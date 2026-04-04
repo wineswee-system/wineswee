@@ -90,3 +90,117 @@ export function exportSalaryPdf(records, month) {
 
   doc.save(`salary-report-${month}.pdf`)
 }
+
+// Export trial balance
+export function exportTrialBalancePdf(trialData, asOfDate, totals = {}) {
+  const doc = createPdf('Trial Balance', `As of: ${asOfDate}`)
+
+  const head = [['Account Code', 'Account Name', 'Type', 'Debit Balance', 'Credit Balance']]
+  const body = trialData.map(r => [
+    r.account_code || '-',
+    r.account_name || '-',
+    r.type || '-',
+    r.debit_balance > 0 ? `NT$ ${r.debit_balance.toLocaleString()}` : '-',
+    r.credit_balance > 0 ? `NT$ ${r.credit_balance.toLocaleString()}` : '-',
+  ])
+
+  autoTable(doc, {
+    startY: 36,
+    head,
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [14, 116, 144], fontSize: 9 },
+    bodyStyles: { fontSize: 8 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+    },
+    foot: [[
+      '', '', 'Total',
+      `NT$ ${(totals.totalDebit || 0).toLocaleString()}`,
+      `NT$ ${(totals.totalCredit || 0).toLocaleString()}`,
+    ]],
+    footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
+  })
+
+  const y = doc.lastAutoTable.finalY + 10
+  doc.setFontSize(10)
+  const balanced = totals.isBalanced
+  doc.setTextColor(balanced ? 34 : 239, balanced ? 197 : 68, balanced ? 94 : 68)
+  doc.text(balanced ? 'Balanced' : `NOT Balanced — Difference: NT$ ${Math.abs((totals.totalDebit || 0) - (totals.totalCredit || 0)).toLocaleString()}`, 14, y)
+
+  doc.save(`trial-balance-${asOfDate}.pdf`)
+}
+
+// Export 401 tax report
+export function exportTaxReportPdf(reportData) {
+  const { period, startDate, endDate, sales, purchases, summary } = reportData
+  const doc = createPdf(
+    '401 Tax Report',
+    `Period: ${period} (${startDate} ~ ${endDate}) | Generated: ${new Date().toLocaleString('zh-TW')}`
+  )
+
+  const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+
+  // Section 1 - Sales / Output
+  autoTable(doc, {
+    startY: 36,
+    head: [['Item', 'Invoice Count', 'Sales Amount (Pre-tax)', 'Tax']],
+    body: [
+      ['Taxable (5%)', sales.taxable.count, fmt(sales.taxable.amount), fmt(sales.taxable.tax)],
+      ['Zero-rated', sales.zeroRated.count, fmt(sales.zeroRated.amount), '0'],
+      ['Exempt', sales.exempt.count, fmt(sales.exempt.amount), '0'],
+    ],
+    foot: [['Total', sales.total.count, fmt(sales.total.amount), fmt(sales.total.tax)]],
+    theme: 'grid',
+    headStyles: { fillColor: [14, 116, 144], fontSize: 9 },
+    bodyStyles: { fontSize: 8 },
+    footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+  })
+
+  // Section 2 - Purchases / Input
+  const y2 = doc.lastAutoTable.finalY + 12
+  doc.setFontSize(11)
+  doc.setTextColor(14, 116, 144)
+  doc.text('Purchases (Input)', 14, y2)
+
+  autoTable(doc, {
+    startY: y2 + 4,
+    head: [['Item', 'Count', 'Purchase Amount (Pre-tax)', 'Tax']],
+    body: [
+      ['Taxable Input', purchases.taxable.count, fmt(purchases.taxable.amount), fmt(purchases.taxable.tax)],
+    ],
+    foot: [['Total', purchases.total.count, fmt(purchases.total.amount), fmt(purchases.total.tax)]],
+    theme: 'grid',
+    headStyles: { fillColor: [5, 150, 105], fontSize: 9 },
+    bodyStyles: { fontSize: 8 },
+    footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+  })
+
+  // Section 3 - Tax Summary
+  const y3 = doc.lastAutoTable.finalY + 12
+  doc.setFontSize(11)
+  doc.setTextColor(14, 116, 144)
+  doc.text('Tax Summary', 14, y3)
+
+  autoTable(doc, {
+    startY: y3 + 4,
+    head: [['Item', 'Amount']],
+    body: [
+      ['Output Tax', fmt(summary.outputTax)],
+      ['Input Tax', fmt(summary.inputTax)],
+      [summary.isRefund ? 'Tax Refund (Credit)' : 'Tax Payable', fmt(Math.abs(summary.taxPayable))],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [100, 116, 139], fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
+    columnStyles: { 1: { halign: 'right' } },
+  })
+
+  doc.save(`401-tax-report-${startDate}-${endDate}.pdf`)
+}

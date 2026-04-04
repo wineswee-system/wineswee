@@ -7,6 +7,7 @@ export default function LineIntegration() {
   const [lineUsers, setLineUsers] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [tab, setTab] = useState('users')
   const [saving, setSaving] = useState(null)
 
@@ -17,38 +18,47 @@ export default function LineIntegration() {
     ]).then(([l, e]) => {
       setLineUsers(l.data || [])
       setEmployees(e.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   const handleBind = async (lineUserId, employeeName) => {
     setSaving(lineUserId)
+    try {
+      // Clear old binding if another employee had this line_user_id
+      await supabase.from('employees').update({ line_user_id: null }).eq('line_user_id', lineUserId)
 
-    // Clear old binding if another employee had this line_user_id
-    await supabase.from('employees').update({ line_user_id: null }).eq('line_user_id', lineUserId)
+      if (employeeName) {
+        // Set new binding
+        await supabase.from('employees').update({ line_user_id: lineUserId }).eq('name', employeeName)
+        // Update line_users table
+        await supabase.from('line_users').update({ bound_employee: employeeName }).eq('line_user_id', lineUserId)
+      } else {
+        await supabase.from('line_users').update({ bound_employee: null }).eq('line_user_id', lineUserId)
+      }
 
-    if (employeeName) {
-      // Set new binding
-      await supabase.from('employees').update({ line_user_id: lineUserId }).eq('name', employeeName)
-      // Update line_users table
-      await supabase.from('line_users').update({ bound_employee: employeeName }).eq('line_user_id', lineUserId)
-    } else {
-      await supabase.from('line_users').update({ bound_employee: null }).eq('line_user_id', lineUserId)
+      // Refresh
+      const [l, e] = await Promise.all([
+        supabase.from('line_users').select('*').order('last_active', { ascending: false }),
+        supabase.from('employees').select('id, name, department, position, status, line_user_id').order('name'),
+      ])
+      setLineUsers(l.data || [])
+      setEmployees(e.data || [])
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
-
-    // Refresh
-    const [l, e] = await Promise.all([
-      supabase.from('line_users').select('*').order('last_active', { ascending: false }),
-      supabase.from('employees').select('id, name, department, position, status, line_user_id').order('name'),
-    ])
-    setLineUsers(l.data || [])
-    setEmployees(e.data || [])
     setSaving(null)
   }
 
   const getBoundEmployee = (lineUserId) => employees.find(e => e.line_user_id === lineUserId)
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const boundCount = lineUsers.filter(u => getBoundEmployee(u.line_user_id)).length
   const unboundCount = lineUsers.length - boundCount

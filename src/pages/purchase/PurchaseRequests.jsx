@@ -9,12 +9,13 @@ import Modal, { Field } from '../../components/Modal'
 export default function PurchaseRequests() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ pr_number: '', requester: '', department: '', total_amount: '', reason: '' })
 
   useEffect(() => {
-    getPurchaseRequests().then(({ data }) => { setRequests(data || []); setLoading(false) })
+    getPurchaseRequests().then(({ data }) => { setRequests(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -40,6 +41,7 @@ export default function PurchaseRequests() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = requests.filter(r =>
     search === '' || r.pr_number?.includes(search) || r.requester?.includes(search)

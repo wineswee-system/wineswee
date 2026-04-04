@@ -12,6 +12,7 @@ export default function Attendance() {
   const [deptFilter, setDeptFilter] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -22,11 +23,16 @@ export default function Attendance() {
       setRecords(r.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
 

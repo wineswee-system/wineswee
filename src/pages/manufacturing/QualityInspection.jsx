@@ -10,6 +10,7 @@ const TYPE_OPTIONS = ['進料檢驗', '製程檢驗', '出貨檢驗', '巡檢']
 export default function QualityInspection() {
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
@@ -20,7 +21,7 @@ export default function QualityInspection() {
   })
 
   useEffect(() => {
-    getQualityInspections().then(({ data }) => { setInspections(data || []); setLoading(false) })
+    getQualityInspections().then(({ data }) => { setInspections(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -59,6 +60,7 @@ export default function QualityInspection() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = inspections.filter(q =>
     search === '' || q.reference?.includes(search) || q.inspector?.includes(search) || q.type?.includes(search)

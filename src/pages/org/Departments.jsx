@@ -7,26 +7,37 @@ import Modal, { Field } from '../../components/Modal'
 export default function Departments() {
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', head: '', description: '' })
 
   useEffect(() => {
-    getDepartments().then(({ data }) => { setDepartments(data || []); setLoading(false) })
+    getDepartments().then(({ data }) => { setDepartments(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
     if (!form.name) return
-    const { data } = await createDepartment({ ...form, member_count: 0 })
-    if (data) {
-      setDepartments(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ name: '', head: '', description: '' })
+    try {
+      const { data, error } = await createDepartment({ ...form, member_count: 0 })
+      if (error) throw error
+      if (data) {
+        setDepartments(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ name: '', head: '', description: '' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

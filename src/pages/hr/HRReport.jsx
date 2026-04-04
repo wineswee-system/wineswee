@@ -9,6 +9,7 @@ export default function HRReport() {
   const [leaves, setLeaves] = useState([])
   const [salary, setSalary] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -21,11 +22,16 @@ export default function HRReport() {
       setAttendance(a.data || [])
       setLeaves(l.data || [])
       setSalary(s.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const activeCount = employees.filter(e => e.status === '在職').length
   const lateCount = attendance.filter(a => a.status === '遲到').length

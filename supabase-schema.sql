@@ -1073,3 +1073,150 @@ insert into quality_inspections (type, reference, inspector, inspection_date, it
 ('進料檢驗', 'PO-2026-001', 'Snow', '2026-04-02', '[{"name":"A4影印紙","qty":50,"passed":48,"failed":2,"reason":"外箱破損"}]', 96, '條件通過', '2箱退回供應商'),
 ('成品抽檢', 'PROD-001 Batch#12', '陳大偉', '2026-04-01', '[{"name":"智慧感測器 A1","qty":20,"passed":19,"failed":1,"reason":"溫度偏差超標"}]', 95, '通過', '不良品返工'),
 ('成品抽檢', 'PROD-003 Batch#5', '吳建宏', '2026-03-28', '[{"name":"控制面板 C1","qty":10,"passed":10,"failed":0,"reason":""}]', 100, '通過', '全數合格');
+
+-- ============================================================
+--  Line-Item Tables (報價/訂單/發票明細行)
+-- ============================================================
+
+-- 報價單明細行 (Quotation Line Items)
+create table if not exists quotation_lines (
+  id serial primary key,
+  quotation_id int references quotations(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- 銷售訂單明細行 (Sales Order Line Items)
+create table if not exists sales_order_lines (
+  id serial primary key,
+  order_id int references sales_orders(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- 發票明細行 (Invoice Line Items)
+create table if not exists invoice_lines (
+  id serial primary key,
+  invoice_id int references invoices(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  庫存成本層 (Inventory Cost Layers for FIFO tracking)
+-- ============================================================
+create table if not exists inventory_cost_layers (
+  id serial primary key,
+  sku_id int references skus(id),
+  warehouse_id int references warehouses(id),
+  lot_number text,
+  quantity_remaining numeric default 0,
+  unit_cost numeric default 0,
+  receipt_date date default current_date,
+  source_type text default 'purchase',  -- purchase, manufacturing, adjustment
+  source_id int,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  庫存估價快照 (Inventory Valuation Snapshots)
+-- ============================================================
+create table if not exists inventory_valuations (
+  id serial primary key,
+  sku_id int references skus(id),
+  valuation_date date,
+  costing_method text default 'weighted_avg',  -- fifo, weighted_avg
+  total_quantity numeric default 0,
+  total_value numeric default 0,
+  unit_cost numeric default 0,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  結構化 BOM 明細行 (Structured BOM Lines for multi-level BOM)
+-- ============================================================
+create table if not exists bom_lines (
+  id serial primary key,
+  bom_id int references bom(id) on delete cascade,
+  component_sku_id int references skus(id),
+  quantity numeric default 1,
+  unit text default 'pcs',
+  scrap_rate numeric default 0,        -- percentage waste
+  is_sub_assembly boolean default false,
+  sub_bom_id int references bom(id),   -- if component is itself a BOM
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  多幣別支援 (Multi-Currency Support)
+-- ============================================================
+
+-- Currency definitions
+CREATE TABLE IF NOT EXISTS currencies (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,       -- USD, EUR, JPY, CNY, NTD
+  name TEXT NOT NULL,              -- 美元, 歐元, 日圓, 人民幣, 新台幣
+  symbol TEXT DEFAULT '',
+  decimal_places INT DEFAULT 2,
+  is_base BOOLEAN DEFAULT false,   -- NTD is base currency
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  Message Logs (Email / SMS / LINE 發送紀錄)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS message_logs (
+  id SERIAL PRIMARY KEY,
+  channel TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  subject TEXT,
+  body TEXT,
+  status TEXT DEFAULT 'queued',
+  campaign_id INT,
+  customer_id TEXT,
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Exchange rates
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  id SERIAL PRIMARY KEY,
+  from_currency TEXT NOT NULL,
+  to_currency TEXT DEFAULT 'NTD',
+  rate NUMERIC NOT NULL,           -- 1 USD = 31.5 NTD
+  effective_date DATE NOT NULL,
+  source TEXT DEFAULT 'manual',    -- manual, api
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Seed common currencies
+INSERT INTO currencies (code, name, symbol, decimal_places, is_base) VALUES
+  ('NTD', '新台幣', 'NT$', 0, true),
+  ('USD', '美元', '$', 2, false),
+  ('EUR', '歐元', '€', 2, false),
+  ('JPY', '日圓', '¥', 0, false),
+  ('CNY', '人民幣', '¥', 2, false),
+  ('GBP', '英鎊', '£', 2, false),
+  ('HKD', '港幣', 'HK$', 2, false)
+ON CONFLICT (code) DO NOTHING;

@@ -10,12 +10,17 @@ export function AuthProvider({ children }) {
 
   const loadProfile = async (authUser) => {
     if (!authUser) { setProfile(null); return }
-    const { data } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('email', authUser.email)
-      .single()
-    setProfile(data || null)
+    try {
+      const { data } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('email', authUser.email)
+        .single()
+      setProfile(data || null)
+    } catch (err) {
+      console.error('Failed to load employee profile:', err)
+      setProfile(null)
+    }
   }
 
   useEffect(() => {
@@ -23,12 +28,19 @@ export function AuthProvider({ children }) {
       const u = session?.user ?? null
       setUser(u)
       loadProfile(u).finally(() => setLoading(false))
+    }).catch((err) => {
+      console.error('Failed to retrieve session:', err)
+      setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user ?? null
-      setUser(u)
-      loadProfile(u)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        const u = session?.user ?? null
+        setUser(u)
+        await loadProfile(u)
+      } catch (err) {
+        console.error('Auth state change error:', err)
+      }
     })
 
     return () => subscription.unsubscribe()

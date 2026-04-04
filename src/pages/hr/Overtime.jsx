@@ -13,6 +13,7 @@ export default function Overtime() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '' })
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -25,6 +26,10 @@ export default function Overtime() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -32,21 +37,34 @@ export default function Overtime() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.date || !form.employee) return
-    const { data } = await createOvertimeRequest({ ...form, status: '待審核' })
-    if (data) {
-      setRecords(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ employee: employees[0]?.name || '', date: '', hours: 1, reason: '' })
+    try {
+      if (!form.date || !form.employee) return
+      const { data, error } = await createOvertimeRequest({ ...form, status: '待審核' })
+      if (error) throw error
+      if (data) {
+        setRecords(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ employee: employees[0]?.name || '', date: '', hours: 1, reason: '' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const handleApprove = async (id) => {
-    const { data } = await updateOvertimeStatus(id, '已核准')
-    if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+    try {
+      const { data, error } = await updateOvertimeStatus(id, '已核准')
+      if (error) throw error
+      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
 

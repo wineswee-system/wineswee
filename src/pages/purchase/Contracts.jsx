@@ -7,31 +7,42 @@ import Modal, { Field } from '../../components/Modal'
 export default function Contracts() {
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ contract_number: '', supplier_id: '', start_date: '', end_date: '', discount_rate: '', min_order: '', status: '有效' })
 
   useEffect(() => {
-    getSupplierContracts().then(({ data }) => { setContracts(data || []); setLoading(false) })
+    getSupplierContracts().then(({ data }) => { setContracts(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
     if (!form.contract_number || !form.supplier_id) return
-    const { data } = await createSupplierContract({
-      ...form,
-      discount_rate: parseFloat(form.discount_rate) || 0,
-      min_order: parseInt(form.min_order) || 0,
-    })
-    if (data) {
-      setContracts(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ contract_number: '', supplier_id: '', start_date: '', end_date: '', discount_rate: '', min_order: '', status: '有效' })
+    try {
+      const { data, error } = await createSupplierContract({
+        ...form,
+        discount_rate: parseFloat(form.discount_rate) || 0,
+        min_order: parseInt(form.min_order) || 0,
+      })
+      if (error) throw error
+      if (data) {
+        setContracts(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ contract_number: '', supplier_id: '', start_date: '', end_date: '', discount_rate: '', min_order: '', status: '有效' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = contracts.filter(c =>
     search === '' || c.contract_number?.includes(search) || c.supplier_id?.toString().includes(search)

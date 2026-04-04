@@ -18,6 +18,7 @@ export default function Leave() {
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [form, setForm] = useState({ employee: '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
   const [validationMsg, setValidationMsg] = useState('')
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -30,6 +31,10 @@ export default function Leave() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -42,6 +47,7 @@ export default function Leave() {
   const selectedPolicy = getLeaveTypeInfo(form.type)
 
   const handleSubmit = async () => {
+    try {
     if (!form.start_date || !form.employee) return
 
     // Calculate days/hours
@@ -104,6 +110,10 @@ export default function Leave() {
         })
       }
     }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const handleApprove = async (id) => {
@@ -116,6 +126,7 @@ export default function Leave() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
   const filtered = leaves.filter(l =>

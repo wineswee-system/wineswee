@@ -16,6 +16,7 @@ export default function Bonus() {
   const [adjustments, setAdjustments] = useState([])
   const [outboundOrders, setOutboundOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showRecordModal, setShowRecordModal] = useState(false)
   const [showSettingModal, setShowSettingModal] = useState(false)
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7))
@@ -40,6 +41,10 @@ export default function Bonus() {
       setContacts(ct.data || [])
       setAdjustments(adj.data || [])
       setOutboundOrders(ob.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -49,15 +54,27 @@ export default function Bonus() {
 
   const handleAddRecord = async () => {
     if (!recordForm.employee_name) return
-    const total = (Number(recordForm.base_bonus) || 0) + (Number(recordForm.data_bonus) || 0)
-    const { data } = await supabase.from('bonus_records').insert({ ...recordForm, base_bonus: Number(recordForm.base_bonus) || 0, data_bonus: Number(recordForm.data_bonus) || 0, total_bonus: total }).select().single()
-    if (data) { setRecords(prev => [data, ...prev]); setShowRecordModal(false); setRecordForm({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' }) }
+    try {
+      const total = (Number(recordForm.base_bonus) || 0) + (Number(recordForm.data_bonus) || 0)
+      const { data, error } = await supabase.from('bonus_records').insert({ ...recordForm, base_bonus: Number(recordForm.base_bonus) || 0, data_bonus: Number(recordForm.data_bonus) || 0, total_bonus: total }).select().single()
+      if (error) throw error
+      if (data) { setRecords(prev => [data, ...prev]); setShowRecordModal(false); setRecordForm({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' }) }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const handleAddSetting = async () => {
     if (!settingForm.metric_name) return
-    const { data } = await supabase.from('bonus_settings').insert({ ...settingForm, target_value: Number(settingForm.target_value) || 0, weight: Number(settingForm.weight) || 1, reward_amount: Number(settingForm.reward_amount) || 0 }).select().single()
-    if (data) { setSettings(prev => [...prev, data]); setShowSettingModal(false); setSettingForm({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' }) }
+    try {
+      const { data, error } = await supabase.from('bonus_settings').insert({ ...settingForm, target_value: Number(settingForm.target_value) || 0, weight: Number(settingForm.weight) || 1, reward_amount: Number(settingForm.reward_amount) || 0 }).select().single()
+      if (error) throw error
+      if (data) { setSettings(prev => [...prev, data]); setShowSettingModal(false); setSettingForm({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' }) }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const toggleSetting = async (id, is_active) => {
@@ -66,6 +83,7 @@ export default function Bonus() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const periodRecords = records.filter(r => r.period === period)
   const totalPayout = periodRecords.reduce((s, r) => s + (r.total_bonus || 0), 0)

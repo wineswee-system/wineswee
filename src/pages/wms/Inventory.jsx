@@ -1,21 +1,41 @@
-import { useState, useEffect } from 'react'
-import { Plus, Search, ArrowRightLeft, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Search, ArrowRightLeft, AlertTriangle, ScanBarcode, Package, History, ArrowUpDown, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { checkStockAndCreatePR } from '../../lib/automation'
+import { calculateFIFO, calculateWeightedAverage, valuateInventory } from '../../lib/inventoryCosting'
+import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import BarcodeInput from '../../components/BarcodeInput'
+
+const COSTING_METHODS = [
+  { value: 'FIFO', label: 'FIFO 先進先出' },
+  { value: 'WEIGHTED_AVG', label: '加權平均' },
+  { value: 'MOVING_AVG', label: '移動平均' },
+]
 
 export default function Inventory() {
   const [stocks, setStocks] = useState([])
   const [adjustments, setAdjustments] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState('stock')
   const [showAdjModal, setShowAdjModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [adjForm, setAdjForm] = useState({ sku_code: '', sku_name: '', bin_code: '', quantity: '', reason: '', operator: '' })
   const [transferForm, setTransferForm] = useState({ sku_code: '', from_bin: '', to_bin: '', quantity: '' })
+
+  // Inventory valuation state
+  const [costingMethod, setCostingMethod] = useState('WEIGHTED_AVG')
+  const [valuationData, setValuationData] = useState([])
+  const [showValuation, setShowValuation] = useState(false)
+
+  // Barcode scanning state
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [scannedItem, setScannedItem] = useState(null)
+  const barcodeRef = useRef(null)
 
   useEffect(() => {
     Promise.all([
@@ -26,6 +46,10 @@ export default function Inventory() {
       setStocks(s.data || [])
       setAdjustments(a.data || [])
       setWarehouses(w.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -61,6 +85,96 @@ export default function Inventory() {
     setTransferForm({ sku_code: '', from_bin: '', to_bin: '', quantity: '' })
   }
 
+  // Inventory valuation calculation
+  const handleValuate = () => {
+    // Build stock levels array from current stocks
+    const stockLevels = stocks.map(s => ({
+      sku: s.skus?.code || '',
+      qty: s.quantity || 0,
+    }))
+
+    // Build mock transactions from adjustments (IN for positive, OUT for negative)
+    const txnsBySku = {}
+    adjustments.forEach(a => {
+      const sku = a.sku_code
+      if (!txnsBySku[sku]) txnsBySku[sku] = []
+      txnsBySku[sku].push({
+        type: a.quantity >= 0 ? 'IN' : 'OUT',
+        qty: Math.abs(a.quantity),
+        unit_cost: a.unit_cost || 100, // fallback unit cost
+        date: a.created_at,
+      })
+    })
+
+    const result = valuateInventory(stockLevels, costingMethod, txnsBySku)
+    setValuationData(result)
+    setShowValuation(true)
+  }
+
+  // Barcode scan handler (legacy manual input)
+  const handleBarcodeScan = (value) => {
+    setBarcodeInput(value)
+    if (!value) {
+      setScannedItem(null)
+      return
+    }
+    const found = stocks.find(s =>
+      s.skus?.code?.toLowerCase() === value.toLowerCase() ||
+      s.skus?.name?.includes(value) ||
+      s.skus?.code?.includes(value)
+    )
+    setScannedItem(found || null)
+  }
+
+  const handleBarcodeKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleBarcodeScan(barcodeInput)
+    }
+  }
+
+  // 新版條碼掃描 handler — 使用 BarcodeInput 元件
+  const handleBarcodeComponentScan = (code, lookupResult) => {
+    // 在庫存中尋找所有匹配的品項（跨倉庫）
+    const matchedItems = stocks.filter(s =>
+      s.skus?.code?.toLowerCase() === code.toLowerCase()
+    )
+    if (matchedItems.length > 0) {
+      setSearch(code) // 篩選庫存表顯示該 SKU
+      setScannedItem(matchedItems[0])
+      setBarcodeInput(code)
+      setTab('stock')
+      playBeep(true)
+    } else {
+      setScannedItem(null)
+      playBeep(false)
+    }
+  }
+
+  // Quick actions from barcode scan
+  const handleQuickAdjust = () => {
+    if (!scannedItem) return
+    setAdjForm({
+      sku_code: scannedItem.skus?.code || '',
+      sku_name: scannedItem.skus?.name || '',
+      bin_code: scannedItem.bins?.code || '',
+      quantity: '',
+      reason: '',
+      operator: ''
+    })
+    setShowAdjModal(true)
+  }
+
+  const handleQuickTransfer = () => {
+    if (!scannedItem) return
+    setTransferForm({
+      sku_code: scannedItem.skus?.code || '',
+      from_bin: scannedItem.bins?.code || '',
+      to_bin: '',
+      quantity: String(scannedItem.quantity || 0)
+    })
+    setShowTransferModal(true)
+  }
+
   const [whFilter, setWhFilter] = useState('')
 
   const filtered = stocks.filter(s =>
@@ -69,6 +183,7 @@ export default function Inventory() {
   )
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const totalQty = stocks.reduce((s, i) => s + (i.quantity || 0), 0)
   const expiringCount = stocks.filter(s => {
@@ -76,6 +191,7 @@ export default function Inventory() {
     const diff = (new Date(s.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)
     return diff <= 30 && diff >= 0
   }).length
+  const totalValuation = valuationData.reduce((s, v) => s + (v.total_value || 0), 0)
 
   return (
     <div className="fade-in">
@@ -114,9 +230,63 @@ export default function Inventory() {
         </div>
       </div>
 
+      {/* 條碼掃描 — 支援 USB/藍牙掃描器 + 相機 */}
+      <BarcodeInput
+        onScan={handleBarcodeComponentScan}
+        placeholder="掃描條碼快速查詢庫存..."
+        autoLookup={false}
+      />
+
+      {/* 掃描結果快速操作 */}
+      {scannedItem && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15 }}>{scannedItem.skus?.code}</span>
+                <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>{scannedItem.skus?.name}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="badge badge-neutral">{scannedItem.bins?.code || '-'}</span>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>數量: {scannedItem.quantity}</span>
+              </div>
+            </div>
+            {/* 顯示該 SKU 在所有倉庫的庫存 */}
+            {(() => {
+              const allMatched = stocks.filter(s => s.skus?.code === scannedItem.skus?.code)
+              if (allMatched.length > 1) {
+                return (
+                  <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    跨倉庫庫存：{allMatched.map((s, i) => (
+                      <span key={s.id} style={{ marginRight: 12 }}>
+                        <span className="badge badge-neutral" style={{ marginRight: 4 }}>{s.bins?.code || '未指定'}</span>
+                        <strong>{s.quantity}</strong>
+                      </span>
+                    ))}
+                    &nbsp;| 合計: <strong>{allMatched.reduce((sum, s) => sum + (s.quantity || 0), 0)}</strong>
+                  </div>
+                )
+              }
+              return null
+            })()}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={handleQuickAdjust} style={{ fontSize: 12 }}>
+                <ArrowUpDown size={12} /> 調整庫存
+              </button>
+              <button className="btn btn-secondary" onClick={() => { setSearch(scannedItem.skus?.code || ''); setTab('adjustments') }} style={{ fontSize: 12 }}>
+                <History size={12} /> 查看紀錄
+              </button>
+              <button className="btn btn-secondary" onClick={handleQuickTransfer} style={{ fontSize: 12 }}>
+                <ArrowRightLeft size={12} /> 移倉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-card)', borderRadius: 10, padding: 4, border: '1px solid var(--border-subtle)', width: 'fit-content' }}>
-        {[['stock', '📦 庫存總覽'], ['adjustments', '📝 調整紀錄']].map(([key, label]) => (
+        {[['stock', '📦 庫存總覽'], ['adjustments', '📝 調整紀錄'], ['valuation', '💰 庫存評價']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: tab === key ? 'var(--accent-cyan)' : 'transparent', color: tab === key ? '#fff' : 'var(--text-muted)' }}>{label}</button>
         ))}
       </div>
@@ -187,6 +357,65 @@ export default function Inventory() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {tab === 'valuation' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon"><DollarSign size={16} /></span> 庫存評價</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select className="form-input" style={{ fontSize: 12 }} value={costingMethod} onChange={e => setCostingMethod(e.target.value)}>
+                {COSTING_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              <button className="btn btn-primary" onClick={handleValuate} style={{ fontSize: 12 }}>
+                <DollarSign size={12} /> 計算評價
+              </button>
+            </div>
+          </div>
+
+          {showValuation && valuationData.length > 0 && (
+            <>
+              <div style={{ padding: '12px 16px', background: 'var(--bg-main)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  成本方法: <span className="badge badge-cyan">{COSTING_METHODS.find(m => m.value === costingMethod)?.label}</span>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>
+                  總庫存價值: <span style={{ color: 'var(--accent-green)' }}>${totalValuation.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>品號</th><th>數量</th><th>單位成本</th><th>總價值</th><th>成本方法</th></tr>
+                  </thead>
+                  <tbody>
+                    {valuationData.map((v, i) => (
+                      <tr key={i}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{v.sku}</td>
+                        <td>{v.qty}</td>
+                        <td style={{ fontFamily: 'monospace' }}>${v.unit_cost.toLocaleString()}</td>
+                        <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>${v.total_value.toLocaleString()}</td>
+                        <td><span className="badge badge-info">{v.method}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {showValuation && valuationData.length === 0 && (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+              無庫存資料可供評價
+            </div>
+          )}
+
+          {!showValuation && (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+              選擇成本方法後按「計算評價」查看庫存評價結果
+            </div>
+          )}
         </div>
       )}
 

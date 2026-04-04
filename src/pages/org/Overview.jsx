@@ -9,6 +9,7 @@ export default function OrgOverview() {
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([getCompanies(), getStores(), getDepartments(), getEmployees()]).then(([c, s, d, e]) => {
@@ -16,11 +17,16 @@ export default function OrgOverview() {
       setStores(s.data || [])
       setDepartments(d.data || [])
       setEmployees(e.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const maxCount = Math.max(...departments.map(d => d.member_count), 1)
 

@@ -52,7 +52,7 @@ export async function checkStockAndCreatePR(orderItems, requester = '系統') {
 
   const prNumber = `PR-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
 
-  const { data: pr } = await supabase.from('purchase_requests').insert({
+  const { data: pr, error } = await supabase.from('purchase_requests').insert({
     pr_number: prNumber,
     requester,
     department: '系統自動',
@@ -62,7 +62,9 @@ export async function checkStockAndCreatePR(orderItems, requester = '系統') {
     status: '待審核',
   }).select().single()
 
-  return { ok: false, shortages, pr }
+  if (error) return { ok: false, error: error.message }
+
+  return { ok: true, shortages, pr }
 }
 
 // ── 2. WMS 出貨 → AR 應收帳款 ──
@@ -70,7 +72,7 @@ export async function checkStockAndCreatePR(orderItems, requester = '系統') {
 export async function createARFromShipment(shipment) {
   const invoiceNumber = `INV-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
 
-  const { data: ar } = await supabase.from('accounts_receivable').insert({
+  const { data: ar, error: arError } = await supabase.from('accounts_receivable').insert({
     invoice_number: invoiceNumber,
     customer: shipment.customer,
     order_ref: shipment.order_ref || shipment.id,
@@ -80,10 +82,12 @@ export async function createARFromShipment(shipment) {
     status: '未收款',
   }).select().single()
 
+  if (arError) return { ok: false, error: arError.message }
+
   // 同時產生傳票
   if (ar) {
     const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
-    const { data: entry } = await supabase.from('journal_entries').insert({
+    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
       entry_number: entryNumber,
       entry_date: new Date().toISOString().slice(0, 10),
       description: `出貨產生應收 - ${shipment.customer} (${invoiceNumber})`,
@@ -93,8 +97,10 @@ export async function createARFromShipment(shipment) {
       created_by: '系統',
     }).select().single()
 
+    if (entryError) return { ok: false, error: entryError.message }
+
     if (entry) {
-      await supabase.from('journal_lines').insert([
+      const { error: linesError } = await supabase.from('journal_lines').insert([
         {
           entry_id: entry.id,
           account_code: '1300',
@@ -112,6 +118,7 @@ export async function createARFromShipment(shipment) {
           memo: `${shipment.customer} - ${invoiceNumber}`,
         },
       ])
+      if (linesError) return { ok: false, error: linesError.message }
     }
   }
 
@@ -125,7 +132,7 @@ export async function createAPFromReceipt(receipt, po) {
   const amount = (po.total_amount || 0) + (po.tax || 0) + (po.shipping || 0)
   const paymentDays = parsePaymentTerms(po.payment_terms)
 
-  const { data: ap } = await supabase.from('accounts_payable').insert({
+  const { data: ap, error: apError } = await supabase.from('accounts_payable').insert({
     bill_number: billNumber,
     supplier: po.supplier,
     po_ref: po.po_number,
@@ -135,10 +142,12 @@ export async function createAPFromReceipt(receipt, po) {
     status: '未付款',
   }).select().single()
 
+  if (apError) return { ok: false, error: apError.message }
+
   // 產生傳票
   if (ap) {
     const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}A`
-    const { data: entry } = await supabase.from('journal_entries').insert({
+    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
       entry_number: entryNumber,
       entry_date: new Date().toISOString().slice(0, 10),
       description: `採購入庫 - ${po.supplier} (${po.po_number})`,
@@ -148,8 +157,10 @@ export async function createAPFromReceipt(receipt, po) {
       created_by: '系統',
     }).select().single()
 
+    if (entryError) return { ok: false, error: entryError.message }
+
     if (entry) {
-      await supabase.from('journal_lines').insert([
+      const { error: linesError } = await supabase.from('journal_lines').insert([
         {
           entry_id: entry.id,
           account_code: '5100',
@@ -167,6 +178,7 @@ export async function createAPFromReceipt(receipt, po) {
           memo: `${po.supplier} - ${po.po_number}`,
         },
       ])
+      if (linesError) return { ok: false, error: linesError.message }
     }
   }
 
@@ -177,11 +189,18 @@ export async function createAPFromReceipt(receipt, po) {
 // 計算指定期間的毛利
 export async function calculateProfitability(month) {
   // month format: '2026-04'
+  const monthStart = month + '-01'
+  const [y, m] = month.split('-').map(Number)
+  const nextMonthStart = m === 12
+    ? `${y + 1}-01-01`
+    : `${y}-${String(m + 1).padStart(2, '0')}-01`
 
   // 收入: AR 已收款金額
   const { data: arRecords } = await supabase
     .from('accounts_receivable')
     .select('amount, paid_amount')
+    .gte('created_at', monthStart)
+    .lt('created_at', nextMonthStart)
 
   const revenue = (arRecords || []).reduce((s, r) => s + (r.paid_amount || 0), 0)
 
@@ -189,6 +208,8 @@ export async function calculateProfitability(month) {
   const { data: apRecords } = await supabase
     .from('accounts_payable')
     .select('amount, paid_amount')
+    .gte('created_at', monthStart)
+    .lt('created_at', nextMonthStart)
 
   const purchaseCost = (apRecords || []).reduce((s, r) => s + (r.amount || 0), 0)
 
@@ -245,6 +266,17 @@ export async function calculateAnnualLeaveSettlement() {
     // Only process in the settlement month
     if (currentMonthNum !== (settlementMonth === 13 ? 1 : settlementMonth)) continue
 
+    // Idempotency check: skip if settlement already exists for this employee+year
+    const settlementYear = today.getFullYear()
+    const { data: existing } = await supabase
+      .from('leave_settlements')
+      .select('id')
+      .eq('employee', emp.name)
+      .eq('settlement_month', currentMonth)
+      .maybeSingle()
+
+    if (existing) continue
+
     // Calculate entitled annual leave based on Taiwan labor law
     let entitled = 0
     if (yearsWorked >= 10) entitled = 30
@@ -276,8 +308,8 @@ export async function calculateAnnualLeaveSettlement() {
         .limit(1)
         .maybeSingle()
 
-      const dailyRate = salary ? Math.round((salary.base_salary || 0) / 30) : 0
-      const settlementAmount = unused * dailyRate
+      const dailyRate = salary ? (salary.base_salary || 0) / 30 : 0
+      const settlementAmount = Math.round(unused * dailyRate)
 
       settlements.push({
         employee: emp.name,
@@ -285,7 +317,7 @@ export async function calculateAnnualLeaveSettlement() {
         entitled,
         used,
         unused,
-        dailyRate,
+        dailyRate: Math.round(dailyRate),
         settlementAmount,
         settlementMonth: currentMonth,
       })

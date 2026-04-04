@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck } from 'lucide-react'
+import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { getEmployees, getTasks, getWorkflows, getAttendance, getLeaveRequests } from '../lib/db'
+import { supabase } from '../lib/supabase'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
@@ -67,17 +68,36 @@ export default function Dashboard() {
   const [workflows, setWorkflows] = useState([])
   const [attendance, setAttendance] = useState([])
   const [leaves, setLeaves] = useState([])
+  const [arData, setArData] = useState([])
+  const [apData, setApData] = useState([])
+  const [opportunities, setOpportunities] = useState([])
+  const [stockLevels, setStockLevels] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    Promise.all([getEmployees(), getTasks(), getWorkflows(), getAttendance(), getLeaveRequests()])
-      .then(([e, t, w, a, l]) => {
+    Promise.all([
+      getEmployees(), getTasks(), getWorkflows(), getAttendance(), getLeaveRequests(),
+      supabase.from('accounts_receivable').select('amount, paid_amount, status, due_date'),
+      supabase.from('accounts_payable').select('amount, paid_amount, status'),
+      supabase.from('opportunities').select('stage, amount'),
+      supabase.from('stock_levels').select('quantity, min_qty'),
+    ])
+      .then(([e, t, w, a, l, ar, ap, opp, stk]) => {
         setEmployees(e.data || []); setTasks(t.data || []); setWorkflows(w.data || [])
-        setAttendance(a.data || []); setLeaves(l.data || []); setLoading(false)
+        setAttendance(a.data || []); setLeaves(l.data || [])
+        setArData(ar.data || []); setApData(ap.data || [])
+        setOpportunities(opp.data || []); setStockLevels(stk.data || [])
+      }).catch(err => {
+        console.error('Failed to load data:', err)
+        setError('資料載入失敗，請重新整理頁面')
+      }).finally(() => {
+        setLoading(false)
       })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const active = employees.filter(e => e.status === '在職').length
   const done = tasks.filter(t => t.status === '已完成').length
@@ -117,12 +137,35 @@ export default function Dashboard() {
       </div>
 
       {/* ════════ Row 2: KPI Cards ════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
         <KpiCard icon={Users} label="在職人數" value={active} change={`共 ${employees.length} 人`} sub="" accent={C.cyan} />
         <KpiCard icon={CheckCircle} label="今日出勤" value={active - late} changeType={late === 0 ? 'up' : 'down'} change={late === 0 ? '全員到齊' : `${late} 人遲到`} accent={C.blue} />
         <KpiCard icon={Briefcase} label="進行中任務" value={doing} change={`${todo} 項未開始`} sub="" accent={C.purple} />
         <KpiCard icon={CalendarCheck} label="任務完成率" value={`${progress}%`} changeType={progress >= 50 ? 'up' : 'down'} change={`${done}/${tasks.length} 已完成`} accent={C.green} />
       </div>
+
+      {/* ════════ Row 2b: Business KPI Cards ════════ */}
+      {(() => {
+        const arTotal = arData.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+        const arPaid = arData.reduce((s, r) => s + (Number(r.paid_amount) || 0), 0)
+        const arOutstanding = arTotal - arPaid
+        const apTotal = apData.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+        const apPaid = apData.reduce((s, r) => s + (Number(r.paid_amount) || 0), 0)
+        const apOutstanding = apTotal - apPaid
+        const pipelineValue = opportunities
+          .filter(o => o.stage !== '輸單')
+          .reduce((s, o) => s + (Number(o.amount) || 0), 0)
+        const lowStockCount = stockLevels.filter(s => (Number(s.quantity) || 0) <= (Number(s.min_qty) || 0)).length
+        const fmt = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+            <KpiCard icon={DollarSign} label="應收帳款" value={`$${fmt(arOutstanding)}`} change={`共 ${arData.length} 筆`} sub="" accent={arOutstanding > 500000 ? C.orange : C.green} />
+            <KpiCard icon={CreditCard} label="應付帳款" value={`$${fmt(apOutstanding)}`} change={`共 ${apData.length} 筆`} sub="" accent={C.blue} />
+            <KpiCard icon={ShoppingCart} label="銷售漏斗" value={`$${fmt(pipelineValue)}`} change={`${opportunities.filter(o => o.stage !== '輸單').length} 項機會`} sub="" accent={C.purple} />
+            <KpiCard icon={Package} label="庫存警示" value={lowStockCount} changeType={lowStockCount > 0 ? 'down' : 'up'} change={lowStockCount > 0 ? '需要補貨' : '庫存充足'} accent={lowStockCount > 0 ? C.red : C.green} />
+          </div>
+        )
+      })()}
 
       {/* ════════ Row 3: Attendance Chart + Task Doughnut ════════ */}
       <div style={{ display: 'grid', gridTemplateColumns: '5fr 3fr', gap: 20, marginBottom: 32 }}>

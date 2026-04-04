@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Plus, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, AlertTriangle, ScanBarcode, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createARFromShipment } from '../../lib/automation'
+import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import BarcodeInput from '../../components/BarcodeInput'
 
 const STATUSES = ['待揀貨', '揀貨中', '已複核', '已出貨']
 const CARRIERS = ['黑貓', '新竹', '郵局', '順豐', '7-11', '全家', '自取', '其他']
@@ -13,10 +15,12 @@ export default function Outbound() {
   const [warehouses, setWarehouses] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [items, setItems] = useState({})
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨' })
+  const [highlightItem, setHighlightItem] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -27,6 +31,10 @@ export default function Outbound() {
       setOrders(o.data || [])
       setWarehouses(w.data || [])
       setCustomers(c.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -80,7 +88,38 @@ export default function Outbound() {
     return null
   }
 
+  // 條碼揀貨處理
+  const handlePickScan = async (code) => {
+    if (!expanded) return
+    const orderItems = items[expanded] || []
+    const matched = orderItems.find(i =>
+      i.sku_code?.toLowerCase() === code.toLowerCase() && (i.picked_qty || 0) < (i.quantity || 0)
+    )
+    if (matched) {
+      const newQty = (matched.picked_qty || 0) + 1
+      const newStatus = newQty >= matched.quantity ? '已揀貨' : matched.status
+      const { data } = await supabase.from('outbound_items').update({ picked_qty: newQty, status: newStatus }).eq('id', matched.id).select().single()
+      if (data) {
+        setItems(prev => ({ ...prev, [expanded]: prev[expanded].map(i => i.id === matched.id ? data : i) }))
+      }
+      setHighlightItem(matched.id)
+      playBeep(true)
+      setTimeout(() => setHighlightItem(null), 1500)
+    } else {
+      playBeep(false)
+    }
+  }
+
+  // 計算揀貨進度
+  const getPickProgress = (orderId) => {
+    const orderItems = items[orderId] || []
+    if (orderItems.length === 0) return null
+    const picked = orderItems.filter(i => (i.picked_qty || 0) >= (i.quantity || 0)).length
+    return { picked, total: orderItems.length }
+  }
+
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">
@@ -103,6 +142,13 @@ export default function Outbound() {
           </div>
         ))}
       </div>
+
+      {/* 條碼揀貨 */}
+      <BarcodeInput
+        onScan={handlePickScan}
+        placeholder="掃描條碼揀貨（請先展開出貨單）..."
+        autoLookup={false}
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {orders.map(o => {
@@ -148,6 +194,24 @@ export default function Outbound() {
                       onBlur={e => e.target.value && updateTracking(o.id, e.target.value)}
                     />
                   </div>
+                  {/* 揀貨進度 */}
+                  {(() => {
+                    const progress = getPickProgress(o.id)
+                    if (!progress) return null
+                    const pct = Math.round((progress.picked / progress.total) * 100)
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '8px 12px', background: pct === 100 ? 'var(--accent-green-dim)' : 'var(--bg-main)', borderRadius: 8, fontSize: 13 }}>
+                        <ScanBarcode size={14} style={{ color: pct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)' }} />
+                        <span>揀貨進度: <strong>{progress.picked}</strong> / {progress.total}</span>
+                        <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: pct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)', transition: 'width 0.3s' }} />
+                        </div>
+                        <span style={{ fontWeight: 600, color: pct === 100 ? 'var(--accent-green)' : 'var(--text-primary)' }}>{pct}%</span>
+                        {pct === 100 && <CheckCircle size={14} style={{ color: 'var(--accent-green)' }} />}
+                      </div>
+                    )
+                  })()}
+
                   {(items[o.id] || []).length === 0 ? (
                     <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>尚無明細</div>
                   ) : (
@@ -155,7 +219,7 @@ export default function Outbound() {
                       <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>實揀數量</th><th>儲位</th><th>狀態</th></tr></thead>
                       <tbody>
                         {items[o.id].map(item => (
-                          <tr key={item.id}>
+                          <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
                             <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
                             <td>{item.sku_name}</td>
                             <td>{item.quantity}</td>

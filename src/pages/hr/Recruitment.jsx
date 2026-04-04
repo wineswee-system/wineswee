@@ -12,7 +12,8 @@ export default function Recruitment() {
   const [deptFilter, setDeptFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ title: '', dept: '', location: '', type: '全職' })
+  const [form, setForm] = useState({ title: '', dept: '', location: '', type: '全��' })
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -26,6 +27,10 @@ export default function Recruitment() {
       setDepartments(depts)
       setLocations(locs)
       setForm(f => ({ ...f, dept: depts[0]?.name || '', location: locs[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -48,6 +53,7 @@ export default function Recruitment() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = jobs.filter(j => deptFilter === '' || j.dept === deptFilter)
 

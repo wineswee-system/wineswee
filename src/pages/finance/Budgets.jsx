@@ -7,12 +7,13 @@ import Modal, { Field } from '../../components/Modal'
 export default function Budgets() {
   const [budgets, setBudgets] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ department: '', category: '', period: '', budget_amount: '', spent_amount: '0', status: '執行中' })
 
   useEffect(() => {
-    getBudgets().then(({ data }) => { setBudgets(data || []); setLoading(false) })
+    getBudgets().then(({ data }) => { setBudgets(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -32,6 +33,7 @@ export default function Budgets() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = budgets.filter(b =>
     search === '' || b.department?.includes(search) || b.category?.includes(search)

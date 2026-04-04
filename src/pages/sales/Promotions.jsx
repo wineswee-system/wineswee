@@ -10,12 +10,13 @@ const STATUS_BADGE = { '進行中': 'badge-success', '即將開始': 'badge-info
 export default function Promotions() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ name: '', type: '滿額折扣', start_date: '', end_date: '', discount_value: 0, discount_type: '百分比', applicable_to: '', max_uses: 0, status: '即將開始' })
 
   useEffect(() => {
-    getPromotions().then(({ data }) => { setItems(data || []); setLoading(false) })
+    getPromotions().then(({ data }) => { setItems(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -31,6 +32,7 @@ export default function Promotions() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = items.filter(s =>
     search === '' || s.name?.includes(search) || s.type?.includes(search)

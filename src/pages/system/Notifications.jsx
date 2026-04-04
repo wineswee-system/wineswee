@@ -8,25 +8,43 @@ const typeIcon = { leave: '📅', task: '✅', system: '⚙️', performance: '�
 export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     getNotifications().then(({ data }) => {
       setNotifications(data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   const handleMarkRead = async (id) => {
-    await markNotificationRead(id)
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+    try {
+      const { error } = await markNotificationRead(id)
+      if (error) throw error
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const handleMarkAllRead = async () => {
-    await markAllNotificationsRead()
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    try {
+      const { error } = await markAllNotificationsRead()
+      if (error) throw error
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const unread = notifications.filter(n => !n.read).length
 

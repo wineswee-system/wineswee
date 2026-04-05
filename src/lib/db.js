@@ -770,3 +770,27 @@ export const createCarrierConfig = (data) =>
   supabase.from('carrier_configs').insert(data).select().single()
 export const updateCarrierConfig = (id, data) =>
   supabase.from('carrier_configs').update(data).eq('id', id).select().single()
+
+// ── Super Admin: Cross-tenant operations ──
+export const getAllEmployees = () =>
+  supabase.from('employees').select('*, tenants(name)').order('id')
+export const updateEmployeeRole = (id, data) =>
+  supabase.from('employees').update(data).eq('id', id).select().single()
+export const getTenantModuleConfig = (tenantId) =>
+  supabase.from('tenants').select('id, name, features, plan, status, max_users').eq('id', tenantId).single()
+export const updateTenantModules = (id, features) =>
+  supabase.from('tenants').update({ features }).eq('id', id).select().single()
+export const getTenantEmployees = (tenantId) =>
+  supabase.from('employees').select('*').eq('tenant_id', tenantId).order('id')
+export const getRoles = () =>
+  supabase.from('roles').select('*').order('level')
+export const getPermissions = () =>
+  supabase.from('permissions').select('*').order('module, code')
+export const getRolePermissions = (roleId) =>
+  supabase.from('role_permissions').select('*, permissions(*)').eq('role_id', roleId)
+export const updateRolePermissions = async (roleId, permissionIds) => {
+  await supabase.from('role_permissions').delete().eq('role_id', roleId)
+  if (permissionIds.length === 0) return { data: [], error: null }
+  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
+  return supabase.from('role_permissions').insert(rows).select()
+}

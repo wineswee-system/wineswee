@@ -57,7 +57,7 @@ const styles = {
     fontSize: 13,
     borderRadius: 8,
     border: '1px solid var(--border-subtle)',
-    background: 'var(--bg-main, #0f172a)',
+    background: 'var(--bg-input)',
     color: 'var(--text-primary)',
     outline: 'none',
     fontFamily: 'inherit',

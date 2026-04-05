@@ -3,7 +3,7 @@
  */
 export function Card({ children, className = '', padding = true }) {
   return (
-    <div className={`rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-sm shadow-sm transition-shadow hover:shadow-md ${padding ? 'p-5' : ''} ${className}`}>
+    <div className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-sm shadow-[var(--shadow-sm)] transition-all duration-200 hover:shadow-[var(--shadow-md)] ${padding ? 'p-5' : ''} ${className}`}>
       {children}
     </div>
   )

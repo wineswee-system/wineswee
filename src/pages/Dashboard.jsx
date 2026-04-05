@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw } from 'lucide-react'
+import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw, BarChart3, PieChart } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { getEmployees, getTasks, getWorkflows, getAttendance, getLeaveRequests } from '../lib/db'
@@ -9,32 +9,44 @@ import { chat, isConfigured, clearSession } from '../lib/gemini'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
-const C = { cyan: '#22d3ee', blue: '#3b82f6', purple: '#a78bfa', green: '#34d399', orange: '#fb923c', red: '#f87171', pink: '#f472b6', yellow: '#fbbf24' }
+const C = { cyan: '#0ea5c9', blue: '#3b82f6', purple: '#8b5cf6', green: '#10b981', orange: '#f59e0b', red: '#ef4444', pink: '#ec4899', yellow: '#eab308' }
+
+// Detect light theme
+const isLight = () => document.documentElement.getAttribute('data-theme') === 'light'
 
 const chartOpts = {
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#94a3b8', font: { size: 11, weight: 600 }, padding: 14, usePointStyle: true, pointStyleWidth: 8 } },
-    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: 'rgba(148,163,184,0.12)', borderWidth: 1, padding: 12, cornerRadius: 10 },
+    legend: { labels: { color: '#64748b', font: { size: 11, weight: 600 }, padding: 14, usePointStyle: true, pointStyleWidth: 8 } },
+    tooltip: { backgroundColor: '#fff', titleColor: '#1e293b', bodyColor: '#475569', borderColor: 'rgba(148,163,184,0.2)', borderWidth: 1, padding: 12, cornerRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.08)' },
   },
 }
-const grid = { color: 'rgba(148,163,184,0.06)' }
+const grid = { color: 'rgba(148,163,184,0.10)' }
 const tick = { color: '#64748b', font: { size: 11 } }
 
 // ── Reusable mini components ──
 const KpiCard = ({ icon: Icon, label, value, change, changeType, sub, accent }) => (
   <div style={{
-    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16,
-    padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    transition: 'all 0.25s ease', cursor: 'default',
+    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20,
+    padding: '22px 24px', display: 'flex', alignItems: 'center', gap: 18,
+    transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)', cursor: 'default',
+    boxShadow: 'var(--shadow-sm)',
   }}
-    onMouseEnter={e => { e.currentTarget.style.borderColor = accent; e.currentTarget.style.boxShadow = `0 8px 32px ${accent}15` }}
-    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none' }}
+    onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 8px 30px ${accent}18`; e.currentTarget.style.transform = 'translateY(-2px)' }}
+    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
   >
-    <div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em' }}>{value}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+    <div style={{
+      width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+      background: `${accent}14`, color: accent,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: `0 4px 14px ${accent}12`,
+    }}>
+      <Icon size={26} strokeWidth={2.2} />
+    </div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, letterSpacing: '0.02em' }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em' }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
         {change !== undefined && (
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700,
@@ -46,13 +58,6 @@ const KpiCard = ({ icon: Icon, label, value, change, changeType, sub, accent }) 
         )}
         {sub && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</span>}
       </div>
-    </div>
-    <div style={{
-      width: 52, height: 52, borderRadius: 16, flexShrink: 0,
-      background: `${accent}12`, color: accent,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <Icon size={24} />
     </div>
   </div>
 )
@@ -157,7 +162,7 @@ export default function Dashboard() {
     <div className="fade-in" style={{ maxWidth: 1400 }}>
 
       {/* ════════ Row 1: Welcome ════════ */}
-      <div className="dash-welcome" style={{ marginBottom: 32 }}>
+      <div className="dash-welcome" style={{ marginBottom: 28 }}>
         <h1>{greeting} 👋</h1>
         <p>{now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
       </div>
@@ -195,7 +200,7 @@ export default function Dashboard() {
 
       {/* ════════ AI Insights ════════ */}
       {isConfigured() && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px', marginBottom: 0 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', marginBottom: 0, boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <SectionTitle><Sparkles size={16} style={{ color: C.purple }} /> AI 智慧洞察</SectionTitle>
             <button
@@ -223,7 +228,7 @@ export default function Dashboard() {
       {/* ════════ Row 3: Attendance Chart + Task Doughnut ════════ */}
       <div className="dash-charts-row">
         {/* Attendance */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
           <SectionTitle><TrendingUp size={16} style={{ color: C.cyan }} /> 近七天出勤趨勢</SectionTitle>
           <div style={{ height: 280 }}>
             <Line
@@ -267,7 +272,7 @@ export default function Dashboard() {
       {/* ════════ Row 4: Dept Bar + Leave Pie + Progress ════════ */}
       <div className="dash-triple-row">
         {/* Department */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
           <SectionTitle><Users size={16} style={{ color: C.purple }} /> 部門人力</SectionTitle>
           <div style={{ height: 220 }}>
             <Bar
@@ -292,7 +297,7 @@ export default function Dashboard() {
         </div>
 
         {/* Flow progress */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
           <SectionTitle>📊 快速概覽</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
             {[
@@ -329,7 +334,7 @@ export default function Dashboard() {
       </div>
 
       {/* ════════ Row 5: Recent Tasks ════════ */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <SectionTitle>📋 最近任務</SectionTitle>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {tasks.length} 項</span>
@@ -359,6 +364,7 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
     </div>
   )
 }

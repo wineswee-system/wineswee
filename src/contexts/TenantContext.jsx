@@ -8,10 +8,16 @@ export function TenantProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Try to load tenant from localStorage or URL subdomain
     const savedTenant = localStorage.getItem('sme_tenant')
     if (savedTenant) {
-      try { setTenant(JSON.parse(savedTenant)) } catch {}
+      try {
+        const parsed = JSON.parse(savedTenant)
+        setTenant(parsed)
+        // Restore RLS tenant_id on page reload
+        if (parsed?.id) {
+          supabase.rpc('set_config', { setting: 'app.tenant_id', value: String(parsed.id) }).catch(() => {})
+        }
+      } catch { /* ignore corrupt data */ }
     }
     setLoading(false)
   }, [])

@@ -630,6 +630,10 @@ export const getTenants = () =>
   supabase.from('tenants').select('*').order('id')
 export const createTenantRecord = (data) =>
   supabase.from('tenants').insert(data).select().single()
+export const updateTenantRecord = (id, data) =>
+  supabase.from('tenants').update(data).eq('id', id).select().single()
+export const deleteTenantRecord = (id) =>
+  supabase.from('tenants').delete().eq('id', id)
 
 // ── Warehouses ──
 export const getWarehouses = () =>

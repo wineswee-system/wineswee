@@ -1267,7 +1267,12 @@ CREATE TABLE IF NOT EXISTS tenants (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
+  tax_id TEXT,
   plan TEXT DEFAULT 'free',
+  max_users INT DEFAULT 5,
+  admin_email TEXT,
+  status TEXT DEFAULT '啟用',
+  features TEXT[] DEFAULT ARRAY['HR','Finance'],
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );

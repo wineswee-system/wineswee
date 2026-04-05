@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Building2, Users, Settings, Shield, Plus, Edit, Trash2, Globe, Database } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Building2, Users, Settings, Shield, Plus, Edit, Trash2, Globe, Database, RefreshCw } from 'lucide-react'
 import Modal, { Field } from '../../components/Modal'
 import { useTenant } from '../../contexts/TenantContext'
+import { getTenants, createTenantRecord, updateTenantRecord, deleteTenantRecord } from '../../lib/db'
 
 const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
@@ -10,22 +11,26 @@ const FEATURES = ['HR', 'Finance', 'CRM', 'WMS', 'POS', 'Manufacturing']
 const planColor = { '免費': 'badge-neutral', '標準': 'badge-info', '專業': 'badge-purple', '企業': 'badge-danger' }
 const statusColor = { '啟用': 'badge-success', '暫停': 'badge-warning', '試用': 'badge-info' }
 
-const initialTenants = [
-  { id: 1, company: '日盛科技股份有限公司', taxId: '12345678', plan: '企業', users: 58, maxUsers: 100, storage: '12.4 GB', status: '啟用', adminEmail: 'admin@richtech.com.tw', features: ['HR', 'Finance', 'CRM', 'WMS', 'POS', 'Manufacturing'], created: '2024-06-15' },
-  { id: 2, company: '美味餐飲集團', taxId: '23456789', plan: '專業', users: 24, maxUsers: 50, storage: '5.8 GB', status: '啟用', adminEmail: 'it@delicious.com.tw', features: ['HR', 'Finance', 'CRM', 'POS'], created: '2024-09-20' },
-  { id: 3, company: '綠能環保有限公司', taxId: '34567890', plan: '標準', users: 12, maxUsers: 25, storage: '2.1 GB', status: '試用', adminEmail: 'manager@greeneco.com.tw', features: ['HR', 'Finance', 'WMS'], created: '2025-11-03' },
-  { id: 4, company: '快捷物流股份有限公司', taxId: '45678901', plan: '免費', users: 3, maxUsers: 5, storage: '0.4 GB', status: '暫停', adminEmail: 'boss@quickship.com.tw', features: ['HR', 'Finance'], created: '2025-12-28' },
-]
-
-const emptyForm = { company: '', taxId: '', plan: '標準', maxUsers: 25, adminEmail: '', status: '啟用', features: ['HR', 'Finance'] }
+const emptyForm = { name: '', tax_id: '', plan: '標準', max_users: 25, admin_email: '', status: '啟用', features: ['HR', 'Finance'] }
 
 export default function TenantAdmin() {
   const { tenant: activeTenant, switchTenant } = useTenant()
-  const [tenants, setTenants] = useState(initialTenants)
+  const [tenants, setTenants] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const fetchTenants = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await getTenants()
+    if (!error && data) setTenants(data)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchTenants() }, [fetchTenants])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -46,31 +51,48 @@ export default function TenantAdmin() {
 
   const openEdit = (t) => {
     setEditId(t.id)
-    setForm({ company: t.company, taxId: t.taxId, plan: t.plan, maxUsers: t.maxUsers, adminEmail: t.adminEmail, status: t.status, features: [...t.features] })
+    setForm({
+      name: t.name || '',
+      tax_id: t.tax_id || '',
+      plan: t.plan || '標準',
+      max_users: t.max_users || 25,
+      admin_email: t.admin_email || '',
+      status: t.status || '啟用',
+      features: Array.isArray(t.features) ? [...t.features] : ['HR', 'Finance'],
+    })
     setShowModal(true)
   }
 
-  const handleSubmit = () => {
-    if (!form.company || !form.taxId || !form.adminEmail) return
+  const handleSubmit = async () => {
+    if (!form.name || !form.tax_id || !form.admin_email) return
+    setSaving(true)
+    const slug = form.tax_id.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const payload = { ...form, slug, is_active: form.status === '啟用' }
+
     if (editId) {
-      setTenants(prev => prev.map(t => t.id === editId ? { ...t, ...form } : t))
+      const { error } = await updateTenantRecord(editId, payload)
+      if (error) { console.error('Update tenant error:', error); setSaving(false); return }
     } else {
-      const newTenant = { id: Date.now(), ...form, users: 1, storage: '0.0 GB', created: new Date().toISOString().slice(0, 10) }
-      setTenants(prev => [...prev, newTenant])
+      const { error } = await createTenantRecord(payload)
+      if (error) { console.error('Create tenant error:', error); setSaving(false); return }
     }
+    setSaving(false)
     setShowModal(false)
     setForm(emptyForm)
     setEditId(null)
+    fetchTenants()
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!confirm('確定要刪除此租戶？此操作無法復原。')) return
-    setTenants(prev => prev.filter(t => t.id !== id))
+    const { error } = await deleteTenantRecord(id)
+    if (error) { console.error('Delete tenant error:', error); return }
+    fetchTenants()
   }
 
-  const totalUsers = tenants.reduce((s, t) => s + t.users, 0)
-  const totalStorage = tenants.reduce((s, t) => s + parseFloat(t.storage), 0).toFixed(1)
-  const filtered = tenants.filter(t => t.company.includes(search) || t.taxId.includes(search))
+  const filtered = tenants.filter(t =>
+    (t.name || '').includes(search) || (t.tax_id || '').includes(search)
+  )
 
   return (
     <div className="fade-in">
@@ -84,9 +106,10 @@ export default function TenantAdmin() {
             {activeTenant && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 12px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
                 <Globe size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
-                目前租戶：<strong style={{ color: 'var(--accent-cyan)' }}>{activeTenant.company}</strong>
+                目前租戶：<strong style={{ color: 'var(--accent-cyan)' }}>{activeTenant.name}</strong>
               </span>
             )}
+            <button className="btn btn-secondary" onClick={fetchTenants} disabled={loading}><RefreshCw size={14} className={loading ? 'spin' : ''} /> 重新整理</button>
             <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增租戶</button>
           </div>
         </div>
@@ -102,12 +125,17 @@ export default function TenantAdmin() {
           <div className="stat-card-value">{tenants.filter(t => t.status === '啟用').length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
-          <div className="stat-card-label"><Users size={14} /> 使用者總數</div>
-          <div className="stat-card-value">{totalUsers}</div>
+          <div className="stat-card-label"><Users size={14} /> 使用者上限合計</div>
+          <div className="stat-card-value">{tenants.reduce((s, t) => s + (t.max_users || 0), 0)}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-amber)', '--card-accent-dim': 'var(--accent-amber-dim)' }}>
-          <div className="stat-card-label"><Database size={14} /> 資料庫大小(估)</div>
-          <div className="stat-card-value">{totalStorage} GB</div>
+          <div className="stat-card-label"><Database size={14} /> 方案分佈</div>
+          <div className="stat-card-value" style={{ fontSize: 14 }}>
+            {PLANS.map(p => {
+              const c = tenants.filter(t => t.plan === p).length
+              return c > 0 ? `${p}:${c}` : null
+            }).filter(Boolean).join(' / ') || '-'}
+          </div>
         </div>
       </div>
 
@@ -123,8 +151,7 @@ export default function TenantAdmin() {
                 <th>公司名稱</th>
                 <th>統一編號</th>
                 <th>方案</th>
-                <th>使用者</th>
-                <th>儲存空間</th>
+                <th>使用者上限</th>
                 <th>狀態</th>
                 <th>功能模組</th>
                 <th>建立日期</th>
@@ -132,27 +159,29 @@ export default function TenantAdmin() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的租戶</td></tr>
+              {loading && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>載入中...</td></tr>
               )}
-              {filtered.map(t => (
+              {!loading && filtered.length === 0 && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的租戶</td></tr>
+              )}
+              {!loading && filtered.map(t => (
                 <tr key={t.id} style={activeTenant?.id === t.id ? { background: 'var(--accent-cyan-dim)' } : {}}>
                   <td style={{ fontWeight: 600 }}>
                     <Building2 size={13} style={{ marginRight: 4, verticalAlign: -2, color: 'var(--accent-cyan)' }} />
-                    {t.company}
+                    {t.name}
                     {activeTenant?.id === t.id && <span style={{ fontSize: 10, color: 'var(--accent-green)', marginLeft: 6 }}>● 目前</span>}
                   </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.taxId}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.tax_id}</td>
                   <td><span className={`badge ${planColor[t.plan] || 'badge-neutral'}`}>{t.plan}</span></td>
-                  <td>{t.users} / {t.maxUsers}</td>
-                  <td>{t.storage}</td>
+                  <td>{t.max_users}</td>
                   <td><span className={`badge ${statusColor[t.status] || 'badge-neutral'}`}>{t.status}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                      {t.features.map(f => <span key={f} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{f}</span>)}
+                      {(t.features || []).map(f => <span key={f} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{f}</span>)}
                     </div>
                   </td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.created}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.created_at?.slice(0, 10)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-ghost" title="切換租戶" onClick={() => switchTenant(t)} style={{ padding: '4px 6px' }}>
@@ -176,13 +205,13 @@ export default function TenantAdmin() {
       {showModal && (
         <Modal title={editId ? '編輯租戶' : '新增租戶'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="公司名稱">
-            <input className="form-input" value={form.company} onChange={e => set('company', e.target.value)} placeholder="例：台灣科技股份有限公司" />
+            <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：台灣科技股份有限公司" />
           </Field>
           <Field label="統一編號">
-            <input className="form-input" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder="8 碼統一編號" maxLength={8} />
+            <input className="form-input" value={form.tax_id} onChange={e => set('tax_id', e.target.value)} placeholder="8 碼統一編號" maxLength={8} />
           </Field>
           <Field label="管理員 Email">
-            <input className="form-input" type="email" value={form.adminEmail} onChange={e => set('adminEmail', e.target.value)} placeholder="admin@example.com" />
+            <input className="form-input" type="email" value={form.admin_email} onChange={e => set('admin_email', e.target.value)} placeholder="admin@example.com" />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <Field label="方案">
@@ -191,7 +220,7 @@ export default function TenantAdmin() {
               </select>
             </Field>
             <Field label="最大使用者數">
-              <input className="form-input" type="number" value={form.maxUsers} onChange={e => set('maxUsers', parseInt(e.target.value) || 0)} min={1} />
+              <input className="form-input" type="number" value={form.max_users} onChange={e => set('max_users', parseInt(e.target.value) || 0)} min={1} />
             </Field>
           </div>
           <Field label="狀態">

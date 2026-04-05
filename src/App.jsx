@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { TenantProvider } from './contexts/TenantContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -316,15 +317,17 @@ function AdminApp() {
 export default function App() {
   return (
     <AuthProvider>
-      <Suspense fallback={<LoadingSpinner />}>
-      <Routes>
-        <Route path="/demo" element={<DemoLanding />} />
-        <Route path="/portal" element={<PortalLayout />}>
-          <Route index element={<PortalHome />} />
-        </Route>
-        <Route path="/*" element={<AdminApp />} />
-      </Routes>
-      </Suspense>
+      <TenantProvider>
+        <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          <Route path="/demo" element={<DemoLanding />} />
+          <Route path="/portal" element={<PortalLayout />}>
+            <Route index element={<PortalHome />} />
+          </Route>
+          <Route path="/*" element={<AdminApp />} />
+        </Routes>
+        </Suspense>
+      </TenantProvider>
     </AuthProvider>
   )
 }

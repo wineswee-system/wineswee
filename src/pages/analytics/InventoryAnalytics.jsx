@@ -31,7 +31,7 @@ export default function InventoryAnalytics() {
   useEffect(() => {
     Promise.all([
       supabase.from('stock_levels').select('*'),
-      supabase.from('stock_movements').select('*'),
+      supabase.from('inventory_transactions').select('*'),
       supabase.from('accounts_payable').select('amount, created_at'),
     ]).then(([sl, sm, ap]) => {
       setStockLevels(sl.data || [])

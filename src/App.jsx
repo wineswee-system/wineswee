@@ -122,6 +122,21 @@ const ExchangeRates = lazy(() => import('./pages/finance/ExchangeRates'))
 const CostCenters = lazy(() => import('./pages/finance/CostCenters'))
 const CashFlow = lazy(() => import('./pages/finance/CashFlow'))
 const ShopFloor = lazy(() => import('./pages/manufacturing/ShopFloor'))
+const WorkCenters = lazy(() => import('./pages/manufacturing/WorkCenters'))
+const Scheduling = lazy(() => import('./pages/manufacturing/Scheduling'))
+const PricingRules = lazy(() => import('./pages/sales/PricingRules'))
+const BlanketOrders = lazy(() => import('./pages/purchase/BlanketOrders'))
+const Segments = lazy(() => import('./pages/crm/Segments'))
+const Bins = lazy(() => import('./pages/wms/Bins'))
+const PickPackShip = lazy(() => import('./pages/wms/PickPackShip'))
+const ApprovalRules = lazy(() => import('./pages/system/ApprovalRules'))
+const Subcontracting = lazy(() => import('./pages/manufacturing/Subcontracting'))
+const PeriodClose = lazy(() => import('./pages/finance/PeriodClose'))
+const Training = lazy(() => import('./pages/hr/Training'))
+const Transfers = lazy(() => import('./pages/wms/Transfers'))
+const Commission = lazy(() => import('./pages/sales/Commission'))
+const Customer360 = lazy(() => import('./pages/crm/Customer360'))
+const CarrierIntegration = lazy(() => import('./pages/integration/CarrierIntegration'))
 const TenantAdmin = lazy(() => import('./pages/system/TenantAdmin'))
 const DataImportExport = lazy(() => import('./pages/system/DataImportExport'))
 const DatabaseAdmin = lazy(() => import('./pages/system/DatabaseAdmin'))
@@ -173,6 +188,7 @@ function AdminApp() {
             <Route path="/hr/expenses" element={<Expenses />} />
             <Route path="/hr/bonus" element={<Bonus />} />
             <Route path="/hr/labor-inspection" element={<Suspense fallback={<LoadingSpinner />}><LaborInspection /></Suspense>} />
+            <Route path="/hr/training" element={<Suspense fallback={<LoadingSpinner />}><Training /></Suspense>} />
             {/* Process */}
             <Route path="/process/overview" element={<ProcessOverview />} />
             <Route path="/process/workflows" element={<Workflows />} />
@@ -198,6 +214,7 @@ function AdminApp() {
             <Route path="/system/import-export" element={<DataImportExport />} />
             <Route path="/system/database" element={<DatabaseAdmin />} />
             <Route path="/system/tenants" element={<Suspense fallback={<LoadingSpinner />}><TenantAdmin /></Suspense>} />
+            <Route path="/system/approval-rules" element={<Suspense fallback={<LoadingSpinner />}><ApprovalRules /></Suspense>} />
             {/* AI */}
             <Route path="/ai/help" element={<HelpCenter />} />
             <Route path="/ai/agent" element={<AgentConsole />} />
@@ -206,6 +223,7 @@ function AdminApp() {
             <Route path="/integration/ecommerce" element={<Ecommerce />} />
             <Route path="/integration/wenzhong" element={<WenzhongImport />} />
             <Route path="/integration/api" element={<APIDocumentation />} />
+            <Route path="/integration/carriers" element={<Suspense fallback={<LoadingSpinner />}><CarrierIntegration /></Suspense>} />
             {/* CRM */}
             <Route path="/crm/overview" element={<CRMOverview />} />
             <Route path="/crm/customers" element={<Customers />} />
@@ -217,6 +235,8 @@ function AdminApp() {
             <Route path="/crm/forms" element={<Suspense fallback={<LoadingSpinner />}><FormBuilder /></Suspense>} />
             <Route path="/crm/workflows" element={<Suspense fallback={<LoadingSpinner />}><WorkflowBuilder /></Suspense>} />
             <Route path="/crm/messages" element={<Suspense fallback={<LoadingSpinner />}><MessageLog /></Suspense>} />
+            <Route path="/crm/segments" element={<Suspense fallback={<LoadingSpinner />}><Segments /></Suspense>} />
+            <Route path="/crm/customer-360" element={<Suspense fallback={<LoadingSpinner />}><Customer360 /></Suspense>} />
             {/* WMS */}
             <Route path="/wms/overview" element={<WMSOverview />} />
             <Route path="/wms/skus" element={<SKUs />} />
@@ -227,6 +247,9 @@ function AdminApp() {
             <Route path="/wms/lots" element={<Lots />} />
             <Route path="/wms/stock-count" element={<StockCount />} />
             <Route path="/wms/valuation" element={<Valuation />} />
+            <Route path="/wms/bins" element={<Suspense fallback={<LoadingSpinner />}><Bins /></Suspense>} />
+            <Route path="/wms/pick-pack-ship" element={<Suspense fallback={<LoadingSpinner />}><PickPackShip /></Suspense>} />
+            <Route path="/wms/transfers" element={<Suspense fallback={<LoadingSpinner />}><Transfers /></Suspense>} />
             {/* Sales */}
             <Route path="/sales" element={<Suspense fallback={<LoadingSpinner />}><SalesOverview /></Suspense>} />
             <Route path="/sales/quotations" element={<Quotations />} />
@@ -234,6 +257,8 @@ function AdminApp() {
             <Route path="/sales/promotions" element={<Promotions />} />
             <Route path="/sales/returns" element={<Returns />} />
             <Route path="/sales/shipments" element={<Shipments />} />
+            <Route path="/sales/pricing" element={<Suspense fallback={<LoadingSpinner />}><PricingRules /></Suspense>} />
+            <Route path="/sales/commission" element={<Suspense fallback={<LoadingSpinner />}><Commission /></Suspense>} />
             {/* POS */}
             <Route path="/pos" element={<Suspense fallback={<LoadingSpinner />}><POSOverview /></Suspense>} />
             <Route path="/pos/terminal" element={<POSTerminal />} />
@@ -250,6 +275,7 @@ function AdminApp() {
             <Route path="/purchase/pipeline" element={<ProcurementPipeline />} />
             <Route path="/purchase/workflow" element={<ProcurementWorkflow />} />
             <Route path="/purchase/matching" element={<ThreeWayMatch />} />
+            <Route path="/purchase/blanket" element={<Suspense fallback={<LoadingSpinner />}><BlanketOrders /></Suspense>} />
             {/* Finance */}
             <Route path="/finance/overview" element={<FinanceOverview />} />
             <Route path="/finance/journal" element={<JournalEntries />} />
@@ -268,12 +294,16 @@ function AdminApp() {
             <Route path="/finance/exchange-rates" element={<Suspense fallback={<LoadingSpinner />}><ExchangeRates /></Suspense>} />
             <Route path="/finance/cost-centers" element={<Suspense fallback={<LoadingSpinner />}><CostCenters /></Suspense>} />
             <Route path="/finance/cash-flow" element={<Suspense fallback={<LoadingSpinner />}><CashFlow /></Suspense>} />
+            <Route path="/finance/period-close" element={<Suspense fallback={<LoadingSpinner />}><PeriodClose /></Suspense>} />
             {/* Manufacturing & QM */}
             <Route path="/manufacturing/bom" element={<BOM />} />
             <Route path="/manufacturing/mrp" element={<MRP />} />
             <Route path="/manufacturing/qm" element={<QualityInspection />} />
             <Route path="/manufacturing/orders" element={<ManufacturingOrders />} />
             <Route path="/manufacturing/shop-floor" element={<Suspense fallback={<LoadingSpinner />}><ShopFloor /></Suspense>} />
+            <Route path="/manufacturing/work-centers" element={<Suspense fallback={<LoadingSpinner />}><WorkCenters /></Suspense>} />
+            <Route path="/manufacturing/scheduling" element={<Suspense fallback={<LoadingSpinner />}><Scheduling /></Suspense>} />
+            <Route path="/manufacturing/subcontracting" element={<Suspense fallback={<LoadingSpinner />}><Subcontracting /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

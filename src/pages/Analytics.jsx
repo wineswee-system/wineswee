@@ -35,6 +35,7 @@ export default function Analytics() {
   const [showComparison, setShowComparison] = useState(false)
   const [deptFilter, setDeptFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [drillDown, setDrillDown] = useState(null)
 
   useEffect(() => {
     const month = new Date().toISOString().slice(0, 7)
@@ -53,7 +54,8 @@ export default function Analytics() {
       setData({
         employees: emp.data || [], tasks: tasks.data || [], attendance: att.data || [],
         opportunities: opps.data || [], stock: stock.data || [],
-        ar: ar.data || [], ap: ap.data || [], salary: sal.data || [], profit,
+        ar: ar.data || [], ap: ap.data || [], salary: sal.data || [],
+        profit: profit || { revenue: 0, totalCost: 0, grossProfit: 0, grossMargin: 0 },
         departments: depts.data || [],
       })
     }).catch(err => {
@@ -63,6 +65,41 @@ export default function Analytics() {
       setLoading(false)
     })
   }, [])
+
+  const handlePipelineClick = useCallback((_, elements) => {
+    if (!data || !elements?.length) return
+    const stages = ['初步接觸', '需求分析', '報價', '議價', '贏單', '輸單']
+    const idx = elements[0].index
+    const stage = stages[idx]
+    const opps = data.opportunities || []
+    const rows = opps.filter(o => o.stage === stage).map(o => ({ title: o.title || o.customer_name, amount: `NT$ ${(o.amount || 0).toLocaleString()}`, assignee: o.assignee || '-', date: (o.created_at || '').slice(0, 10) }))
+    setDrillDown({ title: `銷售漏斗 → ${stage}（${rows.length} 筆）`, rows, columns: [{ key: 'title', label: '商機' }, { key: 'amount', label: '金額' }, { key: 'assignee', label: '負責人' }, { key: 'date', label: '建立日期' }] })
+  }, [data])
+
+  const handleARAgingClick = useCallback((_, elements) => {
+    if (!data || !elements?.length) return
+    const labels = ['未到期', '1-30天', '31-60天', '60天+']
+    const bucketLabel = labels[elements[0].index]
+    const today2 = new Date()
+    const bucketFilter = (r) => {
+      const days = Math.floor((today2 - new Date(r.due_date)) / 86400000)
+      const amt = (r.amount || 0) - (r.paid_amount || 0)
+      if (amt <= 0) return false
+      if (elements[0].index === 0) return days <= 0
+      if (elements[0].index === 1) return days > 0 && days <= 30
+      if (elements[0].index === 2) return days > 30 && days <= 60
+      return days > 60
+    }
+    const rows = (data.ar || []).filter(r => r.status !== '已收款').filter(bucketFilter).map(r => ({ customer: r.customer_name || '-', amount: `NT$ ${(r.amount || 0).toLocaleString()}`, balance: `NT$ ${((r.amount || 0) - (r.paid_amount || 0)).toLocaleString()}`, due: (r.due_date || '').slice(0, 10) }))
+    setDrillDown({ title: `應收帳齡 → ${bucketLabel}（${rows.length} 筆）`, rows, columns: [{ key: 'customer', label: '客戶' }, { key: 'amount', label: '應收金額' }, { key: 'balance', label: '餘額' }, { key: 'due', label: '到期日' }] })
+  }, [data])
+
+  const handleStockClick = useCallback((_, elements) => {
+    if (!data || !elements?.length) return
+    const isLow = elements[0].index === 1
+    const rows = (data.stock || []).filter(s => isLow ? (s.quantity || 0) <= (s.min_qty || 10) : (s.quantity || 0) > (s.min_qty || 10)).map(s => ({ name: s.sku_name || s.name || '-', qty: s.quantity || 0, min: s.min_qty || 10, warehouse: s.warehouse || '-' }))
+    setDrillDown({ title: `庫存 → ${isLow ? '低庫存' : '正常'}（${rows.length} 筆）`, rows, columns: [{ key: 'name', label: 'SKU' }, { key: 'qty', label: '數量' }, { key: 'min', label: '安全量' }, { key: 'warehouse', label: '倉庫' }] })
+  }, [data])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -230,42 +267,6 @@ export default function Analytics() {
       { key: 'value', label: '數值' },
     ], `BI營運看板_${new Date().toISOString().slice(0, 10)}`)
   }
-
-  // Drill-down state
-  const [drillDown, setDrillDown] = useState(null) // { title, rows: [{ col1, col2, ... }], columns: [{ key, label }] }
-
-  const handlePipelineClick = useCallback((_, elements) => {
-    if (!elements?.length) return
-    const idx = elements[0].index
-    const stage = stages[idx]
-    const rows = d.opportunities.filter(o => o.stage === stage).map(o => ({ title: o.title || o.customer_name, amount: `NT$ ${(o.amount || 0).toLocaleString()}`, assignee: o.assignee || '-', date: (o.created_at || '').slice(0, 10) }))
-    setDrillDown({ title: `銷售漏斗 → ${stage}（${rows.length} 筆）`, rows, columns: [{ key: 'title', label: '商機' }, { key: 'amount', label: '金額' }, { key: 'assignee', label: '負責人' }, { key: 'date', label: '建立日期' }] })
-  }, [d.opportunities])
-
-  const handleARAgingClick = useCallback((_, elements) => {
-    if (!elements?.length) return
-    const labels = ['未到期', '1-30天', '31-60天', '60天+']
-    const bucketLabel = labels[elements[0].index]
-    const today2 = new Date()
-    const bucketFilter = (r) => {
-      const days = Math.floor((today2 - new Date(r.due_date)) / 86400000)
-      const amt = (r.amount || 0) - (r.paid_amount || 0)
-      if (amt <= 0) return false
-      if (elements[0].index === 0) return days <= 0
-      if (elements[0].index === 1) return days > 0 && days <= 30
-      if (elements[0].index === 2) return days > 30 && days <= 60
-      return days > 60
-    }
-    const rows = d.ar.filter(r => r.status !== '已收款').filter(bucketFilter).map(r => ({ customer: r.customer_name || '-', amount: `NT$ ${(r.amount || 0).toLocaleString()}`, balance: `NT$ ${((r.amount || 0) - (r.paid_amount || 0)).toLocaleString()}`, due: (r.due_date || '').slice(0, 10) }))
-    setDrillDown({ title: `應收帳齡 → ${bucketLabel}（${rows.length} 筆）`, rows, columns: [{ key: 'customer', label: '客戶' }, { key: 'amount', label: '應收金額' }, { key: 'balance', label: '餘額' }, { key: 'due', label: '到期日' }] })
-  }, [d.ar])
-
-  const handleStockClick = useCallback((_, elements) => {
-    if (!elements?.length) return
-    const isLow = elements[0].index === 1
-    const rows = d.stock.filter(s => isLow ? (s.quantity || 0) <= (s.min_qty || 10) : (s.quantity || 0) > (s.min_qty || 10)).map(s => ({ name: s.sku_name || s.name || '-', qty: s.quantity || 0, min: s.min_qty || 10, warehouse: s.warehouse || '-' }))
-    setDrillDown({ title: `庫存 → ${isLow ? '低庫存' : '正常'}（${rows.length} 筆）`, rows, columns: [{ key: 'name', label: 'SKU' }, { key: 'qty', label: '數量' }, { key: 'min', label: '安全量' }, { key: 'warehouse', label: '倉庫' }] })
-  }, [d.stock])
 
   return (
     <div className="fade-in" id="analytics-page">

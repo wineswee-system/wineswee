@@ -33,7 +33,7 @@ export default function ProcessAnalytics() {
     Promise.all([
       supabase.from('workflows').select('*'),
       supabase.from('tasks').select('*'),
-      supabase.from('approval_records').select('*'),
+      supabase.from('approval_requests').select('*'),
       supabase.from('checklists').select('*'),
     ]).then(([wf, tk, ap, cl]) => {
       setWorkflows(wf.data || [])

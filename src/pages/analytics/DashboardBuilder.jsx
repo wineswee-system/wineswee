@@ -35,7 +35,7 @@ const DATA_SOURCES = [
   { value: 'opportunities', label: '商機', fields: ['amount', 'stage', 'created_at'] },
   { value: 'stock_levels', label: '庫存', fields: ['quantity', 'min_qty', 'category', 'product_name'] },
   { value: 'employees', label: '員工', fields: ['department', 'status', 'position', 'created_at'] },
-  { value: 'attendance', label: '出勤', fields: ['status', 'date', 'department'] },
+  { value: 'attendance_records', label: '出勤', fields: ['status', 'date', 'department'] },
   { value: 'pos_transactions', label: 'POS交易', fields: ['total_amount', 'payment_method', 'created_at'] },
 ]
 
@@ -64,7 +64,7 @@ const defaultWidgets = [
   { id: 'w1', title: '本月營收', type: 'stat', dataSource: 'accounts_receivable', metric: 'sum', groupBy: 'status', size: '1x1' },
   { id: 'w2', title: '商機階段分布', type: 'bar', dataSource: 'opportunities', metric: 'count', groupBy: 'status', size: '1x1' },
   { id: 'w3', title: '庫存類別比例', type: 'doughnut', dataSource: 'stock_levels', metric: 'sum', groupBy: 'category', size: '1x1' },
-  { id: 'w4', title: '出勤狀態', type: 'bar', dataSource: 'attendance', metric: 'count', groupBy: 'status', size: '1x1' },
+  { id: 'w4', title: '出勤狀態', type: 'bar', dataSource: 'attendance_records', metric: 'count', groupBy: 'status', size: '1x1' },
 ]
 
 function aggregate(rows, metric, groupBy) {

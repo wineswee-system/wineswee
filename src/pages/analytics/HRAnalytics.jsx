@@ -29,9 +29,9 @@ export default function HRAnalytics() {
   useEffect(() => {
     Promise.all([
       supabase.from('employees').select('*'),
-      supabase.from('overtime_records').select('*'),
-      supabase.from('leave_records').select('*'),
-      supabase.from('recruitment').select('*'),
+      supabase.from('overtime_requests').select('*'),
+      supabase.from('leave_requests').select('*'),
+      supabase.from('recruitment_jobs').select('*'),
     ]).then(([emp, ot, leave, recruit]) => {
       setData({
         employees: emp.data || [],

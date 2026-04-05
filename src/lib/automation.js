@@ -406,7 +406,7 @@ export async function analyzeProductProfitability(dateRange) {
   // Get sales order lines with SKU info
   const { data: orders } = await supabase
     .from('sales_orders')
-    .select('id, customer, total_amount, status, created_at')
+    .select('id, customer, total, payment_status, created_at')
     .gte('created_at', startDate)
     .lte('created_at', endDate + 'T23:59:59')
 
@@ -478,7 +478,7 @@ export async function analyzeProductProfitability(dateRange) {
     if (!customerProfit[name]) {
       customerProfit[name] = { name, revenue: 0, orders: 0, avgOrderValue: 0 }
     }
-    customerProfit[name].revenue += (order.total_amount || 0)
+    customerProfit[name].revenue += (order.total_amount || order.total || 0)
     customerProfit[name].orders += 1
   }
 
@@ -575,7 +575,7 @@ export async function getCustomer360(customerName) {
     .maybeSingle()
 
   // Calculate unified metrics
-  const b2bRevenue = (salesOrders || []).reduce((s, o) => s + (o.total_amount || 0), 0)
+  const b2bRevenue = (salesOrders || []).reduce((s, o) => s + (o.total_amount || o.total || 0), 0)
   const posRevenue = (posTransactions || []).reduce((s, t) => s + (t.total || t.amount || 0), 0)
   const totalRevenue = b2bRevenue + posRevenue
   const totalOrders = (salesOrders || []).length + (posTransactions || []).length
@@ -614,7 +614,7 @@ export async function runForecastDrivenMRP(forecastMonths = 3) {
     .from('sales_orders')
     .select('id, created_at')
     .gte('created_at', sixMonthsAgo.toISOString())
-    .not('status', 'in', '("已取消")')
+    .not('payment_status', 'in', '("已取消")')
 
   const orderIds = (orders || []).map(o => o.id)
   let lines = []

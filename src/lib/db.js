@@ -558,3 +558,211 @@ export const saveMRPResults = (results) =>
 // ── BOM Update ──
 export const updateBOM = (id, data) =>
   supabase.from('bom').update(data).eq('id', id).select().single()
+
+// ── Work Centers ──
+export const getWorkCenters = () =>
+  supabase.from('work_centers').select('*').order('code')
+export const createWorkCenter = (data) =>
+  supabase.from('work_centers').insert(data).select().single()
+export const updateWorkCenter = (id, data) =>
+  supabase.from('work_centers').update(data).eq('id', id).select().single()
+export const deleteWorkCenter = (id) =>
+  supabase.from('work_centers').delete().eq('id', id)
+
+// ── Routings ──
+export const getRoutings = (bomId) => {
+  const q = supabase.from('routings').select('*, work_centers(code, name)').order('step_number')
+  return bomId ? q.eq('bom_id', bomId) : q
+}
+export const createRouting = (data) =>
+  supabase.from('routings').insert(data).select().single()
+export const updateRouting = (id, data) =>
+  supabase.from('routings').update(data).eq('id', id).select().single()
+export const deleteRouting = (id) =>
+  supabase.from('routings').delete().eq('id', id)
+
+// ── Price Lists & Rules ──
+export const getPriceLists = () =>
+  supabase.from('price_lists').select('*').order('id')
+export const createPriceList = (data) =>
+  supabase.from('price_lists').insert(data).select().single()
+export const updatePriceList = (id, data) =>
+  supabase.from('price_lists').update(data).eq('id', id).select().single()
+export const deletePriceList = (id) =>
+  supabase.from('price_lists').delete().eq('id', id)
+export const getPriceRules = (priceListId) => {
+  const q = supabase.from('price_rules').select('*, skus(code, name)').order('priority', { ascending: false })
+  return priceListId ? q.eq('price_list_id', priceListId) : q
+}
+export const createPriceRule = (data) =>
+  supabase.from('price_rules').insert(data).select().single()
+export const updatePriceRule = (id, data) =>
+  supabase.from('price_rules').update(data).eq('id', id).select().single()
+export const deletePriceRule = (id) =>
+  supabase.from('price_rules').delete().eq('id', id)
+
+// ── Blanket Orders ──
+export const getBlanketOrders = () =>
+  supabase.from('blanket_orders').select('*, suppliers(name)').order('id', { ascending: false })
+export const createBlanketOrder = (data) =>
+  supabase.from('blanket_orders').insert(data).select().single()
+export const updateBlanketOrder = (id, data) =>
+  supabase.from('blanket_orders').update(data).eq('id', id).select().single()
+export const deleteBlanketOrder = (id) =>
+  supabase.from('blanket_orders').delete().eq('id', id)
+export const getBlanketOrderReleases = (boId) =>
+  supabase.from('blanket_order_releases').select('*, purchase_orders(po_number)').eq('blanket_order_id', boId).order('release_date', { ascending: false })
+export const createBlanketOrderRelease = (data) =>
+  supabase.from('blanket_order_releases').insert(data).select().single()
+
+// ── Customer Segments ──
+export const getCustomerSegments = () =>
+  supabase.from('customer_segments').select('*').order('id')
+export const createCustomerSegment = (data) =>
+  supabase.from('customer_segments').insert(data).select().single()
+export const updateCustomerSegment = (id, data) =>
+  supabase.from('customer_segments').update(data).eq('id', id).select().single()
+export const deleteCustomerSegment = (id) =>
+  supabase.from('customer_segments').delete().eq('id', id)
+
+// ── Tenants ──
+export const getTenants = () =>
+  supabase.from('tenants').select('*').order('id')
+export const createTenantRecord = (data) =>
+  supabase.from('tenants').insert(data).select().single()
+
+// ── Warehouses ──
+export const getWarehouses = () =>
+  supabase.from('warehouses').select('*').order('code')
+export const createWarehouse = (data) =>
+  supabase.from('warehouses').insert(data).select().single()
+export const updateWarehouse = (id, data) =>
+  supabase.from('warehouses').update(data).eq('id', id).select().single()
+export const deleteWarehouse = (id) =>
+  supabase.from('warehouses').delete().eq('id', id)
+
+// ── Warehouse Zones ──
+export const getWarehouseZones = (warehouseId) => {
+  const q = supabase.from('warehouse_zones').select('*').order('code')
+  return warehouseId ? q.eq('warehouse_id', warehouseId) : q
+}
+export const createWarehouseZone = (data) =>
+  supabase.from('warehouse_zones').insert(data).select().single()
+export const deleteWarehouseZone = (id) =>
+  supabase.from('warehouse_zones').delete().eq('id', id)
+
+// ── Warehouse Bins ──
+export const getWarehouseBins = (zoneId) => {
+  const q = supabase.from('warehouse_bins').select('*').order('code')
+  return zoneId ? q.eq('zone_id', zoneId) : q
+}
+export const createWarehouseBin = (data) =>
+  supabase.from('warehouse_bins').insert(data).select().single()
+export const updateWarehouseBin = (id, data) =>
+  supabase.from('warehouse_bins').update(data).eq('id', id).select().single()
+export const deleteWarehouseBin = (id) =>
+  supabase.from('warehouse_bins').delete().eq('id', id)
+
+// ── Approval Rules & Requests ──
+export const getApprovalRules = (module) => {
+  const q = supabase.from('approval_rules').select('*').order('approval_order')
+  return module ? q.eq('module', module) : q
+}
+export const createApprovalRule = (data) =>
+  supabase.from('approval_rules').insert(data).select().single()
+export const updateApprovalRule = (id, data) =>
+  supabase.from('approval_rules').update(data).eq('id', id).select().single()
+export const deleteApprovalRule = (id) =>
+  supabase.from('approval_rules').delete().eq('id', id)
+export const getApprovalRequests = (status) => {
+  const q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false })
+  return status ? q.eq('status', status) : q
+}
+export const createApprovalRequest = (data) =>
+  supabase.from('approval_requests').insert(data).select().single()
+export const updateApprovalRequest = (id, data) =>
+  supabase.from('approval_requests').update(data).eq('id', id).select().single()
+
+// ── Subcontracts ──
+export const getSubcontracts = () =>
+  supabase.from('subcontracts').select('*, suppliers(name)').order('id', { ascending: false })
+export const createSubcontract = (data) =>
+  supabase.from('subcontracts').insert(data).select().single()
+export const updateSubcontract = (id, data) =>
+  supabase.from('subcontracts').update(data).eq('id', id).select().single()
+export const deleteSubcontract = (id) =>
+  supabase.from('subcontracts').delete().eq('id', id)
+
+// ── Pick/Pack Lists ──
+export const getPickLists = () =>
+  supabase.from('pick_lists').select('*').order('created_at', { ascending: false })
+export const createPickList = (data) =>
+  supabase.from('pick_lists').insert(data).select().single()
+export const updatePickList = (id, data) =>
+  supabase.from('pick_lists').update(data).eq('id', id).select().single()
+export const getPackLists = () =>
+  supabase.from('pack_lists').select('*, pick_lists(pick_number)').order('created_at', { ascending: false })
+export const createPackList = (data) =>
+  supabase.from('pack_lists').insert(data).select().single()
+export const updatePackList = (id, data) =>
+  supabase.from('pack_lists').update(data).eq('id', id).select().single()
+
+// ── Accounting Periods ──
+export const getAccountingPeriods = () =>
+  supabase.from('accounting_periods').select('*').order('period')
+export const createAccountingPeriod = (data) =>
+  supabase.from('accounting_periods').insert(data).select().single()
+export const updateAccountingPeriod = (id, data) =>
+  supabase.from('accounting_periods').update(data).eq('id', id).select().single()
+
+// ── Training / LMS ──
+export const getTrainingCourses = () =>
+  supabase.from('training_courses').select('*').order('id', { ascending: false })
+export const createTrainingCourse = (data) =>
+  supabase.from('training_courses').insert(data).select().single()
+export const updateTrainingCourse = (id, data) =>
+  supabase.from('training_courses').update(data).eq('id', id).select().single()
+export const deleteTrainingCourse = (id) =>
+  supabase.from('training_courses').delete().eq('id', id)
+export const getTrainingEnrollments = (courseId) => {
+  const q = supabase.from('training_enrollments').select('*').order('id')
+  return courseId ? q.eq('course_id', courseId) : q
+}
+export const createTrainingEnrollment = (data) =>
+  supabase.from('training_enrollments').insert(data).select().single()
+export const updateTrainingEnrollment = (id, data) =>
+  supabase.from('training_enrollments').update(data).eq('id', id).select().single()
+
+// ─�� Warehouse Transfers ──
+export const getWarehouseTransfers = () =>
+  supabase.from('warehouse_transfers').select('*').order('id', { ascending: false })
+export const createWarehouseTransfer = (data) =>
+  supabase.from('warehouse_transfers').insert(data).select().single()
+export const updateWarehouseTransfer = (id, data) =>
+  supabase.from('warehouse_transfers').update(data).eq('id', id).select().single()
+
+// ── Commission ──
+export const getCommissionRules = () =>
+  supabase.from('commission_rules').select('*').order('id')
+export const createCommissionRule = (data) =>
+  supabase.from('commission_rules').insert(data).select().single()
+export const updateCommissionRule = (id, data) =>
+  supabase.from('commission_rules').update(data).eq('id', id).select().single()
+export const deleteCommissionRule = (id) =>
+  supabase.from('commission_rules').delete().eq('id', id)
+export const getCommissionRecords = (period) => {
+  const q = supabase.from('commission_records').select('*').order('id', { ascending: false })
+  return period ? q.eq('period', period) : q
+}
+export const createCommissionRecord = (data) =>
+  supabase.from('commission_records').insert(data).select().single()
+export const updateCommissionRecord = (id, data) =>
+  supabase.from('commission_records').update(data).eq('id', id).select().single()
+
+// ── Carrier Configs ──
+export const getCarrierConfigs = () =>
+  supabase.from('carrier_configs').select('*').order('id')
+export const createCarrierConfig = (data) =>
+  supabase.from('carrier_configs').insert(data).select().single()
+export const updateCarrierConfig = (id, data) =>
+  supabase.from('carrier_configs').update(data).eq('id', id).select().single()

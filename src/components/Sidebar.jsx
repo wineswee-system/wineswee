@@ -70,6 +70,7 @@ const navSections = [
           { icon: Receipt, label: '費用核銷', path: '/hr/expenses' },
           { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
           { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },
+          { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
         ]
       }
     ]
@@ -123,6 +124,8 @@ const navSections = [
           { icon: FileText, label: '表單建立器', path: '/crm/forms' },
           { icon: Zap, label: '工作流程', path: '/crm/workflows' },
           { icon: Send, label: '發送紀錄', path: '/crm/messages' },
+          { icon: Users, label: '客戶分群', path: '/crm/segments' },
+          { icon: UserCircle, label: '客戶 360', path: '/crm/customer-360' },
         ]
       }
     ]
@@ -142,6 +145,9 @@ const navSections = [
           { icon: Package, label: '批號追蹤', path: '/wms/lots' },
           { icon: CheckSquare, label: '盤點作業', path: '/wms/stock-count' },
           { icon: Calculator, label: '庫存估價', path: '/wms/valuation' },
+          { icon: Package, label: '儲位管理', path: '/wms/bins' },
+          { icon: Truck, label: '揀貨/包裝/出貨', path: '/wms/pick-pack-ship' },
+          { icon: ArrowRightLeft, label: '倉庫調撥', path: '/wms/transfers' },
         ]
       }
     ]
@@ -158,6 +164,8 @@ const navSections = [
           { icon: Tag, label: '促銷活動', path: '/sales/promotions' },
           { icon: RotateCcw, label: '退貨管理', path: '/sales/returns' },
           { icon: Truck, label: '物流追蹤', path: '/sales/shipments' },
+          { icon: Tag, label: '價格規則', path: '/sales/pricing' },
+          { icon: DollarSign, label: '業務佣金', path: '/sales/commission' },
         ]
       }
     ]
@@ -192,6 +200,7 @@ const navSections = [
           { icon: GitBranch, label: '採購管線', path: '/purchase/pipeline' },
           { icon: Workflow, label: '採購流程', path: '/purchase/workflow' },
           { icon: Shield, label: '三方比對', path: '/purchase/matching' },
+          { icon: FileText, label: '長期採購協議', path: '/purchase/blanket' },
         ]
       }
     ]
@@ -219,6 +228,7 @@ const navSections = [
           { icon: ArrowRightLeft, label: '匯率管理', path: '/finance/exchange-rates' },
           { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
           { icon: TrendingUp, label: '現金流量表', path: '/finance/cash-flow' },
+          { icon: FileText, label: '期間關帳', path: '/finance/period-close' },
         ]
       }
     ]
@@ -234,6 +244,9 @@ const navSections = [
           { icon: CheckSquare, label: '品質管理', path: '/manufacturing/qm' },
           { icon: ClipboardList, label: '製令管理', path: '/manufacturing/orders' },
           { icon: Monitor, label: '生產現場', path: '/manufacturing/shop-floor' },
+          { icon: ClipboardList, label: '工作中心', path: '/manufacturing/work-centers' },
+          { icon: BarChart3, label: '生產排程', path: '/manufacturing/scheduling' },
+          { icon: ClipboardList, label: '託外加工', path: '/manufacturing/subcontracting' },
         ]
       }
     ]
@@ -250,6 +263,7 @@ const navSections = [
       { icon: BarChart3, label: '資料庫管理', path: '/system/database', color: '#22d3ee' },
       { icon: FileText, label: '資料匯入匯出', path: '/system/import-export', color: '#34d399' },
       { icon: Building2, label: '租戶管理', path: '/system/tenants', color: '#3b82f6' },
+      { icon: Shield, label: '簽核規則', path: '/system/approval-rules', color: '#f87171' },
     ]
   },
   {
@@ -261,6 +275,7 @@ const navSections = [
       { icon: FileText, label: '電商串接', path: '/integration/ecommerce', color: '#fb923c' },
       { icon: Upload, label: '文中匯入', path: '/integration/wenzhong', color: '#8b5cf6' },
       { icon: Settings, label: 'API 文件', path: '/integration/api', color: '#64748b' },
+      { icon: Truck, label: '物流整合', path: '/integration/carriers', color: '#34d399' },
     ]
   },
 ]

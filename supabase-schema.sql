@@ -1358,6 +1358,420 @@ ALTER TABLE pos_transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_pos_transactions ON pos_transactions
   USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
 
+-- ============================================================
+--  工作中心與途程 (Work Centers & Routing)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS work_centers (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT DEFAULT '加工',              -- 加工/組裝/測試/包裝
+  available_hours_per_day NUMERIC DEFAULT 8,
+  efficiency_rate NUMERIC DEFAULT 100,   -- percentage
+  hourly_rate NUMERIC DEFAULT 0,         -- cost per hour
+  status TEXT DEFAULT '啟用',            -- 啟用/停用/維修
+  notes TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS routings (
+  id SERIAL PRIMARY KEY,
+  bom_id INT REFERENCES bom(id) ON DELETE CASCADE,
+  step_number INT NOT NULL,
+  work_center_id INT REFERENCES work_centers(id),
+  operation_name TEXT NOT NULL,
+  setup_time_min NUMERIC DEFAULT 0,      -- minutes
+  run_time_min NUMERIC DEFAULT 0,        -- minutes per unit
+  description TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  價格規則引擎 (Pricing Rules Engine)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS price_lists (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  currency TEXT DEFAULT 'NTD',
+  is_default BOOLEAN DEFAULT false,
+  valid_from DATE,
+  valid_to DATE,
+  status TEXT DEFAULT '啟用',
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS price_rules (
+  id SERIAL PRIMARY KEY,
+  price_list_id INT REFERENCES price_lists(id) ON DELETE CASCADE,
+  sku_id INT,
+  customer_id INT,
+  min_qty NUMERIC DEFAULT 1,
+  unit_price NUMERIC NOT NULL,
+  discount_percent NUMERIC DEFAULT 0,
+  priority INT DEFAULT 0,               -- higher = takes precedence
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  長期採購協議 (Blanket Purchase Orders)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS blanket_orders (
+  id SERIAL PRIMARY KEY,
+  bo_number TEXT UNIQUE,
+  supplier_id INT REFERENCES suppliers(id),
+  items JSONB DEFAULT '[]',
+  total_amount NUMERIC DEFAULT 0,
+  released_amount NUMERIC DEFAULT 0,
+  start_date DATE,
+  end_date DATE,
+  payment_terms TEXT,
+  status TEXT DEFAULT '有效',            -- 有效/已完成/已取消
+  notes TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS blanket_order_releases (
+  id SERIAL PRIMARY KEY,
+  blanket_order_id INT REFERENCES blanket_orders(id) ON DELETE CASCADE,
+  po_id INT REFERENCES purchase_orders(id),
+  release_date DATE DEFAULT current_date,
+  amount NUMERIC DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  CRM 客戶分群 (Customer Segments)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customer_segments (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  rules JSONB DEFAULT '[]',              -- [{field, operator, value}]
+  member_count INT DEFAULT 0,
+  is_dynamic BOOLEAN DEFAULT true,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  倉庫 / 儲位管理 (Warehouse & Bin Management)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouses (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  address TEXT,
+  type TEXT DEFAULT '一般',              -- 一般/冷藏/冷凍/危險品
+  is_active BOOLEAN DEFAULT true,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_zones (
+  id SERIAL PRIMARY KEY,
+  warehouse_id INT REFERENCES warehouses(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  zone_type TEXT DEFAULT '儲存',          -- 收貨/儲存/揀貨/出貨/退貨
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_bins (
+  id SERIAL PRIMARY KEY,
+  zone_id INT REFERENCES warehouse_zones(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,                     -- e.g. A-01-03 (aisle-rack-level)
+  max_capacity NUMERIC DEFAULT 0,
+  current_qty NUMERIC DEFAULT 0,
+  sku_id INT,
+  status TEXT DEFAULT '可用',             -- 可用/已滿/停用
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  通用簽核流程 (Generalized Approval Workflows)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS approval_rules (
+  id SERIAL PRIMARY KEY,
+  module TEXT NOT NULL,                   -- purchase/finance/hr/wms
+  document_type TEXT NOT NULL,            -- pr/po/journal_entry/leave/expense
+  condition_field TEXT,                   -- e.g. total_amount
+  condition_operator TEXT DEFAULT 'gte',  -- gte/lte/gt/lt/eq
+  condition_value NUMERIC DEFAULT 0,
+  required_role TEXT,                     -- role name required to approve
+  approval_order INT DEFAULT 1,          -- step in multi-step approval
+  is_active BOOLEAN DEFAULT true,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id SERIAL PRIMARY KEY,
+  rule_id INT REFERENCES approval_rules(id),
+  module TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  document_id INT NOT NULL,
+  requester TEXT NOT NULL,
+  approver TEXT,
+  status TEXT DEFAULT '待審核',           -- 待審核/已核准/已退回
+  comments TEXT,
+  decided_at TIMESTAMPTZ,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  託外加工 (Subcontracting)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS subcontracts (
+  id SERIAL PRIMARY KEY,
+  sc_number TEXT UNIQUE,
+  supplier_id INT REFERENCES suppliers(id),
+  mo_id INT REFERENCES manufacturing_orders(id),
+  operation_name TEXT NOT NULL,
+  items JSONB DEFAULT '[]',              -- materials issued to subcontractor
+  cost NUMERIC DEFAULT 0,
+  issue_date DATE DEFAULT current_date,
+  expected_return_date DATE,
+  actual_return_date DATE,
+  status TEXT DEFAULT '已發出',           -- 已發出/加工中/已收回/已結案
+  notes TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  揀貨/包裝/出貨 (Pick/Pack/Ship)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pick_lists (
+  id SERIAL PRIMARY KEY,
+  pick_number TEXT UNIQUE,
+  outbound_order_id INT,
+  sales_order_id INT,
+  warehouse_id INT REFERENCES warehouses(id),
+  picker TEXT,
+  status TEXT DEFAULT '待揀貨',           -- 待揀貨/揀貨中/已完成
+  items JSONB DEFAULT '[]',              -- [{sku_id, sku_code, name, qty_ordered, qty_picked, bin_code}]
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS pack_lists (
+  id SERIAL PRIMARY KEY,
+  pack_number TEXT UNIQUE,
+  pick_list_id INT REFERENCES pick_lists(id),
+  packer TEXT,
+  status TEXT DEFAULT '待包裝',           -- 待包裝/包裝中/已完成
+  boxes JSONB DEFAULT '[]',              -- [{box_number, items: [{sku_code, qty}], weight, dimensions}]
+  completed_at TIMESTAMPTZ,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  會計期間關帳 (Period Close / Year-End)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS accounting_periods (
+  id SERIAL PRIMARY KEY,
+  period TEXT UNIQUE NOT NULL,            -- e.g. 2026-01, 2026-02
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status TEXT DEFAULT '開放',             -- 開放/已關帳/已重開
+  closed_by TEXT,
+  closed_at TIMESTAMPTZ,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  教育訓練 / LMS (Training & Learning)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS training_courses (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT DEFAULT '一般',           -- 一般/安全/技術/管理/合規
+  duration_hours NUMERIC DEFAULT 1,
+  instructor TEXT,
+  max_enrollment INT DEFAULT 30,
+  status TEXT DEFAULT '開課中',           -- 開課中/已結束/草稿
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS training_enrollments (
+  id SERIAL PRIMARY KEY,
+  course_id INT REFERENCES training_courses(id) ON DELETE CASCADE,
+  employee TEXT NOT NULL,
+  status TEXT DEFAULT '已報名',           -- 已報名/進行中/已完成/未通過
+  score NUMERIC,
+  completed_at TIMESTAMPTZ,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  倉庫調撥 (Warehouse Transfers)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouse_transfers (
+  id SERIAL PRIMARY KEY,
+  transfer_number TEXT UNIQUE,
+  from_warehouse_id INT REFERENCES warehouses(id),
+  to_warehouse_id INT REFERENCES warehouses(id),
+  items JSONB DEFAULT '[]',              -- [{sku_code, name, qty}]
+  requested_by TEXT,
+  status TEXT DEFAULT '待出庫',           -- 待出庫/運送中/已入庫/已取消
+  requested_date DATE DEFAULT current_date,
+  shipped_date DATE,
+  received_date DATE,
+  notes TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  業務佣金 (Sales Commission)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS commission_rules (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  rate_percent NUMERIC NOT NULL DEFAULT 0,
+  min_amount NUMERIC DEFAULT 0,          -- minimum order amount to qualify
+  product_category TEXT,                  -- null = all products
+  is_active BOOLEAN DEFAULT true,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS commission_records (
+  id SERIAL PRIMARY KEY,
+  salesperson TEXT NOT NULL,
+  order_id INT REFERENCES sales_orders(id),
+  order_amount NUMERIC DEFAULT 0,
+  commission_rate NUMERIC DEFAULT 0,
+  commission_amount NUMERIC DEFAULT 0,
+  status TEXT DEFAULT '待發放',           -- 待發放/已發放/已取消
+  period TEXT,                            -- e.g. 2026-04
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  物流追蹤整合 (Carrier Integration)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS carrier_configs (
+  id SERIAL PRIMARY KEY,
+  carrier_name TEXT NOT NULL,             -- 黑貓/新竹/郵局/順豐
+  api_url TEXT,
+  api_key TEXT,
+  is_active BOOLEAN DEFAULT true,
+  settings JSONB DEFAULT '{}',
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Seed accounting periods
+INSERT INTO accounting_periods (period, start_date, end_date, status) VALUES
+  ('2026-01', '2026-01-01', '2026-01-31', '已關帳'),
+  ('2026-02', '2026-02-01', '2026-02-28', '已關帳'),
+  ('2026-03', '2026-03-01', '2026-03-31', '已關帳'),
+  ('2026-04', '2026-04-01', '2026-04-30', '開放');
+
+-- Seed training courses
+INSERT INTO training_courses (title, description, category, duration_hours, instructor, status) VALUES
+  ('新人到職訓練', '公司制度、系統操作、安全規範', '一般', 8, '張雅婷', '開課中'),
+  ('資安意識提升', '密碼管理、社交工程防範、資料保護', '安全', 2, '王小明', '開課中'),
+  ('ERP 系統操作', 'SME-OPS 各模組操作教學', '技術', 4, '劉佳玲', '開課中'),
+  ('主管領導力', '團隊管理、績效面談技���', '管理', 6, '林美麗', '草稿');
+
+INSERT INTO training_enrollments (course_id, employee, status, score) VALUES
+  (1, '吳建宏', '已完成', 92),
+  (1, '黃志強', '��完成', 88),
+  (2, '王小明', '已完成', 95),
+  (2, '林美麗', '進行中', null),
+  (2, '陳大偉', '已報名', null),
+  (3, '蔡心怡', '進行��', null),
+  (3, '張雅婷', '已完成', 90);
+
+-- Seed commission rules
+INSERT INTO commission_rules (name, rate_percent, min_amount, is_active) VALUES
+  ('標準佣金', 3, 0, true),
+  ('大單佣金', 5, 100000, true),
+  ('VIP 客戶佣金', 4, 50000, true);
+
+-- Seed carrier configs
+INSERT INTO carrier_configs (carrier_name, api_url, is_active) VALUES
+  ('黑貓宅急便', 'https://api.t-cat.com.tw/v1', true),
+  ('新竹物流', 'https://api.hct.com.tw/v1', true),
+  ('中華郵政', 'https://postserv.post.gov.tw/api', false);
+
+-- Seed warehouses
+INSERT INTO warehouses (code, name, address, type) VALUES
+  ('WH-TPE', '台北倉', '台北市信義區信義路五段7號B1', '一般'),
+  ('WH-TXG', '台中倉', '台中市西屯區台灣大道三段99號', '一般'),
+  ('WH-KHH', '高雄倉', '高雄市前鎮區中華五路789號', '一般');
+
+INSERT INTO warehouse_zones (warehouse_id, code, name, zone_type) VALUES
+  (1, 'Z-REC', '收貨區', '收貨'),
+  (1, 'Z-A', 'A 儲區', '儲存'),
+  (1, 'Z-B', 'B 儲區', '儲存'),
+  (1, 'Z-PICK', '揀貨區', '揀貨'),
+  (1, 'Z-SHIP', '出貨區', '出貨'),
+  (2, 'Z-REC', '收貨區', '收貨'),
+  (2, 'Z-A', 'A 儲區', '儲存'),
+  (2, 'Z-SHIP', '出貨區', '出貨');
+
+INSERT INTO warehouse_bins (zone_id, code, max_capacity, current_qty, status) VALUES
+  (2, 'A-01-01', 100, 45, '可用'),
+  (2, 'A-01-02', 100, 100, '已滿'),
+  (2, 'A-01-03', 100, 0, '可用'),
+  (2, 'A-02-01', 200, 80, '可用'),
+  (2, 'A-02-02', 200, 150, '可用'),
+  (3, 'B-01-01', 150, 30, '可用'),
+  (3, 'B-01-02', 150, 0, '停用'),
+  (7, 'A-01-01', 100, 60, '可用'),
+  (7, 'A-01-02', 100, 25, '可用');
+
+-- Seed approval rules
+INSERT INTO approval_rules (module, document_type, condition_field, condition_operator, condition_value, required_role, approval_order) VALUES
+  ('purchase', 'pr', 'total_amount', 'gte', 0, 'manager', 1),
+  ('purchase', 'po', 'total_amount', 'gte', 50000, 'admin', 1),
+  ('finance', 'journal_entry', 'total_amount', 'gte', 100000, 'admin', 1),
+  ('hr', 'leave', 'days', 'gte', 0, 'team_lead', 1),
+  ('hr', 'expense', 'amount', 'gte', 10000, 'manager', 1);
+
+-- Seed work centers
+INSERT INTO work_centers (code, name, type, available_hours_per_day, efficiency_rate, hourly_rate, status) VALUES
+  ('WC-CNC', 'CNC 加工中心', '加工', 16, 92, 850, '啟用'),
+  ('WC-PRESS', '沖壓區', '加工', 8, 87, 600, '啟用'),
+  ('WC-INJ', '射出成型區', '加工', 16, 95, 750, '啟用'),
+  ('WC-SMT', 'SMT 貼片線', '組裝', 8, 88, 950, '啟用'),
+  ('WC-ASSY', '組裝線', '組裝', 8, 90, 500, '啟用'),
+  ('WC-QC', '品質檢驗站', '測試', 8, 98, 400, '啟用'),
+  ('WC-PACK', '包裝區', '包裝', 8, 95, 300, '啟用');
+
+-- Seed routings for existing BOMs
+INSERT INTO routings (bom_id, step_number, work_center_id, operation_name, setup_time_min, run_time_min) VALUES
+  (1, 10, 4, 'SMT 貼片', 30, 2.5),
+  (1, 20, 5, '組裝', 15, 5),
+  (1, 30, 6, '功能測試', 5, 3),
+  (1, 40, 7, '包裝', 5, 1),
+  (2, 10, 4, 'SMT 貼片', 30, 3),
+  (2, 20, 5, '組裝', 15, 4),
+  (2, 30, 6, '功能測試', 5, 2.5),
+  (3, 10, 1, 'CNC 機殼加工', 45, 8),
+  (3, 20, 4, 'SMT 貼片', 30, 3.5),
+  (3, 30, 5, '組裝', 20, 10),
+  (3, 40, 6, '整機測試', 10, 5),
+  (3, 50, 7, '包裝', 5, 2);
+
 -- Seed default tenant
 INSERT INTO tenants (name, slug, plan) VALUES
   ('Master AI 科技有限公司', 'master-ai', 'enterprise')
@@ -1378,3 +1792,177 @@ INSERT INTO cost_centers (code, name, department, manager) VALUES
   ('CC-FI', '財務中心', '財務部', '劉佳玲'),
   ('CC-HR', '人資中心', '人資部', '張雅婷'),
   ('CC-OH', '管理費用', null, '劉佳玲');
+
+-- ============================================================
+--  MISSING TABLES (referenced in db.js but not yet created)
+-- ============================================================
+
+-- ── SKUs (商品主檔) ──
+CREATE TABLE IF NOT EXISTS skus (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  barcode TEXT,
+  unit TEXT DEFAULT '件',
+  category TEXT,
+  weight NUMERIC(10,2),
+  length NUMERIC(10,2),
+  width NUMERIC(10,2),
+  height NUMERIC(10,2),
+  costing_method TEXT DEFAULT 'WEIGHTED_AVG',  -- FIFO, WEIGHTED_AVG, MOVING_AVG
+  unit_cost NUMERIC(12,2) DEFAULT 0,
+  cost NUMERIC(12,2) DEFAULT 0,
+  status TEXT DEFAULT '啟用',
+  stock_qty NUMERIC(12,2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Customers (客戶主檔) ──
+CREATE TABLE IF NOT EXISTS customers (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  company TEXT,
+  phone TEXT,
+  email TEXT,
+  tags TEXT,
+  assigned_to TEXT,
+  source TEXT,
+  status TEXT DEFAULT '活躍',       -- 活躍, 潛在, 冷凍, 流失
+  notes TEXT,
+  credit_limit NUMERIC(12,2) DEFAULT 0,
+  location_id INT,
+  company_id INT REFERENCES companies(id),
+  company_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Stock Levels (庫存水位) ──
+CREATE TABLE IF NOT EXISTS stock_levels (
+  id SERIAL PRIMARY KEY,
+  sku_code TEXT NOT NULL,
+  warehouse TEXT NOT NULL,
+  quantity NUMERIC(12,2) DEFAULT 0,
+  min_qty NUMERIC(12,2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(sku_code, warehouse)
+);
+
+-- ── Inventory Transactions (庫存異動) ──
+CREATE TABLE IF NOT EXISTS inventory_transactions (
+  id SERIAL PRIMARY KEY,
+  sku TEXT NOT NULL,
+  date DATE NOT NULL,
+  type TEXT NOT NULL,                -- IN, OUT
+  qty NUMERIC(12,2) NOT NULL,
+  unit_cost NUMERIC(12,2) DEFAULT 0,
+  warehouse TEXT,
+  reference TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Inventory Adjustments (庫存調整) ──
+CREATE TABLE IF NOT EXISTS inventory_adjustments (
+  id SERIAL PRIMARY KEY,
+  sku_code TEXT NOT NULL,
+  sku_name TEXT,
+  bin_code TEXT,
+  quantity NUMERIC(12,2) NOT NULL,
+  reason TEXT,
+  operator TEXT,
+  unit_cost NUMERIC(12,2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Campaigns (行銷活動) ──
+CREATE TABLE IF NOT EXISTS campaigns (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT,                          -- Email, LINE 訊息, SMS 簡訊
+  segment TEXT,
+  message TEXT,
+  subject TEXT,
+  status TEXT DEFAULT '草稿',         -- 草稿, 排程中, 發送中, 已完成, 已取消
+  scheduled_at TIMESTAMPTZ,
+  location_id INT,
+  sent_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Vendor Categories (供應商分類) ──
+CREATE TABLE IF NOT EXISTS vendor_categories (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  parent_id INT REFERENCES vendor_categories(id),
+  status TEXT DEFAULT '啟用',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Vendor Performance (供應商績效) ──
+CREATE TABLE IF NOT EXISTS vendor_performance (
+  id SERIAL PRIMARY KEY,
+  vendor_id INT REFERENCES suppliers(id),
+  metric_name TEXT NOT NULL,
+  value NUMERIC(10,2),
+  period TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Vendor Onboarding (供應商入駐) ──
+CREATE TABLE IF NOT EXISTS vendor_onboarding (
+  id SERIAL PRIMARY KEY,
+  supplier_name TEXT NOT NULL,
+  contact_person TEXT,
+  email TEXT,
+  phone TEXT,
+  category TEXT,
+  tax_id TEXT,
+  status TEXT DEFAULT '待審核',       -- 待審核, 進行中, 已完成, 已拒絕
+  checklist JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Procurement Pipeline (採購管線) ──
+CREATE TABLE IF NOT EXISTS procurement_pipeline (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  stage TEXT DEFAULT '需求確認',      -- 需求確認, 供應商評估, 報價比較, 審核中, 採購下單, 交貨追蹤, 驗收完成, 已取消
+  priority TEXT DEFAULT '中',         -- 緊急, 高, 中, 低
+  requester TEXT,
+  department TEXT,
+  supplier_name TEXT,
+  estimated_amount NUMERIC(12,2) DEFAULT 0,
+  expected_date DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Procurement Workflows (採購流程範本) ──
+CREATE TABLE IF NOT EXISTS procurement_workflows (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT '草稿',         -- 啟用中, 草稿, 已停用
+  trigger_event TEXT,                 -- 採購申請建立, 採購單建立, 金額超過門檻
+  approval_type TEXT DEFAULT '線性審批', -- 線性審批, 會簽, 或簽
+  amount_threshold NUMERIC(12,2),
+  steps JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Procurement Workflow Instances (採購流程實例) ──
+CREATE TABLE IF NOT EXISTS procurement_workflow_instances (
+  id SERIAL PRIMARY KEY,
+  workflow_id INT REFERENCES procurement_workflows(id),
+  reference TEXT,
+  requester TEXT,
+  status TEXT DEFAULT '進行中',       -- 進行中, 已完成, 已駁回, 已取消
+  current_step INT DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);

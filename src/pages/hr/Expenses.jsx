@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { createJEFromExpense } from '../../lib/automation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -50,7 +51,14 @@ export default function Expenses() {
 
   const handleApprove = async (id) => {
     const { data } = await updateExpenseStatus(id, '已核銷')
-    if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
+    if (data) {
+      setExpenses(prev => prev.map(e => e.id === id ? data : e))
+      // Auto-post journal entry to Finance
+      const result = await createJEFromExpense(data)
+      if (result.ok) {
+        alert(`已核銷並自動產生傳票 ${result.entry.entry_number}`)
+      }
+    }
   }
 
   if (loading) return <LoadingSpinner />

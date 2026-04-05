@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart3, Users, ClipboardList, Building2,
@@ -13,7 +13,7 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
-  UserCheck, Shield, Send
+  UserCheck, Shield, Send, Search
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
@@ -43,6 +43,7 @@ const navSections = [
           { icon: Mail, label: '排程報表', path: '/analytics/reports' },
           { icon: Share2, label: '圖表分享', path: '/analytics/embed' },
           { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
+          { icon: Search, label: '跨系統分析', path: '/analytics/cross-system' },
         ]
       },
     ]
@@ -216,6 +217,8 @@ const navSections = [
           { icon: FileText, label: '營業稅申報', path: '/finance/tax-filing' },
           { icon: Receipt, label: '401 營業稅報表', path: '/finance/tax-report' },
           { icon: ArrowRightLeft, label: '匯率管理', path: '/finance/exchange-rates' },
+          { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
+          { icon: TrendingUp, label: '現金流量表', path: '/finance/cash-flow' },
         ]
       }
     ]
@@ -266,9 +269,24 @@ export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
-  const [openMenus, setOpenMenus] = useState({ '/hr': true, '/process': true, '/org': true })
+  const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Auto-expand section containing active route
+  useEffect(() => {
+    for (const section of navSections) {
+      for (const item of section.items) {
+        if (item.children) {
+          const match = item.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'))
+          if (match) {
+            setOpenMenus(prev => ({ ...prev, [item.path]: true }))
+          }
+        }
+      }
+    }
+  }, [location.pathname])
 
   const toggleMenu = (path) => {
     setOpenMenus(prev => ({ ...prev, [path]: !prev[path] }))
@@ -282,6 +300,15 @@ export default function Sidebar() {
   // 手機版切換路由時自動關閉 sidebar
   const handleNavClick = () => {
     if (window.innerWidth <= 768) setMobileOpen(false)
+  }
+
+  // Filter nav items by search query
+  const q = searchQuery.trim().toLowerCase()
+  const matchItem = (item) => {
+    if (!q) return true
+    if (item.label.toLowerCase().includes(q)) return true
+    if (item.children) return item.children.some(c => c.label.toLowerCase().includes(q))
+    return false
   }
 
   return (
@@ -340,18 +367,32 @@ export default function Sidebar() {
         </div>
       </div>
 
+      <div className="sidebar-search">
+        <div className="sidebar-search-wrapper">
+          <Search className="sidebar-search-icon" />
+          <input
+            className="sidebar-search-input"
+            type="text"
+            placeholder="搜尋功能..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
+
       <nav className="sidebar-nav">
         {navSections.map((section, si) => (
-          <div className="nav-section" key={si}>
+          <div className={`nav-section ${section.items.some(matchItem) ? '' : 'hidden'}`} key={si}>
             <div className="nav-section-label">{section.label}</div>
             {section.items.map((item, ii) => {
               const Icon = item.icon
               const hasChildren = item.children && item.children.length > 0
-              const menuOpen = openMenus[item.path]
+              const menuOpen = openMenus[item.path] || (q && matchItem(item))
+              const itemVisible = matchItem(item)
 
               if (hasChildren) {
                 return (
-                  <div key={ii}>
+                  <div key={ii} className={itemVisible ? '' : 'hidden'}>
                     <div
                       className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
                       role="button"
@@ -365,12 +406,13 @@ export default function Sidebar() {
                     </div>
                     <div className={`nav-sub-items ${menuOpen ? 'open' : ''}`}>
                       {item.children.map((child, ci) => {
+                        const childVisible = !q || child.label.toLowerCase().includes(q) || item.label.toLowerCase().includes(q)
                         const ChildIcon = child.icon
                         return (
                           <NavLink
                             to={child.path}
                             key={ci}
-                            className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''}`}
+                            className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
                             onClick={handleNavClick}
                           >
                             <ChildIcon className="nav-sub-item-icon" />
@@ -387,7 +429,7 @@ export default function Sidebar() {
                 <NavLink
                   to={item.path}
                   key={ii}
-                  className={({ isActive: active }) => `nav-item ${active ? 'active' : ''}`}
+                  className={({ isActive: active }) => `nav-item ${active ? 'active' : ''} ${itemVisible ? '' : 'hidden'}`}
                   onClick={handleNavClick}
                 >
                   <Icon className="nav-item-icon" style={item.color ? { color: item.color, background: `${item.color}15`, opacity: 1 } : undefined} />

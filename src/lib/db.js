@@ -386,6 +386,18 @@ export const createFixedAsset = (data) =>
   supabase.from('fixed_assets').insert(data).select().single()
 export const updateFixedAsset = (id, data) =>
   supabase.from('fixed_assets').update(data).eq('id', id).select().single()
+export const deleteFixedAsset = (id) =>
+  supabase.from('fixed_assets').delete().eq('id', id)
+
+// ── Cost Centers ──
+export const getCostCenters = () =>
+  supabase.from('cost_centers').select('*').order('code')
+export const createCostCenter = (data) =>
+  supabase.from('cost_centers').insert(data).select().single()
+export const updateCostCenter = (id, data) =>
+  supabase.from('cost_centers').update(data).eq('id', id).select().single()
+export const deleteCostCenter = (id) =>
+  supabase.from('cost_centers').delete().eq('id', id)
 
 // ── Journal Entry Updates ──
 export const updateJournalEntry = (id, data) =>

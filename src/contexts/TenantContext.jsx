@@ -19,6 +19,10 @@ export function TenantProvider({ children }) {
   const switchTenant = (tenantData) => {
     setTenant(tenantData)
     localStorage.setItem('sme_tenant', JSON.stringify(tenantData))
+    // Set tenant_id header for Supabase RLS policies
+    if (tenantData?.id) {
+      supabase.rpc('set_config', { setting: 'app.tenant_id', value: String(tenantData.id) }).then(() => {})
+    }
   }
 
   const clearTenant = () => {

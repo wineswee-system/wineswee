@@ -786,3 +786,387 @@ export async function getIncomeStatement(startDate, endDate) {
   const period = `${startDate} ~ ${endDate}`
   return generateProfitLoss(trialBalance, period)
 }
+
+// ─── 成本中心支援 ────────────────────────────────────────────────
+
+/**
+ * 為分錄明細標記成本中心
+ * @param {{account_code: string, debit: number, credit: number}} journalLine — 分錄明細
+ * @param {string} costCenter — 成本中心代碼（例如 'CC001'）
+ * @returns {{account_code: string, debit: number, credit: number, cost_center: string}}
+ */
+export function tagCostCenter(journalLine, costCenter) {
+  return {
+    ...journalLine,
+    cost_center: costCenter,
+  }
+}
+
+/**
+ * 依成本中心產生試算表
+ * @param {Array<{code: string, name: string, type: string}>} accounts — 科目清單
+ * @param {Array<{account_code: string, debit: number, credit: number, cost_center?: string}>} journalLines — 所有已過帳分錄明細
+ * @returns {Record<string, Array<{account_code: string, account_name: string, type: string, debit_balance: number, credit_balance: number}>>} 以成本中心為 key 的試算表
+ */
+export function generateTrialBalanceByCostCenter(accounts, journalLines) {
+  // 依成本中心分組
+  const grouped = {}
+  for (const line of journalLines) {
+    const cc = line.cost_center || '未分配'
+    if (!grouped[cc]) grouped[cc] = []
+    grouped[cc].push(line)
+  }
+
+  const result = {}
+  for (const [cc, lines] of Object.entries(grouped)) {
+    result[cc] = generateTrialBalance(accounts, lines)
+  }
+
+  return result
+}
+
+// ─── 預算 vs 實際差異分析 ──────────────────────────────────────────
+
+/**
+ * 計算預算與實際差異
+ * @param {Array<{account_code: string, account_name: string, budget_amount: number}>} budgetItems — 預算項目
+ * @param {Array<{account_code: string, account_name: string, actual_amount: number}>} actualItems — 實際項目
+ * @returns {Array<{account_code: string, account_name: string, budget_amount: number, actual_amount: number, variance: number, variance_pct: number, favorable: boolean}>}
+ */
+export function calculateBudgetVariance(budgetItems, actualItems) {
+  // 建立實際金額查詢表
+  const actualMap = {}
+  for (const item of actualItems) {
+    actualMap[item.account_code] = item
+  }
+
+  return budgetItems.map(budget => {
+    const actual = actualMap[budget.account_code]
+    const actualAmount = actual ? Math.round((Number(actual.actual_amount) || 0) * 100) / 100 : 0
+    const budgetAmount = Math.round((Number(budget.budget_amount) || 0) * 100) / 100
+    const variance = Math.round((budgetAmount - actualAmount) * 100) / 100
+
+    // 判斷有利/不利：
+    // 收入類：實際 > 預算 → 有利；費用類：實際 < 預算 → 有利
+    const type = getAccountType(budget.account_code)
+    const isRevenueType = ['收入', '營業外收入/支出'].includes(type)
+    const favorable = isRevenueType ? actualAmount >= budgetAmount : actualAmount <= budgetAmount
+
+    const variance_pct = budgetAmount !== 0
+      ? Math.round((variance / budgetAmount) * 10000) / 100
+      : 0
+
+    return {
+      account_code: budget.account_code,
+      account_name: budget.account_name,
+      budget_amount: budgetAmount,
+      actual_amount: actualAmount,
+      variance,
+      variance_pct,
+      favorable,
+    }
+  })
+}
+
+// ─── 應收/應付帳齡分析 ────────────────────────────────────────────
+
+/**
+ * 計算應收/應付帳齡分桶（Current / 1-30 / 31-60 / 61-90 / 91-120 / 120+ 天）
+ * @param {Array<{id: string, counterparty: string, amount: number, due_date: string}>} invoices — 未結發票清單
+ * @param {string} asOfDate — 基準日期（YYYY-MM-DD）
+ * @returns {{buckets: {current: number, days_1_30: number, days_31_60: number, days_61_90: number, days_91_120: number, days_over_120: number}, total: number, details: Array<{id: string, counterparty: string, amount: number, due_date: string, days_overdue: number, bucket: string}>}}
+ */
+export function calculateAgingBuckets(invoices, asOfDate) {
+  const asOf = new Date(asOfDate)
+  const MS_PER_DAY = 86400000
+
+  const buckets = {
+    current: 0,
+    days_1_30: 0,
+    days_31_60: 0,
+    days_61_90: 0,
+    days_91_120: 0,
+    days_over_120: 0,
+  }
+
+  const details = []
+
+  for (const inv of invoices) {
+    const dueDate = new Date(inv.due_date)
+    const diffDays = Math.floor((asOf - dueDate) / MS_PER_DAY)
+    const daysOverdue = Math.max(diffDays, 0)
+    const amount = Math.round((Number(inv.amount) || 0) * 100) / 100
+
+    let bucket
+    if (diffDays <= 0) {
+      bucket = '未到期'
+      buckets.current = Math.round((buckets.current + amount) * 100) / 100
+    } else if (daysOverdue <= 30) {
+      bucket = '1-30天'
+      buckets.days_1_30 = Math.round((buckets.days_1_30 + amount) * 100) / 100
+    } else if (daysOverdue <= 60) {
+      bucket = '31-60天'
+      buckets.days_31_60 = Math.round((buckets.days_31_60 + amount) * 100) / 100
+    } else if (daysOverdue <= 90) {
+      bucket = '61-90天'
+      buckets.days_61_90 = Math.round((buckets.days_61_90 + amount) * 100) / 100
+    } else if (daysOverdue <= 120) {
+      bucket = '91-120天'
+      buckets.days_91_120 = Math.round((buckets.days_91_120 + amount) * 100) / 100
+    } else {
+      bucket = '120天以上'
+      buckets.days_over_120 = Math.round((buckets.days_over_120 + amount) * 100) / 100
+    }
+
+    details.push({
+      id: inv.id,
+      counterparty: inv.counterparty,
+      amount,
+      due_date: inv.due_date,
+      days_overdue: daysOverdue,
+      bucket,
+    })
+  }
+
+  const total = Math.round(
+    (buckets.current + buckets.days_1_30 + buckets.days_31_60 +
+     buckets.days_61_90 + buckets.days_91_120 + buckets.days_over_120) * 100
+  ) / 100
+
+  return { buckets, total, details }
+}
+
+// ─── 收款分配 ────────────────────────────────────────────────────
+
+/**
+ * 將收到的款項依 FIFO（先到期先沖銷）分配至未結發票
+ * @param {{amount: number, date: string, reference?: string}} payment — 收到的款項
+ * @param {Array<{id: string, amount: number, due_date: string, balance: number}>} openInvoices — 未結發票（需有 balance 欄位表示尚欠金額）
+ * @returns {{allocations: Array<{invoice_id: string, allocated_amount: number, remaining_balance: number}>, unallocated: number}}
+ */
+export function allocatePayment(payment, openInvoices) {
+  let remaining = Math.round((Number(payment.amount) || 0) * 100) / 100
+
+  // 依到期日排序（FIFO：最早到期先沖）
+  const sorted = [...openInvoices].sort(
+    (a, b) => new Date(a.due_date) - new Date(b.due_date)
+  )
+
+  const allocations = []
+
+  for (const inv of sorted) {
+    if (remaining <= 0) break
+
+    const invoiceBalance = Math.round((Number(inv.balance) || 0) * 100) / 100
+    if (invoiceBalance <= 0) continue
+
+    const allocated = Math.min(remaining, invoiceBalance)
+    const allocatedRounded = Math.round(allocated * 100) / 100
+    const remainingBalance = Math.round((invoiceBalance - allocatedRounded) * 100) / 100
+
+    allocations.push({
+      invoice_id: inv.id,
+      allocated_amount: allocatedRounded,
+      remaining_balance: remainingBalance,
+    })
+
+    remaining = Math.round((remaining - allocatedRounded) * 100) / 100
+  }
+
+  return {
+    allocations,
+    unallocated: Math.round(remaining * 100) / 100,
+  }
+}
+
+// ─── 折讓單（Credit Note）──────────────────────────────────────────
+
+/**
+ * 建立折讓單（銷貨退回/折讓），產生反向分錄明細
+ * @param {{id: string, entry_date: string, lines: Array<{account_code: string, account_name: string, debit: number, credit: number}>}} originalInvoice — 原始發票傳票
+ * @param {Array<{account_code: string, account_name: string, amount: number, reason?: string}>} creditLines — 折讓明細（金額為正數）
+ * @returns {{credit_note_lines: Array<{account_code: string, account_name: string, debit: number, credit: number, description: string}>, total_credit: number, original_invoice_id: string}}
+ */
+export function createCreditNote(originalInvoice, creditLines) {
+  const credit_note_lines = []
+  let total_credit = 0
+
+  for (const cl of creditLines) {
+    const amount = Math.round((Number(cl.amount) || 0) * 100) / 100
+    if (amount <= 0) continue
+
+    total_credit = Math.round((total_credit + amount) * 100) / 100
+    const reason = cl.reason || '折讓'
+
+    // 找原始分錄中對應科目的借貸方向，產生反向
+    const originalLine = originalInvoice.lines.find(l => l.account_code === cl.account_code)
+    if (originalLine && (Number(originalLine.debit) || 0) > 0) {
+      // 原為借方 → 折讓轉貸方
+      credit_note_lines.push({
+        account_code: cl.account_code,
+        account_name: cl.account_name,
+        debit: 0,
+        credit: amount,
+        description: `折讓 - ${reason}`,
+      })
+    } else {
+      // 原為貸方 → 折讓轉借方
+      credit_note_lines.push({
+        account_code: cl.account_code,
+        account_name: cl.account_name,
+        debit: amount,
+        credit: 0,
+        description: `折讓 - ${reason}`,
+      })
+    }
+  }
+
+  return {
+    credit_note_lines,
+    total_credit,
+    original_invoice_id: originalInvoice.id,
+  }
+}
+
+// ─── 期間關帳 ────────────────────────────────────────────────────
+
+/**
+ * 關閉會計期間，回傳關帳紀錄
+ * @param {{period: string, closed_by: string}} period — 要關閉的期間資料（period 格式如 '2026-03'）
+ * @returns {{period: string, closed_at: string, closed_by: string, status: '已關帳'}}
+ */
+export function closePeriod(period) {
+  return {
+    period: period.period,
+    closed_at: new Date().toISOString(),
+    closed_by: period.closed_by,
+    status: '已關帳',
+  }
+}
+
+/**
+ * 檢查指定期間是否已關帳（用於阻擋過帳）
+ * @param {string} period — 要檢查的期間（格式如 '2026-03'）
+ * @param {Array<{period: string, status: string}>} closedPeriods — 已關帳期間清單
+ * @returns {boolean} true 表示已關帳，不可再過帳
+ */
+export function isPeriodClosed(period, closedPeriods) {
+  return closedPeriods.some(
+    cp => cp.period === period && cp.status === '已關帳'
+  )
+}
+
+// ─── 傳票沖銷（迴轉分錄）──────────────────────────────────────────
+
+/**
+ * 產生迴轉分錄（將原始傳票的借貸方互換）
+ * @param {{id: string, entry_date: string, description: string, lines: Array<{account_code: string, account_name: string, debit: number, credit: number}>}} originalEntry — 原始傳票
+ * @returns {{original_entry_id: string, description: string, lines: Array<{account_code: string, account_name: string, debit: number, credit: number}>}}
+ */
+export function reverseJournalEntry(originalEntry) {
+  const reversedLines = originalEntry.lines.map(line => ({
+    account_code: line.account_code,
+    account_name: line.account_name,
+    debit: Math.round((Number(line.credit) || 0) * 100) / 100,
+    credit: Math.round((Number(line.debit) || 0) * 100) / 100,
+  }))
+
+  return {
+    original_entry_id: originalEntry.id,
+    description: `沖銷 - ${originalEntry.description || originalEntry.id}`,
+    lines: reversedLines,
+  }
+}
+
+// ─── 循環分錄產生器 ──────────────────────────────────────────────
+
+/**
+ * 依範本與頻率產生循環分錄
+ * @param {{description: string, lines: Array<{account_code: string, account_name: string, debit: number, credit: number}>}} template — 分錄範本
+ * @param {string} startDate — 起始日期（YYYY-MM-DD）
+ * @param {string} endDate — 結束日期（YYYY-MM-DD）
+ * @param {'monthly'|'quarterly'|'yearly'} frequency — 頻率
+ * @returns {Array<{entry_date: string, description: string, lines: Array<{account_code: string, account_name: string, debit: number, credit: number}>}>}
+ */
+export function generateRecurringEntries(template, startDate, endDate, frequency) {
+  const entries = []
+  const end = new Date(endDate)
+  let current = new Date(startDate)
+
+  while (current <= end) {
+    const entryDate = current.toISOString().slice(0, 10)
+
+    // 複製範本分錄明細，確保金額精度
+    const lines = template.lines.map(line => ({
+      account_code: line.account_code,
+      account_name: line.account_name,
+      debit: Math.round((Number(line.debit) || 0) * 100) / 100,
+      credit: Math.round((Number(line.credit) || 0) * 100) / 100,
+    }))
+
+    entries.push({
+      entry_date: entryDate,
+      description: template.description,
+      lines,
+    })
+
+    // 遞增日期
+    switch (frequency) {
+      case 'monthly':
+        current.setMonth(current.getMonth() + 1)
+        break
+      case 'quarterly':
+        current.setMonth(current.getMonth() + 3)
+        break
+      case 'yearly':
+        current.setFullYear(current.getFullYear() + 1)
+        break
+      default:
+        throw new Error(`不支援的頻率：${frequency}（支援：monthly, quarterly, yearly）`)
+    }
+  }
+
+  return entries
+}
+
+// ─── 銀行對帳 ────────────────────────────────────────────────────
+
+/**
+ * 自動比對銀行交易與帳簿交易（依金額 + 日期配對）
+ * @param {Array<{id: string, date: string, amount: number, description?: string}>} bankTransactions — 銀行端交易
+ * @param {Array<{id: string, date: string, amount: number, description?: string}>} bookTransactions — 帳簿端交易
+ * @returns {{matched: Array<{bank_id: string, book_id: string, amount: number, date: string}>, unmatchedBank: Array<{id: string, date: string, amount: number, description?: string}>, unmatchedBook: Array<{id: string, date: string, amount: number, description?: string}>}}
+ */
+export function reconcileBankStatement(bankTransactions, bookTransactions) {
+  const matched = []
+  const usedBookIds = new Set()
+  const usedBankIds = new Set()
+
+  // 依金額與日期完全相符進行配對
+  for (const bt of bankTransactions) {
+    const btAmount = Math.round((Number(bt.amount) || 0) * 100) / 100
+
+    for (const bk of bookTransactions) {
+      if (usedBookIds.has(bk.id)) continue
+
+      const bkAmount = Math.round((Number(bk.amount) || 0) * 100) / 100
+
+      if (btAmount === bkAmount && bt.date === bk.date) {
+        matched.push({
+          bank_id: bt.id,
+          book_id: bk.id,
+          amount: btAmount,
+          date: bt.date,
+        })
+        usedBankIds.add(bt.id)
+        usedBookIds.add(bk.id)
+        break
+      }
+    }
+  }
+
+  const unmatchedBank = bankTransactions.filter(bt => !usedBankIds.has(bt.id))
+  const unmatchedBook = bookTransactions.filter(bk => !usedBookIds.has(bk.id))
+
+  return { matched, unmatchedBank, unmatchedBook }
+}

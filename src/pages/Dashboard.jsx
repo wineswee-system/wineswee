@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package } from 'lucide-react'
+import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { getEmployees, getTasks, getWorkflows, getAttendance, getLeaveRequests } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { chat, isConfigured, clearSession } from '../lib/gemini'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
@@ -74,6 +75,8 @@ export default function Dashboard() {
   const [stockLevels, setStockLevels] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [aiInsight, setAiInsight] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -110,6 +113,33 @@ export default function Dashboard() {
   const now = new Date()
   const greeting = now.getHours() < 12 ? '早安' : now.getHours() < 18 ? '午安' : '晚安'
 
+  const fetchAiInsight = async () => {
+    if (!isConfigured()) return
+    setAiLoading(true)
+    try {
+      clearSession('dashboard')
+      const summary = {
+        employees: { total: employees.length, active: employees.filter(e => e.status === '在職').length },
+        attendance: { late: attendance.filter(a => a.status === '遲到').length, total: attendance.length },
+        tasks: { done: tasks.filter(t => t.status === '已完成').length, doing: tasks.filter(t => t.status === '進行中').length, todo: tasks.filter(t => t.status === '未開始').length },
+        leaves: { pending: leaves.filter(l => l.status === '待審核').length, approved: leaves.filter(l => l.status === '已核准').length },
+        ar: { count: arData.length, outstanding: arData.reduce((s, r) => s + (Number(r.amount) || 0) - (Number(r.paid_amount) || 0), 0) },
+        ap: { count: apData.length, outstanding: apData.reduce((s, r) => s + (Number(r.amount) || 0) - (Number(r.paid_amount) || 0), 0) },
+        inventory: { lowStock: stockLevels.filter(s => (Number(s.quantity) || 0) <= (Number(s.min_qty) || 0)).length },
+        pipeline: { value: opportunities.filter(o => o.stage !== '輸單').reduce((s, o) => s + (Number(o.amount) || 0), 0) },
+      }
+      const result = await chat(
+        `以下是今日 ERP 儀表板的數據摘要，請用 3-5 個重點條列分析洞察與建議（每條 30 字以內）：\n${JSON.stringify(summary)}`,
+        'dashboard'
+      )
+      setAiInsight(result)
+    } catch (err) {
+      setAiInsight(`無法取得 AI 洞察：${err.message}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   // Chart data
   const last7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d.toISOString().slice(0, 10) })
   const attByDay = last7.map(date => {
@@ -127,17 +157,13 @@ export default function Dashboard() {
     <div className="fade-in" style={{ maxWidth: 1400 }}>
 
       {/* ════════ Row 1: Welcome ════════ */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-          {greeting} 👋
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 6 }}>
-          {now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
+      <div className="dash-welcome" style={{ marginBottom: 32 }}>
+        <h1>{greeting} 👋</h1>
+        <p>{now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
       </div>
 
       {/* ════════ Row 2: KPI Cards ════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
+      <div className="dash-kpi-grid">
         <KpiCard icon={Users} label="在職人數" value={active} change={`共 ${employees.length} 人`} sub="" accent={C.cyan} />
         <KpiCard icon={CheckCircle} label="今日出勤" value={active - late} changeType={late === 0 ? 'up' : 'down'} change={late === 0 ? '全員到齊' : `${late} 人遲到`} accent={C.blue} />
         <KpiCard icon={Briefcase} label="進行中任務" value={doing} change={`${todo} 項未開始`} sub="" accent={C.purple} />
@@ -158,7 +184,7 @@ export default function Dashboard() {
         const lowStockCount = stockLevels.filter(s => (Number(s.quantity) || 0) <= (Number(s.min_qty) || 0)).length
         const fmt = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+          <div className="dash-kpi-grid-2">
             <KpiCard icon={DollarSign} label="應收帳款" value={`$${fmt(arOutstanding)}`} change={`共 ${arData.length} 筆`} sub="" accent={arOutstanding > 500000 ? C.orange : C.green} />
             <KpiCard icon={CreditCard} label="應付帳款" value={`$${fmt(apOutstanding)}`} change={`共 ${apData.length} 筆`} sub="" accent={C.blue} />
             <KpiCard icon={ShoppingCart} label="銷售漏斗" value={`$${fmt(pipelineValue)}`} change={`${opportunities.filter(o => o.stage !== '輸單').length} 項機會`} sub="" accent={C.purple} />
@@ -167,8 +193,35 @@ export default function Dashboard() {
         )
       })()}
 
+      {/* ════════ AI Insights ════════ */}
+      {isConfigured() && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px', marginBottom: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <SectionTitle><Sparkles size={16} style={{ color: C.purple }} /> AI 智慧洞察</SectionTitle>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '4px 12px' }}
+              onClick={fetchAiInsight}
+              disabled={aiLoading}
+            >
+              {aiLoading ? <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Bot size={12} />}
+              {aiLoading ? '分析中...' : aiInsight ? '重新分析' : '產生洞察'}
+            </button>
+          </div>
+          {aiInsight ? (
+            <div style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+              {aiInsight}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              點擊「產生洞察」讓 AI 分析今日營運數據
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ════════ Row 3: Attendance Chart + Task Doughnut ════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '5fr 3fr', gap: 20, marginBottom: 32 }}>
+      <div className="dash-charts-row">
         {/* Attendance */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px' }}>
           <SectionTitle><TrendingUp size={16} style={{ color: C.cyan }} /> 近七天出勤趨勢</SectionTitle>
@@ -212,7 +265,7 @@ export default function Dashboard() {
       </div>
 
       {/* ════════ Row 4: Dept Bar + Leave Pie + Progress ════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 32 }}>
+      <div className="dash-triple-row">
         {/* Department */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: '24px' }}>
           <SectionTitle><Users size={16} style={{ color: C.purple }} /> 部門人力</SectionTitle>

@@ -114,10 +114,13 @@ const DashboardBuilder = lazy(() => import('./pages/analytics/DashboardBuilder')
 const AnomalyDetection = lazy(() => import('./pages/analytics/AnomalyDetection'))
 const EmbeddableCharts = lazy(() => import('./pages/analytics/EmbeddableCharts'))
 const ProcessAnalytics = lazy(() => import('./pages/analytics/ProcessAnalytics'))
+const CrossSystemAnalytics = lazy(() => import('./pages/analytics/CrossSystemAnalytics'))
 const LaborInspection = lazy(() => import('./pages/hr/LaborInspection'))
 const TaxFiling = lazy(() => import('./pages/finance/TaxFiling'))
 const TaxReport = lazy(() => import('./pages/finance/TaxReport'))
 const ExchangeRates = lazy(() => import('./pages/finance/ExchangeRates'))
+const CostCenters = lazy(() => import('./pages/finance/CostCenters'))
+const CashFlow = lazy(() => import('./pages/finance/CashFlow'))
 const ShopFloor = lazy(() => import('./pages/manufacturing/ShopFloor'))
 const TenantAdmin = lazy(() => import('./pages/system/TenantAdmin'))
 const DataImportExport = lazy(() => import('./pages/system/DataImportExport'))
@@ -152,6 +155,7 @@ function AdminApp() {
             <Route path="/analytics/anomaly" element={<Suspense fallback={<LoadingSpinner />}><AnomalyDetection /></Suspense>} />
             <Route path="/analytics/embed" element={<Suspense fallback={<LoadingSpinner />}><EmbeddableCharts /></Suspense>} />
             <Route path="/analytics/process" element={<Suspense fallback={<LoadingSpinner />}><ProcessAnalytics /></Suspense>} />
+            <Route path="/analytics/cross-system" element={<Suspense fallback={<LoadingSpinner />}><CrossSystemAnalytics /></Suspense>} />
             {/* HR */}
             <Route path="/hr/report" element={<HRReport />} />
             <Route path="/hr/attendance" element={<Attendance />} />
@@ -262,6 +266,8 @@ function AdminApp() {
             <Route path="/finance/tax-filing" element={<Suspense fallback={<LoadingSpinner />}><TaxFiling /></Suspense>} />
             <Route path="/finance/tax-report" element={<Suspense fallback={<LoadingSpinner />}><TaxReport /></Suspense>} />
             <Route path="/finance/exchange-rates" element={<Suspense fallback={<LoadingSpinner />}><ExchangeRates /></Suspense>} />
+            <Route path="/finance/cost-centers" element={<Suspense fallback={<LoadingSpinner />}><CostCenters /></Suspense>} />
+            <Route path="/finance/cash-flow" element={<Suspense fallback={<LoadingSpinner />}><CashFlow /></Suspense>} />
             {/* Manufacturing & QM */}
             <Route path="/manufacturing/bom" element={<BOM />} />
             <Route path="/manufacturing/mrp" element={<MRP />} />

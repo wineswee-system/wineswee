@@ -20,12 +20,13 @@ const PRIORITY_BADGE = {
 export default function ManufacturingOrders() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ mo_number: '', product_name: '', quantity: '', completed_qty: '0', defect_qty: '0', start_date: '', due_date: '', priority: '中', status: '待生產', assigned_to: '' })
 
   useEffect(() => {
-    getManufacturingOrders().then(({ data }) => { setOrders(data || []); setLoading(false) })
+    getManufacturingOrders().then(({ data }) => { setOrders(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -46,6 +47,7 @@ export default function ManufacturingOrders() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = orders.filter(o =>
     search === '' || o.mo_number?.includes(search) || o.product_name?.includes(search)

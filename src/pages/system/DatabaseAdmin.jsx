@@ -89,6 +89,7 @@ const MODULE_COLORS = {
 export default function DatabaseAdmin() {
   const [tableCounts, setTableCounts] = useState({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [moduleFilter, setModuleFilter] = useState('')
   const [expandedTable, setExpandedTable] = useState(null)
@@ -98,19 +99,26 @@ export default function DatabaseAdmin() {
   // 抓每張表的筆數
   const fetchCounts = async () => {
     setLoading(true)
-    const counts = {}
-    await Promise.all(
-      ALL_TABLES.map(async (t) => {
-        try {
-          const { count } = await supabase.from(t.name).select('*', { count: 'exact', head: true })
-          counts[t.name] = count || 0
-        } catch {
-          counts[t.name] = -1 // 表不存在
-        }
-      })
-    )
-    setTableCounts(counts)
-    setLoading(false)
+    setError(null)
+    try {
+      const counts = {}
+      await Promise.all(
+        ALL_TABLES.map(async (t) => {
+          try {
+            const { count } = await supabase.from(t.name).select('*', { count: 'exact', head: true })
+            counts[t.name] = count || 0
+          } catch {
+            counts[t.name] = -1 // 表不存在
+          }
+        })
+      )
+      setTableCounts(counts)
+    } catch (err) {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchCounts() }, [])
@@ -134,6 +142,7 @@ export default function DatabaseAdmin() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const modules = [...new Set(ALL_TABLES.map(t => t.module))]
   const filtered = ALL_TABLES.filter(t =>

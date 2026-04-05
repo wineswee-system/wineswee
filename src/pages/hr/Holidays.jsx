@@ -9,33 +9,50 @@ const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','
 export default function Holidays() {
   const [holidays, setHolidays] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', date: '', type: '國定', multiplier: 2 })
   const [activeYear, setActiveYear] = useState(new Date().getFullYear())
 
   useEffect(() => {
-    getHolidays().then(({ data }) => { setHolidays(data || []); setLoading(false) })
+    getHolidays().then(({ data }) => { setHolidays(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
     if (!form.name || !form.date) return
-    const { data } = await createHoliday({ ...form, multiplier: Number(form.multiplier) || 2 })
-    if (data) {
-      setHolidays(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ name: '', date: '', type: '國定', multiplier: 2 })
+    try {
+      const { data, error } = await createHoliday({ ...form, multiplier: Number(form.multiplier) || 2 })
+      if (error) throw error
+      if (data) {
+        setHolidays(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ name: '', date: '', type: '國定', multiplier: 2 })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const handleDelete = async (id) => {
     if (!confirm('確定刪除此假日？')) return
-    await deleteHoliday(id)
-    setHolidays(prev => prev.filter(h => h.id !== id))
+    try {
+      const { error } = await deleteHoliday(id)
+      if (error) throw error
+      setHolidays(prev => prev.filter(h => h.id !== id))
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const yearHolidays = holidays.filter(h => h.date?.startsWith(String(activeYear)))
   const national = yearHolidays.filter(h => h.type === '國定')

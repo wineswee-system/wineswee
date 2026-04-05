@@ -23,17 +23,23 @@ function getActionStyle(action) {
 export default function AuditLog() {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [view, setView] = useState('timeline') // 'timeline' | 'table'
 
   useEffect(() => {
     getAuditLogs().then(({ data }) => {
       setLogs(data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const formatTime = (ts) => ts ? new Date(ts).toLocaleString('zh-TW') : '-'
   const formatRelative = (ts) => {

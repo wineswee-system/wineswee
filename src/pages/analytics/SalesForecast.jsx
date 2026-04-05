@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Target, PieChart } from 'lucide-react'
+import { TrendingUp, Target, PieChart, Download, Printer } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { Line, Bar, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../../lib/supabase'
+import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import DateRangePicker from '../../components/DateRangePicker'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
@@ -43,6 +45,8 @@ export default function SalesForecast() {
   const [opportunities, setOpportunities] = useState([])
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [dateRange, setDateRange] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -51,22 +55,38 @@ export default function SalesForecast() {
     ]).then(([opp, ord]) => {
       setOpportunities(opp.data || [])
       setOrders(ord.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+
+  const filterByDate = (arr) => {
+    if (!dateRange) return arr
+    return arr.filter(r => {
+      const d = (r.created_at || '').slice(0, 10)
+      return d >= dateRange.startDate && d <= dateRange.endDate
+    })
+  }
+
+  const filteredOpportunities = filterByDate(opportunities)
+  const filteredOrders = filterByDate(orders)
 
   // ── Stats ──
   const now = new Date()
-  const thisMonthOrders = orders.filter(o => {
+  const thisMonthOrders = filteredOrders.filter(o => {
     const d = new Date(o.created_at)
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   })
   const thisMonthRevenue = thisMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0)
 
-  const wonOpps = opportunities.filter(o => o.stage === '贏單')
-  const totalOpps = opportunities.length
+  const wonOpps = filteredOpportunities.filter(o => o.stage === '贏單')
+  const totalOpps = filteredOpportunities.length
   const conversionRate = totalOpps > 0 ? Math.round(wonOpps.length / totalOpps * 100) : 0
 
   // Average days to close (mock: based on created_at to updated_at for won deals)
@@ -78,22 +98,27 @@ export default function SalesForecast() {
       }, 0) / wonOpps.length)
     : 0
 
-  // Forecast next month (simple: this month * random multiplier 1.05-1.15)
-  const forecastNext = Math.round(thisMonthRevenue * (1.05 + Math.random() * 0.1))
-
   // ── Chart 1: Monthly Revenue Trend (past 6 months) ──
   const monthLabels = []
   const monthData = []
-  const baseAmount = thisMonthRevenue || 150000
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    monthLabels.push(`${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`)
-    if (i === 0) {
-      monthData.push(thisMonthRevenue || Math.round(baseAmount * (0.8 + Math.random() * 0.4)))
-    } else {
-      monthData.push(Math.round(baseAmount * (0.8 + Math.random() * 0.4)))
-    }
+    const year = d.getFullYear()
+    const month = d.getMonth()
+    monthLabels.push(`${year}/${String(month + 1).padStart(2, '0')}`)
+    const monthRevenue = filteredOrders
+      .filter(o => {
+        const od = new Date(o.created_at)
+        return od.getFullYear() === year && od.getMonth() === month
+      })
+      .reduce((sum, o) => sum + (o.total || 0), 0)
+    monthData.push(monthRevenue)
   }
+
+  // Forecast next month: 3-month weighted moving average
+  const forecastNext = monthData.length >= 3 && (monthData[5] + monthData[4] + monthData[3]) > 0
+    ? Math.round(monthData[5] * 0.5 + monthData[4] * 0.3 + monthData[3] * 0.2)
+    : Math.round(thisMonthRevenue * 1.05)
 
   const revenueLineData = {
     labels: monthLabels,
@@ -113,7 +138,7 @@ export default function SalesForecast() {
 
   // ── Chart 2: Sales Funnel Conversion ──
   const stages = ['初步接觸', '需求分析', '報價', '議價', '贏單']
-  const stageCounts = stages.map(stage => opportunities.filter(o => o.stage === stage).length)
+  const stageCounts = stages.map(stage => filteredOpportunities.filter(o => o.stage === stage).length)
 
   const funnelBarData = {
     labels: stages,
@@ -127,10 +152,17 @@ export default function SalesForecast() {
     }],
   }
 
-  // ── Chart 3: Customer Source Distribution (mock) ──
-  const sourceLabels = ['官網', 'LINE', '門市', '轉介', '電話']
-  const sourceData = [35, 28, 18, 12, 7]
-  const sourceColors = [chartColors.cyan, chartColors.green, chartColors.purple, chartColors.orange, chartColors.pink]
+  // ── Chart 3: Customer Source Distribution ──
+  const sourceMap = {}
+  filteredOpportunities.forEach(o => {
+    const key = o.pipeline_id || '未分類'
+    sourceMap[key] = (sourceMap[key] || 0) + 1
+  })
+  const allSourceColors = [chartColors.cyan, chartColors.green, chartColors.purple, chartColors.orange, chartColors.pink, chartColors.blue, chartColors.yellow, chartColors.red]
+  const sourceEntries = Object.entries(sourceMap).sort((a, b) => b[1] - a[1])
+  const sourceLabels = sourceEntries.length > 0 ? sourceEntries.map(([k]) => k) : ['無資料']
+  const sourceData = sourceEntries.length > 0 ? sourceEntries.map(([, v]) => v) : [1]
+  const sourceColors = sourceLabels.map((_, i) => allSourceColors[i % allSourceColors.length])
 
   const sourceDoughnutData = {
     labels: sourceLabels,
@@ -142,12 +174,41 @@ export default function SalesForecast() {
     }],
   }
 
+  const handleExportCSV = () => {
+    const exportData = opportunities.map(o => ({
+      name: o.name || '',
+      customer: o.customer_name || '',
+      stage: o.stage || '',
+      amount: o.amount || 0,
+      probability: o.probability || 0,
+      created_at: o.created_at ? o.created_at.slice(0, 10) : '',
+    }))
+    exportToCSV(exportData, [
+      { key: 'name', label: '商機名稱' },
+      { key: 'customer', label: '客戶' },
+      { key: 'stage', label: '階段' },
+      { key: 'amount', label: '金額' },
+      { key: 'probability', label: '成交機率 (%)' },
+      { key: 'created_at', label: '建立日期' },
+    ], `銷售預測_商機_${new Date().toISOString().slice(0, 10)}`)
+  }
+
   return (
-    <div className="fade-in">
+    <div className="fade-in" id="sales-forecast-page">
       <div className="page-header">
         <h2><span className="header-icon">🔮</span> 銷售預測</h2>
         <p>營收趨勢分析與銷售預測</p>
+        <div className="export-btn-group" style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+          <button className="btn btn-primary" onClick={handleExportCSV} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Download size={15} /> 匯出 CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => exportToPDF('sales-forecast-page', '銷售預測')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Printer size={15} /> 列印報表
+          </button>
+        </div>
       </div>
+
+      <DateRangePicker value={dateRange} onChange={setDateRange} />
 
       {/* ── Stats Row ── */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

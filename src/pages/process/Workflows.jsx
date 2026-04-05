@@ -10,6 +10,7 @@ const CATEGORIES = ['HR', '財務', '業務', '行政', '研發', '客服', '營
 export default function Workflows() {
   const [workflows, setWorkflows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -17,7 +18,7 @@ export default function Workflows() {
   const [editForm, setEditForm] = useState({ name: '', category: '', steps: '', description: '', status: '' })
 
   useEffect(() => {
-    getWorkflows().then(({ data }) => { setWorkflows(data || []); setLoading(false) })
+    getWorkflows().then(({ data }) => { setWorkflows(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -80,6 +81,7 @@ export default function Workflows() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

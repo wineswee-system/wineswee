@@ -10,6 +10,7 @@ export default function Overview() {
   const [ap, setAp] = useState([])
   const [profit, setProfit] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const month = new Date().toISOString().slice(0, 7)
@@ -23,11 +24,16 @@ export default function Overview() {
       setAr(r.data || [])
       setAp(p.data || [])
       setProfit(prof)
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const sumByType = (type) => accounts.filter(a => a.type === type).reduce((s, a) => s + (Number(a.balance) || 0), 0)
   const totalAssets = sumByType('資產')

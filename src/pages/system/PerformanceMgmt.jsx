@@ -6,15 +6,21 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 export default function PerformanceMgmt() {
   const [kpis, setKpis] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     getKpiData().then(({ data }) => {
       setKpis(data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const overallRate = kpis.length
     ? Math.round(kpis.reduce((s, k) => s + Number(k.value) / Number(k.target), 0) / kpis.length * 100)

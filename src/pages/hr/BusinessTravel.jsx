@@ -11,6 +11,7 @@ export default function BusinessTravel() {
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ employee: '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
 
@@ -25,6 +26,10 @@ export default function BusinessTravel() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -47,6 +52,7 @@ export default function BusinessTravel() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
 

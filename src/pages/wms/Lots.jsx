@@ -6,13 +6,18 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 export default function Lots() {
   const [lots, setLots] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    getInventoryLots().then(({ data }) => { setLots(data || []); setLoading(false) })
+    getInventoryLots().then(({ data }) => { setLots(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = lots.filter(l =>
     search === '' || l.lot_number?.includes(search) || l.sku_id?.toString().includes(search)

@@ -8,6 +8,7 @@ export default function WMSReports() {
   const [recentAdj, setRecentAdj] = useState([])
   const [inboundStats, setInboundStats] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -24,11 +25,16 @@ export default function WMSReports() {
       const stats = {}
       ;(ib.data || []).forEach(o => { stats[o.status] = (stats[o.status] || 0) + 1 })
       setInboundStats(Object.entries(stats).map(([status, count]) => ({ status, count })))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

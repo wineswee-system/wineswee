@@ -13,6 +13,7 @@ export default function Employees() {
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
@@ -39,6 +40,10 @@ export default function Employees() {
       setDepartments(depts)
       setLocations(locs)
       setForm(f => ({ ...f, dept: depts[0]?.name || '', store: locs[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -48,12 +53,18 @@ export default function Employees() {
   // 新增員工
   const handleSubmit = async () => {
     if (!form.name || !form.email) return
-    const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
-    const { data } = await createEmployee({ ...form, avatar })
-    if (data) {
-      setEmployees(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職' })
+    try {
+      const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
+      const { data, error } = await createEmployee({ ...form, avatar })
+      if (error) throw error
+      if (data) {
+        setEmployees(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -66,14 +77,20 @@ export default function Employees() {
   }
   const handleResign = async () => {
     if (!selectedEmp) return
-    const { data } = await updateEmployee(selectedEmp.id, {
-      status: '離職',
-      resign_date: resignDate,
-      resign_reason: resignReason,
-    })
-    if (data) {
-      setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
-      setShowResignModal(false)
+    try {
+      const { data, error } = await updateEmployee(selectedEmp.id, {
+        status: '離職',
+        resign_date: resignDate,
+        resign_reason: resignReason,
+      })
+      if (error) throw error
+      if (data) {
+        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
+        setShowResignModal(false)
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -91,10 +108,16 @@ export default function Employees() {
   const setE = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
   const handleEdit = async () => {
     if (!selectedEmp) return
-    const { data } = await updateEmployee(selectedEmp.id, editForm)
-    if (data) {
-      setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
-      setShowEditModal(false)
+    try {
+      const { data, error } = await updateEmployee(selectedEmp.id, editForm)
+      if (error) throw error
+      if (data) {
+        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
+        setShowEditModal(false)
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -102,18 +125,25 @@ export default function Employees() {
   const openRehire = (emp) => { setSelectedEmp(emp); setShowRehireModal(true) }
   const handleRehire = async () => {
     if (!selectedEmp) return
-    const { data } = await updateEmployee(selectedEmp.id, {
-      status: '在職',
-      resign_date: null,
-      resign_reason: null,
-    })
-    if (data) {
-      setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
-      setShowRehireModal(false)
+    try {
+      const { data, error } = await updateEmployee(selectedEmp.id, {
+        status: '在職',
+        resign_date: null,
+        resign_reason: null,
+      })
+      if (error) throw error
+      if (data) {
+        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
+        setShowRehireModal(false)
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = employees.filter(e =>
     (statusFilter === '' || e.status === statusFilter) &&

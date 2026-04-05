@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
-import { Plus, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, ChevronDown, ChevronRight, ScanBarcode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { addCostLayer } from '../../lib/inventoryCosting'
+import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import BarcodeInput from '../../components/BarcodeInput'
 
 const STATUSES = ['待到貨', '收貨中', '已完成', '異常']
 
@@ -10,11 +13,15 @@ export default function Inbound() {
   const [orders, setOrders] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [whFilter, setWhFilter] = useState('')
   const [expanded, setExpanded] = useState(null)
   const [items, setItems] = useState({})
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ po_number: '', supplier: '', warehouse_id: '', expected_date: '', status: '待到貨' })
+  const [scanCount, setScanCount] = useState(0)
+  const [lastScannedSku, setLastScannedSku] = useState(null)
+  const [highlightItem, setHighlightItem] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -23,6 +30,10 @@ export default function Inbound() {
     ]).then(([o, w]) => {
       setOrders(o.data || [])
       setWarehouses(w.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -51,10 +62,49 @@ export default function Inbound() {
 
   const updateItemQty = async (orderId, itemId, qty) => {
     const { data } = await supabase.from('inbound_items').update({ received_qty: qty, status: '已收貨' }).eq('id', itemId).select().single()
-    if (data) setItems(prev => ({ ...prev, [orderId]: prev[orderId].map(i => i.id === itemId ? data : i) }))
+    if (data) {
+      setItems(prev => ({ ...prev, [orderId]: prev[orderId].map(i => i.id === itemId ? data : i) }))
+
+      // 建立成本層：收貨時記錄進貨成本
+      const order = orders.find(o => o.id === orderId)
+      const warehouseId = order?.warehouse_id
+      const skuId = data.sku_id
+      const unitCost = data.unit_cost || data.unit_price || 0
+
+      if (skuId && warehouseId && qty > 0 && unitCost > 0) {
+        try {
+          await addCostLayer(skuId, warehouseId, qty, unitCost, 'purchase', orderId, data.lot_number || null)
+        } catch (err) {
+          console.error('建立成本層失敗:', err)
+        }
+      }
+    }
+  }
+
+  // 條碼掃描收貨處理
+  const handleBarcodeScan = async (code, lookupResult) => {
+    if (!expanded) return // 需先展開某張進貨單
+    const orderItems = items[expanded] || []
+    // 在展開的進貨單中尋找匹配的品項
+    const matched = orderItems.find(i =>
+      i.sku_code?.toLowerCase() === code.toLowerCase()
+    )
+    if (matched) {
+      const newQty = (matched.received_qty || 0) + 1
+      await updateItemQty(expanded, matched.id, newQty)
+      setScanCount(prev => prev + 1)
+      setLastScannedSku(matched.sku_code)
+      setHighlightItem(matched.id)
+      playBeep(true)
+      setTimeout(() => setHighlightItem(null), 1500)
+    } else {
+      setLastScannedSku(null)
+      playBeep(false)
+    }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">
@@ -77,6 +127,21 @@ export default function Inbound() {
           </div>
         ))}
       </div>
+
+      {/* 條碼掃描收貨 */}
+      <BarcodeInput
+        onScan={handleBarcodeScan}
+        placeholder="掃描條碼收貨（請先展開進貨單）..."
+        autoLookup={false}
+      />
+      {scanCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '8px 16px', background: 'var(--accent-green-dim)', borderRadius: 8, fontSize: 13 }}>
+          <ScanBarcode size={14} style={{ color: 'var(--accent-green)' }} />
+          <span>已掃描 <strong>{scanCount}</strong> 次</span>
+          {lastScannedSku && <span style={{ color: 'var(--accent-green)' }}>最近: {lastScannedSku}</span>}
+          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', marginLeft: 'auto' }} onClick={() => { setScanCount(0); setLastScannedSku(null) }}>重置</button>
+        </div>
+      )}
 
       {/* 倉庫篩選 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -124,7 +189,7 @@ export default function Inbound() {
                     <thead><tr><th>品號</th><th>品名</th><th>預計數量</th><th>實收數量</th><th>指定儲位</th><th>狀態</th></tr></thead>
                     <tbody>
                       {items[o.id].map(item => (
-                        <tr key={item.id}>
+                        <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
                           <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
                           <td>{item.sku_name}</td>
                           <td>{item.expected_qty}</td>

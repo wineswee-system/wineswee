@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 
 // 記錄單一操作
 export async function logAudit({ user, action, target, targetTable, targetId, fieldName, oldValue, newValue, ip }) {
-  return supabase.from('audit_logs').insert({
+  const { data, error } = await supabase.from('audit_logs').insert({
     user,
     action,
     target,
@@ -18,11 +18,16 @@ export async function logAudit({ user, action, target, targetTable, targetId, fi
     new_value: newValue != null ? String(newValue) : null,
     ip: ip || null,
   })
+  if (error) return { data: null, error: error.message }
+  return { data, error: null }
 }
 
 // 比較兩個物件差異並批次記錄
 export async function logChanges({ user, action, target, targetTable, targetId, oldData, newData, ip }) {
-  if (!oldData || !newData) return
+  if (!oldData || !newData) {
+    console.warn(`logChanges: skipping — missing ${!oldData ? 'oldData' : ''}${!oldData && !newData ? ' and ' : ''}${!newData ? 'newData' : ''} for ${targetTable || 'unknown table'} (target: ${target || 'unknown'})`)
+    return
+  }
 
   const changes = []
   for (const key of Object.keys(newData)) {

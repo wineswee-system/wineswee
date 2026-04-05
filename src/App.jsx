@@ -1,92 +1,134 @@
-import { useState } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
-import DemoLanding from './pages/DemoLanding'
-import Dashboard from './pages/Dashboard'
-import Analytics from './pages/Analytics'
-import HRReport from './pages/hr/HRReport'
-import Attendance from './pages/hr/Attendance'
-import Leave from './pages/hr/Leave'
-import Overtime from './pages/hr/Overtime'
-import Salary from './pages/hr/Salary'
-import Schedule from './pages/hr/Schedule'
-import Holidays from './pages/hr/Holidays'
-import ScheduleRules from './pages/hr/ScheduleRules'
-import Performance from './pages/hr/Performance'
-import Recruitment from './pages/hr/Recruitment'
-import Documents from './pages/hr/Documents'
-import Transfer from './pages/hr/Transfer'
-import Bonus from './pages/hr/Bonus'
-import BusinessTravel from './pages/hr/BusinessTravel'
-import Expenses from './pages/hr/Expenses'
-import ProcessOverview from './pages/process/Overview'
-import Workflows from './pages/process/Workflows'
-import Tasks from './pages/process/Tasks'
-import Checklists from './pages/process/Checklists'
-import SOPTemplates from './pages/process/SOPTemplates'
-import OrgOverview from './pages/org/Overview'
-import OrgChart from './pages/org/OrgChart'
-import Companies from './pages/org/Companies'
-import Locations from './pages/org/Locations'
-import Departments from './pages/org/Departments'
-import Employees from './pages/org/Employees'
-import LineIntegration from './pages/org/LineIntegration'
-import Templates from './pages/org/Templates'
-import Triggers from './pages/system/Triggers'
-import Notifications from './pages/system/Notifications'
-import Users from './pages/system/Users'
-import AuditLog from './pages/system/AuditLog'
-import PerformanceMgmt from './pages/system/PerformanceMgmt'
-import SystemSettings from './pages/system/Settings'
-import HelpCenter from './pages/ai/HelpCenter'
-import AgentConsole from './pages/ai/AgentConsole'
-import CRMOverview from './pages/crm/Overview'
-import Customers from './pages/crm/Customers'
-import Pipeline from './pages/crm/Pipeline'
-import CRMMarketing from './pages/crm/Marketing'
-import CRMService from './pages/crm/Service'
-import WMSOverview from './pages/wms/Overview'
-import SKUs from './pages/wms/SKUs'
-import Inbound from './pages/wms/Inbound'
-import Inventory from './pages/wms/Inventory'
-import Outbound from './pages/wms/Outbound'
-import WMSReports from './pages/wms/Reports'
-import PortalLayout from './pages/portal/PortalLayout'
-import PortalHome from './pages/portal/PortalHome'
-import Suppliers from './pages/purchase/Suppliers'
-import PurchaseRequests from './pages/purchase/PurchaseRequests'
-import PurchaseOrders from './pages/purchase/PurchaseOrders'
-import GoodsReceipts from './pages/purchase/GoodsReceipts'
-import FinanceOverview from './pages/finance/Overview'
-import JournalEntries from './pages/finance/JournalEntries'
-import AccountsReceivable from './pages/finance/AccountsReceivable'
-import AccountsPayable from './pages/finance/AccountsPayable'
-import BOM from './pages/manufacturing/BOM'
-import MRP from './pages/manufacturing/MRP'
-import QualityInspection from './pages/manufacturing/QualityInspection'
-import Contracts from './pages/purchase/Contracts'
-import Budgets from './pages/finance/Budgets'
-import BankReconciliation from './pages/finance/BankReconciliation'
-import ManufacturingOrders from './pages/manufacturing/ManufacturingOrders'
-import Lots from './pages/wms/Lots'
-import StockCount from './pages/wms/StockCount'
-import Quotations from './pages/sales/Quotations'
-import SalesOrders from './pages/sales/SalesOrders'
-import Promotions from './pages/sales/Promotions'
-import Returns from './pages/sales/Returns'
-import POSTerminal from './pages/pos/POSTerminal'
-import POSShifts from './pages/pos/POSShifts'
-import Shipments from './pages/sales/Shipments'
-import Members from './pages/crm/Members'
-import Invoices from './pages/finance/Invoices'
-import SalesForecast from './pages/analytics/SalesForecast'
-import DataImportExport from './pages/system/DataImportExport'
-import DatabaseAdmin from './pages/system/DatabaseAdmin'
-import Ecommerce from './pages/integration/Ecommerce'
-import APIDocumentation from './pages/integration/APIDocumentation'
-import Tutorial from './pages/ai/Tutorial'
+import LoadingSpinner from './components/LoadingSpinner'
+
+// Lazy load all page components
+const DemoLanding = lazy(() => import('./pages/DemoLanding'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const HRReport = lazy(() => import('./pages/hr/HRReport'))
+const Attendance = lazy(() => import('./pages/hr/Attendance'))
+const Leave = lazy(() => import('./pages/hr/Leave'))
+const Overtime = lazy(() => import('./pages/hr/Overtime'))
+const Salary = lazy(() => import('./pages/hr/Salary'))
+const Schedule = lazy(() => import('./pages/hr/Schedule'))
+const Holidays = lazy(() => import('./pages/hr/Holidays'))
+const ScheduleRules = lazy(() => import('./pages/hr/ScheduleRules'))
+const Performance = lazy(() => import('./pages/hr/Performance'))
+const Recruitment = lazy(() => import('./pages/hr/Recruitment'))
+const Documents = lazy(() => import('./pages/hr/Documents'))
+const Transfer = lazy(() => import('./pages/hr/Transfer'))
+const Bonus = lazy(() => import('./pages/hr/Bonus'))
+const BusinessTravel = lazy(() => import('./pages/hr/BusinessTravel'))
+const Expenses = lazy(() => import('./pages/hr/Expenses'))
+const ProcessOverview = lazy(() => import('./pages/process/Overview'))
+const Workflows = lazy(() => import('./pages/process/Workflows'))
+const Tasks = lazy(() => import('./pages/process/Tasks'))
+const Checklists = lazy(() => import('./pages/process/Checklists'))
+const SOPTemplates = lazy(() => import('./pages/process/SOPTemplates'))
+const OrgOverview = lazy(() => import('./pages/org/Overview'))
+const OrgChart = lazy(() => import('./pages/org/OrgChart'))
+const Companies = lazy(() => import('./pages/org/Companies'))
+const Locations = lazy(() => import('./pages/org/Locations'))
+const Departments = lazy(() => import('./pages/org/Departments'))
+const Employees = lazy(() => import('./pages/org/Employees'))
+const LineIntegration = lazy(() => import('./pages/org/LineIntegration'))
+const Templates = lazy(() => import('./pages/org/Templates'))
+const Triggers = lazy(() => import('./pages/system/Triggers'))
+const Notifications = lazy(() => import('./pages/system/Notifications'))
+const Users = lazy(() => import('./pages/system/Users'))
+const AuditLog = lazy(() => import('./pages/system/AuditLog'))
+const PerformanceMgmt = lazy(() => import('./pages/system/PerformanceMgmt'))
+const SystemSettings = lazy(() => import('./pages/system/Settings'))
+const HelpCenter = lazy(() => import('./pages/ai/HelpCenter'))
+const AgentConsole = lazy(() => import('./pages/ai/AgentConsole'))
+const CRMOverview = lazy(() => import('./pages/crm/Overview'))
+const Customers = lazy(() => import('./pages/crm/Customers'))
+const Pipeline = lazy(() => import('./pages/crm/Pipeline'))
+const CRMMarketing = lazy(() => import('./pages/crm/Marketing'))
+const CRMService = lazy(() => import('./pages/crm/Service'))
+const WMSOverview = lazy(() => import('./pages/wms/Overview'))
+const SKUs = lazy(() => import('./pages/wms/SKUs'))
+const Inbound = lazy(() => import('./pages/wms/Inbound'))
+const Inventory = lazy(() => import('./pages/wms/Inventory'))
+const Outbound = lazy(() => import('./pages/wms/Outbound'))
+const WMSReports = lazy(() => import('./pages/wms/Reports'))
+const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
+const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
+const Suppliers = lazy(() => import('./pages/purchase/Suppliers'))
+const PurchaseRequests = lazy(() => import('./pages/purchase/PurchaseRequests'))
+const PurchaseOrders = lazy(() => import('./pages/purchase/PurchaseOrders'))
+const GoodsReceipts = lazy(() => import('./pages/purchase/GoodsReceipts'))
+const ProcurementPipeline = lazy(() => import('./pages/purchase/ProcurementPipeline'))
+const ProcurementWorkflow = lazy(() => import('./pages/purchase/ProcurementWorkflow'))
+const ThreeWayMatch = lazy(() => import('./pages/purchase/ThreeWayMatch'))
+const FinanceOverview = lazy(() => import('./pages/finance/Overview'))
+const JournalEntries = lazy(() => import('./pages/finance/JournalEntries'))
+const AccountsReceivable = lazy(() => import('./pages/finance/AccountsReceivable'))
+const AccountsPayable = lazy(() => import('./pages/finance/AccountsPayable'))
+const BOM = lazy(() => import('./pages/manufacturing/BOM'))
+const MRP = lazy(() => import('./pages/manufacturing/MRP'))
+const QualityInspection = lazy(() => import('./pages/manufacturing/QualityInspection'))
+const Contracts = lazy(() => import('./pages/purchase/Contracts'))
+const VendorCategories = lazy(() => import('./pages/purchase/VendorCategories'))
+const VendorPerformance = lazy(() => import('./pages/purchase/VendorPerformance'))
+const VendorOnboarding = lazy(() => import('./pages/purchase/VendorOnboarding'))
+const Budgets = lazy(() => import('./pages/finance/Budgets'))
+const BankReconciliation = lazy(() => import('./pages/finance/BankReconciliation'))
+const ManufacturingOrders = lazy(() => import('./pages/manufacturing/ManufacturingOrders'))
+const Valuation = lazy(() => import('./pages/wms/Valuation'))
+const Lots = lazy(() => import('./pages/wms/Lots'))
+const StockCount = lazy(() => import('./pages/wms/StockCount'))
+const SalesOverview = lazy(() => import('./pages/sales/Overview'))
+const Quotations = lazy(() => import('./pages/sales/Quotations'))
+const SalesOrders = lazy(() => import('./pages/sales/SalesOrders'))
+const Promotions = lazy(() => import('./pages/sales/Promotions'))
+const Returns = lazy(() => import('./pages/sales/Returns'))
+const POSOverview = lazy(() => import('./pages/pos/Overview'))
+const POSTerminal = lazy(() => import('./pages/pos/POSTerminal'))
+const POSShifts = lazy(() => import('./pages/pos/POSShifts'))
+const Shipments = lazy(() => import('./pages/sales/Shipments'))
+const Members = lazy(() => import('./pages/crm/Members'))
+const Invoices = lazy(() => import('./pages/finance/Invoices'))
+const TrialBalance = lazy(() => import('./pages/finance/TrialBalance'))
+const BalanceSheet = lazy(() => import('./pages/finance/BalanceSheet'))
+const ProfitLoss = lazy(() => import('./pages/finance/ProfitLoss'))
+const TaxReports = lazy(() => import('./pages/finance/TaxReports'))
+const FixedAssets = lazy(() => import('./pages/finance/FixedAssets'))
+const MessageLog = lazy(() => import('./pages/crm/MessageLog'))
+const DripCampaigns = lazy(() => import('./pages/crm/DripCampaigns'))
+const FormBuilder = lazy(() => import('./pages/crm/FormBuilder'))
+const WorkflowBuilder = lazy(() => import('./pages/crm/WorkflowBuilder'))
+const SalesForecast = lazy(() => import('./pages/analytics/SalesForecast'))
+const FinanceAnalytics = lazy(() => import('./pages/analytics/FinanceAnalytics'))
+const HRAnalytics = lazy(() => import('./pages/analytics/HRAnalytics'))
+const InventoryAnalytics = lazy(() => import('./pages/analytics/InventoryAnalytics'))
+const POSAnalytics = lazy(() => import('./pages/analytics/POSAnalytics'))
+const ManufacturingAnalytics = lazy(() => import('./pages/analytics/ManufacturingAnalytics'))
+const SalesPerformance = lazy(() => import('./pages/analytics/SalesPerformance'))
+const ScheduledReports = lazy(() => import('./pages/analytics/ScheduledReports'))
+const DashboardBuilder = lazy(() => import('./pages/analytics/DashboardBuilder'))
+const AnomalyDetection = lazy(() => import('./pages/analytics/AnomalyDetection'))
+const EmbeddableCharts = lazy(() => import('./pages/analytics/EmbeddableCharts'))
+const ProcessAnalytics = lazy(() => import('./pages/analytics/ProcessAnalytics'))
+const CrossSystemAnalytics = lazy(() => import('./pages/analytics/CrossSystemAnalytics'))
+const LaborInspection = lazy(() => import('./pages/hr/LaborInspection'))
+const TaxFiling = lazy(() => import('./pages/finance/TaxFiling'))
+const TaxReport = lazy(() => import('./pages/finance/TaxReport'))
+const ExchangeRates = lazy(() => import('./pages/finance/ExchangeRates'))
+const CostCenters = lazy(() => import('./pages/finance/CostCenters'))
+const CashFlow = lazy(() => import('./pages/finance/CashFlow'))
+const ShopFloor = lazy(() => import('./pages/manufacturing/ShopFloor'))
+const TenantAdmin = lazy(() => import('./pages/system/TenantAdmin'))
+const DataImportExport = lazy(() => import('./pages/system/DataImportExport'))
+const DatabaseAdmin = lazy(() => import('./pages/system/DatabaseAdmin'))
+const Ecommerce = lazy(() => import('./pages/integration/Ecommerce'))
+const APIDocumentation = lazy(() => import('./pages/integration/APIDocumentation'))
+const WenzhongImport = lazy(() => import('./pages/integration/WenzhongImport'))
+const Tutorial = lazy(() => import('./pages/ai/Tutorial'))
 
 function AdminApp() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
@@ -97,10 +139,23 @@ function AdminApp() {
       <Sidebar />
       <main className="main-content">
         <div className="page-container">
+          <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/analytics/forecast" element={<SalesForecast />} />
+            <Route path="/analytics/finance" element={<Suspense fallback={<LoadingSpinner />}><FinanceAnalytics /></Suspense>} />
+            <Route path="/analytics/hr" element={<Suspense fallback={<LoadingSpinner />}><HRAnalytics /></Suspense>} />
+            <Route path="/analytics/inventory" element={<Suspense fallback={<LoadingSpinner />}><InventoryAnalytics /></Suspense>} />
+            <Route path="/analytics/pos" element={<Suspense fallback={<LoadingSpinner />}><POSAnalytics /></Suspense>} />
+            <Route path="/analytics/manufacturing" element={<Suspense fallback={<LoadingSpinner />}><ManufacturingAnalytics /></Suspense>} />
+            <Route path="/analytics/sales" element={<Suspense fallback={<LoadingSpinner />}><SalesPerformance /></Suspense>} />
+            <Route path="/analytics/reports" element={<Suspense fallback={<LoadingSpinner />}><ScheduledReports /></Suspense>} />
+            <Route path="/analytics/builder" element={<Suspense fallback={<LoadingSpinner />}><DashboardBuilder /></Suspense>} />
+            <Route path="/analytics/anomaly" element={<Suspense fallback={<LoadingSpinner />}><AnomalyDetection /></Suspense>} />
+            <Route path="/analytics/embed" element={<Suspense fallback={<LoadingSpinner />}><EmbeddableCharts /></Suspense>} />
+            <Route path="/analytics/process" element={<Suspense fallback={<LoadingSpinner />}><ProcessAnalytics /></Suspense>} />
+            <Route path="/analytics/cross-system" element={<Suspense fallback={<LoadingSpinner />}><CrossSystemAnalytics /></Suspense>} />
             {/* HR */}
             <Route path="/hr/report" element={<HRReport />} />
             <Route path="/hr/attendance" element={<Attendance />} />
@@ -117,6 +172,7 @@ function AdminApp() {
             <Route path="/hr/travel" element={<BusinessTravel />} />
             <Route path="/hr/expenses" element={<Expenses />} />
             <Route path="/hr/bonus" element={<Bonus />} />
+            <Route path="/hr/labor-inspection" element={<Suspense fallback={<LoadingSpinner />}><LaborInspection /></Suspense>} />
             {/* Process */}
             <Route path="/process/overview" element={<ProcessOverview />} />
             <Route path="/process/workflows" element={<Workflows />} />
@@ -141,20 +197,26 @@ function AdminApp() {
             <Route path="/system/settings" element={<SystemSettings />} />
             <Route path="/system/import-export" element={<DataImportExport />} />
             <Route path="/system/database" element={<DatabaseAdmin />} />
+            <Route path="/system/tenants" element={<Suspense fallback={<LoadingSpinner />}><TenantAdmin /></Suspense>} />
             {/* AI */}
             <Route path="/ai/help" element={<HelpCenter />} />
             <Route path="/ai/agent" element={<AgentConsole />} />
             <Route path="/ai/tutorial" element={<Tutorial />} />
             {/* Integration */}
             <Route path="/integration/ecommerce" element={<Ecommerce />} />
+            <Route path="/integration/wenzhong" element={<WenzhongImport />} />
             <Route path="/integration/api" element={<APIDocumentation />} />
             {/* CRM */}
             <Route path="/crm/overview" element={<CRMOverview />} />
             <Route path="/crm/customers" element={<Customers />} />
             <Route path="/crm/pipeline" element={<Pipeline />} />
             <Route path="/crm/marketing" element={<CRMMarketing />} />
+            <Route path="/crm/drip-campaigns" element={<Suspense fallback={<LoadingSpinner />}><DripCampaigns /></Suspense>} />
             <Route path="/crm/service" element={<CRMService />} />
             <Route path="/crm/members" element={<Members />} />
+            <Route path="/crm/forms" element={<Suspense fallback={<LoadingSpinner />}><FormBuilder /></Suspense>} />
+            <Route path="/crm/workflows" element={<Suspense fallback={<LoadingSpinner />}><WorkflowBuilder /></Suspense>} />
+            <Route path="/crm/messages" element={<Suspense fallback={<LoadingSpinner />}><MessageLog /></Suspense>} />
             {/* WMS */}
             <Route path="/wms/overview" element={<WMSOverview />} />
             <Route path="/wms/skus" element={<SKUs />} />
@@ -164,21 +226,30 @@ function AdminApp() {
             <Route path="/wms/reports" element={<WMSReports />} />
             <Route path="/wms/lots" element={<Lots />} />
             <Route path="/wms/stock-count" element={<StockCount />} />
+            <Route path="/wms/valuation" element={<Valuation />} />
             {/* Sales */}
+            <Route path="/sales" element={<Suspense fallback={<LoadingSpinner />}><SalesOverview /></Suspense>} />
             <Route path="/sales/quotations" element={<Quotations />} />
             <Route path="/sales/orders" element={<SalesOrders />} />
             <Route path="/sales/promotions" element={<Promotions />} />
             <Route path="/sales/returns" element={<Returns />} />
             <Route path="/sales/shipments" element={<Shipments />} />
             {/* POS */}
+            <Route path="/pos" element={<Suspense fallback={<LoadingSpinner />}><POSOverview /></Suspense>} />
             <Route path="/pos/terminal" element={<POSTerminal />} />
             <Route path="/pos/shifts" element={<POSShifts />} />
             {/* Purchase */}
             <Route path="/purchase/suppliers" element={<Suppliers />} />
+            <Route path="/purchase/categories" element={<VendorCategories />} />
+            <Route path="/purchase/performance" element={<VendorPerformance />} />
+            <Route path="/purchase/onboarding" element={<VendorOnboarding />} />
             <Route path="/purchase/requests" element={<PurchaseRequests />} />
             <Route path="/purchase/orders" element={<PurchaseOrders />} />
             <Route path="/purchase/receipts" element={<GoodsReceipts />} />
             <Route path="/purchase/contracts" element={<Contracts />} />
+            <Route path="/purchase/pipeline" element={<ProcurementPipeline />} />
+            <Route path="/purchase/workflow" element={<ProcurementWorkflow />} />
+            <Route path="/purchase/matching" element={<ThreeWayMatch />} />
             {/* Finance */}
             <Route path="/finance/overview" element={<FinanceOverview />} />
             <Route path="/finance/journal" element={<JournalEntries />} />
@@ -187,13 +258,25 @@ function AdminApp() {
             <Route path="/finance/budgets" element={<Budgets />} />
             <Route path="/finance/bank" element={<BankReconciliation />} />
             <Route path="/finance/invoices" element={<Invoices />} />
+            <Route path="/finance/trial-balance" element={<Suspense fallback={<LoadingSpinner />}><TrialBalance /></Suspense>} />
+            <Route path="/finance/balance-sheet" element={<Suspense fallback={<LoadingSpinner />}><BalanceSheet /></Suspense>} />
+            <Route path="/finance/profit-loss" element={<Suspense fallback={<LoadingSpinner />}><ProfitLoss /></Suspense>} />
+            <Route path="/finance/tax-reports" element={<Suspense fallback={<LoadingSpinner />}><TaxReports /></Suspense>} />
+            <Route path="/finance/fixed-assets" element={<Suspense fallback={<LoadingSpinner />}><FixedAssets /></Suspense>} />
+            <Route path="/finance/tax-filing" element={<Suspense fallback={<LoadingSpinner />}><TaxFiling /></Suspense>} />
+            <Route path="/finance/tax-report" element={<Suspense fallback={<LoadingSpinner />}><TaxReport /></Suspense>} />
+            <Route path="/finance/exchange-rates" element={<Suspense fallback={<LoadingSpinner />}><ExchangeRates /></Suspense>} />
+            <Route path="/finance/cost-centers" element={<Suspense fallback={<LoadingSpinner />}><CostCenters /></Suspense>} />
+            <Route path="/finance/cash-flow" element={<Suspense fallback={<LoadingSpinner />}><CashFlow /></Suspense>} />
             {/* Manufacturing & QM */}
             <Route path="/manufacturing/bom" element={<BOM />} />
             <Route path="/manufacturing/mrp" element={<MRP />} />
             <Route path="/manufacturing/qm" element={<QualityInspection />} />
             <Route path="/manufacturing/orders" element={<ManufacturingOrders />} />
+            <Route path="/manufacturing/shop-floor" element={<Suspense fallback={<LoadingSpinner />}><ShopFloor /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </div>
       </main>
     </div>
@@ -203,6 +286,7 @@ function AdminApp() {
 export default function App() {
   return (
     <AuthProvider>
+      <Suspense fallback={<LoadingSpinner />}>
       <Routes>
         <Route path="/demo" element={<DemoLanding />} />
         <Route path="/portal" element={<PortalLayout />}>
@@ -210,6 +294,7 @@ export default function App() {
         </Route>
         <Route path="/*" element={<AdminApp />} />
       </Routes>
+      </Suspense>
     </AuthProvider>
   )
 }

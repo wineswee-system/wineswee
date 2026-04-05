@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { createJEFromExpense } from '../../lib/automation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -13,6 +14,7 @@ export default function Expenses() {
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
 
@@ -27,6 +29,10 @@ export default function Expenses() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -45,10 +51,18 @@ export default function Expenses() {
 
   const handleApprove = async (id) => {
     const { data } = await updateExpenseStatus(id, '已核銷')
-    if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
+    if (data) {
+      setExpenses(prev => prev.map(e => e.id === id ? data : e))
+      // Auto-post journal entry to Finance
+      const result = await createJEFromExpense(data)
+      if (result.ok) {
+        alert(`已核銷並自動產生傳票 ${result.entry.entry_number}`)
+      }
+    }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
 

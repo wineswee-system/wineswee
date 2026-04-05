@@ -97,6 +97,7 @@ export default function SOPTemplates() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeployModal, setShowDeployModal] = useState(false)
@@ -130,6 +131,10 @@ export default function SOPTemplates() {
       setLocations(l.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -138,35 +143,40 @@ export default function SOPTemplates() {
   const handleDeploy = async () => {
     if (!deployTemplate || !deployForm.location) return
     setDeploying(true)
+    try {
+      const steps = deployTemplate.steps || []
+      const loc = deployForm.location
+      const results = []
 
-    const steps = deployTemplate.steps || []
-    const loc = deployForm.location
-    const results = []
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i]
+        const assignee = deployForm.assignees[i] || ''
+        const { data, error } = await createTask({
+          title: `【${loc}】${step.title}`,
+          workflow: deployTemplate.name,
+          assignee,
+          priority: step.priority || '中',
+          status: '未開始',
+          due_date: '',
+        })
+        if (error) throw error
+        if (data) results.push(data)
+      }
 
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i]
-      const assignee = deployForm.assignees[i] || ''
-      const { data } = await createTask({
-        title: `【${loc}】${step.title}`,
-        workflow: deployTemplate.name,
-        assignee,
-        priority: step.priority || '中',
-        status: '未開始',
-        due_date: '',
+      // Also create a checklist
+      await createChecklist({
+        name: `${loc} — ${deployTemplate.name}`,
+        category: deployTemplate.category || '展店',
+        assignee: deployForm.assignees[0] || '',
+        items: steps.length,
+        completed: 0,
       })
-      if (data) results.push(data)
+
+      setDeployResult({ location: loc, count: results.length })
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
-
-    // Also create a checklist
-    await createChecklist({
-      name: `${loc} — ${deployTemplate.name}`,
-      category: deployTemplate.category || '展店',
-      assignee: deployForm.assignees[0] || '',
-      items: steps.length,
-      completed: 0,
-    })
-
-    setDeployResult({ location: loc, count: results.length })
     setDeploying(false)
   }
 
@@ -180,17 +190,23 @@ export default function SOPTemplates() {
   // ── Create Template ──
   const handleCreateTemplate = async () => {
     if (!newTemplate.name || !newTemplate.steps.some(s => s.title)) return
-    const validSteps = newTemplate.steps.filter(s => s.title)
-    const { data } = await supabase.from('sop_templates').insert({
-      name: newTemplate.name,
-      category: newTemplate.category,
-      description: newTemplate.description,
-      steps: validSteps,
-    }).select().single()
-    if (data) {
-      setTemplates(prev => [...prev, data])
-      setShowCreateModal(false)
-      setNewTemplate({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+    try {
+      const validSteps = newTemplate.steps.filter(s => s.title)
+      const { data, error } = await supabase.from('sop_templates').insert({
+        name: newTemplate.name,
+        category: newTemplate.category,
+        description: newTemplate.description,
+        steps: validSteps,
+      }).select().single()
+      if (error) throw error
+      if (data) {
+        setTemplates(prev => [...prev, data])
+        setShowCreateModal(false)
+        setNewTemplate({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -200,8 +216,14 @@ export default function SOPTemplates() {
 
   const handleDelete = async (id) => {
     if (!confirm('確定刪除此範本？')) return
-    await supabase.from('sop_templates').delete().eq('id', id)
-    setTemplates(prev => prev.filter(t => t.id !== id))
+    try {
+      const { error } = await supabase.from('sop_templates').delete().eq('id', id)
+      if (error) throw error
+      setTemplates(prev => prev.filter(t => t.id !== id))
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const deptBtnStyle = (active) => ({
@@ -212,6 +234,7 @@ export default function SOPTemplates() {
   })
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

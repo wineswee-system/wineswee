@@ -65,10 +65,28 @@ export async function submitForApproval(type, record, requesterName) {
   }
 
   const chain = await getApprovalChain(requesterName, permissionCode)
-  const approver = chain.find(c => c.hasPermission)
+
+  if (chain.length === 0) {
+    return { approver: null, chain, record, error: 'No approval chain found — no supervisors configured' }
+  }
+
+  // Find a valid approver: must have the permission and must not be the requester (self-approval)
+  let approver = chain.find(c => c.hasPermission && c.name !== requesterName)
+
+  // Fallback: if no one with permission found (excluding self), try last in chain if not self
+  if (!approver) {
+    const fallback = chain[chain.length - 1]
+    if (fallback && fallback.name !== requesterName) {
+      approver = fallback
+    }
+  }
+
+  if (!approver) {
+    return { approver: null, chain, record, error: 'No valid approver found' }
+  }
 
   return {
-    approver: approver || chain[chain.length - 1] || null,
+    approver,
     chain,
     record,
   }

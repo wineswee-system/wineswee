@@ -7,11 +7,15 @@ import Modal, { Field } from '../../components/Modal'
 export default function Locations() {
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '' })
 
   useEffect(() => {
-    getStores().then(({ data }) => { setStores(data || []); setLoading(false) })
+    getStores().then(({ data }) => { setStores(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -26,15 +30,22 @@ export default function Locations() {
       clock_radius: parseInt(form.clock_radius) || 150,
       allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
     }
-    const { data } = await createStore(payload)
-    if (data) {
-      setStores(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '' })
+    try {
+      const { data, error } = await createStore(payload)
+      if (error) throw error
+      if (data) {
+        setStores(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

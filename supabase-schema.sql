@@ -1073,3 +1073,308 @@ insert into quality_inspections (type, reference, inspector, inspection_date, it
 ('進料檢驗', 'PO-2026-001', 'Snow', '2026-04-02', '[{"name":"A4影印紙","qty":50,"passed":48,"failed":2,"reason":"外箱破損"}]', 96, '條件通過', '2箱退回供應商'),
 ('成品抽檢', 'PROD-001 Batch#12', '陳大偉', '2026-04-01', '[{"name":"智慧感測器 A1","qty":20,"passed":19,"failed":1,"reason":"溫度偏差超標"}]', 95, '通過', '不良品返工'),
 ('成品抽檢', 'PROD-003 Batch#5', '吳建宏', '2026-03-28', '[{"name":"控制面板 C1","qty":10,"passed":10,"failed":0,"reason":""}]', 100, '通過', '全數合格');
+
+-- ============================================================
+--  Line-Item Tables (報價/訂單/發票明細行)
+-- ============================================================
+
+-- 報價單明細行 (Quotation Line Items)
+create table if not exists quotation_lines (
+  id serial primary key,
+  quotation_id int references quotations(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- 銷售訂單明細行 (Sales Order Line Items)
+create table if not exists sales_order_lines (
+  id serial primary key,
+  order_id int references sales_orders(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- 發票明細行 (Invoice Line Items)
+create table if not exists invoice_lines (
+  id serial primary key,
+  invoice_id int references invoices(id) on delete cascade,
+  sku_id int,
+  description text,
+  quantity numeric default 1,
+  unit_price numeric default 0,
+  discount_percent numeric default 0,
+  tax_rate numeric default 0.05,
+  line_total numeric generated always as (quantity * unit_price * (1 - discount_percent / 100)) stored,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  庫存成本層 (Inventory Cost Layers for FIFO tracking)
+-- ============================================================
+create table if not exists inventory_cost_layers (
+  id serial primary key,
+  sku_id int references skus(id),
+  warehouse_id int references warehouses(id),
+  lot_number text,
+  quantity_remaining numeric default 0,
+  unit_cost numeric default 0,
+  receipt_date date default current_date,
+  source_type text default 'purchase',  -- purchase, manufacturing, adjustment
+  source_id int,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  庫存估價快照 (Inventory Valuation Snapshots)
+-- ============================================================
+create table if not exists inventory_valuations (
+  id serial primary key,
+  sku_id int references skus(id),
+  valuation_date date,
+  costing_method text default 'weighted_avg',  -- fifo, weighted_avg
+  total_quantity numeric default 0,
+  total_value numeric default 0,
+  unit_cost numeric default 0,
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  結構化 BOM 明細行 (Structured BOM Lines for multi-level BOM)
+-- ============================================================
+create table if not exists bom_lines (
+  id serial primary key,
+  bom_id int references bom(id) on delete cascade,
+  component_sku_id int references skus(id),
+  quantity numeric default 1,
+  unit text default 'pcs',
+  scrap_rate numeric default 0,        -- percentage waste
+  is_sub_assembly boolean default false,
+  sub_bom_id int references bom(id),   -- if component is itself a BOM
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+--  多幣別支援 (Multi-Currency Support)
+-- ============================================================
+
+-- Currency definitions
+CREATE TABLE IF NOT EXISTS currencies (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,       -- USD, EUR, JPY, CNY, NTD
+  name TEXT NOT NULL,              -- 美元, 歐元, 日圓, 人民幣, 新台幣
+  symbol TEXT DEFAULT '',
+  decimal_places INT DEFAULT 2,
+  is_base BOOLEAN DEFAULT false,   -- NTD is base currency
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  Message Logs (Email / SMS / LINE 發送紀錄)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS message_logs (
+  id SERIAL PRIMARY KEY,
+  channel TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  subject TEXT,
+  body TEXT,
+  status TEXT DEFAULT 'queued',
+  campaign_id INT,
+  customer_id TEXT,
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Exchange rates
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  id SERIAL PRIMARY KEY,
+  from_currency TEXT NOT NULL,
+  to_currency TEXT DEFAULT 'NTD',
+  rate NUMERIC NOT NULL,           -- 1 USD = 31.5 NTD
+  effective_date DATE NOT NULL,
+  source TEXT DEFAULT 'manual',    -- manual, api
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  固定資產 (Fixed Assets Register)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS fixed_assets (
+  id SERIAL PRIMARY KEY,
+  asset_code TEXT UNIQUE,
+  name TEXT NOT NULL,
+  category TEXT DEFAULT '辦公設備',        -- 土地/建築物/��器設備/運輸設備/辦公設備/其他
+  cost NUMERIC NOT NULL DEFAULT 0,
+  salvage_value NUMERIC DEFAULT 0,
+  useful_life INT NOT NULL DEFAULT 5,       -- years
+  method TEXT DEFAULT 'straight_line',       -- straight_line/declining_balance/sum_of_years
+  acquired_date DATE DEFAULT current_date,
+  disposed_date DATE,
+  status TEXT DEFAULT '使用中',              -- 使用中/已處分/已報廢
+  department TEXT,
+  location TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================================
+--  成本中心 (Cost Centers)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS cost_centers (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  department TEXT,
+  manager TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Add cost_center column to journal_lines
+ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS cost_center TEXT;
+
+-- Seed common currencies
+INSERT INTO currencies (code, name, symbol, decimal_places, is_base) VALUES
+  ('NTD', '新台幣', 'NT$', 0, true),
+  ('USD', '美元', '$', 2, false),
+  ('EUR', '歐元', '€', 2, false),
+  ('JPY', '日圓', '¥', 0, false),
+  ('CNY', '人民幣', '¥', 2, false),
+  ('GBP', '英鎊', '£', 2, false),
+  ('HKD', '港幣', 'HK$', 2, false)
+ON CONFLICT (code) DO NOTHING;
+
+-- ============================================================
+--  多租戶支援 (Multi-Tenancy)
+-- ============================================================
+
+-- Tenant registry
+CREATE TABLE IF NOT EXISTS tenants (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  plan TEXT DEFAULT 'free',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Add tenant_id column to all major business tables
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE overtime_requests ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE salary_records ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE goods_receipts ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE accounts_receivable ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE accounts_payable ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE budgets ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE bom ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE quality_inspections ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE inventory_lots ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE stock_counts ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE quotations ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE promotions ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE pos_transactions ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE pos_shifts ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE returns ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE members ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE cost_centers ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE workflows ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+
+-- ── RLS Policies (Row-Level Security) ──
+-- Enable RLS on key tables. The policy uses a custom claim `tenant_id`
+-- set via Supabase auth.users metadata: auth.jwt()->'app_metadata'->>'tenant_id'
+-- For tables without RLS enabled yet, enable and add policy:
+
+ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_employees ON employees
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_journal_entries ON journal_entries
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_accounts ON accounts
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_suppliers ON suppliers
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE sales_orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_sales_orders ON sales_orders
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_purchase_orders ON purchase_orders
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_invoices ON invoices
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE fixed_assets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_fixed_assets ON fixed_assets
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_members ON members
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+ALTER TABLE pos_transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_pos_transactions ON pos_transactions
+  USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+
+-- Seed default tenant
+INSERT INTO tenants (name, slug, plan) VALUES
+  ('Master AI 科技有限公司', 'master-ai', 'enterprise')
+ON CONFLICT (slug) DO NOTHING;
+
+-- ── 固定資產 seed data ──
+INSERT INTO fixed_assets (asset_code, name, category, cost, salvage_value, useful_life, method, acquired_date, status, department, location) VALUES
+  ('FA-001', '辦公電腦 x10', '辦公設備', 350000, 35000, 5, 'straight_line', '2024-01-15', '使用中', '研發部', '台北總部'),
+  ('FA-002', '貨運卡車', '運輸設備', 1200000, 200000, 8, 'declining_balance', '2023-06-01', '使用中', '業務部', '台中分店'),
+  ('FA-003', 'CNC 加工機', '機器設備', 2500000, 250000, 10, 'straight_line', '2022-03-10', '使用中', '研發部', '台北總部'),
+  ('FA-004', '辦公桌椅組', '辦公設備', 180000, 18000, 7, 'sum_of_years', '2024-07-20', '使用中', '行銷部', '台北總部');
+
+-- ── 成本中心 seed data ──
+INSERT INTO cost_centers (code, name, department, manager) VALUES
+  ('CC-RD', '研發中心', '研發部', '王小明'),
+  ('CC-MK', '行銷中心', '行銷部', '林美麗'),
+  ('CC-SA', '業務中心', '業務部', '陳大偉'),
+  ('CC-FI', '財務中心', '財務部', '劉佳玲'),
+  ('CC-HR', '人資中心', '人資部', '張雅婷'),
+  ('CC-OH', '管理費用', null, '劉佳玲');

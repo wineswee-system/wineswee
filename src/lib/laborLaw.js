@@ -296,23 +296,43 @@ export function validateSchedule(schedules, weekDates) {
     }
 
     // 4. 輪班間隔檢查 (§34)
+    const shiftPattern = /^(\d{1,2}(?::\d{2})?)-(\d{1,2}(?::\d{2})?)$/
     for (let i = 1; i < empSchedules.length; i++) {
       const prev = empSchedules[i - 1]
       const curr = empSchedules[i]
       if (prev.shift && curr.shift && prev.shift !== '休' && curr.shift !== '休') {
-        const prevEnd = parseInt(prev.shift.split('-')[1]) || 17
-        const currStart = parseInt(curr.shift.split('-')[0]) || 9
-        // Simple check: if previous shift ends late and next starts early
-        if (prevEnd >= 20 && currStart <= 9) {
-          const gap = (24 - prevEnd) + currStart
-          if (gap < 11) {
-            warnings.push({
-              employee: emp,
-              law: '勞基法 §34',
-              message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h，應至少11小時`,
-              severity: 'warning',
-            })
-          }
+        const prevMatch = prev.shift.match(shiftPattern)
+        const currMatch = curr.shift.match(shiftPattern)
+
+        if (!prevMatch || !currMatch) {
+          warnings.push({
+            employee: emp,
+            law: '勞基法 §34',
+            message: `${emp} ${prev.date}→${curr.date} 班別格式無法解析（${prev.shift}, ${curr.shift}），跳過輪班間隔檢查`,
+            severity: 'warning',
+          })
+          continue
+        }
+
+        const prevEnd = parseInt(prevMatch[2])
+        const currStart = parseInt(currMatch[1])
+
+        // Calculate gap, handling midnight-crossing shifts
+        let gap
+        if (prevEnd > currStart) {
+          // Shift crosses midnight boundary: e.g., prev ends at 22, next starts at 7
+          gap = currStart + (24 - prevEnd)
+        } else {
+          gap = currStart - prevEnd
+        }
+
+        if (gap < 11) {
+          warnings.push({
+            employee: emp,
+            law: '勞基法 §34',
+            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h，應至少11小時`,
+            severity: 'warning',
+          })
         }
       }
     }

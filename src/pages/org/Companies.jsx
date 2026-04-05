@@ -7,26 +7,37 @@ import Modal, { Field } from '../../components/Modal'
 export default function Companies() {
   const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', short_name: '', tax_id: '', phone: '', status: '營運中' })
 
   useEffect(() => {
-    getCompanies().then(({ data }) => { setCompanies(data || []); setLoading(false) })
+    getCompanies().then(({ data }) => { setCompanies(data || []) }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => { setLoading(false) })
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
     if (!form.name) return
-    const { data } = await createCompany({ ...form, stores: 0, employees: 0 })
-    if (data) {
-      setCompanies(prev => [...prev, data])
-      setShowModal(false)
-      setForm({ name: '', short_name: '', tax_id: '', phone: '', status: '營運中' })
+    try {
+      const { data, error } = await createCompany({ ...form, stores: 0, employees: 0 })
+      if (error) throw error
+      if (data) {
+        setCompanies(prev => [...prev, data])
+        setShowModal(false)
+        setForm({ name: '', short_name: '', tax_id: '', phone: '', status: '營運中' })
+      }
+    } catch (err) {
+      console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   return (
     <div className="fade-in">

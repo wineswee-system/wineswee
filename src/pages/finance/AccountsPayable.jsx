@@ -12,12 +12,17 @@ const emptyForm = {
 export default function AccountsPayable() {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => {
     getAccountsPayable().then(({ data }) => {
       setRecords(data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -35,6 +40,7 @@ export default function AccountsPayable() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const today = new Date().toISOString().slice(0, 10)
 

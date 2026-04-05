@@ -44,6 +44,7 @@ export default function Schedule() {
   const [minStaff, setMinStaff] = useState(3)
   const [showLawModal, setShowLawModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
+  const [error, setError] = useState(null)
 
   const weekDates = getWeekDates(weekOffset)
   const weekStart = weekDates[0]
@@ -58,6 +59,10 @@ export default function Schedule() {
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setLocations(l.data || [])
+    }).catch(err => {
+      console.error('Failed to load data:', err)
+      setError('資料載入失敗，請重新整理頁面')
+    }).finally(() => {
       setLoading(false)
     })
   }, [])
@@ -69,6 +74,8 @@ export default function Schedule() {
     ]).then(([s, o]) => {
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
+    }).catch(err => {
+      console.error('Failed to load schedule data:', err)
     })
   }, [weekStart])
 
@@ -198,6 +205,7 @@ export default function Schedule() {
   }
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = employees.filter(e =>
     (deptFilter === '' || e.dept === deptFilter) &&

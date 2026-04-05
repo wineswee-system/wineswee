@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import {
   Users, GitBranch, Building2, HeadphonesIcon, Warehouse, Settings,
   Bot, LayoutDashboard, BarChart3, ArrowRight, Send, CheckCircle,
-  ShoppingCart, CreditCard, Wrench
+  ShoppingCart, CreditCard, Wrench, TrendingUp, Plug
 } from 'lucide-react'
 
 // Animated counter hook
@@ -68,8 +68,16 @@ const 核心模組_INTRO = [
     features: ['多公司管理', '門市管理（GPS）', '部門架構', '員工目錄', '組織圖', 'LINE 串接'], tag: '組織',
   },
   {
+    icon: '📊', title: '數據分析', color: 'var(--accent-amber)', dim: 'var(--accent-amber-dim)',
+    features: ['BI 營運看板', '銷售預測', '異常偵測', '自訂儀表板', '跨系統分析', '排程報表'], tag: '分析',
+  },
+  {
+    icon: '🔌', title: '外部串接', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
+    features: ['電商平台串接', '文中匯入', 'API 開放介面', '物流整合'], tag: '串接',
+  },
+  {
     icon: '🔐', title: '系統管理', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)',
-    features: ['RBAC 角色權限', '操作紀錄追蹤', '個資遮蔽保護', '自動觸發器', '即時通知中心', '系統效能監控'], tag: '系統',
+    features: ['RBAC 角色權限', '操作紀錄追蹤', '個資遮蔽保護', '自動觸發器', '即時通知中心', '租戶管理'], tag: '系統',
   },
   {
     icon: '🤖', title: '智慧工具', color: 'var(--accent-pink)', dim: 'var(--accent-pink-dim)',
@@ -97,10 +105,10 @@ const 跨系統串接S = [
 ]
 
 const STATS = [
-  { label: '功能模組', value: 14, suffix: '' },
-  { label: '功能頁面', value: 100, suffix: '+' },
-  { label: '跨模組整合', value: 6, suffix: '項' },
-  { label: '資料表串接', value: 30, suffix: '+' },
+  { label: '功能模組', value: 16, suffix: '' },
+  { label: '功能頁面', value: 136, suffix: '+' },
+  { label: '跨模組整合', value: 8, suffix: '項' },
+  { label: '資料表串接', value: 52, suffix: '+' },
 ]
 
 const 我們的優勢 = [
@@ -146,11 +154,18 @@ const systems = [
     features: ['KPI 總覽', '出勤統計', '任務追蹤', '流程監控'], moduleCount: 2,
   },
   {
+    id: 'analytics', title: '數據分析中心', subtitle: 'Business Intelligence',
+    description: '銷售預測、財務分析、庫存分析、異常偵測、自訂儀表板，用數據驅動決策。',
+    icon: TrendingUp, accent: 'var(--accent-amber)', accentDim: 'var(--accent-amber-dim)',
+    glow: 'rgba(245, 158, 11, 0.2)', path: '/analytics',
+    features: ['BI 看板', '銷售預測', '異常偵測', '自訂儀表板', '跨系統分析', '排程報表'], moduleCount: 13,
+  },
+  {
     id: 'hr', title: '人事管理系統', subtitle: 'HR Management',
     description: '涵蓋考勤、請假、加班、薪資、排班、績效考核、招募等完整人事生命週期管理。',
     icon: Users, accent: 'var(--accent-blue)', accentDim: 'var(--accent-blue-dim)',
     glow: 'rgba(59, 130, 246, 0.2)', path: '/hr/report',
-    features: ['考勤打卡', '請假管理', '薪資計算', '排班系統', '績效考核', '招募管理'], moduleCount: 15,
+    features: ['考勤打卡', '請假管理', '薪資計算', '排班系統', '績效考核', '招募管理'], moduleCount: 17,
   },
   {
     id: 'process', title: '流程管理系統', subtitle: 'Process Management',
@@ -168,66 +183,73 @@ const systems = [
   },
   {
     id: 'crm', title: '客戶關係管理', subtitle: 'CRM System',
-    description: '客戶資料管理、銷售漏斗追蹤、行銷自動化、客服工單管理，驅動業績成長。',
+    description: '客戶 360° 全視角、銷售漏斗、Drip Campaign、行銷自動化、客服工單、表單建立器。',
     icon: HeadphonesIcon, accent: 'var(--accent-orange)', accentDim: 'var(--accent-orange-dim)',
     glow: 'rgba(251, 146, 60, 0.2)', path: '/crm/overview',
-    features: ['客戶管理', '銷售管線', '行銷自動化', '客服系統'], moduleCount: 5,
+    features: ['客戶 360', '銷售管線', 'Drip Campaign', '客服系統', '表單建立器', '客戶分群'], moduleCount: 12,
   },
   {
     id: 'wms', title: '倉儲管理系統', subtitle: 'Warehouse Management',
-    description: 'SKU 商品管理、入庫出庫作業、庫存即時追蹤、異常報表分析，精準掌控庫存。',
+    description: 'SKU 管理、入庫出庫、庫存追蹤、批號效期、盤點作業、儲位管理、揀貨包裝出貨。',
     icon: Warehouse, accent: 'var(--accent-yellow)', accentDim: 'var(--accent-yellow-dim)',
     glow: 'rgba(251, 191, 36, 0.2)', path: '/wms/overview',
-    features: ['SKU 管理', '入庫管理', '庫存追蹤', '出庫管理'], moduleCount: 6,
+    features: ['SKU 管理', '庫存追蹤', '批號效期', '盤點作業', '儲位管理', '揀貨包裝'], moduleCount: 12,
   },
   {
     id: 'system', title: '系統管理', subtitle: 'System Administration',
-    description: '使用者權限、自動觸發器、通知設定、稽核日誌、系統效能監控與全域設定。',
+    description: '使用者權限、觸發器、通知設定、稽核日誌、租戶管理、簽核規則、系統設定。',
     icon: Settings, accent: 'var(--accent-red)', accentDim: 'var(--accent-red-dim)',
     glow: 'rgba(248, 113, 113, 0.2)', path: '/system/triggers',
-    features: ['權限管理', '觸發器', '稽核日誌', '系統監控'], moduleCount: 6,
+    features: ['權限管理', '觸發器', '稽核日誌', '租戶管理', '簽核規則', '資料庫管理'], moduleCount: 10,
   },
   {
     id: 'ai', title: 'AI 智能工具', subtitle: 'AI Tools',
-    description: 'AI 助理、智能客服 Agent、幫助中心，讓 AI 成為您的營運好幫手。',
+    description: 'AI 助理、智能 Agent 控制台、教學中心，讓 AI 成為您的營運好幫手。',
     icon: Bot, accent: 'var(--accent-pink)', accentDim: 'var(--accent-pink-dim)',
     glow: 'rgba(244, 114, 182, 0.2)', path: '/ai/help',
-    features: ['幫助中心', 'Agent 控制台'], moduleCount: 2,
+    features: ['說明中心', 'Agent 控制台', '教學中心'], moduleCount: 3,
   },
   {
-    id: 'sales', title: '銷售管理', subtitle: '報價到成交',
-    description: '報價單版本管理、一鍵轉訂單、促銷活動引擎、退貨折讓，完整的接單流程。',
-    icon: Settings, accent: 'var(--accent-pink)', accentDim: 'var(--accent-pink-dim)',
-    glow: 'rgba(244, 114, 182, 0.2)', path: '/sales/quotations',
-    features: ['報價管理', '銷售訂單', '促銷活動', '退貨管理'], moduleCount: 4,
+    id: 'sales', title: '銷售管理', subtitle: 'Sales Management',
+    description: '報價版本管理、一鍵轉訂單、促銷引擎、退貨管理、物流追蹤、價格規則、業務佣金。',
+    icon: ShoppingCart, accent: 'var(--accent-pink)', accentDim: 'var(--accent-pink-dim)',
+    glow: 'rgba(244, 114, 182, 0.2)', path: '/sales',
+    features: ['報價管理', '銷售訂單', '促銷活動', '退貨管理', '價格規則', '業務佣金'], moduleCount: 8,
   },
   {
-    id: 'pos', title: 'POS 收銀', subtitle: '門市結帳',
+    id: 'pos', title: 'POS 收銀', subtitle: 'Point of Sale',
     description: '收銀台結帳介面、多元支付整合、交班日結、會員點數折抵。',
-    icon: LayoutDashboard, accent: 'var(--accent-cyan)', accentDim: 'var(--accent-cyan-dim)',
-    glow: 'rgba(34, 211, 238, 0.2)', path: '/pos/terminal',
-    features: ['收銀台', '交班日結'], moduleCount: 2,
+    icon: CreditCard, accent: 'var(--accent-cyan)', accentDim: 'var(--accent-cyan-dim)',
+    glow: 'rgba(34, 211, 238, 0.2)', path: '/pos',
+    features: ['營運總覽', '收銀台', '交班日結'], moduleCount: 3,
   },
   {
-    id: 'purchase', title: '採購管理', subtitle: '供應商與進貨',
-    description: '從供應商管理、採購申請、下單追蹤到進貨驗收，完整的採購流程全在這裡。',
+    id: 'purchase', title: '採購管理', subtitle: 'Procurement',
+    description: '供應商管理、採購申請、下單追蹤、進貨驗收、合約管理、三方比對、長期採購協議。',
     icon: ShoppingCart, accent: 'var(--accent-yellow)', accentDim: 'var(--accent-yellow-dim)',
     glow: 'rgba(251, 191, 36, 0.2)', path: '/purchase/suppliers',
-    features: ['供應商管理', '採購申請', '採購單', '進貨驗收'], moduleCount: 4,
+    features: ['供應商管理', '採購申請', '進貨驗收', '合約管理', '三方比對', '長期協議'], moduleCount: 12,
   },
   {
-    id: 'finance', title: '財務會計', subtitle: '帳務與金流',
-    description: '應收應付帳款、傳票管理、毛利分析，讓老闆隨時掌握公司的錢進錢出。',
+    id: 'finance', title: '財務會計', subtitle: 'Finance & Accounting',
+    description: '傳票管理、應收應付帳款、資產負債表、損益表、稅務申報、現金流量、成本中心。',
     icon: CreditCard, accent: 'var(--accent-green)', accentDim: 'var(--accent-green-dim)',
     glow: 'rgba(52, 211, 153, 0.2)', path: '/finance/overview',
-    features: ['財務總覽', '傳票管理', '應收帳款', '應付帳款'], moduleCount: 4,
+    features: ['傳票管理', '應收帳款', '資產負債表', '損益表', '稅務申報', '成本中心'], moduleCount: 18,
   },
   {
-    id: 'manufacturing', title: '生產品管', subtitle: '製造與品質',
-    description: '物料清單展開零件、需求計畫自動算缺料、品質檢驗追蹤合格率。',
+    id: 'manufacturing', title: '生產品管', subtitle: 'Manufacturing & Quality',
+    description: 'BOM 物料清單、MRP 需求計畫、品質管理、製令管理、生產現場、工作中心、排程。',
     icon: Wrench, accent: 'var(--accent-orange)', accentDim: 'var(--accent-orange-dim)',
     glow: 'rgba(251, 146, 60, 0.2)', path: '/manufacturing/bom',
-    features: ['物料清單', '需求計畫', '品質管理'], moduleCount: 3,
+    features: ['物料清單', '需求計畫', '品質管理', '製令管理', '生產現場', '生產排程'], moduleCount: 8,
+  },
+  {
+    id: 'integration', title: '外部串接', subtitle: 'Integrations',
+    description: '電商平台串接、文中匯入、API 開放介面、物流整合，連通外部系統生態。',
+    icon: Plug, accent: 'var(--accent-orange)', accentDim: 'var(--accent-orange-dim)',
+    glow: 'rgba(251, 146, 60, 0.2)', path: '/integration/ecommerce',
+    features: ['電商串接', '文中匯入', 'API 文件', '物流整合'], moduleCount: 4,
   },
 ]
 
@@ -240,7 +262,7 @@ export default function DemoLanding() {
   // Inquiry form
   const [inquiry, setInquiry] = useState({ company_name: '', contact_name: '', phone: '', email: '', company_size: '', interested_modules: [] })
   const [inquiryStatus, setInquiryStatus] = useState(null) // null | 'sending' | 'success' | 'error'
-  const MODULE_OPTIONS = ['HR 人資管理', 'CRM 客戶管理', 'WMS 倉儲管理', '採購管理', '財務會計', '製造 & 品質', '流程管理', '組織管理', 'AI 工具', '全部都要']
+  const MODULE_OPTIONS = ['HR 人資管理', 'CRM 客戶管理', 'WMS 倉儲管理', '銷售管理', 'POS 收銀', '採購管理', '財務會計', '製造 & 品質', '流程管理', '組織管理', '數據分析', 'AI 工具', '全部都要']
 
   const toggleModule = (mod) => {
     setInquiry(prev => ({
@@ -772,43 +794,47 @@ export default function DemoLanding() {
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-blue)', letterSpacing: '2px', marginBottom: 12 }}>所有功能一覽</div>
           <h2 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>系統完整功能一覽</h2>
-          <p style={{ color: 'var(--text-secondary)', marginTop: 12, fontSize: 15 }}>70+ 個功能頁面、35 張資料表、12 大模組，從人事到財務全面涵蓋</p>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 12, fontSize: 15 }}>136+ 個功能頁面、52+ 張資料表、16 大模組，從人事到財務全面涵蓋</p>
         </div>
 
         {/* Feature modules */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
           {[
             {
-              icon: '👥', title: '人事管理', tag: '15 項功能', color: 'var(--accent-cyan)',
-              items: ['人事報表總覽', '打卡系統（GPS 圍籬 + WiFi IP 驗證）', '請假管理（14種假別，符合勞基法/性平法）', '加班申請與費率自動計算', '薪資管理（含請假扣款明細 + 報帳退款）', '智慧排班（AI 自動排班 + 法規即時檢核）', '假日管理（年度月曆 + 國定/公司假）', '排班規則（三大法律50+條完整對照）', '績效考核', '招募管理', '文件管理', '轉調紀錄', '公出差旅', '費用核銷', '績效獎金'],
+              icon: '📊', title: '數據分析', tag: '13 項功能', color: 'var(--accent-amber)',
+              items: ['BI 營運看板', '銷售預測（趨勢圖表/漏斗分析）', '財務分析', '銷售績效', '庫存分析', '人資分析', 'POS 分析', '製造分析', '異常偵測（AI 自動標記異常值）', '自訂儀表板（拖拉配置）', '排程報表（定期 Email 寄送）', '圖表分享（嵌入外部頁面）', '跨系統分析'],
             },
             {
-              icon: '🤝', title: '客戶經營', tag: '6 項功能', color: 'var(--accent-blue)',
-              items: ['客戶經營總覽', '客戶360°完整檢視（個資遮蔽保護）', '銷售漏斗追蹤（贏單自動產生應收帳款）', '行銷活動管理', '客服工單追蹤', '會員管理（等級/點數累折/消費紀錄）'],
+              icon: '👥', title: '人事管理', tag: '17 項功能', color: 'var(--accent-cyan)',
+              items: ['人事報表總覽', '打卡系統（GPS 圍籬 + WiFi IP 驗證）', '請假管理（14種假別，符合勞基法/性平法）', '加班申請與費率自動計算', '薪資管理（含請假扣款明細 + 報帳退款）', '智慧排班（AI 自動排班 + 法規即時檢核）', '假日管理（年度月曆 + 國定/公司假）', '排班規則（三大法律50+條完整對照）', '績效考核', '招募管理', '文件管理', '轉調紀錄', '公出差旅', '費用核銷', '績效獎金', '勞檢報表（法規合規檢核）', '教育訓練'],
             },
             {
-              icon: '📦', title: '倉儲物流', tag: '8 項功能', color: 'var(--accent-green)',
-              items: ['倉庫營運總覽', '商品主檔管理', '進貨入庫作業', '庫存即時追蹤（異動自動寫入稽核日誌）', '出貨管理（出貨自動拋轉應收帳款）', '異常報表與分析', '批號追蹤（效期管理/過期預警）', '盤點作業（差異管理/盤盈盤虧）'],
+              icon: '🤝', title: '客戶經營', tag: '12 項功能', color: 'var(--accent-blue)',
+              items: ['客戶經營總覽', '客戶管理（個資遮蔽保護）', '銷售漏斗追蹤', '行銷自動化', 'Drip Campaign（滴灌行銷）', '客服工單追蹤', '會員管理（等級/點數累折）', '表單建立器', '工作流程自動化', '發送紀錄', '客戶分群', '客戶 360° 完整檢視'],
             },
             {
-              icon: '🧾', title: '銷售管理', tag: '5 項功能', color: 'var(--accent-pink)',
-              items: ['報價單（版本管理 v1/v2，一鍵轉訂單）', '銷售訂單（信用額度自動檢核）', '促銷引擎（滿額折/階梯折/VIP價/組合優惠）', '退貨管理（自動沖帳 + 庫存回補）', '物流追蹤（運單號/配送狀態/到貨通知）'],
+              icon: '📦', title: '倉儲物流', tag: '12 項功能', color: 'var(--accent-green)',
+              items: ['倉庫營運總覽', '商品主檔管理', '進貨入庫作業', '庫存即時追蹤', '出貨管理（出貨自動拋轉應收帳款）', '異常報表與分析', '批號追蹤（效期管理/過期預警）', '盤點作業（差異管理/盤盈盤虧）', '庫存估價', '儲位管理', '揀貨/包裝/出貨', '倉庫調撥'],
             },
             {
-              icon: '🖥️', title: 'POS 收銀系統', tag: '2 項功能', color: 'var(--accent-cyan)',
-              items: ['收銀台（商品搜尋 + 購物車 + 多元支付結帳）', '交班日結（現金核對 / 刷卡對帳 / 溢缺管理）'],
+              icon: '🧾', title: '銷售管理', tag: '8 項功能', color: 'var(--accent-pink)',
+              items: ['銷售總覽', '報價單（版本管理 v1/v2，一鍵轉訂單）', '銷售訂單（信用額度自動檢核）', '促銷引擎（滿額折/階梯折/VIP價/組合優惠）', '退貨管理（自動沖帳 + 庫存回補）', '物流追蹤（運單號/配送狀態/到貨通知）', '價格規則', '業務佣金'],
             },
             {
-              icon: '🛒', title: '採購管理', tag: '5 項功能', color: 'var(--accent-yellow)',
-              items: ['供應商管理（評等與付款條件）', '採購申請（主管動態簽核）', '採購單追蹤（庫存不足自動建議）', '進貨驗收（驗收完自動產生應付帳款）', '合約管理（折扣/最低訂量/效期）'],
+              icon: '🖥️', title: 'POS 收銀系統', tag: '3 項功能', color: 'var(--accent-cyan)',
+              items: ['營運總覽（當日營收/交易筆數）', '收銀台（商品搜尋 + 購物車 + 多元支付結帳）', '交班日結（現金核對 / 刷卡對帳 / 溢缺管理）'],
             },
             {
-              icon: '💰', title: '財務會計', tag: '7 項功能', color: 'var(--accent-cyan)',
-              items: ['財務總覽（資產負債 + 毛利分析）', '傳票管理（借貸自動平衡）', '應收帳款（帳齡分析 + 逾期追蹤）', '應付帳款（付款排程管理）', '預算管理（編列/執行率/剩餘追蹤）', '銀行對帳（交易比對/差異管理）', '電子發票（開立/作廢/載具/捐贈碼）'],
+              icon: '🛒', title: '採購管理', tag: '12 項功能', color: 'var(--accent-yellow)',
+              items: ['供應商管理（評等與付款條件）', '供應商分類', '供應商績效', '廠商入駐', '採購申請（主管動態簽核）', '採購單追蹤', '進貨驗收（驗收完自動產生應付帳款）', '合約管理（折扣/最低訂量/效期）', '採購管線', '採購流程', '三方比對（PO/GR/Invoice）', '長期採購協議'],
             },
             {
-              icon: '🔧', title: '生產品管', tag: '4 項功能', color: 'var(--accent-red)',
-              items: ['物料清單（成品展開零件組成）', '物料需求計畫（根據訂單自動算缺料）', '品質管理（進料檢驗 / 成品抽檢 / 合格率追蹤）', '製令管理（生產工單/進度/不良率）'],
+              icon: '💰', title: '財務會計', tag: '18 項功能', color: 'var(--accent-cyan)',
+              items: ['財務總覽（資產負債 + 毛利分析）', '傳票管理（借貸自動平衡）', '應收帳款（帳齡分析 + 逾期追蹤）', '應付帳款（付款排程管理）', '預算管理', '銀行對帳', '電子發票', '試算表', '資產負債表', '損益表', '稅務申報', '固定資產', '營業稅申報', '401 營業稅報表', '匯率管理', '成本中心', '現金流量表', '期間關帳'],
+            },
+            {
+              icon: '🔧', title: '生產品管', tag: '8 項功能', color: 'var(--accent-red)',
+              items: ['BOM 物料清單（成品展開零件組成）', 'MRP 需求計畫（根據訂單自動算缺料）', '品質管理（進料檢驗/合格率追蹤）', '製令管理（生產工單/進度/不良率）', '生產現場（即時看板）', '工作中心', '生產排程', '託外加工'],
             },
             {
               icon: '⚙️', title: '流程管理', tag: '5 項功能', color: 'var(--accent-purple)',
@@ -819,16 +845,16 @@ export default function DemoLanding() {
               items: ['組織總覽', '組織架構圖', '多公司管理', '門市管理（含 GPS 打卡座標）', '部門管理', '員工目錄（個資遮蔽保護）', 'LINE 官方帳號串接', '文件範本管理'],
             },
             {
-              icon: '🔐', title: '系統管理', tag: '6 項功能', color: 'var(--accent-red)',
-              items: ['自動觸發器（排程 + 事件驅動）', '通知中心（即時推播）', '使用者權限（RBAC 角色管理）', '操作紀錄（欄位級變更追蹤）', '系統效能監控', '全域設定'],
+              icon: '🔐', title: '系統管理', tag: '10 項功能', color: 'var(--accent-red)',
+              items: ['自動觸發器（排程 + 事件驅動）', '通知中心（即時推播）', '使用者權限（RBAC 角色管理）', '操作紀錄（欄位級變更追蹤）', '系統效能監控', '全域設定', '資料庫管理', '資料匯入匯出', '租戶管理（多租戶架構）', '簽核規則'],
             },
             {
-              icon: '🤖', title: '智慧工具', tag: '5 項功能', color: 'var(--accent-pink)',
-              items: ['AI 助理中心', 'Agent 智慧控制台', '教學中心（分類教程/難度標示）', '銷售預測（趨勢圖表/漏斗分析）', '資料匯入匯出（Excel/CSV）'],
+              icon: '🤖', title: '智慧工具', tag: '3 項功能', color: 'var(--accent-pink)',
+              items: ['AI 說明中心', 'Agent 智慧控制台', '教學中心（分類教程/難度標示）'],
             },
             {
-              icon: '🔌', title: '外部串接', tag: '2 項功能', color: 'var(--accent-orange)',
-              items: ['電商平台串接（蝦皮/Momo/PChome/LINE購物）', 'API 開放介面（RESTful 文件/Token 驗證）'],
+              icon: '🔌', title: '外部串接', tag: '4 項功能', color: 'var(--accent-orange)',
+              items: ['電商平台串接（蝦皮/Momo/PChome/LINE購物）', '文中匯入（POS 系統資料匯入）', 'API 開放介面（RESTful 文件/Token 驗證）', '物流整合（宅配/超取/物流商串接）'],
             },
             {
               icon: '📱', title: 'LINE 員工服務', tag: '行動辦公', color: '#34d399',
@@ -910,9 +936,9 @@ export default function DemoLanding() {
           overflow: 'hidden', border: '1px solid var(--border-subtle)',
         }}>
           {[
-            { value: '100+', label: '功能頁面' },
+            { value: '136+', label: '功能頁面' },
             { value: '52+', label: '資料表' },
-            { value: '12', label: '大模組' },
+            { value: '16', label: '大模組' },
             { value: '14', label: '法定假別' },
             { value: '50+', label: '法規條文' },
           ].map((s, i) => (

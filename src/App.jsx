@@ -148,6 +148,7 @@ const Tutorial = lazy(() => import('./pages/ai/Tutorial'))
 const SuperAdminOrg = lazy(() => import('./pages/super-admin/OrgManagement'))
 const SuperAdminUsers = lazy(() => import('./pages/super-admin/UserConfig'))
 const SuperAdminModules = lazy(() => import('./pages/super-admin/ModuleConfig'))
+const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
 
 function AdminApp() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
@@ -328,6 +329,7 @@ export default function App() {
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/demo" element={<DemoLanding />} />
+          <Route path="/liff/clock" element={<LiffClockIn />} />
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>

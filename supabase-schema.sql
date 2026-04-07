@@ -56,6 +56,13 @@ create table attendance_records (
   clock_out time,
   status text,
   hours numeric(4,2) default 0,
+  clock_in_lat double precision,
+  clock_in_lng double precision,
+  clock_in_ip text,
+  clock_in_location text,
+  clock_out_lat double precision,
+  clock_out_lng double precision,
+  clock_out_ip text,
   created_at timestamptz default now()
 );
 
@@ -861,15 +868,15 @@ insert into employees (name, name_en, dept, position, store, status, email, phon
 ('蔡心怡', 'Xinyi Cai', '客服部', '客服組長', '台中分店', '在職', 'xinyi@company.com', '0989-012-345', '2022-09-08', '#fbbf24', 3, '陳大偉'),
 ('鄭宇翔', 'Yuxiang Zheng', '研發部', '後端工程師', '台北總部', '離職', 'yuxiang@company.com', '0990-123-456', '2021-12-01', '#64748b', 4, '王小明');
 
-insert into attendance_records (employee, date, clock_in, clock_out, status, hours) values
-('王小明', '2026-03-27', '08:52', '18:15', '正常', 8.38),
-('林美麗', '2026-03-27', '09:05', '18:30', '遲到', 8.42),
-('陳大偉', '2026-03-27', '08:30', '17:45', '正常', 8.25),
-('張雅婷', '2026-03-27', '08:58', '18:20', '正常', 8.37),
-('黃志強', '2026-03-27', '09:15', '19:00', '遲到', 8.75),
-('劉佳玲', '2026-03-27', '08:45', '18:00', '正常', 8.25),
-('吳建宏', '2026-03-27', null, null, '未打卡', 0),
-('蔡心怡', '2026-03-27', '08:55', '18:10', '正常', 8.25);
+insert into attendance_records (employee, date, clock_in, clock_out, status, hours, clock_in_lat, clock_in_lng, clock_in_ip, clock_in_location) values
+('王小明', '2026-03-27', '08:52', '18:15', '正常', 8.38, 25.0408, 121.5750, '114.37.129.78', '台北總部'),
+('林美麗', '2026-03-27', '09:05', '18:30', '遲到', 8.42, 25.0405, 121.5752, '114.37.129.78', '台北總部'),
+('陳大偉', '2026-03-27', '08:30', '17:45', '正常', 8.25, 24.1477, 120.6736, '61.220.45.8', '台中分店'),
+('張雅婷', '2026-03-27', '08:58', '18:20', '正常', 8.37, 25.0407, 121.5753, '114.37.129.78', '台北總部'),
+('黃志強', '2026-03-27', '09:15', '19:00', '遲到', 8.75, 25.0500, 121.5800, '220.130.50.10', '外部位置'),
+('劉佳玲', '2026-03-27', '08:45', '18:00', '正常', 8.25, 25.0406, 121.5751, '114.37.129.78', '台北總部'),
+('吳建宏', '2026-03-27', null, null, '未打卡', 0, null, null, null, null),
+('蔡心怡', '2026-03-27', '08:55', '18:10', '正常', 8.25, 24.1480, 120.6740, '61.220.45.12', '台中分店');
 
 insert into leave_requests (employee, type, start_date, end_date, days, reason, status, approver) values
 ('王小明', '特休', '2026-04-01', '2026-04-03', 3, '家庭旅遊', '已核准', '劉佳玲'),
@@ -963,7 +970,7 @@ insert into companies (name, short_name, tax_id, address, phone, stores, employe
 ('Master AI 科技有限公司', 'Master AI', '12345678', '台北市信義區信義路五段7號', '02-2345-6789', 3, 9, '營運中');
 
 insert into stores (name, company, address, phone, manager, employee_count, status, lat, lng, clock_radius, allowed_wifi) values
-('台北總部', 'Master AI', '台北市信義區信義路五段7號', '02-2345-6789', '劉佳玲', 5, '營運中', 25.0330, 121.5654, 150, '{"203.69.180.0/24","61.220.45.0/24"}'),
+('台北總部', 'Master AI', '台北市信義區忠孝東路五段410號', '02-2345-6789', '劉佳玲', 5, '營運中', 25.0406891, 121.5751359, 150, '{"114.37.129.0/24"}'),
 ('台中分店', 'Master AI', '台中市西屯區台灣大道三段99號', '04-2345-6789', '陳大偉', 2, '營運中', 24.1628, 120.6395, 150, '{"114.32.100.0/24"}'),
 ('高雄分店', 'Master AI', '高雄市前鎮區中華五路789號', '07-2345-6789', '吳建宏', 1, '籌備中', 22.6127, 120.3016, 150, NULL);
 

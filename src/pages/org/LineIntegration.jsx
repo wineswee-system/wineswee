@@ -208,10 +208,16 @@ export default function LineIntegration() {
               <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>支援指令</span>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>打卡、薪資、假期、任務、庫存、選單</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>LIFF App</span>
               <a href="https://sme-ops-liff.vercel.app" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent-cyan)' }}>
                 sme-ops-liff.vercel.app ↗
+              </a>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>LIFF 打卡頁</span>
+              <a href="/liff/clock" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent-cyan)' }}>
+                /liff/clock（GPS + WiFi IP 驗證）↗
               </a>
             </div>
           </div>

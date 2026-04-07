@@ -145,6 +145,9 @@ const Ecommerce = lazy(() => import('./pages/integration/Ecommerce'))
 const APIDocumentation = lazy(() => import('./pages/integration/APIDocumentation'))
 const WenzhongImport = lazy(() => import('./pages/integration/WenzhongImport'))
 const Tutorial = lazy(() => import('./pages/ai/Tutorial'))
+const SuperAdminOrg = lazy(() => import('./pages/super-admin/OrgManagement'))
+const SuperAdminUsers = lazy(() => import('./pages/super-admin/UserConfig'))
+const SuperAdminModules = lazy(() => import('./pages/super-admin/ModuleConfig'))
 
 function AdminApp() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
@@ -305,6 +308,10 @@ function AdminApp() {
             <Route path="/manufacturing/work-centers" element={<Suspense fallback={<LoadingSpinner />}><WorkCenters /></Suspense>} />
             <Route path="/manufacturing/scheduling" element={<Suspense fallback={<LoadingSpinner />}><Scheduling /></Suspense>} />
             <Route path="/manufacturing/subcontracting" element={<Suspense fallback={<LoadingSpinner />}><Subcontracting /></Suspense>} />
+            {/* Super Admin */}
+            <Route path="/super-admin/orgs" element={<Suspense fallback={<LoadingSpinner />}><SuperAdminOrg /></Suspense>} />
+            <Route path="/super-admin/users" element={<Suspense fallback={<LoadingSpinner />}><SuperAdminUsers /></Suspense>} />
+            <Route path="/super-admin/modules" element={<Suspense fallback={<LoadingSpinner />}><SuperAdminModules /></Suspense>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

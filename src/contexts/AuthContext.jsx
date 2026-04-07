@@ -51,10 +51,11 @@ export function AuthProvider({ children }) {
 
   const signOut = () => supabase.auth.signOut()
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+  const isSuperAdmin = profile?.role === 'super_admin'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isSuperAdmin, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

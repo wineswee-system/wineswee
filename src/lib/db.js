@@ -70,8 +70,8 @@ export const getOvertimeRequests = () =>
 export const createOvertimeRequest = (data) =>
   supabase.from('overtime_requests').insert(data).select().single()
 
-export const updateOvertimeStatus = (id, status) =>
-  supabase.from('overtime_requests').update({ status }).eq('id', id).select().single()
+export const updateOvertimeStatus = (id, status, rejectReason) =>
+  supabase.from('overtime_requests').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Salary ─────────────────────────────────────────────────
 export const getSalaryRecords = (month) => {

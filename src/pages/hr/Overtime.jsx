@@ -63,6 +63,19 @@ export default function Overtime() {
     }
   }
 
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    try {
+      const { data, error } = await updateOvertimeStatus(id, '已拒絕', reason.trim())
+      if (error) throw error
+      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+    } catch (err) {
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -133,13 +146,19 @@ export default function Overtime() {
                   <td>{o.hours}h</td>
                   <td>{o.reason}</td>
                   <td>
-                    <span className={`badge ${o.status === '已核准' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${o.status === '已核准' ? 'badge-success' : o.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{o.status}
                     </span>
+                    {o.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{o.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {o.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>

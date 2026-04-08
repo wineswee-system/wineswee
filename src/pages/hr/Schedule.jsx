@@ -56,6 +56,15 @@ export default function Schedule() {
   const [showLawModal, setShowLawModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
+  const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
+  // Store settings
+  const [storeSettings, setStoreSettings] = useState(null)
+  const [staffing, setStaffing] = useState([])
+  const [operatingHours, setOperatingHours] = useState({})
+  // Preferences
+  const [preferences, setPreferences] = useState([])
+  // Swap requests
+  const [swaps, setSwaps] = useState([])
 
   const weekDates = getWeekDates(weekOffset)
   const weekStart = weekDates[0]
@@ -289,6 +298,37 @@ export default function Schedule() {
     return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
   }
 
+  // Load tab-specific data
+  useEffect(() => {
+    if (mainTab === 'store-settings' && storeFilter) {
+      const store = locations.find(s => s.name === storeFilter)
+      if (store) {
+        supabase.from('store_settings').select('*').eq('store_id', store.id).maybeSingle()
+          .then(({ data }) => { setStoreSettings(data); if (data?.operating_hours) setOperatingHours(data.operating_hours) })
+        supabase.from('store_staffing').select('*').eq('store_id', store.id)
+          .then(({ data }) => setStaffing(data || []))
+      }
+    }
+    if (mainTab === 'preferences') {
+      supabase.from('employee_shift_preferences').select('*').order('employee')
+        .then(({ data }) => setPreferences(data || []))
+    }
+    if (mainTab === 'swaps') {
+      supabase.from('shift_swaps').select('*').order('created_at', { ascending: false })
+        .then(({ data }) => setSwaps(data || []))
+    }
+  }, [mainTab, storeFilter])
+
+  const selectedStore = locations.find(s => s.name === storeFilter)
+  const DAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  const DAY_LABELS_FULL = ['一', '二', '三', '四', '五', '六', '日']
+  const WORK_SYSTEMS = [
+    { value: '標準工時', desc: '標準每週40小時，每日不超過8小時（勞基法§30-1）' },
+    { value: '2週變形', desc: '2週內正常工時不超過84小時（勞基法§30-2）' },
+    { value: '4週變形', desc: '4週內正常工時不超過160小時（勞基法§30-3）' },
+    { value: '8週變形', desc: '8週內每週平均不超過40小時（勞基法§30-1）' },
+  ]
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -350,16 +390,23 @@ export default function Schedule() {
           </select>
         </div>
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden' }}>
-          {['班表總覽', '排班條件', '分析報表'].map(tab => (
-            <button key={tab} style={{
+          {[
+            { key: 'schedule', label: '📋 班表總覽' },
+            { key: 'store-settings', label: '⚙️ 門市設定' },
+            { key: 'preferences', label: '👤 排班偏好' },
+            { key: 'swaps', label: '🔄 換班申請' },
+            { key: 'analytics', label: '📊 分析報表' },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setMainTab(tab.key)} style={{
               padding: '8px 18px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              background: tab === '班表總覽' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-              color: tab === '班表總覽' ? '#fff' : 'var(--text-muted)',
-            }}>{tab}</button>
+              background: mainTab === tab.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+              color: mainTab === tab.key ? '#fff' : 'var(--text-muted)',
+            }}>{tab.label}</button>
           ))}
         </div>
       </div>
 
+      {mainTab === 'schedule' && (<>
       {/* Week Navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -546,6 +593,326 @@ export default function Schedule() {
           </table>
         </div>
       </div>
+
+      </>)}
+
+      {/* ══ Store Settings Tab ══ */}
+      {mainTab === 'store-settings' && (
+        <div>
+          {!storeFilter ? (
+            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>請先選擇門市</div>
+          ) : (
+            <>
+              {/* Shift Definitions */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header">
+                  <div className="card-title"><span className="card-title-icon">⏰</span> 班別設定</div>
+                </div>
+                <div className="data-table-wrapper">
+                  <table className="data-table">
+                    <thead><tr><th>班別</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th></tr></thead>
+                    <tbody>
+                      {shiftDefs.map(d => {
+                        const sh = parseInt(d.start_time) || 0, eh = parseInt(d.end_time) || 0
+                        const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
+                        return (
+                          <tr key={d.id}>
+                            <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: d.color }} /><b>{d.name}</b></div></td>
+                            <td>{d.start_time?.slice(0, 5)}</td>
+                            <td>{d.end_time?.slice(0, 5)}</td>
+                            <td>{d.break_minutes}分鐘</td>
+                            <td style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>如需新增/編輯班別，請至「排班規則」頁面</div>
+              </div>
+
+              {/* Staffing Requirements */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header">
+                  <div className="card-title"><span className="card-title-icon">👥</span> 人力需求</div>
+                </div>
+                <div style={{ padding: '12px 16px' }}>
+                  {staffing.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 8 }}>尚未設定（例如：早班×3人、晚班×2人）</div>
+                  ) : staffing.map(s => (
+                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <span><b>{s.shift_name}</b>{s.skill ? ` · ${s.skill}` : ''}</span>
+                      <span style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{s.required_count} 人</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <select id="staffShift" className="form-input" style={{ flex: 1 }}>
+                      {shiftDefs.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <input id="staffCount" className="form-input" type="number" min={1} defaultValue={1} style={{ width: 60 }} />
+                    <button className="btn btn-primary btn-sm" onClick={async () => {
+                      const shift = document.getElementById('staffShift').value
+                      const count = parseInt(document.getElementById('staffCount').value) || 1
+                      if (!selectedStore) return
+                      const { data } = await supabase.from('store_staffing').upsert({ store_id: selectedStore.id, shift_name: shift, required_count: count }, { onConflict: 'store_id,shift_name,skill' }).select().single()
+                      if (data) setStaffing(prev => [...prev.filter(s => s.id !== data.id), data])
+                    }}>+ 新增</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Operating Hours */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header">
+                  <div className="card-title"><span className="card-title-icon">🏪</span> 營業時間</div>
+                </div>
+                <div style={{ padding: '12px 16px' }}>
+                  {DAY_LABELS_FULL.map((label, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <span style={{ width: 24, fontWeight: 700, color: i >= 5 ? 'var(--accent-red)' : 'var(--text-primary)' }}>{label}</span>
+                      <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.open || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], open: e.target.value } }))} />
+                      <span style={{ color: 'var(--text-muted)' }}>~</span>
+                      <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.close || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], close: e.target.value } }))} />
+                    </div>
+                  ))}
+                  <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={async () => {
+                    if (!selectedStore) return
+                    await supabase.from('store_settings').upsert({ store_id: selectedStore.id, operating_hours: operatingHours }, { onConflict: 'store_id' })
+                    alert('已儲存營業時間')
+                  }}>儲存營業時間</button>
+                </div>
+              </div>
+
+              {/* Work Hour System */}
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header">
+                  <div className="card-title"><span className="card-title-icon">⚙️</span> 變形工時制度</div>
+                </div>
+                <div style={{ padding: '12px 16px' }}>
+                  <select className="form-input" style={{ width: '100%', marginBottom: 8 }} value={storeSettings?.work_hour_system || '標準工時'} onChange={async e => {
+                    if (!selectedStore) return
+                    const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, work_hour_system: e.target.value }, { onConflict: 'store_id' }).select().single()
+                    if (data) setStoreSettings(data)
+                  }}>
+                    {WORK_SYSTEMS.map(w => <option key={w.value} value={w.value}>{w.value}</option>)}
+                  </select>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{WORK_SYSTEMS.find(w => w.value === (storeSettings?.work_hour_system || '標準工時'))?.desc}</div>
+                </div>
+              </div>
+
+              {/* Labor Cost Budget */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title"><span className="card-title-icon">💰</span> 人力成本預算</div>
+                </div>
+                <div style={{ padding: '12px 16px', display: 'flex', gap: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>每週預算 (NT$)</label>
+                    <input className="form-input" type="number" placeholder="例如 50000" value={storeSettings?.weekly_budget || ''} onChange={async e => {
+                      if (!selectedStore) return
+                      const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, weekly_budget: Number(e.target.value) || null }, { onConflict: 'store_id' }).select().single()
+                      if (data) setStoreSettings(data)
+                    }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>預設時薪 (NT$)</label>
+                    <input className="form-input" type="number" value={storeSettings?.default_hourly_rate || 183} onChange={async e => {
+                      if (!selectedStore) return
+                      const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, default_hourly_rate: Number(e.target.value) || 183 }, { onConflict: 'store_id' }).select().single()
+                      if (data) setStoreSettings(data)
+                    }} />
+                  </div>
+                </div>
+                <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text-muted)' }}>2026 年基本工資：NT$29,500/月、NT$196/時</div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ══ Preferences Tab ══ */}
+      {mainTab === 'preferences' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon">👤</span> 員工排班偏好</div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>員工</th><th>偏好班別</th><th>不可用日</th><th>最大連續天數</th><th>備註</th><th>操作</th></tr></thead>
+              <tbody>
+                {filtered.map(emp => {
+                  const pref = preferences.find(p => p.employee === emp.name)
+                  return (
+                    <tr key={emp.id}>
+                      <td style={{ fontWeight: 600 }}>{emp.name}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {shiftDefs.map(d => {
+                            const selected = pref?.preferred_shifts?.includes(d.name)
+                            return (
+                              <button key={d.id} onClick={async () => {
+                                const current = pref?.preferred_shifts || []
+                                const next = selected ? current.filter(s => s !== d.name) : [...current, d.name]
+                                const { data } = await supabase.from('employee_shift_preferences').upsert({ employee: emp.name, preferred_shifts: next }, { onConflict: 'employee' }).select().single()
+                                if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
+                              }} style={{
+                                padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                background: selected ? d.color + '30' : 'var(--bg-card)',
+                                color: selected ? d.color : 'var(--text-muted)',
+                                border: `1px solid ${selected ? d.color : 'var(--border-medium)'}`,
+                              }}>{d.name}</button>
+                            )
+                          })}
+                        </div>
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{pref?.unavailable_days?.join(', ') || '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{pref?.max_consecutive || 6}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{pref?.notes || '—'}</td>
+                      <td>
+                        <button className="btn btn-sm btn-secondary" onClick={async () => {
+                          const notes = prompt('備註（例如：只能上早班、週三不行）', pref?.notes || '')
+                          if (notes === null) return
+                          const { data } = await supabase.from('employee_shift_preferences').upsert({ employee: emp.name, notes }, { onConflict: 'employee' }).select().single()
+                          if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
+                        }}>備註</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Shift Swaps Tab ══ */}
+      {mainTab === 'swaps' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon">🔄</span> 換班申請</div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>申請人</th><th>對象</th><th>日期</th><th>原班</th><th>換班</th><th>原因</th><th>狀態</th><th>操作</th></tr></thead>
+              <tbody>
+                {swaps.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無換班申請</td></tr>}
+                {swaps.map(s => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 600 }}>{s.requester}</td>
+                    <td style={{ fontWeight: 600 }}>{s.target}</td>
+                    <td>{s.swap_date}</td>
+                    <td>{s.requester_shift || '—'}</td>
+                    <td>{s.target_shift || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.reason || '—'}</td>
+                    <td>
+                      <span className={`badge ${s.status === '已核准' ? 'badge-success' : s.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
+                        <span className="badge-dot"></span>{s.status}
+                      </span>
+                      {s.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{s.reject_reason}</div>}
+                    </td>
+                    <td>
+                      {s.status === '待審核' && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-sm btn-primary" onClick={async () => {
+                            const { data } = await supabase.from('shift_swaps').update({ status: '已核准', approver: '主管' }).eq('id', s.id).select().single()
+                            if (data) {
+                              setSwaps(prev => prev.map(x => x.id === s.id ? data : x))
+                              // Execute swap in schedules
+                              await supabase.from('schedules').update({ shift: s.target_shift }).eq('employee', s.requester).eq('date', s.swap_date)
+                              await supabase.from('schedules').update({ shift: s.requester_shift }).eq('employee', s.target).eq('date', s.swap_date)
+                            }
+                          }}>核准</button>
+                          <button className="btn btn-sm btn-secondary" onClick={async () => {
+                            const reason = prompt('拒絕原因：')
+                            if (!reason?.trim()) return
+                            const { data } = await supabase.from('shift_swaps').update({ status: '已拒絕', reject_reason: reason.trim() }).eq('id', s.id).select().single()
+                            if (data) setSwaps(prev => prev.map(x => x.id === s.id ? data : x))
+                          }}>拒絕</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Analytics Tab ══ */}
+      {mainTab === 'analytics' && (() => {
+        const weekSchedules = schedules.filter(s => s.shift && s.shift !== '休')
+        const empStats = filtered.map(e => {
+          const empSch = schedules.filter(s => s.employee === e.name)
+          const work = empSch.filter(s => s.shift && s.shift !== '休').length
+          const rest = empSch.filter(s => s.shift === '休').length
+          const hours = work * 8
+          const rate = storeSettings?.default_hourly_rate || 183
+          return { name: e.name, dept: e.dept, work, rest, hours, cost: hours * rate }
+        })
+        const totalHours = empStats.reduce((s, e) => s + e.hours, 0)
+        const totalCost = empStats.reduce((s, e) => s + e.cost, 0)
+        const budget = storeSettings?.weekly_budget || 0
+        const avgHours = empStats.length ? (totalHours / empStats.length).toFixed(1) : 0
+        const maxWork = Math.max(...empStats.map(e => e.work), 0)
+        const minWork = Math.min(...empStats.map(e => e.work), 7)
+
+        return (
+          <div>
+            {/* Summary stats */}
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
+                <div className="stat-card-label">總排班時數</div>
+                <div className="stat-card-value">{totalHours}h</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+                <div className="stat-card-label">人均時數</div>
+                <div className="stat-card-value">{avgHours}h</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
+                <div className="stat-card-label">預估人力成本</div>
+                <div className="stat-card-value">NT$ {totalCost.toLocaleString()}</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': budget > 0 && totalCost > budget ? 'var(--accent-red)' : 'var(--accent-green)', '--card-accent-dim': budget > 0 && totalCost > budget ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
+                <div className="stat-card-label">預算使用率</div>
+                <div className="stat-card-value">{budget > 0 ? Math.round(totalCost / budget * 100) + '%' : '未設定'}</div>
+              </div>
+            </div>
+
+            {/* Fairness */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <div className="card-title"><span className="card-title-icon">⚖️</span> 公平性分析</div>
+                <span style={{ fontSize: 12, color: maxWork - minWork > 2 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  班次差距：{maxWork - minWork} 天 {maxWork - minWork > 2 ? '⚠️ 偏高' : '✓ 正常'}
+                </span>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead><tr><th>員工</th><th>部門</th><th>上班天數</th><th>休息天數</th><th>週時數</th><th>預估成本</th><th>分布</th></tr></thead>
+                  <tbody>
+                    {empStats.sort((a, b) => b.work - a.work).map(e => (
+                      <tr key={e.name}>
+                        <td style={{ fontWeight: 600 }}>{e.name}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.dept}</td>
+                        <td>{e.work} 天</td>
+                        <td>{e.rest} 天</td>
+                        <td style={{ color: e.hours > 40 ? 'var(--accent-red)' : 'var(--accent-cyan)', fontWeight: 600 }}>{e.hours}h</td>
+                        <td>NT$ {e.cost.toLocaleString()}</td>
+                        <td style={{ width: 120 }}>
+                          <div style={{ height: 8, borderRadius: 4, background: 'var(--border-medium)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${(e.work / 7) * 100}%`, borderRadius: 4, background: e.work > 5 ? 'var(--accent-red)' : 'var(--accent-cyan)' }} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Law Reference Modal */}
       {showLawModal && (

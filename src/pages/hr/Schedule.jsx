@@ -277,6 +277,27 @@ export default function Schedule() {
     alert(`自動排班完成！填入 ${newSchedules.length} 個班次`)
   }
 
+  // Load tab-specific data (must be before early returns to maintain hook order)
+  useEffect(() => {
+    if (mainTab === 'store-settings' && storeFilter) {
+      const store = locations.find(s => s.name === storeFilter)
+      if (store) {
+        supabase.from('store_settings').select('*').eq('store_id', store.id).maybeSingle()
+          .then(({ data }) => { setStoreSettings(data); if (data?.operating_hours) setOperatingHours(data.operating_hours) })
+        supabase.from('store_staffing').select('*').eq('store_id', store.id)
+          .then(({ data }) => setStaffing(data || []))
+      }
+    }
+    if (mainTab === 'preferences') {
+      supabase.from('employee_shift_preferences').select('*').order('employee')
+        .then(({ data }) => setPreferences(data || []))
+    }
+    if (mainTab === 'swaps') {
+      supabase.from('shift_swaps').select('*').order('created_at', { ascending: false })
+        .then(({ data }) => setSwaps(data || []))
+    }
+  }, [mainTab, storeFilter])
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -297,27 +318,6 @@ export default function Schedule() {
     if (!type) return {}
     return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
   }
-
-  // Load tab-specific data
-  useEffect(() => {
-    if (mainTab === 'store-settings' && storeFilter) {
-      const store = locations.find(s => s.name === storeFilter)
-      if (store) {
-        supabase.from('store_settings').select('*').eq('store_id', store.id).maybeSingle()
-          .then(({ data }) => { setStoreSettings(data); if (data?.operating_hours) setOperatingHours(data.operating_hours) })
-        supabase.from('store_staffing').select('*').eq('store_id', store.id)
-          .then(({ data }) => setStaffing(data || []))
-      }
-    }
-    if (mainTab === 'preferences') {
-      supabase.from('employee_shift_preferences').select('*').order('employee')
-        .then(({ data }) => setPreferences(data || []))
-    }
-    if (mainTab === 'swaps') {
-      supabase.from('shift_swaps').select('*').order('created_at', { ascending: false })
-        .then(({ data }) => setSwaps(data || []))
-    }
-  }, [mainTab, storeFilter])
 
   const selectedStore = locations.find(s => s.name === storeFilter)
   const DAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']

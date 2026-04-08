@@ -21,7 +21,7 @@ export default function Attendance() {
   useEffect(() => {
     Promise.all([
       getAttendance(),
-      supabase.from('employees').select('id, name, department, position, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*'),
     ]).then(([r, e, d, s]) => {
@@ -40,7 +40,7 @@ export default function Attendance() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const filtered = records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
@@ -226,13 +226,13 @@ export default function Attendance() {
                 const todayEmployees = records.filter(r => r.date === today).map(r => r.employee)
                 const notClocked = employees.filter(e =>
                   !todayEmployees.includes(e.name) &&
-                  (deptFilter === '' || e.department === deptFilter) &&
+                  (deptFilter === '' || e.dept === deptFilter) &&
                   (search === '' || e.name.includes(search))
                 )
                 return notClocked.map(e => (
                   <tr key={`new-${e.id}`} style={{ opacity: 0.7 }}>
                     <td style={{ fontWeight: 600 }}>{e.name}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.department || '-'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.dept || '-'}</td>
                     <td>{today}</td>
                     <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
                     <td><span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span></td>

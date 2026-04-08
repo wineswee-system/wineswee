@@ -18,7 +18,7 @@ export default function Overtime() {
   useEffect(() => {
     Promise.all([
       getOvertimeRequests(),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, e, d]) => {
       const emps = e.data || []
@@ -79,7 +79,7 @@ export default function Overtime() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const filtered = records.filter(r =>
     deptFilter === '' || getEmpDept(r.employee) === deptFilter
@@ -175,7 +175,7 @@ export default function Overtime() {
               <option value="">請選擇員工</option>
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.department === d.name).map(e => (
+                  {employees.filter(e => e.dept === d.name).map(e => (
                     <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
                   ))}
                 </optgroup>

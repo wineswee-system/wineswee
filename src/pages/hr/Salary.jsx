@@ -16,7 +16,7 @@ function EmpSelect({ value, onChange, employees, departments }) {
       <option value="">請選擇員工</option>
       {departments.map(d => (
         <optgroup key={d.id} label={d.name}>
-          {employees.filter(e => e.department === d.name).map(e => (
+          {employees.filter(e => e.dept === d.name).map(e => (
             <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
           ))}
         </optgroup>
@@ -97,7 +97,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').order('id'),
       supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, department, position, base_salary').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, base_salary').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([s, b, e, d]) => {
       setRecords(s.data || [])
@@ -192,7 +192,7 @@ export default function Salary() {
       })
       return {
         employee: emp.name,
-        department: emp.department,
+        dept: emp.dept,
         base_salary: baseSalary,
         ...result,
       }
@@ -250,7 +250,7 @@ export default function Salary() {
     </div>
   )
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const deptBtnStyle = (active) => ({
     padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
@@ -650,7 +650,7 @@ export default function Salary() {
                     {batchPreview.map((p, i) => (
                       <tr key={i}>
                         <td style={{ fontWeight: 600 }}>{p.employee}</td>
-                        <td style={{ color: 'var(--text-muted)' }}>{p.department || '-'}</td>
+                        <td style={{ color: 'var(--text-muted)' }}>{p.dept || '-'}</td>
                         <td>{fmt(p.base_salary)}</td>
                         <td>{fmt(p.gross)}</td>
                         <td style={{ color: 'var(--accent-orange)' }}>-{p.laborInsurance.toLocaleString()}</td>

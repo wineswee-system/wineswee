@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Info } from 'lucide-react'
+import { Plus, Search, Info, Paperclip } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
@@ -195,10 +195,10 @@ export default function Leave() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>員工</th><th>部門</th><th>假別</th><th>期間</th><th>天數/時數</th><th>事由</th><th>狀態</th><th>操作</th></tr>
+              <tr><th>員工</th><th>部門</th><th>假別</th><th>期間</th><th>天數/時數</th><th>事由</th><th>附件</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無假單</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無假單</td></tr>}
               {filtered.map(l => (
                 <tr key={l.id}>
                   <td style={{ fontWeight: 600 }}>{l.employee}</td>
@@ -211,6 +211,23 @@ export default function Leave() {
                   </td>
                   <td>{l.hours && l.hours < 8 ? `${l.hours}h` : `${l.days}天`}</td>
                   <td style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</td>
+                  <td>
+                    {l.attachments?.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {l.attachments.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', textDecoration: 'none',
+                          }}>
+                            <Paperclip size={10} /> {i + 1}
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
+                    )}
+                  </td>
                   <td>
                     <span className={`badge ${l.status === '已核准' ? 'badge-success' : l.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}

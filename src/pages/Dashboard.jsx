@@ -23,6 +23,12 @@ import DataTable from '../components/ui/DataTable'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
+const SectionTitle = ({ children }) => (
+  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+    {children}
+  </div>
+)
+
 const C = {
   cyan: '#0ea5c9', blue: '#3b82f6', purple: '#8b5cf6',
   green: '#10b981', orange: '#f59e0b', red: '#ef4444',

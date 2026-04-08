@@ -144,8 +144,30 @@ export default function SOPTemplates() {
     try {
       const steps = deployTemplate.steps || []
       const loc = deployForm.location
-      const results = []
 
+      // Create workflow instance
+      const { data: instance, error: instErr } = await supabase.from('workflow_instances').insert({
+        template_name: deployTemplate.name,
+        store: loc,
+        status: '進行中',
+        started_by: employees[0]?.name || '系統',
+      }).select().single()
+      if (instErr) throw instErr
+
+      // Create workflow steps
+      const stepRows = steps.map((step, i) => ({
+        instance_id: instance.id,
+        step_order: i + 1,
+        title: step.title,
+        description: step.description,
+        role: step.role,
+        assignee: deployForm.assignees[i] || '',
+        status: '待處理',
+      }))
+      await supabase.from('workflow_steps').insert(stepRows)
+
+      // Also create tasks for assignees
+      const results = []
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i]
         const assignee = deployForm.assignees[i] || ''

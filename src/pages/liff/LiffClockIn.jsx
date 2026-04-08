@@ -202,7 +202,7 @@ export default function LiffClockIn() {
           }}>{employee.name?.[0]}</div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9' }}>{employee.name}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{employee.department} · {employee.position}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>{employee.dept} · {employee.position}</div>
           </div>
         </div>
         <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>

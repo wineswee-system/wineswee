@@ -11,6 +11,23 @@ import {
 import FeatureCarousel from '../components/ui/FeatureCarousel'
 import { ALL_DEMOS } from '../data/featureDemos'
 
+// ── Count-up animation hook ──
+function useCounter(target, duration = 1600, start = false) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!start) return
+    let startTime = null
+    const step = (ts) => {
+      if (!startTime) startTime = ts
+      const p = Math.min((ts - startTime) / duration, 1)
+      setCount(Math.floor((1 - Math.pow(1 - p, 3)) * target))
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [target, duration, start])
+  return count
+}
+
 // ── Intersection observer for scroll reveal ──
 function useInView(threshold = 0.12) {
   const ref = useRef(null)
@@ -163,6 +180,101 @@ function FeatureShowcase() {
   )
 }
 
+// ── ROI Calculator ──
+function ROICalculator() {
+  const [employees, setEmployees] = useState(30)
+  const [hours, setHours] = useState(2)
+  const savedHours = employees * hours * 22 * 12
+  const savedCost = Math.round(savedHours * 250)
+  const fmt = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)
+
+  return (
+    <div className="roi-calc">
+      <div className="roi-sliders">
+        <label className="roi-field">
+          <span>公司人數</span>
+          <div className="roi-slider-row">
+            <input type="range" min="5" max="200" value={employees} onChange={e => setEmployees(+e.target.value)} />
+            <strong>{employees} 人</strong>
+          </div>
+        </label>
+        <label className="roi-field">
+          <span>每人每天手動作業時間</span>
+          <div className="roi-slider-row">
+            <input type="range" min="0.5" max="8" step="0.5" value={hours} onChange={e => setHours(+e.target.value)} />
+            <strong>{hours} 小時</strong>
+          </div>
+        </label>
+      </div>
+      <div className="roi-result">
+        <div className="roi-result-item">
+          <span className="roi-result-label">每年可節省工時</span>
+          <span className="roi-result-value">{fmt(savedHours)} 小時</span>
+        </div>
+        <div className="roi-result-item">
+          <span className="roi-result-label">估算節省成本</span>
+          <span className="roi-result-value highlight">NT$ {fmt(savedCost)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Interactive LINE Phone (hover to switch screen) ──
+function InteractiveLinePhone() {
+  const [activeScreen, setActiveScreen] = useState('clock')
+  const screens = {
+    clock: { header: '打卡結果', headerBg: '#EFF9FB', headerColor: '#0E7490', title: '上班打卡成功', rows: [['員工', '王小明'], ['時間', '08:52'], ['方式', 'GPS 驗證']] },
+    salary: { header: '2026-04 薪資', headerBg: '#ECFDF5', headerColor: '#047857', title: 'NT$ 45,800', rows: [['底薪', 'NT$ 40,000'], ['加班費', '+5,200'], ['津貼', '+3,000']] },
+    leave: { header: '請假申請', headerBg: '#EFF6FF', headerColor: '#1D4ED8', title: '已送出審核', rows: [['假別', '特休假'], ['日期', '04/15~04/16'], ['狀態', '待主管核准']] },
+    stock: { header: '庫存查詢', headerBg: '#FFF7ED', headerColor: '#C2410C', title: '12 項低庫存', rows: [['有機牛奶', '45 / 50'], ['鮮奶油', '8 / 20'], ['雞胸肉', '150 / 80']] },
+  }
+  const s = screens[activeScreen]
+
+  return (
+    <div className="demo-line-phone-col">
+      <div className="demo-phone" style={{ background: '#e8e8e8' }}>
+        <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
+        <div className="demo-phone-chat">
+          <div className="demo-msg-r">{activeScreen === 'clock' ? '打卡' : activeScreen === 'salary' ? '薪資' : activeScreen === 'leave' ? '請假' : '庫存'}</div>
+          <div className="demo-msg-l" key={activeScreen}>
+            <div style={{ background: s.headerBg, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, color: `${s.headerColor}99`, fontWeight: 600 }}>{s.header}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: s.headerColor, marginTop: 2 }}>{s.title}</div>
+            </div>
+            <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
+              {s.rows.map(([k, v], i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span>{k}</span><span style={{ fontWeight: 600, color: '#222' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="demo-line-triggers">
+        {[
+          { key: 'clock', label: '打卡' },
+          { key: 'salary', label: '薪資' },
+          { key: 'leave', label: '請假' },
+          { key: 'stock', label: '庫存' },
+        ].map(t => (
+          <button
+            key={t.key}
+            className={`demo-line-trigger ${activeScreen === t.key ? 'active' : ''}`}
+            onMouseEnter={() => setActiveScreen(t.key)}
+            onClick={() => setActiveScreen(t.key)}
+          >{t.label}</button>
+        ))}
+      </div>
+      <div className="demo-line-phone-label">
+        <strong>互動體驗</strong>
+        <span>滑過上方按鈕，即時切換畫面</span>
+      </div>
+    </div>
+  )
+}
+
 export default function DemoLanding() {
   const navigate = useNavigate()
   const [visible, setVisible] = useState(false)
@@ -201,6 +313,10 @@ export default function DemoLanding() {
   }
 
   useEffect(() => { setTimeout(() => setVisible(true), 150) }, [])
+
+  const c0 = useCounter(16, 1200, visible)
+  const c1 = useCounter(136, 1600, visible)
+  const c2 = useCounter(8, 1000, visible)
 
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
 
@@ -264,19 +380,12 @@ export default function DemoLanding() {
             </button>
           </div>
 
-          {/* Trust numbers */}
+          {/* Trust numbers with count-up */}
           <div className="demo-hero-stats">
-            {[
-              { n: '16', label: '大模組', color: '#2563eb' },
-              { n: '136+', label: '功能頁面', color: '#059669' },
-              { n: '8', label: '條自動串接', color: '#d97706' },
-              { n: '不限', label: '使用人數', color: '#7c3aed' },
-            ].map((s, i) => (
-              <div key={i} className="demo-stat-item">
-                <strong style={{ color: s.color }}>{s.n}</strong>
-                <span>{s.label}</span>
-              </div>
-            ))}
+            <div className="demo-stat-item"><strong style={{ color: '#2563eb' }}>{c0}</strong><span>大模組</span></div>
+            <div className="demo-stat-item"><strong style={{ color: '#059669' }}>{c1}+</strong><span>功能頁面</span></div>
+            <div className="demo-stat-item"><strong style={{ color: '#d97706' }}>{c2}</strong><span>條自動串接</span></div>
+            <div className="demo-stat-item"><strong style={{ color: '#7c3aed' }}>不限</strong><span>使用人數</span></div>
           </div>
         </div>
       </section>
@@ -360,26 +469,45 @@ export default function DemoLanding() {
         </div>
       </Section>
 
-      {/* ═══ 3 pillars ═══ */}
+      {/* ═══ Bento Grid — core value props ═══ */}
       <Section id="overview" dark>
         <div className="demo-container">
-          <div className="demo-row-3">
-            {[
-              { icon: Zap, title: '跨模組即時串接', desc: '訂單成立自動檢查庫存與信用額度，出貨完成即時拋轉應收帳款，減少人工對帳工時與錯帳風險。', color: '#2563eb' },
-              { icon: Shield, title: '台灣法規合規引擎', desc: '內建勞基法、性平法共 50+ 條法規，排班與請假即時檢核，違規態樣自動標示，降低勞檢風險。', color: '#059669' },
-              { icon: Globe, title: 'LINE 行動辦公整合', desc: '員工透過 LINE 完成打卡、假單申請、薪資查詢；主管即時收到簽核通知，不受時間地點限制。', color: '#d97706' },
-            ].map((item, i) => {
-              const Icon = item.icon
-              return (
-                <div key={i} className="demo-pillar">
-                  <div className="demo-pillar-icon" style={{ '--pcolor': item.color }}>
-                    <Icon size={22} strokeWidth={1.8} />
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.desc}</p>
-                </div>
-              )
-            })}
+          <div className="bento-grid">
+            {/* Row 1: 3 equal cards */}
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#2563eb' }}><Zap size={22} strokeWidth={1.8} /></div>
+              <h3>跨模組即時串接</h3>
+              <p>訂單自動檢查庫存與信用額度，出貨即時拋轉應收帳款，減少人工對帳。</p>
+              <div className="bento-tags">
+                {['贏單→應收', '出貨→帳款', '請假→薪資', '庫存→採購'].map(t => <span key={t} className="bento-tag">{t}</span>)}
+              </div>
+            </div>
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#059669' }}><Shield size={22} strokeWidth={1.8} /></div>
+              <h3>台灣法規合規引擎</h3>
+              <p>勞基法、性平法共 50+ 條法規即時檢核，排班違規自動標示，降低勞檢風險。</p>
+            </div>
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#d97706' }}><Globe size={22} strokeWidth={1.8} /></div>
+              <h3>LINE 行動辦公</h3>
+              <p>打卡、假單、薪資、簽核，打開 LINE 就能操作，不受時間地點限制。</p>
+            </div>
+            {/* Row 2: 3 equal cards */}
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#7c3aed' }}><BarChart3 size={22} strokeWidth={1.8} /></div>
+              <h3>BI 數據看板</h3>
+              <p>即時營運圖表、銷售預測、異常偵測，用數據驅動決策，不憑感覺。</p>
+            </div>
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#db2777' }}><Users size={22} strokeWidth={1.8} /></div>
+              <h3>不限使用人數</h3>
+              <p>全模組授權不按人頭計費，5 人到 200 人同一套系統，隨公司成長擴展。</p>
+            </div>
+            <div className="bento-card glass">
+              <div className="bento-icon" style={{ '--bcolor': '#f97316' }}><CreditCard size={22} strokeWidth={1.8} /></div>
+              <h3>全模組一次包含</h3>
+              <p>人事、倉儲、CRM、財務、生產全部內建，不用一個一個另外買。</p>
+            </div>
           </div>
         </div>
       </Section>
@@ -479,42 +607,8 @@ export default function DemoLanding() {
           {/* 3 phones side by side */}
           <div className="demo-line-phones">
 
-            {/* Phone 1: Chat — 打卡 + 薪資 */}
-            <div className="demo-line-phone-col">
-              <div className="demo-phone">
-                <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
-                <div className="demo-phone-chat">
-                  <div className="demo-msg-r">打卡</div>
-                  <div className="demo-msg-l">
-                    <div style={{ background: '#EFF9FB', padding: '10px 14px' }}>
-                      <div style={{ fontSize: 10, color: '#67B2C4', fontWeight: 600 }}>打卡結果</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0E7490', marginTop: 2 }}>上班打卡成功</div>
-                    </div>
-                    <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>員工</span><span style={{ fontWeight: 600, color: '#222' }}>王小明</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>時間</span><span style={{ fontWeight: 600, color: '#0891B2' }}>08:52</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>方式</span><span style={{ fontWeight: 600, color: '#059669' }}>GPS 驗證</span></div>
-                    </div>
-                  </div>
-                  <div className="demo-msg-r">薪資</div>
-                  <div className="demo-msg-l">
-                    <div style={{ background: '#ECFDF5', padding: '10px 14px' }}>
-                      <div style={{ fontSize: 10, color: '#6EBF9E', fontWeight: 600 }}>2026-04 薪資</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#047857', marginTop: 2 }}>NT$ 45,800</div>
-                    </div>
-                    <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>底薪</span><span>NT$ 40,000</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>加班費</span><span style={{ color: '#059669' }}>+5,200</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>津貼</span><span style={{ color: '#059669' }}>+3,000</span></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="demo-line-phone-label">
-                <strong>傳訊息即操作</strong>
-                <span>輸入「打卡」「薪資」系統秒回</span>
-              </div>
-            </div>
+            {/* Phone 1: Interactive — hover to switch */}
+            <InteractiveLinePhone />
 
             {/* Phone 2: LIFF 員工首頁 */}
             <div className="demo-line-phone-col">
@@ -649,8 +743,70 @@ export default function DemoLanding() {
         </div>
       </Section>
 
-      {/* ═══ Diagnostic CTA ═══ */}
+      {/* ═══ ROI Calculator ═══ */}
       <Section dark>
+        <div className="demo-container">
+          <div className="demo-sh">
+            <h2>導入效益試算</h2>
+            <p>拖動滑桿，估算導入系統後每年可節省的時間與成本</p>
+          </div>
+          <ROICalculator />
+        </div>
+      </Section>
+
+      {/* ═══ Comparison Table ═══ */}
+      <Section>
+        <div className="demo-container">
+          <div className="demo-sh">
+            <h2>跟傳統 ERP 有什麼不同？</h2>
+          </div>
+          <div className="compare-table">
+            <div className="compare-header">
+              <div className="compare-col feature">比較項目</div>
+              <div className="compare-col them">傳統 ERP</div>
+              <div className="compare-col us">SME OPS</div>
+            </div>
+            {[
+              { feature: '導入時程', them: '半年 ~ 一年', us: '兩週內上線' },
+              { feature: '授權方式', them: '按人頭計費', us: '不限使用人數' },
+              { feature: '操作介面', them: '類似 Excel 表格', us: '現代化 Web UI' },
+              { feature: 'LINE 整合', them: '無 / 需額外開發', us: '原生內建' },
+              { feature: '模組擴充', them: '每個模組另外購買', us: '全模組包含' },
+              { feature: '行動辦公', them: '需另購 App', us: 'LINE + Web 即用' },
+              { feature: '跨模組串接', them: '手動匯出匯入', us: '即時自動串接' },
+              { feature: '法規合規', them: '需自行檢查', us: '內建 50+ 條法規檢核' },
+            ].map((row, i) => (
+              <div key={i} className="compare-row">
+                <div className="compare-col feature">{row.feature}</div>
+                <div className="compare-col them">{row.them}</div>
+                <div className="compare-col us"><Check size={13} /> {row.us}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ═══ Team / Trust ═══ */}
+      <Section dark>
+        <div className="demo-container">
+          <div className="team-section">
+            <div className="team-banner">
+              <div className="team-banner-left">
+                <h3>專為台灣中小企業打造</h3>
+                <p>我們的目標很簡單：讓老闆不用再花大錢買七套系統、請七家廠商。一套搞定，是我們對每個客戶的承諾。</p>
+              </div>
+              <div className="team-banner-stats">
+                <div className="team-stat"><strong>50+</strong><span>條內建法規</span></div>
+                <div className="team-stat"><strong>16</strong><span>大模組全包</span></div>
+                <div className="team-stat"><strong>24hr</strong><span>內回覆諮詢</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* ═══ Diagnostic CTA ═══ */}
+      <Section>
         <div className="demo-container">
           <div className="demo-diagnostic">
             <div className="demo-diagnostic-text">
@@ -749,7 +905,7 @@ export default function DemoLanding() {
               {inquiryStatus === 'error' && <p style={{ color: 'var(--accent-red)', fontSize: 13, textAlign: 'center' }}>提交失敗，請稍後再試</p>}
 
               <button
-                className="demo-submit"
+                className={`demo-submit ${inquiry.company_name && inquiry.contact_name && inquiry.phone ? 'ready' : ''}`}
                 onClick={handleSubmit}
                 disabled={inquiryStatus === 'sending' || !inquiry.company_name || !inquiry.contact_name || !inquiry.phone}
               >

@@ -71,7 +71,7 @@ export default function POSOverview() {
   useEffect(() => {
     Promise.all([
       supabase.from('pos_transactions').select('*'),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
     ]).then(([txRes, locRes]) => {
       const locs = locRes.data || []
       setLocations(locs)

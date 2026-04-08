@@ -41,7 +41,7 @@ export default function UserConfig() {
       role: emp.role || 'user',
       status: emp.status || '在職',
       position: emp.position || '',
-      department: emp.department || '',
+      department: emp.dept || '',
     })
     setShowModal(true)
   }

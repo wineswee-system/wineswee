@@ -91,7 +91,7 @@ export default function Pipeline() {
     Promise.all([
       supabase.from('opportunities').select('*').order('created_at', { ascending: false }),
       supabase.from('customers').select('id, name'),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
     ]).then(([o, c, l]) => {
       setOpps(o.data || [])
       setCustomers(c.data || [])

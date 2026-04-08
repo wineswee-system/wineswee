@@ -51,7 +51,7 @@ export default function Employees() {
     Promise.all([
       getEmployees(),
       supabase.from('departments').select('*').order('name'),
-      supabase.from('locations').select('*').order('name'),
+      supabase.from('stores').select('*').order('name'),
     ]).then(([e, d, l]) => {
       const depts = d.data || []
       const locs = l.data || []

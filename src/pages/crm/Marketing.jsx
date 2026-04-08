@@ -132,7 +132,7 @@ export default function Marketing() {
   useEffect(() => {
     Promise.all([
       supabase.from('marketing_campaigns').select('*').order('created_at', { ascending: false }),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
     ]).then(([c, l]) => {
       const campData = c.data || []
       setCampaigns(campData)

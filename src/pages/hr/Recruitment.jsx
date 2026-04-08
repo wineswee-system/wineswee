@@ -19,7 +19,7 @@ export default function Recruitment() {
     Promise.all([
       getRecruitmentJobs(),
       supabase.from('departments').select('*').order('name'),
-      supabase.from('locations').select('*').order('name'),
+      supabase.from('stores').select('*').order('name'),
     ]).then(([j, d, l]) => {
       const depts = d.data || []
       const locs = l.data || []

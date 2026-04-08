@@ -141,10 +141,13 @@ serve(async (req: Request) => {
       method = gpsPass ? 'gps' : 'wifi'
     }
 
-    // ── Write attendance record ──────────────────────────
+    // ── Write attendance record (Taiwan time UTC+8) ────
     const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10)
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const taiwanNow = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+    const dateStr = taiwanNow.toISOString().slice(0, 10)
+    const hours24 = taiwanNow.getUTCHours()
+    const minutes = taiwanNow.getUTCMinutes()
+    const timeStr = `${String(hours24).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 
     // Check existing record for today
     const { data: existing } = await supabase
@@ -158,7 +161,7 @@ serve(async (req: Request) => {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
+      const isLate = hours24 >= 9 && (hours24 > 9 || minutes > 0)
       const { data, error } = await supabase.from('attendance_records').upsert({
         employee: emp.name,
         date: dateStr,

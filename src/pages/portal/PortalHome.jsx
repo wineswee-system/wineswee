@@ -108,7 +108,7 @@ export default function PortalHome() {
           {greeting}，{profile?.name}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-          {profile?.department}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          {profile?.dept}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
         </p>
       </div>
 

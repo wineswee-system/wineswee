@@ -63,7 +63,7 @@ export default function Customers() {
   useEffect(() => {
     Promise.all([
       supabase.from('customers').select('*').order('created_at', { ascending: false }),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
       supabase.from('outbound_orders').select('*').order('created_at', { ascending: false }),
     ]).then(([c, l, o]) => {
       setCustomers(c.data || [])

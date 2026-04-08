@@ -121,7 +121,10 @@ export default function Leave() {
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
   const handleReject = async (id) => {
-    const { data } = await updateLeaveStatus(id, '已拒絕', '主管')
+    const reason = prompt('請輸入拒絕原因：')
+    if (reason === null) return // cancelled
+    if (!reason.trim()) { alert('請填寫拒絕原因'); return }
+    const { data } = await updateLeaveStatus(id, '已拒絕', '主管', reason.trim())
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 
@@ -232,6 +235,9 @@ export default function Leave() {
                     <span className={`badge ${l.status === '已核准' ? 'badge-success' : l.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}
                     </span>
+                    {l.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{l.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {l.status === '待審核' && (

@@ -57,8 +57,8 @@ export const getLeaveRequests = () =>
 export const createLeaveRequest = (data) =>
   supabase.from('leave_requests').insert(data).select().single()
 
-export const updateLeaveStatus = (id, status, approver) =>
-  supabase.from('leave_requests').update({ status, approver }).eq('id', id).select().single()
+export const updateLeaveStatus = (id, status, approver, rejectReason) =>
+  supabase.from('leave_requests').update({ status, approver, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 export const deleteLeaveRequest = (id) =>
   supabase.from('leave_requests').delete().eq('id', id)

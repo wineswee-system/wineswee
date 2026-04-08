@@ -81,6 +81,8 @@ export default function Salary() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState('')
+  const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [expanded, setExpanded] = useState(null)
@@ -97,13 +99,15 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').order('id'),
       supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, dept, position, base_salary').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, base_salary, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([s, b, e, d]) => {
+      supabase.from('stores').select('*').order('name'),
+    ]).then(([s, b, e, d, st]) => {
       setRecords(s.data || [])
       setBonusRecords(b.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
+      setStores(st.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -251,6 +255,7 @@ export default function Salary() {
   )
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
+  const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
 
   const deptBtnStyle = (active) => ({
     padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
@@ -261,7 +266,8 @@ export default function Salary() {
 
   const filtered = records.filter(r =>
     (!month || !r.month || r.month === month) &&
-    (deptFilter === '' || getEmpDept(r.employee) === deptFilter)
+    (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
+    (storeFilter === '' || getEmpStore(r.employee) === storeFilter)
   )
 
   // Stats
@@ -333,9 +339,9 @@ export default function Salary() {
 
       {/* ── Department filter ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
+        <button style={deptBtnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部門市</button>
+        {stores.map(s => (
+          <button key={s.id} style={deptBtnStyle(storeFilter === s.name)} onClick={() => setStoreFilter(s.name)}>{s.name}</button>
         ))}
       </div>
 

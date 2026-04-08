@@ -12,6 +12,7 @@ export default function Attendance() {
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -41,9 +42,11 @@ export default function Attendance() {
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
+  const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
 
   const filtered = records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
+    (storeFilter === '' || getEmpStore(r.employee) === storeFilter) &&
     (search === '' || r.employee?.includes(search))
   )
 
@@ -133,11 +136,11 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* 部門篩選 */}
+      {/* 門市篩選 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
+        <button style={deptBtnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部門市</button>
+        {stores.map(s => (
+          <button key={s.id} style={deptBtnStyle(storeFilter === s.name)} onClick={() => setStoreFilter(s.name)}>{s.name}</button>
         ))}
       </div>
 

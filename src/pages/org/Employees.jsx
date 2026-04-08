@@ -8,6 +8,25 @@ import Modal, { Field } from '../../components/Modal'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
+// 標準化職稱（manager = 有審核權限）
+const POSITIONS = [
+  { label: '總經理', level: 'manager' },
+  { label: '副總經理', level: 'manager' },
+  { label: '總監', level: 'manager' },
+  { label: '經理', level: 'manager' },
+  { label: '副理', level: 'manager' },
+  { label: '主管', level: 'manager' },
+  { label: '店長', level: 'manager' },
+  { label: '副店長', level: 'manager' },
+  { label: '組長', level: 'manager' },
+  { label: '資深工程師', level: 'staff' },
+  { label: '工程師', level: 'staff' },
+  { label: '專員', level: 'staff' },
+  { label: '業務代表', level: 'staff' },
+  { label: '助理', level: 'staff' },
+  { label: '實習生', level: 'staff' },
+]
+
 export default function Employees() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -55,7 +74,9 @@ export default function Employees() {
     if (!form.name || !form.email) return
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
-      const { data, error } = await createEmployee({ ...form, avatar })
+      const posInfo = POSITIONS.find(p => p.label === form.position)
+      const role = posInfo?.level || 'staff'
+      const { data, error } = await createEmployee({ ...form, avatar, role })
       if (error) throw error
       if (data) {
         setEmployees(prev => [...prev, data])
@@ -109,7 +130,9 @@ export default function Employees() {
   const handleEdit = async () => {
     if (!selectedEmp) return
     try {
-      const { data, error } = await updateEmployee(selectedEmp.id, editForm)
+      const posInfo = POSITIONS.find(p => p.label === editForm.position)
+      const role = posInfo?.level || 'staff'
+      const { data, error } = await updateEmployee(selectedEmp.id, { ...editForm, role })
       if (error) throw error
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
@@ -306,7 +329,15 @@ export default function Employees() {
               </select>
             </Field>
             <Field label="職稱">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="工程師" value={form.position} onChange={e => set('position', e.target.value)} />
+              <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => set('position', e.target.value)}>
+                <option value="">請選擇</option>
+                <optgroup label="主管級">
+                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="員工級">
+                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+              </select>
             </Field>
           </div>
           <Field label="門市 / 分店">
@@ -383,7 +414,15 @@ export default function Employees() {
               </select>
             </Field>
             <Field label="職稱">
-              <input className="form-input" type="text" style={{ width: '100%' }} value={editForm.position} onChange={e => setE('position', e.target.value)} />
+              <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => setE('position', e.target.value)}>
+                <option value="">請選擇</option>
+                <optgroup label="主管級">
+                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="員工級">
+                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+              </select>
             </Field>
           </div>
           <Field label="門市 / 分店">

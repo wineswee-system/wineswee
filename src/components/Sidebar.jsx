@@ -266,6 +266,7 @@ const groupNav = {
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
+        { icon: Shield, label: '簽核系統', path: '/system/approval-chains' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
         { icon: ScrollText, label: 'SOP 範本', path: '/process/sop' },
@@ -317,7 +318,6 @@ const systemItems = [
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },
   { icon: Shield, label: '簽核規則', path: '/system/approval-rules' },
-  { icon: Shield, label: '簽核系統', path: '/system/approval-chains' },
   { icon: ScrollText, label: '操作紀錄', path: '/system/audit' },
   { icon: Award, label: '系統效能', path: '/system/performance' },
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },

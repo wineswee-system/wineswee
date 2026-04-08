@@ -131,6 +131,7 @@ const Segments = lazy(() => import('./pages/crm/Segments'))
 const Bins = lazy(() => import('./pages/wms/Bins'))
 const PickPackShip = lazy(() => import('./pages/wms/PickPackShip'))
 const ApprovalRules = lazy(() => import('./pages/system/ApprovalRules'))
+const ApprovalChains = lazy(() => import('./pages/system/ApprovalChains'))
 const Subcontracting = lazy(() => import('./pages/manufacturing/Subcontracting'))
 const PeriodClose = lazy(() => import('./pages/finance/PeriodClose'))
 const Training = lazy(() => import('./pages/hr/Training'))
@@ -220,6 +221,7 @@ function AdminApp() {
             <Route path="/system/database" element={<DatabaseAdmin />} />
             <Route path="/system/tenants" element={<Suspense fallback={<LoadingSpinner />}><TenantAdmin /></Suspense>} />
             <Route path="/system/approval-rules" element={<Suspense fallback={<LoadingSpinner />}><ApprovalRules /></Suspense>} />
+            <Route path="/system/approval-chains" element={<Suspense fallback={<LoadingSpinner />}><ApprovalChains /></Suspense>} />
             {/* AI */}
             <Route path="/ai/help" element={<HelpCenter />} />
             <Route path="/ai/agent" element={<AgentConsole />} />

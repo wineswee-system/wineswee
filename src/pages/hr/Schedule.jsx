@@ -99,7 +99,7 @@ export default function Schedule() {
   // Run compliance check when schedules update
   useEffect(() => {
     if (schedules.length > 0) {
-      setCompliance(validateSchedule(schedules, weekDates))
+      setCompliance(validateSchedule(schedules, weekDates, shiftDefs))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, weekStart])
@@ -180,18 +180,20 @@ export default function Schedule() {
           continue
         }
 
-        // Each person gets ~2 rest days per week
-        // Prefer weekend rest, but ensure minimum staff
+        // Each person gets 2 rest days per week (勞基法 §36)
         const needRest = restCount[name] < 2
         const isWeekend = dayIndex >= 5
-        const enoughStaff = workingCount >= minStaff
+        // Count how many unscheduled people remain for today
+        const unscheduledToday = empNames.filter(n => !existing[`${n}_${date}`]).length
+        const futureWorkersEstimate = workingCount + unscheduledToday - 1 // if this person rests
+        const canRest = futureWorkersEstimate >= minStaff
 
-        if (needRest && isWeekend && enoughStaff) {
+        if (needRest && canRest && (isWeekend || dayIndex >= 3 || restCount[name] === 0)) {
           newSchedules.push({ employee: name, date, shift: '休' })
           restCount[name]++
           existing[key] = '休'
-        } else if (needRest && !isWeekend && workingCount >= minStaff && restCount[name] === 0 && dayIndex >= 3) {
-          // Give a midweek rest if they have 0 so far and enough staff
+        } else if (needRest && dayIndex === 6 && restCount[name] < 2) {
+          // Last day of week — force rest if still needed, even if understaffed
           newSchedules.push({ employee: name, date, shift: '休' })
           restCount[name]++
           existing[key] = '休'

@@ -397,3 +397,72 @@ export function calculateNetSalary(grossSalary, options = {}) {
     netSalary,
   };
 }
+
+// ══════════════════════════════════════
+//  7. 特休未休折算工資
+// ══════════════════════════════════════
+
+/**
+ * 計算特休未休折算工資（勞基法 §38-4）
+ * 到職週年未休完的特休，應於次月薪資結清折算
+ *
+ * @param {number} baseSalary - 月薪
+ * @param {number} unusedDays - 未休天數
+ * @returns {{ dailyRate: number, totalPayout: number }}
+ */
+export function calculateAnnualLeavePayout(baseSalary, unusedDays) {
+  const dailyRate = Math.round(baseSalary / 30)
+  const totalPayout = dailyRate * unusedDays
+  return { dailyRate, totalPayout }
+}
+
+// ══════════════════════════════════════
+//  8. 加班費計算（勞基法 §24）
+// ══════════════════════════════════════
+
+/**
+ * 計算加班費
+ *
+ * 平日加班：
+ * - 前 2 小時：時薪 × 1.34（加給 1/3）
+ * - 第 3~4 小時：時薪 × 1.67（加給 2/3）
+ *
+ * 休息日加班：
+ * - 前 2 小時：時薪 × 1.34
+ * - 第 3~8 小時：時薪 × 1.67
+ * - 第 9~12 小時：時薪 × 2.67
+ *
+ * 國定假日/例假日加班：
+ * - 全額加倍：時薪 × 2
+ *
+ * @param {number} baseSalary - 月薪
+ * @param {number} hours - 加班時數
+ * @param {'weekday'|'restday'|'holiday'} type - 加班類型
+ * @returns {{ hourlyRate: number, overtimePay: number, breakdown: string }}
+ */
+export function calculateOvertimePay(baseSalary, hours, type = 'weekday') {
+  const hourlyRate = Math.round(baseSalary / 30 / 8)
+  let pay = 0
+  let breakdown = ''
+
+  if (type === 'holiday') {
+    // 國定假日/例假日：加倍
+    pay = hourlyRate * 2 * hours
+    breakdown = `${hours}h × ${hourlyRate} × 2 = ${pay}`
+  } else if (type === 'restday') {
+    // 休息日
+    const h1 = Math.min(hours, 2)
+    const h2 = Math.min(Math.max(hours - 2, 0), 6)
+    const h3 = Math.max(hours - 8, 0)
+    pay = Math.round(hourlyRate * h1 * 1.34 + hourlyRate * h2 * 1.67 + hourlyRate * h3 * 2.67)
+    breakdown = `前${h1}h×1.34${h2 > 0 ? ` + ${h2}h×1.67` : ''}${h3 > 0 ? ` + ${h3}h×2.67` : ''}`
+  } else {
+    // 平日
+    const h1 = Math.min(hours, 2)
+    const h2 = Math.max(hours - 2, 0)
+    pay = Math.round(hourlyRate * h1 * 1.34 + hourlyRate * h2 * 1.67)
+    breakdown = `前${h1}h×1.34${h2 > 0 ? ` + ${h2}h×1.67` : ''}`
+  }
+
+  return { hourlyRate, overtimePay: pay, breakdown }
+}

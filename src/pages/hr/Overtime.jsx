@@ -189,7 +189,7 @@ export default function Overtime() {
             <input className="form-input" type="number" min="0.5" step="0.5" style={{ width: '100%' }} value={form.hours} onChange={e => set('hours', Number(e.target.value))} />
           </Field>
           <Field label="原因">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />
+            <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />
           </Field>
         </Modal>
       )}

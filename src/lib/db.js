@@ -136,8 +136,8 @@ export const getBusinessTrips = () =>
 export const createBusinessTrip = (data) =>
   supabase.from('business_trips').insert(data).select().single()
 
-export const updateBusinessTripStatus = (id, status) =>
-  supabase.from('business_trips').update({ status }).eq('id', id).select().single()
+export const updateBusinessTripStatus = (id, status, rejectReason) =>
+  supabase.from('business_trips').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Expenses ───────────────────────────────────────────────
 export const getExpenses = () =>
@@ -146,8 +146,8 @@ export const getExpenses = () =>
 export const createExpense = (data) =>
   supabase.from('expenses').insert(data).select().single()
 
-export const updateExpenseStatus = (id, status) =>
-  supabase.from('expenses').update({ status }).eq('id', id).select().single()
+export const updateExpenseStatus = (id, status, rejectReason) =>
+  supabase.from('expenses').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Workflows ──────────────────────────────────────────────
 export const getWorkflows = () =>

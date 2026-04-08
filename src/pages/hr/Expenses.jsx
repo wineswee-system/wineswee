@@ -53,12 +53,19 @@ export default function Expenses() {
     const { data } = await updateExpenseStatus(id, '已核銷')
     if (data) {
       setExpenses(prev => prev.map(e => e.id === id ? data : e))
-      // Auto-post journal entry to Finance
       const result = await createJEFromExpense(data)
       if (result.ok) {
         alert(`已核銷並自動產生傳票 ${result.entry.entry_number}`)
       }
     }
+  }
+
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
+    if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
   }
 
   if (loading) return <LoadingSpinner />
@@ -131,13 +138,19 @@ export default function Expenses() {
                   <td>{e.description}</td>
                   <td>{e.receipt ? <span className="badge badge-success">✓ 有</span> : <span className="badge badge-danger">✗ 無</span>}</td>
                   <td>
-                    <span className={`badge ${e.status === '已核銷' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${e.status === '已核銷' ? 'badge-success' : e.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{e.status}
                     </span>
+                    {e.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{e.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {e.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>

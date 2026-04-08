@@ -51,6 +51,14 @@ export default function BusinessTravel() {
     if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
   }
 
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    const { data } = await updateBusinessTripStatus(id, '已駁回', reason.trim())
+    if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -118,13 +126,19 @@ export default function BusinessTravel() {
                   <td>{t.purpose}</td>
                   <td>NT$ {Number(t.budget).toLocaleString()}</td>
                   <td>
-                    <span className={`badge ${t.status === '已核准' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${t.status === '已核准' ? 'badge-success' : t.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{t.status}
                     </span>
+                    {t.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{t.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {t.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>

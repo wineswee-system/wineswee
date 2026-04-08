@@ -99,7 +99,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').order('id'),
       supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, dept, position, base_salary, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([s, b, e, d, st]) => {

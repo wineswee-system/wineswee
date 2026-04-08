@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw, BarChart3, PieChart, GitBranch } from 'lucide-react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import {
-  Users, CheckCircle, Target,
-  Clock, Briefcase, CalendarCheck, DollarSign, CreditCard,
-  ShoppingCart, Package, Sparkles, Bot, RefreshCw, TrendingUp
+  Users, CheckCircle, AlertTriangle, TrendingUp, Target,
+  ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
+  DollarSign, CreditCard, ShoppingCart, Package, Sparkles,
+  Bot, RefreshCw, BarChart3, PieChart, GitBranch
 } from 'lucide-react'
 import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,

@@ -22,6 +22,34 @@ export const getAttendance = (date) => {
 export const upsertAttendance = (data) =>
   supabase.from('attendance_records').upsert(data).select().single()
 
+/**
+ * Server-side clock-in via Edge Function (validates GPS + WiFi on server).
+ * @param {{ employee: string, action: 'clock_in'|'clock_out', lat?: number, lng?: number, accuracy?: number, ip?: string }} payload
+ * @returns {Promise<{ success: boolean, record: object, method: string, locationName: string, ip: string }>}
+ * @throws {Error} with descriptive message on validation failure or server error
+ */
+export async function serverClockIn(payload) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/clock-in`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
+      'apikey': key,
+    },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data.reasons ? `${data.error}\n${data.reasons.join('\n')}` : (data.error || '伺服器錯誤')
+    const err = new Error(msg)
+    err.code = res.status === 403 ? 'VALIDATION_FAILED' : 'SERVER_ERROR'
+    throw err
+  }
+  return data
+}
+
 // ── Leave Requests ─────────────────────────────────────────
 export const getLeaveRequests = () =>
   supabase.from('leave_requests').select('*').order('id')

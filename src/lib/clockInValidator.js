@@ -2,7 +2,11 @@
  * Clock-in validation: GPS location + WiFi IP verification
  * Checks employee position / IP against their assigned store's settings.
  * Either GPS or WiFi pass is sufficient (OR logic, matching Locations page description).
+ * Validation failure BLOCKS clock-in (throws error with descriptive message).
  */
+
+// GPS accuracy threshold in metres — positions less accurate than this are discarded
+const GPS_ACCURACY_THRESHOLD = 200
 
 // Haversine distance in metres
 function haversineMetres(lat1, lng1, lat2, lng2) {
@@ -19,32 +23,65 @@ function getGeoPosition() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('瀏覽器不支援 GPS 定位'))
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords
+        if (accuracy > GPS_ACCURACY_THRESHOLD) {
+          // GPS signal too weak — resolve with accuracy info so caller can decide
+          resolve({ lat: latitude, lng: longitude, accuracy, weak: true })
+        } else {
+          resolve({ lat: latitude, lng: longitude, accuracy, weak: false })
+        }
+      },
       (err) => reject(new Error(err.code === 1 ? 'GPS 定位被拒絕，請允許位置存取權限' : 'GPS 定位失敗，請確認裝置已開啟定位')),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )
   })
 }
 
-// Get public IP via free API
+// Get public IP with retry (up to 2 attempts, fallback to backup API)
 async function getPublicIP() {
-  try {
-    const res = await fetch('https://api.ipify.org?format=json')
-    const data = await res.json()
-    return data.ip
-  } catch {
-    return null
+  const apis = [
+    'https://api.ipify.org?format=json',
+    'https://api.seeip.org/jsonip',
+  ]
+  for (const url of apis) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) continue
+      const data = await res.json()
+      return data.ip
+    } catch {
+      // try next API
+    }
   }
+  return null
 }
 
 // Check if an IP matches a CIDR or exact IP entry
 function ipMatchesCIDR(ip, cidr) {
-  const ipToNum = (s) => s.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0
   const trimmed = cidr.trim()
+  if (!trimmed) return false
+  const ipToNum = (s) => {
+    const parts = s.split('.')
+    if (parts.length !== 4) return null
+    const num = parts.reduce((acc, oct) => {
+      const n = parseInt(oct, 10)
+      if (isNaN(n) || n < 0 || n > 255) return null
+      return acc !== null ? (acc << 8) + n : null
+    }, 0)
+    return num !== null ? num >>> 0 : null
+  }
+  const ipNum = ipToNum(ip)
+  if (ipNum === null) return false
+
   if (trimmed.includes('/')) {
-    const [network, bits] = trimmed.split('/')
-    const mask = ~((1 << (32 - parseInt(bits, 10))) - 1) >>> 0
-    return (ipToNum(ip) & mask) === (ipToNum(network) & mask)
+    const [network, bitsStr] = trimmed.split('/')
+    const bits = parseInt(bitsStr, 10)
+    if (isNaN(bits) || bits < 0 || bits > 32) return false
+    const netNum = ipToNum(network)
+    if (netNum === null) return false
+    const mask = bits === 0 ? 0 : ~((1 << (32 - bits)) - 1) >>> 0
+    return (ipNum & mask) === (netNum & mask)
   }
   return ip === trimmed
 }
@@ -53,13 +90,15 @@ function ipMatchesCIDR(ip, cidr) {
  * Main validation entry point.
  * @param {Object|null} store - The store record (with lat, lng, clock_radius, allowed_wifi)
  * @returns {Promise<{lat, lng, ip, method, locationName}>}
+ * @throws {Error} when validation is required but fails — caller should display error and block clock-in
  */
 export async function validateClockIn(store) {
   // Capture GPS + IP in parallel
-  const [geoResult, ip] = await Promise.allSettled([getGeoPosition(), getPublicIP()])
+  const [geoResult, ipResult] = await Promise.allSettled([getGeoPosition(), getPublicIP()])
 
   const geo = geoResult.status === 'fulfilled' ? geoResult.value : null
-  const publicIP = ip.status === 'fulfilled' ? ip.value : null
+  const geoError = geoResult.status === 'rejected' ? geoResult.reason.message : null
+  const publicIP = ipResult.status === 'fulfilled' ? ipResult.value : null
 
   // If no store configured, just record the data without validation
   if (!store) {
@@ -72,24 +111,8 @@ export async function validateClockIn(store) {
     }
   }
 
-  let gpsPass = false
-  let wifiPass = false
-
-  // GPS validation
-  if (geo && store.lat && store.lng) {
-    const dist = haversineMetres(geo.lat, geo.lng, store.lat, store.lng)
-    const radius = store.clock_radius || 150
-    gpsPass = dist <= radius
-  }
-
-  // WiFi IP validation
-  if (publicIP && store.allowed_wifi && store.allowed_wifi.length > 0) {
-    wifiPass = store.allowed_wifi.some((cidr) => ipMatchesCIDR(publicIP, cidr))
-  }
-
-  // Determine result
-  const hasGPSConfig = store.lat && store.lng
-  const hasWifiConfig = store.allowed_wifi && store.allowed_wifi.length > 0
+  const hasGPSConfig = !!(store.lat && store.lng)
+  const hasWifiConfig = !!(store.allowed_wifi && store.allowed_wifi.length > 0)
 
   // If store has neither configured, allow
   if (!hasGPSConfig && !hasWifiConfig) {
@@ -99,6 +122,39 @@ export async function validateClockIn(store) {
       ip: publicIP,
       method: 'none',
       locationName: store.name,
+    }
+  }
+
+  let gpsPass = false
+  let gpsDetail = ''
+  let wifiPass = false
+  let wifiDetail = ''
+
+  // GPS validation — skip if accuracy is too poor
+  if (hasGPSConfig) {
+    if (geo && !geo.weak) {
+      const dist = haversineMetres(geo.lat, geo.lng, store.lat, store.lng)
+      const radius = store.clock_radius || 150
+      gpsPass = dist <= radius
+      if (!gpsPass) {
+        gpsDetail = `GPS 距離 ${store.name} ${Math.round(dist)} 公尺（超出 ${radius}m 範圍）`
+      }
+    } else if (geo && geo.weak) {
+      gpsDetail = `GPS 精確度不足（${Math.round(geo.accuracy)}m），無法用於定位驗證`
+    } else {
+      gpsDetail = geoError || '無法取得 GPS 定位'
+    }
+  }
+
+  // WiFi IP validation
+  if (hasWifiConfig) {
+    if (publicIP) {
+      wifiPass = store.allowed_wifi.some((cidr) => ipMatchesCIDR(publicIP, cidr))
+      if (!wifiPass) {
+        wifiDetail = `網路 IP（${publicIP}）不在允許的 WiFi 白名單內`
+      }
+    } else {
+      wifiDetail = '無法取得網路 IP，請確認網路連線正常'
     }
   }
 
@@ -113,25 +169,13 @@ export async function validateClockIn(store) {
     }
   }
 
-  // Both failed — build descriptive error
+  // Both failed — throw to BLOCK clock-in
   const reasons = []
-  if (hasGPSConfig && geo) {
-    const dist = haversineMetres(geo.lat, geo.lng, store.lat, store.lng)
-    reasons.push(`GPS 距離 ${store.name} ${Math.round(dist)} 公尺（超出 ${store.clock_radius || 150}m 範圍）`)
-  } else if (hasGPSConfig && !geo) {
-    reasons.push('無法取得 GPS 定位')
-  }
-  if (hasWifiConfig) {
-    reasons.push(`WiFi IP ${publicIP || '未知'} 不在白名單內`)
-  }
+  if (gpsDetail) reasons.push(gpsDetail)
+  if (wifiDetail) reasons.push(wifiDetail)
 
-  // Still record but mark as external
-  return {
-    lat: geo?.lat || null,
-    lng: geo?.lng || null,
-    ip: publicIP,
-    method: 'failed',
-    locationName: '外部位置',
-    warning: `打卡位置驗證未通過：${reasons.join('；')}`,
-  }
+  const error = new Error(`打卡失敗：位置驗證未通過\n${reasons.join('\n')}`)
+  error.code = 'VALIDATION_FAILED'
+  error.detail = { lat: geo?.lat || null, lng: geo?.lng || null, ip: publicIP, reasons }
+  throw error
 }

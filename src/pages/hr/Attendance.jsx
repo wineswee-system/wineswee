@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Download, MapPin, Wifi, Clock } from 'lucide-react'
-import { getAttendance, upsertAttendance } from '../../lib/db'
+import { getAttendance, serverClockIn } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
@@ -56,50 +56,33 @@ export default function Attendance() {
     try {
       const emp = employees.find(e => e.name === employeeName)
       const store = stores.find(s => s.name === emp?.store)
+
+      // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
+
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const existing = records.find(r => r.employee === employeeName && r.date === dateStr)
+      const action = (existing?.clock_in && !existing?.clock_out) ? 'clock_out' : 'clock_in'
+
+      // Server-side validation + record write
+      const data = await serverClockIn({
+        employee: employeeName,
+        action,
+        lat: result.lat,
+        lng: result.lng,
+        accuracy: result.accuracy || null,
+        ip: result.ip,
+      })
 
       const now = new Date()
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      const dateStr = now.toISOString().slice(0, 10)
-      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
 
-      const existing = records.find(r => r.employee === employeeName && r.date === dateStr)
-
-      if (existing && existing.clock_in && !existing.clock_out) {
-        // Clock out
-        const hours = ((now.getTime() - new Date(`${dateStr}T${existing.clock_in}`).getTime()) / 3600000).toFixed(2)
-        const { data } = await upsertAttendance({
-          ...existing,
-          clock_out: timeStr,
-          hours: parseFloat(hours),
-          clock_out_lat: result.lat,
-          clock_out_lng: result.lng,
-          clock_out_ip: result.ip,
-        })
-        if (data) {
-          setRecords(prev => prev.map(r => r.id === data.id ? data : r))
-          setClockMsg({ type: 'success', text: `${employeeName} 下班打卡成功 (${timeStr})` })
-        }
-      } else if (!existing || !existing.clock_in) {
-        // Clock in
-        const payload = {
-          employee: employeeName,
-          date: dateStr,
-          clock_in: timeStr,
-          status: isLate ? '遲到' : '正常',
-          hours: 0,
-          clock_in_lat: result.lat,
-          clock_in_lng: result.lng,
-          clock_in_ip: result.ip,
-          clock_in_location: result.locationName || (result.method === 'gps' ? 'GPS 定位' : result.method === 'wifi' ? 'WiFi 驗證' : '未驗證'),
-        }
-        const { data } = await upsertAttendance(payload)
-        if (data) {
-          setRecords(prev => [...prev.filter(r => !(r.employee === employeeName && r.date === dateStr)), data])
-          setClockMsg({ type: 'success', text: `${employeeName} 上班打卡成功 (${timeStr}) — ${result.locationName || result.method}` })
-        }
+      if (action === 'clock_out') {
+        setRecords(prev => prev.map(r => r.id === data.record.id ? data.record : r))
+        setClockMsg({ type: 'success', text: `${employeeName} 下班打卡成功 (${timeStr})` })
       } else {
-        setClockMsg({ type: 'info', text: `${employeeName} 今日已完成打卡` })
+        setRecords(prev => [...prev.filter(r => !(r.employee === employeeName && r.date === dateStr)), data.record])
+        setClockMsg({ type: 'success', text: `${employeeName} 上班打卡成功 (${timeStr}) — ${data.locationName || data.method}` })
       }
     } catch (err) {
       setClockMsg({ type: 'error', text: err.message })

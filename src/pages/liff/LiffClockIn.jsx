@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Clock, MapPin, Wifi, CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { upsertAttendance } from '../../lib/db'
+import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
 
 /**
@@ -94,66 +94,52 @@ export default function LiffClockIn() {
     setClockingIn(true)
     setResult(null)
 
+    const action = (todayRecord?.clock_in && !todayRecord?.clock_out) ? 'clock_out' : 'clock_in'
+
     try {
+      // Step 1: Client-side validation (blocks UI if location check fails)
       const validation = await validateClockIn(store)
+
+      // Step 2: Call Edge Function for server-side validation + record write
+      const data = await serverClockIn({
+        employee: employee.name,
+        action,
+        lat: validation.lat,
+        lng: validation.lng,
+        accuracy: validation.accuracy || null,
+        ip: validation.ip,
+      })
+
+      // Success
+      setTodayRecord(data.record)
       const now = new Date()
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      const dateStr = now.toISOString().slice(0, 10)
-      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
 
-      if (todayRecord && todayRecord.clock_in && !todayRecord.clock_out) {
-        // Clock out
-        const hours = ((now.getTime() - new Date(`${dateStr}T${todayRecord.clock_in}`).getTime()) / 3600000).toFixed(2)
-        const { data } = await upsertAttendance({
-          ...todayRecord,
-          clock_out: timeStr,
-          hours: parseFloat(hours),
-          clock_out_lat: validation.lat,
-          clock_out_lng: validation.lng,
-          clock_out_ip: validation.ip,
+      if (action === 'clock_in') {
+        setResult({
+          success: true,
+          type: 'in',
+          time: timeStr,
+          location: data.locationName,
+          ip: data.ip,
+          late: now.getHours() >= 9 && now.getMinutes() > 0,
         })
-        if (data) {
-          setTodayRecord(data)
-          setResult({
-            success: true,
-            type: 'out',
-            time: timeStr,
-            location: validation.locationName,
-            ip: validation.ip,
-            warning: validation.warning,
-            hours: parseFloat(hours),
-          })
-        }
-      } else if (!todayRecord || !todayRecord.clock_in) {
-        // Clock in
-        const { data } = await upsertAttendance({
-          employee: employee.name,
-          date: dateStr,
-          clock_in: timeStr,
-          status: isLate ? '遲到' : '正常',
-          hours: 0,
-          clock_in_lat: validation.lat,
-          clock_in_lng: validation.lng,
-          clock_in_ip: validation.ip,
-          clock_in_location: validation.locationName || '未知',
-        })
-        if (data) {
-          setTodayRecord(data)
-          setResult({
-            success: true,
-            type: 'in',
-            time: timeStr,
-            location: validation.locationName,
-            ip: validation.ip,
-            warning: validation.warning,
-            late: isLate,
-          })
-        }
       } else {
-        setResult({ success: true, type: 'done' })
+        setResult({
+          success: true,
+          type: 'out',
+          time: timeStr,
+          location: data.locationName,
+          ip: data.ip,
+          hours: data.record?.hours,
+        })
       }
     } catch (err) {
-      setResult({ success: false, error: err.message })
+      // Client validation failed (thrown error) or network error
+      const msg = err.code === 'VALIDATION_FAILED'
+        ? err.message
+        : `打卡失敗：${err.message}`
+      setResult({ success: false, error: msg })
     }
     setClockingIn(false)
   }

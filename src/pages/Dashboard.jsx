@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw, BarChart3, PieChart } from 'lucide-react'
+import { Users, CheckCircle, AlertTriangle, TrendingUp, Target, ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck, DollarSign, CreditCard, ShoppingCart, Package, Sparkles, Bot, RefreshCw, BarChart3, PieChart, GitBranch } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { getEmployees, getTasks, getWorkflows, getAttendance, getLeaveRequests } from '../lib/db'
@@ -333,37 +333,139 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ════════ Row 5: Recent Tasks ════════ */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <SectionTitle>📋 最近任務</SectionTitle>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {tasks.length} 項</span>
-        </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead><tr><th>#</th><th>任務名稱</th><th>狀態</th><th>負責人</th><th>優先度</th></tr></thead>
-            <tbody>
-              {tasks.slice(0, 10).map(t => (
-                <tr key={t.id}>
-                  <td style={{ color: 'var(--text-muted)', width: 40 }}>{t.id}</td>
-                  <td style={{ fontWeight: 600 }}>{t.title}</td>
-                  <td>
-                    <span className={`badge ${t.status === '已完成' ? 'badge-success' : t.status === '進行中' ? 'badge-info' : 'badge-warning'}`}>
-                      <span className="badge-dot"></span>{t.status}
-                    </span>
-                  </td>
-                  <td>{t.assignee}</td>
-                  <td>
-                    <span className={`badge ${t.priority === '高' ? 'badge-danger' : t.priority === '中' ? 'badge-warning' : 'badge-info'}`}>
-                      {t.priority || '中'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* ════════ Row 5: Active Workflows ════════ */}
+      {(() => {
+        const activeWf = workflows.filter(w => w.status === '已啟用')
+        return (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionTitle><GitBranch size={16} style={{ color: C.cyan }} /> Active Workflows</SectionTitle>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {activeWf.length} 個流程</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>#</th><th>流程名稱</th><th>類別</th><th>步驟數</th><th>進行中</th><th>狀態</th></tr></thead>
+                <tbody>
+                  {activeWf.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>尚無已啟用流程</td></tr>
+                  ) : activeWf.map(w => (
+                    <tr key={w.id}>
+                      <td style={{ color: 'var(--text-muted)', width: 40 }}>{w.id}</td>
+                      <td style={{ fontWeight: 600 }}>{w.name}</td>
+                      <td><span className="badge badge-info">{w.category || '一般'}</span></td>
+                      <td>{w.steps}</td>
+                      <td style={{ fontWeight: 600, color: (w.active_instances || 0) > 0 ? C.cyan : 'var(--text-muted)' }}>{w.active_instances || 0}</td>
+                      <td>
+                        <span className={`badge ${(w.active_instances || 0) > 0 ? 'badge-warning' : 'badge-success'}`}>
+                          <span className="badge-dot"></span>{(w.active_instances || 0) > 0 ? '執行中' : '閒置'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ════════ Row 6: 流程完成度 ════════ */}
+      {(() => {
+        const activeFlows = workflows.filter(w => w.status === '已啟用' && (w.active_instances || 0) > 0)
+        const allEnabled = workflows.filter(w => w.status === '已啟用')
+        const colors = [C.cyan, C.blue, C.purple, C.green, C.orange, C.pink, C.yellow, C.red]
+        const overallDone = allEnabled.filter(w => (w.active_instances || 0) === 0).length
+        const overallPct = allEnabled.length ? Math.round(overallDone / allEnabled.length * 100) : 0
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {/* Horizontal bar chart */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <SectionTitle><GitBranch size={16} style={{ color: C.cyan }} /> 流程完成度</SectionTitle>
+              {allEnabled.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: 32 }}>尚無已啟用流程</div>
+              ) : (
+                <div style={{ height: 280 }}>
+                  <Bar
+                    data={{
+                      labels: allEnabled.map(w => w.name.length > 10 ? w.name.slice(0, 10) + '…' : w.name),
+                      datasets: [
+                        {
+                          label: '進行中實例',
+                          data: allEnabled.map(w => w.active_instances || 0),
+                          backgroundColor: allEnabled.map((_, i) => `${colors[i % colors.length]}cc`),
+                          borderRadius: 6,
+                          barThickness: 22,
+                        },
+                        {
+                          label: '總步驟數',
+                          data: allEnabled.map(w => w.steps || 0),
+                          backgroundColor: allEnabled.map(() => 'rgba(148,163,184,0.15)'),
+                          borderRadius: 6,
+                          barThickness: 22,
+                        },
+                      ],
+                    }}
+                    options={{
+                      ...chartOpts,
+                      indexAxis: 'y',
+                      scales: {
+                        x: { beginAtZero: true, grid, ticks: { ...tick, stepSize: 1 } },
+                        y: { grid: { display: false }, ticks: { ...tick, font: { size: 11, weight: 600 } } },
+                      },
+                      plugins: {
+                        ...chartOpts.plugins,
+                        legend: { ...chartOpts.plugins.legend, position: 'bottom' },
+                      },
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Per-flow progress list */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <SectionTitle><BarChart3 size={16} style={{ color: C.purple }} /> 各流程狀態</SectionTitle>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>整體完成 {overallPct}%</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 300, overflowY: 'auto' }}>
+                {allEnabled.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: 32 }}>尚無已啟用流程</div>
+                ) : allEnabled.map((w, i) => {
+                  const pct = w.steps > 0 ? Math.round(Math.max(0, w.steps - (w.active_instances || 0)) / w.steps * 100) : 100
+                  const color = colors[i % colors.length]
+                  return (
+                    <div key={w.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {(w.active_instances || 0) > 0 && (
+                            <span className="badge badge-info" style={{ fontSize: 10 }}>
+                              <span className="badge-dot"></span>{w.active_instances} 進行中
+                            </span>
+                          )}
+                          <span style={{ fontSize: 12, fontWeight: 700, color }}>{pct}%</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--glass-strong)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${pct}%`, borderRadius: 99,
+                          background: `linear-gradient(90deg, ${color}, ${color}88)`,
+                          transition: 'width 1s ease',
+                        }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )

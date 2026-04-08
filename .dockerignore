@@ -1,0 +1,11 @@
+.git
+.gitignore
+.vercel
+node_modules
+dist
+test-results
+coverage
+build
+.env.local
+.env.*.local
+README.md

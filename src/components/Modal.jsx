@@ -39,17 +39,19 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-medium)',
           borderRadius: 16,
-          width: '100%', maxWidth: 480,
+          width: '100%', maxWidth: 560,
+          maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column',
           boxShadow: 'var(--shadow-xl)',
           animation: 'fadeIn 0.15s ease',
         }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
           {children}
         </div>
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

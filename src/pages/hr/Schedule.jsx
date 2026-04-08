@@ -5,15 +5,23 @@ import { validateSchedule, LABOR_STANDARDS, GENDER_EQUALITY, OCCUPATIONAL_SAFETY
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal from '../../components/Modal'
 
-const SHIFT_TYPES = [
-  { label: '08-17', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)' },
-  { label: '09-18', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
-  { label: '10-19', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
-  { label: '11-20', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
-  { label: '12-21', color: 'var(--accent-pink)', dim: 'var(--accent-pink-dim)' },
-  { label: '輪值', color: 'var(--accent-yellow)', dim: 'var(--accent-yellow-dim)' },
-  { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' },
-]
+// Fallback shift types (used if DB hasn't loaded yet)
+const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
+
+function hexToDim(hex) {
+  return hex + '20'
+}
+
+function buildShiftTypes(dbShifts) {
+  const fromDB = dbShifts.map(s => ({
+    label: s.name,
+    color: s.color || 'var(--accent-cyan)',
+    dim: hexToDim(s.color || '#22d3ee'),
+    start_time: s.start_time?.slice(0, 5),
+    end_time: s.end_time?.slice(0, 5),
+  }))
+  return [...fromDB, REST_SHIFT]
+}
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -40,6 +48,9 @@ export default function Schedule() {
   const [storeFilter, setStoreFilter] = useState('')
   const [editCell, setEditCell] = useState(null)
   const [offRequests, setOffRequests] = useState([])
+  const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
+  const [shiftDefs, setShiftDefs] = useState([])
+  const [SHIFT_TYPES, setShiftTypes] = useState([REST_SHIFT])
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [minStaff, setMinStaff] = useState(3)
   const [showLawModal, setShowLawModal] = useState(false)
@@ -55,10 +66,16 @@ export default function Schedule() {
       supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([e, d, l]) => {
+      supabase.from('shift_definitions').select('*').order('sort_order'),
+      supabase.from('holidays').select('date'),
+    ]).then(([e, d, l, sd, hd]) => {
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setLocations(l.data || [])
+      const defs = sd.data || []
+      setShiftDefs(defs)
+      setShiftTypes(buildShiftTypes(defs))
+      setHolidays((hd.data || []).map(h => h.date))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -107,7 +124,8 @@ export default function Schedule() {
   const getOffRequest = (empName, date) => offRequests.find(o => o.employee === empName && o.date === date)
 
   // AI Auto-Schedule
-  const WORK_SHIFTS = SHIFT_TYPES.filter(t => t.label !== '休' && t.label !== '輪值').map(t => t.label)
+  const WORK_SHIFTS = SHIFT_TYPES.filter(t => t.label !== '休').map(t => t.label)
+  const holidaySet = new Set(holidays)
 
   const handleAutoSchedule = async () => {
     if (!confirm(`將為 ${filtered.length} 位員工自動排班（${weekStart} ~ ${weekEnd}）\n已有的排班會保留，空白格子才會填入。\n每天最少 ${minStaff} 人上班。`)) return
@@ -154,8 +172,8 @@ export default function Schedule() {
         const key = `${name}_${date}`
         if (existing[key]) continue // already scheduled
 
-        // Check if employee requested off
-        if (offMap[key]) {
+        // Check if employee requested off or is a holiday
+        if (offMap[key] || holidaySet.has(date)) {
           newSchedules.push({ employee: name, date, shift: '休' })
           restCount[name]++
           existing[key] = '休'
@@ -399,12 +417,17 @@ export default function Schedule() {
             <thead>
               <tr>
                 <th style={{ minWidth: 100 }}>員工</th>
-                {weekDates.map((date, i) => (
-                  <th key={date} style={{ textAlign: 'center', minWidth: 80 }}>
-                    <div>週{DAY_LABELS[i]}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>{date.slice(5)}</div>
-                  </th>
-                ))}
+                {weekDates.map((date, i) => {
+                  const isHoliday = holidaySet.has(date)
+                  return (
+                    <th key={date} style={{ textAlign: 'center', minWidth: 80, background: isHoliday ? 'var(--accent-red-dim)' : undefined }}>
+                      <div>週{DAY_LABELS[i]}</div>
+                      <div style={{ fontSize: 11, color: isHoliday ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: isHoliday ? 600 : 400 }}>
+                        {date.slice(5)}{isHoliday ? ' 🎌' : ''}
+                      </div>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>

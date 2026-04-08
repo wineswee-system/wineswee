@@ -54,7 +54,7 @@ export default function Schedule() {
     Promise.all([
       supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-      supabase.from('locations').select('*').order('name'),
+      supabase.from('stores').select('*').order('name'),
     ]).then(([e, d, l]) => {
       setEmployees(e.data || [])
       setDepartments(d.data || [])
@@ -353,6 +353,35 @@ export default function Schedule() {
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)' }}>排班符合勞基法規定</span>
         </div>
       )}
+
+      {/* Stats */}
+      {schedules.length > 0 && (() => {
+        const weekWork = filtered.map(e => weekDates.filter(d => { const s = getShift(e.name, d); return s && s !== '休' }).length)
+        const totalHours = weekWork.reduce((s, d) => s + d * 8, 0)
+        const avgHours = filtered.length ? (totalHours / filtered.length).toFixed(1) : 0
+        const restDays = filtered.map(e => weekDates.filter(d => getShift(e.name, d) === '休').length)
+        const overwork = weekWork.filter(d => d > 6).length
+        return (
+          <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
+              <div className="stat-card-label">本週總排班時數</div>
+              <div className="stat-card-value">{totalHours}h</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+              <div className="stat-card-label">人均週時數</div>
+              <div className="stat-card-value">{avgHours}h</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
+              <div className="stat-card-label">平均休假天數</div>
+              <div className="stat-card-value">{filtered.length ? (restDays.reduce((a, b) => a + b, 0) / filtered.length).toFixed(1) : 0}</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': overwork > 0 ? 'var(--accent-red)' : 'var(--accent-green)', '--card-accent-dim': overwork > 0 ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
+              <div className="stat-card-label">超時排班人數</div>
+              <div className="stat-card-value">{overwork}</div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>

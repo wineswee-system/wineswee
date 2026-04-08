@@ -195,6 +195,12 @@ export const getStores = () =>
 export const createStore = (data) =>
   supabase.from('stores').insert(data).select().single()
 
+export const updateStore = (id, data) =>
+  supabase.from('stores').update(data).eq('id', id).select().single()
+
+export const deleteStore = (id) =>
+  supabase.from('stores').delete().eq('id', id)
+
 export const getDepartments = () =>
   supabase.from('departments').select('*').order('id')
 

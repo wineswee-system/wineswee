@@ -202,20 +202,38 @@ export default function Schedule() {
           const prevDate = dayIndex > 0 ? weekDates[dayIndex - 1] : null
           const prevShift = prevDate ? existing[`${name}_${prevDate}`] : null
           const prevDef = prevShift && prevShift !== '休' ? shiftDefs.find(d => d.name === prevShift) : null
-          const prevEndH = prevDef ? parseInt(prevDef.end_time) || 0 : 0
 
-          // Find a valid shift with ≥ 11h gap from previous shift end
+          // Calculate when previous shift actually ends
+          // Night shift (e.g., 22:00-06:00): ends next morning, so effective end = 06:00 on CURRENT day
+          let prevEndEffective = null
+          if (prevDef) {
+            const prevStartH = parseInt(prevDef.start_time) || 0
+            const prevEndH = parseInt(prevDef.end_time) || 0
+            const crossesMidnight = prevEndH < prevStartH // e.g., 22-06
+            // If crosses midnight, prev shift ends at prevEndH on CURRENT day (morning)
+            // Gap = candidate start on current day - prevEndH on current day
+            prevEndEffective = crossesMidnight ? prevEndH : null // null means normal shift, use 24-based calc
+          }
+
+          // Find a valid shift with ≥ 11h gap
           let assigned = false
           const startIdx = (empNames.indexOf(name) + dayIndex) % WORK_SHIFTS.length
           for (let attempt = 0; attempt < WORK_SHIFTS.length; attempt++) {
             const candidateName = WORK_SHIFTS[(startIdx + attempt) % WORK_SHIFTS.length]
             const candidateDef = shiftDefs.find(d => d.name === candidateName)
-            const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 0 : 9
+            const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 9 : 9
 
             if (prevDef) {
-              // Check interval: previous end → next start (next day)
-              const gap = candidateStartH + (24 - prevEndH)
-              if (gap < 11 && prevEndH > candidateStartH) continue // skip if gap too short
+              let gap
+              if (prevEndEffective !== null) {
+                // Previous was a night shift ending in the morning of current day
+                gap = candidateStartH - prevEndEffective
+              } else {
+                // Normal shift: ended yesterday, gap = candidate start + (24 - prevEnd)
+                const prevEndH = parseInt(prevDef.end_time) || 0
+                gap = candidateStartH + (24 - prevEndH)
+              }
+              if (gap < 11) continue // skip — interval too short
             }
 
             newSchedules.push({ employee: name, date, shift: candidateName })
@@ -224,12 +242,11 @@ export default function Schedule() {
             assigned = true
             break
           }
-          // Fallback: if no valid shift found, assign first available
+          // Fallback: if no valid shift, force rest (better than violating labor law)
           if (!assigned) {
-            const shift = WORK_SHIFTS[startIdx % WORK_SHIFTS.length]
-            newSchedules.push({ employee: name, date, shift })
-            workingCount++
-            existing[key] = shift
+            newSchedules.push({ employee: name, date, shift: '休' })
+            restCount[name]++
+            existing[key] = '休'
           }
         }
       }

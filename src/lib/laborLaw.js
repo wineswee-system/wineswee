@@ -311,17 +311,22 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
         const prevTime = shiftTimeMap[prev.shift]
         const currTime = shiftTimeMap[curr.shift]
 
-        if (!prevTime || !currTime) continue // 無法解析就跳過，不再顯示警告
+        if (!prevTime || !currTime) continue
 
+        const prevStart = prevTime.start
         const prevEnd = prevTime.end
         const currStart = currTime.start
+        const prevCrossesMidnight = prevEnd < prevStart // e.g., 22:00-06:00
 
-        // Calculate gap, handling midnight-crossing shifts
+        // Calculate actual gap
         let gap
-        if (prevEnd > currStart) {
-          gap = currStart + (24 - prevEnd)
-        } else {
+        if (prevCrossesMidnight) {
+          // Night shift ends in the morning of the NEXT day (which is curr's day)
+          // Gap = curr start - prev end (both on the same calendar day)
           gap = currStart - prevEnd
+        } else {
+          // Normal shift: ended yesterday
+          gap = currStart + (24 - prevEnd)
         }
 
         if (gap < 11) {

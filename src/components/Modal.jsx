@@ -5,27 +5,24 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
   const modalRef = useRef(null)
   const previousFocusRef = useRef(null)
 
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     previousFocusRef.current = document.activeElement
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', handleKeyDown)
 
-    // Focus the first focusable element inside the modal
-    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    const firstFocusable = modalRef.current?.querySelector(focusableSelector)
-    if (firstFocusable) firstFocusable.focus()
-
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      // Restore focus to the previously focused element
       if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
         previousFocusRef.current.focus()
       }
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div style={{

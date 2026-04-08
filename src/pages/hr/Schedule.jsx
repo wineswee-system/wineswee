@@ -421,16 +421,18 @@ export default function Schedule() {
         <button onClick={() => setWeekOffset(0)} style={{ ...btnStyle(weekOffset === 0), marginLeft: 4 }}>本週</button>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: '28px' }}>門市</span>
-        <button style={btnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部</button>
-        {locations.map(l => <button key={l.id} style={btnStyle(storeFilter === l.name)} onClick={() => setStoreFilter(l.name)}>{l.name}</button>)}
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: '28px' }}>部門</span>
-        <button style={btnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部</button>
-        {departments.map(d => <button key={d.id} style={btnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>)}
+      {/* Compact filters — use dropdowns instead of button lists */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>部門</span>
+          <select className="form-input" style={{ width: 160, padding: '6px 10px', fontSize: 13 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+            <option value="">全部部門</option>
+            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          篩選結果：{filtered.length} 人
+        </div>
       </div>
 
       {/* Compliance Alerts */}

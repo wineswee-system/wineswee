@@ -110,7 +110,7 @@ export default function SOPTemplates() {
   useEffect(() => {
     Promise.all([
       supabase.from('sop_templates').select('*').order('id'),
-      supabase.from('locations').select('*').order('name'),
+      supabase.from('stores').select('*').order('name'),
       supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(async ([t, l, e, d]) => {

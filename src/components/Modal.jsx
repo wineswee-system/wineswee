@@ -32,7 +32,7 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
       position: 'fixed', inset: 0, zIndex: 1000,
       background: 'var(--bg-modal-overlay)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
+    }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         ref={modalRef}
         role="dialog"
@@ -45,7 +45,7 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           width: '100%', maxWidth: 480,
           boxShadow: 'var(--shadow-xl)',
           animation: 'fadeIn 0.15s ease',
-        }} onClick={e => e.stopPropagation()}>
+        }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>

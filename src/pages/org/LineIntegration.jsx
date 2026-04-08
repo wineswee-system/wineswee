@@ -14,7 +14,7 @@ export default function LineIntegration() {
   useEffect(() => {
     Promise.all([
       supabase.from('line_users').select('*').order('last_active', { ascending: false }),
-      supabase.from('employees').select('id, name, department, position, status, line_user_id').order('name'),
+      supabase.from('employees').select('id, name, dept, position, status, line_user_id').order('name'),
     ]).then(([l, e]) => {
       setLineUsers(l.data || [])
       setEmployees(e.data || [])
@@ -44,7 +44,7 @@ export default function LineIntegration() {
       // Refresh
       const [l, e] = await Promise.all([
         supabase.from('line_users').select('*').order('last_active', { ascending: false }),
-        supabase.from('employees').select('id, name, department, position, status, line_user_id').order('name'),
+        supabase.from('employees').select('id, name, dept, position, status, line_user_id').order('name'),
       ])
       setLineUsers(l.data || [])
       setEmployees(e.data || [])
@@ -163,7 +163,7 @@ export default function LineIntegration() {
                             <option value="">— 未對應 —</option>
                             {employees.filter(e => e.status === '在職').map(e => (
                               <option key={e.id} value={e.name}>
-                                {e.name}（{e.department} · {e.position}）
+                                {e.name}（{e.dept} · {e.position}）
                               </option>
                             ))}
                           </select>

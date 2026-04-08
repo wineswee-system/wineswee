@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, Calendar, DollarSign, GitBranch, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { upsertAttendance } from '../../lib/db'
+import { validateClockIn } from '../../lib/clockInValidator'
 
 const QUICK_ACTIONS = [
-  { icon: Clock, label: '打卡', desc: '上下班打卡', path: '/hr/attendance', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)' },
   { icon: Calendar, label: '請假', desc: '假單申請', path: '/hr/leave', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
   { icon: DollarSign, label: '薪資', desc: '查看薪資單', path: '/hr/salary', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
   { icon: GitBranch, label: '流程', desc: '任務回報', path: '/process/tasks', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
+  { icon: Calendar, label: '出勤', desc: '出勤紀錄', path: '/hr/attendance', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
 ]
 
 export default function PortalHome() {
@@ -16,6 +18,9 @@ export default function PortalHome() {
   const [todayAttendance, setTodayAttendance] = useState(null)
   const [pendingTasks, setPendingTasks] = useState(0)
   const [recentLeaves, setRecentLeaves] = useState([])
+  const [store, setStore] = useState(null)
+  const [clockingIn, setClockingIn] = useState(false)
+  const [clockMsg, setClockMsg] = useState(null)
 
   const today = new Date().toISOString().slice(0, 10)
   const hour = new Date().getHours()
@@ -35,7 +40,73 @@ export default function PortalHome() {
     supabase.from('leave_requests').select('*')
       .eq('employee', profile.name).order('id', { ascending: false }).limit(5)
       .then(({ data }) => setRecentLeaves(data || []))
+
+    // Load employee's store for clock-in validation
+    supabase.from('employees').select('store').eq('name', profile.name).maybeSingle()
+      .then(({ data }) => {
+        if (data?.store) {
+          supabase.from('stores').select('*').eq('name', data.store).maybeSingle()
+            .then(({ data: s }) => setStore(s))
+        }
+      })
   }, [profile])
+
+  const handleClock = async () => {
+    if (!profile?.name) return
+    setClockingIn(true)
+    setClockMsg(null)
+    try {
+      const result = await validateClockIn(store)
+
+      if (result.warning) {
+        setClockMsg({ type: 'warning', text: result.warning })
+      }
+
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const dateStr = now.toISOString().slice(0, 10)
+      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
+
+      if (todayAttendance && todayAttendance.clock_in && !todayAttendance.clock_out) {
+        // Clock out
+        const hours = ((now.getTime() - new Date(`${dateStr}T${todayAttendance.clock_in}`).getTime()) / 3600000).toFixed(2)
+        const { data } = await upsertAttendance({
+          ...todayAttendance,
+          clock_out: timeStr,
+          hours: parseFloat(hours),
+          clock_out_lat: result.lat,
+          clock_out_lng: result.lng,
+          clock_out_ip: result.ip,
+        })
+        if (data) {
+          setTodayAttendance(data)
+          setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}` })
+        }
+      } else if (!todayAttendance || !todayAttendance.clock_in) {
+        // Clock in
+        const { data } = await upsertAttendance({
+          employee: profile.name,
+          date: dateStr,
+          clock_in: timeStr,
+          status: isLate ? '遲到' : '正常',
+          hours: 0,
+          clock_in_lat: result.lat,
+          clock_in_lng: result.lng,
+          clock_in_ip: result.ip,
+          clock_in_location: result.locationName || '未知',
+        })
+        if (data) {
+          setTodayAttendance(data)
+          setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${result.locationName || ''}` })
+        }
+      } else {
+        setClockMsg({ type: 'info', text: '今日已完成打卡' })
+      }
+    } catch (err) {
+      setClockMsg({ type: 'error', text: err.message })
+    }
+    setClockingIn(false)
+  }
 
   const clockStatus = todayAttendance
     ? todayAttendance.clock_out ? '已下班' : '已上班'
@@ -43,6 +114,9 @@ export default function PortalHome() {
   const clockColor = todayAttendance
     ? todayAttendance.clock_out ? 'var(--accent-green)' : 'var(--accent-cyan)'
     : 'var(--accent-orange)'
+  const clockAction = todayAttendance
+    ? todayAttendance.clock_out ? null : '下班打卡'
+    : '上班打卡'
 
   return (
     <div className="fade-in">
@@ -60,24 +134,75 @@ export default function PortalHome() {
         </p>
       </div>
 
-      {/* Status Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-          borderRadius: 14, padding: '18px 20px',
-        }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>今日出勤</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: clockColor }} />
-            <span style={{ fontSize: 15, fontWeight: 700, color: clockColor }}>{clockStatus}</span>
-          </div>
-          {todayAttendance?.clock_in && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              {todayAttendance.clock_in}{todayAttendance.clock_out ? ` → ${todayAttendance.clock_out}` : ''}
+      {/* Clock-in Card */}
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+        borderRadius: 16, padding: '24px 28px', marginBottom: 24,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+              <Clock size={16} style={{ verticalAlign: -3, marginRight: 6 }} /> 今日打卡
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: clockColor }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: clockColor }}>{clockStatus}</span>
+              {todayAttendance?.clock_in && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {todayAttendance.clock_in}{todayAttendance.clock_out ? ` → ${todayAttendance.clock_out}` : ''}
+                </span>
+              )}
+            </div>
+            {todayAttendance?.clock_in_location && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <MapPin size={10} /> {todayAttendance.clock_in_location}
+                {todayAttendance.clock_in_ip && (
+                  <span style={{ marginLeft: 8 }}><Wifi size={10} /> {todayAttendance.clock_in_ip}</span>
+                )}
+              </div>
+            )}
+          </div>
+          {clockAction && (
+            <button
+              onClick={handleClock}
+              disabled={clockingIn}
+              style={{
+                padding: '12px 28px', borderRadius: 12, border: 'none',
+                background: clockAction === '下班打卡'
+                  ? 'linear-gradient(135deg, var(--accent-orange), #f59e0b)'
+                  : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
+                color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
+                boxShadow: '0 4px 14px rgba(34,211,238,0.3)',
+              }}
+            >
+              {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}
+              {clockingIn ? '定位中...' : clockAction}
+            </button>
           )}
         </div>
 
+        {/* Clock message */}
+        {clockMsg && (
+          <div style={{
+            padding: '8px 14px', borderRadius: 8, fontSize: 12,
+            background: clockMsg.type === 'success' ? 'var(--accent-green-dim)'
+              : clockMsg.type === 'error' ? 'var(--accent-red-dim)'
+              : clockMsg.type === 'warning' ? 'var(--accent-orange-dim)'
+              : 'var(--accent-cyan-dim)',
+            color: clockMsg.type === 'success' ? 'var(--accent-green)'
+              : clockMsg.type === 'error' ? 'var(--accent-red)'
+              : clockMsg.type === 'warning' ? 'var(--accent-orange)'
+              : 'var(--accent-cyan)',
+          }}>
+            {clockMsg.text}
+          </div>
+        )}
+      </div>
+
+      {/* Status Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
         <div style={{
           background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
           borderRadius: 14, padding: '18px 20px',

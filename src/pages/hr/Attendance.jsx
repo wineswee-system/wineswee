@@ -1,28 +1,34 @@
 import { useState, useEffect } from 'react'
-import { Search, Download } from 'lucide-react'
-import { getAttendance } from '../../lib/db'
+import { Search, Download, MapPin, Wifi, Clock } from 'lucide-react'
+import { getAttendance, upsertAttendance } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { exportAttendancePdf } from '../../lib/exportPdf'
+import { validateClockIn } from '../../lib/clockInValidator'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 export default function Attendance() {
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
+  const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [clockingIn, setClockingIn] = useState(false)
+  const [clockMsg, setClockMsg] = useState(null)
 
   useEffect(() => {
     Promise.all([
       getAttendance(),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department, position, store').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([r, e, d]) => {
+      supabase.from('stores').select('*'),
+    ]).then(([r, e, d, s]) => {
       setRecords(r.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
+      setStores(s.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -44,6 +50,63 @@ export default function Attendance() {
   const avgHours = filtered.filter(r => r.hours > 0).reduce((s, r) => s + Number(r.hours), 0) /
     (filtered.filter(r => r.hours > 0).length || 1)
 
+  const handleClockIn = async (employeeName) => {
+    setClockingIn(true)
+    setClockMsg(null)
+    try {
+      const emp = employees.find(e => e.name === employeeName)
+      const store = stores.find(s => s.name === emp?.store)
+      const result = await validateClockIn(store)
+
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const dateStr = now.toISOString().slice(0, 10)
+      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
+
+      const existing = records.find(r => r.employee === employeeName && r.date === dateStr)
+
+      if (existing && existing.clock_in && !existing.clock_out) {
+        // Clock out
+        const hours = ((now.getTime() - new Date(`${dateStr}T${existing.clock_in}`).getTime()) / 3600000).toFixed(2)
+        const { data } = await upsertAttendance({
+          ...existing,
+          clock_out: timeStr,
+          hours: parseFloat(hours),
+          clock_out_lat: result.lat,
+          clock_out_lng: result.lng,
+          clock_out_ip: result.ip,
+        })
+        if (data) {
+          setRecords(prev => prev.map(r => r.id === data.id ? data : r))
+          setClockMsg({ type: 'success', text: `${employeeName} 下班打卡成功 (${timeStr})` })
+        }
+      } else if (!existing || !existing.clock_in) {
+        // Clock in
+        const payload = {
+          employee: employeeName,
+          date: dateStr,
+          clock_in: timeStr,
+          status: isLate ? '遲到' : '正常',
+          hours: 0,
+          clock_in_lat: result.lat,
+          clock_in_lng: result.lng,
+          clock_in_ip: result.ip,
+          clock_in_location: result.locationName || (result.method === 'gps' ? 'GPS 定位' : result.method === 'wifi' ? 'WiFi 驗證' : '未驗證'),
+        }
+        const { data } = await upsertAttendance(payload)
+        if (data) {
+          setRecords(prev => [...prev.filter(r => !(r.employee === employeeName && r.date === dateStr)), data])
+          setClockMsg({ type: 'success', text: `${employeeName} 上班打卡成功 (${timeStr}) — ${result.locationName || result.method}` })
+        }
+      } else {
+        setClockMsg({ type: 'info', text: `${employeeName} 今日已完成打卡` })
+      }
+    } catch (err) {
+      setClockMsg({ type: 'error', text: err.message })
+    }
+    setClockingIn(false)
+  }
+
   const deptBtnStyle = (active) => ({
     padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
     background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
@@ -51,17 +114,41 @@ export default function Attendance() {
     cursor: 'pointer', fontSize: 12, fontWeight: 500
   })
 
+  const locationBadge = (r) => {
+    if (!r.clock_in_location) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span>
+    const isExternal = r.clock_in_location === '外部位置'
+    return (
+      <span className={`badge ${isExternal ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: 11 }}>
+        <MapPin size={10} style={{ marginRight: 3 }} />
+        {r.clock_in_location}
+      </span>
+    )
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">⏰</span> 打卡追蹤</h2>
-            <p>員工每日出缺勤即時追蹤</p>
+            <p>員工每日出缺勤即時追蹤（含 GPS 地點 / WiFi IP 驗證）</p>
           </div>
           <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter })}><Download size={14} /> 匯出 PDF</button>
         </div>
       </div>
+
+      {/* Clock-in message */}
+      {clockMsg && (
+        <div style={{
+          padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13,
+          background: clockMsg.type === 'success' ? 'var(--accent-green-dim)' : clockMsg.type === 'error' ? 'var(--accent-red-dim)' : 'var(--accent-cyan-dim)',
+          color: clockMsg.type === 'success' ? 'var(--accent-green)' : clockMsg.type === 'error' ? 'var(--accent-red)' : 'var(--accent-cyan)',
+          border: `1px solid ${clockMsg.type === 'success' ? 'var(--accent-green)' : clockMsg.type === 'error' ? 'var(--accent-red)' : 'var(--accent-cyan)'}`,
+        }}>
+          {clockMsg.text}
+          <button onClick={() => setClockMsg(null)} style={{ float: 'right', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 700 }}>×</button>
+        </div>
+      )}
 
       {/* 部門篩選 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -102,25 +189,79 @@ export default function Attendance() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>員工</th><th>部門</th><th>日期</th><th>上班打卡</th><th>下班打卡</th><th>工時</th><th>狀態</th></tr>
+              <tr>
+                <th>員工</th><th>部門</th><th>日期</th><th>上班打卡</th><th>下班打卡</th>
+                <th>工時</th><th>打卡地點</th><th>IP 位址</th><th>狀態</th><th>操作</th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無出勤紀錄</td></tr>}
-              {filtered.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.employee}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
-                  <td>{r.date}</td>
-                  <td>{r.clock_in || '-'}</td>
-                  <td>{r.clock_out || '-'}</td>
-                  <td>{r.hours > 0 ? `${r.hours}h` : '-'}</td>
-                  <td>
-                    <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : 'badge-danger'}`}>
-                      <span className="badge-dot"></span>{r.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無出勤紀錄</td></tr>}
+              {filtered.map(r => {
+                const today = new Date().toISOString().slice(0, 10)
+                const isToday = r.date === today
+                const canClockOut = isToday && r.clock_in && !r.clock_out
+                const canClockIn = isToday && !r.clock_in
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 600 }}>{r.employee}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
+                    <td>{r.date}</td>
+                    <td>{r.clock_in || '-'}</td>
+                    <td>{r.clock_out || '-'}</td>
+                    <td>{r.hours > 0 ? `${r.hours}h` : '-'}</td>
+                    <td>{locationBadge(r)}</td>
+                    <td style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {r.clock_in_ip ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Wifi size={10} /> {r.clock_in_ip}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td>
+                      <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : 'badge-danger'}`}>
+                        <span className="badge-dot"></span>{r.status}
+                      </span>
+                    </td>
+                    <td>
+                      {(canClockIn || canClockOut) && (
+                        <button
+                          className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`}
+                          style={{ fontSize: 11, padding: '3px 10px' }}
+                          disabled={clockingIn}
+                          onClick={() => handleClockIn(r.employee)}
+                        >
+                          <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+              {/* Quick clock-in for employees not yet in today's records */}
+              {(() => {
+                const today = new Date().toISOString().slice(0, 10)
+                const todayEmployees = records.filter(r => r.date === today).map(r => r.employee)
+                const notClocked = employees.filter(e =>
+                  !todayEmployees.includes(e.name) &&
+                  (deptFilter === '' || e.department === deptFilter) &&
+                  (search === '' || e.name.includes(search))
+                )
+                return notClocked.map(e => (
+                  <tr key={`new-${e.id}`} style={{ opacity: 0.7 }}>
+                    <td style={{ fontWeight: 600 }}>{e.name}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.department || '-'}</td>
+                    <td>{today}</td>
+                    <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+                    <td><span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span></td>
+                    <td>
+                      <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}
+                        disabled={clockingIn} onClick={() => handleClockIn(e.name)}>
+                        <Clock size={10} /> 上班打卡
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              })()}
             </tbody>
           </table>
         </div>

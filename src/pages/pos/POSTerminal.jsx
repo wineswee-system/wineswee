@@ -168,7 +168,7 @@ export default function POSTerminal() {
       // 3. Create POS transaction record
       await createPOSTransaction({
         transaction_number: txnNum,
-        store: '台北總部',
+        store: '威士威企業總部',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
         subtotal, discount, tax, total,
@@ -208,7 +208,7 @@ export default function POSTerminal() {
 
       // Build receipt data
       const receipt = {
-        storeName: '台北總部',
+        storeName: '威士威企業總部',
         txnNum,
         invoiceNum,
         paymentId: payResult.paymentId,
@@ -316,7 +316,7 @@ export default function POSTerminal() {
   }
 
   const receiptPrintOptions = {
-    companyName: '台北總部',
+    companyName: '威士威企業總部',
     companyTaxId: '12345678',
     cashierName: '系統',
   }

@@ -7,12 +7,12 @@ const DEPTS = ['研發部', '行銷部', '業務部', '人資部', '財務部', 
 const roleColor = { '超級管理員': 'badge-danger', 'HR 管理員': 'badge-purple', '主管': 'badge-info', '一般用戶': 'badge-neutral' }
 
 const initialUsers = [
-  { id: 1, name: '劉佳玲', email: 'jialing@company.com', role: '超級管理員', dept: '財務部', lastLogin: '2026-03-27 09:30', status: '啟用' },
-  { id: 2, name: '張雅婷', email: 'yating@company.com', role: 'HR 管理員', dept: '人資部', lastLogin: '2026-03-27 08:55', status: '啟用' },
-  { id: 3, name: '王小明', email: 'xiaoming@company.com', role: '一般用戶', dept: '研發部', lastLogin: '2026-03-26 18:10', status: '啟用' },
-  { id: 4, name: '陳大偉', email: 'dawei@company.com', role: '主管', dept: '業務部', lastLogin: '2026-03-27 10:15', status: '啟用' },
-  { id: 5, name: '林美麗', email: 'meili@company.com', role: '一般用戶', dept: '行銷部', lastLogin: '2026-03-26 17:30', status: '啟用' },
-  { id: 6, name: '鄭宇翔', email: 'yuxiang@company.com', role: '一般用戶', dept: '研發部', lastLogin: '2026-02-15 11:00', status: '停用' },
+  { id: 1, name: '曠虎', email: 'tiger@weiyo.com', role: '超級管理員', dept: '總經理室', lastLogin: '2026-04-08 09:30', status: '啟用' },
+  { id: 2, name: '陳虹', email: 'hong@weiyo.com', role: '超級管理員', dept: '總經理室', lastLogin: '2026-04-08 08:55', status: '啟用' },
+  { id: 3, name: '張啟達', email: 'hr@weiyo.com', role: 'HR 管理員', dept: '人資部', lastLogin: '2026-04-08 10:15', status: '啟用' },
+  { id: 4, name: '洪伯嘉', email: 'aska@weiyo.com', role: '主管', dept: '總經理室', lastLogin: '2026-04-08 11:08', status: '啟用' },
+  { id: 5, name: 'SNOW', email: 'snow@weiyo.com', role: '主管', dept: '總經理室', lastLogin: '2026-04-08 10:00', status: '啟用' },
+  { id: 6, name: 'Dave', email: 'dave@weiyo.com', role: '主管', dept: '總經理室', lastLogin: '2026-04-07 18:10', status: '啟用' },
 ]
 
 export default function Users() {

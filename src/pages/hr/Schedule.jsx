@@ -198,12 +198,39 @@ export default function Schedule() {
           restCount[name]++
           existing[key] = '休'
         } else {
-          // Assign a work shift (rotate through shifts)
-          const shiftIndex = (empNames.indexOf(name) + dayIndex) % WORK_SHIFTS.length
-          const shift = WORK_SHIFTS[shiftIndex]
-          newSchedules.push({ employee: name, date, shift })
-          workingCount++
-          existing[key] = shift
+          // Assign a work shift — check 11h interval with previous day
+          const prevDate = dayIndex > 0 ? weekDates[dayIndex - 1] : null
+          const prevShift = prevDate ? existing[`${name}_${prevDate}`] : null
+          const prevDef = prevShift && prevShift !== '休' ? shiftDefs.find(d => d.name === prevShift) : null
+          const prevEndH = prevDef ? parseInt(prevDef.end_time) || 0 : 0
+
+          // Find a valid shift with ≥ 11h gap from previous shift end
+          let assigned = false
+          const startIdx = (empNames.indexOf(name) + dayIndex) % WORK_SHIFTS.length
+          for (let attempt = 0; attempt < WORK_SHIFTS.length; attempt++) {
+            const candidateName = WORK_SHIFTS[(startIdx + attempt) % WORK_SHIFTS.length]
+            const candidateDef = shiftDefs.find(d => d.name === candidateName)
+            const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 0 : 9
+
+            if (prevDef) {
+              // Check interval: previous end → next start (next day)
+              const gap = candidateStartH + (24 - prevEndH)
+              if (gap < 11 && prevEndH > candidateStartH) continue // skip if gap too short
+            }
+
+            newSchedules.push({ employee: name, date, shift: candidateName })
+            workingCount++
+            existing[key] = candidateName
+            assigned = true
+            break
+          }
+          // Fallback: if no valid shift found, assign first available
+          if (!assigned) {
+            const shift = WORK_SHIFTS[startIdx % WORK_SHIFTS.length]
+            newSchedules.push({ employee: name, date, shift })
+            workingCount++
+            existing[key] = shift
+          }
         }
       }
     }
@@ -276,6 +303,13 @@ export default function Schedule() {
               }
             }}>
               📋 複製上週
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
+              if (!confirm(`確定要清除本週（${weekStart} ~ ${weekEnd}）所有排班嗎？`)) return
+              await supabase.from('schedules').delete().gte('date', weekStart).lte('date', weekEnd)
+              setSchedules([])
+            }}>
+              🗑️ 清除本週
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件

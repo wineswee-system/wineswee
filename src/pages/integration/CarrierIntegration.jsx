@@ -153,8 +153,8 @@ export default function CarrierIntegration() {
       )}
 
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 400, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh' }} onClick={() => setShowModal(false)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border-medium)', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', margin: 'auto' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>{editingId ? '編輯物流商' : '新增物流商'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <select value={form.carrier_name} onChange={e => setForm(f => ({ ...f, carrier_name: e.target.value }))} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>

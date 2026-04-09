@@ -159,6 +159,37 @@ export const createWorkflow = (data) =>
 export const updateWorkflow = (id, data) =>
   supabase.from('workflows').update(data).eq('id', id).select().single()
 
+// ── Workflow Instances ────────────────────────────────────
+export const getWorkflowInstances = () =>
+  supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+
+export const createWorkflowInstance = (data) =>
+  supabase.from('workflow_instances').insert(data).select().single()
+
+export const updateWorkflowInstance = (id, data) =>
+  supabase.from('workflow_instances').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowInstance = (id) =>
+  supabase.from('workflow_instances').delete().eq('id', id)
+
+// ── Workflow Steps ────────────────────────────────────────
+export const getWorkflowSteps = (instanceId) => {
+  const q = supabase.from('workflow_steps').select('*').order('step_order')
+  return instanceId ? q.eq('instance_id', instanceId) : q
+}
+
+export const createWorkflowStep = (data) =>
+  supabase.from('workflow_steps').insert(data).select().single()
+
+export const createWorkflowStepsBatch = (rows) =>
+  supabase.from('workflow_steps').insert(rows).select()
+
+export const updateWorkflowStep = (id, data) =>
+  supabase.from('workflow_steps').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowStep = (id) =>
+  supabase.from('workflow_steps').delete().eq('id', id)
+
 // ── Tasks ──────────────────────────────────────────────────
 export const getTasks = () =>
   supabase.from('tasks').select('*').order('id')

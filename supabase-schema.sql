@@ -201,6 +201,43 @@ create table workflows (
   category text
 );
 
+-- Workflow Instances (流程實例)
+CREATE TABLE IF NOT EXISTS workflow_instances (
+  id SERIAL PRIMARY KEY,
+  template_name TEXT NOT NULL,
+  store TEXT,
+  status TEXT DEFAULT '進行中',        -- 進行中, 已完成
+  started_by TEXT,
+  assignee TEXT,
+  groups TEXT[],
+  started_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  due_date DATE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Workflow Steps (流程步驟/任務)
+CREATE TABLE IF NOT EXISTS workflow_steps (
+  id SERIAL PRIMARY KEY,
+  instance_id INT REFERENCES workflow_instances(id) ON DELETE CASCADE,
+  step_order INT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  role TEXT,
+  assignee TEXT,
+  store TEXT,
+  planned_start DATE,
+  due_date DATE,
+  due_time TIME DEFAULT '17:00',
+  status TEXT DEFAULT '待處理',        -- 待處理, 進行中, 已完成, 已擱置
+  notes TEXT,
+  confirmed BOOLEAN DEFAULT false,
+  confirmed_by TEXT,
+  confirmed_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Tasks
 create table tasks (
   id serial primary key,

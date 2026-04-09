@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Pencil, Save, Trash2, Upload, Link, Send, Clock, Bell, Plus } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Plus, Check } from 'lucide-react'
 import {
   updateWorkflowStep, deleteWorkflowStep,
   getStepComments, createStepComment,
   getStepAttachments, createStepAttachment, deleteStepAttachment,
   getStepChecklists, linkStepChecklist, unlinkStepChecklist,
   getStepDependencies, createStepDependency, deleteStepDependency,
+  getStepChecklistItems, createStepChecklistItem, updateStepChecklistItem, deleteStepChecklistItem,
   getApprovalChains
 } from '../lib/db'
 
@@ -26,8 +27,10 @@ export default function TaskDetailPanel({
   const [attachments, setAttachments] = useState([])
   const [linkedChecklists, setLinkedChecklists] = useState([])
   const [dependencies, setDependencies] = useState([])
+  const [checklistItems, setChecklistItems] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
   const [commentText, setCommentText] = useState('')
+  const [newItemText, setNewItemText] = useState('')
   const [saving, setSaving] = useState(false)
   const commentsEndRef = useRef(null)
 
@@ -50,18 +53,19 @@ export default function TaskDetailPanel({
     setShowTime(!!step.due_time)
     setEditingTitle(false)
 
-    // Load sub-data
     Promise.all([
       getStepComments(step.id),
       getStepAttachments(step.id),
       getStepChecklists(step.id),
       getStepDependencies(step.id),
+      getStepChecklistItems(step.id),
       getApprovalChains(),
-    ]).then(([c, a, cl, d, ac]) => {
+    ]).then(([c, a, cl, d, ci, ac]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
+      setChecklistItems(ci.data || [])
       setApprovalChains(ac.data || [])
     })
   }, [step?.id])
@@ -100,16 +104,34 @@ export default function TaskDetailPanel({
   // Comments
   const handleSendComment = async () => {
     if (!commentText.trim()) return
-    const { data } = await createStepComment({
-      step_id: step.id,
-      author: '使用者',
-      content: commentText.trim(),
-    })
+    const { data } = await createStepComment({ step_id: step.id, author: '使用者', content: commentText.trim() })
     if (data) setComments(prev => [...prev, data])
     setCommentText('')
   }
 
-  // Checklists
+  // Checklist items
+  const handleAddItem = async () => {
+    if (!newItemText.trim()) return
+    const { data } = await createStepChecklistItem({
+      step_id: step.id,
+      title: newItemText.trim(),
+      sort_order: checklistItems.length,
+    })
+    if (data) setChecklistItems(prev => [...prev, data])
+    setNewItemText('')
+  }
+
+  const handleToggleItem = async (item) => {
+    const { data } = await updateStepChecklistItem(item.id, { checked: !item.checked })
+    if (data) setChecklistItems(prev => prev.map(i => i.id === item.id ? data : i))
+  }
+
+  const handleDeleteItem = async (id) => {
+    await deleteStepChecklistItem(id)
+    setChecklistItems(prev => prev.filter(i => i.id !== id))
+  }
+
+  // Checklists link
   const handleLinkChecklist = async (checklistId) => {
     if (!checklistId) return
     const { data } = await linkStepChecklist(step.id, Number(checklistId))
@@ -131,11 +153,7 @@ export default function TaskDetailPanel({
 
   const handleAddDep = async (depStepId, type) => {
     if (!depStepId) return
-    const { data } = await createStepDependency({
-      step_id: step.id,
-      depends_on_step_id: Number(depStepId),
-      dep_type: type,
-    })
+    const { data } = await createStepDependency({ step_id: step.id, depends_on_step_id: Number(depStepId), dep_type: type })
     if (data) setDependencies(prev => [...prev, data])
   }
 
@@ -160,21 +178,32 @@ export default function TaskDetailPanel({
     return s ? `${s.step_order}. ${s.title}` : `#${id}`
   }
 
+  const checkedCount = checklistItems.filter(i => i.checked).length
+  const totalItems = checklistItems.length
+
   const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
+  const sectionStyle = {
+    padding: '16px 20px', marginBottom: 12, borderRadius: 10,
+    background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+  }
   const fieldGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
-      display: 'flex', justifyContent: 'flex-end',
-      background: 'rgba(0,0,0,0.3)',
-    }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.4)',
+      backdropFilter: 'blur(2px)',
+    }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{
-        width: '100%', maxWidth: 680,
+        width: '100%', maxWidth: 780,
+        maxHeight: '92vh',
         background: 'var(--bg-primary)',
-        borderLeft: '1px solid var(--border-medium)',
+        border: '1px solid var(--border-medium)',
+        borderRadius: 16,
         display: 'flex', flexDirection: 'column',
-        animation: 'slideInRight 0.2s ease',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        animation: 'fadeIn 0.2s ease',
         overflow: 'hidden',
       }}>
         {/* ── Header ── */}
@@ -183,7 +212,7 @@ export default function TaskDetailPanel({
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
             {editingTitle ? (
               <input
                 className="form-input"
@@ -202,307 +231,364 @@ export default function TaskDetailPanel({
               </h3>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}
-              style={{ fontSize: 13 }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 13 }}>
               <Save size={13} /> {saving ? '...' : '更新'}
             </button>
             <button className="btn btn-sm btn-secondary" onClick={handleDelete}
               style={{ color: 'var(--accent-red)', padding: '6px 8px' }}>
               <Trash2 size={15} />
             </button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* ── Body ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
+        {/* ── Body (scrollable) ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-          {/* Status & Priority */}
-          <div style={fieldGrid}>
-            <div>
-              <div style={labelStyle}>狀態</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.status}
-                onChange={e => set('status', e.target.value)}>
-                {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
-              </select>
+          {/* ═══ Section: Basic Fields ═══ */}
+          <div style={sectionStyle}>
+            <div style={fieldGrid}>
+              <div>
+                <div style={labelStyle}>狀態</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.status}
+                  onChange={e => set('status', e.target.value)}>
+                  {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>優先度</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.priority}
+                  onChange={e => set('priority', e.target.value)}>
+                  {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
             </div>
-            <div>
-              <div style={labelStyle}>優先度</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.priority}
-                onChange={e => set('priority', e.target.value)}>
-                {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
-              </select>
+
+            <div style={fieldGrid}>
+              <div>
+                <div style={labelStyle}>負責人</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.assignee}
+                  onChange={e => set('assignee', e.target.value)}>
+                  <option value="">未指定</option>
+                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>歸屬門市</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.store}
+                  onChange={e => set('store', e.target.value)}>
+                  <option value="">未指定</option>
+                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={fieldGrid}>
+              <div>
+                <div style={labelStyle}>工作流</div>
+                <input className="form-input" style={{ width: '100%' }} readOnly
+                  value={instance?.store || instance?.template_name || ''} />
+              </div>
+              <div>
+                <div style={labelStyle}>分類</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.category}
+                  onChange={e => set('category', e.target.value)}>
+                  {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Assignee & Store */}
-          <div style={fieldGrid}>
-            <div>
-              <div style={labelStyle}>負責人</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.assignee}
-                onChange={e => set('assignee', e.target.value)}>
-                <option value="">未指定</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-              </select>
+          {/* ═══ Section: Dates & Time ═══ */}
+          <div style={sectionStyle}>
+            <div style={fieldGrid}>
+              <div>
+                <div style={labelStyle}>計畫開始日</div>
+                <input className="form-input" type="date" style={{ width: '100%' }}
+                  value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
+              </div>
+              <div>
+                <div style={labelStyle}>計畫完成日</div>
+                <input className="form-input" type="date" style={{ width: '100%' }}
+                  value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+              </div>
             </div>
-            <div>
-              <div style={labelStyle}>歸屬門市</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.store}
-                onChange={e => set('store', e.target.value)}>
-                <option value="">未指定</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
-            </div>
-          </div>
 
-          {/* Workflow & Category */}
-          <div style={fieldGrid}>
-            <div>
-              <div style={labelStyle}>工作流</div>
-              <input className="form-input" style={{ width: '100%' }} readOnly
-                value={instance?.store || instance?.template_name || ''} />
-            </div>
-            <div>
-              <div style={labelStyle}>分類</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.category}
-                onChange={e => set('category', e.target.value)}>
-                {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Dates */}
-          <div style={fieldGrid}>
-            <div>
-              <div style={labelStyle}>計畫開始日</div>
-              <input className="form-input" type="date" style={{ width: '100%' }}
-                value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
-            </div>
-            <div>
-              <div style={labelStyle}>計畫完成日</div>
-              <input className="form-input" type="date" style={{ width: '100%' }}
-                value={form.due_date} onChange={e => set('due_date', e.target.value)} />
-            </div>
-          </div>
-
-          {/* Time toggle */}
-          <div style={{ marginTop: 8 }}>
             {!showTime ? (
               <button onClick={() => setShowTime(true)} style={{
                 background: 'none', border: 'none', color: 'var(--accent-cyan)',
-                fontSize: 12, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 12, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4, marginTop: 10,
               }}>
                 <Clock size={13} /> 設定時間
               </button>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <input className="form-input" type="time" value={form.due_time}
-                  onChange={e => set('due_time', e.target.value)}
-                  style={{ width: 160 }} />
+                  onChange={e => set('due_time', e.target.value)} style={{ width: 160 }} />
                 <button onClick={() => { setShowTime(false); set('due_time', '') }} style={{
                   background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer',
-                }}>
-                  <X size={16} />
-                </button>
+                }}><X size={16} /></button>
               </div>
             )}
-          </div>
 
-          {/* Reminder */}
-          <div style={labelStyle}>
-            <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
-          </div>
-          <input className="form-input" type="datetime-local" style={{ width: '100%' }}
-            value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
-            onChange={e => set('reminder_at', e.target.value)} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            {[
-              { label: '到期前1hr', type: '1hr' },
-              { label: '到期前1天', type: '1day' },
-              { label: '當天09:00', type: 'morning' },
-            ].map(r => (
-              <button key={r.type} onClick={() => setReminder(r.type)} style={{
-                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
-                color: 'var(--text-secondary)', cursor: 'pointer',
-              }}>{r.label}</button>
-            ))}
-          </div>
-
-          {/* Approval Chain */}
-          <div style={labelStyle}>🔐 確認審批</div>
-          <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id}
-            onChange={e => set('approval_chain_id', e.target.value)}>
-            <option value="">＋ 新增審批</option>
-            {approvalChains.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
-          </select>
-
-          {/* Notes */}
-          <div style={labelStyle}>備註</div>
-          <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
-            placeholder="備註..." value={form.notes} onChange={e => set('notes', e.target.value)} />
-
-          {/* ID & Created */}
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 16 }}>
-            ID: {step.id} &nbsp;&nbsp; 建立: {step.created_at?.slice(0, 10)}
-          </div>
-
-          {/* ── Prerequisites ── */}
-          <div style={{ ...labelStyle, marginTop: 24 }}>
-            🔒 前置條件（全部完成後才開始）
-          </div>
-          {prerequisites.map(d => (
-            <div key={d.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-              background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
-              border: '1px solid var(--border-subtle)', fontSize: 13,
-            }}>
-              <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
-              <button onClick={() => handleRemoveDep(d.id)} style={{
-                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
-              }}><X size={14} /></button>
+            <div style={labelStyle}>
+              <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
             </div>
-          ))}
-          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-            value="" onChange={e => handleAddDep(e.target.value, 'prerequisite')}>
-            <option value="">＋ 新增前置條件...</option>
-            {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_step_id === s.id))
-              .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
-          </select>
-
-          {/* ── Triggers ── */}
-          <div style={{ ...labelStyle, marginTop: 24 }}>
-            ⚠️ 觸發動作（完成時執行）
-          </div>
-          {triggers.map(d => (
-            <div key={d.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-              background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
-              border: '1px solid var(--border-subtle)', fontSize: 13,
-            }}>
-              <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
-              <button onClick={() => handleRemoveDep(d.id)} style={{
-                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
-              }}><X size={14} /></button>
+            <input className="form-input" type="datetime-local" style={{ width: '100%' }}
+              value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
+              onChange={e => set('reminder_at', e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              {[
+                { label: '到期前1hr', type: '1hr' },
+                { label: '到期前1天', type: '1day' },
+                { label: '當天09:00', type: 'morning' },
+              ].map(r => (
+                <button key={r.type} onClick={() => setReminder(r.type)} style={{
+                  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', cursor: 'pointer',
+                }}>{r.label}</button>
+              ))}
             </div>
-          ))}
-          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-            value="" onChange={e => handleAddDep(e.target.value, 'trigger')}>
-            <option value="">＋ 新增觸發任務...</option>
-            {otherSteps.filter(s => !triggers.some(t => t.depends_on_step_id === s.id))
-              .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
-          </select>
-
-          {/* ── Linked Checklists ── */}
-          <div style={{ ...labelStyle, marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>☑️ 關聯查核清單 ({linkedChecklists.length})</span>
           </div>
-          {linkedChecklists.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯查核清單</div>
-          ) : linkedChecklists.map(lc => (
-            <div key={lc.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 12px', background: 'var(--glass-light)', borderRadius: 8,
-              marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13,
-            }}>
-              <span>{lc.checklists?.name || `清單 #${lc.checklist_id}`}</span>
-              <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
-                background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
-              }}>移除</button>
+
+          {/* ═══ Section: Approval ═══ */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>🔐 確認審批</div>
+            <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id}
+              onChange={e => set('approval_chain_id', e.target.value)}>
+              <option value="">＋ 新增審批</option>
+              {approvalChains.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
+            </select>
+          </div>
+
+          {/* ═══ Section: Checklist Items (清單設定) ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ ...labelStyle, marginTop: 0, marginBottom: 0 }}>
+                📋 清單設定 {totalItems > 0 && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({checkedCount}/{totalItems})</span>}
+              </div>
             </div>
-          ))}
-          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-            value="" onChange={e => handleLinkChecklist(e.target.value)}>
-            <option value="">＋ 關聯...</option>
-            {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
-              .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
 
-          {/* ── Attachments ── */}
-          <div style={{ ...labelStyle, marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>📎 附件 ({attachments.length})</span>
-            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}
-              onClick={() => {
-                const url = prompt('輸入檔案 URL:')
-                const name = prompt('檔案名稱:')
-                if (url && name) {
-                  createStepAttachment({ step_id: step.id, file_name: name, file_url: url, uploaded_by: '使用者' })
-                    .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
-                }
-              }}>
-              <Upload size={11} /> 上傳
-            </button>
-          </div>
-          {attachments.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無附件</div>
-          ) : attachments.map(a => (
-            <div key={a.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
-              marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
-            }}>
-              <a href={a.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>
-                📄 {a.file_name}
-              </a>
-              <button onClick={async () => {
-                await deleteStepAttachment(a.id)
-                setAttachments(prev => prev.filter(x => x.id !== a.id))
-              }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={13} />
-              </button>
-            </div>
-          ))}
-
-          {/* ── Comments ── */}
-          <div style={{ ...labelStyle, marginTop: 24 }}>
-            💬 備註 ({comments.length})
-          </div>
-          <div style={{
-            maxHeight: 200, overflowY: 'auto', marginBottom: 8,
-            padding: comments.length > 0 ? '8px 0' : 0,
-          }}>
-            {comments.map(c => (
-              <div key={c.id} style={{
-                padding: '8px 12px', marginBottom: 6, borderRadius: 8,
-                background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    ⚙️ {c.author}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {new Date(c.created_at).toLocaleString('zh-TW')}
-                  </span>
+            {/* Progress */}
+            {totalItems > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ flex: 1, height: 6, borderRadius: 4, background: 'var(--border-medium)', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 4,
+                    width: `${Math.round(checkedCount / totalItems * 100)}%`,
+                    background: checkedCount === totalItems ? 'var(--accent-green)' : 'var(--accent-cyan)',
+                    transition: 'width 0.3s ease',
+                  }} />
                 </div>
-                <div style={{ fontSize: 13 }}>🚩 {c.content}</div>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {Math.round(checkedCount / totalItems * 100)}%
+                </span>
+              </div>
+            )}
+
+            {/* Items */}
+            {checklistItems.map(item => (
+              <div key={item.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8, marginBottom: 4,
+                background: item.checked ? 'var(--accent-green-dim)' : 'transparent',
+                border: '1px solid var(--border-subtle)',
+              }}>
+                <button onClick={() => handleToggleItem(item)} style={{
+                  width: 22, height: 22, borderRadius: 4, border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
+                  background: item.checked ? 'var(--accent-green)' : 'transparent',
+                  color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, padding: 0,
+                }}>
+                  {item.checked && <Check size={14} />}
+                </button>
+                <span style={{
+                  flex: 1, fontSize: 13,
+                  textDecoration: item.checked ? 'line-through' : 'none',
+                  color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
+                }}>{item.title}</span>
+                <button onClick={() => handleDeleteItem(item.id)} style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2,
+                  opacity: 0.5,
+                }}><X size={14} /></button>
               </div>
             ))}
-            <div ref={commentsEndRef} />
+
+            {/* Add item */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input className="form-input" type="text" style={{ flex: 1, fontSize: 13 }}
+                placeholder="新增項目..."
+                value={newItemText}
+                onChange={e => setNewItemText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
+              <button className="btn btn-sm btn-primary" onClick={handleAddItem} style={{ fontSize: 12 }}>
+                <Plus size={12} /> 新增
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="form-input" type="text" style={{ flex: 1 }}
-              placeholder="輸入備註..."
-              value={commentText}
-              onChange={e => setCommentText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSendComment()} />
-            <button className="btn btn-primary" onClick={handleSendComment}
-              style={{ fontSize: 12, padding: '8px 14px' }}>
-              送出
-            </button>
+
+          {/* ═══ Section: Notes ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
+            <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+              placeholder="備註..." value={form.notes} onChange={e => set('notes', e.target.value)} />
+          </div>
+
+          {/* ID & Created */}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
+            ID: {step.id} &nbsp;&nbsp; 建立: {step.created_at?.slice(0, 10)}
+            {step.confirmed && <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>✅ {step.confirmed_at?.slice(0, 10)}</span>}
+          </div>
+
+          {/* ═══ Section: Prerequisites ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0 }}>🔒 前置條件（全部完成後才開始）</div>
+            {prerequisites.map(d => (
+              <div key={d.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
+                border: '1px solid var(--border-subtle)', fontSize: 13,
+              }}>
+                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+                <button onClick={() => handleRemoveDep(d.id)} style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                }}><X size={14} /></button>
+              </div>
+            ))}
+            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+              value="" onChange={e => handleAddDep(e.target.value, 'prerequisite')}>
+              <option value="">＋ 新增前置條件...</option>
+              {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_step_id === s.id))
+                .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
+            </select>
+          </div>
+
+          {/* ═══ Section: Triggers ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0 }}>⚠️ 觸發動作（完成時執行）</div>
+            {triggers.map(d => (
+              <div key={d.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
+                border: '1px solid var(--border-subtle)', fontSize: 13,
+              }}>
+                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+                <button onClick={() => handleRemoveDep(d.id)} style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                }}><X size={14} /></button>
+              </div>
+            ))}
+            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+              value="" onChange={e => handleAddDep(e.target.value, 'trigger')}>
+              <option value="">＋ 新增觸發任務...</option>
+              {otherSteps.filter(s => !triggers.some(t => t.depends_on_step_id === s.id))
+                .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
+            </select>
+          </div>
+
+          {/* ═══ Section: Linked Checklists ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>☑️ 關聯查核清單 ({linkedChecklists.length})</span>
+            </div>
+            {linkedChecklists.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯查核清單</div>
+            ) : linkedChecklists.map(lc => (
+              <div key={lc.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', background: 'var(--glass-light)', borderRadius: 8,
+                marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13,
+              }}>
+                <span>{lc.checklists?.name || `清單 #${lc.checklist_id}`}</span>
+                <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
+                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
+                }}>移除</button>
+              </div>
+            ))}
+            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+              value="" onChange={e => handleLinkChecklist(e.target.value)}>
+              <option value="">＋ 關聯...</option>
+              {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
+                .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* ═══ Section: Attachments ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>📎 附件 ({attachments.length})</span>
+              <button className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}
+                onClick={() => {
+                  const url = prompt('輸入檔案 URL:')
+                  const name = prompt('檔案名稱:')
+                  if (url && name) {
+                    createStepAttachment({ step_id: step.id, file_name: name, file_url: url, uploaded_by: '使用者' })
+                      .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
+                  }
+                }}>
+                <Upload size={11} /> 上傳
+              </button>
+            </div>
+            {attachments.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無附件</div>
+            ) : attachments.map(a => (
+              <div key={a.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
+                marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
+              }}>
+                <a href={a.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>
+                  📄 {a.file_name}
+                </a>
+                <button onClick={async () => {
+                  await deleteStepAttachment(a.id)
+                  setAttachments(prev => prev.filter(x => x.id !== a.id))
+                }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* ═══ Section: Comments ═══ */}
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0 }}>💬 備註 ({comments.length})</div>
+            <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 8 }}>
+              {comments.map(c => (
+                <div key={c.id} style={{
+                  padding: '8px 12px', marginBottom: 6, borderRadius: 8,
+                  background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)' }}>⚙️ {c.author}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {new Date(c.created_at).toLocaleString('zh-TW')}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13 }}>🚩 {c.content}</div>
+                </div>
+              ))}
+              <div ref={commentsEndRef} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="form-input" type="text" style={{ flex: 1 }}
+                placeholder="輸入備註..."
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendComment()} />
+              <button className="btn btn-primary" onClick={handleSendComment}
+                style={{ fontSize: 12, padding: '8px 14px' }}>
+                送出
+              </button>
+            </div>
           </div>
 
         </div>
       </div>
-
-      <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
     </div>
   )
 }

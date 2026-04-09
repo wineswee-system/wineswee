@@ -230,6 +230,19 @@ export const linkStepChecklist = (stepId, checklistId) =>
 export const unlinkStepChecklist = (id) =>
   supabase.from('workflow_step_checklists').delete().eq('id', id)
 
+// ── Step Checklist Items (任務內建清單) ──────────────────
+export const getStepChecklistItems = (stepId) =>
+  supabase.from('workflow_step_checklist_items').select('*').eq('step_id', stepId).order('sort_order')
+
+export const createStepChecklistItem = (data) =>
+  supabase.from('workflow_step_checklist_items').insert(data).select().single()
+
+export const updateStepChecklistItem = (id, data) =>
+  supabase.from('workflow_step_checklist_items').update(data).eq('id', id).select().single()
+
+export const deleteStepChecklistItem = (id) =>
+  supabase.from('workflow_step_checklist_items').delete().eq('id', id)
+
 // ── Approval Chains (簽核鏈) ─────────────────────────────
 export const getApprovalChains = () =>
   supabase.from('approval_chains').select('*').order('id')

@@ -59,15 +59,14 @@ export default function PunchCorrection() {
           // Update existing record
           const update = {}
           if (correction.corrected_clock_in) update.clock_in = correction.corrected_clock_in
-          if (correction.corrected_clock_out) {
-            update.clock_out = correction.corrected_clock_out
-            // Recalculate hours
-            const clockIn = existing.clock_in || correction.corrected_clock_in
-            if (clockIn) {
-              const inH = parseInt(clockIn) + parseInt(clockIn.split(':')[1] || 0) / 60
-              const outH = parseInt(correction.corrected_clock_out) + parseInt(correction.corrected_clock_out.split(':')[1] || 0) / 60
-              update.hours = Math.round((outH - inH) * 10) / 10
-            }
+          if (correction.corrected_clock_out) update.clock_out = correction.corrected_clock_out
+          // Always recalculate hours when both in/out exist
+          const finalIn = update.clock_in || existing.clock_in
+          const finalOut = update.clock_out || existing.clock_out
+          if (finalIn && finalOut) {
+            const [inH, inM] = finalIn.split(':').map(Number)
+            const [outH, outM] = finalOut.split(':').map(Number)
+            update.hours = Math.round(((outH * 60 + outM) - (inH * 60 + inM)) / 60 * 10) / 10
           }
           await supabase.from('attendance_records').update(update).eq('id', existing.id)
         } else {

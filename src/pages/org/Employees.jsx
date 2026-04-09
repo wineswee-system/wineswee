@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
+import EmployeeDetail from '../../components/EmployeeDetail'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
@@ -46,18 +47,22 @@ export default function Employees() {
   const [resignReason, setResignReason] = useState('')
   const [editForm, setEditForm] = useState({})
   const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職' })
+  const [detailEmp, setDetailEmp] = useState(null)
+  const [lineUsers, setLineUsers] = useState([])
 
   useEffect(() => {
     Promise.all([
       getEmployees(),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([e, d, l]) => {
+      supabase.from('line_users').select('line_user_id, display_name').order('display_name'),
+    ]).then(([e, d, l, lu]) => {
       const depts = d.data || []
       const locs = l.data || []
       setEmployees(e.data || [])
       setDepartments(depts)
       setLocations(locs)
+      setLineUsers(lu.data || [])
       setForm(f => ({ ...f, dept: depts[0]?.name || '', store: locs[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -255,7 +260,7 @@ export default function Employees() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
               {filtered.map(e => (
-                <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1 }}>
+                <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={() => setDetailEmp(e)}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: e.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
@@ -286,17 +291,17 @@ export default function Employees() {
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}
-                        onClick={() => openEdit(e)}>
+                        onClick={ev => { ev.stopPropagation(); openEdit(e) }}>
                         <Pencil size={12} /> 編輯
                       </button>
                       {e.status === '在職' ? (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }}
-                          onClick={() => openResign(e)}>
+                          onClick={ev => { ev.stopPropagation(); openResign(e) }}>
                           <UserMinus size={12} /> 離職
                         </button>
                       ) : (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-green)' }}
-                          onClick={() => openRehire(e)}>
+                          onClick={ev => { ev.stopPropagation(); openRehire(e) }}>
                           <UserPlus size={12} /> 復職
                         </button>
                       )}
@@ -442,6 +447,21 @@ export default function Employees() {
             </Field>
           </div>
         </Modal>
+      )}
+
+      {/* Employee Detail Modal */}
+      {detailEmp && (
+        <EmployeeDetail
+          employee={detailEmp}
+          stores={locations}
+          departments={departments}
+          lineUsers={lineUsers}
+          onUpdate={(updated) => {
+            setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e))
+            setDetailEmp(updated)
+          }}
+          onClose={() => setDetailEmp(null)}
+        />
       )}
     </div>
   )

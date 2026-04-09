@@ -267,13 +267,15 @@ export default function TaskDetailPanel({
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(0,0,0,0.4)',
+      width: '100vw', height: '100vh',
     }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{
         width: '100%', maxWidth: 780,
-        maxHeight: '92vh',
+        maxHeight: '85vh',
         background: 'var(--bg-primary)',
         border: '1px solid var(--border-medium)',
         borderRadius: 16,
@@ -281,6 +283,7 @@ export default function TaskDetailPanel({
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         animation: 'fadeIn 0.2s ease',
         overflow: 'hidden',
+        margin: 'auto',
       }}>
         {/* ── Header ── */}
         <div style={{

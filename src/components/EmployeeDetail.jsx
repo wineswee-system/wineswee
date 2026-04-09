@@ -312,8 +312,34 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
               <SectionTitle icon="💰" text="薪資" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
-                <div><div style={L}>每週上限</div><input className="form-input" type="number" style={{ width: '100%' }} value={form.weekly_hours || 40} onChange={e => set('weekly_hours', e.target.value)} /></div>
+                <div><div style={L}>計薪方式</div>
+                  <select className="form-input" style={{ width: '100%' }} value={form.salary_type || 'monthly'} onChange={e => set('salary_type', e.target.value)}>
+                    <option value="monthly">月薪制</option>
+                    <option value="hourly">時薪制</option>
+                  </select>
+                </div>
+                {(form.salary_type || 'monthly') === 'monthly' ? (
+                  <div><div style={L}>月底薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：28000" value={form.base_salary || ''} onChange={e => set('base_salary', e.target.value)} /></div>
+                ) : (
+                  <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：183" value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><div style={L}>每週工時上限</div><input className="form-input" type="number" style={{ width: '100%' }} value={form.weekly_hours || 40} onChange={e => set('weekly_hours', e.target.value)} /></div>
+                {(form.salary_type || 'monthly') === 'monthly' && (
+                  <div><div style={L}>月底薪換算時薪</div>
+                    <div className="form-input" style={{ width: '100%', background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
+                      NT$ {form.base_salary ? Math.round(Number(form.base_salary) / 30 / 8) : '—'} /hr
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginTop: 14, marginBottom: 6 }}>津貼</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div><div style={L}>伙食津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.meal_allowance || ''} onChange={e => set('meal_allowance', e.target.value)} /></div>
+                <div><div style={L}>交通津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.transport_allowance || ''} onChange={e => set('transport_allowance', e.target.value)} /></div>
+                <div><div style={L}>住房津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.housing_allowance || ''} onChange={e => set('housing_allowance', e.target.value)} /></div>
               </div>
 
               <SectionTitle icon="🏥" text="勞健保" />

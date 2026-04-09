@@ -185,6 +185,7 @@ export default function Salary() {
 
   // ── Batch payroll run ──
   const handleBatchPayroll = async () => {
+    try {
     // Pull attendance data for the month
     const monthStart = month + '-01'
     const monthEnd = month + '-31'
@@ -235,6 +236,10 @@ export default function Salary() {
     })
     setBatchPreview(preview)
     setShowBatchModal(true)
+    } catch (err) {
+      console.error('Batch payroll failed:', err)
+      alert('計薪失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const handleBatchSave = async () => {

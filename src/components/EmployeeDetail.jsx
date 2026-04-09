@@ -80,57 +80,71 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   // Sub-data handlers
   const addSkill = async () => {
     if (!newSkill.trim()) return
-    const { data } = await supabase.from('employee_skills').insert({ employee_id: employee.id, skill_name: newSkill.trim(), level: newSkillLevel }).select().single()
-    if (data) { setSkills(prev => [...prev, data]); setNewSkill('') }
+    try {
+      const { data } = await supabase.from('employee_skills').insert({ employee_id: employee.id, skill_name: newSkill.trim(), level: newSkillLevel }).select().single()
+      if (data) { setSkills(prev => [...prev, data]); setNewSkill('') }
+    } catch (e) { alert('新增失敗') }
   }
 
   const deleteSkill = async (id) => {
-    await supabase.from('employee_skills').delete().eq('id', id)
-    setSkills(prev => prev.filter(s => s.id !== id))
+    try {
+      await supabase.from('employee_skills').delete().eq('id', id)
+      setSkills(prev => prev.filter(s => s.id !== id))
+    } catch (e) { alert('刪除失敗') }
   }
 
   const addDependent = async () => {
     const name = prompt('眷屬姓名：')
     if (!name) return
     const relationship = prompt('關係（配偶/子女/父母）：') || ''
-    const { data } = await supabase.from('employee_dependents').insert({ employee_id: employee.id, name, relationship }).select().single()
-    if (data) setDependents(prev => [...prev, data])
+    try {
+      const { data } = await supabase.from('employee_dependents').insert({ employee_id: employee.id, name, relationship }).select().single()
+      if (data) setDependents(prev => [...prev, data])
+    } catch (e) { alert('新增失敗') }
   }
 
   const deleteDependent = async (id) => {
-    await supabase.from('employee_dependents').delete().eq('id', id)
-    setDependents(prev => prev.filter(d => d.id !== id))
+    try {
+      await supabase.from('employee_dependents').delete().eq('id', id)
+      setDependents(prev => prev.filter(d => d.id !== id))
+    } catch (e) { alert('刪除失敗') }
   }
 
   const addReview = async () => {
     const score = prompt('評分（1-5）：')
     if (!score) return
     const notes = prompt('評語：') || ''
-    const { data } = await supabase.from('employee_reviews').insert({
-      employee_id: employee.id, review_date: new Date().toISOString().slice(0, 10),
-      reviewer: '管理員', score: Number(score), notes,
-    }).select().single()
-    if (data) setReviews(prev => [data, ...prev])
+    try {
+      const { data } = await supabase.from('employee_reviews').insert({
+        employee_id: employee.id, review_date: new Date().toISOString().slice(0, 10),
+        reviewer: '管理員', score: Number(score), notes,
+      }).select().single()
+      if (data) setReviews(prev => [data, ...prev])
+    } catch (e) { alert('新增失敗') }
   }
 
   const addTransfer = async () => {
     const to_store = prompt('調到哪個門市：')
     if (!to_store) return
     const reason = prompt('調動原因：') || ''
-    const { data } = await supabase.from('employee_transfers').insert({
-      employee_id: employee.id, transfer_date: new Date().toISOString().slice(0, 10),
-      from_store: employee.store, to_store, from_dept: employee.dept, from_position: employee.position, reason,
-    }).select().single()
-    if (data) setTransfers(prev => [data, ...prev])
+    try {
+      const { data } = await supabase.from('employee_transfers').insert({
+        employee_id: employee.id, transfer_date: new Date().toISOString().slice(0, 10),
+        from_store: employee.store, to_store, from_dept: employee.dept, from_position: employee.position, reason,
+      }).select().single()
+      if (data) setTransfers(prev => [data, ...prev])
+    } catch (e) { alert('新增失敗') }
   }
 
   const addSchedPref = async () => {
     const notes = prompt('排班偏好（例如：週六不排晚班）：')
     if (!notes) return
-    const { data } = await supabase.from('employee_schedule_prefs').insert({
-      employee_id: employee.id, pref_type: 'note', notes,
-    }).select().single()
-    if (data) setSchedPrefs(prev => [...prev, data])
+    try {
+      const { data } = await supabase.from('employee_schedule_prefs').insert({
+        employee_id: employee.id, pref_type: 'note', notes,
+      }).select().single()
+      if (data) setSchedPrefs(prev => [...prev, data])
+    } catch (e) { alert('新增失敗') }
   }
 
   const deleteSchedPref = async (id) => {

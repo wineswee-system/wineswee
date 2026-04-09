@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Search, CheckCircle, XCircle, AlertTriangle, ArrowRightLeft } from 'lucide-react'
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders, getAccountsPayable } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { createAPFromReceipt } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import { performThreeWayMatch, calculatePriceVariance, performThreeWayMatchById } from '../../lib/threeWayMatch'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -40,7 +40,16 @@ export default function GoodsReceipts() {
       setForm({ po_id: '', receiver: '', received_date: '', notes: '' })
       // 自動產生應付帳款
       const { data: po } = await supabase.from('purchase_orders').select('*').eq('id', poId).maybeSingle()
-      if (po) createAPFromReceipt(data, po)
+      if (po) getEventBus().publish('purchase.goods_receipt.completed', {
+          receipt_id: data.id,
+          po_id: po.id,
+          po_number: po.po_number,
+          supplier: po.supplier,
+          total_amount: po.total_amount,
+          tax: po.tax,
+          shipping: po.shipping,
+          payment_terms: po.payment_terms,
+        }, { source: 'GoodsReceipts.jsx' })
 
       // 自動執行三方比對
       try {

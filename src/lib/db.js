@@ -955,3 +955,45 @@ export const updateRolePermissions = async (roleId, permissionIds) => {
   const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
   return supabase.from('role_permissions').insert(rows).select()
 }
+
+// ── System Logs (Super Admin) ──
+export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {
+  let q = supabase.from('system_logs').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (level) q = q.eq('level', level)
+  if (module) q = q.eq('module', module)
+  if (action) q = q.eq('action', action)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+}
+
+// ── Error Logs (Super Admin) ──
+export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, level, module, resolved, from, to } = {}) => {
+  let q = supabase.from('error_logs').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (level) q = q.eq('level', level)
+  if (module) q = q.eq('module', module)
+  if (resolved !== undefined) q = q.eq('resolved', resolved)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+}
+export const resolveErrorLog = (id, resolvedBy) =>
+  supabase.from('error_logs').update({ resolved: true, resolved_by: resolvedBy, resolved_at: new Date().toISOString() }).eq('id', id).select().single()
+export const unresolveErrorLog = (id) =>
+  supabase.from('error_logs').update({ resolved: false, resolved_by: null, resolved_at: null }).eq('id', id).select().single()
+export const deleteErrorLog = (id) =>
+  supabase.from('error_logs').delete().eq('id', id)
+
+// ── User Activity (Super Admin) ──
+export const getUserActivity = ({ limit = 200, offset = 0, tenantId, userName, action, module, from, to } = {}) => {
+  let q = supabase.from('user_activity').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (userName) q = q.eq('user_name', userName)
+  if (action) q = q.eq('action', action)
+  if (module) q = q.eq('module', module)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+}

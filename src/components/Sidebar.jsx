@@ -13,10 +13,11 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
-  UserCheck, Shield, Send, Search
+  UserCheck, Shield, Send, Search, Activity, AlertOctagon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
+import { prefetchGroup } from '../modules/prefetch'
 
 // Init theme from localStorage (default to light)
 const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('theme') : null
@@ -335,6 +336,9 @@ const superAdminItems = [
   { icon: Building2, label: '組織管理', path: '/super-admin/orgs' },
   { icon: UserCog, label: '使用者配置', path: '/super-admin/users' },
   { icon: Package, label: '模組配置', path: '/super-admin/modules' },
+  { icon: Monitor, label: '系統日誌', path: '/super-admin/system-logs' },
+  { icon: AlertOctagon, label: '錯誤日誌', path: '/super-admin/error-logs' },
+  { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
 ]
 
 // ── Route prefix → group key mapping ──
@@ -504,6 +508,7 @@ export default function Sidebar() {
               ref={el => { btnRefs.current[group.key] = el }}
               className={`topnav-group-btn ${active ? 'active' : ''} ${isOpen ? 'mega-open' : ''}`}
               onClick={() => handleGroupClick(group)}
+              onMouseEnter={() => prefetchGroup(group.key)}
               style={{ '--group-color': group.color }}
             >
               <Icon size={16} />

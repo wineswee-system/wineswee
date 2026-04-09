@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, ChevronDown, ChevronRight, AlertTriangle, ScanBarcode, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { createARFromShipment } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -67,12 +67,14 @@ export default function Outbound() {
       setOrders(prev => prev.map(o => o.id === id ? data : o))
       // 自動產生 AR 應收帳款
       if (data.total_amount > 0) {
-        createARFromShipment({
+        getEventBus().publish('wms.shipment.completed', {
+          shipment_id: data.id,
           customer: data.customer,
           order_ref: `OUT-${data.id}`,
           total_amount: data.total_amount,
-          id: data.id,
-        })
+          carrier: data.carrier,
+          tracking_number,
+        }, { source: 'Outbound.jsx' })
       }
     }
   }

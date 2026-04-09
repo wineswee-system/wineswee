@@ -12,10 +12,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
+          // Vendor chunks — shared libraries split by usage pattern
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-charts': ['chart.js', 'react-chartjs-2'],
           'vendor-pdf': ['jspdf', 'jspdf-autotable'],
           'vendor-supabase': ['@supabase/supabase-js'],
+          // Icon library — used across all modules, loaded once
+          'vendor-icons': ['lucide-react'],
         }
       }
     },

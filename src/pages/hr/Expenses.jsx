@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { createJEFromExpense } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -53,10 +53,15 @@ export default function Expenses() {
     const { data } = await updateExpenseStatus(id, '已核銷')
     if (data) {
       setExpenses(prev => prev.map(e => e.id === id ? data : e))
-      const result = await createJEFromExpense(data)
-      if (result.ok) {
-        alert(`已核銷並自動產生傳票 ${result.entry.entry_number}`)
-      }
+      getEventBus().publish('hr.expense.approved', {
+        expense_id: data.id,
+        employee: data.employee,
+        category: data.category,
+        amount: data.amount,
+        description: data.description,
+        date: data.date,
+      }, { source: 'Expenses.jsx' })
+      alert('已核銷並發送費用核准事件')
     }
   }
 

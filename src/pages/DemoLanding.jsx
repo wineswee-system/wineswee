@@ -11,6 +11,12 @@ import {
 import FeatureCarousel from '../components/ui/FeatureCarousel'
 import { ALL_DEMOS } from '../data/featureDemos'
 
+import DemoIndustrySection from './components/DemoIndustrySection'
+import DemoBentoSection from './components/DemoBentoSection'
+import DemoLineSection from './components/DemoLineSection'
+import DemoComparisonTable from './components/DemoComparisonTable'
+import DemoContactSection from './components/DemoContactSection'
+
 // ── Count-up animation hook ──
 function useCounter(target, duration = 1600, start = false) {
   const [count, setCount] = useState(0)
@@ -143,10 +149,8 @@ const SYSTEMS = [
   { id: 'integration', title: '外部串接', icon: Plug, path: '/integration/ecommerce', count: 4, color: '#f97316' },
 ]
 
-const MODULE_OPTIONS = ['HR 人資', 'CRM 客戶', 'WMS 倉儲', '銷售', 'POS', '採購', '財務', '製造品管', '流程', '組織', '數據分析', 'AI', '全部都要']
-
 // ════════════════════════════════════════════
-//  COMPONENT
+//  COMPONENTS
 // ════════════════════════════════════════════
 
 function FeatureShowcase() {
@@ -220,60 +224,9 @@ function ROICalculator() {
   )
 }
 
-// ── Interactive LINE Phone (hover to switch screen) ──
-function InteractiveLinePhone() {
-  const [activeScreen, setActiveScreen] = useState('clock')
-  const screens = {
-    clock: { header: '打卡結果', headerBg: '#EFF9FB', headerColor: '#0E7490', title: '上班打卡成功', rows: [['員工', '王小明'], ['時間', '08:52'], ['方式', 'GPS 驗證']] },
-    salary: { header: '2026-04 薪資', headerBg: '#ECFDF5', headerColor: '#047857', title: 'NT$ 45,800', rows: [['底薪', 'NT$ 40,000'], ['加班費', '+5,200'], ['津貼', '+3,000']] },
-    leave: { header: '請假申請', headerBg: '#EFF6FF', headerColor: '#1D4ED8', title: '已送出審核', rows: [['假別', '特休假'], ['日期', '04/15~04/16'], ['狀態', '待主管核准']] },
-    stock: { header: '庫存查詢', headerBg: '#FFF7ED', headerColor: '#C2410C', title: '12 項低庫存', rows: [['有機牛奶', '45 / 50'], ['鮮奶油', '8 / 20'], ['雞胸肉', '150 / 80']] },
-  }
-  const s = screens[activeScreen]
-
-  return (
-    <div className="demo-line-phone-col">
-      <div className="demo-phone" style={{ background: '#e8e8e8' }}>
-        <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
-        <div className="demo-phone-chat">
-          <div className="demo-msg-r">{activeScreen === 'clock' ? '打卡' : activeScreen === 'salary' ? '薪資' : activeScreen === 'leave' ? '請假' : '庫存'}</div>
-          <div className="demo-msg-l" key={activeScreen}>
-            <div style={{ background: s.headerBg, padding: '10px 14px' }}>
-              <div style={{ fontSize: 10, color: `${s.headerColor}99`, fontWeight: 600 }}>{s.header}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: s.headerColor, marginTop: 2 }}>{s.title}</div>
-            </div>
-            <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
-              {s.rows.map(([k, v], i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>{k}</span><span style={{ fontWeight: 600, color: '#222' }}>{v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="demo-line-triggers">
-        {[
-          { key: 'clock', label: '打卡' },
-          { key: 'salary', label: '薪資' },
-          { key: 'leave', label: '請假' },
-          { key: 'stock', label: '庫存' },
-        ].map(t => (
-          <button
-            key={t.key}
-            className={`demo-line-trigger ${activeScreen === t.key ? 'active' : ''}`}
-            onMouseEnter={() => setActiveScreen(t.key)}
-            onClick={() => setActiveScreen(t.key)}
-          >{t.label}</button>
-        ))}
-      </div>
-      <div className="demo-line-phone-label">
-        <strong>互動體驗</strong>
-        <span>滑過上方按鈕，即時切換畫面</span>
-      </div>
-    </div>
-  )
-}
+// ════════════════════════════════════════════
+//  MAIN PAGE
+// ════════════════════════════════════════════
 
 export default function DemoLanding() {
   const navigate = useNavigate()
@@ -390,7 +343,7 @@ export default function DemoLanding() {
         </div>
       </section>
 
-      {/* ═══ Feature Showcase (moved up — most prominent) ═══ */}
+      {/* ═══ Feature Showcase ═══ */}
       <Section id="showcase" dark>
         <div className="demo-container">
           <div className="demo-sh">
@@ -408,107 +361,14 @@ export default function DemoLanding() {
             <h2>適合你的公司嗎？</h2>
             <p>不同產業有不同的管理重點，我們都能對應</p>
           </div>
-          <div className="demo-industry-grid">
-            {[
-              {
-                icon: Warehouse, title: '餐飲連鎖', color: '#f97316',
-                pains: ['門市多、排班複雜，人力調度困難', '食材效期管控不易，過期報廢成本高', '各店營收數據分散，老闆看不到全貌'],
-                solutions: ['智慧排班 + 勞基法即時檢核', '批號效期追蹤 + 低庫存自動預警', 'POS 日結 + BI 看板即時匯總'],
-              },
-              {
-                icon: ShoppingCart, title: '批發零售', color: '#2563eb',
-                pains: ['進銷存各做各的，月底對帳對到崩潰', '客戶帳款追不回來，應收越積越多', '促銷活動人工算折扣，錯誤率高'],
-                solutions: ['進貨→庫存→出貨→帳款全自動串接', '帳齡分析 + 逾期自動提醒', '促銷引擎自動套用最優方案'],
-              },
-              {
-                icon: Factory, title: '製造業', color: '#059669',
-                pains: ['物料需求靠 Excel 算，經常缺料停工', '品質問題追溯困難，不知道哪批出問題', '生產成本算不清楚，毛利只是猜的'],
-                solutions: ['MRP 需求計畫自動計算缺料', '批號追蹤 + 品質檢驗紀錄完整', '進貨成本 + 工時自動算出實際毛利'],
-              },
-              {
-                icon: HeadphonesIcon, title: '服務業', color: '#7c3aed',
-                pains: ['客戶資料散在業務手機裡，離職就帶走', '專案進度追蹤靠問人，沒有系統化管理', '員工報帳流程冗長，紙本簽核效率低'],
-                solutions: ['CRM 客戶 360° 集中管理', '任務流程 + SOP 範本 + 即時追蹤', 'LINE 行動簽核 + 費用線上核銷'],
-              },
-              {
-                icon: Globe, title: '貿易物流', color: '#d97706',
-                pains: ['多幣別交易，匯率換算容易出錯', '供應商多、採購流程缺乏標準化', '倉庫跨區調撥，庫存數字不即時'],
-                solutions: ['匯率管理 + 多幣別自動換算', '採購流程 + 三方比對 + 合約管理', '多倉庫即時庫存 + 調撥自動扣帳'],
-              },
-              {
-                icon: BarChart3, title: '科技 / 新創', color: '#db2777',
-                pains: ['公司快速成長，HR 流程跟不上', '業務獎金計算規則複雜，每月手算', '老闆想看數據但報表散落各處'],
-                solutions: ['完整 HR 生命週期管理', 'CRM 成交數據直接連動獎金計算', 'BI 營運看板 + 自訂儀表板'],
-              },
-            ].map((ind, i) => {
-              const IIcon = ind.icon
-              return (
-                <div key={i} className="demo-industry-card-v2">
-                  <div className="demo-ind-header">
-                    <div className="demo-ind-icon" style={{ '--ind-color': ind.color }}>
-                      <IIcon size={20} strokeWidth={1.8} />
-                    </div>
-                    <h3>{ind.title}</h3>
-                  </div>
-                  <div className="demo-ind-section">
-                    <div className="demo-ind-label pain">常見痛點</div>
-                    {ind.pains.map((p, pi) => (
-                      <div key={pi} className="demo-ind-item pain">{p}</div>
-                    ))}
-                  </div>
-                  <div className="demo-ind-section">
-                    <div className="demo-ind-label solution">對應方案</div>
-                    {ind.solutions.map((s, si) => (
-                      <div key={si} className="demo-ind-item solution"><Check size={12} /> {s}</div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <DemoIndustrySection />
         </div>
       </Section>
 
       {/* ═══ Bento Grid — core value props ═══ */}
       <Section id="overview" dark>
         <div className="demo-container">
-          <div className="bento-grid">
-            {/* Row 1: 3 equal cards */}
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#2563eb' }}><Zap size={22} strokeWidth={1.8} /></div>
-              <h3>跨模組即時串接</h3>
-              <p>訂單自動檢查庫存與信用額度，出貨即時拋轉應收帳款，減少人工對帳。</p>
-              <div className="bento-tags">
-                {['贏單→應收', '出貨→帳款', '請假→薪資', '庫存→採購'].map(t => <span key={t} className="bento-tag">{t}</span>)}
-              </div>
-            </div>
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#059669' }}><Shield size={22} strokeWidth={1.8} /></div>
-              <h3>台灣法規合規引擎</h3>
-              <p>勞基法、性平法共 50+ 條法規即時檢核，排班違規自動標示，降低勞檢風險。</p>
-            </div>
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#d97706' }}><Globe size={22} strokeWidth={1.8} /></div>
-              <h3>LINE 行動辦公</h3>
-              <p>打卡、假單、薪資、簽核，打開 LINE 就能操作，不受時間地點限制。</p>
-            </div>
-            {/* Row 2: 3 equal cards */}
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#7c3aed' }}><BarChart3 size={22} strokeWidth={1.8} /></div>
-              <h3>BI 數據看板</h3>
-              <p>即時營運圖表、銷售預測、異常偵測，用數據驅動決策，不憑感覺。</p>
-            </div>
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#db2777' }}><Users size={22} strokeWidth={1.8} /></div>
-              <h3>不限使用人數</h3>
-              <p>全模組授權不按人頭計費，5 人到 200 人同一套系統，隨公司成長擴展。</p>
-            </div>
-            <div className="bento-card glass">
-              <div className="bento-icon" style={{ '--bcolor': '#f97316' }}><CreditCard size={22} strokeWidth={1.8} /></div>
-              <h3>全模組一次包含</h3>
-              <p>人事、倉儲、CRM、財務、生產全部內建，不用一個一個另外買。</p>
-            </div>
-          </div>
+          <DemoBentoSection />
         </div>
       </Section>
 
@@ -603,143 +463,7 @@ export default function DemoLanding() {
             <h2>LINE 行動辦公整合</h2>
             <p>無需額外安裝 App，員工透過 LINE 即可完成日常營運操作</p>
           </div>
-
-          {/* 3 phones side by side */}
-          <div className="demo-line-phones">
-
-            {/* Phone 1: Interactive — hover to switch */}
-            <InteractiveLinePhone />
-
-            {/* Phone 2: LIFF 員工首頁 */}
-            <div className="demo-line-phone-col">
-              <div className="demo-phone" style={{ background: '#f0f2f5' }}>
-                <div style={{ background: '#fff', padding: '12px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(8,145,178,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0891B2' }}>王</div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>午安，王小明</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>研發部 · 資深工程師</div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ padding: '8px 12px', display: 'flex', gap: 6 }}>
-                  <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>出勤</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#0891B2' }}>已上班</div>
-                  </div>
-                  <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>待辦</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>3 項任務</div>
-                  </div>
-                  <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                    <div style={{ fontSize: 9, color: '#94a3b8' }}>假單</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>已核准</div>
-                  </div>
-                </div>
-                <div style={{ padding: '0 12px 8px' }}>
-                  <div style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.08), rgba(220,38,38,0.08))', border: '1px solid rgba(234,88,12,0.15)', borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>點我下班打卡</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>上班 08:52</div>
-                    </div>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #fb923c, #f87171)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff' }}>👋</div>
-                  </div>
-                </div>
-                <div style={{ padding: '0 12px 8px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>功能選單</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
-                    {[
-                      { icon: '⏰', label: '打卡', bg: 'rgba(8,145,178,0.1)' },
-                      { icon: '💰', label: '查薪水', bg: 'rgba(5,150,105,0.1)' },
-                      { icon: '📋', label: '請假', bg: 'rgba(37,99,235,0.1)' },
-                      { icon: '📦', label: '查庫存', bg: 'rgba(234,88,12,0.1)' },
-                      { icon: '⚙️', label: '流程', bg: 'rgba(124,58,237,0.1)' },
-                      { icon: '🧾', label: '報帳', bg: 'rgba(217,119,6,0.1)' },
-                      { icon: '📅', label: '排休', bg: 'rgba(8,145,178,0.1)' },
-                      { icon: '🤝', label: '客戶', bg: 'rgba(219,39,119,0.1)' },
-                    ].map(m => (
-                      <div key={m.label} style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)', borderRadius: 8, padding: '8px 4px', textAlign: 'center' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 7, background: m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, margin: '0 auto 3px' }}>{m.icon}</div>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b' }}>{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.06)', padding: '6px 0' }}>
-                  {['首頁', '打卡', '請假', '庫存'].map((t, i) => (
-                    <div key={t} style={{ textAlign: 'center', fontSize: 9, color: i === 0 ? '#0891B2' : '#94a3b8', fontWeight: 500 }}>{t}</div>
-                  ))}
-                </div>
-              </div>
-              <div className="demo-line-phone-label">
-                <strong>員工行動工作台</strong>
-                <span>在 LINE 裡直接開，8 大功能一鍵操作</span>
-              </div>
-            </div>
-
-            {/* Phone 3: 主管簽核 + Rich Menu */}
-            <div className="demo-line-phone-col">
-              <div className="demo-phone" style={{ background: '#e8e8e8' }}>
-                <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
-                <div className="demo-phone-chat" style={{ minHeight: 160 }}>
-                  <div className="demo-msg-l" style={{ width: '82%' }}>
-                    <div style={{ background: '#FEF3C7', padding: '10px 14px' }}>
-                      <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>簽核通知</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#78350F', marginTop: 2 }}>李美玲 申請特休假</div>
-                    </div>
-                    <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>日期</span><span style={{ fontWeight: 600, color: '#222' }}>04/15 ~ 04/16</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span>天數</span><span style={{ fontWeight: 600, color: '#222' }}>2 天</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>事由</span><span style={{ fontWeight: 600, color: '#222' }}>家庭旅遊</span></div>
-                    </div>
-                    <div style={{ padding: '6px 14px 10px', display: 'flex', gap: 6 }}>
-                      <div style={{ flex: 1, textAlign: 'center', padding: '6px', borderRadius: 6, background: '#059669', color: '#fff', fontSize: 12, fontWeight: 700 }}>核准</div>
-                      <div style={{ flex: 1, textAlign: 'center', padding: '6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontSize: 12, fontWeight: 600 }}>退回</div>
-                    </div>
-                  </div>
-                  <div className="demo-msg-r">核准</div>
-                  <div className="demo-msg-l" style={{ width: '75%' }}>
-                    <div style={{ padding: '10px 14px', fontSize: 12, color: '#059669', fontWeight: 600 }}>
-                      ✓ 已核准李美玲的特休假申請
-                    </div>
-                  </div>
-                </div>
-                {/* Rich Menu */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', background: '#f6f8fa' }}>
-                  {[
-                    { icon: '✍️', label: '待簽核', color: '#EA580C' },
-                    { icon: '📊', label: '營運數據', color: '#2563EB' },
-                    { icon: '👥', label: '員工狀態', color: '#0891B2' },
-                  ].map(m => (
-                    <div key={m.label} style={{ background: '#fff', padding: '10px 6px', textAlign: 'center', borderRight: '1px solid rgba(0,0,0,0.04)', borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: `${m.color}12`, border: `1px solid ${m.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, margin: '0 auto 3px' }}>{m.icon}</div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1e293b' }}>{m.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="demo-line-phone-label">
-                <strong>主管行動簽核</strong>
-                <span>假單、採購單，LINE 上直接核准或退回</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Feature pills */}
-          <div className="demo-line-pills">
-            {[
-              '不用另外裝 App',
-              'GPS + WiFi 雙重打卡驗證',
-              '14 種假別線上申請',
-              '薪資明細即時查詢',
-              '庫存低量自動推播',
-              '主管隨時隨地簽核',
-              '排休月曆一目瞭然',
-              '班表提醒自動推播',
-            ].map(f => (
-              <span key={f} className="demo-line-pill"><Check size={11} /> {f}</span>
-            ))}
-          </div>
+          <DemoLineSection />
         </div>
       </Section>
 
@@ -760,29 +484,7 @@ export default function DemoLanding() {
           <div className="demo-sh">
             <h2>跟傳統 ERP 有什麼不同？</h2>
           </div>
-          <div className="compare-table">
-            <div className="compare-header">
-              <div className="compare-col feature">比較項目</div>
-              <div className="compare-col them">傳統 ERP</div>
-              <div className="compare-col us">SME OPS</div>
-            </div>
-            {[
-              { feature: '導入時程', them: '半年 ~ 一年', us: '兩週內上線' },
-              { feature: '授權方式', them: '按人頭計費', us: '不限使用人數' },
-              { feature: '操作介面', them: '類似 Excel 表格', us: '現代化 Web UI' },
-              { feature: 'LINE 整合', them: '無 / 需額外開發', us: '原生內建' },
-              { feature: '模組擴充', them: '每個模組另外購買', us: '全模組包含' },
-              { feature: '行動辦公', them: '需另購 App', us: 'LINE + Web 即用' },
-              { feature: '跨模組串接', them: '手動匯出匯入', us: '即時自動串接' },
-              { feature: '法規合規', them: '需自行檢查', us: '內建 50+ 條法規檢核' },
-            ].map((row, i) => (
-              <div key={i} className="compare-row">
-                <div className="compare-col feature">{row.feature}</div>
-                <div className="compare-col them">{row.them}</div>
-                <div className="compare-col us"><Check size={13} /> {row.us}</div>
-              </div>
-            ))}
-          </div>
+          <DemoComparisonTable />
         </div>
       </Section>
 
@@ -855,65 +557,13 @@ export default function DemoLanding() {
             <h2>聯繫我們</h2>
             <p>留下資料，將由專人於一個工作天內與您聯繫</p>
           </div>
-
-          {inquiryStatus === 'success' ? (
-            <div className="demo-form-done">
-              <CheckCircle size={40} strokeWidth={1.5} />
-              <h3>感謝您的諮詢</h3>
-              <p>我們會在 1 個工作天內與您聯繫。</p>
-            </div>
-          ) : (
-            <div className="demo-form">
-              <div className="demo-form-row">
-                {[
-                  { key: 'company_name', label: '公司名稱 *', ph: '例：好吃餐飲有限公司' },
-                  { key: 'contact_name', label: '聯絡人 *', ph: '王小明' },
-                  { key: 'phone', label: '電話 *', ph: '0912-345-678' },
-                  { key: 'email', label: 'Email', ph: 'example@company.com' },
-                ].map(f => (
-                  <label key={f.key} className="demo-field">
-                    <span>{f.label}</span>
-                    <input
-                      type="text" placeholder={f.ph} value={inquiry[f.key]}
-                      onChange={e => setInquiry(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <label className="demo-field">
-                <span>公司人數</span>
-                <select value={inquiry.company_size} onChange={e => setInquiry(prev => ({ ...prev, company_size: e.target.value }))}>
-                  <option value="">請選擇</option>
-                  {['1-10 人', '11-30 人', '31-50 人', '51-100 人', '100 人以上'].map(o => <option key={o}>{o}</option>)}
-                </select>
-              </label>
-
-              <div className="demo-field">
-                <span>感興趣的模組</span>
-                <div className="demo-chips">
-                  {MODULE_OPTIONS.map(mod => (
-                    <button
-                      key={mod}
-                      className={`demo-chip ${inquiry.interested_modules.includes(mod) ? 'on' : ''}`}
-                      onClick={() => toggleModule(mod)}
-                    >{mod}</button>
-                  ))}
-                </div>
-              </div>
-
-              {inquiryStatus === 'error' && <p style={{ color: 'var(--accent-red)', fontSize: 13, textAlign: 'center' }}>提交失敗，請稍後再試</p>}
-
-              <button
-                className={`demo-submit ${inquiry.company_name && inquiry.contact_name && inquiry.phone ? 'ready' : ''}`}
-                onClick={handleSubmit}
-                disabled={inquiryStatus === 'sending' || !inquiry.company_name || !inquiry.contact_name || !inquiry.phone}
-              >
-                <Send size={15} />
-                {inquiryStatus === 'sending' ? '提交中...' : '提交諮詢'}
-              </button>
-            </div>
-          )}
+          <DemoContactSection
+            inquiry={inquiry}
+            setInquiry={setInquiry}
+            inquiryStatus={inquiryStatus}
+            onSubmit={handleSubmit}
+            toggleModule={toggleModule}
+          />
         </div>
       </Section>
 

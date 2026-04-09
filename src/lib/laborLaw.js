@@ -244,10 +244,17 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
 
   // Build shift time lookup from definitions
   const shiftTimeMap = {}
+  const shiftHoursMap = {}
   shiftDefs.forEach(d => {
     const startH = parseInt(d.start_time) || 0
+    const startM = parseInt((d.start_time || '').split(':')[1]) || 0
     const endH = parseInt(d.end_time) || 0
+    const endM = parseInt((d.end_time || '').split(':')[1]) || 0
+    const start = startH + startM / 60
+    const end = endH + endM / 60
     shiftTimeMap[d.name] = { start: startH, end: endH }
+    // Calculate shift duration
+    shiftHoursMap[d.name] = end > start ? end - start : (24 - start + end)
   })
 
   // Group by employee
@@ -261,28 +268,55 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     const workDays = empSchedules.filter(s => s.shift && s.shift !== '休')
     const restDays = empSchedules.filter(s => s.shift === '休')
 
-    // 1. 每週至少2天休息 (§36)
+    // H10: 每週至少2天休息 (§36)
     if (restDays.length < 2 && empSchedules.length >= 7) {
       errors.push({
         employee: emp,
+        constraint: 'H10',
         law: '勞基法 §36',
         message: `${emp} 本週僅排 ${restDays.length} 天休息，違反每7日應有2日休息之規定`,
         severity: 'error',
       })
     }
 
-    // 2. 每週工時不超過40小時 (§30)
-    const weeklyHours = workDays.length * 8
+    // H2: 每日工時檢查 — 正常8h，含加班最高12h (§30, §32)
+    for (const s of workDays) {
+      const hours = shiftHoursMap[s.shift]
+      if (hours && hours > 12) {
+        errors.push({
+          employee: emp,
+          constraint: 'H2',
+          law: '勞基法 §32',
+          message: `${emp} ${s.date} 班次「${s.shift}」工時 ${hours.toFixed(1)}h，超過每日12小時上限`,
+          severity: 'error',
+        })
+      } else if (hours && hours > 8) {
+        warnings.push({
+          employee: emp,
+          constraint: 'H2',
+          law: '勞基法 §30',
+          message: `${emp} ${s.date} 班次「${s.shift}」工時 ${hours.toFixed(1)}h，超過正常8小時（含加班）`,
+          severity: 'warning',
+        })
+      }
+    }
+
+    // 每週工時不超過40小時 (§30)
+    let weeklyHours = 0
+    for (const s of workDays) {
+      weeklyHours += shiftHoursMap[s.shift] || 8
+    }
     if (weeklyHours > 40) {
       warnings.push({
         employee: emp,
+        constraint: 'S3',
         law: '勞基法 §30',
-        message: `${emp} 本週工時 ${weeklyHours}h 超過40小時上限`,
+        message: `${emp} 本週工時 ${weeklyHours.toFixed(1)}h 超過40小時上限`,
         severity: 'warning',
       })
     }
 
-    // 3. 連續工作不超過6天
+    // H3: 連續工作不超過6天 (§36 七休一)
     let consecutiveWork = 0
     let maxConsecutive = 0
     for (const date of weekDates) {
@@ -297,19 +331,20 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     if (maxConsecutive > 6) {
       errors.push({
         employee: emp,
+        constraint: 'H3',
         law: '勞基法 §36',
         message: `${emp} 連續工作 ${maxConsecutive} 天，超過6天上限（每7日應有1日例假）`,
         severity: 'error',
       })
     }
 
-    // 4. 輪班間隔檢查 (§34) — 用 shift_definitions 的時間
+    // H4: 輪班間隔檢查 (§34) — 用 shift_definitions 的時間
     for (let i = 1; i < empSchedules.length; i++) {
       const prev = empSchedules[i - 1]
       const curr = empSchedules[i]
       if (prev.shift && curr.shift && prev.shift !== '休' && curr.shift !== '休') {
-        const prevTime = shiftTimeMap[prev.shift]
-        const currTime = shiftTimeMap[curr.shift]
+        const prevTime = shiftTimeMap[prev.shift] || parseShiftString(prev.shift)
+        const currTime = shiftTimeMap[curr.shift] || parseShiftString(curr.shift)
 
         if (!prevTime || !currTime) continue
 
@@ -321,20 +356,18 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
         // Calculate actual gap
         let gap
         if (prevCrossesMidnight) {
-          // Night shift ends in the morning of the NEXT day (which is curr's day)
-          // Gap = curr start - prev end (both on the same calendar day)
           gap = currStart - prevEnd
         } else {
-          // Normal shift: ended yesterday
           gap = currStart + (24 - prevEnd)
         }
 
         if (gap < 11) {
-          warnings.push({
+          errors.push({
             employee: emp,
+            constraint: 'H4',
             law: '勞基法 §34',
             message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），應至少11小時`,
-            severity: 'warning',
+            severity: 'error',
           })
         }
       }
@@ -342,6 +375,17 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
   }
 
   return { errors, warnings, isValid: errors.length === 0 }
+}
+
+/**
+ * Parse a shift string like '14-22' or '6-14' into { start, end }.
+ * Fallback for when shiftDefs are not provided.
+ */
+function parseShiftString(shift) {
+  if (!shift || typeof shift !== 'string') return null
+  const match = shift.match(/^(\d{1,2})-(\d{1,2})$/)
+  if (!match) return null
+  return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) }
 }
 
 // ══════════════════════════════════════

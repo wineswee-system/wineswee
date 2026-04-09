@@ -28,6 +28,6 @@ describe('StatCard', () => {
 
   it('defaults to cyan color', () => {
     const { container } = render(<StatCard label="Test" value="1" />)
-    expect(container.querySelector('.text-cyan-400')).toBeInTheDocument()
+    expect(container.querySelector('.text-cyan-500')).toBeInTheDocument()
   })
 })

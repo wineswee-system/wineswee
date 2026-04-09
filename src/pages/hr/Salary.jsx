@@ -218,7 +218,11 @@ export default function Salary() {
       const att = attMap[emp.name] || { hours: 0, late: 0, days: 0 }
       const otHours = otMap[emp.name] || 0
       const absenceDays = lvMap[emp.name]?.absence || 0
-      const overtimePay = Math.round(otHours * (baseSalary / 30 / 8) * 1.34)
+      // Tiered OT: first 2h = 1.34x, 3h+ = 1.67x (勞基法 §24)
+      const hourlyRate = baseSalary / 30 / 8
+      const overtimePay = otHours <= 2
+        ? Math.round(otHours * hourlyRate * 1.34)
+        : Math.round(2 * hourlyRate * 1.34 + (otHours - 2) * hourlyRate * 1.67)
       const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
       const lateDeduction = att.late * 100
 
@@ -249,8 +253,8 @@ export default function Salary() {
         employee: p.employee,
         month,
         base_salary: p.base_salary,
-        allowance: 0,
-        overtime: 0,
+        allowance: (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.housing_allowance || 0),
+        overtime: p.overtimePay || 0,
         bonus: 0,
         dependents: 0,
         voluntary_pension_rate: 0,
@@ -258,8 +262,8 @@ export default function Salary() {
         health_insurance: p.healthInsurance,
         pension_self: p.pension,
         income_tax: p.incomeTax,
-        absence_deduction: 0,
-        late_deduction: 0,
+        absence_deduction: p.absenceDeduction || 0,
+        late_deduction: p.lateDeduction || 0,
         other_deduction: 0,
         deduction_note: '',
         insurance: p.laborInsurance + p.healthInsurance,

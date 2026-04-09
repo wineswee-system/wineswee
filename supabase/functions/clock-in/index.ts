@@ -186,7 +186,9 @@ serve(async (req: Request) => {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const hours = ((now.getTime() - new Date(`${dateStr}T${existing.clock_in}`).getTime()) / 3600000)
+      // Calculate hours using Taiwan time (minutes-based, no timezone issues)
+      const [inH, inM] = (existing.clock_in as string).split(':').map(Number)
+      const hours = ((hours24 * 60 + minutes) - (inH * 60 + inM)) / 60
       const { data, error } = await supabase.from('attendance_records').upsert({
         ...existing,
         clock_out: timeStr,

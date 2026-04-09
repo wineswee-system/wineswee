@@ -66,7 +66,9 @@ export default function PunchCorrection() {
           if (finalIn && finalOut) {
             const [inH, inM] = finalIn.split(':').map(Number)
             const [outH, outM] = finalOut.split(':').map(Number)
-            update.hours = Math.round(((outH * 60 + outM) - (inH * 60 + inM)) / 60 * 10) / 10
+            let diff = (outH * 60 + outM) - (inH * 60 + inM)
+            if (diff < 0) diff += 24 * 60 // overnight shift
+            update.hours = Math.round(diff / 60 * 10) / 10
           }
           await supabase.from('attendance_records').update(update).eq('id', existing.id)
         } else {

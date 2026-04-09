@@ -5,6 +5,13 @@ import { validateSchedule, LABOR_STANDARDS, GENDER_EQUALITY, OCCUPATIONAL_SAFETY
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal from '../../components/Modal'
 
+// Parse time string "HH:MM" to decimal hours (e.g., "09:30" -> 9.5)
+function parseTime(t) {
+  if (!t) return 0
+  const [h, m] = String(t).split(':').map(Number)
+  return (h || 0) + (m || 0) / 60
+}
+
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
 
@@ -158,7 +165,7 @@ export default function Schedule() {
     setCoverCandidates([])
 
     const shiftDef = shiftDefs.find(d => d.name === shiftName)
-    const shiftStartH = shiftDef ? parseInt(shiftDef.start_time) || 11 : 11
+    const shiftStartH = shiftDef ? parseTime(shiftDef.start_time) || 11 : 11
     const absentStore = employees.find(e => e.name === absentEmp)?.store || ''
 
     // Get schedules for the full week + adjacent days (for 11h rule + rest day count)
@@ -186,8 +193,8 @@ export default function Schedule() {
       if (prevSchedule && prevSchedule.shift !== '休') {
         const prevDef = shiftDefs.find(d => d.name === prevSchedule.shift)
         if (prevDef) {
-          const prevEndH = parseInt(prevDef.end_time) || 0
-          const prevStartH = parseInt(prevDef.start_time) || 0
+          const prevEndH = parseTime(prevDef.end_time)
+          const prevStartH = parseTime(prevDef.start_time)
           const crossesMidnight = prevEndH < prevStartH
           if (crossesMidnight) {
             const gap = shiftStartH - prevEndH
@@ -204,10 +211,10 @@ export default function Schedule() {
       if (nextSchedule && nextSchedule.shift !== '休' && shiftDef) {
         const nextDef = shiftDefs.find(d => d.name === nextSchedule.shift)
         if (nextDef) {
-          const endH = parseInt(shiftDef.end_time) || 0
-          const startH = parseInt(shiftDef.start_time) || 0
+          const endH = parseTime(shiftDef.end_time)
+          const startH = parseTime(shiftDef.start_time)
           const crossesMidnight = endH < startH
-          const nextStartH = parseInt(nextDef.start_time) || 11
+          const nextStartH = parseTime(nextDef.start_time) || 11
           // If crosses midnight: shift ends at endH on NEXT day morning, gap = nextStart - endH
           // If normal: shift ends today, gap = nextStart + 24 - endH (next day)
           const gap = crossesMidnight ? (nextStartH - endH) : (nextStartH + 24 - endH)
@@ -338,8 +345,8 @@ export default function Schedule() {
           // Night shift (e.g., 22:00-06:00): ends next morning, so effective end = 06:00 on CURRENT day
           let prevEndEffective = null
           if (prevDef) {
-            const prevStartH = parseInt(prevDef.start_time) || 0
-            const prevEndH = parseInt(prevDef.end_time) || 0
+            const prevStartH = parseTime(prevDef.start_time)
+            const prevEndH = parseTime(prevDef.end_time)
             const crossesMidnight = prevEndH < prevStartH // e.g., 22-06
             // If crosses midnight, prev shift ends at prevEndH on CURRENT day (morning)
             // Gap = candidate start on current day - prevEndH on current day
@@ -359,7 +366,7 @@ export default function Schedule() {
           for (let attempt = 0; attempt < workShifts.length; attempt++) {
             const candidateName = workShifts[(startIdx + attempt) % workShifts.length]
             const candidateDef = shiftDefs.find(d => d.name === candidateName)
-            const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 9 : 9
+            const candidateStartH = candidateDef ? parseTime(candidateDef.start_time) || 9 : 9
 
             // Check 11h gap with PREVIOUS day
             if (prevDef) {
@@ -367,7 +374,7 @@ export default function Schedule() {
               if (prevEndEffective !== null) {
                 gap = candidateStartH - prevEndEffective
               } else {
-                const prevEndH = parseInt(prevDef.end_time) || 0
+                const prevEndH = parseTime(prevDef.end_time)
                 gap = candidateStartH + (24 - prevEndH)
               }
               if (gap < 11) continue
@@ -378,10 +385,10 @@ export default function Schedule() {
             const nextShift = nextDate ? existing[`${name}_${nextDate}`] : null
             const nextDef = nextShift && nextShift !== '休' ? shiftDefs.find(d => d.name === nextShift) : null
             if (nextDef && candidateDef) {
-              const candEndH = parseInt(candidateDef.end_time) || 0
-              const candStartH2 = parseInt(candidateDef.start_time) || 0
+              const candEndH = parseTime(candidateDef.end_time)
+              const candStartH2 = parseTime(candidateDef.start_time)
               const candCrosses = candEndH < candStartH2
-              const nextStartH = parseInt(nextDef.start_time) || 11
+              const nextStartH = parseTime(nextDef.start_time) || 11
               const fwdGap = candCrosses ? (nextStartH - candEndH) : (nextStartH + 24 - candEndH)
               if (fwdGap < 11) continue
             }
@@ -503,9 +510,10 @@ export default function Schedule() {
               📋 複製上週
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              if (!confirm(`確定要清除本週（${weekStart} ~ ${weekEnd}）所有排班嗎？`)) return
-              await supabase.from('schedules').delete().gte('date', weekStart).lte('date', weekEnd)
-              setSchedules([])
+              const empNames = filtered.map(e => e.name)
+              if (!confirm(`確定要清除本週（${weekStart} ~ ${weekEnd}）${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
+              await supabase.from('schedules').delete().in('employee', empNames).gte('date', weekStart).lte('date', weekEnd)
+              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < weekStart || s.date > weekEnd))
             }}>
               🗑️ 清除本週
             </button>
@@ -775,7 +783,7 @@ export default function Schedule() {
                     <thead><tr><th>班別</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th></tr></thead>
                     <tbody>
                       {shiftDefs.map(d => {
-                        const sh = parseInt(d.start_time) || 0, eh = parseInt(d.end_time) || 0
+                        const sh = parseTime(d.start_time), eh = parseTime(d.end_time)
                         const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
                         return (
                           <tr key={d.id}>

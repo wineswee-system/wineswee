@@ -464,8 +464,8 @@ export default function Sidebar() {
     }
   }
 
-  // Role-based filtering: staff only sees dashboard + people
-  const userRole = profile?.role || 'staff'
+  // Role-based filtering: only explicitly 'staff' role is restricted
+  const userRole = profile?.role || 'manager'
   const STAFF_GROUPS = ['dashboard', 'people']
   const roleFiltered = userRole === 'staff'
     ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))

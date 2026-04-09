@@ -132,8 +132,20 @@ export default function Schedule() {
 
   const getOffRequest = (empName, date) => offRequests.find(o => o.employee === empName && o.date === date)
 
+  // Get available shifts for a specific store (store-specific + global)
+  const getStoreShifts = (storeName, empType = 'all') => {
+    const store = locations.find(l => l.name === storeName)
+    const storeId = store?.id
+    return shiftDefs.filter(d => {
+      // Match store: store-specific OR global (no store_id)
+      const storeMatch = !d.store_id || d.store_id === storeId
+      // Match employee type
+      const typeMatch = !d.employee_type || d.employee_type === 'all' || d.employee_type === empType
+      return storeMatch && typeMatch
+    })
+  }
+
   // AI Auto-Schedule
-  const WORK_SHIFTS = SHIFT_TYPES.filter(t => t.label !== '休').map(t => t.label)
   const holidaySet = new Set(holidays)
 
   const handleAutoSchedule = async () => {
@@ -224,11 +236,18 @@ export default function Schedule() {
             prevEndEffective = crossesMidnight ? prevEndH : null // null means normal shift, use 24-based calc
           }
 
-          // Find a valid shift with ≥ 11h gap
+          // Find a valid shift with ≥ 11h gap — use store-specific shifts
           let assigned = false
-          const startIdx = (empNames.indexOf(name) + dayIndex) % WORK_SHIFTS.length
-          for (let attempt = 0; attempt < WORK_SHIFTS.length; attempt++) {
-            const candidateName = WORK_SHIFTS[(startIdx + attempt) % WORK_SHIFTS.length]
+          const emp = filtered.find(e => e.name === name)
+          const empStore = emp?.store || storeFilter || ''
+          const isPT = emp?.position?.includes('PT') || emp?.employment_type === 'PT'
+          const empType = isPT ? 'pt' : 'full_time'
+          const availableShifts = getStoreShifts(empStore, empType).map(d => d.name)
+          const workShifts = availableShifts.length > 0 ? availableShifts : SHIFT_TYPES.filter(t => t.label !== '休').map(t => t.label)
+
+          const startIdx = (empNames.indexOf(name) + dayIndex) % workShifts.length
+          for (let attempt = 0; attempt < workShifts.length; attempt++) {
+            const candidateName = workShifts[(startIdx + attempt) % workShifts.length]
             const candidateDef = shiftDefs.find(d => d.name === candidateName)
             const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 9 : 9
 
@@ -554,16 +573,23 @@ export default function Schedule() {
                             borderRadius: 10, padding: 8, boxShadow: 'var(--shadow-lg)',
                             display: 'flex', flexDirection: 'column', gap: 4, minWidth: 90,
                           }}>
-                            {SHIFT_TYPES.map(t => (
-                              <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
-                                style={{
-                                  padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                  fontSize: 12, fontWeight: 600, textAlign: 'center',
-                                  background: t.dim, color: t.color,
-                                }}>
-                                {t.label}
-                              </button>
-                            ))}
+                            {(() => {
+                              const empStore = emp.store || storeFilter || ''
+                              const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
+                              const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
+                              const storeShiftLabels = storeShiftDefs.map(d => d.name)
+                              const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
+                              return shiftOptions.map(t => (
+                                <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
+                                  style={{
+                                    padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    fontSize: 12, fontWeight: 600, textAlign: 'center',
+                                    background: t.dim, color: t.color,
+                                  }}>
+                                  {t.label}
+                                </button>
+                              ))
+                            })()}
                             <button onClick={() => setEditCell(null)} style={{
                               padding: '4px', borderRadius: 6, border: '1px solid var(--border-medium)',
                               background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',

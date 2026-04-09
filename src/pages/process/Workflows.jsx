@@ -635,7 +635,7 @@ export default function Workflows() {
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
           { key: 'active', label: `🟢 進行中流程 (${activeInstances.length})` },
           { key: 'templates', label: `📁 流程範本 (${templates.length})` },
@@ -643,9 +643,11 @@ export default function Workflows() {
           { key: 'archived', label: `📦 封存流程 (${archivedInstances.length})` },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
-            flex: 1, padding: '10px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            padding: '8px 20px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            borderRadius: 8,
             background: tab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
             color: tab === t.key ? '#fff' : 'var(--text-muted)',
+            border: tab === t.key ? 'none' : '1px solid var(--border-medium)',
           }}>{t.label}</button>
         ))}
       </div>

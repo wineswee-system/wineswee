@@ -429,7 +429,7 @@ export default function TaskDetailPanel({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <input className="form-input" type="time" value={form.due_time}
                   onChange={e => setAndDirty('due_time', e.target.value)} style={{ width: 160 }} />
-                <button onClick={() => { setShowTime(false); set('due_time', '') }} style={{
+                <button onClick={() => { setShowTime(false); setAndDirty('due_time', '') }} style={{
                   background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer',
                 }}><X size={16} /></button>
               </div>

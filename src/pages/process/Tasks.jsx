@@ -99,7 +99,7 @@ export default function Tasks() {
   const activeCount = allItems.filter(t => t.status === '進行中').length
   const doneCount = allItems.filter(t => t.status === '已完成').length
 
-  const statusOpts = ['未開始', '進行中', '已完成']
+  const statusOpts = ['未開始', '進行中', '已完成', '已擱置']
 
   return (
     <div className="fade-in">

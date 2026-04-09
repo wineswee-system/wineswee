@@ -51,7 +51,7 @@ const HELP_SECTIONS = [
 
 export default function HelpCenter() {
   const [search, setSearch] = useState('')
-  const [expandedSection, setExpandedSection] = useState(0)
+  const [expandedSection, setExpandedSection] = useState(null)
   const [expandedArticle, setExpandedArticle] = useState(null)
 
   const filteredSections = HELP_SECTIONS.map(section => ({
@@ -79,10 +79,10 @@ export default function HelpCenter() {
       {/* Sections */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filteredSections.map((section, si) => {
-          const isOpen = expandedSection === si
+          const isOpen = expandedSection === section.title
           return (
             <div key={si} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div onClick={() => setExpandedSection(isOpen ? null : si)} style={{
+              <div onClick={() => setExpandedSection(isOpen ? null : section.title)} style={{
                 padding: '14px 20px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>

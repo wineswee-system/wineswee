@@ -128,13 +128,14 @@ export default function Workflows() {
       setSteps(updatedSteps)
 
       // Auto-progression: when a step completes, check if dependent steps can start
+      let latestSteps = updatedSteps
       if (newStatus === '已完成') {
-        await autoProgressDependents(data.id, data.instance_id, updatedSteps)
+        latestSteps = await autoProgressDependents(data.id, data.instance_id, updatedSteps)
       }
 
-      // Check if entire instance is done
+      // Check if entire instance is done (use latestSteps to include auto-progressed)
       const instId = data.instance_id
-      const instSteps = updatedSteps.filter(s => s.instance_id === instId)
+      const instSteps = latestSteps.filter(s => s.instance_id === instId)
       if (instSteps.length > 0 && instSteps.every(s => s.status === '已完成')) {
         const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
         if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
@@ -143,32 +144,32 @@ export default function Workflows() {
   }
 
   // Auto-progress: find steps that depend on the completed step, start them if all prerequisites met
+  // Returns the latest steps array after any auto-progressions
   const autoProgressDependents = async (completedStepId, instanceId, currentSteps) => {
-    // Get all dependencies where this step is a prerequisite
+    let result = [...currentSteps]
     const { data: deps } = await supabase.from('workflow_step_dependencies')
       .select('*').eq('depends_on_step_id', completedStepId).eq('dep_type', 'prerequisite')
-    if (!deps?.length) return
+    if (!deps?.length) return result
 
-    const instSteps = currentSteps.filter(s => s.instance_id === instanceId)
+    const instSteps = result.filter(s => s.instance_id === instanceId)
 
     for (const dep of deps) {
       const targetStep = instSteps.find(s => s.id === dep.step_id)
       if (!targetStep || targetStep.status !== '待處理') continue
 
-      // Check if ALL prerequisites for this target step are completed
       const { data: allPrereqs } = await supabase.from('workflow_step_dependencies')
         .select('depends_on_step_id').eq('step_id', dep.step_id).eq('dep_type', 'prerequisite')
 
       const allMet = (allPrereqs || []).every(p => {
-        const prereqStep = instSteps.find(s => s.id === p.depends_on_step_id)
+        const prereqStep = result.find(s => s.id === p.depends_on_step_id)
         return prereqStep?.status === '已完成'
       })
 
       if (allMet) {
         const { data: started } = await updateWorkflowStep(dep.step_id, { status: '進行中' })
         if (started) {
+          result = result.map(s => s.id === started.id ? started : s)
           setSteps(prev => prev.map(s => s.id === started.id ? started : s))
-          // Notify assignee
           if (started.assignee) {
             const inst = instances.find(i => i.id === instanceId)
             notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id)
@@ -176,6 +177,7 @@ export default function Workflows() {
         }
       }
     }
+    return result
   }
 
   const handleConfirmTask = async (stepId) => {
@@ -465,7 +467,8 @@ export default function Workflows() {
           role: step.role, assignee: deployForm.assignees[i] || '',
           store: loc, status: '待處理',
         }))
-        await supabase.from('workflow_steps').insert(stepRows)
+        const { data: insertedSteps } = await supabase.from('workflow_steps').insert(stepRows).select()
+        if (insertedSteps) setSteps(prev => [...prev, ...insertedSteps])
         setInstances(prev => [instance, ...prev])
         setDeployResult({ location: loc, count: tplSteps.length })
       }

@@ -55,14 +55,12 @@ export default function Checklists() {
       checklist_id: expandedId, title: newItemText.trim(), sort_order: items.length,
     })
     if (data) {
-      setItems(prev => {
-        const updated = [...prev, data]
-        // Use updated length to avoid stale closure
-        updateChecklist(expandedId, { items: updated.length })
-        setChecklists(p => p.map(c => c.id === expandedId ? { ...c, items: updated.length } : c))
-        return updated
-      })
+      const newItems = [...items, data]
+      setItems(newItems)
       setNewItemText('')
+      const newCount = newItems.length
+      await updateChecklist(expandedId, { items: newCount })
+      setChecklists(prev => prev.map(c => c.id === expandedId ? { ...c, items: newCount } : c))
     }
   }
 

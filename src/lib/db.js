@@ -273,6 +273,22 @@ export const createChecklist = (data) =>
 export const updateChecklist = (id, data) =>
   supabase.from('checklists').update(data).eq('id', id).select().single()
 
+export const deleteChecklist = (id) =>
+  supabase.from('checklists').delete().eq('id', id)
+
+// ── Checklist Items (查核清單項目) ────────────────────────
+export const getChecklistItems = (checklistId) =>
+  supabase.from('checklist_items').select('*').eq('checklist_id', checklistId).order('sort_order')
+
+export const createChecklistItem = (data) =>
+  supabase.from('checklist_items').insert(data).select().single()
+
+export const updateChecklistItem = (id, data) =>
+  supabase.from('checklist_items').update(data).eq('id', id).select().single()
+
+export const deleteChecklistItem = (id) =>
+  supabase.from('checklist_items').delete().eq('id', id)
+
 // ── Organizations ──────────────────────────────────────────
 export const getCompanies = () =>
   supabase.from('companies').select('*').order('id')

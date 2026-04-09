@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Plus, Check } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check } from 'lucide-react'
 import {
   updateWorkflowStep, deleteWorkflowStep,
   getStepComments, createStepComment,
   getStepAttachments, createStepAttachment, deleteStepAttachment,
   getStepChecklists, linkStepChecklist, unlinkStepChecklist,
   getStepDependencies, createStepDependency, deleteStepDependency,
-  getStepChecklistItems, createStepChecklistItem, updateStepChecklistItem, deleteStepChecklistItem,
+  getChecklistItems, updateChecklistItem,
   getApprovalChains
 } from '../lib/db'
 
@@ -26,11 +26,10 @@ export default function TaskDetailPanel({
   const [comments, setComments] = useState([])
   const [attachments, setAttachments] = useState([])
   const [linkedChecklists, setLinkedChecklists] = useState([])
+  const [checklistItemsMap, setChecklistItemsMap] = useState({}) // { checklistId: items[] }
   const [dependencies, setDependencies] = useState([])
-  const [checklistItems, setChecklistItems] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
   const [commentText, setCommentText] = useState('')
-  const [newItemText, setNewItemText] = useState('')
   const [saving, setSaving] = useState(false)
   const commentsEndRef = useRef(null)
 
@@ -58,15 +57,25 @@ export default function TaskDetailPanel({
       getStepAttachments(step.id),
       getStepChecklists(step.id),
       getStepDependencies(step.id),
-      getStepChecklistItems(step.id),
       getApprovalChains(),
-    ]).then(([c, a, cl, d, ci, ac]) => {
+    ]).then(([c, a, cl, d, ac]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
-      setChecklistItems(ci.data || [])
       setApprovalChains(ac.data || [])
+      // Load items for each linked checklist
+      const linked = cl.data || []
+      if (linked.length > 0) {
+        Promise.all(linked.map(lc => getChecklistItems(lc.checklist_id)))
+          .then(results => {
+            const map = {}
+            linked.forEach((lc, i) => { map[lc.checklist_id] = results[i].data || [] })
+            setChecklistItemsMap(map)
+          })
+      } else {
+        setChecklistItemsMap({})
+      }
     })
   }, [step?.id])
 
@@ -109,26 +118,15 @@ export default function TaskDetailPanel({
     setCommentText('')
   }
 
-  // Checklist items
-  const handleAddItem = async () => {
-    if (!newItemText.trim()) return
-    const { data } = await createStepChecklistItem({
-      step_id: step.id,
-      title: newItemText.trim(),
-      sort_order: checklistItems.length,
-    })
-    if (data) setChecklistItems(prev => [...prev, data])
-    setNewItemText('')
-  }
-
-  const handleToggleItem = async (item) => {
-    const { data } = await updateStepChecklistItem(item.id, { checked: !item.checked })
-    if (data) setChecklistItems(prev => prev.map(i => i.id === item.id ? data : i))
-  }
-
-  const handleDeleteItem = async (id) => {
-    await deleteStepChecklistItem(id)
-    setChecklistItems(prev => prev.filter(i => i.id !== id))
+  // Toggle checklist item (from linked checklist)
+  const handleToggleLinkedItem = async (item) => {
+    const { data } = await updateChecklistItem(item.id, { checked: !item.checked })
+    if (data) {
+      setChecklistItemsMap(prev => ({
+        ...prev,
+        [item.checklist_id]: (prev[item.checklist_id] || []).map(i => i.id === item.id ? data : i),
+      }))
+    }
   }
 
   // Checklists link
@@ -177,9 +175,6 @@ export default function TaskDetailPanel({
     const s = allSteps.find(x => x.id === id)
     return s ? `${s.step_order}. ${s.title}` : `#${id}`
   }
-
-  const checkedCount = checklistItems.filter(i => i.checked).length
-  const totalItems = checklistItems.length
 
   const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
   const sectionStyle = {
@@ -365,70 +360,97 @@ export default function TaskDetailPanel({
             </select>
           </div>
 
-          {/* ═══ Section: Checklist Items (清單設定) ═══ */}
+          {/* ═══ Section: 清單設定 (select existing checklists) ═══ */}
           <div style={sectionStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ ...labelStyle, marginTop: 0, marginBottom: 0 }}>
-                📋 清單設定 {totalItems > 0 && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({checkedCount}/{totalItems})</span>}
-              </div>
+            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>📋 清單設定 ({linkedChecklists.length})</span>
             </div>
 
-            {/* Progress */}
-            {totalItems > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ flex: 1, height: 6, borderRadius: 4, background: 'var(--border-medium)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 4,
-                    width: `${Math.round(checkedCount / totalItems * 100)}%`,
-                    background: checkedCount === totalItems ? 'var(--accent-green)' : 'var(--accent-cyan)',
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {Math.round(checkedCount / totalItems * 100)}%
-                </span>
-              </div>
-            )}
-
-            {/* Items */}
-            {checklistItems.map(item => (
-              <div key={item.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 10px', borderRadius: 8, marginBottom: 4,
-                background: item.checked ? 'var(--accent-green-dim)' : 'transparent',
-                border: '1px solid var(--border-subtle)',
-              }}>
-                <button onClick={() => handleToggleItem(item)} style={{
-                  width: 22, height: 22, borderRadius: 4, border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
-                  background: item.checked ? 'var(--accent-green)' : 'transparent',
-                  color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, padding: 0,
+            {/* Linked checklists with their items */}
+            {linkedChecklists.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯清單，請從下方選擇</div>
+            ) : linkedChecklists.map(lc => {
+              const clItems = checklistItemsMap[lc.checklist_id] || []
+              const clChecked = clItems.filter(i => i.checked).length
+              const clTotal = clItems.length
+              return (
+                <div key={lc.id} style={{
+                  marginBottom: 10, borderRadius: 8,
+                  border: '1px solid var(--border-subtle)', overflow: 'hidden',
                 }}>
-                  {item.checked && <Check size={14} />}
-                </button>
-                <span style={{
-                  flex: 1, fontSize: 13,
-                  textDecoration: item.checked ? 'line-through' : 'none',
-                  color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
-                }}>{item.title}</span>
-                <button onClick={() => handleDeleteItem(item.id)} style={{
-                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2,
-                  opacity: 0.5,
-                }}><X size={14} /></button>
-              </div>
-            ))}
+                  {/* Checklist header */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', background: 'var(--glass-light)',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>
+                      {lc.checklists?.name || `清單 #${lc.checklist_id}`}
+                      {clTotal > 0 && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({clChecked}/{clTotal})</span>}
+                    </span>
+                    <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
+                      background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
+                    }}>移除</button>
+                  </div>
 
-            {/* Add item */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input className="form-input" type="text" style={{ flex: 1, fontSize: 13 }}
-                placeholder="新增項目..."
-                value={newItemText}
-                onChange={e => setNewItemText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
-              <button className="btn btn-sm btn-primary" onClick={handleAddItem} style={{ fontSize: 12 }}>
-                <Plus size={12} /> 新增
-              </button>
-            </div>
+                  {/* Progress bar */}
+                  {clTotal > 0 && (
+                    <div style={{ padding: '4px 12px 0' }}>
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--border-medium)', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', borderRadius: 2,
+                          width: `${Math.round(clChecked / clTotal * 100)}%`,
+                          background: clChecked === clTotal ? 'var(--accent-green)' : 'var(--accent-cyan)',
+                        }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Items */}
+                  <div style={{ padding: '8px 12px' }}>
+                    {clItems.map(item => (
+                      <div key={item.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
+                      }}>
+                        <button onClick={() => handleToggleLinkedItem(item)} style={{
+                          width: 20, height: 20, borderRadius: 4,
+                          border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
+                          background: item.checked ? 'var(--accent-green)' : 'transparent',
+                          color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, padding: 0,
+                        }}>
+                          {item.checked && <Check size={12} />}
+                        </button>
+                        <span style={{
+                          fontSize: 12,
+                          textDecoration: item.checked ? 'line-through' : 'none',
+                          color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
+                        }}>{item.title}</span>
+                      </div>
+                    ))}
+                    {clItems.length === 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>此清單尚無項目，請到「查核清單」頁面新增</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Select existing checklist */}
+            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+              value="" onChange={e => {
+                const id = e.target.value
+                if (!id) return
+                handleLinkChecklist(id).then(() => {
+                  // Load items for newly linked checklist
+                  getChecklistItems(Number(id)).then(({ data }) => {
+                    setChecklistItemsMap(prev => ({ ...prev, [Number(id)]: data || [] }))
+                  })
+                })
+              }}>
+              <option value="">＋ 選擇已建立的清單...</option>
+              {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
+                .map(c => <option key={c.id} value={c.id}>{c.name} ({c.completed}/{c.items})</option>)}
+            </select>
           </div>
 
           {/* ═══ Section: Notes ═══ */}
@@ -487,33 +509,6 @@ export default function TaskDetailPanel({
               <option value="">＋ 新增觸發任務...</option>
               {otherSteps.filter(s => !triggers.some(t => t.depends_on_step_id === s.id))
                 .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
-            </select>
-          </div>
-
-          {/* ═══ Section: Linked Checklists ═══ */}
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>☑️ 關聯查核清單 ({linkedChecklists.length})</span>
-            </div>
-            {linkedChecklists.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯查核清單</div>
-            ) : linkedChecklists.map(lc => (
-              <div key={lc.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 12px', background: 'var(--glass-light)', borderRadius: 8,
-                marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13,
-              }}>
-                <span>{lc.checklists?.name || `清單 #${lc.checklist_id}`}</span>
-                <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
-                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
-                }}>移除</button>
-              </div>
-            ))}
-            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-              value="" onChange={e => handleLinkChecklist(e.target.value)}>
-              <option value="">＋ 關聯...</option>
-              {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
-                .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 

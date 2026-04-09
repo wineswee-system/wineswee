@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, X, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
+import { Plus, X, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 import { getChecklists, createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -63,17 +63,6 @@ export default function Checklists() {
         return updated
       })
       setNewItemText('')
-    }
-  }
-
-  const handleToggle = async (item) => {
-    const { data } = await updateChecklistItem(item.id, { checked: !item.checked })
-    if (data) {
-      const newItems = items.map(i => i.id === item.id ? data : i)
-      setItems(newItems)
-      const completed = newItems.filter(i => i.checked).length
-      await updateChecklist(expandedId, { completed })
-      setChecklists(prev => prev.map(c => c.id === expandedId ? { ...c, completed } : c))
     }
   }
 
@@ -148,20 +137,12 @@ export default function Checklists() {
               {/* Items */}
               {isOpen && (
                 <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '12px 16px' }}>
-                  {items.map(item => (
+                  {items.map((item, idx) => (
                     <div key={item.id} style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '8px 0', borderBottom: '1px solid var(--border-subtle)',
                     }}>
-                      <button onClick={() => handleToggle(item)} style={{
-                        width: 20, height: 20, borderRadius: 4, flexShrink: 0, padding: 0,
-                        border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
-                        background: item.checked ? 'var(--accent-green)' : 'transparent',
-                        color: '#fff', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {item.checked && <Check size={13} />}
-                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, minWidth: 20 }}>{idx + 1}.</span>
                       {editingItemId === item.id ? (
                         <input
                           className="form-input"
@@ -175,11 +156,7 @@ export default function Checklists() {
                       ) : (
                         <span
                           onClick={() => { setEditingItemId(item.id); setEditingText(item.title) }}
-                          style={{
-                            flex: 1, fontSize: 13, cursor: 'pointer', padding: '4px 0',
-                            textDecoration: item.checked ? 'line-through' : 'none',
-                            color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
-                          }}
+                          style={{ flex: 1, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}
                         >
                           {item.title}
                           <Pencil size={11} style={{ marginLeft: 6, color: 'var(--text-muted)', opacity: 0.4, verticalAlign: 'middle' }} />

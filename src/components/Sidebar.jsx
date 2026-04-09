@@ -266,10 +266,8 @@ const groupNav = {
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
-        { icon: Shield, label: '簽核系統', path: '/system/approval-chains' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
-        { icon: ScrollText, label: 'SOP 範本', path: '/process/sop' },
       ]
     },
   ],

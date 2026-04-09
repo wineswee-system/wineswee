@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const HRReport = lazy(() => import('./pages/hr/HRReport'))
 const Attendance = lazy(() => import('./pages/hr/Attendance'))
+const PunchCorrection = lazy(() => import('./pages/hr/PunchCorrection'))
 const Leave = lazy(() => import('./pages/hr/Leave'))
 const Overtime = lazy(() => import('./pages/hr/Overtime'))
 const Salary = lazy(() => import('./pages/hr/Salary'))
@@ -44,7 +45,7 @@ const Users = lazy(() => import('./pages/system/Users'))
 const AuditLog = lazy(() => import('./pages/system/AuditLog'))
 const PerformanceMgmt = lazy(() => import('./pages/system/PerformanceMgmt'))
 const SystemSettings = lazy(() => import('./pages/system/Settings'))
-const HelpCenter = lazy(() => import('./pages/ai/HelpCenter'))
+const HelpCenter = lazy(() => import('./pages/system/HelpCenter'))
 const AgentConsole = lazy(() => import('./pages/ai/AgentConsole'))
 const CRMOverview = lazy(() => import('./pages/crm/Overview'))
 const Customers = lazy(() => import('./pages/crm/Customers'))
@@ -181,6 +182,7 @@ function AdminApp() {
             {/* HR */}
             <Route path="/hr/report" element={<HRReport />} />
             <Route path="/hr/attendance" element={<Attendance />} />
+            <Route path="/hr/punch-correction" element={<PunchCorrection />} />
             <Route path="/hr/leave" element={<Leave />} />
             <Route path="/hr/overtime" element={<Overtime />} />
             <Route path="/hr/salary" element={<Salary />} />

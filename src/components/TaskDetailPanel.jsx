@@ -101,6 +101,16 @@ export default function TaskDetailPanel({
     return () => { document.body.style.overflow = orig }
   }, [])
 
+  // Dirty state: track if user made changes
+  const [isDirty, setIsDirty] = useState(false)
+  useEffect(() => { setIsDirty(false) }, [step?.id])
+  const setAndDirty = (k, v) => { set(k, v); setIsDirty(true) }
+
+  const handleClose = () => {
+    if (isDirty && !confirm('有未儲存的變更，確定要離開嗎？')) return
+    onClose()
+  }
+
   // Only auto-scroll comments when user adds a new one (not on initial load)
   const initialLoad = useRef(true)
   useEffect(() => {
@@ -125,7 +135,7 @@ export default function TaskDetailPanel({
       completed_at: form.status === '已完成' ? (step.completed_at || new Date().toISOString()) : null,
     }
     const { data } = await updateWorkflowStep(step.id, payload)
-    if (data) onUpdate(data)
+    if (data) { onUpdate(data); setIsDirty(false) }
     setSaving(false)
   }
 
@@ -284,7 +294,7 @@ export default function TaskDetailPanel({
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(0,0,0,0.4)',
       width: '100vw', height: '100vh',
-    }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    }} onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       <div style={{
         width: '100%', maxWidth: 780,
         maxHeight: '85vh',
@@ -330,7 +340,7 @@ export default function TaskDetailPanel({
               style={{ color: 'var(--accent-red)', padding: '6px 8px' }}>
               <Trash2 size={15} />
             </button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
+            <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
               <X size={20} />
             </button>
           </div>
@@ -345,14 +355,14 @@ export default function TaskDetailPanel({
               <div>
                 <div style={labelStyle}>狀態</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.status}
-                  onChange={e => set('status', e.target.value)}>
+                  onChange={e => setAndDirty('status', e.target.value)}>
                   {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div>
                 <div style={labelStyle}>優先度</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.priority}
-                  onChange={e => set('priority', e.target.value)}>
+                  onChange={e => setAndDirty('priority', e.target.value)}>
                   {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
                 </select>
               </div>
@@ -362,7 +372,7 @@ export default function TaskDetailPanel({
               <div>
                 <div style={labelStyle}>負責人</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.assignee}
-                  onChange={e => set('assignee', e.target.value)}>
+                  onChange={e => setAndDirty('assignee', e.target.value)}>
                   <option value="">未指定</option>
                   {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
                 </select>
@@ -370,7 +380,7 @@ export default function TaskDetailPanel({
               <div>
                 <div style={labelStyle}>歸屬門市</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.store}
-                  onChange={e => set('store', e.target.value)}>
+                  onChange={e => setAndDirty('store', e.target.value)}>
                   <option value="">未指定</option>
                   {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
@@ -386,7 +396,7 @@ export default function TaskDetailPanel({
               <div>
                 <div style={labelStyle}>分類</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.category}
-                  onChange={e => set('category', e.target.value)}>
+                  onChange={e => setAndDirty('category', e.target.value)}>
                   {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
@@ -399,12 +409,12 @@ export default function TaskDetailPanel({
               <div>
                 <div style={labelStyle}>計畫開始日</div>
                 <input className="form-input" type="date" style={{ width: '100%' }}
-                  value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
+                  value={form.planned_start} onChange={e => setAndDirty('planned_start', e.target.value)} />
               </div>
               <div>
                 <div style={labelStyle}>計畫完成日</div>
                 <input className="form-input" type="date" style={{ width: '100%' }}
-                  value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+                  value={form.due_date} onChange={e => setAndDirty('due_date', e.target.value)} />
               </div>
             </div>
 
@@ -418,7 +428,7 @@ export default function TaskDetailPanel({
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <input className="form-input" type="time" value={form.due_time}
-                  onChange={e => set('due_time', e.target.value)} style={{ width: 160 }} />
+                  onChange={e => setAndDirty('due_time', e.target.value)} style={{ width: 160 }} />
                 <button onClick={() => { setShowTime(false); set('due_time', '') }} style={{
                   background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer',
                 }}><X size={16} /></button>
@@ -430,7 +440,7 @@ export default function TaskDetailPanel({
             </div>
             <input className="form-input" type="datetime-local" style={{ width: '100%' }}
               value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
-              onChange={e => set('reminder_at', e.target.value)} />
+              onChange={e => setAndDirty('reminder_at', e.target.value)} />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               {[
                 { label: '到期前1hr', type: '1hr' },
@@ -450,7 +460,7 @@ export default function TaskDetailPanel({
           <div style={sectionStyle}>
             <div style={labelStyle}>🔐 確認審批</div>
             <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id}
-              onChange={e => set('approval_chain_id', e.target.value)}>
+              onChange={e => setAndDirty('approval_chain_id', e.target.value)}>
               <option value="">＋ 新增審批</option>
               {approvalChains.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
             </select>
@@ -553,7 +563,7 @@ export default function TaskDetailPanel({
           <div style={sectionStyle}>
             <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
             <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
-              placeholder="備註..." value={form.notes} onChange={e => set('notes', e.target.value)} />
+              placeholder="備註..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
           </div>
 
           {/* ID & Created */}

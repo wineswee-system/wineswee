@@ -224,6 +224,7 @@ const groupNav = {
       icon: Clock,
       children: [
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
+        { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },

@@ -175,12 +175,7 @@ export default function Employees() {
     (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search))
   )
 
-  const btnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500,
-  })
+
 
   return (
     <div className="fade-in">
@@ -213,30 +208,34 @@ export default function Employees() {
         </div>
       </div>
 
-      {/* 狀態篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: '28px', marginRight: 4 }}>狀態</span>
-        <button style={btnStyle(statusFilter === '')} onClick={() => setStatusFilter('')}>全部</button>
-        <button style={btnStyle(statusFilter === '在職')} onClick={() => setStatusFilter('在職')}>在職</button>
-        <button style={btnStyle(statusFilter === '離職')} onClick={() => setStatusFilter('離職')}>離職</button>
-      </div>
-
-      {/* 門市篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: '28px', marginRight: 4 }}>門市</span>
-        <button style={btnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部門市</button>
-        {locations.map(l => (
-          <button key={l.id} style={btnStyle(storeFilter === l.name)} onClick={() => setStoreFilter(l.name)}>{l.name}</button>
-        ))}
-      </div>
-
-      {/* 部門篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: '28px', marginRight: 4 }}>部門</span>
-        <button style={btnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={btnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      {/* 篩選列 */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 20, padding: '14px 20px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
+        flexWrap: 'wrap', alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>狀態</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 100 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="">全部</option>
+            <option value="在職">在職</option>
+            <option value="離職">離職</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
+            <option value="">全部門市</option>
+            {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏢 部門</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+            <option value="">全部部門</option>
+            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="card">

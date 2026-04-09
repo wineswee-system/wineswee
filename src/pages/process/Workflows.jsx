@@ -54,6 +54,10 @@ export default function Workflows() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ assignee: '', groups: '' })
 
+  // Create SOP template
+  const [showCreateTplModal, setShowCreateTplModal] = useState(false)
+  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+
   // SOP deploy
   const [showDeployModal, setShowDeployModal] = useState(false)
   const [deployTemplate, setDeployTemplate] = useState(null)
@@ -159,6 +163,25 @@ export default function Workflows() {
       setShowEditModal(false)
     }
   }
+
+  // ── Create SOP Template ──
+  const handleCreateTpl = async () => {
+    if (!newTpl.name || !newTpl.steps.some(s => s.title)) return
+    const validSteps = newTpl.steps.filter(s => s.title)
+    const { data } = await supabase.from('sop_templates').insert({
+      name: newTpl.name, category: newTpl.category,
+      description: newTpl.description, steps: validSteps,
+    }).select().single()
+    if (data) {
+      setTemplates(prev => [...prev, data])
+      setShowCreateTplModal(false)
+      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+    }
+  }
+
+  const addTplStep = () => setNewTpl(t => ({ ...t, steps: [...t.steps, { title: '', role: '', priority: '中', description: '' }] }))
+  const updateTplStep = (i, k, v) => setNewTpl(t => ({ ...t, steps: t.steps.map((s, j) => j === i ? { ...s, [k]: v } : s) }))
+  const removeTplStep = (i) => setNewTpl(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
 
   // ── SOP Deploy ──
   const handleDeploy = async () => {
@@ -452,6 +475,9 @@ export default function Workflows() {
       {/* ══ Templates (SOP) ══ */}
       {tab === 'templates' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+            <button className="btn btn-primary" onClick={() => setShowCreateTplModal(true)}><Plus size={13} /> 新增流程範本</button>
+          </div>
           {templates.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無流程範本</div>
           ) : templates.map(tpl => {
@@ -539,6 +565,56 @@ export default function Workflows() {
               ))}
             </>
           )}
+        </Modal>
+      )}
+
+      {/* ══ Create Template Modal ══ */}
+      {showCreateTplModal && (
+        <Modal title="新增流程範本" onClose={() => setShowCreateTplModal(false)} onSubmit={handleCreateTpl} submitLabel="建立範本">
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <Field label="範本名稱 *">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"
+                value={newTpl.name} onChange={e => setNewTpl(t => ({ ...t, name: e.target.value }))} />
+            </Field>
+            <Field label="分類">
+              <select className="form-input" style={{ width: '100%' }} value={newTpl.category} onChange={e => setNewTpl(t => ({ ...t, category: e.target.value }))}>
+                {['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="說明">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="範本說明"
+              value={newTpl.description} onChange={e => setNewTpl(t => ({ ...t, description: e.target.value }))} />
+          </Field>
+
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '12px 0 8px' }}>步驟</div>
+          {newTpl.steps.map((step, i) => (
+            <div key={i} style={{
+              display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end',
+              marginBottom: 8, padding: '10px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+            }}>
+              <Field label={`Step ${i + 1} 名稱`}>
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="步驟名稱"
+                  value={step.title} onChange={e => updateTplStep(i, 'title', e.target.value)} />
+              </Field>
+              <Field label="角色">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="主管"
+                  value={step.role} onChange={e => updateTplStep(i, 'role', e.target.value)} />
+              </Field>
+              <Field label="優先度">
+                <select className="form-input" style={{ width: '100%' }} value={step.priority} onChange={e => updateTplStep(i, 'priority', e.target.value)}>
+                  <option>高</option><option>中</option><option>低</option>
+                </select>
+              </Field>
+              <button onClick={() => removeTplStep(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: '8px' }}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button onClick={addTplStep} style={{
+            width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed var(--border-medium)',
+            background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+          }}><Plus size={12} /> 新增步驟</button>
         </Modal>
       )}
     </div>

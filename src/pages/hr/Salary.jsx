@@ -257,12 +257,6 @@ export default function Salary() {
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
   const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   const filtered = records.filter(r =>
     (!month || !r.month || r.month === month) &&
@@ -338,11 +332,16 @@ export default function Salary() {
       </div>
 
       {/* ── Department filter ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部門市</button>
-        {stores.map(s => (
-          <button key={s.id} style={deptBtnStyle(storeFilter === s.name)} onClick={() => setStoreFilter(s.name)}>{s.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* ── Stats cards ── */}

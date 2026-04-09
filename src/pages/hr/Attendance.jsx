@@ -18,6 +18,7 @@ export default function Attendance() {
   const [error, setError] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
+  const [tab, setTab] = useState('records') // records | hours
 
   useEffect(() => {
     Promise.all([
@@ -93,13 +94,6 @@ export default function Attendance() {
     setClockingIn(false)
   }
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
-
   const locationBadge = (r) => {
     if (!r.clock_in_location) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span>
     const isExternal = r.clock_in_location === '外部位置'
@@ -136,14 +130,35 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* 門市篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(storeFilter === '')} onClick={() => setStoreFilter('')}>全部門市</button>
-        {stores.map(s => (
-          <button key={s.id} style={deptBtnStyle(storeFilter === s.name)} onClick={() => setStoreFilter(s.name)}>{s.name}</button>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {[
+          { key: 'records', label: '📋 打卡紀錄' },
+          { key: 'hours', label: '⏱️ 工時統整' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            background: tab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+            color: tab === t.key ? '#fff' : 'var(--text-muted)',
+            border: tab === t.key ? 'none' : '1px solid var(--border-medium)',
+          }}>{t.label}</button>
         ))}
       </div>
 
+      {/* 門市篩選 */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
+      </div>
+
+      {tab === 'records' && <>
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">正常</div>
@@ -252,6 +267,98 @@ export default function Attendance() {
           </table>
         </div>
       </div>
+      </>}
+
+      {/* ══ Work Hours Summary Tab ══ */}
+      {tab === 'hours' && (() => {
+        // Group records by employee, compute totals
+        const empMap = {}
+        for (const r of filtered) {
+          if (!r.employee) continue
+          if (!empMap[r.employee]) empMap[r.employee] = { days: 0, hours: 0, late: 0, normal: 0, records: [] }
+          empMap[r.employee].records.push(r)
+          if (r.hours > 0) { empMap[r.employee].days++; empMap[r.employee].hours += Number(r.hours) }
+          if (r.status === '遲到') empMap[r.employee].late++
+          if (r.status === '正常') empMap[r.employee].normal++
+        }
+        const empList = Object.entries(empMap).map(([name, data]) => ({
+          name, ...data,
+          avg: data.days > 0 ? (data.hours / data.days) : 0,
+          store: getEmpStore(name),
+          dept: getEmpDept(name),
+        })).sort((a, b) => b.hours - a.hours)
+
+        const totalHours = empList.reduce((s, e) => s + e.hours, 0)
+        const totalDays = empList.reduce((s, e) => s + e.days, 0)
+
+        return (
+          <>
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
+                <div className="stat-card-label">總工時</div>
+                <div className="stat-card-value">{totalHours.toFixed(1)}h</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+                <div className="stat-card-label">總出勤天數</div>
+                <div className="stat-card-value">{totalDays}</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-blue)', '--card-accent-dim': 'var(--accent-blue-dim)' }}>
+                <div className="stat-card-label">人員數</div>
+                <div className="stat-card-value">{empList.length}</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
+                <div className="stat-card-label">平均每人工時</div>
+                <div className="stat-card-value">{empList.length > 0 ? (totalHours / empList.length).toFixed(1) : 0}h</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title"><span className="card-title-icon">⏱️</span> 員工工時明細</div>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>員工</th><th>門市</th><th>出勤天數</th><th>總工時</th><th>平均工時</th>
+                      <th>正常</th><th>遲到</th><th>工時分佈</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {empList.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
+                    {empList.map(e => {
+                      const maxHours = Math.max(...empList.map(x => x.hours), 1)
+                      const pct = (e.hours / maxHours) * 100
+                      return (
+                        <tr key={e.name}>
+                          <td style={{ fontWeight: 600 }}>{e.name}</td>
+                          <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.store || e.dept || '—'}</td>
+                          <td style={{ textAlign: 'center' }}>{e.days} 天</td>
+                          <td style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{e.hours.toFixed(1)}h</td>
+                          <td style={{ textAlign: 'center' }}>{e.avg.toFixed(1)}h</td>
+                          <td style={{ textAlign: 'center', color: 'var(--accent-green)' }}>{e.normal}</td>
+                          <td style={{ textAlign: 'center', color: e.late > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{e.late}</td>
+                          <td style={{ minWidth: 120 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--glass-light)', overflow: 'hidden' }}>
+                                <div style={{
+                                  height: '100%', borderRadius: 4, width: `${pct}%`,
+                                  background: e.avg >= 9 ? 'var(--accent-orange)' : e.avg >= 7 ? 'var(--accent-cyan)' : 'var(--accent-green)',
+                                }} />
+                              </div>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 30 }}>{pct.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

@@ -175,7 +175,7 @@ export default function Schedule() {
       if (emp.status !== '在職') continue
 
       // Check if same store (or willing to cross-store)
-      const sameStore = emp.store === absentStore
+      const sameStore = emp.store === absentStore || (emp.additional_stores || []).includes(absentStore)
       // Check if already working that day
       const daySchedule = allSchedules.find(s => s.employee === emp.name && s.date === date)
       if (daySchedule && daySchedule.shift !== '休') continue // already working

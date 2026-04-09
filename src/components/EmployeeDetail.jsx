@@ -286,11 +286,29 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               <div><div style={L}>離職原因</div><textarea className="form-input" style={{ width: '100%', minHeight: 50, resize: 'vertical' }} value={form.resign_reason || ''} onChange={e => set('resign_reason', e.target.value)} /></div>
 
               <SectionTitle icon="🏪" text="門市 / 公司 / 部門" />
-              <div><div style={L}>門市</div>
+              <div><div style={L}>主要門市</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.store || ''} onChange={e => set('store', e.target.value)}>
                   <option value="">未指派</option>
                   {(stores || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <div style={L}>可支援門市（跨店排班）</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {(stores || []).filter(s => s.name !== form.store).map(s => {
+                    const checked = (form.additional_stores || []).includes(s.name)
+                    return (
+                      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: checked ? 'var(--accent-cyan-dim)' : 'var(--glass-light)', border: `1px solid ${checked ? 'rgba(6,182,212,0.3)' : 'var(--border-subtle)'}` }}>
+                        <input type="checkbox" checked={checked} onChange={() => {
+                          const current = form.additional_stores || []
+                          set('additional_stores', checked ? current.filter(n => n !== s.name) : [...current, s.name])
+                        }} style={{ width: 14, height: 14 }} />
+                        {s.name}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>勾選的門市會在「找人代班」時優先顯示此員工</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><div style={L}>部門</div>
@@ -343,21 +361,73 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
 
               <SectionTitle icon="🏥" text="勞健保" />
-              {[
-                { key: 'labor_insurance', label: '勞工保險' },
-                { key: 'health_insurance', label: '全民健康保險' },
-                { key: 'pension', label: '勞工退休金' },
-              ].map(ins => (
-                <div key={ins.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{ins.label}</span>
+
+              {/* 勞工保險 */}
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.labor_insurance ? 10 : 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>勞工保險</span>
                   <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form[ins.key] || false} onChange={e => set(ins.key, e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form[ins.key] ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
-                      <span style={{ position: 'absolute', top: 2, left: form[ins.key] ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                    <input type="checkbox" checked={form.labor_insurance || false} onChange={e => set('labor_insurance', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.labor_insurance ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
+                      <span style={{ position: 'absolute', top: 2, left: form.labor_insurance ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
                     </span>
                   </label>
                 </div>
-              ))}
+                {form.labor_insurance && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div>
+                      <input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} />
+                    </div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div>
+                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_start || ''} onChange={e => set('labor_ins_start', e.target.value)} />
+                    </div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div>
+                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_end || ''} onChange={e => set('labor_ins_end', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 全民健康保險 */}
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.health_insurance ? 10 : 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>全民健康保險</span>
+                  <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.health_insurance || false} onChange={e => set('health_insurance', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.health_insurance ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
+                      <span style={{ position: 'absolute', top: 2, left: form.health_insurance ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                    </span>
+                  </label>
+                </div>
+                {form.health_insurance && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div>
+                      <input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} />
+                    </div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div>
+                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_start || ''} onChange={e => set('health_ins_start', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 勞工退休金 */}
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.pension ? 10 : 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>勞工退休金</span>
+                  <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.pension || false} onChange={e => set('pension', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.pension ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
+                      <span style={{ position: 'absolute', top: 2, left: form.pension ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                    </span>
+                  </label>
+                </div>
+                {form.pension && (
+                  <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳率 (%)</div>
+                    <input className="form-input" type="number" style={{ width: '100%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} />
+                  </div>
+                )}
+              </div>
 
               <SectionTitle icon="💬" text="LINE 整合" />
               <div><div style={L}>綁定個人 LINE 帳號</div>

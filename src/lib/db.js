@@ -190,6 +190,53 @@ export const updateWorkflowStep = (id, data) =>
 export const deleteWorkflowStep = (id) =>
   supabase.from('workflow_steps').delete().eq('id', id)
 
+// ── Step Dependencies (前置條件 & 觸發動作) ─────────────
+export const getStepDependencies = (stepId) =>
+  supabase.from('workflow_step_dependencies').select('*').or(`step_id.eq.${stepId},depends_on_step_id.eq.${stepId}`)
+
+export const getStepDependenciesByInstance = (stepIds) =>
+  supabase.from('workflow_step_dependencies').select('*').in('step_id', stepIds)
+
+export const createStepDependency = (data) =>
+  supabase.from('workflow_step_dependencies').insert(data).select().single()
+
+export const deleteStepDependency = (id) =>
+  supabase.from('workflow_step_dependencies').delete().eq('id', id)
+
+// ── Step Comments (備註留言) ──────────────────────────────
+export const getStepComments = (stepId) =>
+  supabase.from('workflow_step_comments').select('*').eq('step_id', stepId).order('created_at', { ascending: true })
+
+export const createStepComment = (data) =>
+  supabase.from('workflow_step_comments').insert(data).select().single()
+
+// ── Step Attachments (附件) ──────────────────────────────
+export const getStepAttachments = (stepId) =>
+  supabase.from('workflow_step_attachments').select('*').eq('step_id', stepId).order('created_at')
+
+export const createStepAttachment = (data) =>
+  supabase.from('workflow_step_attachments').insert(data).select().single()
+
+export const deleteStepAttachment = (id) =>
+  supabase.from('workflow_step_attachments').delete().eq('id', id)
+
+// ── Step-Checklist Link (關聯查核清單) ───────────────────
+export const getStepChecklists = (stepId) =>
+  supabase.from('workflow_step_checklists').select('*, checklists(*)').eq('step_id', stepId)
+
+export const linkStepChecklist = (stepId, checklistId) =>
+  supabase.from('workflow_step_checklists').insert({ step_id: stepId, checklist_id: checklistId }).select().single()
+
+export const unlinkStepChecklist = (id) =>
+  supabase.from('workflow_step_checklists').delete().eq('id', id)
+
+// ── Approval Chains (簽核鏈) ─────────────────────────────
+export const getApprovalChains = () =>
+  supabase.from('approval_chains').select('*').order('id')
+
+export const createApprovalChain = (data) =>
+  supabase.from('approval_chains').insert(data).select().single()
+
 // ── Tasks ──────────────────────────────────────────────────
 export const getTasks = () =>
   supabase.from('tasks').select('*').order('id')

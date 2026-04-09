@@ -12,6 +12,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import TaskDetailPanel from '../../components/TaskDetailPanel'
 
 const CATEGORIES = ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷']
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
@@ -35,6 +36,8 @@ export default function Workflows() {
 
   // Detail view state
   const [selectedInstance, setSelectedInstance] = useState(null)
+  const [selectedStep, setSelectedStep] = useState(null)
+  const [checklists, setChecklists] = useState([])
 
   // Modals
   const [showDefModal, setShowDefModal] = useState(false)
@@ -54,12 +57,14 @@ export default function Workflows() {
       getWorkflowSteps(),
       supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([w, inst, st, emp, loc]) => {
+      supabase.from('checklists').select('*').order('id'),
+    ]).then(([w, inst, st, emp, loc, cl]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
       setSteps(st.data || [])
       setEmployees(emp.data || [])
       setStores(loc.data || [])
+      setChecklists(cl.data || [])
     }).catch(err => {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
@@ -318,7 +323,8 @@ export default function Workflows() {
                   return (
                     <tr key={step.id} style={{
                       borderLeft: `3px solid ${sc.color}`,
-                    }}>
+                      cursor: 'pointer',
+                    }} onClick={() => setSelectedStep(step)}>
                       <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>
                         {step.step_order}
                       </td>
@@ -472,6 +478,27 @@ export default function Workflows() {
                 onChange={e => setEditForm(f => ({ ...f, groups: e.target.value }))} />
             </Field>
           </Modal>
+        )}
+
+        {/* ── Task Detail Panel ── */}
+        {selectedStep && (
+          <TaskDetailPanel
+            step={selectedStep}
+            instance={inst}
+            allSteps={instSteps}
+            employees={employees}
+            stores={stores}
+            checklists={checklists}
+            onUpdate={(updatedStep) => {
+              setSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s))
+              setSelectedStep(updatedStep)
+            }}
+            onDelete={(stepId) => {
+              setSteps(prev => prev.filter(s => s.id !== stepId))
+              setSelectedStep(null)
+            }}
+            onClose={() => setSelectedStep(null)}
+          />
         )}
       </div>
     )

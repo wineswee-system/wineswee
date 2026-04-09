@@ -1,0 +1,508 @@
+import { useState, useEffect, useRef } from 'react'
+import { X, Pencil, Save, Trash2, Upload, Link, Send, Clock, Bell, Plus } from 'lucide-react'
+import {
+  updateWorkflowStep, deleteWorkflowStep,
+  getStepComments, createStepComment,
+  getStepAttachments, createStepAttachment, deleteStepAttachment,
+  getStepChecklists, linkStepChecklist, unlinkStepChecklist,
+  getStepDependencies, createStepDependency, deleteStepDependency,
+  getApprovalChains
+} from '../lib/db'
+
+const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
+const PRIORITY_LIST = ['低', '中', '高']
+
+export default function TaskDetailPanel({
+  step, instance, allSteps, employees, stores, checklists,
+  onUpdate, onDelete, onClose,
+}) {
+  const [form, setForm] = useState({})
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [showTime, setShowTime] = useState(false)
+
+  // Sub-data
+  const [comments, setComments] = useState([])
+  const [attachments, setAttachments] = useState([])
+  const [linkedChecklists, setLinkedChecklists] = useState([])
+  const [dependencies, setDependencies] = useState([])
+  const [approvalChains, setApprovalChains] = useState([])
+  const [commentText, setCommentText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const commentsEndRef = useRef(null)
+
+  useEffect(() => {
+    if (!step) return
+    setForm({
+      status: step.status || '待處理',
+      priority: step.priority || '中',
+      assignee: step.assignee || '',
+      store: step.store || '',
+      category: step.category || 'Workflow',
+      planned_start: step.planned_start || '',
+      due_date: step.due_date || '',
+      due_time: step.due_time || '',
+      reminder_at: step.reminder_at || '',
+      approval_chain_id: step.approval_chain_id || '',
+      notes: step.notes || '',
+    })
+    setTitleDraft(step.title)
+    setShowTime(!!step.due_time)
+    setEditingTitle(false)
+
+    // Load sub-data
+    Promise.all([
+      getStepComments(step.id),
+      getStepAttachments(step.id),
+      getStepChecklists(step.id),
+      getStepDependencies(step.id),
+      getApprovalChains(),
+    ]).then(([c, a, cl, d, ac]) => {
+      setComments(c.data || [])
+      setAttachments(a.data || [])
+      setLinkedChecklists(cl.data || [])
+      setDependencies(d.data || [])
+      setApprovalChains(ac.data || [])
+    })
+  }, [step?.id])
+
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [comments.length])
+
+  if (!step) return null
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    const payload = {
+      ...form,
+      title: titleDraft,
+      planned_start: form.planned_start || null,
+      due_date: form.due_date || null,
+      due_time: form.due_time || null,
+      reminder_at: form.reminder_at || null,
+      approval_chain_id: form.approval_chain_id ? Number(form.approval_chain_id) : null,
+      completed_at: form.status === '已完成' ? (step.completed_at || new Date().toISOString()) : null,
+    }
+    const { data } = await updateWorkflowStep(step.id, payload)
+    if (data) onUpdate(data)
+    setSaving(false)
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('確定刪除此任務？')) return
+    await deleteWorkflowStep(step.id)
+    onDelete(step.id)
+  }
+
+  // Comments
+  const handleSendComment = async () => {
+    if (!commentText.trim()) return
+    const { data } = await createStepComment({
+      step_id: step.id,
+      author: '使用者',
+      content: commentText.trim(),
+    })
+    if (data) setComments(prev => [...prev, data])
+    setCommentText('')
+  }
+
+  // Checklists
+  const handleLinkChecklist = async (checklistId) => {
+    if (!checklistId) return
+    const { data } = await linkStepChecklist(step.id, Number(checklistId))
+    if (data) {
+      const cl = checklists.find(c => c.id === Number(checklistId))
+      setLinkedChecklists(prev => [...prev, { ...data, checklists: cl }])
+    }
+  }
+
+  const handleUnlinkChecklist = async (linkId) => {
+    await unlinkStepChecklist(linkId)
+    setLinkedChecklists(prev => prev.filter(l => l.id !== linkId))
+  }
+
+  // Dependencies
+  const otherSteps = allSteps.filter(s => s.id !== step.id)
+  const prerequisites = dependencies.filter(d => d.step_id === step.id && d.dep_type === 'prerequisite')
+  const triggers = dependencies.filter(d => d.step_id === step.id && d.dep_type === 'trigger')
+
+  const handleAddDep = async (depStepId, type) => {
+    if (!depStepId) return
+    const { data } = await createStepDependency({
+      step_id: step.id,
+      depends_on_step_id: Number(depStepId),
+      dep_type: type,
+    })
+    if (data) setDependencies(prev => [...prev, data])
+  }
+
+  const handleRemoveDep = async (depId) => {
+    await deleteStepDependency(depId)
+    setDependencies(prev => prev.filter(d => d.id !== depId))
+  }
+
+  // Reminder quick set
+  const setReminder = (type) => {
+    if (!form.due_date) return
+    const due = new Date(form.due_date + 'T' + (form.due_time || '17:00'))
+    let reminder
+    if (type === '1hr') reminder = new Date(due.getTime() - 60 * 60 * 1000)
+    else if (type === '1day') reminder = new Date(due.getTime() - 24 * 60 * 60 * 1000)
+    else reminder = new Date(form.due_date + 'T09:00')
+    set('reminder_at', reminder.toISOString().slice(0, 16))
+  }
+
+  const getStepLabel = (id) => {
+    const s = allSteps.find(x => x.id === id)
+    return s ? `${s.step_order}. ${s.title}` : `#${id}`
+  }
+
+  const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
+  const fieldGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', justifyContent: 'flex-end',
+      background: 'rgba(0,0,0,0.3)',
+    }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{
+        width: '100%', maxWidth: 680,
+        background: 'var(--bg-primary)',
+        borderLeft: '1px solid var(--border-medium)',
+        display: 'flex', flexDirection: 'column',
+        animation: 'slideInRight 0.2s ease',
+        overflow: 'hidden',
+      }}>
+        {/* ── Header ── */}
+        <div style={{
+          padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+            {editingTitle ? (
+              <input
+                className="form-input"
+                value={titleDraft}
+                onChange={e => setTitleDraft(e.target.value)}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={e => e.key === 'Enter' && setEditingTitle(false)}
+                autoFocus
+                style={{ fontSize: 18, fontWeight: 800, flex: 1 }}
+              />
+            ) : (
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, cursor: 'pointer' }}
+                onClick={() => setEditingTitle(true)}>
+                {titleDraft}
+                <Pencil size={14} style={{ marginLeft: 8, color: 'var(--accent-orange)', verticalAlign: 'middle' }} />
+              </h3>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+              style={{ fontSize: 13 }}>
+              <Save size={13} /> {saving ? '...' : '更新'}
+            </button>
+            <button className="btn btn-sm btn-secondary" onClick={handleDelete}
+              style={{ color: 'var(--accent-red)', padding: '6px 8px' }}>
+              <Trash2 size={15} />
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
+
+          {/* Status & Priority */}
+          <div style={fieldGrid}>
+            <div>
+              <div style={labelStyle}>狀態</div>
+              <select className="form-input" style={{ width: '100%' }} value={form.status}
+                onChange={e => set('status', e.target.value)}>
+                {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={labelStyle}>優先度</div>
+              <select className="form-input" style={{ width: '100%' }} value={form.priority}
+                onChange={e => set('priority', e.target.value)}>
+                {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Assignee & Store */}
+          <div style={fieldGrid}>
+            <div>
+              <div style={labelStyle}>負責人</div>
+              <select className="form-input" style={{ width: '100%' }} value={form.assignee}
+                onChange={e => set('assignee', e.target.value)}>
+                <option value="">未指定</option>
+                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={labelStyle}>歸屬門市</div>
+              <select className="form-input" style={{ width: '100%' }} value={form.store}
+                onChange={e => set('store', e.target.value)}>
+                <option value="">未指定</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Workflow & Category */}
+          <div style={fieldGrid}>
+            <div>
+              <div style={labelStyle}>工作流</div>
+              <input className="form-input" style={{ width: '100%' }} readOnly
+                value={instance?.store || instance?.template_name || ''} />
+            </div>
+            <div>
+              <div style={labelStyle}>分類</div>
+              <select className="form-input" style={{ width: '100%' }} value={form.category}
+                onChange={e => set('category', e.target.value)}>
+                {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div style={fieldGrid}>
+            <div>
+              <div style={labelStyle}>計畫開始日</div>
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
+            </div>
+            <div>
+              <div style={labelStyle}>計畫完成日</div>
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+            </div>
+          </div>
+
+          {/* Time toggle */}
+          <div style={{ marginTop: 8 }}>
+            {!showTime ? (
+              <button onClick={() => setShowTime(true)} style={{
+                background: 'none', border: 'none', color: 'var(--accent-cyan)',
+                fontSize: 12, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                <Clock size={13} /> 設定時間
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input className="form-input" type="time" value={form.due_time}
+                  onChange={e => set('due_time', e.target.value)}
+                  style={{ width: 160 }} />
+                <button onClick={() => { setShowTime(false); set('due_time', '') }} style={{
+                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer',
+                }}>
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Reminder */}
+          <div style={labelStyle}>
+            <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
+          </div>
+          <input className="form-input" type="datetime-local" style={{ width: '100%' }}
+            value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
+            onChange={e => set('reminder_at', e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            {[
+              { label: '到期前1hr', type: '1hr' },
+              { label: '到期前1天', type: '1day' },
+              { label: '當天09:00', type: 'morning' },
+            ].map(r => (
+              <button key={r.type} onClick={() => setReminder(r.type)} style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                color: 'var(--text-secondary)', cursor: 'pointer',
+              }}>{r.label}</button>
+            ))}
+          </div>
+
+          {/* Approval Chain */}
+          <div style={labelStyle}>🔐 確認審批</div>
+          <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id}
+            onChange={e => set('approval_chain_id', e.target.value)}>
+            <option value="">＋ 新增審批</option>
+            {approvalChains.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
+          </select>
+
+          {/* Notes */}
+          <div style={labelStyle}>備註</div>
+          <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+            placeholder="備註..." value={form.notes} onChange={e => set('notes', e.target.value)} />
+
+          {/* ID & Created */}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 16 }}>
+            ID: {step.id} &nbsp;&nbsp; 建立: {step.created_at?.slice(0, 10)}
+          </div>
+
+          {/* ── Prerequisites ── */}
+          <div style={{ ...labelStyle, marginTop: 24 }}>
+            🔒 前置條件（全部完成後才開始）
+          </div>
+          {prerequisites.map(d => (
+            <div key={d.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+              background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
+              border: '1px solid var(--border-subtle)', fontSize: 13,
+            }}>
+              <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+              <button onClick={() => handleRemoveDep(d.id)} style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+              }}><X size={14} /></button>
+            </div>
+          ))}
+          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+            value="" onChange={e => handleAddDep(e.target.value, 'prerequisite')}>
+            <option value="">＋ 新增前置條件...</option>
+            {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_step_id === s.id))
+              .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
+          </select>
+
+          {/* ── Triggers ── */}
+          <div style={{ ...labelStyle, marginTop: 24 }}>
+            ⚠️ 觸發動作（完成時執行）
+          </div>
+          {triggers.map(d => (
+            <div key={d.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+              background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
+              border: '1px solid var(--border-subtle)', fontSize: 13,
+            }}>
+              <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+              <button onClick={() => handleRemoveDep(d.id)} style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+              }}><X size={14} /></button>
+            </div>
+          ))}
+          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+            value="" onChange={e => handleAddDep(e.target.value, 'trigger')}>
+            <option value="">＋ 新增觸發任務...</option>
+            {otherSteps.filter(s => !triggers.some(t => t.depends_on_step_id === s.id))
+              .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
+          </select>
+
+          {/* ── Linked Checklists ── */}
+          <div style={{ ...labelStyle, marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>☑️ 關聯查核清單 ({linkedChecklists.length})</span>
+          </div>
+          {linkedChecklists.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯查核清單</div>
+          ) : linkedChecklists.map(lc => (
+            <div key={lc.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 12px', background: 'var(--glass-light)', borderRadius: 8,
+              marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13,
+            }}>
+              <span>{lc.checklists?.name || `清單 #${lc.checklist_id}`}</span>
+              <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
+                background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
+              }}>移除</button>
+            </div>
+          ))}
+          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+            value="" onChange={e => handleLinkChecklist(e.target.value)}>
+            <option value="">＋ 關聯...</option>
+            {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
+              .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+
+          {/* ── Attachments ── */}
+          <div style={{ ...labelStyle, marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📎 附件 ({attachments.length})</span>
+            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}
+              onClick={() => {
+                const url = prompt('輸入檔案 URL:')
+                const name = prompt('檔案名稱:')
+                if (url && name) {
+                  createStepAttachment({ step_id: step.id, file_name: name, file_url: url, uploaded_by: '使用者' })
+                    .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
+                }
+              }}>
+              <Upload size={11} /> 上傳
+            </button>
+          </div>
+          {attachments.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無附件</div>
+          ) : attachments.map(a => (
+            <div key={a.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
+              marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
+            }}>
+              <a href={a.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>
+                📄 {a.file_name}
+              </a>
+              <button onClick={async () => {
+                await deleteStepAttachment(a.id)
+                setAttachments(prev => prev.filter(x => x.id !== a.id))
+              }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+
+          {/* ── Comments ── */}
+          <div style={{ ...labelStyle, marginTop: 24 }}>
+            💬 備註 ({comments.length})
+          </div>
+          <div style={{
+            maxHeight: 200, overflowY: 'auto', marginBottom: 8,
+            padding: comments.length > 0 ? '8px 0' : 0,
+          }}>
+            {comments.map(c => (
+              <div key={c.id} style={{
+                padding: '8px 12px', marginBottom: 6, borderRadius: 8,
+                background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    ⚙️ {c.author}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {new Date(c.created_at).toLocaleString('zh-TW')}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13 }}>🚩 {c.content}</div>
+              </div>
+            ))}
+            <div ref={commentsEndRef} />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="form-input" type="text" style={{ flex: 1 }}
+              placeholder="輸入備註..."
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSendComment()} />
+            <button className="btn btn-primary" onClick={handleSendComment}
+              style={{ fontSize: 12, padding: '8px 14px' }}>
+              送出
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  )
+}

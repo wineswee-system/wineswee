@@ -10,6 +10,8 @@ const ROUTES = {
   stock: '/wms/inventory',
   task: '/process/tasks',
   late: '/hr/attendance',
+  correction: '/hr/punch-correction',
+  overtime: '/hr/overtime',
 }
 
 function getReadIds() {
@@ -88,6 +90,46 @@ export default function NotificationCenter() {
           title: '今日遲到',
           desc: `${a.employee} 於 ${a.clock_in} 打卡`,
           time: today,
+        }))
+      }
+
+      // Workflow steps overdue
+      const { data: overdueSteps } = await supabase
+        .from('workflow_steps').select('id, title, assignee, due_date')
+        .in('status', ['待處理', '進行中']).lt('due_date', today).limit(5)
+      if (overdueSteps) {
+        overdueSteps.forEach(s => items.push({
+          id: `wfstep-${s.id}`, type: 'task', icon: AlertTriangle,
+          color: 'var(--accent-red)', dim: 'var(--accent-red-dim)',
+          title: '流程任務逾期',
+          desc: `「${s.title}」(${s.assignee || '未指派'}) 截止 ${s.due_date}`,
+          time: s.due_date,
+        }))
+      }
+
+      // Pending clock corrections
+      const { data: corrections } = await supabase
+        .from('clock_corrections').select('id, employee, date').eq('status', '待審核').limit(5)
+      if (corrections) {
+        corrections.forEach(c => items.push({
+          id: `correction-${c.id}`, type: 'late', icon: Clock,
+          color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)',
+          title: '補登待審核',
+          desc: `${c.employee} 申請 ${c.date} 補登`,
+          time: c.date,
+        }))
+      }
+
+      // Pending overtime
+      const { data: otReqs } = await supabase
+        .from('overtime_requests').select('id, employee, date').eq('status', '待審核').limit(5)
+      if (otReqs) {
+        otReqs.forEach(o => items.push({
+          id: `ot-${o.id}`, type: 'late', icon: Clock,
+          color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
+          title: '加班待審核',
+          desc: `${o.employee} 申請 ${o.date} 加班`,
+          time: o.date,
         }))
       }
     } catch (e) { /* ignore */ }

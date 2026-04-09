@@ -83,6 +83,10 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   const [aiInsight, setAiInsight] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [wfInstances, setWfInstances] = useState([])
+  const [wfSteps, setWfSteps] = useState([])
+  const [pendingCorrections, setPendingCorrections] = useState(0)
+  const [pendingOT, setPendingOT] = useState(0)
 
   useEffect(() => {
     Promise.all([
@@ -91,12 +95,18 @@ export default function Dashboard() {
       supabase.from('accounts_payable').select('amount, paid_amount, status'),
       supabase.from('opportunities').select('stage, amount'),
       supabase.from('stock_levels').select('quantity, min_qty'),
+      supabase.from('workflow_instances').select('id, status').eq('status', '進行中'),
+      supabase.from('workflow_steps').select('id, status, assignee, due_date').in('status', ['待處理', '進行中']),
+      supabase.from('clock_corrections').select('id').eq('status', '待審核'),
+      supabase.from('overtime_requests').select('id').eq('status', '待審核'),
     ])
-      .then(([e, t, w, a, l, ar, ap, opp, stk]) => {
+      .then(([e, t, w, a, l, ar, ap, opp, stk, wfi, wfs, pc, ot]) => {
         setEmployees(e.data || []); setTasks(t.data || []); setWorkflows(w.data || [])
         setAttendance(a.data || []); setLeaves(l.data || [])
         setArData(ar.data || []); setApData(ap.data || [])
         setOpportunities(opp.data || []); setStockLevels(stk.data || [])
+        setWfInstances(wfi.data || []); setWfSteps(wfs.data || [])
+        setPendingCorrections(pc.data?.length || 0); setPendingOT(ot.data?.length || 0)
       }).catch(err => {
         console.error('Failed to load data:', err)
         setError('資料載入失敗，請重新整理頁面')
@@ -118,6 +128,16 @@ export default function Dashboard() {
   const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0
   const late = attendance.filter(a => a.status === '遲到').length
   const onLeave = leaves.filter(l => l.status === '已核准').length
+
+  // Today's real-time metrics
+  const today = new Date().toISOString().slice(0, 10)
+  const todayAttendance = attendance.filter(a => a.date === today)
+  const todayClockedIn = todayAttendance.length
+  const todayAttRate = active > 0 ? Math.round(todayClockedIn / active * 100) : 0
+  const pendingLeaves = leaves.filter(l => l.status === '待審核').length
+  const totalPending = pendingLeaves + pendingCorrections + pendingOT
+  const runningWorkflows = wfInstances.length
+  const overdueSteps = wfSteps.filter(s => s.due_date && s.due_date < today).length
 
   const arOutstanding = arData.reduce((s, r) => s + (Number(r.amount) || 0) - (Number(r.paid_amount) || 0), 0)
   const apOutstanding = apData.reduce((s, r) => s + (Number(r.amount) || 0) - (Number(r.paid_amount) || 0), 0)
@@ -194,22 +214,27 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* ═══ HR KPI Row ═══ */}
+      {/* ═══ Today's Real-Time KPIs ═══ */}
       <div className="dash-v2-metrics">
         <div className="animate-in animate-in-1">
-          <Metric icon={Users} label="在職人數" value={active} change={`共 ${employees.length} 人`} color={C.cyan} />
+          <Metric icon={Clock} label="今日出勤率" value={`${todayAttRate}%`}
+            trend={todayAttRate >= 80 ? 'up' : 'down'}
+            change={`${todayClockedIn}/${active} 已打卡`}
+            color={todayAttRate >= 80 ? C.green : C.orange} />
         </div>
         <div className="animate-in animate-in-2">
-          <Metric icon={CheckCircle} label="今日出勤" value={active - late}
-            trend={late === 0 ? 'up' : 'down'} change={late === 0 ? '全員到齊' : `${late} 人遲到`}
-            color={C.blue} />
+          <Metric icon={AlertTriangle} label="待審核" value={totalPending}
+            change={`假${pendingLeaves} 補${pendingCorrections} 加${pendingOT}`}
+            color={totalPending > 0 ? C.orange : C.green} />
         </div>
         <div className="animate-in animate-in-3">
-          <Metric icon={Briefcase} label="進行中任務" value={doing}
-            change={`${todo} 項未開始`} color={C.purple} />
+          <Metric icon={GitBranch} label="進行中流程" value={runningWorkflows}
+            change={overdueSteps > 0 ? `${overdueSteps} 項逾期` : '無逾期'}
+            trend={overdueSteps > 0 ? 'down' : 'up'}
+            color={C.purple} />
         </div>
         <div className="animate-in animate-in-4">
-          <Metric icon={CalendarCheck} label="任務完成率" value={`${progress}%`}
+          <Metric icon={CheckCircle} label="任務完成率" value={`${progress}%`}
             trend={progress >= 50 ? 'up' : 'down'} change={`${done}/${tasks.length} 已完成`}
             color={C.green} />
         </div>

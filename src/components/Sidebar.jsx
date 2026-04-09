@@ -464,10 +464,17 @@ export default function Sidebar() {
     }
   }
 
+  // Role-based filtering: staff only sees dashboard + people
+  const userRole = profile?.role || 'staff'
+  const STAFF_GROUPS = ['dashboard', 'people']
+  const roleFiltered = userRole === 'staff'
+    ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))
+    : majorGroups
+
   // Build all dropdown groups including super-admin
   const allGroups = isSuperAdmin
-    ? [...majorGroups, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
-    : majorGroups
+    ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
+    : roleFiltered
 
   return (
     <>

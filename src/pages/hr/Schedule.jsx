@@ -65,6 +65,10 @@ export default function Schedule() {
   const [preferences, setPreferences] = useState([])
   // Swap requests
   const [swaps, setSwaps] = useState([])
+  // Cover shift finder
+  const [coverModal, setCoverModal] = useState(null) // { employee, date, shift }
+  const [coverCandidates, setCoverCandidates] = useState([])
+  const [coverLoading, setCoverLoading] = useState(false)
 
   const weekDates = getWeekDates(weekOffset)
   const weekStart = weekDates[0]
@@ -147,6 +151,108 @@ export default function Schedule() {
 
   // AI Auto-Schedule
   const holidaySet = new Set(holidays)
+
+  // ── Cover Shift Finder: find who can replace a shift ──
+  const findCoverCandidates = async (absentEmp, date, shiftName) => {
+    setCoverLoading(true)
+    setCoverCandidates([])
+
+    const shiftDef = shiftDefs.find(d => d.name === shiftName)
+    const shiftStartH = shiftDef ? parseInt(shiftDef.start_time) || 11 : 11
+    const absentStore = employees.find(e => e.name === absentEmp)?.store || ''
+
+    // Get all schedules for this date and adjacent dates (for 11h rule)
+    const prevDate = new Date(new Date(date).getTime() - 86400000).toISOString().slice(0, 10)
+    const nextDate = new Date(new Date(date).getTime() + 86400000).toISOString().slice(0, 10)
+    const { data: nearbySchedules } = await supabase.from('schedules')
+      .select('*').in('date', [prevDate, date, nextDate])
+
+    const allSchedules = nearbySchedules || []
+    const candidates = []
+
+    for (const emp of employees) {
+      if (emp.name === absentEmp) continue
+      if (emp.status !== '在職') continue
+
+      // Check if same store (or willing to cross-store)
+      const sameStore = emp.store === absentStore
+      // Check if already working that day
+      const daySchedule = allSchedules.find(s => s.employee === emp.name && s.date === date)
+      if (daySchedule && daySchedule.shift !== '休') continue // already working
+
+      // Check 11h rule with previous day
+      const prevSchedule = allSchedules.find(s => s.employee === emp.name && s.date === prevDate)
+      let valid11h = true
+      if (prevSchedule && prevSchedule.shift !== '休') {
+        const prevDef = shiftDefs.find(d => d.name === prevSchedule.shift)
+        if (prevDef) {
+          const prevEndH = parseInt(prevDef.end_time) || 0
+          const prevStartH = parseInt(prevDef.start_time) || 0
+          const crossesMidnight = prevEndH < prevStartH
+          if (crossesMidnight) {
+            const gap = shiftStartH - prevEndH
+            if (gap < 11) valid11h = false
+          } else {
+            const gap = shiftStartH + (24 - prevEndH)
+            if (gap < 11) valid11h = false
+          }
+        }
+      }
+
+      // Check 11h rule with next day
+      const nextSchedule = allSchedules.find(s => s.employee === emp.name && s.date === nextDate)
+      if (nextSchedule && nextSchedule.shift !== '休' && shiftDef) {
+        const nextDef = shiftDefs.find(d => d.name === nextSchedule.shift)
+        if (nextDef) {
+          const endH = parseInt(shiftDef.end_time) || 0
+          const startH = parseInt(shiftDef.start_time) || 0
+          const crossesMidnight = endH < startH
+          const effectiveEnd = crossesMidnight ? endH : endH
+          const nextStartH = parseInt(nextDef.start_time) || 11
+          const gap = crossesMidnight ? (nextStartH - effectiveEnd) : (nextStartH + 24 - endH)
+          if (gap < 11) valid11h = false
+        }
+      }
+
+      // Count rest days this week
+      const weekSchedules = allSchedules.filter(s => s.employee === emp.name)
+      const restDays = weekSchedules.filter(s => s.shift === '休').length
+      const wouldLoseRest = daySchedule?.shift === '休' && restDays <= 2
+
+      const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
+
+      candidates.push({
+        name: emp.name,
+        dept: emp.dept,
+        store: emp.store,
+        position: emp.position,
+        isPT,
+        sameStore,
+        isOff: !daySchedule || daySchedule.shift === '休',
+        valid11h,
+        wouldLoseRest,
+        restDays,
+        score: (sameStore ? 30 : 0) + (valid11h ? 20 : 0) + (!wouldLoseRest ? 15 : 0) + (!isPT && !shiftName.includes('18') ? 10 : 0) + (restDays > 2 ? 5 : 0),
+      })
+    }
+
+    // Sort by score descending
+    candidates.sort((a, b) => b.score - a.score)
+    setCoverCandidates(candidates.filter(c => c.isOff && c.valid11h))
+    setCoverLoading(false)
+  }
+
+  const handleAssignCover = async (coverEmpName, date, shift) => {
+    await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' })
+    // Update local state
+    setSchedules(prev => {
+      const idx = prev.findIndex(s => s.employee === coverEmpName && s.date === date)
+      if (idx >= 0) return prev.map((s, i) => i === idx ? { ...s, shift } : s)
+      return [...prev, { employee: coverEmpName, date, shift }]
+    })
+    setCoverModal(null)
+    alert(`已指派 ${coverEmpName} 代班 ${shift}`)
+  }
 
   const handleAutoSchedule = async () => {
     if (!confirm(`將為 ${filtered.length} 位員工自動排班（${weekStart} ~ ${weekEnd}）\n已有的排班會保留，空白格子才會填入。\n每天最少 ${minStaff} 人上班。`)) return
@@ -601,17 +707,29 @@ export default function Schedule() {
                             <CalendarOff size={10} style={{ verticalAlign: -1 }} /> 希望休
                           </div>
                         )}
-                        <span
-                          onClick={() => setEditCell(isEditing ? null : { empName: emp.name, date })}
-                          style={{
-                            display: 'inline-block', padding: '4px 12px', borderRadius: 8,
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                            transition: 'all 0.15s',
-                            ...(shift ? getShiftStyle(shift) : { background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px dashed var(--border-medium)' }),
-                          }}
-                        >
-                          {shift || '+'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                          <span
+                            onClick={() => setEditCell(isEditing ? null : { empName: emp.name, date })}
+                            style={{
+                              display: 'inline-block', padding: '4px 12px', borderRadius: 8,
+                              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                              transition: 'all 0.15s',
+                              ...(shift ? getShiftStyle(shift) : { background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px dashed var(--border-medium)' }),
+                            }}
+                          >
+                            {shift || '+'}
+                          </span>
+                          {shift && shift !== '休' && (
+                            <button title="找人代班" onClick={e => {
+                              e.stopPropagation()
+                              setCoverModal({ employee: emp.name, date, shift })
+                              findCoverCandidates(emp.name, date, shift)
+                            }} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              color: 'var(--text-muted)', fontSize: 10, padding: 1, opacity: 0.4, lineHeight: 1,
+                            }}>🔄</button>
+                          )}
+                        </div>
                       </td>
                     )
                   })}
@@ -1040,6 +1158,76 @@ export default function Schedule() {
             ))}
           </div>
         </Modal>
+      )}
+
+      {/* ══ Cover Shift Modal ══ */}
+      {coverModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.4)', width: '100vw', height: '100vh',
+        }} onMouseDown={e => { if (e.target === e.currentTarget) setCoverModal(null) }}>
+          <div style={{
+            width: '100%', maxWidth: 560, maxHeight: '85vh',
+            background: 'var(--bg-primary)', border: '1px solid var(--border-medium)',
+            borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: 'auto',
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>🔄 找人代班</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {coverModal.employee} · {coverModal.date} · {coverModal.shift}
+                </div>
+              </div>
+              <button onClick={() => setCoverModal(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              {coverLoading ? (
+                <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                  <div className="spinner" style={{ margin: '0 auto 12px' }} />
+                  分析可代班人選...
+                </div>
+              ) : coverCandidates.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                  😔 沒有符合條件的人選
+                  <div style={{ fontSize: 12, marginTop: 8 }}>所有員工當天都有班或不符合 11 小時班距規定</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    找到 {coverCandidates.length} 位可代班人選（依適合度排序）
+                  </div>
+                  {coverCandidates.map((c, i) => (
+                    <div key={c.name} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '12px 14px', borderRadius: 10, marginBottom: 8,
+                      background: i === 0 ? 'var(--accent-green-dim)' : 'var(--bg-card)',
+                      border: `1px solid ${i === 0 ? 'rgba(52,211,153,0.3)' : 'var(--border-subtle)'}`,
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>
+                          {i === 0 && '⭐ '}{c.name}
+                          {!c.sameStore && <span style={{ fontSize: 11, color: 'var(--accent-orange)', marginLeft: 6 }}>跨店</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {c.store || '—'} · {c.position || c.dept}
+                          {c.isPT && <span className="badge badge-cyan" style={{ marginLeft: 6, fontSize: 10 }}>PT</span>}
+                          {c.wouldLoseRest && <span style={{ color: 'var(--accent-orange)', marginLeft: 6 }}>⚠ 僅剩 {c.restDays} 天休</span>}
+                        </div>
+                      </div>
+                      <button className="btn btn-sm btn-primary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                        onClick={() => handleAssignCover(c.name, coverModal.date, coverModal.shift)}>
+                        指派代班
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

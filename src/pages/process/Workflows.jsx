@@ -14,8 +14,18 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
+
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
+
+const AI_EXAMPLES = [
+  '我需要一個新員工入職訓練流程',
+  '設計一個每月庫存盤點的工作流程',
+  '建立一個客戶活動企劃執行流程',
+  '建立一個新店開幕準備流程',
+]
 
 const STATUS_CONFIG = {
   '待處理': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
@@ -57,6 +67,12 @@ export default function Workflows() {
   // Create SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
   const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+
+  // AI assistant
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState(null)
+  const [aiMessages, setAiMessages] = useState([])
 
   // SOP deploy
   const [showDeployModal, setShowDeployModal] = useState(false)
@@ -161,6 +177,47 @@ export default function Workflows() {
       setInstances(prev => prev.map(i => i.id === selectedInstance.id ? data : i))
       setSelectedInstance(data)
       setShowEditModal(false)
+    }
+  }
+
+  // ── AI Assistant ──
+  const handleAiGenerate = async (prompt) => {
+    if (!prompt?.trim()) return
+    const userMsg = prompt.trim()
+    setAiPrompt('')
+    setAiMessages(prev => [...prev, { role: 'user', text: userMsg }])
+    setAiLoading(true)
+    setAiResult(null)
+    try {
+      if (!GEMINI_KEY || GEMINI_KEY === 'your_gemini_api_key_here') throw new Error('請先設定 VITE_GEMINI_API_KEY')
+      const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const result = await model.generateContent(`你是流程設計專家。根據以下需求，設計一個標準作業流程（SOP）。
+
+需求：${userMsg}
+
+請以 JSON 格式回覆（不要 markdown code block）：
+{"name":"流程名稱","category":"分類(HR/營運/採購/展店/倉管/財務/行銷)","description":"流程說明","steps":[{"title":"步驟名稱","role":"負責角色","priority":"高/中/低","description":"步驟說明"}]}`)
+      const text = result.response.text()
+      const json = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
+      setAiResult(json)
+      setAiMessages(prev => [...prev, { role: 'ai', text: `已生成「${json.name}」，共 ${json.steps?.length || 0} 個步驟`, data: json }])
+    } catch (err) {
+      setAiMessages(prev => [...prev, { role: 'ai', text: `❌ ${err.message}`, error: true }])
+    }
+    setAiLoading(false)
+  }
+
+  const handleSaveAiResult = async () => {
+    if (!aiResult) return
+    const { data } = await supabase.from('sop_templates').insert({
+      name: aiResult.name, category: aiResult.category || '營運',
+      description: aiResult.description, steps: aiResult.steps || [],
+    }).select().single()
+    if (data) {
+      setTemplates(prev => [...prev, data])
+      setAiResult(null)
+      setAiMessages(prev => [...prev, { role: 'ai', text: `✅「${data.name}」已儲存到流程範本！` }])
     }
   }
 
@@ -419,6 +476,7 @@ export default function Workflows() {
         {[
           { key: 'active', label: `🟢 進行中流程 (${activeInstances.length})` },
           { key: 'templates', label: `📁 流程範本 (${templates.length})` },
+          { key: 'ai', label: '🤖 AI 助手' },
           { key: 'archived', label: `📦 封存流程 (${archivedInstances.length})` },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -499,6 +557,125 @@ export default function Workflows() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ══ AI Assistant ══ */}
+      {tab === 'ai' && (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 500 }}>
+          {/* Header card */}
+          <div style={{
+            padding: '20px 24px', marginBottom: 16, borderRadius: 14,
+            background: 'linear-gradient(135deg, rgba(6,182,212,0.05), rgba(139,92,246,0.05))',
+            border: '1px solid var(--border-medium)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 24 }}>🤖</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>AI 流程助手</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>用自然語言描述你需要的流程，AI 會幫你設計</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, marginBottom: 16 }}>
+            {aiMessages.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🧑‍💼</div>
+                <div style={{ color: 'var(--text-muted)', marginBottom: 24 }}>告訴我你想建立什麼流程，例如：</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400, margin: '0 auto' }}>
+                  {AI_EXAMPLES.map((ex, i) => (
+                    <button key={i} onClick={() => handleAiGenerate(ex)} style={{
+                      padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border-medium)',
+                      background: 'var(--bg-card)', color: 'var(--text-secondary)',
+                      cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                    }}>
+                      💡 「{ex}」
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {aiMessages.map((msg, i) => (
+              <div key={i} style={{
+                display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                marginBottom: 12,
+              }}>
+                <div style={{
+                  maxWidth: '80%', padding: '12px 16px', borderRadius: 14,
+                  background: msg.role === 'user' ? 'var(--accent-cyan)' : msg.error ? 'rgba(239,68,68,0.1)' : 'var(--bg-card)',
+                  color: msg.role === 'user' ? '#fff' : msg.error ? 'var(--accent-red)' : 'var(--text-primary)',
+                  border: msg.role === 'user' ? 'none' : '1px solid var(--border-medium)',
+                  fontSize: 14,
+                }}>
+                  {msg.text}
+
+                  {/* Show generated steps preview */}
+                  {msg.data && (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{msg.data.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        <span className="badge badge-cyan">{msg.data.category}</span> {msg.data.description}
+                      </div>
+                      {(msg.data.steps || []).map((s, j) => (
+                        <div key={j} style={{ fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: 8 }}>
+                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 700, minWidth: 20 }}>{j + 1}.</span>
+                          <span style={{ fontWeight: 600 }}>{s.title}</span>
+                          <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{s.role}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {aiLoading && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', padding: '12px 0' }}>
+                <div className="spinner" style={{ width: 16, height: 16 }} /> AI 正在設計流程...
+              </div>
+            )}
+
+            {/* Save button when result is ready */}
+            {aiResult && !aiLoading && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={handleSaveAiResult}>
+                  💾 儲存到流程範本
+                </button>
+                <button className="btn btn-secondary" onClick={() => setAiResult(null)}>
+                  略過
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Input bar (sticky bottom) */}
+          <div style={{
+            display: 'flex', gap: 10, padding: '14px 0',
+            borderTop: '1px solid var(--border-subtle)',
+            position: 'sticky', bottom: 0, background: 'var(--bg-primary)',
+          }}>
+            <input
+              className="form-input"
+              type="text"
+              style={{ flex: 1, fontSize: 14, padding: '12px 16px', borderRadius: 12 }}
+              placeholder="描述你需要的流程..."
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !aiLoading && handleAiGenerate(aiPrompt)}
+              disabled={aiLoading}
+            />
+            <button
+              className="btn btn-primary"
+              style={{ borderRadius: 12, padding: '12px 16px' }}
+              onClick={() => handleAiGenerate(aiPrompt)}
+              disabled={aiLoading || !aiPrompt.trim()}
+            >
+              🚀
+            </button>
+          </div>
         </div>
       )}
 

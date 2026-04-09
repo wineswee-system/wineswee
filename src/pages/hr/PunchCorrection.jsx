@@ -43,10 +43,45 @@ export default function PunchCorrection() {
   }
 
   const handleApprove = async (id) => {
+    const correction = corrections.find(c => c.id === id)
     const { data } = await supabase.from('clock_corrections')
       .update({ status: '已核准', approver: '管理員' })
       .eq('id', id).select().single()
-    if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
+    if (data) {
+      setCorrections(prev => prev.map(c => c.id === id ? data : c))
+
+      // Write correction back to attendance_records
+      if (correction) {
+        const { data: existing } = await supabase.from('attendance_records')
+          .select('*').eq('employee', correction.employee).eq('date', correction.date).maybeSingle()
+
+        if (existing) {
+          // Update existing record
+          const update = {}
+          if (correction.corrected_clock_in) update.clock_in = correction.corrected_clock_in
+          if (correction.corrected_clock_out) {
+            update.clock_out = correction.corrected_clock_out
+            // Recalculate hours
+            const clockIn = existing.clock_in || correction.corrected_clock_in
+            if (clockIn) {
+              const inH = parseInt(clockIn) + parseInt(clockIn.split(':')[1] || 0) / 60
+              const outH = parseInt(correction.corrected_clock_out) + parseInt(correction.corrected_clock_out.split(':')[1] || 0) / 60
+              update.hours = Math.round((outH - inH) * 10) / 10
+            }
+          }
+          await supabase.from('attendance_records').update(update).eq('id', existing.id)
+        } else {
+          // Create new record
+          await supabase.from('attendance_records').insert({
+            employee: correction.employee,
+            date: correction.date,
+            clock_in: correction.corrected_clock_in || null,
+            clock_out: correction.corrected_clock_out || null,
+            status: '補登',
+          })
+        }
+      }
+    }
   }
 
   const handleReject = async (id) => {

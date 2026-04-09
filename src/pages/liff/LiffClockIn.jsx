@@ -13,12 +13,17 @@ export default function LiffClockIn() {
   const [result, setResult] = useState(null)
   const [liffReady, setLiffReady] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   const today = new Date().toISOString().slice(0, 10)
-  const now = new Date()
+  const now = currentTime
   const timeDisplay = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
 
   useEffect(() => { initLiff() }, [])
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000)
+    return () => clearInterval(timer)
+  }, [])
 
   async function initLiff() {
     try {

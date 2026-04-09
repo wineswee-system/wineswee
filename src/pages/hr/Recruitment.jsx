@@ -12,7 +12,7 @@ export default function Recruitment() {
   const [deptFilter, setDeptFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ title: '', dept: '', location: '', type: '全��' })
+  const [form, setForm] = useState({ title: '', dept: '', location: '', type: '全職' })
   const [error, setError] = useState(null)
 
   useEffect(() => {

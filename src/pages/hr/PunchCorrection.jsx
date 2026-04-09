@@ -26,7 +26,7 @@ export default function PunchCorrection() {
 
   const handleSubmit = async () => {
     if (!form.employee || !form.date || !form.corrected_time || !form.reason) return
-    const { data } = await supabase.from('punch_corrections').insert(form).select().single()
+    const { data } = await supabase.from('punch_corrections').insert({ ...form, status: '待審核' }).select().single()
     if (data) {
       setCorrections(prev => [data, ...prev])
       setShowModal(false)

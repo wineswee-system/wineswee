@@ -5,7 +5,7 @@ import { updateEmployee } from '../lib/db'
 
 const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '中高齡者 (45+)', '長期失業者', '更生人', '獨力負擔家計者', '家庭暴力被害人', '二度就業婦女']
 
-export default function EmployeeDetail({ employee, stores, departments, lineUsers, onUpdate, onClose }) {
+export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, lineUsers, onUpdate, onClose }) {
   const [tab, setTab] = useState('personal')
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -56,7 +56,8 @@ export default function EmployeeDetail({ employee, stores, departments, lineUser
 
   const handleSave = async () => {
     setSaving(true)
-    const { data } = await updateEmployee(employee.id, form)
+    const { data, error } = await updateEmployee(employee.id, form)
+    if (error) { alert('儲存失敗：' + error.message); setSaving(false); return }
     if (data) { onUpdate(data); setIsDirty(false) }
     setSaving(false)
   }
@@ -277,7 +278,9 @@ export default function EmployeeDetail({ employee, stores, departments, lineUser
                 <div><div style={L}>直屬主管</div>
                   <select className="form-input" style={{ width: '100%' }} value={form.supervisor || ''} onChange={e => set('supervisor', e.target.value)}>
                     <option value="">— 未指派 —</option>
-                    {(stores || []).length > 0 && onUpdate && []}
+                    {(allEmployees || []).filter(e => e.id !== employee.id && e.status === '在職').map(e => (
+                      <option key={e.id} value={e.name}>{e.name} — {e.position || e.dept}</option>
+                    ))}
                   </select>
                 </div>
               </div>

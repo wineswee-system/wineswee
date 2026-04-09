@@ -453,6 +453,7 @@ export default function Employees() {
       {detailEmp && (
         <EmployeeDetail
           employee={detailEmp}
+          employees={employees}
           stores={locations}
           departments={departments}
           lineUsers={lineUsers}

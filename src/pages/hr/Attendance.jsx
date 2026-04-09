@@ -244,6 +244,7 @@ export default function Attendance() {
                 const todayEmployees = records.filter(r => r.date === today).map(r => r.employee)
                 const notClocked = employees.filter(e =>
                   !todayEmployees.includes(e.name) &&
+                  (storeFilter === '' || e.store === storeFilter) &&
                   (deptFilter === '' || e.dept === deptFilter) &&
                   (search === '' || e.name.includes(search))
                 )

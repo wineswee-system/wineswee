@@ -161,11 +161,11 @@ export default function Schedule() {
     const shiftStartH = shiftDef ? parseInt(shiftDef.start_time) || 11 : 11
     const absentStore = employees.find(e => e.name === absentEmp)?.store || ''
 
-    // Get all schedules for this date and adjacent dates (for 11h rule)
+    // Get schedules for the full week + adjacent days (for 11h rule + rest day count)
     const prevDate = new Date(new Date(date).getTime() - 86400000).toISOString().slice(0, 10)
     const nextDate = new Date(new Date(date).getTime() + 86400000).toISOString().slice(0, 10)
     const { data: nearbySchedules } = await supabase.from('schedules')
-      .select('*').in('date', [prevDate, date, nextDate])
+      .select('*').gte('date', weekStart).lte('date', weekEnd)
 
     const allSchedules = nearbySchedules || []
     const candidates = []
@@ -207,9 +207,10 @@ export default function Schedule() {
           const endH = parseInt(shiftDef.end_time) || 0
           const startH = parseInt(shiftDef.start_time) || 0
           const crossesMidnight = endH < startH
-          const effectiveEnd = crossesMidnight ? endH : endH
           const nextStartH = parseInt(nextDef.start_time) || 11
-          const gap = crossesMidnight ? (nextStartH - effectiveEnd) : (nextStartH + 24 - endH)
+          // If crosses midnight: shift ends at endH on NEXT day morning, gap = nextStart - endH
+          // If normal: shift ends today, gap = nextStart + 24 - endH (next day)
+          const gap = crossesMidnight ? (nextStartH - endH) : (nextStartH + 24 - endH)
           if (gap < 11) valid11h = false
         }
       }
@@ -243,13 +244,14 @@ export default function Schedule() {
   }
 
   const handleAssignCover = async (coverEmpName, date, shift) => {
-    await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' })
-    // Update local state
-    setSchedules(prev => {
-      const idx = prev.findIndex(s => s.employee === coverEmpName && s.date === date)
-      if (idx >= 0) return prev.map((s, i) => i === idx ? { ...s, shift } : s)
-      return [...prev, { employee: coverEmpName, date, shift }]
-    })
+    const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' }).select().single()
+    if (data) {
+      setSchedules(prev => {
+        const idx = prev.findIndex(s => s.employee === coverEmpName && s.date === date)
+        if (idx >= 0) return prev.map((s, i) => i === idx ? data : s)
+        return [...prev, data]
+      })
+    }
     setCoverModal(null)
     alert(`已指派 ${coverEmpName} 代班 ${shift}`)
   }

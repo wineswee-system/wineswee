@@ -250,6 +250,26 @@ export const getApprovalChains = () =>
 export const createApprovalChain = (data) =>
   supabase.from('approval_chains').insert(data).select().single()
 
+// ── Approval Forms (簽核表單) ────────────────────────────
+export const getApprovalFormByStep = (stepId) =>
+  supabase.from('approval_forms').select('*').eq('ref_step_id', stepId).maybeSingle()
+
+export const createApprovalForm = (data) =>
+  supabase.from('approval_forms').insert(data).select().single()
+
+export const updateApprovalForm = (id, data) =>
+  supabase.from('approval_forms').update(data).eq('id', id).select().single()
+
+// ── Approval Form Steps (簽核步驟) ──────────────────────
+export const getApprovalFormSteps = (formId) =>
+  supabase.from('approval_form_steps').select('*').eq('form_id', formId).order('step_order')
+
+export const createApprovalFormSteps = (rows) =>
+  supabase.from('approval_form_steps').insert(rows).select()
+
+export const updateApprovalFormStep = (id, data) =>
+  supabase.from('approval_form_steps').update(data).eq('id', id).select().single()
+
 // ── Tasks ──────────────────────────────────────────────────
 export const getTasks = () =>
   supabase.from('tasks').select('*').order('id')

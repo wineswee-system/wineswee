@@ -7,7 +7,9 @@ import {
   getStepChecklists, linkStepChecklist, unlinkStepChecklist,
   getStepDependencies, createStepDependency, deleteStepDependency,
   getChecklistItems, updateChecklistItem,
-  getApprovalChains
+  getApprovalChains,
+  getApprovalFormByStep, createApprovalForm, updateApprovalForm,
+  getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
 } from '../lib/db'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
@@ -29,6 +31,8 @@ export default function TaskDetailPanel({
   const [checklistItemsMap, setChecklistItemsMap] = useState({}) // { checklistId: items[] }
   const [dependencies, setDependencies] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
+  const [approvalForm, setApprovalForm] = useState(null)
+  const [approvalSteps, setApprovalSteps] = useState([])
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
   const commentsEndRef = useRef(null)
@@ -58,12 +62,21 @@ export default function TaskDetailPanel({
       getStepChecklists(step.id),
       getStepDependencies(step.id),
       getApprovalChains(),
-    ]).then(([c, a, cl, d, ac]) => {
+      getApprovalFormByStep(step.id),
+    ]).then(([c, a, cl, d, ac, af]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
       setApprovalChains(ac.data || [])
+      // Load approval form & steps
+      if (af.data) {
+        setApprovalForm(af.data)
+        getApprovalFormSteps(af.data.id).then(({ data: steps }) => setApprovalSteps(steps || []))
+      } else {
+        setApprovalForm(null)
+        setApprovalSteps([])
+      }
       // Load items for each linked checklist
       const linked = cl.data || []
       if (linked.length > 0) {
@@ -108,6 +121,65 @@ export default function TaskDetailPanel({
     if (!confirm('確定刪除此任務？')) return
     await deleteWorkflowStep(step.id)
     onDelete(step.id)
+  }
+
+  // ── Approval (簽核) ──
+  const handleStartApproval = async (chainId) => {
+    if (!chainId) return
+    const chain = approvalChains.find(c => c.id === Number(chainId))
+    if (!chain) return
+    const { data: form } = await createApprovalForm({
+      title: `${step.title} — 簽核`,
+      applicant: step.assignee || '系統',
+      chain_id: chain.id,
+      ref_step_id: step.id,
+      status: '簽核中',
+      current_step: 0,
+    })
+    if (!form) return
+    setApprovalForm(form)
+    // Create steps from chain
+    const stepRows = (chain.steps || []).map((s, i) => ({
+      form_id: form.id,
+      step_order: i + 1,
+      role: s.role,
+      status: i === 0 ? '待簽' : '等待中',
+    }))
+    const { data: steps } = await createApprovalFormSteps(stepRows)
+    setApprovalSteps(steps || [])
+  }
+
+  const handleApprovalAction = async (formStepId, action, comment) => {
+    const newStatus = action === 'approve' ? '已核准' : '已退回'
+    const { data } = await updateApprovalFormStep(formStepId, {
+      status: newStatus,
+      approver: '目前使用者',
+      comment: comment || null,
+      acted_at: new Date().toISOString(),
+    })
+    if (!data) return
+    const updated = approvalSteps.map(s => s.id === formStepId ? data : s)
+    setApprovalSteps(updated)
+
+    if (action === 'approve') {
+      // Advance to next step
+      const nextStep = updated.find(s => s.status === '等待中')
+      if (nextStep) {
+        const { data: ns } = await updateApprovalFormStep(nextStep.id, { status: '待簽' })
+        if (ns) setApprovalSteps(prev => prev.map(s => s.id === ns.id ? ns : s))
+        await updateApprovalForm(approvalForm.id, { current_step: nextStep.step_order })
+      } else {
+        // All approved
+        const { data: f } = await updateApprovalForm(approvalForm.id, {
+          status: '已通過', completed_at: new Date().toISOString(),
+        })
+        if (f) setApprovalForm(f)
+      }
+    } else {
+      // Rejected
+      const { data: f } = await updateApprovalForm(approvalForm.id, { status: '已退回' })
+      if (f) setApprovalForm(f)
+    }
   }
 
   // Comments
@@ -547,6 +619,149 @@ export default function TaskDetailPanel({
                 </button>
               </div>
             ))}
+          </div>
+
+          {/* ═══ Section: Approval (簽核系統) ═══ */}
+          <div style={{
+            ...sectionStyle,
+            border: '2px solid var(--accent-purple)',
+            background: 'linear-gradient(135deg, var(--bg-card), rgba(139,92,246,0.05))',
+          }}>
+            <div style={{ ...labelStyle, marginTop: 0, color: 'var(--accent-purple)', fontSize: 14 }}>
+              🔏 簽核流程
+            </div>
+
+            {!approvalForm ? (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚未啟動簽核，選擇簽核鏈開始</div>
+                <select className="form-input" style={{ width: '100%', fontSize: 13 }}
+                  value="" onChange={e => handleStartApproval(e.target.value)}>
+                  <option value="">＋ 選擇簽核鏈...</option>
+                  {approvalChains.map(ac => (
+                    <option key={ac.id} value={ac.id}>
+                      {ac.name} ({(ac.steps || []).length} 關)
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                {/* Form status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{
+                    padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                    background: approvalForm.status === '已通過' ? 'var(--accent-green-dim)' :
+                      approvalForm.status === '已退回' ? 'rgba(239,68,68,0.1)' : 'var(--accent-purple-dim, rgba(139,92,246,0.15))',
+                    color: approvalForm.status === '已通過' ? 'var(--accent-green)' :
+                      approvalForm.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-purple, #8b5cf6)',
+                    border: `1px solid ${approvalForm.status === '已通過' ? 'rgba(52,211,153,0.3)' :
+                      approvalForm.status === '已退回' ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+                  }}>
+                    {approvalForm.status === '已通過' ? '✅ 已通過' : approvalForm.status === '已退回' ? '❌ 已退回' : '⏳ 簽核中'}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    申請人：{approvalForm.applicant}
+                  </span>
+                </div>
+
+                {/* Steps timeline */}
+                <div style={{ position: 'relative', paddingLeft: 24 }}>
+                  {/* Vertical line */}
+                  <div style={{
+                    position: 'absolute', left: 9, top: 8, bottom: 8, width: 2,
+                    background: 'var(--border-medium)',
+                  }} />
+
+                  {approvalSteps.map((as, i) => {
+                    const isActive = as.status === '待簽'
+                    const isDone = as.status === '已核准'
+                    const isRejected = as.status === '已退回'
+                    return (
+                      <div key={as.id} style={{ position: 'relative', marginBottom: 16 }}>
+                        {/* Dot */}
+                        <div style={{
+                          position: 'absolute', left: -24, top: 2,
+                          width: 18, height: 18, borderRadius: '50%',
+                          background: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
+                            isActive ? 'var(--accent-purple, #8b5cf6)' : 'var(--border-medium)',
+                          border: isActive ? '3px solid rgba(139,92,246,0.3)' : 'none',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: 10, zIndex: 1,
+                        }}>
+                          {isDone ? '✓' : isRejected ? '✗' : i + 1}
+                        </div>
+
+                        {/* Content */}
+                        <div style={{
+                          padding: '10px 14px', borderRadius: 10,
+                          background: isActive ? 'rgba(139,92,246,0.08)' : 'var(--glass-light)',
+                          border: `1px solid ${isActive ? 'rgba(139,92,246,0.3)' : 'var(--border-subtle)'}`,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                第 {as.step_order} 關：{as.role || '審核者'}
+                              </div>
+                              {as.approver && (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  👤 {as.approver} · {as.acted_at ? new Date(as.acted_at).toLocaleString('zh-TW') : ''}
+                                </div>
+                              )}
+                              {as.comment && (
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                                  💬 {as.comment}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{
+                              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                              background: isDone ? 'var(--accent-green-dim)' : isRejected ? 'rgba(239,68,68,0.1)' :
+                                isActive ? 'rgba(139,92,246,0.15)' : 'var(--glass-light)',
+                              color: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
+                                isActive ? 'var(--accent-purple, #8b5cf6)' : 'var(--text-muted)',
+                            }}>
+                              {as.status}
+                            </span>
+                          </div>
+
+                          {/* Action buttons for active step */}
+                          {isActive && approvalForm.status === '簽核中' && (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                              <button
+                                className="btn btn-sm"
+                                style={{
+                                  background: 'var(--accent-green)', color: '#fff', border: 'none',
+                                  padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+                                }}
+                                onClick={() => {
+                                  const comment = prompt('審核意見（可留空）：')
+                                  handleApprovalAction(as.id, 'approve', comment)
+                                }}
+                              >
+                                ✅ 核准
+                              </button>
+                              <button
+                                className="btn btn-sm"
+                                style={{
+                                  background: 'var(--accent-red)', color: '#fff', border: 'none',
+                                  padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+                                }}
+                                onClick={() => {
+                                  const comment = prompt('退回原因：')
+                                  if (comment) handleApprovalAction(as.id, 'reject', comment)
+                                }}
+                              >
+                                ❌ 退回
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           {/* ═══ Section: Comments ═══ */}

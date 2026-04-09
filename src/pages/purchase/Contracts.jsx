@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, FileText } from 'lucide-react'
-import { getSupplierContracts, createSupplierContract } from '../../lib/db'
+import { getSupplierContracts, createSupplierContract, getSuppliers } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -10,10 +10,13 @@ export default function Contracts() {
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch] = useState('')
+  const [suppliers, setSuppliers] = useState([])
   const [form, setForm] = useState({ contract_number: '', supplier_id: '', start_date: '', end_date: '', discount_rate: '', min_order: '', status: '有效' })
 
   useEffect(() => {
-    getSupplierContracts().then(({ data }) => { setContracts(data || []) }).catch(err => {
+    Promise.all([getSupplierContracts(), getSuppliers()]).then(([c, s]) => {
+      setContracts(c.data || []); setSuppliers(s.data || [])
+    }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
@@ -123,7 +126,10 @@ export default function Contracts() {
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="CTR-001" value={form.contract_number} onChange={e => set('contract_number', e.target.value)} />
             </Field>
             <Field label="供應商ID *">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="供應商ID" value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)} />
+              <select className="form-input" style={{ width: '100%' }} value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)}>
+                <option value="">請選擇供應商</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

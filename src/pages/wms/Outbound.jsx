@@ -19,7 +19,7 @@ export default function Outbound() {
   const [expanded, setExpanded] = useState(null)
   const [items, setItems] = useState({})
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨' })
+  const [form, setForm] = useState({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨', items: [{ sku_name: '', quantity: 1, unit: '個' }], notes: '' })
   const [highlightItem, setHighlightItem] = useState(null)
 
   useEffect(() => {
@@ -270,6 +270,27 @@ export default function Outbound() {
             </Field>
           </div>
           <Field label="截止出貨日"><input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date} onChange={e => set('due_date', e.target.value)} /></Field>
+          <Field label="出貨品項">
+            {form.items.map((item, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 6, marginBottom: 6 }}>
+                <input className="form-input" placeholder="品名/SKU" value={item.sku_name}
+                  onChange={e => set('items', form.items.map((it, j) => j === i ? { ...it, sku_name: e.target.value } : it))} />
+                <input className="form-input" type="number" placeholder="數量" min="1" value={item.quantity}
+                  onChange={e => set('items', form.items.map((it, j) => j === i ? { ...it, quantity: Number(e.target.value) } : it))} />
+                <input className="form-input" placeholder="單位" value={item.unit}
+                  onChange={e => set('items', form.items.map((it, j) => j === i ? { ...it, unit: e.target.value } : it))} />
+                {form.items.length > 1 && (
+                  <button onClick={() => set('items', form.items.filter((_, j) => j !== i))}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => set('items', [...form.items, { sku_name: '', quantity: 1, unit: '個' }])}
+              style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px dashed var(--border-medium)', background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>
+              + 新增品項
+            </button>
+          </Field>
+          <Field label="備註"><textarea className="form-input" style={{ width: '100%', minHeight: 50, resize: 'vertical' }} placeholder="出貨備註..." value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
         </Modal>
       )}
     </div>

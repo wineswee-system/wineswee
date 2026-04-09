@@ -49,7 +49,19 @@ export default function Tasks() {
     const completedAt = status === '已完成' ? new Date().toISOString() : null
     const { data } = await supabase.from('workflow_steps')
       .update({ status, completed_at: completedAt }).eq('id', id).select().single()
-    if (data) setWfSteps(prev => prev.map(s => s.id === id ? data : s))
+    if (data) {
+      setWfSteps(prev => prev.map(s => s.id === id ? data : s))
+      // Check if entire instance is now complete
+      if (status === '已完成' && data.instance_id) {
+        const { data: siblings } = await supabase.from('workflow_steps')
+          .select('status').eq('instance_id', data.instance_id)
+        if (siblings && siblings.length > 0 && siblings.every(s => s.status === '已完成')) {
+          await supabase.from('workflow_instances')
+            .update({ status: '已完成', completed_at: new Date().toISOString() })
+            .eq('id', data.instance_id)
+        }
+      }
+    }
   }
 
   const handleSubmit = async () => {

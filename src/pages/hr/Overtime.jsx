@@ -56,7 +56,19 @@ export default function Overtime() {
     try {
       const { data, error } = await updateOvertimeStatus(id, '已核准')
       if (error) throw error
-      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+      if (data) {
+        setRecords(prev => prev.map(r => r.id === id ? data : r))
+        // Update attendance: add overtime hours
+        if (data.employee && data.date && data.hours) {
+          const { data: att } = await supabase.from('attendance_records')
+            .select('id, hours').eq('employee', data.employee).eq('date', data.date).maybeSingle()
+          if (att) {
+            await supabase.from('attendance_records').update({
+              hours: (Number(att.hours) || 0) + Number(data.hours),
+            }).eq('id', att.id)
+          }
+        }
+      }
     } catch (err) {
       console.error('Operation failed:', err)
       alert('操作失敗：' + (err.message || '未知錯誤'))

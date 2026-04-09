@@ -226,10 +226,11 @@ export default function TaskDetailPanel({
   const handleToggleLinkedItem = async (item) => {
     const { data } = await updateChecklistItem(item.id, { checked: !item.checked })
     if (data) {
-      setChecklistItemsMap(prev => ({
-        ...prev,
-        [item.checklist_id]: (prev[item.checklist_id] || []).map(i => i.id === item.id ? data : i),
-      }))
+      const updatedItems = (checklistItemsMap[item.checklist_id] || []).map(i => i.id === item.id ? data : i)
+      setChecklistItemsMap(prev => ({ ...prev, [item.checklist_id]: updatedItems }))
+      // Persist completed count to checklists table
+      const completed = updatedItems.filter(i => i.checked).length
+      await supabase.from('checklists').update({ completed }).eq('id', item.checklist_id)
     }
   }
 

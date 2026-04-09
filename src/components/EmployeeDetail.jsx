@@ -56,9 +56,19 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   const handleSave = async () => {
     setSaving(true)
+    // Check if store changed
+    const storeChanged = form.store !== employee.store && employee.store && form.store
     const { data, error } = await updateEmployee(employee.id, form)
     if (error) { alert('儲存失敗：' + error.message); setSaving(false); return }
-    if (data) { onUpdate(data); setIsDirty(false) }
+    if (data) {
+      onUpdate(data); setIsDirty(false)
+      // If store changed, remove future schedules (shifts may not exist at new store)
+      if (storeChanged) {
+        const today = new Date().toISOString().slice(0, 10)
+        await supabase.from('schedules').delete().eq('employee', data.name).gt('date', today)
+        alert(`已調至${form.store}，未來排班已清除，請重新排班`)
+      }
+    }
     setSaving(false)
   }
 

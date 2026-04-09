@@ -184,20 +184,52 @@ export default function Salary() {
   }
 
   // ── Batch payroll run ──
-  const handleBatchPayroll = () => {
+  const handleBatchPayroll = async () => {
+    // Pull attendance data for the month
+    const monthStart = month + '-01'
+    const monthEnd = month + '-31'
+    const { data: attendance } = await supabase.from('attendance_records')
+      .select('employee, hours, status').gte('date', monthStart).lte('date', monthEnd)
+    const { data: overtime } = await supabase.from('overtime_requests')
+      .select('employee, hours').eq('status', '已核准').gte('date', monthStart).lte('date', monthEnd)
+    const { data: leaves } = await supabase.from('leave_requests')
+      .select('employee, days, type').eq('status', '已核准').gte('start_date', monthStart).lte('start_date', monthEnd)
+
+    const attMap = {}
+    for (const a of (attendance || [])) {
+      if (!attMap[a.employee]) attMap[a.employee] = { hours: 0, late: 0, days: 0 }
+      attMap[a.employee].hours += Number(a.hours || 0)
+      attMap[a.employee].days++
+      if (a.status === '遲到') attMap[a.employee].late++
+    }
+    const otMap = {}
+    for (const o of (overtime || [])) {
+      otMap[o.employee] = (otMap[o.employee] || 0) + Number(o.hours || 0)
+    }
+    const lvMap = {}
+    for (const l of (leaves || [])) {
+      if (!lvMap[l.employee]) lvMap[l.employee] = { absence: 0 }
+      if (l.type === '事假') lvMap[l.employee].absence += (l.days || 0)
+    }
+
     const preview = employees.map(emp => {
       const baseSalary = emp.base_salary || 0
+      const att = attMap[emp.name] || { hours: 0, late: 0, days: 0 }
+      const otHours = otMap[emp.name] || 0
+      const absenceDays = lvMap[emp.name]?.absence || 0
+      const overtimePay = Math.round(otHours * (baseSalary / 30 / 8) * 1.34)
+      const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
+      const lateDeduction = att.late * 100
+
       const result = calculateNetSalary(baseSalary, {
-        dependents: 0,
-        voluntaryPensionRate: 0,
-        overtimePay: 0,
-        bonus: 0,
-        otherDeductions: 0,
+        dependents: 0, voluntaryPensionRate: 0,
+        overtimePay, bonus: 0,
+        otherDeductions: absenceDeduction + lateDeduction,
       })
       return {
-        employee: emp.name,
-        dept: emp.dept,
-        base_salary: baseSalary,
+        employee: emp.name, dept: emp.dept, base_salary: baseSalary,
+        workDays: att.days, workHours: att.hours, otHours, absenceDays, lateCount: att.late,
+        overtimePay, absenceDeduction, lateDeduction,
         ...result,
       }
     })

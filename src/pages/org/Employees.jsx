@@ -87,6 +87,24 @@ export default function Employees() {
         setEmployees(prev => [...prev, data])
         setShowModal(false)
         setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職' })
+        // Auto-start onboarding workflow if template exists
+        const { data: tpl } = await supabase.from('sop_templates')
+          .select('*').ilike('name', '%新人%到職%').limit(1).maybeSingle()
+        if (tpl) {
+          const { data: inst } = await supabase.from('workflow_instances').insert({
+            template_name: tpl.name, store: data.store || '',
+            status: '進行中', started_by: '系統',
+          }).select().single()
+          if (inst && tpl.steps?.length) {
+            const stepRows = tpl.steps.map((s, i) => ({
+              instance_id: inst.id, step_order: i + 1,
+              title: s.title, description: s.description,
+              role: s.role, assignee: data.name,
+              store: data.store || '', status: '待處理',
+            }))
+            await supabase.from('workflow_steps').insert(stepRows)
+          }
+        }
       }
     } catch (err) {
       console.error('Operation failed:', err)
@@ -113,6 +131,11 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
         setShowResignModal(false)
+        // Cleanup: remove future schedules, cancel pending leaves/tasks
+        const today = new Date().toISOString().slice(0, 10)
+        await supabase.from('schedules').delete().eq('employee', data.name).gt('date', today)
+        await supabase.from('leave_requests').update({ status: '已取消' }).eq('employee', data.name).eq('status', '待審核')
+        await supabase.from('workflow_steps').update({ status: '已擱置' }).eq('assignee', data.name).in('status', ['待處理', '進行中'])
       }
     } catch (err) {
       console.error('Operation failed:', err)

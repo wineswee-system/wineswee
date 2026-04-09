@@ -118,7 +118,21 @@ export default function Leave() {
 
   const handleApprove = async (id) => {
     const { data } = await updateLeaveStatus(id, '已核准', '主管')
-    if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
+    if (data) {
+      setLeaves(prev => prev.map(l => l.id === id ? data : l))
+      // Write leave days to schedule as '休'
+      if (data.start_date && data.days) {
+        for (let i = 0; i < data.days; i++) {
+          const d = new Date(data.start_date)
+          d.setDate(d.getDate() + i)
+          const dateStr = d.toISOString().slice(0, 10)
+          await supabase.from('schedules').upsert(
+            { employee: data.employee, date: dateStr, shift: '休' },
+            { onConflict: 'employee,date' }
+          )
+        }
+      }
+    }
   }
   const handleReject = async (id) => {
     const reason = prompt('請輸入拒絕原因：')

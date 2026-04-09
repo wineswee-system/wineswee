@@ -131,7 +131,10 @@ export default function ScheduleRules() {
   }
 
   const handleDelete = async (s) => {
-    if (!confirm(`確定要刪除「${s.name}」班別嗎？`)) return
+    // Check if any schedules use this shift
+    const { data: used } = await supabase.from('schedules').select('id').eq('shift', s.name).limit(1)
+    const warning = used?.length > 0 ? `\n⚠ 有排班紀錄使用此班別，刪除後這些紀錄將無法顯示班別樣式。` : ''
+    if (!confirm(`確定要刪除「${s.name}」班別嗎？${warning}`)) return
     await supabase.from('shift_definitions').delete().eq('id', s.id)
     setShiftRules(prev => prev.filter(x => x.id !== s.id))
   }

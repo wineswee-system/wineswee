@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
+import { notifyTaskAssignee } from '../../lib/lineNotify'
 
 const CATEGORIES = ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷']
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
@@ -137,6 +138,10 @@ export default function Workflows() {
       setSteps(prev => [...prev, data])
       setShowAddTaskModal(false)
       setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
+      // Notify assignee via LINE
+      if (taskForm.assignee) {
+        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id)
+      }
     }
   }
 

@@ -11,6 +11,7 @@ import {
   getApprovalFormByStep, createApprovalForm, updateApprovalForm,
   getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
 } from '../lib/db'
+import { notifyApproval } from '../lib/lineNotify'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -157,6 +158,11 @@ export default function TaskDetailPanel({
     }))
     const { data: steps } = await createApprovalFormSteps(stepRows)
     setApprovalSteps(steps || [])
+    // Notify first approver via LINE
+    const firstRole = chain.steps?.[0]?.role
+    if (firstRole) {
+      notifyApproval(firstRole, step.title, `第 1 關：${firstRole}`)
+    }
   }
 
   const handleApprovalAction = async (formStepId, action, comment) => {

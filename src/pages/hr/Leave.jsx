@@ -122,7 +122,8 @@ export default function Leave() {
       setLeaves(prev => prev.map(l => l.id === id ? data : l))
       // Write leave days to schedule as '休'
       if (data.start_date && data.days) {
-        for (let i = 0; i < data.days; i++) {
+        const totalDays = Math.ceil(data.days) // 0.5天也要標休（半天假整天不排班）
+        for (let i = 0; i < totalDays; i++) {
           const d = new Date(data.start_date)
           d.setDate(d.getDate() + i)
           const dateStr = d.toISOString().slice(0, 10)

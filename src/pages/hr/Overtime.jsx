@@ -66,6 +66,12 @@ export default function Overtime() {
             await supabase.from('attendance_records').update({
               hours: (Number(att.hours) || 0) + Number(data.hours),
             }).eq('id', att.id)
+          } else {
+            // No attendance record — create one with overtime hours
+            await supabase.from('attendance_records').insert({
+              employee: data.employee, date: data.date,
+              hours: Number(data.hours), status: '加班',
+            })
           }
         }
       }

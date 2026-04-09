@@ -89,7 +89,7 @@ export default function Employees() {
         setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
-          .select('*').ilike('name', '%新人%到職%').limit(1).maybeSingle()
+          .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
         if (tpl) {
           const { data: inst } = await supabase.from('workflow_instances').insert({
             template_name: tpl.name, store: data.store || '',

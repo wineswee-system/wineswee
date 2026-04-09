@@ -92,12 +92,6 @@ export default function TaskDetailPanel({
     })
   }, [step?.id])
 
-  // Lock body scroll when modal is open
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [comments.length])
@@ -262,29 +256,14 @@ export default function TaskDetailPanel({
   const fieldGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)',
-      backdropFilter: 'blur(2px)',
-    }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="fade-in">
+      {/* ── Header ── */}
       <div style={{
-        width: '100%', maxWidth: 780,
-        maxHeight: '92vh',
-        background: 'var(--bg-primary)',
-        border: '1px solid var(--border-medium)',
-        borderRadius: 16,
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        animation: 'fadeIn 0.2s ease',
-        overflow: 'hidden',
+        padding: '18px 24px', marginBottom: 20,
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+        borderRadius: 14,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        {/* ── Header ── */}
-        <div style={{
-          padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexShrink: 0,
-        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
             {editingTitle ? (
               <input
@@ -318,8 +297,8 @@ export default function TaskDetailPanel({
           </div>
         </div>
 
-        {/* ── Body (scrollable) ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        {/* ── Body ── */}
+        <div style={{ maxWidth: 780 }}>
 
           {/* ═══ Section: Basic Fields ═══ */}
           <div style={sectionStyle}>
@@ -804,7 +783,6 @@ export default function TaskDetailPanel({
           </div>
 
         </div>
-      </div>
     </div>
   )
 }

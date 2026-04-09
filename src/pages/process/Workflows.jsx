@@ -182,6 +182,34 @@ export default function Workflows() {
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
   // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════
+  // ══ Step Detail View (full page) ═══════════════════════════
+  // ════════════════════════════════════════════════════════════
+  if (selectedStep && selectedInstance) {
+    const inst = instances.find(i => i.id === selectedInstance.id) || selectedInstance
+    const instSteps = getInstanceSteps(inst.id)
+    return (
+      <TaskDetailPanel
+        step={selectedStep}
+        instance={inst}
+        allSteps={instSteps}
+        employees={employees}
+        stores={stores}
+        checklists={checklists}
+        onUpdate={(updatedStep) => {
+          setSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s))
+          setSelectedStep(updatedStep)
+        }}
+        onDelete={(stepId) => {
+          setSteps(prev => prev.filter(s => s.id !== stepId))
+          setSelectedStep(null)
+        }}
+        onClose={() => setSelectedStep(null)}
+      />
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════
   // ══ Instance Detail View ═══════════════════════════════════
   // ════════════════════════════════════════════════════════════
   if (selectedInstance) {
@@ -480,26 +508,7 @@ export default function Workflows() {
           </Modal>
         )}
 
-        {/* ── Task Detail Panel ── */}
-        {selectedStep && (
-          <TaskDetailPanel
-            step={selectedStep}
-            instance={inst}
-            allSteps={instSteps}
-            employees={employees}
-            stores={stores}
-            checklists={checklists}
-            onUpdate={(updatedStep) => {
-              setSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s))
-              setSelectedStep(updatedStep)
-            }}
-            onDelete={(stepId) => {
-              setSteps(prev => prev.filter(s => s.id !== stepId))
-              setSelectedStep(null)
-            }}
-            onClose={() => setSelectedStep(null)}
-          />
-        )}
+        {/* Task detail is now a separate full-page view */}
       </div>
     )
   }

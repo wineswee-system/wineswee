@@ -11,6 +11,7 @@ import {
   getApprovalFormByStep, createApprovalForm, updateApprovalForm,
   getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
 } from '../lib/db'
+import { supabase } from '../lib/supabase'
 import { notifyApproval } from '../lib/lineNotify'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
@@ -158,18 +159,23 @@ export default function TaskDetailPanel({
     }))
     const { data: steps } = await createApprovalFormSteps(stepRows)
     setApprovalSteps(steps || [])
-    // Notify first approver via LINE
+    // Notify: look up employee with matching position/role for the first step
     const firstRole = chain.steps?.[0]?.role
     if (firstRole) {
-      notifyApproval(firstRole, step.title, `第 1 關：${firstRole}`)
+      const { data: roleEmp } = await supabase.from('employees')
+        .select('name').eq('position', firstRole).limit(1).maybeSingle()
+      if (roleEmp?.name) {
+        notifyApproval(roleEmp.name, step.title, `第 1 關：${firstRole}`)
+      }
     }
   }
 
   const handleApprovalAction = async (formStepId, action, comment) => {
     const newStatus = action === 'approve' ? '已核准' : '已退回'
+    const currentUser = step.assignee || instance?.assignee || '系統'
     const { data } = await updateApprovalFormStep(formStepId, {
       status: newStatus,
-      approver: '目前使用者',
+      approver: currentUser,
       comment: comment || null,
       acted_at: new Date().toISOString(),
     })

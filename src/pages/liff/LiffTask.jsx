@@ -21,7 +21,7 @@ export default function LiffTask() {
   const [tasks, setTasks] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [checklistItems, setChecklistItems] = useState([])
-  const [linkedChecklists, setLinkedChecklists] = useState([])
+  const [, setLinkedChecklists] = useState([])
   const [commentText, setCommentText] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -99,12 +99,14 @@ export default function LiffTask() {
   async function handleToggleItem(item) {
     const { data } = await updateChecklistItem(item.id, { checked: !item.checked })
     if (data) {
-      setChecklistItems(prev => prev.map(i => i.id === item.id ? { ...data, _checklistName: i._checklistName } : i))
-      // Update checklist completed count
-      const clItems = checklistItems.map(i => i.id === item.id ? data : i)
-        .filter(i => i.checklist_id === item.checklist_id)
-      const completed = clItems.filter(i => i.checked).length
-      await updateChecklist(item.checklist_id, { completed })
+      setChecklistItems(prev => {
+        const updated = prev.map(i => i.id === item.id ? { ...data, _checklistName: i._checklistName } : i)
+        // Use updated array to avoid stale closure
+        const clItems = updated.filter(i => i.checklist_id === item.checklist_id)
+        const completed = clItems.filter(i => i.checked).length
+        updateChecklist(item.checklist_id, { completed })
+        return updated
+      })
     }
   }
 

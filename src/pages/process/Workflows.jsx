@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  Plus, Pencil, Trash2, ChevronDown, ChevronRight, CheckCircle, Clock,
-  AlertCircle, X, Users, User, FileText, Lock, Play, Pause, BarChart3,
-  ClipboardList, Square, RotateCcw, Ban, StickyNote
+  Plus, Pencil, Trash2, ChevronRight, CheckCircle,
+  X, Users, User, Play, Pause,
+  ClipboardList, Square, RotateCcw, Ban
 } from 'lucide-react'
 import {
   getWorkflows, createWorkflow, updateWorkflow,
-  getWorkflowInstances, createWorkflowInstance, updateWorkflowInstance, deleteWorkflowInstance,
-  getWorkflowSteps, createWorkflowStep, updateWorkflowStep, deleteWorkflowStep, createWorkflowStepsBatch
+  getWorkflowInstances, updateWorkflowInstance,
+  getWorkflowSteps, createWorkflowStep, updateWorkflowStep
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -157,12 +157,6 @@ export default function Workflows() {
       setSelectedInstance(data)
       setShowEditModal(false)
     }
-  }
-
-  const handleDeleteStep = async (stepId) => {
-    if (!confirm('確定刪除此任務？')) return
-    await deleteWorkflowStep(stepId)
-    setSteps(prev => prev.filter(s => s.id !== stepId))
   }
 
   // ── Workflow definition handlers ──
@@ -364,7 +358,8 @@ export default function Workflows() {
                       <td>
                         <select
                           value={step.status}
-                          onChange={e => handleStatusChange(step.id, e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => { e.stopPropagation(); handleStatusChange(step.id, e.target.value) }}
                           style={{
                             fontSize: 11, fontWeight: 600, padding: '4px 6px', borderRadius: 6,
                             border: `1px solid ${sc.color}`,
@@ -381,7 +376,8 @@ export default function Workflows() {
                             title="備註"
                             className="btn btn-sm btn-secondary"
                             style={{ padding: '4px 8px', fontSize: 11 }}
-                            onClick={() => {
+                            onClick={e => {
+                              e.stopPropagation()
                               setNotesStep(step)
                               setNotesText(step.notes || '')
                               setShowNotesModal(true)
@@ -394,7 +390,7 @@ export default function Workflows() {
                               title="確認任務"
                               className="btn btn-sm btn-secondary"
                               style={{ padding: '4px 8px', fontSize: 11 }}
-                              onClick={() => handleConfirmTask(step.id)}
+                              onClick={e => { e.stopPropagation(); handleConfirmTask(step.id) }}
                             >
                               🔐 確認任務
                             </button>

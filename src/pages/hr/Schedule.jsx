@@ -260,7 +260,9 @@ export default function Schedule() {
     if (!confirm(`將為 ${filtered.length} 位員工自動排班（${weekStart} ~ ${weekEnd}）\n已有的排班會保留，空白格子才會填入。\n每天最少 ${minStaff} 人上班。`)) return
     setAutoScheduling(true)
 
-    const empNames = filtered.map(e => e.name)
+    // Sort employees by schedule_priority (1=highest) — high priority gets scheduled first for peak slots
+    const sortedEmps = [...filtered].sort((a, b) => (a.schedule_priority || 3) - (b.schedule_priority || 3))
+    const empNames = sortedEmps.map(e => e.name)
     const newSchedules = []
 
     // Build existing schedule map

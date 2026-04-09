@@ -391,6 +391,30 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 </label>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>AI 排班會優先安排有開/關店能力的員工於營業起始或結束時段</div>
+
+              <SectionTitle icon="⭐" text="排班優先級" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {[
+                  { value: 1, label: '最優先', color: '#ef4444', desc: '王牌員工，優先排熱門時段' },
+                  { value: 2, label: '優先', color: '#f59e0b', desc: '表現優秀' },
+                  { value: 3, label: '一般', color: '#06b6d4', desc: '預設' },
+                  { value: 4, label: '低', color: '#94a3b8', desc: '新進/訓練中' },
+                  { value: 5, label: '最低', color: '#cbd5e1', desc: '備用人力' },
+                ].map(p => (
+                  <button key={p.value} onClick={() => set('schedule_priority', p.value)} title={p.desc} style={{
+                    flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    background: (form.schedule_priority || 3) === p.value ? p.color : 'var(--bg-card)',
+                    color: (form.schedule_priority || 3) === p.value ? '#fff' : 'var(--text-muted)',
+                    fontSize: 12, fontWeight: 700,
+                    outline: (form.schedule_priority || 3) === p.value ? `2px solid ${p.color}` : '1px solid var(--border-subtle)',
+                  }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                AI 排班會根據優先級決定排班順序，優先級高的員工會先被排入尖峰時段
+              </div>
             </>
           )}
 

@@ -10,7 +10,7 @@ export default function Transfers() {
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ from_warehouse_id: '', to_warehouse_id: '', requested_by: '', notes: '' })
+  const [form, setForm] = useState({ from_warehouse_id: '', to_warehouse_id: '', requested_by: '', notes: '', items: [{ sku_name: '', quantity: 1, unit: '個' }] })
   const [error, setError] = useState(null)
 
   const load = async () => {
@@ -26,16 +26,18 @@ export default function Transfers() {
   const handleCreate = async () => {
     if (!form.from_warehouse_id || !form.to_warehouse_id) return
     if (form.from_warehouse_id === form.to_warehouse_id) { setError('來源與目的倉庫不能相同'); return }
+    const itemsSummary = form.items.filter(i => i.sku_name).map(i => `${i.sku_name} x${i.quantity} ${i.unit}`).join('、')
+    const fullNotes = [itemsSummary, form.notes].filter(Boolean).join('\n')
     const { error } = await createWarehouseTransfer({
       transfer_number: `TF-${Date.now().toString(36).toUpperCase()}`,
       from_warehouse_id: Number(form.from_warehouse_id),
       to_warehouse_id: Number(form.to_warehouse_id),
       requested_by: form.requested_by || null,
-      notes: form.notes || null,
+      notes: fullNotes || null,
       status: '待出庫',
     })
     if (error) { setError(error.message); return }
-    setShowModal(false); setForm({ from_warehouse_id: '', to_warehouse_id: '', requested_by: '', notes: '' }); load()
+    setShowModal(false); setForm({ from_warehouse_id: '', to_warehouse_id: '', requested_by: '', notes: '', items: [{ sku_name: '', quantity: 1, unit: '個' }] }); load()
   }
 
   const advanceStatus = async (t) => {
@@ -123,22 +125,54 @@ export default function Transfers() {
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 400, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>新增調撥單</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>來源倉庫 *</label>
-                <select value={form.from_warehouse_id} onChange={e => setForm(f => ({ ...f, from_warehouse_id: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                  <option value="">請選擇</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>來源倉庫 *</label>
+                  <select value={form.from_warehouse_id} onChange={e => setForm(f => ({ ...f, from_warehouse_id: e.target.value }))} className="form-input" style={{ width: '100%' }}>
+                    <option value="">請選擇</option>
+                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>目的倉庫 *</label>
+                  <select value={form.to_warehouse_id} onChange={e => setForm(f => ({ ...f, to_warehouse_id: e.target.value }))} className="form-input" style={{ width: '100%' }}>
+                    <option value="">請選擇</option>
+                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>目的倉庫 *</label>
-                <select value={form.to_warehouse_id} onChange={e => setForm(f => ({ ...f, to_warehouse_id: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                  <option value="">請選擇</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
-                </select>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人</label>
+                <input type="text" placeholder="申請人姓名" value={form.requested_by} onChange={e => setForm(f => ({ ...f, requested_by: e.target.value }))} className="form-input" style={{ width: '100%' }} />
               </div>
-              <input type="text" placeholder="申請人" value={form.requested_by} onChange={e => setForm(f => ({ ...f, requested_by: e.target.value }))} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-              <textarea placeholder="備註" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', resize: 'vertical' }} />
+
+              {/* Transfer items */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>調撥品項</label>
+                {form.items.map((item, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 6, marginBottom: 6 }}>
+                    <input className="form-input" placeholder="品名/SKU" value={item.sku_name}
+                      onChange={e => setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, sku_name: e.target.value } : it) }))} />
+                    <input className="form-input" type="number" placeholder="數量" min="1" value={item.quantity}
+                      onChange={e => setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, quantity: Number(e.target.value) } : it) }))} />
+                    <input className="form-input" placeholder="單位" value={item.unit}
+                      onChange={e => setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, unit: e.target.value } : it) }))} />
+                    <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) }))}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => setForm(f => ({ ...f, items: [...f.items, { sku_name: '', quantity: 1, unit: '個' }] }))}
+                  style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px dashed var(--border-medium)', background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>
+                  + 新增品項
+                </button>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>備註</label>
+                <textarea placeholder="備註" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="form-input" style={{ width: '100%', resize: 'vertical' }} />
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>取消</button>

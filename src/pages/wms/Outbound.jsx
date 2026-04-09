@@ -53,7 +53,7 @@ export default function Outbound() {
   const handleSubmit = async () => {
     if (!form.order_number || !form.customer) return
     const { data } = await supabase.from('outbound_orders').insert({ ...form, warehouse_id: form.warehouse_id || null }).select().single()
-    if (data) { setOrders(prev => [data, ...prev]); setShowModal(false); setForm({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨' }) }
+    if (data) { setOrders(prev => [data, ...prev]); setShowModal(false); setForm({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨', items: [{ sku_name: '', quantity: 1, unit: '個' }], notes: '' }) }
   }
 
   const updateStatus = async (id, status) => {

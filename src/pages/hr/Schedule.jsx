@@ -76,7 +76,7 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -361,17 +361,29 @@ export default function Schedule() {
             const candidateDef = shiftDefs.find(d => d.name === candidateName)
             const candidateStartH = candidateDef ? parseInt(candidateDef.start_time) || 9 : 9
 
+            // Check 11h gap with PREVIOUS day
             if (prevDef) {
               let gap
               if (prevEndEffective !== null) {
-                // Previous was a night shift ending in the morning of current day
                 gap = candidateStartH - prevEndEffective
               } else {
-                // Normal shift: ended yesterday, gap = candidate start + (24 - prevEnd)
                 const prevEndH = parseInt(prevDef.end_time) || 0
                 gap = candidateStartH + (24 - prevEndH)
               }
-              if (gap < 11) continue // skip — interval too short
+              if (gap < 11) continue
+            }
+
+            // Check 11h gap with NEXT day (if already scheduled)
+            const nextDate = dayIndex < 6 ? weekDates[dayIndex + 1] : null
+            const nextShift = nextDate ? existing[`${name}_${nextDate}`] : null
+            const nextDef = nextShift && nextShift !== '休' ? shiftDefs.find(d => d.name === nextShift) : null
+            if (nextDef && candidateDef) {
+              const candEndH = parseInt(candidateDef.end_time) || 0
+              const candStartH2 = parseInt(candidateDef.start_time) || 0
+              const candCrosses = candEndH < candStartH2
+              const nextStartH = parseInt(nextDef.start_time) || 11
+              const fwdGap = candCrosses ? (nextStartH - candEndH) : (nextStartH + 24 - candEndH)
+              if (fwdGap < 11) continue
             }
 
             newSchedules.push({ employee: name, date, shift: candidateName })

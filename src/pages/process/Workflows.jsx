@@ -618,16 +618,16 @@ export default function Workflows() {
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
         flexWrap: 'wrap', alignItems: 'center',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 140 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
             <option value="">全部門市</option>
             {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👤 負責人</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 140 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
             <option value="">全部人員</option>
             {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
           </select>
@@ -672,18 +672,18 @@ export default function Workflows() {
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{inst.template_name} · {inst.started_at?.slice(0, 10)}</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24, whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 13 }}>
                       <span>⬜ {stats.pending}</span>
                       <span style={{ color: 'var(--accent-cyan)' }}>🔄 {stats.inProgress}</span>
                       <span style={{ color: 'var(--accent-green)' }}>✅ {stats.completed}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent-cyan)' }}>{stats.pct}%</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{stats.completed}/{stats.total}</div>
                       </div>
-                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{stats.pct}%</div>
                       </div>
                     </div>

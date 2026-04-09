@@ -14,7 +14,7 @@ export default function PunchCorrection() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
+      supabase.from('clock_corrections').select('*').order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, dept').eq('status', '在職').order('name'),
     ]).then(([c, e]) => {
       setCorrections(c.data || [])
@@ -26,7 +26,15 @@ export default function PunchCorrection() {
 
   const handleSubmit = async () => {
     if (!form.employee || !form.date || !form.corrected_time || !form.reason) return
-    const { data } = await supabase.from('punch_corrections').insert({ ...form, status: '待審核' }).select().single()
+    const insertData = {
+      employee: form.employee,
+      date: form.date,
+      corrected_clock_in: form.correction_type === 'clock_in' ? form.corrected_time : null,
+      corrected_clock_out: form.correction_type === 'clock_out' ? form.corrected_time : null,
+      reason: form.reason,
+      status: '待審核',
+    }
+    const { data } = await supabase.from('clock_corrections').insert(insertData).select().single()
     if (data) {
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
@@ -35,8 +43,8 @@ export default function PunchCorrection() {
   }
 
   const handleApprove = async (id) => {
-    const { data } = await supabase.from('punch_corrections')
-      .update({ status: '已核准', approved_by: '管理員', approved_at: new Date().toISOString() })
+    const { data } = await supabase.from('clock_corrections')
+      .update({ status: '已核准', approver: '管理員' })
       .eq('id', id).select().single()
     if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
   }
@@ -44,8 +52,8 @@ export default function PunchCorrection() {
   const handleReject = async (id) => {
     const reason = prompt('駁回原因：')
     if (!reason) return
-    const { data } = await supabase.from('punch_corrections')
-      .update({ status: '已駁回', approved_by: '管理員', approved_at: new Date().toISOString(), reject_reason: reason })
+    const { data } = await supabase.from('clock_corrections')
+      .update({ status: '已駁回', reject_reason: reason })
       .eq('id', id).select().single()
     if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
   }
@@ -61,6 +69,13 @@ export default function PunchCorrection() {
 
   const pendingCount = corrections.filter(c => c.status === '待審核').length
 
+  // Helper: display correction type and time
+  const getCorrectionInfo = (c) => {
+    if (c.corrected_clock_in) return { type: '上班', time: c.corrected_clock_in }
+    if (c.corrected_clock_out) return { type: '下班', time: c.corrected_clock_out }
+    return { type: '—', time: '—' }
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -73,7 +88,6 @@ export default function PunchCorrection() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {[
           { key: 'pending', label: `待審核 (${pendingCount})` },
@@ -97,37 +111,40 @@ export default function PunchCorrection() {
             </thead>
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
-              {filtered.map(c => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 600 }}>{c.employee}</td>
-                  <td>{c.date}</td>
-                  <td><span className="badge badge-cyan">{c.correction_type === 'clock_in' ? '上班' : '下班'}</span></td>
-                  <td style={{ fontWeight: 600 }}>{c.corrected_time}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>{c.reason}</td>
-                  <td>
-                    <span className={`badge ${c.status === '已核准' ? 'badge-success' : c.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
-                      <span className="badge-dot"></span>{c.status}
-                    </span>
-                  </td>
-                  <td>
-                    {c.status === '待審核' ? (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)}>
-                          <Check size={12} /> 核准
-                        </button>
-                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)}>
-                          <X size={12} /> 駁回
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {c.approved_by} · {c.approved_at?.slice(0, 10)}
-                        {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
+              {filtered.map(c => {
+                const info = getCorrectionInfo(c)
+                return (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight: 600 }}>{c.employee}</td>
+                    <td>{c.date}</td>
+                    <td><span className="badge badge-cyan">{info.type}</span></td>
+                    <td style={{ fontWeight: 600 }}>{info.time}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>{c.reason}</td>
+                    <td>
+                      <span className={`badge ${c.status === '已核准' ? 'badge-success' : c.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
+                        <span className="badge-dot"></span>{c.status}
                       </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      {c.status === '待審核' ? (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)}>
+                            <Check size={12} /> 核准
+                          </button>
+                          <button className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)}>
+                            <X size={12} /> 駁回
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {c.approver}
+                          {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

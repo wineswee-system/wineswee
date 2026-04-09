@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, X, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Check, X, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 import { getChecklists, createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -14,6 +14,8 @@ export default function Checklists() {
   const [expandedId, setExpandedId] = useState(null)
   const [items, setItems] = useState([])
   const [newItemText, setNewItemText] = useState('')
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [editingText, setEditingText] = useState('')
 
   useEffect(() => {
     getChecklists().then(({ data }) => {
@@ -73,6 +75,13 @@ export default function Checklists() {
       await updateChecklist(expandedId, { completed })
       setChecklists(prev => prev.map(c => c.id === expandedId ? { ...c, completed } : c))
     }
+  }
+
+  const handleSaveEdit = async (item) => {
+    if (!editingText.trim() || editingText.trim() === item.title) { setEditingItemId(null); return }
+    const { data } = await updateChecklistItem(item.id, { title: editingText.trim() })
+    if (data) setItems(prev => prev.map(i => i.id === item.id ? data : i))
+    setEditingItemId(null)
   }
 
   const handleDeleteItem = async (id) => {
@@ -142,7 +151,7 @@ export default function Checklists() {
                   {items.map(item => (
                     <div key={item.id} style={{
                       display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '6px 0',
+                      padding: '8px 0', borderBottom: '1px solid var(--border-subtle)',
                     }}>
                       <button onClick={() => handleToggle(item)} style={{
                         width: 20, height: 20, borderRadius: 4, flexShrink: 0, padding: 0,
@@ -153,11 +162,29 @@ export default function Checklists() {
                       }}>
                         {item.checked && <Check size={13} />}
                       </button>
-                      <span style={{
-                        flex: 1, fontSize: 13,
-                        textDecoration: item.checked ? 'line-through' : 'none',
-                        color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
-                      }}>{item.title}</span>
+                      {editingItemId === item.id ? (
+                        <input
+                          className="form-input"
+                          style={{ flex: 1, fontSize: 13, padding: '4px 8px' }}
+                          value={editingText}
+                          onChange={e => setEditingText(e.target.value)}
+                          onBlur={() => handleSaveEdit(item)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(item); if (e.key === 'Escape') setEditingItemId(null) }}
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          onClick={() => { setEditingItemId(item.id); setEditingText(item.title) }}
+                          style={{
+                            flex: 1, fontSize: 13, cursor: 'pointer', padding: '4px 0',
+                            textDecoration: item.checked ? 'line-through' : 'none',
+                            color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
+                          }}
+                        >
+                          {item.title}
+                          <Pencil size={11} style={{ marginLeft: 6, color: 'var(--text-muted)', opacity: 0.4, verticalAlign: 'middle' }} />
+                        </span>
+                      )}
                       <button onClick={() => handleDeleteItem(item.id)} style={{
                         background: 'none', border: 'none', color: 'var(--text-muted)',
                         cursor: 'pointer', padding: 2, opacity: 0.4,

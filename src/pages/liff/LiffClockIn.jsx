@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Clock, MapPin, CheckCircle, XCircle, Loader } from 'lucide-react'
+import { Clock, MapPin, Wifi, CheckCircle, XCircle, Loader } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
@@ -121,6 +121,11 @@ export default function LiffClockIn() {
               <MapPin size={14} /> {result.location}
             </div>
           )}
+          {result?.ip && (
+            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Wifi size={13} /> {result.ip}
+            </div>
+          )}
           {result?.hours && (
             <div style={{ fontSize: 16, fontWeight: 700, color: '#06b6d4', marginTop: 12 }}>
               今日工時：{result.hours.toFixed(1)} 小時
@@ -220,6 +225,12 @@ export default function LiffClockIn() {
               <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{todayRecord.hours}h</span>
             )}
           </div>
+          {(todayRecord.clock_in_location || todayRecord.clock_in_ip) && (
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8, display: 'flex', gap: 12 }}>
+              {todayRecord.clock_in_location && <span><MapPin size={10} style={{ verticalAlign: -1 }} /> {todayRecord.clock_in_location}</span>}
+              {todayRecord.clock_in_ip && <span><Wifi size={10} style={{ verticalAlign: -1 }} /> {todayRecord.clock_in_ip}</span>}
+            </div>
+          )}
         </div>
       )}
 
@@ -264,6 +275,7 @@ export default function LiffClockIn() {
               <div style={{ fontSize: 13, color: '#64748b' }}>
                 <div>時間：{result.time}</div>
                 {result.location && <div><MapPin size={11} style={{ verticalAlign: -1 }} /> {result.location}</div>}
+                {result.ip && <div><Wifi size={11} style={{ verticalAlign: -1 }} /> {result.ip}</div>}
                 {result.hours && <div>工時：{result.hours.toFixed(2)} 小時</div>}
               </div>
             </>

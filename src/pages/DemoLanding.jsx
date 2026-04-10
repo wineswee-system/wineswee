@@ -190,6 +190,21 @@ export default function DemoLanding() {
       {/* ═══ Hero ═══ */}
       <section id="hero" className="demo-hero">
         <div className="demo-hero-accent" />
+        {/* Floating particles */}
+        <div className="demo-particles">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div key={i} className="demo-particle" style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              width: `${4 + Math.random() * 8}px`,
+              height: `${4 + Math.random() * 8}px`,
+              animationDelay: `${Math.random() * 6}s`,
+              animationDuration: `${8 + Math.random() * 12}s`,
+            }} />
+          ))}
+        </div>
+        {/* Animated grid lines */}
+        <div className="demo-grid-bg" />
         <div className={`demo-hero-content ${visible ? 'visible' : ''}`}>
           <p className="demo-hero-eyebrow">按需選購，隨需擴充 — Buy what you need, grow when you're ready.</p>
           <h1 className="demo-hero-h1">

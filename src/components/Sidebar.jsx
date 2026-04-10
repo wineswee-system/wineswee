@@ -475,8 +475,9 @@ export default function Sidebar() {
     ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))
     : majorGroups
 
-  // Build all dropdown groups including super-admin
-  const allGroups = isSuperAdmin
+  // Build all dropdown groups including super-admin (Demo mode: always show)
+  const showSuperAdmin = isSuperAdmin || !profile
+  const allGroups = showSuperAdmin
     ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
     : roleFiltered
 

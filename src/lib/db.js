@@ -99,6 +99,23 @@ export const createHoliday = (data) =>
 export const deleteHoliday = (id) =>
   supabase.from('holidays').delete().eq('id', id)
 
+/** 呼叫 Edge Function 刷新國定假日與排班規則 */
+export const refreshHolidays = async (years) => {
+  const { data, error } = await supabase.functions.invoke('refresh-holidays', {
+    body: years ? { years } : {},
+  })
+  if (error) throw error
+  return data
+}
+
+/** 取得排班規則快照 */
+export const getSchedulingRules = (year) =>
+  supabase
+    .from('scheduling_rules_snapshot')
+    .select('*')
+    .eq('effective_year', year || new Date().getFullYear())
+    .order('category')
+
 // ── Performance Reviews ────────────────────────────────────
 export const getPerformanceReviews = () =>
   supabase.from('performance_reviews').select('*').order('id')

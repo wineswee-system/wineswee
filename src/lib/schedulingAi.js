@@ -227,15 +227,62 @@ async function callGeminiClientSide(schedulingData) {
 
 function parseResponse(raw) {
   let cleaned = raw.trim()
+
+  // 移除 markdown code fence
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
   }
-  const parsed = JSON.parse(cleaned)
-  return {
-    assignments: parsed.assignments || [],
-    reasoning: parsed.reasoning || '',
-    warnings: parsed.warnings || [],
+
+  // 嘗試直接解析
+  try {
+    const parsed = JSON.parse(cleaned)
+    return {
+      assignments: parsed.assignments || [],
+      reasoning: parsed.reasoning || '',
+      warnings: parsed.warnings || [],
+    }
+  } catch {
+    // fallback: 從回傳文字中提取最大的 JSON 物件
   }
+
+  // 找到第一個 { 和最後一個 } 之間的內容
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace = cleaned.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    let jsonStr = cleaned.slice(firstBrace, lastBrace + 1)
+
+    // 修復常見的 JSON 問題
+    // 1. 移除尾端多餘逗號 (trailing commas)
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1')
+    // 2. 移除控制字元
+    jsonStr = jsonStr.replace(/[\x00-\x1F\x7F]/g, (ch) =>
+      ch === '\n' || ch === '\r' || ch === '\t' ? ch : ''
+    )
+    // 3. 修復未跳脫的換行 (在字串值內)
+    jsonStr = jsonStr.replace(/(?<=:\s*"[^"]*)\n([^"]*")/g, '\\n$1')
+
+    try {
+      const parsed = JSON.parse(jsonStr)
+      return {
+        assignments: parsed.assignments || [],
+        reasoning: parsed.reasoning || '',
+        warnings: parsed.warnings || [],
+      }
+    } catch {
+      // 最後手段：嘗試只提取 assignments 陣列
+    }
+  }
+
+  // 最後手段：用 regex 提取 assignments
+  const assignMatch = cleaned.match(/"assignments"\s*:\s*(\[[\s\S]*?\])\s*[,}]/)
+  if (assignMatch) {
+    try {
+      const assignments = JSON.parse(assignMatch[1].replace(/,\s*([\]}])/g, '$1'))
+      return { assignments, reasoning: 'JSON 解析修復模式', warnings: ['原始回傳 JSON 格式有誤，已自動修復'] }
+    } catch { /* give up */ }
+  }
+
+  throw new Error('AI 回傳格式無法解析，請重試')
 }
 
 // ══════════════════════════════════════════════════════════════

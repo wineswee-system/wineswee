@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Pencil } from 'lucide-react'
-import { getHolidays, createHoliday, deleteHoliday } from '../../lib/db'
+import { Plus, Trash2, RefreshCw } from 'lucide-react'
+import { getHolidays, createHoliday, deleteHoliday, refreshHolidays } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -13,6 +13,7 @@ export default function Holidays() {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', date: '', type: '國定', multiplier: 2 })
   const [activeYear, setActiveYear] = useState(new Date().getFullYear())
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     getHolidays().then(({ data }) => { setHolidays(data || []) }).catch(err => {
@@ -74,7 +75,30 @@ export default function Holidays() {
             <h2><span className="header-icon">📅</span> 假日管理</h2>
             <p>管理國定假日與自訂假日</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增假日</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-secondary"
+              disabled={refreshing}
+              onClick={async () => {
+                setRefreshing(true)
+                try {
+                  await refreshHolidays([activeYear, activeYear + 1])
+                  const { data } = await getHolidays()
+                  setHolidays(data || [])
+                  alert(`已刷新 ${activeYear} 及 ${activeYear + 1} 年度國定假日`)
+                } catch (err) {
+                  console.error('Refresh failed:', err)
+                  alert('刷新失敗：' + (err.message || '未知錯誤'))
+                } finally {
+                  setRefreshing(false)
+                }
+              }}
+            >
+              <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+              {refreshing ? '刷新中...' : '刷新國定假日'}
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增假日</button>
+          </div>
         </div>
       </div>
 

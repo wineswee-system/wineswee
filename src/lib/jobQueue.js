@@ -246,3 +246,9 @@ registerJobHandler('outbox.flush', async () => {
 
   return { pending: data?.length || 0 }
 })
+
+registerJobHandler('holidays.refresh', async ({ years } = {}) => {
+  const { refreshHolidays } = await import('./db.js')
+  const result = await refreshHolidays(years)
+  return result
+})

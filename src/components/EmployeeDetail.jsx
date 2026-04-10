@@ -18,6 +18,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [reviews, setReviews] = useState([])
   const [schedPrefs, setSchedPrefs] = useState([])
   const [leaveRecords, setLeaveRecords] = useState([])
+  const [availability, setAvailability] = useState([])
+  const [onboardingTasks, setOnboardingTasks] = useState([])
 
   // Inline add
   const [newSkill, setNewSkill] = useState('')
@@ -35,13 +37,17 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_reviews').select('*').eq('employee_id', employee.id).order('review_date', { ascending: false }),
       supabase.from('employee_schedule_prefs').select('*').eq('employee_id', employee.id).order('id'),
       supabase.from('leave_requests').select('*').eq('employee', employee.name).order('id', { ascending: false }).limit(10),
-    ]).then(([sk, dep, tr, rev, sp, lv]) => {
+      supabase.from('employee_availability').select('*').eq('employee_id', employee.id).order('day_of_week'),
+      supabase.from('workflow_steps').select('*, workflow_instances!inner(template_name)').eq('assignee', employee.name).order('step_order'),
+    ]).then(([sk, dep, tr, rev, sp, lv, av, ob]) => {
       setSkills(sk.data || [])
       setDependents(dep.data || [])
       setTransfers(tr.data || [])
       setReviews(rev.data || [])
       setSchedPrefs(sp.data || [])
       setLeaveRecords(lv.data || [])
+      setAvailability(av.data || [])
+      setOnboardingTasks(ob.data || [])
     })
   }, [employee?.id])
 
@@ -93,13 +99,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     } catch (e) { alert('刪除失敗') }
   }
 
+  const [showDepForm, setShowDepForm] = useState(false)
+  const [depForm, setDepForm] = useState({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
+
   const addDependent = async () => {
-    const name = prompt('眷屬姓名：')
-    if (!name) return
-    const relationship = prompt('關係（配偶/子女/父母）：') || ''
+    if (!depForm.name) return
     try {
-      const { data } = await supabase.from('employee_dependents').insert({ employee_id: employee.id, name, relationship }).select().single()
-      if (data) setDependents(prev => [...prev, data])
+      const { data } = await supabase.from('employee_dependents').insert({
+        employee_id: employee.id, name: depForm.name, relationship: depForm.relationship,
+        id_number: depForm.id_number || null, birth_date: depForm.birth_date || null,
+        health_ins: depForm.health_ins,
+      }).select().single()
+      if (data) {
+        setDependents(prev => [...prev, data])
+        setDepForm({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
+        setShowDepForm(false)
+      }
     } catch (e) { alert('新增失敗') }
   }
 
@@ -152,60 +167,144 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     setSchedPrefs(prev => prev.filter(p => p.id !== id))
   }
 
+  const DAYS = ['一', '二', '三', '四', '五', '六', '日']
+  const AVAIL_STATUS = ['可排班', '偏好', '偏不排', '不可']
+  const AVAIL_COLORS = { '可排班': '#22c55e', '偏好': '#3b82f6', '偏不排': '#f59e0b', '不可': '#ef4444' }
+
+  const setAvail = async (dayIdx, status) => {
+    const existing = availability.find(a => a.day_of_week === dayIdx)
+    if (existing) {
+      const { data } = await supabase.from('employee_availability').update({ status }).eq('id', existing.id).select().single()
+      if (data) setAvailability(prev => prev.map(a => a.id === data.id ? data : a))
+    } else {
+      const { data } = await supabase.from('employee_availability').insert({ employee_id: employee.id, day_of_week: dayIdx, status }).select().single()
+      if (data) setAvailability(prev => [...prev, data])
+    }
+  }
+
+  const setAvailShift = async (dayIdx, shift) => {
+    const existing = availability.find(a => a.day_of_week === dayIdx)
+    if (existing) {
+      const { data } = await supabase.from('employee_availability').update({ preferred_shift: shift }).eq('id', existing.id).select().single()
+      if (data) setAvailability(prev => prev.map(a => a.id === data.id ? data : a))
+    }
+  }
+
   const toggleSpecial = (cat) => {
     const current = form.special_categories || []
     const next = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat]
     set('special_categories', next)
   }
 
-  const L = { fontSize: 12, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 4, marginTop: 14 }
+  const L = { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, marginTop: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }
   const SectionTitle = ({ icon, text }) => (
-    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 20, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>{icon} {text}</div>
+    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 22, marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 15 }}>{icon}</span> {text}
+    </div>
   )
 
   const TABS = [
-    { key: 'personal', label: '個人資訊' },
-    { key: 'org', label: '組織' },
-    { key: 'skills', label: '技能' },
-    { key: 'schedule', label: '排班' },
-    { key: 'records', label: '紀錄' },
+    { key: 'personal', label: '個人資訊', icon: '👤' },
+    { key: 'org', label: '組織', icon: '🏢' },
+    { key: 'skills', label: '技能', icon: '🏷️' },
+    { key: 'schedule', label: '排班', icon: '📅' },
+    { key: 'records', label: '紀錄', icon: '📋' },
   ]
 
+  const empTypeColor = (form.employment_type || '全職') === '全職' ? '#22c55e' : '#f59e0b'
+  const statusColor = (form.status || '在職') === '在職' ? '#22c55e' : form.status === '留職停薪' ? '#f59e0b' : '#ef4444'
+
+  const QuickInfo = ({ icon, label, value }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 12 }}>{icon}</span>
+      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{value || '—'}</span>
+    </div>
+  )
+
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', width: '100vw', height: '100vh' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
-      <div style={{ width: '100%', maxWidth: 720, maxHeight: '90vh', background: 'var(--bg-primary)', border: '1px solid var(--border-medium)', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden', margin: 'auto' }}>
+      {/* Backdrop */}
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+        onMouseDown={handleClose} />
+
+      {/* Panel */}
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 760, height: '100vh',
+        background: 'var(--bg-primary)', borderLeft: '1px solid var(--border-medium)',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column',
+        animation: 'slideInRight 0.25s ease-out',
+      }}>
 
         {/* Header */}
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: employee.avatar || '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff' }}>
-            {employee.name?.[0]}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{employee.name}
-              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', marginLeft: 8 }}>EMP-{String(employee.id).padStart(3, '0')}</span>
+        <div style={{ flexShrink: 0, background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)', borderBottom: '1px solid var(--border-subtle)' }}>
+          {/* Top bar: close + save */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px 0' }}>
+            <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 0' }}>
+              <X size={16} /> 關閉
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isDirty && <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>未儲存變更</span>}
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '6px 16px', borderRadius: 8 }}>
+                <Save size={12} /> {saving ? '儲存中...' : '儲存'}
+              </button>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{employee.position || '未設定職位'} · {employee.employment_type || '全職'}</div>
           </div>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 13 }}>
-            <Save size={13} /> {saving ? '...' : '更新'}
-          </button>
-          <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={22} /></button>
-        </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, padding: '0 24px' }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '10px 18px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              background: 'transparent', color: tab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              borderBottom: tab === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-            }}>{t.label}</button>
-          ))}
+          {/* Profile row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px 0' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 14, background: employee.avatar || '#8b5cf6',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, fontWeight: 800, color: '#fff',
+              boxShadow: `0 4px 12px ${(employee.avatar || '#8b5cf6')}44`,
+            }}>
+              {employee.name?.[0]}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>{employee.name}</span>
+                {employee.name_en && <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>{employee.name_en}</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700 }}>EMP-{String(employee.id).padStart(3, '0')}</span>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeColor + '18', color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '全職'}</span>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: statusColor + '18', color: statusColor, fontWeight: 700 }}>{form.status || '在職'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick info bar */}
+          <div style={{ display: 'flex', gap: 16, padding: '12px 24px 14px', overflowX: 'auto', flexWrap: 'wrap' }}>
+            <QuickInfo icon="💼" value={employee.position || '未設定'} />
+            <QuickInfo icon="🏪" value={employee.store || '未指派'} />
+            <QuickInfo icon="🏢" value={employee.dept || '未指派'} />
+            {employee.join_date && <QuickInfo icon="📅" value={`到職 ${employee.join_date}`} />}
+            {employee.phone && <QuickInfo icon="📱" value={employee.phone} />}
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 0, padding: '0 24px', overflowX: 'auto' }}>
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding: '10px 16px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: 'transparent', display: 'flex', alignItems: 'center', gap: 5,
+                color: tab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                borderBottom: tab === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                transition: 'color 0.15s, border-color 0.15s',
+                whiteSpace: 'nowrap',
+              }}>
+                <span style={{ fontSize: 13 }}>{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 32px' }}>
+
+        {/* Slide-in animation */}
+        <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }`}</style>
 
           {/* ═══ 個人資訊 ═══ */}
           {tab === 'personal' && (
@@ -266,7 +365,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><div style={L}>類型</div>
                   <select className="form-input" style={{ width: '100%' }} value={form.employment_type || '全職'} onChange={e => set('employment_type', e.target.value)}>
-                    <option>全職</option><option>兼職</option><option>PT</option><option>實習</option>
+                    <option>全職</option><option>兼職</option>
                   </select>
                 </div>
                 <div><div style={L}>狀態</div>
@@ -517,6 +616,53 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           {/* ═══ 排班 ═══ */}
           {tab === 'schedule' && (
             <>
+              <SectionTitle icon="📅" text="每週可排班時間" />
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--glass-light)' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>星期</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>狀態</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>偏好班別</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DAYS.map((day, idx) => {
+                      const av = availability.find(a => a.day_of_week === idx)
+                      const status = av?.status || '可排班'
+                      return (
+                        <tr key={idx} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '6px 12px', fontWeight: 600 }}>週{day}</td>
+                          <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                              {AVAIL_STATUS.map(s => (
+                                <button key={s} onClick={() => setAvail(idx, s)} style={{
+                                  padding: '3px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                  background: status === s ? AVAIL_COLORS[s] + '22' : 'transparent',
+                                  color: status === s ? AVAIL_COLORS[s] : 'var(--text-muted)',
+                                  outline: status === s ? `1.5px solid ${AVAIL_COLORS[s]}` : '1px solid var(--border-subtle)',
+                                }}>{s}</button>
+                              ))}
+                            </div>
+                          </td>
+                          <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                            <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: 'auto', minWidth: 80 }}
+                              value={av?.preferred_shift || ''} onChange={e => setAvailShift(idx, e.target.value)}>
+                              <option value="">—</option>
+                              <option value="早班">早班</option>
+                              <option value="午班">午班</option>
+                              <option value="晚班">晚班</option>
+                              <option value="全天">全天</option>
+                            </select>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>AI 排班會參考此設定，避免在「不可」的時段安排班表</div>
+
               <SectionTitle icon="📋" text="請假 / 排除日期" />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                 <button className="btn btn-sm btn-secondary" onClick={() => {}}><Plus size={13} /></button>
@@ -548,6 +694,40 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           {/* ═══ 紀錄 ═══ */}
           {tab === 'records' && (
             <>
+              {/* 到職任務 */}
+              {onboardingTasks.length > 0 && (() => {
+                const completed = onboardingTasks.filter(t => t.status === '已完成').length
+                const total = onboardingTasks.length
+                const pct = total > 0 ? Math.round(completed / total * 100) : 0
+                return (
+                  <>
+                    <SectionTitle icon="📝" text={`到職 / 工作流程任務 (${completed}/${total})`} />
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                        <span>完成進度</span><span>{pct}%</span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 3, background: 'var(--glass-light)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 3, background: pct === 100 ? '#22c55e' : 'var(--accent-cyan)', width: `${pct}%`, transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                    {onboardingTasks.map(t => (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>{t.status === '已完成' ? '✅' : t.status === '進行中' ? '🔄' : '⬜'}</span>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{t.title}</div>
+                            {t.workflow_instances?.template_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.workflow_instances.template_name}</div>}
+                          </div>
+                        </div>
+                        <span className={`badge ${t.status === '已完成' ? 'badge-success' : t.status === '進行中' ? 'badge-warning' : 'badge-cyan'}`} style={{ fontSize: 11 }}>
+                          {t.status}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )
+              })()}
+
               <SectionTitle icon="🎯" text="績效評估" />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                 <button className="btn btn-sm btn-secondary" onClick={addReview}><Plus size={13} /></button>
@@ -566,14 +746,61 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
               <SectionTitle icon="👥" text={`眷屬 (${dependents.length})`} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <button className="btn btn-sm btn-secondary" onClick={addDependent}><Plus size={13} /></button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowDepForm(!showDepForm)}><Plus size={13} /></button>
               </div>
-              {dependents.length === 0 ? (
+              {showDepForm && (
+                <div style={{ padding: 14, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--accent-cyan)', marginBottom: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>姓名 *</div>
+                      <input className="form-input" style={{ width: '100%', fontSize: 12 }} placeholder="眷屬姓名" value={depForm.name} onChange={e => setDepForm(f => ({ ...f, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>關係</div>
+                      <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={depForm.relationship} onChange={e => setDepForm(f => ({ ...f, relationship: e.target.value }))}>
+                        <option>配偶</option><option>子女</option><option>父</option><option>母</option><option>其他</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>身分證字號</div>
+                      <input className="form-input" style={{ width: '100%', fontSize: 12 }} placeholder="選填" value={depForm.id_number} onChange={e => setDepForm(f => ({ ...f, id_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>出生日期</div>
+                      <input className="form-input" type="date" style={{ width: '100%', fontSize: 12 }} value={depForm.birth_date} onChange={e => setDepForm(f => ({ ...f, birth_date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={depForm.health_ins} onChange={e => setDepForm(f => ({ ...f, health_ins: e.target.checked }))} />
+                      加保健保（眷屬附加）
+                    </label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-secondary" onClick={() => setShowDepForm(false)} style={{ fontSize: 11 }}>取消</button>
+                      <button className="btn btn-sm btn-primary" onClick={addDependent} style={{ fontSize: 11 }}>新增</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {dependents.length === 0 && !showDepForm ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無眷屬</div>
               ) : dependents.map(d => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
-                  <span>{d.name} · {d.relationship || '—'}</span>
-                  <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
+                <div key={d.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
+                      <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
+                      {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#22c55e22', color: '#22c55e', fontWeight: 600 }}>健保</span>}
+                    </div>
+                    <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
+                  </div>
+                  {(d.id_number || d.birth_date) && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {d.id_number && <span>ID: {d.id_number.slice(0, 3)}***</span>}
+                      {d.id_number && d.birth_date && <span> · </span>}
+                      {d.birth_date && <span>生日: {d.birth_date}</span>}
+                    </div>
+                  )}
                 </div>
               ))}
 

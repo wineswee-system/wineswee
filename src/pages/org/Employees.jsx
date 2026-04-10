@@ -9,6 +9,11 @@ import EmployeeDetail from '../../components/EmployeeDetail'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
+const EMPLOYMENT_TYPES = [
+  { value: '全職', label: '全職', color: '#22c55e' },
+  { value: '兼職', label: '兼職', color: '#f59e0b' },
+]
+
 // 標準化職稱（manager = 有審核權限）
 const POSITIONS = [
   { label: '總經理', level: 'manager' },
@@ -38,6 +43,7 @@ export default function Employees() {
   const [storeFilter, setStoreFilter] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('在職')
+  const [typeFilter, setTypeFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [showResignModal, setShowResignModal] = useState(false)
   const [showRehireModal, setShowRehireModal] = useState(false)
@@ -46,7 +52,7 @@ export default function Employees() {
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
   const [editForm, setEditForm] = useState({})
-  const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職' })
+  const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
   const [lineUsers, setLineUsers] = useState([])
 
@@ -86,7 +92,7 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => [...prev, data])
         setShowModal(false)
-        setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職' })
+        setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
@@ -151,6 +157,7 @@ export default function Employees() {
       dept: emp.dept || '', position: emp.position || '',
       store: emp.store || '', email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
+      employment_type: emp.employment_type || '全職',
     })
     setShowEditModal(true)
   }
@@ -198,6 +205,7 @@ export default function Employees() {
 
   const filtered = employees.filter(e =>
     (statusFilter === '' || e.status === statusFilter) &&
+    (typeFilter === '' || (e.employment_type || '全職') === typeFilter) &&
     (storeFilter === '' || e.store === storeFilter) &&
     (deptFilter === '' || e.dept === deptFilter) &&
     (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search))
@@ -217,7 +225,7 @@ export default function Employees() {
         </div>
       </div>
 
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">在職</div>
           <div className="stat-card-value">{employees.filter(e => e.status === '在職').length}</div>
@@ -226,10 +234,13 @@ export default function Employees() {
           <div className="stat-card-label">離職</div>
           <div className="stat-card-value">{employees.filter(e => e.status === '離職').length}</div>
         </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">總計</div>
-          <div className="stat-card-value">{employees.length}</div>
-        </div>
+        {EMPLOYMENT_TYPES.map(t => (
+          <div key={t.value} className="stat-card" style={{ '--card-accent': t.color, '--card-accent-dim': t.color + '22', cursor: 'pointer', outline: typeFilter === t.value ? `2px solid ${t.color}` : 'none' }}
+            onClick={() => setTypeFilter(typeFilter === t.value ? '' : t.value)}>
+            <div className="stat-card-label">{t.label}</div>
+            <div className="stat-card-value">{employees.filter(e => (e.employment_type || '全職') === t.value && e.status === '在職').length}</div>
+          </div>
+        ))}
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
           <div className="stat-card-label">篩選結果</div>
           <div className="stat-card-value">{filtered.length}</div>
@@ -248,6 +259,13 @@ export default function Employees() {
             <option value="">全部</option>
             <option value="在職">在職</option>
             <option value="離職">離職</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>類型</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+            <option value="">全部類型</option>
+            {EMPLOYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
@@ -278,12 +296,15 @@ export default function Employees() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>姓名</th><th>部門</th><th>職稱</th><th>門市</th><th>Email</th><th>手機</th><th>到職日</th><th>狀態</th><th>操作</th></tr>
+              <tr><th>編號</th><th>姓名</th><th>類型</th><th>部門</th><th>職稱</th><th>門市</th><th>Email</th><th>手機</th><th>到職日</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
-              {filtered.map(e => (
+              {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
+              {filtered.map(e => {
+                const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '全職'))
+                return (
                 <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={() => setDetailEmp(e)}>
+                  <td><span style={{ fontFamily: 'monospace', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>EMP-{String(e.id).padStart(3, '0')}</span></td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: e.avatar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
@@ -295,6 +316,7 @@ export default function Employees() {
                       </div>
                     </div>
                   </td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: (empType?.color || '#22c55e') + '22', color: empType?.color || '#22c55e' }}>{empType?.label || '全職'}</span></td>
                   <td>{e.dept}</td>
                   <td>{e.position}</td>
                   <td>{e.store}</td>
@@ -331,7 +353,8 @@ export default function Employees() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -346,6 +369,16 @@ export default function Employees() {
             </Field>
             <Field label="英文姓名">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="Xiaoming Wang" value={form.name_en} onChange={e => set('name_en', e.target.value)} />
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="僱用類型">
+              <select className="form-input" style={{ width: '100%' }} value={form.employment_type} onChange={e => set('employment_type', e.target.value)}>
+                {EMPLOYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="到職日">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date} onChange={e => set('join_date', e.target.value)} />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -380,8 +413,30 @@ export default function Employees() {
             <Field label="手機">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="0912-345-678" value={form.phone} onChange={e => set('phone', e.target.value)} />
             </Field>
-            <Field label="到職日">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date} onChange={e => set('join_date', e.target.value)} />
+          </div>
+
+          {/* 薪資區塊 */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 薪資資訊</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="計薪方式">
+                <select className="form-input" style={{ width: '100%' }} value={form.salary_type} onChange={e => set('salary_type', e.target.value)}>
+                  <option value="monthly">月薪制</option>
+                  <option value="hourly">時薪制</option>
+                </select>
+              </Field>
+              {form.salary_type === 'monthly' ? (
+                <Field label="月底薪 (NT$)">
+                  <input className="form-input" type="number" style={{ width: '100%' }} placeholder="28000" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
+                </Field>
+              ) : (
+                <Field label="時薪 (NT$)">
+                  <input className="form-input" type="number" style={{ width: '100%' }} placeholder="183" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
+                </Field>
+              )}
+            </div>
+            <Field label="每週工時上限">
+              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="40" value={form.weekly_hours} onChange={e => set('weekly_hours', e.target.value)} />
             </Field>
           </div>
         </Modal>
@@ -433,7 +488,12 @@ export default function Employees() {
               <input className="form-input" type="text" style={{ width: '100%' }} value={editForm.name_en} onChange={e => setE('name_en', e.target.value)} />
             </Field>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Field label="僱用類型">
+              <select className="form-input" style={{ width: '100%' }} value={editForm.employment_type} onChange={e => setE('employment_type', e.target.value)}>
+                {EMPLOYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
             <Field label="部門">
               <select className="form-input" style={{ width: '100%' }} value={editForm.dept} onChange={e => setE('dept', e.target.value)}>
                 <option value="">請選擇</option>

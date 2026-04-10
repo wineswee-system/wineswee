@@ -149,29 +149,29 @@ export default function UserActivity() {
   }
 
   return (
-    <div className="page-container">
+    <div className="fade-in">
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title"><Activity size={22} style={{ marginRight: 8, color: '#6366f1' }} />使用者活動</h1>
-          <p className="page-subtitle">跨組織使用者行為追蹤與分析</p>
+          <h2><Activity size={22} style={{ marginRight: 8, color: '#6366f1' }} />使用者活動</h2>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>跨組織使用者行為追蹤與分析</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             <button className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius: 0 }} onClick={() => setViewMode('table')}>表格</button>
             <button className={`btn btn-sm ${viewMode === 'timeline' ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius: 0 }} onClick={() => setViewMode('timeline')}>時間軸</button>
           </div>
-          <button className="btn btn-ghost" onClick={exportCSV}><Download size={15} /> 匯出</button>
-          <button className="btn btn-ghost" onClick={fetchData}><RefreshCw size={15} /> 重新整理</button>
+          <button className="btn btn-secondary" onClick={exportCSV}><Download size={15} /> 匯出</button>
+          <button className="btn btn-secondary" onClick={fetchData}><RefreshCw size={15} /> 重新整理</button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
-        <div className="stat-card"><div className="stat-value">{stats.total}</div><div className="stat-label">總活動數</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: '#6366f1' }}>{stats.activeUsers}</div><div className="stat-label">今日活躍用戶</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: '#3b82f6' }}>{stats.pageViews}</div><div className="stat-label">頁面瀏覽</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: '#f59e0b' }}>{stats.actions}</div><div className="stat-label">操作次數</div></div>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+        <div className="stat-card" style={{ "--card-accent": "var(--accent-cyan)", "--card-accent-dim": "var(--accent-cyan-dim)" }}><div className="stat-card-value">{stats.total}</div><div className="stat-card-label">總活動數</div></div>
+        <div className="stat-card"><div className="stat-card-value" style={{ color: '#6366f1' }}>{stats.activeUsers}</div><div className="stat-card-label">今日活躍用戶</div></div>
+        <div className="stat-card"><div className="stat-card-value" style={{ color: '#3b82f6' }}>{stats.pageViews}</div><div className="stat-card-label">頁面瀏覽</div></div>
+        <div className="stat-card"><div className="stat-card-value" style={{ color: '#f59e0b' }}>{stats.actions}</div><div className="stat-card-label">操作次數</div></div>
       </div>
 
       {/* Module Usage Bar */}
@@ -201,14 +201,14 @@ export default function UserActivity() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-          <input className="input" placeholder="搜尋使用者、頁面、目標..." value={search} onChange={e => setSearch(e.target.value)}
+          <input className="form-input" placeholder="搜尋使用者、頁面、目標..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ paddingLeft: 32, width: '100%' }} />
         </div>
         <button className={`btn ${showFilters ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setShowFilters(!showFilters)}>
           <Filter size={14} /> 篩選{activeFilterCount > 0 && ` (${activeFilterCount})`}
         </button>
         {activeFilterCount > 0 && (
-          <button className="btn btn-ghost" onClick={resetFilters}><X size={14} /> 清除篩選</button>
+          <button className="btn btn-secondary" onClick={resetFilters}><X size={14} /> 清除篩選</button>
         )}
       </div>
 
@@ -216,40 +216,40 @@ export default function UserActivity() {
       {showFilters && (
         <div className="card" style={{ padding: 16, marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
           <div>
-            <label className="label">組織</label>
-            <select className="input" value={filters.tenantId} onChange={e => { setFilters(f => ({ ...f, tenantId: e.target.value })); setPage(0) }}>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>組織</label>
+            <select className="form-input" value={filters.tenantId} onChange={e => { setFilters(f => ({ ...f, tenantId: e.target.value })); setPage(0) }}>
               <option value="">全部組織</option>
               {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">使用者</label>
-            <select className="input" value={filters.userName} onChange={e => { setFilters(f => ({ ...f, userName: e.target.value })); setPage(0) }}>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>使用者</label>
+            <select className="form-input" value={filters.userName} onChange={e => { setFilters(f => ({ ...f, userName: e.target.value })); setPage(0) }}>
               <option value="">全部</option>
               {uniqueUsers.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">動作</label>
-            <select className="input" value={filters.action} onChange={e => { setFilters(f => ({ ...f, action: e.target.value })); setPage(0) }}>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>動作</label>
+            <select className="form-input" value={filters.action} onChange={e => { setFilters(f => ({ ...f, action: e.target.value })); setPage(0) }}>
               <option value="">全部</option>
               {ACTIONS.map(a => <option key={a} value={a}>{actionMeta[a]?.label || a}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">模組</label>
-            <select className="input" value={filters.module} onChange={e => { setFilters(f => ({ ...f, module: e.target.value })); setPage(0) }}>
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>模組</label>
+            <select className="form-input" value={filters.module} onChange={e => { setFilters(f => ({ ...f, module: e.target.value })); setPage(0) }}>
               <option value="">全部</option>
               {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">開始日期</label>
-            <input className="input" type="date" value={filters.from} onChange={e => { setFilters(f => ({ ...f, from: e.target.value })); setPage(0) }} />
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>開始日期</label>
+            <input className="form-input" type="date" value={filters.from} onChange={e => { setFilters(f => ({ ...f, from: e.target.value })); setPage(0) }} />
           </div>
           <div>
-            <label className="label">結束日期</label>
-            <input className="input" type="date" value={filters.to} onChange={e => { setFilters(f => ({ ...f, to: e.target.value })); setPage(0) }} />
+            <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>結束日期</label>
+            <input className="form-input" type="date" value={filters.to} onChange={e => { setFilters(f => ({ ...f, to: e.target.value })); setPage(0) }} />
           </div>
         </div>
       )}
@@ -359,8 +359,8 @@ export default function UserActivity() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>共 {total} 筆，第 {page + 1} / {totalPages} 頁</span>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button className="btn btn-ghost btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft size={14} /> 上一頁</button>
-            <button className="btn btn-ghost btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>下一頁 <ChevronRight size={14} /></button>
+            <button className="btn btn-secondary btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft size={14} /> 上一頁</button>
+            <button className="btn btn-secondary btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>下一頁 <ChevronRight size={14} /></button>
           </div>
         </div>
       )}

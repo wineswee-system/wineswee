@@ -187,9 +187,17 @@ async function callGeminiClientSide(schedulingData) {
   // Attempt 1
   console.log('[schedulingAi] Calling Gemini 2.5 Flash (attempt 1)...')
   const result1 = await model.generateContent(prompt)
+  const finishReason = result1.response.candidates?.[0]?.finishReason
   let raw = result1.response.text()
-  console.log('[schedulingAi] Raw response length:', raw.length)
-  console.log('[schedulingAi] Raw response preview:', raw.slice(0, 500))
+  console.log('[schedulingAi] Raw response length:', raw.length, '| finishReason:', finishReason)
+  console.log('[schedulingAi] Raw response tail:', raw.slice(-200))
+
+  // 如果被截斷，嘗試補上結尾
+  if (finishReason === 'MAX_TOKENS' || (!raw.trimEnd().endsWith('}') && !raw.trimEnd().endsWith(']'))) {
+    console.warn('[schedulingAi] Response appears truncated, attempting to repair...')
+    raw = repairTruncatedJson(raw)
+  }
+
   let parsed = parseResponse(raw)
   let violations = validateClientSide(parsed.assignments, schedulingData)
   const errors1 = violations.filter(v => v.severity === 'error')
@@ -225,6 +233,42 @@ async function callGeminiClientSide(schedulingData) {
       totalAssignments: parsed.assignments.length,
     },
   }
+}
+
+/**
+ * 修復被截斷的 JSON — 補上缺少的括號
+ * Gemini 回傳超過 token 限制時，JSON 會在中間斷掉
+ */
+function repairTruncatedJson(raw) {
+  let s = raw.trimEnd()
+
+  // 移除最後一個不完整的物件（找最後一個完整的 }）
+  // 例如: ..."shift": "11-20" }, { "employee": "王  ← 截斷
+  const lastCompleteObj = s.lastIndexOf('}')
+  if (lastCompleteObj > 0) {
+    s = s.slice(0, lastCompleteObj + 1)
+  }
+
+  // 計算未關閉的括號
+  let braces = 0, brackets = 0
+  let inString = false, escape = false
+  for (const ch of s) {
+    if (escape) { escape = false; continue }
+    if (ch === '\\') { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') braces++
+    else if (ch === '}') braces--
+    else if (ch === '[') brackets++
+    else if (ch === ']') brackets--
+  }
+
+  // 補上缺少的結尾
+  while (brackets > 0) { s += ']'; brackets-- }
+  while (braces > 0) { s += '}'; braces-- }
+
+  console.log('[schedulingAi] Repaired JSON length:', s.length, '(added closing brackets/braces)')
+  return s
 }
 
 function parseResponse(raw) {

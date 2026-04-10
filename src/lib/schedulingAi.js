@@ -173,10 +173,10 @@ async function callGeminiClientSide(schedulingData) {
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-pro',
+    model: 'gemini-2.5-flash',
     generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 8192,
+      temperature: 0.2,
+      maxOutputTokens: 16384,
       responseMimeType: 'application/json',
     },
   })
@@ -185,9 +185,11 @@ async function callGeminiClientSide(schedulingData) {
   const prompt = buildClientPrompt(schedulingData, patterns)
 
   // Attempt 1
-  console.log('[schedulingAi] Calling Gemini 2.5 Pro (attempt 1)...')
+  console.log('[schedulingAi] Calling Gemini 2.5 Flash (attempt 1)...')
   const result1 = await model.generateContent(prompt)
   let raw = result1.response.text()
+  console.log('[schedulingAi] Raw response length:', raw.length)
+  console.log('[schedulingAi] Raw response preview:', raw.slice(0, 500))
   let parsed = parseResponse(raw)
   let violations = validateClientSide(parsed.assignments, schedulingData)
   const errors1 = violations.filter(v => v.severity === 'error')
@@ -217,7 +219,7 @@ async function callGeminiClientSide(schedulingData) {
     errors: violations.filter(v => v.severity === 'error'),
     warnings: violations.filter(v => v.severity === 'warning'),
     meta: {
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       mode: 'client-fallback',
       employeeCount: schedulingData.employees.length,
       totalAssignments: parsed.assignments.length,
@@ -547,8 +549,8 @@ export async function fixViolations(schedulingData, currentAssignments, violatio
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-pro',
-    generationConfig: { temperature: 0.3, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+    model: 'gemini-2.5-flash',
+    generationConfig: { temperature: 0.2, maxOutputTokens: 16384, responseMimeType: 'application/json' },
   })
 
   const patterns = analyzeHistoricalPatterns(schedulingData)
@@ -556,7 +558,9 @@ export async function fixViolations(schedulingData, currentAssignments, violatio
   const fixPrompt = buildFixPromptClient(basePrompt, violations, currentAssignments)
 
   const result = await model.generateContent(fixPrompt)
-  const parsed = parseResponse(result.response.text())
+  const raw = result.response.text()
+  console.log('[schedulingAi:fix] Raw response length:', raw.length)
+  const parsed = parseResponse(raw)
   const newViolations = validateClientSide(parsed.assignments, schedulingData)
 
   return {
@@ -567,6 +571,6 @@ export async function fixViolations(schedulingData, currentAssignments, violatio
     violations: newViolations,
     errors: newViolations.filter(v => v.severity === 'error'),
     warnings: newViolations.filter(v => v.severity === 'warning'),
-    meta: { model: 'gemini-2.5-pro', mode: 'fix-violations' },
+    meta: { model: 'gemini-2.5-flash', mode: 'fix-violations' },
   }
 }

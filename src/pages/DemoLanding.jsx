@@ -94,14 +94,6 @@ const SOLUTION_BUNDLES = [
   },
 ]
 
-const MODULE_PRICES = {
-  '出勤管理': 2000, '排班系統': 1500, '薪資管理': 2000, '請假管理': 800, '加班管理': 500, '績效考核': 1000,
-  '採購管理': 2000, '倉儲物流': 2500, '銷售管理': 1500, 'POS 收銀': 1000,
-  '財務會計': 3000, '應收帳款': 1000, '應付帳款': 1000, '預算管理': 800,
-  '流程管理': 1500, '任務管理': 800, '簽核系統': 500, 'SOP 範本': 500,
-  '數據分析': 2000, 'AI 工具': 1500, '報表系統': 800,
-  'CRM 客戶管理': 2000, '組織管理': 500, '系統管理': 0, '外部串接': 1000, '生產品管': 2000,
-}
 
 const TIMELINE = [
   { week: '第 1 週', title: '需求訪談', desc: '了解公司流程、確認模組需求、盤點痛點', icon: '📋' },
@@ -137,72 +129,6 @@ const SYSTEMS = [
 // ════════════════════════════════════════════
 //  COMPONENTS
 // ════════════════════════════════════════════
-
-function PricingCalculator() {
-  const [selected, setSelected] = useState([])
-  const allModules = Object.entries(MODULE_PRICES).filter(([, p]) => p > 0)
-  const total = selected.reduce((s, m) => s + (MODULE_PRICES[m] || 0), 0)
-  const toggle = (m) => setSelected(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 900, margin: '0 auto' }}>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>選擇你需要的模組</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {allModules.map(([name, price]) => (
-            <label key={name} onClick={() => toggle(name)} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
-              background: selected.includes(name) ? 'rgba(6,182,212,0.08)' : 'var(--bg-card, #fff)',
-              border: `2px solid ${selected.includes(name) ? '#06b6d4' : 'transparent'}`,
-              transition: 'all 0.15s',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={selected.includes(name)} readOnly style={{ accentColor: '#06b6d4' }} />
-                <span style={{ fontSize: 14, fontWeight: selected.includes(name) ? 700 : 400 }}>{name}</span>
-              </div>
-              <span style={{ fontSize: 13, color: '#64748b' }}>NT$ {price.toLocaleString()}/月</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      <div style={{ position: 'sticky', top: 100 }}>
-        <div style={{
-          padding: 24, borderRadius: 16,
-          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-          color: '#fff',
-        }}>
-          <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>預估月費</div>
-          <div style={{ fontSize: 42, fontWeight: 800, marginBottom: 4 }}>
-            NT$ {total.toLocaleString()}
-            <span style={{ fontSize: 16, fontWeight: 400, opacity: 0.8 }}>/月</span>
-          </div>
-          <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 16 }}>已選 {selected.length} 個模組 · 不限使用人數</div>
-          {selected.length > 0 && (
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 12 }}>
-              {selected.map(m => (
-                <div key={m} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', opacity: 0.9 }}>
-                  <span>{m}</span>
-                  <span>NT$ {MODULE_PRICES[m]?.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <button style={{
-            width: '100%', marginTop: 16, padding: '12px', borderRadius: 10,
-            background: '#fff', color: '#0891b2', border: 'none',
-            fontSize: 15, fontWeight: 700, cursor: 'pointer',
-          }}>
-            免費試用 14 天 <ArrowRight size={15} style={{ verticalAlign: -2 }} />
-          </button>
-        </div>
-        <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', marginTop: 8 }}>
-          * 價格為參考，實際依客製需求報價
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ════════════════════════════════════════════
 //  MAIN PAGE
@@ -249,7 +175,7 @@ export default function DemoLanding() {
           </div>
           <div className="demo-nav-links">
             <button className="demo-nav-link" onClick={() => scrollTo('bundles')}>方案與功能</button>
-            <button className="demo-nav-link" onClick={() => scrollTo('pricing')}>自選配方</button>
+            <button className="demo-nav-link" onClick={() => scrollTo('timeline')}>導入流程</button>
             <button className="demo-nav-link" onClick={() => scrollTo('line')}>LINE 整合</button>
             <button className="demo-nav-link" onClick={() => scrollTo('timeline')}>導入流程</button>
           </div>
@@ -385,17 +311,6 @@ export default function DemoLanding() {
             <p>無需額外安裝 App，員工透過 LINE 即可完成日常營運操作</p>
           </div>
           <DemoLineSection />
-        </div>
-      </Section>
-
-      {/* ═══ Pricing Calculator ═══ */}
-      <Section id="pricing">
-        <div className="demo-container">
-          <div className="demo-sh">
-            <h2>自選配方 — 按需組合</h2>
-            <p>勾選你需要的模組，即時試算月費。不綁約、不限人數。</p>
-          </div>
-          <PricingCalculator />
         </div>
       </Section>
 

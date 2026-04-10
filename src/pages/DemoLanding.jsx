@@ -215,6 +215,47 @@ export default function DemoLanding() {
         </div>
       </section>
 
+      {/* ═══ Pain Points ═══ */}
+      <Section>
+        <div className="demo-container">
+          <div className="demo-sh">
+            <h2>這些問題，聽起來熟悉嗎？</h2>
+            <p>如果你中了 3 項以上，是時候考慮數位化了</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, maxWidth: 1000, margin: '0 auto' }}>
+            {[
+              { emoji: '📋', pain: '員工打卡用紙本，月底人資手動算出勤', cost: '每月浪費 40+ 小時', solution: 'LINE GPS 打卡 → 自動統計' },
+              { emoji: '📊', pain: '排班用 Excel，改一個人要調半天', cost: '每週花 3-5 小時排班', solution: 'AI 一鍵排班 + 勞基法自動檢查' },
+              { emoji: '💰', pain: '薪資用計算機，怕算錯又怕漏', cost: '每月 2-3 天算薪', solution: '自動拉出勤 + 加班 + 請假計算' },
+              { emoji: '📦', pain: '庫存靠記憶，賣完才知道沒貨', cost: '缺貨損失 5-10% 營收', solution: '即時庫存 + 安全量自動補貨' },
+              { emoji: '📱', pain: '請假要填紙本，主管不在就卡住', cost: '審核平均等 2-3 天', solution: 'LINE 即時送簽 → 秒核' },
+              { emoji: '🔄', pain: '開新店流程混亂，總是漏東漏西', cost: '開店延誤 2-4 週', solution: 'SOP 範本 + 任務追蹤 + 進度透明' },
+              { emoji: '🧾', pain: '對帳要翻三本帳，月結拖到下個月', cost: '財務作業遲延', solution: '進銷存自動拋轉 + 一鍵對帳' },
+              { emoji: '📞', pain: '系統七八套，資料不互通', cost: '重複輸入 + 資料不一致', solution: '一套系統 + 跨模組自動串接' },
+              { emoji: '😰', pain: '老闆要報表，要等會計整理三天', cost: '決策延遲', solution: '即時儀表板 + AI 洞察' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                padding: 20, borderRadius: 14,
+                background: 'var(--bg-card, #fff)',
+                border: '1px solid var(--border-medium, #e2e8f0)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>{item.emoji}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, lineHeight: 1.4 }}>{item.pain}</div>
+                <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, marginBottom: 10 }}>💸 {item.cost}</div>
+                <div style={{
+                  fontSize: 12, padding: '6px 10px', borderRadius: 8,
+                  background: 'rgba(6,182,212,0.08)', color: '#0891b2',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <Check size={13} /> {item.solution}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
       {/* ═══ Hot Module Spotlight ═══ */}
       <Section dark>
         <div className="demo-container">

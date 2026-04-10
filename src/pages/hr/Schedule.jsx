@@ -1,24 +1,20 @@
 import { useState, useEffect, useContext } from 'react'
-import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save } from 'lucide-react'
+import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code, Calendar } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
-import { gatherSchedulingData, runAiSchedule, fixViolations } from '../../lib/schedulingAi'
+import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
+import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
+import { parseTime, getMonthDates, isAbsence, getAbsenceOptions, ABSENCE_TYPES, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ScheduleTable from './components/ScheduleTable'
+import MonthScheduleTable from './components/MonthScheduleTable'
 import StoreSettingsTab from './components/StoreSettingsTab'
 import PreferencesTab from './components/PreferencesTab'
 import SwapsTab from './components/SwapsTab'
 import AnalyticsTab from './components/AnalyticsTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
-
-// Parse time string "HH:MM" to decimal hours (e.g., "09:30" -> 9.5)
-function parseTime(t) {
-  if (!t) return 0
-  const [h, m] = String(t).split(':').map(Number)
-  return (h || 0) + (m || 0) / 60
-}
 
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
@@ -99,10 +95,27 @@ export default function Schedule() {
   // AI Draft workflow
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
+  // View mode: week or month
+  const [viewMode, setViewMode] = useState('week') // 'week' | 'month'
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date()
+    return formatYearMonth(now.getFullYear(), now.getMonth() + 1)
+  })
 
   const weekDates = getWeekDates(weekOffset)
   const weekStart = weekDates[0]
   const weekEnd = weekDates[6]
+
+  // Month dates for monthly view
+  const { year: monthYear, month: monthNum } = parseYearMonth(selectedMonth)
+  const monthDates = getMonthDates(monthYear, monthNum)
+  const monthStart = monthDates[0]
+  const monthEnd = monthDates[monthDates.length - 1]
+
+  // Active dates based on view mode
+  const activeDates = viewMode === 'month' ? monthDates : weekDates
+  const activeStart = viewMode === 'month' ? monthStart : weekStart
+  const activeEnd = viewMode === 'month' ? monthEnd : weekEnd
 
   useEffect(() => {
     Promise.all([
@@ -129,15 +142,15 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('schedules').select('*').gte('date', weekStart).lte('date', weekEnd),
-      supabase.from('off_requests').select('*').gte('date', weekStart).lte('date', weekEnd),
+      supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd),
+      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd),
     ]).then(([s, o]) => {
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
     }).catch(err => {
       console.error('Failed to load schedule data:', err)
     })
-  }, [weekStart])
+  }, [activeStart, activeEnd])
 
   // Run compliance check when schedules update
   useEffect(() => {
@@ -299,31 +312,32 @@ export default function Schedule() {
   // ── AI Auto-Schedule (LLM-based, 6-phase framework) ──
   const handleAutoSchedule = async () => {
     if (!canUseAISchedule) { alert('您沒有使用 AI 排班的權限'); return }
-    if (!confirm(`將使用 AI (Gemini 2.5 Pro) 為 ${filtered.length} 位員工自動排班（${weekStart} ~ ${weekEnd}）\n\n已有的排班會保留。AI 產出為草稿，您可以審閱後再發布。`)) return
+    const isMonthly = viewMode === 'month'
+    const rangeLabel = isMonthly ? `${selectedMonth} 月排班` : `${weekStart} ~ ${weekEnd}`
+    if (!confirm(`將使用 AI (Gemini 2.5) 為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n已有的排班會保留。AI 產出為草稿，您可以審閱後再發布。`)) return
     setAutoScheduling(true)
     setAiDraft(null)
     setAiProgress('正在收集排班資料...')
 
     try {
-      // Phase 2: Gather all data
       const schedulingData = await gatherSchedulingData({
-        weekDates, employees: filtered, shiftDefs,
+        weekDates: isMonthly ? null : weekDates,
+        monthDates: isMonthly ? monthDates : null,
+        employees: filtered, shiftDefs,
         storeFilter, locations, minStaff, tenantId,
       })
 
-      // Phase 3-5: Call AI (edge function → client fallback)
-      setAiProgress('AI 分析中（Gemini 2.5 Pro）...')
-      const result = await runAiSchedule(schedulingData)
-
-      if (!result.success) {
-        throw new Error(result.error || 'AI 排班失敗')
+      if (isMonthly) {
+        setAiProgress('AI 月排班中...')
+        const result = await runMonthlyAiSchedule(schedulingData, setAiProgress)
+        if (!result.success) throw new Error(result.error || 'AI 排班失敗')
+        setAiDraft({ ...result, schedulingData })
+      } else {
+        setAiProgress('AI 分析中（Gemini 2.5）...')
+        const result = await runAiSchedule(schedulingData)
+        if (!result.success) throw new Error(result.error || 'AI 排班失敗')
+        setAiDraft({ ...result, schedulingData })
       }
-
-      // Store as draft (don't write to DB yet)
-      setAiDraft({
-        ...result,
-        schedulingData, // keep for fix-violations
-      })
       setAiProgress('')
 
     } catch (err) {
@@ -342,24 +356,37 @@ export default function Schedule() {
       if (!confirm(`仍有 ${aiDraft.errors.length} 個違規項目。確定要發布嗎？`)) return
     }
 
+    const empNames = [...new Set(aiDraft.assignments.map(a => a.employee))]
+    const dates = [...new Set(aiDraft.assignments.map(a => a.date))].sort()
+
+    // Clear existing schedules for these employees in this date range
+    await supabase.from('schedules').delete()
+      .in('employee', empNames)
+      .gte('date', dates[0])
+      .lte('date', dates[dates.length - 1])
+
+    // Build records with absence_type and month_group
+    const monthGroup = dates[0]?.slice(0, 7) || null
     const newSchedules = aiDraft.assignments.map(a => ({
       employee: a.employee,
       date: a.date,
       shift: a.shift,
+      absence_type: isAbsence(a.shift) ? a.shift : null,
+      source_store: a.store || null,
+      month_group: monthGroup,
       ...(tenantId ? { tenant_id: tenantId } : {}),
     }))
 
     const { data } = await supabase.from('schedules')
-      .upsert(newSchedules, { onConflict: 'employee,date' }).select()
+      .insert(newSchedules).select()
     if (data) {
       setSchedules(prev => {
-        const map = {}
-        for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s
-        return Object.values(map)
+        const kept = prev.filter(s => !(empNames.includes(s.employee) && s.date >= dates[0] && s.date <= dates[dates.length - 1]))
+        return [...kept, ...data]
       })
     }
     setAiDraft(null)
-    alert(`已發布 AI 排班！共 ${newSchedules.length} 筆`)
+    alert(`已發布排班！共 ${newSchedules.length} 筆`)
   }
 
   // ── Fix violations (re-run AI with violation context) ──
@@ -386,7 +413,40 @@ export default function Schedule() {
 
   // ── Discard draft ──
   const handleDiscardDraft = () => {
-    if (confirm('確定要捨棄 AI 排班草稿嗎？')) setAiDraft(null)
+    if (confirm('確定要捨棄排班草稿嗎？')) setAiDraft(null)
+  }
+
+  // ── Programmatic Schedule (no AI) ──
+  const handleCodeSchedule = async () => {
+    if (!canUseAISchedule) { alert('您沒有使用排班功能的權限'); return }
+    const isMonthly = viewMode === 'month'
+    const rangeLabel = isMonthly ? `${selectedMonth} 月排班` : `${weekStart} ~ ${weekEnd}`
+    if (!confirm(`將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。`)) return
+    setAutoScheduling(true)
+    setAiDraft(null)
+    setAiProgress('程式排班計算中...')
+
+    try {
+      const schedulingData = await gatherSchedulingData({
+        weekDates: isMonthly ? null : weekDates,
+        monthDates: isMonthly ? monthDates : null,
+        employees: filtered, shiftDefs,
+        storeFilter, locations, minStaff, tenantId,
+      })
+
+      const result = isMonthly
+        ? runMonthlyProgrammaticSchedule(schedulingData, setAiProgress)
+        : runProgrammaticSchedule(schedulingData)
+
+      setAiDraft({ ...result, schedulingData })
+      setAiProgress('')
+    } catch (err) {
+      console.error('[Code Schedule] Error:', err)
+      alert(`程式排班失敗：${err.message}`)
+      setAiProgress('')
+    } finally {
+      setAutoScheduling(false)
+    }
   }
 
   // Load tab-specific data (must be before early returns to maintain hook order)
@@ -471,10 +531,16 @@ export default function Schedule() {
               <Shield size={14} /> 排班條件
             </button>
             {canUseAISchedule && (
-              <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
-                onClick={handleAutoSchedule} disabled={autoScheduling}>
-                <Sparkles size={14} /> {autoScheduling ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
-              </button>
+              <>
+                <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
+                  onClick={handleCodeSchedule} disabled={autoScheduling}>
+                  <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
+                </button>
+                <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
+                  onClick={handleAutoSchedule} disabled={autoScheduling}>
+                  <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
+                </button>
+              </>
             )}
             {aiDraft && (
               <>
@@ -490,10 +556,44 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* Store selector + Tabs */}
+      {/* View mode toggle + Store selector + Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+        {/* View mode: Week / Month */}
+        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+          <button onClick={() => setViewMode('week')} style={{
+            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            background: viewMode === 'week' ? 'var(--accent-cyan)' : 'var(--bg-card)',
+            color: viewMode === 'week' ? '#fff' : 'var(--text-muted)',
+          }}>
+            <Calendar size={12} style={{ marginRight: 4 }} />週
+          </button>
+          <button onClick={() => setViewMode('month')} style={{
+            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            background: viewMode === 'month' ? 'var(--accent-cyan)' : 'var(--bg-card)',
+            color: viewMode === 'month' ? '#fff' : 'var(--text-muted)',
+          }}>
+            <Calendar size={12} style={{ marginRight: 4 }} />月
+          </button>
+        </div>
+        {/* Month navigator (only in month mode) */}
+        {viewMode === 'month' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
+              onClick={() => {
+                const d = new Date(monthYear, monthNum - 2, 1)
+                setSelectedMonth(formatYearMonth(d.getFullYear(), d.getMonth() + 1))
+              }}>◀</button>
+            <input type="month" className="form-input" style={{ padding: '4px 8px', fontSize: 13 }}
+              value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} />
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
+              onClick={() => {
+                const d = new Date(monthYear, monthNum, 1)
+                setSelectedMonth(formatYearMonth(d.getFullYear(), d.getMonth() + 1))
+              }}>▶</button>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14 }}>📅</span>
+          <span style={{ fontSize: 14 }}>🏪</span>
           <select className="form-input" style={{ width: 200, padding: '8px 12px', fontSize: 13 }}
             value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
             <option value="">全部門市</option>
@@ -586,12 +686,16 @@ export default function Schedule() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-medium)' }}>
-                  <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)' }}>員工</th>
-                  {weekDates.map(d => (
-                    <th key={d} style={{ textAlign: 'center', padding: '6px 4px', color: 'var(--text-muted)', minWidth: 70 }}>
-                      {d.slice(5)}
-                    </th>
-                  ))}
+                  <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>員工</th>
+                  {activeDates.map(d => {
+                    const dow = getDayLabel(d)
+                    const isWeekend = new Date(d).getDay() === 0 || new Date(d).getDay() === 6
+                    return (
+                      <th key={d} style={{ textAlign: 'center', padding: '6px 2px', color: isWeekend ? 'var(--accent-red)' : 'var(--text-muted)', minWidth: viewMode === 'month' ? 40 : 70, fontSize: viewMode === 'month' ? 10 : 12 }}>
+                        {d.slice(5)}<br /><span style={{ fontSize: 9 }}>{dow}</span>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -599,21 +703,23 @@ export default function Schedule() {
                   const empAssignments = aiDraft.assignments?.filter(a => a.employee === emp.name) || []
                   return (
                     <tr key={emp.name} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{emp.name}</td>
-                      {weekDates.map(date => {
-                        const assignment = empAssignments.find(a => a.date === date)
-                        const shift = assignment?.shift || '-'
-                        const isRest = shift === '休'
+                      <td style={{ padding: '6px 8px', fontWeight: 500, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>{emp.name}</td>
+                      {activeDates.map(date => {
+                        const a = empAssignments.find(a => a.date === date)
+                        const shift = a?.shift
+                        const isRest = isAbsence(shift)
                         const hasError = aiDraft.errors?.some(v => v.employee === emp.name && v.message.includes(date))
                         return (
                           <td key={date} style={{
-                            textAlign: 'center', padding: '4px',
-                            background: hasError ? 'rgba(239,68,68,0.15)' : isRest ? 'var(--glass-light)' : 'rgba(34,197,94,0.08)',
-                            color: isRest ? 'var(--text-muted)' : 'var(--text-primary)',
-                            fontWeight: isRest ? 400 : 600,
-                            borderRadius: 4,
+                            textAlign: 'center', padding: '2px', verticalAlign: 'middle',
+                            background: hasError ? 'rgba(239,68,68,0.15)' : isRest ? 'var(--glass-light)' : shift ? 'rgba(34,197,94,0.08)' : 'transparent',
+                            borderRadius: 4, fontSize: viewMode === 'month' ? 9 : 11,
                           }}>
-                            {shift}
+                            {isRest ? (
+                              <span style={{ color: 'var(--text-muted)' }}>{shift}</span>
+                            ) : shift ? (
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{shift}</span>
+                            ) : '-'}
                           </td>
                         )
                       })}
@@ -626,7 +732,7 @@ export default function Schedule() {
         </div>
       )}
 
-      {mainTab === 'schedule' && (
+      {mainTab === 'schedule' && viewMode === 'week' && (
         <ScheduleTable
           weekDates={weekDates} weekStart={weekStart} weekEnd={weekEnd}
           weekOffset={weekOffset} setWeekOffset={setWeekOffset}
@@ -639,6 +745,32 @@ export default function Schedule() {
           getStoreShifts={getStoreShifts} storeFilter={storeFilter}
           compliance={compliance} holidaySet={holidaySet}
           setCoverModal={setCoverModal} findCoverCandidates={findCoverCandidates}
+        />
+      )}
+
+      {mainTab === 'schedule' && viewMode === 'month' && (
+        <MonthScheduleTable
+          monthDates={monthDates}
+          filtered={filtered}
+          employees={employees}
+          locations={locations}
+          schedules={schedules}
+          shiftDefs={shiftDefs}
+          SHIFT_TYPES={SHIFT_TYPES}
+          getShift={getShift}
+          getShiftStyle={getShiftStyle}
+          getOffRequest={getOffRequest}
+          editCell={editCell}
+          setEditCell={setEditCell}
+          handleSetShift={handleSetShift}
+          handleDeleteShift={handleDeleteShift}
+          canEditSchedule={canEditSchedule}
+          getStoreShifts={getStoreShifts}
+          storeFilter={storeFilter}
+          holidaySet={holidaySet}
+          deptFilter={deptFilter}
+          setDeptFilter={setDeptFilter}
+          departments={departments}
         />
       )}
 

@@ -42,6 +42,8 @@ interface ScheduleEntry {
   employee: string
   date: string
   shift: string
+  store?: string
+  absence_type?: string
 }
 
 interface Violation {
@@ -56,20 +58,37 @@ interface SchedulingRequest {
   employees: Employee[]
   shiftDefs: ShiftDef[]
   weekDates: string[]
+  monthDates?: string[]
   existingSchedules: ScheduleEntry[]
   offRequests: { employee: string; date: string }[]
-  holidays: string[]
   preferences: { employee: string; preferred_shifts: string[]; avoid_shifts: string[] }[]
   previousWeek: ScheduleEntry[]
-  historicalSchedules: ScheduleEntry[]  // 8-week history
+  crossStoreEligible?: Employee[]
   storeSettings: {
     minStaff: number
     maxStaff?: number
     operatingHours?: { open: string; close: string }
-    peakDays?: number[]  // 0=Sun ... 6=Sat
+    peakDays?: number[]
   }
   budget?: { maxOvertimeHours: number; maxWeeklyCost?: number }
   tenantId?: string
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Constants
+// ══════════════════════════════════════════════════════════════
+
+const DAILY_MAX_HOURS = 12
+const MAX_CONSECUTIVE_WORK_DAYS = 6
+const MIN_SHIFT_INTERVAL = 11
+const MIN_WEEKLY_REST_DAYS = 2
+const MONTHLY_OVERTIME_CAP = 46
+const MONTHLY_REST_DAYS_TARGET = 10
+
+const ABSENCE_VALUES = new Set(['休', '補休', '病', '特休', '會議', '產'])
+
+function isAbsence(shift: string): boolean {
+  return ABSENCE_VALUES.has(shift)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -88,213 +107,151 @@ function shiftHours(def: ShiftDef): number {
   return e > s ? e - s : (24 - s + e)
 }
 
-function shiftGapHours(prevDef: ShiftDef, currDef: ShiftDef): number {
-  const prevStart = parseTime(prevDef.start_time)
-  const prevEnd = parseTime(prevDef.end_time)
-  const currStart = parseTime(currDef.start_time)
-  const crossesMidnight = prevEnd < prevStart
-  if (crossesMidnight) {
-    return currStart - prevEnd  // both on same calendar day
-  }
-  return currStart + (24 - prevEnd)
+function effectiveEndHour(def: ShiftDef): number {
+  const s = parseTime(def.start_time)
+  const e = parseTime(def.end_time)
+  return e < s ? e + 24 : e
 }
 
 function isNightShift(def: ShiftDef): boolean {
   const s = parseTime(def.start_time)
   const e = parseTime(def.end_time)
-  // Overlaps 22:00-06:00 window
   return s >= 22 || e <= 6 || e < s
 }
 
-// ══════════════════════════════════════════════════════════════
-//  Phase 3: Historical Pattern Analysis
-// ══════════════════════════════════════════════════════════════
-
-function analyzeHistoricalPatterns(
-  employees: Employee[],
-  history: ScheduleEntry[],
-  shiftDefs: ShiftDef[]
-) {
-  const patterns: Record<string, {
-    avgHoursPerWeek: number
-    dayOfWeekFrequency: Record<number, number>  // 0=Mon frequency
-    shiftTypeDistribution: Record<string, number>
-    weekendWorkRatio: number
-    totalWeeksTracked: number
-  }> = {}
-
-  for (const emp of employees) {
-    const empSchedules = history.filter(s => s.employee === emp.name && s.shift !== '休')
-
-    // Group by ISO week
-    const weekMap: Record<string, ScheduleEntry[]> = {}
-    for (const s of empSchedules) {
-      const d = new Date(s.date)
-      const weekNum = `${d.getFullYear()}-W${Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7)}`
-      if (!weekMap[weekNum]) weekMap[weekNum] = []
-      weekMap[weekNum].push(s)
+function splitIntoWeeks(dates: string[]): string[][] {
+  const weeks: string[][] = []
+  let current: string[] = []
+  for (const date of dates) {
+    const dow = new Date(date).getDay()
+    if (dow === 1 && current.length > 0) {
+      weeks.push(current)
+      current = []
     }
-
-    const totalWeeks = Math.max(Object.keys(weekMap).length, 1)
-
-    // Day-of-week frequency (0=Mon ... 6=Sun)
-    const dowFreq: Record<number, number> = {}
-    for (let i = 0; i < 7; i++) dowFreq[i] = 0
-    for (const s of empSchedules) {
-      const dow = (new Date(s.date).getDay() + 6) % 7  // Mon=0
-      dowFreq[dow]++
-    }
-
-    // Shift type distribution
-    const shiftDist: Record<string, number> = {}
-    for (const s of empSchedules) {
-      shiftDist[s.shift] = (shiftDist[s.shift] || 0) + 1
-    }
-
-    // Weekend work ratio
-    const weekendDays = empSchedules.filter(s => {
-      const dow = new Date(s.date).getDay()
-      return dow === 0 || dow === 6
-    }).length
-    const weekendRatio = empSchedules.length > 0 ? weekendDays / empSchedules.length : 0
-
-    // Average hours per week
-    let totalHours = 0
-    for (const s of empSchedules) {
-      const def = shiftDefs.find(d => d.name === s.shift)
-      totalHours += def ? shiftHours(def) : 8
-    }
-
-    patterns[emp.name] = {
-      avgHoursPerWeek: totalHours / totalWeeks,
-      dayOfWeekFrequency: dowFreq,
-      shiftTypeDistribution: shiftDist,
-      weekendWorkRatio: weekendRatio,
-      totalWeeksTracked: totalWeeks,
-    }
+    current.push(date)
   }
-
-  return patterns
+  if (current.length > 0) weeks.push(current)
+  return weeks
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Phase 4: Prompt Construction
+//  Prompt Construction (single assignment per employee per day)
 // ══════════════════════════════════════════════════════════════
 
-function buildSystemPrompt(req: SchedulingRequest, patterns: ReturnType<typeof analyzeHistoricalPatterns>): string {
-  const { employees, shiftDefs, weekDates, existingSchedules, offRequests, holidays, preferences, previousWeek, storeSettings } = req
-
-  const holidaySet = new Set(holidays)
-  const offMap: Record<string, boolean> = {}
-  for (const o of offRequests) offMap[`${o.employee}_${o.date}`] = true
+function buildSystemPrompt(req: SchedulingRequest): string {
+  const { employees, shiftDefs, weekDates, existingSchedules, offRequests, preferences, previousWeek, storeSettings, crossStoreEligible } = req
 
   // Build employee profiles
   const empProfiles = employees.map(emp => {
     const pref = preferences.find(p => p.employee === emp.name)
-    const hist = patterns[emp.name]
     const prevWeekShifts = previousWeek.filter(s => s.employee === emp.name)
-
-    return `  - ${emp.name} | ${emp.position} | ${emp.store} | priority=${emp.schedule_priority || 3} | type=${emp.employment_type || 'full_time'}
-    can_open=${emp.can_open !== false} | can_close=${emp.can_close !== false}
-    ${emp.gender ? `gender=${emp.gender}` : ''} ${emp.is_pregnant ? '| PREGNANT' : ''} ${emp.is_nursing ? '| NURSING' : ''}
-    ${emp.skills?.length ? `skills=[${emp.skills.join(',')}]` : ''}
-    ${emp.additional_stores?.length ? `cross_store=[${emp.additional_stores.join(',')}]` : ''}
-    ${pref ? `preferred=[${pref.preferred_shifts.join(',')}] avoid=[${pref.avoid_shifts.join(',')}]` : ''}
-    ${hist ? `history: avg ${hist.avgHoursPerWeek.toFixed(1)}h/wk, weekend_ratio=${(hist.weekendWorkRatio * 100).toFixed(0)}%` : ''}
-    last_week: [${prevWeekShifts.map(s => `${s.date}:${s.shift}`).join(', ')}]`
+    const lines = [
+      `  - ${emp.name} | ${emp.position || '員工'} | 門市=${emp.store} | priority=${emp.schedule_priority || 3} | type=${emp.employment_type || 'full_time'}`,
+      `    can_open=${emp.can_open !== false} | can_close=${emp.can_close !== false}${emp.gender ? ` | gender=${emp.gender}` : ''}${emp.is_pregnant ? ' | PREGNANT' : ''}${emp.is_nursing ? ' | NURSING' : ''}`,
+    ]
+    if (emp.additional_stores?.length) lines.push(`    可支援門市=[${emp.additional_stores.join(',')}]`)
+    if (emp.skills?.length) lines.push(`    skills=[${emp.skills.join(',')}]`)
+    if (pref) lines.push(`    preferred=[${pref.preferred_shifts.join(',')}] avoid=[${pref.avoid_shifts.join(',')}]`)
+    if (prevWeekShifts.length) lines.push(`    上週: [${prevWeekShifts.map(s => `${s.date}:${s.shift}`).join(', ')}]`)
+    return lines.join('\n')
   }).join('\n')
 
-  // Build shift definitions
   const shiftInfo = shiftDefs.map(d =>
     `  - "${d.name}" | ${d.start_time}~${d.end_time} | ${shiftHours(d).toFixed(1)}h | store=${d.store_id || 'all'} | emp_type=${d.employee_type || 'all'}`
   ).join('\n')
 
-  // Build existing assignments (locked)
-  const locked = existingSchedules.map(s => `  - ${s.employee} | ${s.date} | ${s.shift} (LOCKED)`).join('\n')
-
-  // Build off-requests & holidays
+  const locked = existingSchedules.filter(s => !isAbsence(s.shift)).map(s => `  - ${s.employee} | ${s.date} | ${s.shift} (LOCKED)`).join('\n')
   const offInfo = offRequests.map(o => `  - ${o.employee} OFF on ${o.date}`).join('\n')
-  const holidayInfo = holidays.filter(h => weekDates.includes(h)).map(h => `  - ${h}`).join('\n')
 
-  // Build date context
   const dateContext = weekDates.map(d => {
-    const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(new Date(d).getDay() + 6) % 7]
-    const isHoliday = holidaySet.has(d)
+    const dayLabels = ['日', '一', '二', '三', '四', '五', '六']
+    const dow = dayLabels[new Date(d).getDay()]
     const isPeak = storeSettings.peakDays?.includes(new Date(d).getDay())
-    return `  - ${d} (${dow})${isHoliday ? ' [HOLIDAY]' : ''}${isPeak ? ' [PEAK]' : ''}`
+    return `  - ${d} (${dow})${isPeak ? ' [PEAK]' : ''}`
   }).join('\n')
 
-  return `You are an expert HR scheduling AI for a Taiwan-based business. Generate a weekly employee shift schedule that strictly complies with Taiwan labor law.
+  // Cross-store section
+  let crossStoreSection = ''
+  if (crossStoreEligible?.length) {
+    crossStoreSection = `\n## 跨店支援候選人
+以下員工來自其他門市，可在人力不足時借調：
+${crossStoreEligible.map(e => `  - ${e.name} | 主店=${e.store} | 可支援=[${(e.additional_stores || []).join(',')}]`).join('\n')}
+借調時 assignment 中加入 "store" 欄位標示被支援的門市。\n`
+  }
 
-## SCHEDULE PERIOD
+  const numDays = weekDates.length
+
+  return `你是台灣門市排班專家 AI。請根據以下資訊產生排班表，嚴格遵守台灣勞基法。
+
+## 排班期間 (${numDays} 天)
 ${dateContext}
 
-## EMPLOYEES (${employees.length} total)
+## 員工 (${employees.length} 人)
 ${empProfiles}
 
-## AVAILABLE SHIFTS
+## 可用班別
 ${shiftInfo}
 
-## EXISTING ASSIGNMENTS (DO NOT MODIFY)
-${locked || '  (none)'}
+## 假別代碼
+  - "休" = 例假/休息日
+  - "補休" = 補休假
+  - "病" = 病假
+  - "特休" = 特別休假
+  - "會議" = 開會 (部分工時)
+  - "產" = 產假
+${crossStoreSection}
+## 已鎖定班表 (不可修改)
+${locked || '  (無)'}
 
-## OFF REQUESTS (MUST ASSIGN REST)
-${offInfo || '  (none)'}
+## 請假申請 (該天必須排休)
+${offInfo || '  (無)'}
 
-## HOLIDAYS
-${holidayInfo || '  (none in this week)'}
+## 人力需求
+- 每天最少人力: ${storeSettings.minStaff}
+${storeSettings.maxStaff ? `- 每天最多人力: ${storeSettings.maxStaff}` : ''}
+${req.budget ? `- 月加班時數上限: ${req.budget.maxOvertimeHours}h` : ''}
 
-## STAFFING REQUIREMENTS
-- Minimum staff per day: ${storeSettings.minStaff}
-${storeSettings.maxStaff ? `- Maximum staff per day: ${storeSettings.maxStaff}` : ''}
-${req.budget ? `- Max overtime hours budget: ${req.budget.maxOvertimeHours}h/month` : ''}
+## 硬性規則 (H1-H15) — 不可違反
+H1: 有請假的員工當天必須排休（使用對應假別代碼）
+H2: 每天工時 ≤${DAILY_MAX_HOURS}h (勞基法 §30,§32)
+H3: 連續工作 ≤${MAX_CONSECUTIVE_WORK_DAYS} 天 (勞基法 §36 七休一)
+H4: 換班間隔 ≥${MIN_SHIFT_INTERVAL} 小時 (勞基法 §34)
+H5: 連續工作 4h 需休息 30 分鐘 (勞基法 §35)
+H6: 每月加班 ≤${MONTHLY_OVERTIME_CAP}h (勞基法 §32)
+H9: 開店班需 can_open=true，關店班需 can_close=true
+H10: 每週至少 ${MIN_WEEKLY_REST_DAYS} 天完整休假 (勞基法 §36 一例一休)
+H12: 女性夜班 (22-06) 需工會同意 (勞基法 §49)
+H13: 孕婦/哺乳期不得排夜班 (性平法 §15)
+H14: 班別需對應員工所屬門市（或該員工的可支援門市）
+H15: 兼職員工只排兼職班別
 
-## HARD CONSTRAINTS (H1-H15) — MUST NOT VIOLATE
-H1: Employees with off-requests or on approved leave MUST be assigned "休" on those dates.
-H2: Normal work hours max 8h/day. With overtime, absolute max 12h/day. (勞基法 §30, §32)
-H3: Max 6 consecutive work days. Every 7 days must include at least 1 regular day off. (勞基法 §36 七休一)
-H4: Minimum 11 hours rest between shift changes. Can be reduced to 8h only with union agreement. (勞基法 §34)
-H5: After 4 continuous work hours, must have at least 30 min break. (勞基法 §35)
-H6: Monthly overtime cap: 46 hours. (勞基法 §32)
-H7: Quarterly overtime cap: 138 hours (if monthly exceeds 46h with union agreement, max 54h/month). (勞基法 §32)
-H8: Employees must only be assigned shifts matching their skills/position. PT employees only get PT-eligible shifts.
-H9: Opening shifts require can_open=true. Closing shifts require can_close=true.
-H10: Minimum 2 rest days per week (1 regular day off + 1 rest day). (勞基法 §36)
-H11: National holidays — assign "休" unless employee explicitly agrees to work (then pay 2x). (勞基法 §37)
-H12: Female employees cannot work 22:00-06:00 night shifts UNLESS union agreement + safety measures are in place. (勞基法 §49)
-H13: Pregnant or nursing employees MUST NOT be assigned night shifts (22:00-06:00). (性平法 §15, 職安法 §30-1)
-H14: Shifts must match the employee's store assignment (store_id match or global shift).
-H15: Employment type matching — PT employees get PT-eligible shifts only; full-time get full-time shifts.
+## 軟性規則 (S1-S7) — 盡量遵守
+S1: 每天達到最低人力 ${storeSettings.minStaff} 人，尖峰日多 1-2 人
+S2: 尊重員工班別偏好
+S3: 公平分配班次
+S4: 週末出勤公平輪流
+S5: 每人每週工時盡量接近 40h
+S6: 高優先權員工 (priority=1) 優先排偏好班別
+S7: 每月目標 ~${MONTHLY_REST_DAYS_TARGET} 天休假
 
-## SOFT CONSTRAINTS (S1-S8) — OPTIMIZE WHEN POSSIBLE
-S1: Meet minimum staffing level (${storeSettings.minStaff} people/day). On peak days, aim for +1-2 above minimum.
-S2: Respect employee shift preferences (preferred_shifts / avoid_shifts). Weight: high.
-S3: Stay within overtime budget. Prefer standard hours over overtime assignments.
-S4: Match historical demand patterns — schedule more staff on historically busy days.
-S5: Maintain schedule consistency — similar patterns to previous weeks when possible.
-S6: Fairness — distribute weekend/holiday work evenly. Minimize variance in total hours across employees.
-S7: Higher priority employees (priority=1) get preferred/peak shifts first.
-S8: Avoid assigning the same employee consecutive unpopular shifts (closing→opening, weekend→weekend).
-
-## OUTPUT FORMAT
-Return ONLY a valid JSON object with this exact structure:
+## 輸出格式
+只回傳合法 JSON：
 {
-  "assignments": [
-    { "employee": "Name", "date": "YYYY-MM-DD", "shift": "ShiftName or 休" }
-  ],
-  "reasoning": "Brief explanation of key scheduling decisions",
-  "warnings": ["Any soft constraint trade-offs made"]
+  "assignments": [{ "employee": "姓名", "date": "YYYY-MM-DD", "shift": "班別名稱 or 休/補休/病/特休/會議" }],
+  "reasoning": "簡短說明排班邏輯",
+  "warnings": ["注意事項"]
 }
 
-RULES:
-1. Every employee MUST have exactly one assignment per day for all 7 days.
-2. Do NOT modify any LOCKED assignments.
-3. Use exact shift names from the AVAILABLE SHIFTS list, or "休" for rest.
-4. Output valid JSON only — no markdown, no code fences, no extra text.`
+規則：
+1. 每位員工每天恰好 1 筆 assignment
+2. 不可修改已鎖定的班表
+3. shift 欄位用精確的班別名稱或假別代碼
+4. 只輸出 JSON
+5. 全部員工合計 ${employees.length * numDays} 筆`
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Phase 5: Validate AI Output
+//  Validation
 // ══════════════════════════════════════════════════════════════
 
 function validateSchedule(
@@ -302,7 +259,7 @@ function validateSchedule(
   req: SchedulingRequest
 ): Violation[] {
   const violations: Violation[] = []
-  const { employees, shiftDefs, weekDates, offRequests, holidays, storeSettings } = req
+  const { employees, shiftDefs, weekDates, offRequests, storeSettings } = req
 
   const shiftDefMap: Record<string, ShiftDef> = {}
   for (const d of shiftDefs) shiftDefMap[d.name] = d
@@ -310,9 +267,6 @@ function validateSchedule(
   const offMap: Record<string, boolean> = {}
   for (const o of offRequests) offMap[`${o.employee}_${o.date}`] = true
 
-  const holidaySet = new Set(holidays)
-
-  // Group by employee
   const byEmployee: Record<string, ScheduleEntry[]> = {}
   for (const a of assignments) {
     if (!byEmployee[a.employee]) byEmployee[a.employee] = []
@@ -320,15 +274,13 @@ function validateSchedule(
   }
 
   for (const emp of employees) {
-    const empAssignments = (byEmployee[emp.name] || [])
-      .sort((a, b) => a.date.localeCompare(b.date))
+    const empAssignments = (byEmployee[emp.name] || []).sort((a, b) => a.date.localeCompare(b.date))
+    const workDays = empAssignments.filter(a => !isAbsence(a.shift))
+    const restDays = empAssignments.filter(a => isAbsence(a.shift))
 
-    const workDays = empAssignments.filter(a => a.shift !== '休')
-    const restDays = empAssignments.filter(a => a.shift === '休')
-
-    // H1: Off-request violations
+    // H1: Off-request
     for (const a of empAssignments) {
-      if (offMap[`${emp.name}_${a.date}`] && a.shift !== '休') {
+      if (offMap[`${emp.name}_${a.date}`] && !isAbsence(a.shift)) {
         violations.push({
           employee: emp.name, constraint: 'H1', law: '排班規則',
           message: `${emp.name} has off-request on ${a.date} but assigned "${a.shift}"`,
@@ -340,22 +292,22 @@ function validateSchedule(
     // H2: Max daily hours
     for (const a of workDays) {
       const def = shiftDefMap[a.shift]
-      if (def && shiftHours(def) > 12) {
+      if (def && shiftHours(def) > DAILY_MAX_HOURS) {
         violations.push({
           employee: emp.name, constraint: 'H2', law: '勞基法 §30/§32',
-          message: `${emp.name} on ${a.date}: shift "${a.shift}" is ${shiftHours(def).toFixed(1)}h, exceeds 12h max`,
+          message: `${emp.name} on ${a.date}: shift "${a.shift}" is ${shiftHours(def).toFixed(1)}h, exceeds ${DAILY_MAX_HOURS}h`,
           severity: 'error',
         })
       }
     }
 
-    // H3: Max 6 consecutive work days
+    // H3: Max consecutive work days
     let consecutive = 0
     for (const date of weekDates) {
       const a = empAssignments.find(a => a.date === date)
-      if (a && a.shift !== '休') {
+      if (a && !isAbsence(a.shift)) {
         consecutive++
-        if (consecutive > 6) {
+        if (consecutive > MAX_CONSECUTIVE_WORK_DAYS) {
           violations.push({
             employee: emp.name, constraint: 'H3', law: '勞基法 §36',
             message: `${emp.name} has ${consecutive} consecutive work days ending ${date}`,
@@ -367,19 +319,21 @@ function validateSchedule(
       }
     }
 
-    // H4: 11-hour shift interval
-    for (let i = 1; i < empAssignments.length; i++) {
-      const prev = empAssignments[i - 1]
-      const curr = empAssignments[i]
-      if (prev.shift === '休' || curr.shift === '休') continue
-      const prevDef = shiftDefMap[prev.shift]
-      const currDef = shiftDefMap[curr.shift]
-      if (!prevDef || !currDef) continue
-      const gap = shiftGapHours(prevDef, currDef)
-      if (gap < 11) {
+    // H4: Shift interval ≥ 11h
+    for (let i = 0; i < weekDates.length - 1; i++) {
+      const todayA = empAssignments.find(a => a.date === weekDates[i])
+      const tomorrowA = empAssignments.find(a => a.date === weekDates[i + 1])
+      if (!todayA || isAbsence(todayA.shift) || !tomorrowA || isAbsence(tomorrowA.shift)) continue
+      const todayDef = shiftDefMap[todayA.shift]
+      const tomorrowDef = shiftDefMap[tomorrowA.shift]
+      if (!todayDef || !tomorrowDef) continue
+      const latestEnd = effectiveEndHour(todayDef)
+      const earliestStart = parseTime(tomorrowDef.start_time)
+      const gap = (earliestStart + 24) - latestEnd
+      if (gap < MIN_SHIFT_INTERVAL) {
         violations.push({
           employee: emp.name, constraint: 'H4', law: '勞基法 §34',
-          message: `${emp.name} ${prev.date}→${curr.date}: only ${gap.toFixed(1)}h gap (${prev.shift}→${curr.shift}), min 11h required`,
+          message: `${emp.name} ${weekDates[i]}→${weekDates[i + 1]}: ${gap.toFixed(1)}h gap (${todayA.shift}→${tomorrowA.shift}), min ${MIN_SHIFT_INTERVAL}h`,
           severity: 'error',
         })
       }
@@ -392,37 +346,27 @@ function validateSchedule(
       const startH = parseTime(def.start_time)
       const endH = parseTime(def.end_time)
       if (startH <= 9 && emp.can_open === false) {
-        violations.push({
-          employee: emp.name, constraint: 'H9', law: '排班規則',
-          message: `${emp.name} on ${a.date}: assigned opening shift "${a.shift}" but can_open=false`,
-          severity: 'error',
-        })
+        violations.push({ employee: emp.name, constraint: 'H9', law: '排班規則', message: `${emp.name} on ${a.date}: opening shift but can_open=false`, severity: 'error' })
       }
       if ((endH >= 21 || endH < startH) && emp.can_close === false) {
-        violations.push({
-          employee: emp.name, constraint: 'H9', law: '排班規則',
-          message: `${emp.name} on ${a.date}: assigned closing shift "${a.shift}" but can_close=false`,
-          severity: 'error',
-        })
+        violations.push({ employee: emp.name, constraint: 'H9', law: '排班規則', message: `${emp.name} on ${a.date}: closing shift but can_close=false`, severity: 'error' })
       }
     }
 
-    // H10: Min 2 rest days per week
-    if (restDays.length < 2 && empAssignments.length >= 7) {
-      violations.push({
-        employee: emp.name, constraint: 'H10', law: '勞基法 §36',
-        message: `${emp.name} has only ${restDays.length} rest days this week, minimum 2 required`,
-        severity: 'error',
-      })
-    }
-
-    // H11: Holiday work check
-    for (const a of workDays) {
-      if (holidaySet.has(a.date)) {
+    // H10: Min rest days per week
+    const weeks = splitIntoWeeks(weekDates)
+    for (const week of weeks) {
+      if (week.length < 7) continue
+      let weekRest = 0
+      for (const date of week) {
+        const a = empAssignments.find(a => a.date === date)
+        if (!a || isAbsence(a.shift)) weekRest++
+      }
+      if (weekRest < MIN_WEEKLY_REST_DAYS) {
         violations.push({
-          employee: emp.name, constraint: 'H11', law: '勞基法 §37',
-          message: `${emp.name} assigned to work on holiday ${a.date} — requires explicit consent + 2x pay`,
-          severity: 'warning',
+          employee: emp.name, constraint: 'H10', law: '勞基法 §36',
+          message: `${emp.name} week ${week[0]}~${week[week.length - 1]}: only ${weekRest} rest days, min ${MIN_WEEKLY_REST_DAYS}`,
+          severity: 'error',
         })
       }
     }
@@ -432,52 +376,25 @@ function validateSchedule(
       const def = shiftDefMap[a.shift]
       if (!def || !isNightShift(def)) continue
       if (emp.is_pregnant || emp.is_nursing) {
-        violations.push({
-          employee: emp.name, constraint: 'H13', law: '性平法 §15 / 職安法 §30-1',
-          message: `${emp.name} (pregnant/nursing) assigned night shift "${a.shift}" on ${a.date} — PROHIBITED`,
-          severity: 'error',
-        })
+        violations.push({ employee: emp.name, constraint: 'H13', law: '性平法 §15', message: `${emp.name} (pregnant/nursing) assigned night shift "${a.shift}" on ${a.date}`, severity: 'error' })
       } else if (emp.gender === 'F') {
-        violations.push({
-          employee: emp.name, constraint: 'H12', law: '勞基法 §49',
-          message: `${emp.name} (female) assigned night shift "${a.shift}" on ${a.date} — requires union agreement`,
-          severity: 'warning',
-        })
+        violations.push({ employee: emp.name, constraint: 'H12', law: '勞基法 §49', message: `${emp.name} (female) assigned night shift "${a.shift}" on ${a.date} — requires union agreement`, severity: 'warning' })
       }
     }
-
-    // H14 & H15: Store/type matching
-    for (const a of workDays) {
-      const def = shiftDefMap[a.shift]
-      if (!def) {
-        violations.push({
-          employee: emp.name, constraint: 'H14', law: '排班規則',
-          message: `${emp.name} on ${a.date}: shift "${a.shift}" not found in shift definitions`,
-          severity: 'error',
-        })
-      }
-    }
-
-    // S1: Staffing levels (as warning)
-    // Check per-day after all employees
   }
 
-  // S1: Check daily staffing
+  // S1: Daily staffing
   for (const date of weekDates) {
-    const working = assignments.filter(a => a.date === date && a.shift !== '休').length
+    const working = assignments.filter(a => a.date === date && !isAbsence(a.shift)).length
     if (working < storeSettings.minStaff) {
-      violations.push({
-        employee: '-', constraint: 'S1', law: '營運需求',
-        message: `${date}: only ${working} staff scheduled, minimum ${storeSettings.minStaff} required`,
-        severity: 'warning',
-      })
+      violations.push({ employee: '-', constraint: 'S1', law: '營運需求', message: `${date}: only ${working} staff, min ${storeSettings.minStaff}`, severity: 'warning' })
     }
   }
 
   // S6: Fairness check
   const hoursByEmp: Record<string, number> = {}
   for (const emp of employees) {
-    const work = (byEmployee[emp.name] || []).filter(a => a.shift !== '休')
+    const work = (byEmployee[emp.name] || []).filter(a => !isAbsence(a.shift))
     let hours = 0
     for (const a of work) {
       const def = shiftDefMap[a.shift]
@@ -490,11 +407,7 @@ function validateSchedule(
     const avg = hoursValues.reduce((a, b) => a + b, 0) / hoursValues.length
     const maxDiff = Math.max(...hoursValues.map(h => Math.abs(h - avg)))
     if (maxDiff > 12) {
-      violations.push({
-        employee: '-', constraint: 'S6', law: '公平性',
-        message: `Hours variance too high: max deviation ${maxDiff.toFixed(1)}h from average ${avg.toFixed(1)}h`,
-        severity: 'warning',
-      })
+      violations.push({ employee: '-', constraint: 'S6', law: '公平性', message: `Hours variance too high: max deviation ${maxDiff.toFixed(1)}h from average ${avg.toFixed(1)}h`, severity: 'warning' })
     }
   }
 
@@ -502,7 +415,7 @@ function validateSchedule(
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Phase 5: Call Gemini 2.5 Pro
+//  Gemini API Call
 // ══════════════════════════════════════════════════════════════
 
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
@@ -515,7 +428,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 16384,
         responseMimeType: 'application/json',
       },
     }),
@@ -531,21 +444,40 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
 }
 
 function parseAiResponse(raw: string): { assignments: ScheduleEntry[]; reasoning: string; warnings: string[] } {
-  // Strip markdown fences if present
   let cleaned = raw.trim()
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
   }
-  const parsed = JSON.parse(cleaned)
-  return {
-    assignments: parsed.assignments || [],
-    reasoning: parsed.reasoning || '',
-    warnings: parsed.warnings || [],
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    return { assignments: parsed.assignments || [], reasoning: parsed.reasoning || '', warnings: parsed.warnings || [] }
+  } catch { /* fallback */ }
+
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace = cleaned.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    let jsonStr = cleaned.slice(firstBrace, lastBrace + 1)
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1')
+    try {
+      const parsed = JSON.parse(jsonStr)
+      return { assignments: parsed.assignments || [], reasoning: parsed.reasoning || '', warnings: parsed.warnings || [] }
+    } catch { /* last resort */ }
   }
+
+  const assignMatch = cleaned.match(/"assignments"\s*:\s*(\[[\s\S]*?\])\s*[,}]/)
+  if (assignMatch) {
+    try {
+      const assignments = JSON.parse(assignMatch[1].replace(/,\s*([\]}])/g, '$1'))
+      return { assignments, reasoning: 'JSON 解析修復模式', warnings: ['JSON 格式已自動修復'] }
+    } catch { /* give up */ }
+  }
+
+  throw new Error('AI 回傳格式無法解析')
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Phase 6: Fix Violations (retry prompt)
+//  Fix Violations Prompt
 // ══════════════════════════════════════════════════════════════
 
 function buildFixPrompt(
@@ -561,15 +493,12 @@ function buildFixPrompt(
   return `${originalPrompt}
 
 ## PREVIOUS ATTEMPT HAD ${errorViolations.length} VIOLATIONS — FIX THEM
-
-The previous schedule output had these violations that MUST be fixed:
 ${violationSummary}
 
 Previous (invalid) assignments:
-${JSON.stringify(previousOutput, null, 2)}
+${JSON.stringify(previousOutput)}
 
-Please regenerate a CORRECTED schedule that fixes ALL of the above violations while still respecting all hard and soft constraints.
-Return ONLY valid JSON in the same format as before.`
+Regenerate a CORRECTED schedule fixing ALL violations. Return valid JSON only.`
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -592,41 +521,33 @@ serve(async (httpReq) => {
 
     const req: SchedulingRequest = await httpReq.json()
 
-    // ── Phase 3: Analyze history ──
-    const patterns = analyzeHistoricalPatterns(req.employees, req.historicalSchedules || [], req.shiftDefs)
+    const systemPrompt = buildSystemPrompt(req)
 
-    // ── Phase 4: Build prompt ──
-    const systemPrompt = buildSystemPrompt(req, patterns)
-
-    // ── Phase 5: First LLM call ──
+    // First LLM call
     console.log('[scheduling-ai] Calling Gemini 2.5 Pro (attempt 1)...')
     const raw1 = await callGemini(systemPrompt, apiKey)
     let result = parseAiResponse(raw1)
 
-    // ── Validate ──
     let violations = validateSchedule(result.assignments, req)
     const errors1 = violations.filter(v => v.severity === 'error')
     console.log(`[scheduling-ai] Attempt 1: ${result.assignments.length} assignments, ${errors1.length} errors, ${violations.length - errors1.length} warnings`)
 
-    // ── Phase 6: Retry if violations ──
+    // Retry if violations
     if (errors1.length > 0) {
-      console.log(`[scheduling-ai] ${errors1.length} errors found, retrying with fix prompt...`)
+      console.log(`[scheduling-ai] ${errors1.length} errors found, retrying...`)
       const fixPrompt = buildFixPrompt(systemPrompt, violations, result.assignments)
       const raw2 = await callGemini(fixPrompt, apiKey)
       const result2 = parseAiResponse(raw2)
       const violations2 = validateSchedule(result2.assignments, req)
       const errors2 = violations2.filter(v => v.severity === 'error')
-
       console.log(`[scheduling-ai] Attempt 2: ${result2.assignments.length} assignments, ${errors2.length} errors`)
 
-      // Use attempt 2 if it has fewer errors
       if (errors2.length < errors1.length) {
         result = result2
         violations = violations2
       }
     }
 
-    // ── Return draft result ──
     return new Response(
       JSON.stringify({
         success: true,
@@ -640,7 +561,7 @@ serve(async (httpReq) => {
           model: 'gemini-2.5-pro',
           employeeCount: req.employees.length,
           totalAssignments: result.assignments.length,
-          retried: violations.filter(v => v.severity === 'error').length > 0,
+          retried: errors1.length > 0,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

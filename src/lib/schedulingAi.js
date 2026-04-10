@@ -399,69 +399,91 @@ function buildClientPrompt(data, patterns) {
     return `  - ${d} (${dow})${isHoliday ? ' [HOLIDAY]' : ''}`
   }).join('\n')
 
-  return `You are an expert HR scheduling AI for a Taiwan-based business. Generate a weekly employee shift schedule that strictly complies with Taiwan labor law.
+  // 分析班別時段覆蓋
+  const shiftsByPeriod = { morning: [], afternoon: [], evening: [], night: [] }
+  for (const d of shiftDefs) {
+    const s = parseTime(d.start_time)
+    if (s < 12) shiftsByPeriod.morning.push(d.name)
+    else if (s < 16) shiftsByPeriod.afternoon.push(d.name)
+    else if (s < 20) shiftsByPeriod.evening.push(d.name)
+    else shiftsByPeriod.night.push(d.name)
+  }
 
-## SCHEDULE PERIOD
+  const coverageGuide = [
+    shiftsByPeriod.morning.length > 0 ? `  - 早班 (開店): ${shiftsByPeriod.morning.join(', ')}` : '',
+    shiftsByPeriod.afternoon.length > 0 ? `  - 午班: ${shiftsByPeriod.afternoon.join(', ')}` : '',
+    shiftsByPeriod.evening.length > 0 ? `  - 晚班: ${shiftsByPeriod.evening.join(', ')}` : '',
+    shiftsByPeriod.night.length > 0 ? `  - 夜班 (收店): ${shiftsByPeriod.night.join(', ')}` : '',
+  ].filter(Boolean).join('\n')
+
+  return `你是台灣門市排班專家 AI。請根據以下資訊產生一週排班表，嚴格遵守台灣勞基法。
+
+## 排班期間
 ${dateContext}
 
-## EMPLOYEES (${employees.length} total)
+## 員工 (${employees.length} 人)
 ${empProfiles}
 
-## AVAILABLE SHIFTS
+## 可用班別
 ${shiftInfo}
 
-## EXISTING ASSIGNMENTS (DO NOT MODIFY)
-${locked || '  (none)'}
+## 班別時段分類
+${coverageGuide}
 
-## OFF REQUESTS (MUST ASSIGN REST)
-${offInfo || '  (none)'}
+## 已鎖定班表 (不可修改)
+${locked || '  (無)'}
 
-## HOLIDAYS
-${holidayInfo || '  (none in this week)'}
+## 請假申請 (必須排休)
+${offInfo || '  (無)'}
 
-## STAFFING
-- Minimum staff per day: ${storeSettings.minStaff}
+## 國定假日
+${holidayInfo || '  (本週無)'}
 
-## HARD CONSTRAINTS (H1-H15) — MUST NOT VIOLATE
-H1: Employees with off-requests MUST be assigned "休".
-H2: Max 8h/day normal, 12h/day absolute max with OT. (勞基法 §30, §32)
-H3: Max 6 consecutive work days. (勞基法 §36 七休一)
-H4: Min 11 hours rest between shifts. (勞基法 §34)
-H5: 30 min break after 4h continuous work. (勞基法 §35)
-H6: Monthly OT cap 46h. (勞基法 §32)
-H7: Quarterly OT cap 138h. (勞基法 §32)
-H8: Match employee skills/position to shift requirements.
-H9: Opening shifts need can_open=true. Closing shifts need can_close=true.
-H10: Min 2 rest days per week. (勞基法 §36)
-H11: National holidays default to rest unless explicit consent. (勞基法 §37)
-H12: Female night shift (22-06) requires union agreement. (勞基法 §49)
-H13: Pregnant/nursing employees CANNOT work night shifts. (性平法 §15)
-H14: Shifts must match employee's store assignment.
-H15: PT employees only get PT-eligible shifts.
+## 人力需求
+- 每日最少人力: ${storeSettings.minStaff} 人
 
-## SOFT CONSTRAINTS (S1-S8) — OPTIMIZE
-S1: Meet min staffing (${storeSettings.minStaff}/day).
-S2: Respect shift preferences.
-S3: Minimize overtime.
-S4: Match historical demand patterns.
-S5: Schedule consistency with previous weeks.
-S6: Fair distribution of hours and weekend work.
-S7: Priority employees (1=highest) get preferred shifts.
-S8: Avoid consecutive unpopular shifts for same employee.
+## ⚠️ 重要：班別多樣性要求
+你必須使用多種不同班別來確保全天各時段都有人力覆蓋。
+- 絕對不要把所有人都排同一個班別
+- 每天至少要有 2-3 種不同班別，確保開店到收店都有人
+- 早班、午班、晚班要合理分配
+- 員工每週應輪換不同班別（除非偏好設定另有指定）
 
-## OUTPUT FORMAT
-Return ONLY valid JSON:
+## 硬性規則 (不可違反)
+H1: 有請假的員工該天必須排「休」
+H2: 每日正常 ≤8h，含加班 ≤12h (勞基法 §30,§32)
+H3: 連續工作 ≤6 天 (勞基法 §36 七休一)
+H4: 換班間隔 ≥11 小時 (勞基法 §34)
+H5: 連續工作 4h 需休息 30 分鐘 (勞基法 §35)
+H6: 每月加班 ≤46h (勞基法 §32)
+H10: 每週至少 2 天休假 (勞基法 §36 一例一休)
+H11: 國定假日預設排休 (勞基法 §37)
+H12: 女性夜班 (22-06) 需工會同意 (勞基法 §49)
+H13: 孕婦/哺乳期不得排夜班 (性平法 §15)
+H14: 班別需對應員工所屬門市
+H15: 兼職員工只排兼職班別
+
+## 軟性規則 (盡量遵守)
+S1: 達到每日最低人力 ${storeSettings.minStaff} 人
+S2: 尊重員工班別偏好
+S3: 公平分配早晚班，避免同一人連續排不受歡迎的班
+S4: 週末出勤公平輪流
+S5: 每人每週工時盡量接近 40h
+S6: 高優先權員工 (priority=1) 優先排偏好班別
+
+## 輸出格式
+只回傳合法 JSON，不要加說明文字：
 {
-  "assignments": [{ "employee": "Name", "date": "YYYY-MM-DD", "shift": "ShiftName or 休" }],
-  "reasoning": "Brief explanation",
-  "warnings": ["Trade-offs made"]
+  "assignments": [{ "employee": "姓名", "date": "YYYY-MM-DD", "shift": "班別名稱 or 休" }],
+  "reasoning": "簡短說明排班邏輯",
+  "warnings": ["注意事項"]
 }
 
-RULES:
-1. Every employee MUST have exactly one assignment per day for all 7 days.
-2. Do NOT modify LOCKED assignments.
-3. Use exact shift names or "休".
-4. Output valid JSON only.`
+規則：
+1. 每位員工每天恰好一筆，7 天共 ${employees.length * 7} 筆
+2. 不可修改已鎖定的班表
+3. shift 欄位用精確的班別名稱或「休」
+4. 只輸出 JSON`
 }
 
 function buildFixPromptClient(originalPrompt, violations, previousOutput) {

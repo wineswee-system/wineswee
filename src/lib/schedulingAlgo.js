@@ -181,9 +181,10 @@ export function runProgrammaticSchedule(data) {
         if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return null
         const dow = new Date(date).getDay()
         let score = 0
-        // Prefer weekend rest for fairness
-        if (dow === 5) score += 10
-        if (dow === 6) score += 8
+        // Restaurants: weekends are busiest, prefer resting on weekdays
+        // Mon-Thu (1-4) get higher rest scores, Fri-Sat (5-6) get lower
+        if (dow >= 1 && dow <= 4) score += 8  // Prefer weekday rest
+        if (dow === 5 || dow === 6) score -= 5  // Avoid weekend rest
         // Spread rest days apart
         if (rest.size === 1) {
           const existingIdx = weekDates.indexOf([...rest][0])

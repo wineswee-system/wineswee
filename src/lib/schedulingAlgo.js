@@ -368,16 +368,12 @@ export function runProgrammaticSchedule(data) {
 
         let score = 0
 
-        // Staffing needs (strongest signal)
+        // Staffing needs — required_count is both minimum AND maximum
         const needed = staffingMap[shiftDef.name] || minStaff
         const current = shiftCounts[shiftDef.name] || 0
-        if (current < needed) {
-          // More urgently needed = higher score (bigger deficit = higher priority)
-          const deficit = needed - current
-          score += 40 + deficit * 10
-        } else {
-          score += 5
-        }
+        if (current >= needed) continue // Shift is full, don't over-staff
+        const deficit = needed - current
+        score += 40 + deficit * 10
 
         // Shift balance: prefer the shift with fewer people assigned (break ties)
         score -= current * 3

@@ -108,7 +108,7 @@ export default function StoreSettingsTab({
 
   // Time slot staffing
   const [timeSlots, setTimeSlots] = useState([])
-  const [newSlot, setNewSlot] = useState({ day_type: 'all', start_time: '', end_time: '', required_count: 1 })
+  const [newSlot, setNewSlot] = useState({ day_type: 'all', start_time: '', end_time: '', required_count: 1, max_count: null })
 
   // Load time slots
   useEffect(() => {
@@ -603,7 +603,7 @@ export default function StoreSettingsTab({
                 <tr>
                   <th>適用</th>
                   <th>時段</th>
-                  <th style={{ textAlign: 'center' }}>需求人數</th>
+                  <th style={{ textAlign: 'center' }}>最少~最多</th>
                   <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
@@ -624,11 +624,11 @@ export default function StoreSettingsTab({
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{
-                        display: 'inline-block', minWidth: 28, padding: '2px 8px', borderRadius: 6,
+                        display: 'inline-block', padding: '2px 8px', borderRadius: 6,
                         background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
-                        fontWeight: 700, fontSize: 14,
+                        fontWeight: 700, fontSize: 13,
                       }}>
-                        {s.required_count}
+                        {s.required_count}~{s.max_count || s.required_count * 2}
                       </span>
                     </td>
                     <td>
@@ -696,8 +696,12 @@ export default function StoreSettingsTab({
               <input className="form-input" type="time" value={newSlot.end_time} onChange={e => setNewSlot(prev => ({ ...prev, end_time: e.target.value }))} style={{ width: 100, fontSize: 12 }} />
             </div>
             <div>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>人數</label>
-              <input className="form-input" type="number" min={1} max={20} value={newSlot.required_count} onChange={e => setNewSlot(prev => ({ ...prev, required_count: Math.max(1, parseInt(e.target.value) || 1) }))} style={{ width: 60, fontSize: 12, textAlign: 'center' }} />
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最少</label>
+              <input className="form-input" type="number" min={1} max={20} value={newSlot.required_count} onChange={e => setNewSlot(prev => ({ ...prev, required_count: Math.max(1, parseInt(e.target.value) || 1) }))} style={{ width: 50, fontSize: 12, textAlign: 'center' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最多</label>
+              <input className="form-input" type="number" min={1} max={20} value={newSlot.max_count || ''} placeholder="不限" onChange={e => setNewSlot(prev => ({ ...prev, max_count: e.target.value ? Math.max(prev.required_count, parseInt(e.target.value) || 1) : null }))} style={{ width: 50, fontSize: 12, textAlign: 'center' }} />
             </div>
             <button className="btn btn-primary btn-sm" onClick={handleAddTimeSlot} style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
               + 新增時段

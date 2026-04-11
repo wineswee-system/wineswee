@@ -149,6 +149,7 @@ export async function gatherSchedulingData({
       start_time: s.start_time,
       end_time: s.end_time,
       required_count: s.required_count,
+      max_count: s.max_count || null,
     })),
     crossStoreEligible,
     locations,

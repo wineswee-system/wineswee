@@ -325,13 +325,20 @@ export function runProgrammaticSchedule(data) {
       const weekHoursCache = {}
       for (const emp of employees) weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
 
+      // Check if this day still needs coverage
+      const dayNeedsCoverage = slotCoverage.some(s => s.covered < s.required_count)
+
       // Get assignable employees for this day
       const toAssign = employees.filter(emp => {
         if (schedule[emp.name][date]) return false
         if (restDayPlan[emp.name].has(date)) return false
+        // Only auto-rest for target hours if day already has enough coverage
         if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
-          schedule[emp.name][date] = '休'
-          return false
+          if (!dayNeedsCoverage) {
+            schedule[emp.name][date] = '休'
+            return false
+          }
+          // Day needs coverage — keep this employee available even if over target
         }
         return true
       })
@@ -429,16 +436,22 @@ export function runProgrammaticSchedule(data) {
             // Score: how many understaffed slots does this window cover?
             let score = 0
             let coveredSlots = 0
+            let wouldExceedMax = false
             for (const slot of slotCoverage) {
               if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
+                // Check max_count cap
+                const maxCount = slot.max_count || slot.required_count * 2 // default: 2x min
+                if (slot.covered >= maxCount) { wouldExceedMax = true; break }
+
                 if (slot.covered < slot.required_count) {
                   score += 30 + (slot.required_count - slot.covered) * 10
                   coveredSlots++
                 } else {
-                  score += 2 // Slight bonus for covering already-staffed slots
+                  score += 2
                 }
               }
             }
+            if (wouldExceedMax) continue
 
             if (coveredSlots === 0) continue // Must cover at least one understaffed slot
 

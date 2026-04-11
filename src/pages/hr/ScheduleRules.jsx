@@ -109,7 +109,7 @@ export default function ScheduleRules() {
   const [shiftRules, setShiftRules] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editingShift, setEditingShift] = useState(null)
-  const [form, setForm] = useState({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee' })
+  const [form, setForm] = useState({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
 
   useEffect(() => {
     supabase.from('shift_definitions').select('*').order('sort_order')
@@ -119,13 +119,13 @@ export default function ScheduleRules() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const resetForm = () => {
-    setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee' })
+    setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
     setEditingShift(null)
     setShowModal(false)
   }
 
   const openEdit = (s) => {
-    setForm({ name: s.name, start_time: s.start_time?.slice(0, 5) || '09:00', end_time: s.end_time?.slice(0, 5) || '18:00', break_minutes: s.break_minutes || 60, color: s.color || '#22d3ee' })
+    setForm({ name: s.name, start_time: s.start_time?.slice(0, 5) || '09:00', end_time: s.end_time?.slice(0, 5) || '18:00', break_minutes: s.break_minutes || 60, color: s.color || '#22d3ee', shift_type: s.shift_type || 'morning' })
     setEditingShift(s)
     setShowModal(true)
   }
@@ -141,7 +141,7 @@ export default function ScheduleRules() {
 
   const handleSubmit = async () => {
     if (!form.name) return
-    const payload = { name: form.name, start_time: form.start_time, end_time: form.end_time, break_minutes: Number(form.break_minutes) || 60, color: form.color }
+    const payload = { name: form.name, start_time: form.start_time, end_time: form.end_time, break_minutes: Number(form.break_minutes) || 60, color: form.color, shift_type: form.shift_type || 'morning' }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
@@ -172,7 +172,7 @@ export default function ScheduleRules() {
             <h2><span className="header-icon">⚖️</span> 排班規則</h2>
             <p>台灣勞動法排班相關規定一覽</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditingShift(null); setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee' }); setShowModal(true) }}><Plus size={14} /> 新增班別</button>
+          <button className="btn btn-primary" onClick={() => { setEditingShift(null); setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' }); setShowModal(true) }}><Plus size={14} /> 新增班別</button>
         </div>
       </div>
 
@@ -280,9 +280,9 @@ export default function ScheduleRules() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>班別</th><th>上班時間</th><th>下班時間</th><th>休息(分鐘)</th><th>工時</th><th>顏色</th><th>操作</th></tr></thead>
+            <thead><tr><th>班別</th><th>類型</th><th>上班時間</th><th>下班時間</th><th>休息(分鐘)</th><th>工時</th><th>顏色</th><th>操作</th></tr></thead>
             <tbody>
-              {shiftRules.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
+              {shiftRules.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
               {shiftRules.map(r => {
                 const start = r.start_time?.slice(0, 5) || ''
                 const end = r.end_time?.slice(0, 5) || ''
@@ -296,6 +296,15 @@ export default function ScheduleRules() {
                         <div style={{ width: 12, height: 12, borderRadius: 3, background: r.color || '#22d3ee' }} />
                         <span style={{ fontWeight: 700 }}>{r.name}</span>
                       </div>
+                    </td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: r.shift_type === 'evening' ? 'rgba(139,92,246,0.12)' : 'rgba(251,191,36,0.12)',
+                        color: r.shift_type === 'evening' ? '#8b5cf6' : '#f59e0b',
+                      }}>
+                        {r.shift_type === 'evening' ? '🌙 晚班' : '☀️ 早班'}
+                      </span>
                     </td>
                     <td>{start}</td>
                     <td>{end}</td>
@@ -318,9 +327,33 @@ export default function ScheduleRules() {
 
       {showModal && (
         <Modal title={editingShift ? `編輯班別 — ${editingShift.name}` : '新增班別'} onClose={resetForm} onSubmit={handleSubmit} submitLabel={editingShift ? '儲存變更' : '新增'}>
-          <Field label="班別名稱 *">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：夜班" value={form.name} onChange={e => set('name', e.target.value)} />
-          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="班別名稱 *">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：夜班" value={form.name} onChange={e => set('name', e.target.value)} />
+            </Field>
+            <Field label="類型 *">
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => set('shift_type', 'morning')} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid',
+                  borderColor: form.shift_type === 'morning' ? '#f59e0b' : 'var(--border-medium)',
+                  background: form.shift_type === 'morning' ? 'rgba(251,191,36,0.12)' : 'var(--bg-card)',
+                  color: form.shift_type === 'morning' ? '#f59e0b' : 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center',
+                }}>
+                  ☀️ 早班
+                </button>
+                <button type="button" onClick={() => set('shift_type', 'evening')} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid',
+                  borderColor: form.shift_type === 'evening' ? '#8b5cf6' : 'var(--border-medium)',
+                  background: form.shift_type === 'evening' ? 'rgba(139,92,246,0.12)' : 'var(--bg-card)',
+                  color: form.shift_type === 'evening' ? '#8b5cf6' : 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center',
+                }}>
+                  🌙 晚班
+                </button>
+              </div>
+            </Field>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="上班時間 *">
               <input className="form-input" type="time" style={{ width: '100%' }} value={form.start_time} onChange={e => set('start_time', e.target.value)} />

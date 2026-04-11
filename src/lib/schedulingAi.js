@@ -49,6 +49,9 @@ export async function gatherSchedulingData({
   const prevStart = new Date(new Date(dateStart).getTime() - 7 * 86400000).toISOString().slice(0, 10)
   const prevEnd = new Date(new Date(dateStart).getTime() - 1 * 86400000).toISOString().slice(0, 10)
 
+  // Current month for fatigue lookup
+  const currentMonth = dateStart.slice(0, 7)
+
   // Parallel data fetches
   const [
     { data: existingSchedules },
@@ -57,6 +60,9 @@ export async function gatherSchedulingData({
     { data: preferences },
     { data: storeSettingsData },
     { data: staffingData },
+    { data: availabilityData },
+    { data: fatigueData },
+    { data: holidayData },
   ] = await Promise.all([
     supabase.from('schedules').select('employee, date, shift, absence_type, source_store')
       .gte('date', dateStart).lte('date', dateEnd),
@@ -74,6 +80,9 @@ export async function gatherSchedulingData({
       ? supabase.from('store_staffing').select('*')
           .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
       : Promise.resolve({ data: [] }),
+    supabase.from('employee_availability').select('employee, day_of_week, start_time, end_time'),
+    supabase.from('fatigue_scores').select('employee, total_score, month').eq('month', currentMonth),
+    supabase.from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd),
   ])
 
   const storeSettings = {
@@ -104,6 +113,7 @@ export async function gatherSchedulingData({
       is_pregnant: e.is_pregnant,
       is_nursing: e.is_nursing,
       skills: e.skills || [],
+      weekly_target_hours: e.weekly_target_hours || null,
     })),
     shiftDefs,
     weekDates: weekDates || dates,
@@ -117,6 +127,18 @@ export async function gatherSchedulingData({
     })),
     previousWeek: previousPeriod || [],
     storeSettings,
+    staffingRules: staffingData || [],
+    availability: (availabilityData || []).map(a => ({
+      employee: a.employee,
+      day_of_week: a.day_of_week,
+      start_time: a.start_time,
+      end_time: a.end_time,
+    })),
+    fatigueScores: (fatigueData || []).map(f => ({
+      employee: f.employee,
+      total_score: f.total_score || 0,
+    })),
+    holidays: (holidayData || []).map(h => h.date),
     crossStoreEligible,
     locations,
     tenantId,

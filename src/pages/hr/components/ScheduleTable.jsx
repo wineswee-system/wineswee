@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
+import { getShiftHours } from '../../../lib/scheduleUtils'
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -153,7 +154,18 @@ export default function ScheduleTable({
                   <td>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {emp.position || emp.dept} · {weekDates.filter(d => { const s = getShift(emp.name, d); return s && s !== '休' }).length * 8}h
+                      {emp.position || emp.dept} · {(() => {
+                        let h = 0
+                        weekDates.forEach(d => {
+                          const s = schedules.find(x => x.employee === emp.name && x.date === d)
+                          if (s?.actual_hours) h += s.actual_hours
+                          else if (s?.shift && s.shift !== '休') {
+                            const def = shiftDefs.find(sd => sd.name === s.shift)
+                            h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+                          }
+                        })
+                        return Math.round(h)
+                      })()}h
                     </div>
                   </td>
                   {weekDates.map(date => {
@@ -214,6 +226,17 @@ export default function ScheduleTable({
                           >
                             {shift || '+'}
                           </span>
+                          {shift && shift !== '休' && (() => {
+                            const sched = schedules.find(x => x.employee === emp.name && x.date === date)
+                            const def = shiftDefs.find(d => d.name === shift)
+                            const startT = sched?.actual_start?.slice(0, 5) || def?.start_time?.slice(0, 5)
+                            const endT = sched?.actual_end?.slice(0, 5) || def?.end_time?.slice(0, 5)
+                            return startT && endT ? (
+                              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1, fontFamily: 'monospace' }}>
+                                {startT}~{endT}
+                              </div>
+                            ) : null
+                          })()}
                           {shift && shift !== '休' && (
                             <button title="找人代班" onClick={e => {
                               e.stopPropagation()

@@ -13,8 +13,14 @@ import StoreSettingsTab from './components/StoreSettingsTab'
 import PreferencesTab from './components/PreferencesTab'
 import SwapsTab from './components/SwapsTab'
 import AnalyticsTab from './components/AnalyticsTab'
+import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
+import StaffingGapPanel from './components/StaffingGapPanel'
+import EmergencyCoverPanel from './components/EmergencyCoverPanel'
+import { notifySchedulePublished } from '../../lib/lineNotify'
+import { persistFatigueScores } from '../../lib/fatigueEngine'
+import { validateShiftChange } from '../../lib/scheduleValidator'
 
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
@@ -81,6 +87,7 @@ export default function Schedule() {
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
   // Store settings
+  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at }
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
   const [operatingHours, setOperatingHours] = useState({})
@@ -119,7 +126,7 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -150,7 +157,16 @@ export default function Schedule() {
     }).catch(err => {
       console.error('Failed to load schedule data:', err)
     })
-  }, [activeStart, activeEnd])
+
+    // Load publish status for current month
+    const month = activeStart?.slice(0, 7)
+    const store = locations.find(l => l.name === storeFilter)
+    if (month && store) {
+      supabase.from('schedule_publish_status').select('*')
+        .eq('store_id', store.id).eq('month', month).maybeSingle()
+        .then(({ data }) => setPublishStatus(data))
+    }
+  }, [activeStart, activeEnd, storeFilter, locations])
 
   // Run compliance check when schedules update
   useEffect(() => {
@@ -167,6 +183,30 @@ export default function Schedule() {
 
   const handleSetShift = async (empName, date, shift) => {
     if (!canEditSchedule) return
+
+    // Real-time validation before saving
+    if (!isAbsence(shift)) {
+      const validation = validateShiftChange({
+        empName, date, newShift: shift,
+        employees: filtered, schedules, shiftDefs, weekDates,
+      })
+
+      if (validation.errors.length > 0) {
+        const proceed = confirm(
+          `⚠️ 違規警告：\n\n${validation.errors.map(e => `❌ ${e}`).join('\n')}` +
+          (validation.warnings.length > 0 ? `\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` : '') +
+          `\n\n確定要強制排班嗎？`
+        )
+        if (!proceed) return
+      } else if (validation.warnings.length > 0) {
+        const proceed = confirm(
+          `注意事項：\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` +
+          `\n\n確定要排班嗎？`
+        )
+        if (!proceed) return
+      }
+    }
+
     const existing = schedules.find(s => s.employee === empName && s.date === date)
     if (existing) {
       const { data } = await supabase.from('schedules').update({ shift }).eq('id', existing.id).select().single()
@@ -372,6 +412,9 @@ export default function Schedule() {
       date: a.date,
       shift: a.shift,
       absence_type: isAbsence(a.shift) ? a.shift : null,
+      actual_start: a.actual_start || null,
+      actual_end: a.actual_end || null,
+      actual_hours: a.actual_hours || null,
       source_store: a.store || null,
       month_group: monthGroup,
       ...(tenantId ? { tenant_id: tenantId } : {}),
@@ -386,7 +429,36 @@ export default function Schedule() {
       })
     }
     setAiDraft(null)
-    alert(`已發布排班！共 ${newSchedules.length} 筆`)
+
+    // Send LINE notifications to employees
+    const dateRange = `${dates[0]} ~ ${dates[dates.length - 1]}`
+    let notified = 0
+    for (const empName of empNames) {
+      const empAssignments = newSchedules
+        .filter(s => s.employee === empName)
+        .sort((a, b) => a.date.localeCompare(b.date))
+      const result = await notifySchedulePublished(empName, dateRange, empAssignments)
+      if (result?.ok) notified++
+    }
+
+    // Auto-persist fatigue scores for the month
+    const month = dates[0]?.slice(0, 7)
+    if (month) {
+      persistFatigueScores(month).then(r => {
+        if (r.success) console.log(`[Fatigue] 已結算 ${month} 辛苦度：${r.count} 人`)
+      })
+    }
+
+    // Update publish status
+    const store = locations.find(l => l.name === storeFilter)
+    if (month && store) {
+      const profile = JSON.parse(localStorage.getItem('sme_profile') || '{}')
+      const pubData = { store_id: store.id, month, status: 'published', published_at: new Date().toISOString(), published_by: profile?.name || 'unknown' }
+      await supabase.from('schedule_publish_status').upsert(pubData, { onConflict: 'store_id,month' })
+      setPublishStatus(pubData)
+    }
+
+    alert(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
   }
 
   // ── Fix violations (re-run AI with violation context) ──
@@ -492,7 +564,23 @@ export default function Schedule() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">📅</span> 排班管理</h2>
-            <p>管理班表、排班偏好與AI自動排班</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <p style={{ margin: 0 }}>管理班表、排班偏好與AI自動排班</p>
+              {publishStatus && (
+                <span style={{
+                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: publishStatus.status === 'published' ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)',
+                  color: publishStatus.status === 'published' ? '#10b981' : '#f59e0b',
+                }}>
+                  {publishStatus.status === 'published' ? `✓ 已發布 ${publishStatus.published_at?.slice(0, 10) || ''}` : '草稿'}
+                </span>
+              )}
+              {!publishStatus && storeFilter && (
+                <span style={{ padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
+                  未發布
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -606,6 +694,7 @@ export default function Schedule() {
             { key: 'store-settings', label: '⚙️ 門市設定' },
             { key: 'preferences', label: '👤 排班偏好' },
             { key: 'swaps', label: '🔄 換班申請' },
+            { key: 'cross-store', label: '🏪 跨店調度' },
             { key: 'analytics', label: '📊 分析報表' },
           ].map(tab => (
             <button key={tab.key} onClick={() => setMainTab(tab.key)} style={{
@@ -733,6 +822,28 @@ export default function Schedule() {
       )}
 
       {mainTab === 'schedule' && viewMode === 'week' && (
+        <EmergencyCoverPanel
+          employees={filtered} schedules={schedules} shiftDefs={shiftDefs}
+          weekDates={weekDates} storeFilter={storeFilter} locations={locations}
+          offRequests={offRequests}
+          onUpdate={() => {
+            // Reload schedules after emergency cover
+            supabase.from('schedules').select('*').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1])
+              .then(({ data }) => { if (data) setSchedules(data) })
+          }}
+        />
+      )}
+
+      {mainTab === 'schedule' && viewMode === 'week' && (
+        <StaffingGapPanel
+          weekDates={weekDates} schedules={schedules} employees={filtered}
+          shiftDefs={shiftDefs} staffingRules={staffing}
+          offRequests={offRequests} storeFilter={storeFilter} locations={locations}
+          onAssign={handleSetShift}
+        />
+      )}
+
+      {mainTab === 'schedule' && viewMode === 'week' && (
         <ScheduleTable
           weekDates={weekDates} weekStart={weekStart} weekEnd={weekEnd}
           weekOffset={weekOffset} setWeekOffset={setWeekOffset}
@@ -797,10 +908,17 @@ export default function Schedule() {
         <SwapsTab swaps={swaps} setSwaps={setSwaps} />
       )}
 
+      {mainTab === 'cross-store' && (
+        <CrossStoreTab
+          storeFilter={storeFilter} locations={locations}
+          shiftDefs={shiftDefs} weekDates={weekDates}
+        />
+      )}
+
       {mainTab === 'analytics' && (
         <AnalyticsTab
           filtered={filtered} schedules={schedules} weekDates={weekDates}
-          getShift={getShift} storeSettings={storeSettings}
+          shiftDefs={shiftDefs} storeSettings={storeSettings} holidays={holidays}
         />
       )}
 

@@ -1,63 +1,124 @@
 /**
- * Programmatic Shift Scheduler (No AI)
+ * Humanized Programmatic Shift Scheduler
  *
- * Deterministic constraint-satisfaction algorithm that assigns shifts.
- * Supports both weekly and monthly scheduling.
+ * 5-layer priority scheduling algorithm:
+ *   L1  Hard legal constraints (Taiwan labor law)
+ *   L2  Employee hard constraints (availability, leave, qualifications)
+ *   L3  Operational requirements (minimum staffing)
+ *   L4  Employee preferences (shift preference, target hours)
+ *   L5  Fairness (fatigue score balancing, weekend rotation)
  *
- * Hard constraints:
- *   H1  Off-request → rest day
- *   H2  Daily total hours ≤ 12h
- *   H3  Max 6 consecutive work days
- *   H4  Cross-day shift gap ≥ 11h
- *   H9  can_open / can_close flags
- *   H10 Min 2 full rest days per week
- *   H13 Pregnant/nursing → no night shifts (22-06)
- *   H14 Shift must match employee store
- *   H15 PT employees only get PT-eligible shifts
- *
- * Soft constraints:
- *   S1  Min staff per day
- *   S2  Respect employee preferences
- *   S3  Fair shift distribution
- *   S5  Target ~40h/week
- *   S6  Priority employees get preferred shifts
- *   S7  Monthly rest day target (~10/month)
+ * Supports weekly and monthly scheduling.
  */
 
 import {
   parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
-  splitIntoWeeks, DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS,
+  splitIntoWeeks, isWeekendDay,
+  DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS,
   MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS, MONTHLY_OVERTIME_CAP,
   MONTHLY_REST_DAYS_TARGET,
 } from './scheduleUtils'
 
 // ══════════════════════════════════════════════════════════════
+//  Fatigue Scoring
+// ══════════════════════════════════════════════════════════════
+
+const FATIGUE_POINTS = {
+  weekday_morning: 1,
+  weekday_evening: 2,
+  weekend_morning: 2,
+  weekend_evening: 3,
+  holiday: 4,
+}
+
+function classifyShiftFatigue(shiftDef, dateStr, holidays = []) {
+  if (holidays.includes(dateStr)) return 'holiday'
+  const dow = new Date(dateStr).getDay()
+  const isWeekend = isWeekendDay(dow)
+  const startH = parseTime(shiftDef.start_time)
+  const isMorning = startH < 15
+  if (isWeekend) return isMorning ? 'weekend_morning' : 'weekend_evening'
+  return isMorning ? 'weekday_morning' : 'weekday_evening'
+}
+
+function getFatiguePoints(shiftDef, dateStr, holidays = []) {
+  const type = classifyShiftFatigue(shiftDef, dateStr, holidays)
+  return FATIGUE_POINTS[type] || 1
+}
+
+// ══════════════════════════════════════════════════════════════
 //  Main Algorithm (Weekly)
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Run the programmatic scheduler for a single week.
- * @param {Object} data - Same shape as gatherSchedulingData() output
- */
 export function runProgrammaticSchedule(data) {
-  const { employees, shiftDefs, weekDates, existingSchedules, offRequests, preferences, storeSettings } = data
+  const {
+    employees, shiftDefs, weekDates, existingSchedules, offRequests,
+    preferences, storeSettings, holidays = [], fatigueScores = [],
+    availability = [],
+  } = data
 
+  const staffingRules = data.staffingRules || []
   const minStaff = storeSettings?.minStaff || 1
 
-  // Build lookup maps
-  const offMap = {}
-  for (const o of offRequests) offMap[`${o.employee}_${o.date}`] = true
+  // ── Build lookup maps ──
+  const offMap = new Set()
+  for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
 
   const prefMap = {}
   for (const p of preferences) {
-    prefMap[p.employee] = { preferred: new Set(p.preferred_shifts || []), avoid: new Set(p.avoid_shifts || []) }
+    prefMap[p.employee] = {
+      preferred: new Set(p.preferred_shifts || []),
+      avoid: new Set(p.avoid_shifts || []),
+    }
   }
 
-  // Sort employees by priority (1=highest → gets first pick)
-  const sortedEmps = [...employees].sort((a, b) => (a.schedule_priority || 3) - (b.schedule_priority || 3))
+  // Availability: employee → day_of_week → { start, end }
+  const availMap = {}
+  for (const a of availability) {
+    if (!availMap[a.employee]) availMap[a.employee] = {}
+    availMap[a.employee][a.day_of_week] = {
+      start: parseTime(a.start_time),
+      end: parseTime(a.end_time),
+    }
+  }
 
-  // Track schedule: emp → date → shift name or absence
+  // Fatigue: employee → total_score (lower = less tired = more likely to get hard shifts)
+  const fatigueMap = {}
+  for (const f of fatigueScores) fatigueMap[f.employee] = f.total_score || 0
+
+  // Staffing rules: shift_name → required_count
+  const staffingMap = {}
+  for (const s of staffingRules) {
+    staffingMap[s.shift_name] = s.required_count || 0
+  }
+
+  // Target weekly hours per employee
+  const targetHoursMap = {}
+  for (const emp of employees) {
+    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    targetHoursMap[emp.name] = emp.weekly_target_hours || (isPT ? 20 : 40)
+  }
+
+  // ── Track consecutive weekends worked ──
+  // Count how many recent consecutive weekends each employee worked (from previousWeek data)
+  const consecWeekends = {}
+  for (const emp of employees) {
+    let count = 0
+    if (data.previousWeek) {
+      // Check if employee worked last weekend (Fri/Sat in previous week)
+      const prevWeekendWork = data.previousWeek.filter(a =>
+        a.employee === emp.name && !isAbsence(a.shift) &&
+        isWeekendDay(new Date(a.date).getDay())
+      ).length > 0
+      if (prevWeekendWork) count = 1
+      // Could extend to check 2+ weeks back, but previousWeek is only 1 week
+    }
+    consecWeekends[emp.name] = count
+  }
+
+  // ── Init schedule grid ──
   const schedule = {}
+  const actualTimes = {} // emp_date → { start, end, hours }
   for (const emp of employees) {
     schedule[emp.name] = {}
     for (const date of weekDates) {
@@ -65,23 +126,33 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // Pre-populate locked assignments
+  // Pre-populate locked (existing) assignments
   for (const s of existingSchedules) {
     if (schedule[s.employee]?.[s.date] !== undefined) {
       schedule[s.employee][s.date] = s.shift
     }
   }
 
-  // ── Step 1: Assign rest days ──
+  // ── Step 1: Mark rest days ──
   const restDayPlan = {}
-  for (const emp of employees) {
-    restDayPlan[emp.name] = new Set()
-  }
+  for (const emp of employees) restDayPlan[emp.name] = new Set()
 
-  // H1: Off-request dates are mandatory rest
+  // H1: Off-request = mandatory rest
   for (const emp of employees) {
     for (const date of weekDates) {
-      if (offMap[`${emp.name}_${date}`]) {
+      if (offMap.has(`${emp.name}_${date}`)) {
+        restDayPlan[emp.name].add(date)
+      }
+    }
+  }
+
+  // L2: Days with no availability = rest
+  for (const emp of employees) {
+    for (const date of weekDates) {
+      if (restDayPlan[emp.name].has(date)) continue
+      const dow = new Date(date).getDay()
+      const avail = availMap[emp.name]
+      if (avail && Object.keys(avail).length > 0 && !avail[dow]) {
         restDayPlan[emp.name].add(date)
       }
     }
@@ -92,27 +163,35 @@ export function runProgrammaticSchedule(data) {
     const rest = restDayPlan[emp.name]
     if (rest.size >= MIN_WEEKLY_REST_DAYS) continue
 
-    const dayScores = weekDates.map((date, idx) => {
-      if (rest.has(date)) return { date, score: -1 }
-      if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return { date, score: -1 } // locked work
-      const dow = new Date(date).getDay()
-      let score = 0
-      if (dow === 5) score += 10  // Friday (weekend)
-      if (dow === 6) score += 8   // Saturday (weekend)
-      if (rest.size === 0 && idx >= 4) score += 5
-      if (rest.size === 1) {
-        const existingIdx = weekDates.indexOf([...rest][0])
-        score += Math.abs(idx - existingIdx)
-      }
-      return { date, score }
-    }).filter(d => d.score >= 0).sort((a, b) => b.score - a.score)
+    // Score candidate rest days
+    const candidates = weekDates
+      .map((date, idx) => {
+        if (rest.has(date)) return null
+        if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return null
+        const dow = new Date(date).getDay()
+        let score = 0
+        // Prefer weekend rest for fairness
+        if (dow === 5) score += 10
+        if (dow === 6) score += 8
+        // Spread rest days apart
+        if (rest.size === 1) {
+          const existingIdx = weekDates.indexOf([...rest][0])
+          score += Math.abs(idx - existingIdx)
+        }
+        // If high fatigue, give rest on busy days
+        const fatigue = fatigueMap[emp.name] || 0
+        if (fatigue > 20) score += 3
+        return { date, score }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
 
-    while (rest.size < MIN_WEEKLY_REST_DAYS && dayScores.length > 0) {
-      rest.add(dayScores.shift().date)
+    while (rest.size < MIN_WEEKLY_REST_DAYS && candidates.length > 0) {
+      rest.add(candidates.shift().date)
     }
   }
 
-  // Fill rest day slots
+  // Fill rest into schedule
   for (const emp of employees) {
     for (const date of restDayPlan[emp.name]) {
       if (!schedule[emp.name][date] || isAbsence(schedule[emp.name][date])) {
@@ -124,48 +203,284 @@ export function runProgrammaticSchedule(data) {
   // ── Step 2: Sort shifts by start time ──
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
 
-  // ── Step 3: Assign work shifts ──
-  // For each date, pick the best shift for each unassigned employee
-  for (const date of weekDates) {
-    for (const emp of sortedEmps) {
-      // Skip if already assigned (locked or rest)
-      if (schedule[emp.name][date]) continue
-      if (restDayPlan[emp.name].has(date)) continue
+  // ── Step 3: Two-pass shift assignment with conflict resolution ──
+  //
+  // Pass 1: Everyone picks their "想上" (preferred) shift
+  //         If conflicts (more people want a shift than needed),
+  //         priority decides who stays, others marked for reassignment.
+  // Pass 2: Reassigned people get their "都可以" (neutral) shifts.
+  //         "不可上" (blocked) shifts are never assigned.
 
-      // Find the best shift for this employee
+  // Helper: check if a shift is legally and availability-wise valid for an employee
+  const isShiftAvailable = (emp, shiftDef, date) => {
+    if (!isLegallyValid(emp, shiftDef, date, schedule, shiftDefs, weekDates, data)) return false
+
+    const dow = new Date(date).getDay()
+    const avail = availMap[emp.name]?.[dow]
+    if (avail) {
+      const shiftStart = parseTime(shiftDef.start_time)
+      const shiftEnd = parseTime(shiftDef.end_time)
+      const isCrossMidnight = shiftEnd < shiftStart
+
+      if (avail.end > avail.start) {
+        if (isCrossMidnight) { if (shiftStart < avail.start) return false }
+        else { if (shiftStart < avail.start || shiftEnd > avail.end) return false }
+      } else if (avail.end < avail.start || avail.end === 0) {
+        if (shiftStart < avail.start) return false
+        if (!isCrossMidnight && shiftEnd > 24) return false
+      }
+    }
+    return true
+  }
+
+  // Helper: get employee's weekly hours so far
+  const getEmpWeekHours = (empName) => {
+    let h = 0
+    for (const d of weekDates) {
+      const s = schedule[empName][d]
+      if (s && !isAbsence(s)) {
+        const def = shiftDefs.find(sd => sd.name === s)
+        h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+      }
+    }
+    return h
+  }
+
+  for (const date of weekDates) {
+    const shiftCounts = {}
+    for (const sd of sortedShifts) shiftCounts[sd.name] = 0
+
+    // Count already-assigned (locked)
+    for (const emp of employees) {
+      const s = schedule[emp.name][date]
+      if (s && !isAbsence(s) && shiftCounts[s] !== undefined) {
+        shiftCounts[s]++
+      }
+    }
+
+    // Cache weekly hours per employee (recomputed each day since prior days may have changed)
+    const weekHoursCache = {}
+    for (const emp of employees) {
+      weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
+    }
+
+    // Get unassigned employees
+    const toAssign = employees.filter(emp => {
+      if (schedule[emp.name][date]) return false
+      if (restDayPlan[emp.name].has(date)) return false
+      // If already at target hours, auto-rest
+      if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
+        schedule[emp.name][date] = '休'
+        return false
+      }
+      return true
+    })
+
+    const dow = new Date(date).getDay()
+
+    // ── Pass 1: Assign preferred ("想上") shifts ──
+    // Collect who wants what
+    const wantMap = {} // shiftName → [{ emp, priority }]
+    const assigned = new Set()
+
+    for (const emp of toAssign) {
       const pref = prefMap[emp.name]
-      let bestShift = null
-      let bestScore = -1
+      if (!pref?.preferred.size) continue
 
       for (const shiftDef of sortedShifts) {
-        if (!isShiftValid(emp, shiftDef, date, schedule, shiftDefs, weekDates, data)) continue
+        if (!pref.preferred.has(shiftDef.name)) continue
+        if (pref.avoid.has(shiftDef.name)) continue // blocked overrides
+        if (!isShiftAvailable(emp, shiftDef, date)) continue
 
-        let score = 10 // base
-        if (pref?.preferred.has(shiftDef.name)) score += 20
-        if (pref?.avoid.has(shiftDef.name)) score -= 15
+        if (!wantMap[shiftDef.name]) wantMap[shiftDef.name] = []
+        wantMap[shiftDef.name].push({
+          emp,
+          priority: emp.schedule_priority || 3,
+          fatigue: fatigueMap[emp.name] || 0,
+        })
+      }
+    }
 
-        // Prefer shifts that need more staff
-        const currentCount = Object.values(schedule).filter(s => s[date] === shiftDef.name).length
-        if (currentCount < minStaff) score += 30
+    // Resolve conflicts: if more people want a shift than slots available, priority wins
+    for (const shiftName of Object.keys(wantMap)) {
+      const needed = staffingMap[shiftName] || minStaff
+      const slotsLeft = needed - (shiftCounts[shiftName] || 0)
+      if (slotsLeft <= 0) continue
+
+      // Sort: lower priority number = higher priority, then lower fatigue
+      const candidates = wantMap[shiftName].sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority
+        return a.fatigue - b.fatigue
+      })
+
+      // Assign top candidates (skip already-assigned, don't waste slot count)
+      const shiftDef = sortedShifts.find(s => s.name === shiftName)
+      let filled = 0
+      for (const { emp } of candidates) {
+        if (filled >= slotsLeft) break
+        if (assigned.has(emp.name)) continue
+
+        schedule[emp.name][date] = shiftName
+        actualTimes[`${emp.name}_${date}`] = {
+          start: shiftDef?.start_time?.slice(0, 5),
+          end: shiftDef?.end_time?.slice(0, 5),
+          hours: shiftDef ? getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60 : 8,
+        }
+        shiftCounts[shiftName] = (shiftCounts[shiftName] || 0) + 1
+        assigned.add(emp.name)
+        filled++
+      }
+    }
+
+    // ── Pass 2: Assign remaining employees to "都可以" (neutral) or understaffed shifts ──
+    const remaining = toAssign
+      .filter(emp => !assigned.has(emp.name))
+      .sort((a, b) => {
+        // Sort by fatigue (fairness-first for pass 2)
+        const fa = fatigueMap[a.name] || 0
+        const fb = fatigueMap[b.name] || 0
+        return fa - fb
+      })
+
+    for (const emp of remaining) {
+      if (schedule[emp.name][date]) continue
+
+      const pref = prefMap[emp.name]
+      const currentWeekHours = weekHoursCache[emp.name]
+      const targetH = targetHoursMap[emp.name]
+      let bestShift = null
+      let bestScore = -Infinity
+
+      for (const shiftDef of sortedShifts) {
+        // Hard block: "不可上" shifts are never assigned
+        if (pref?.avoid.has(shiftDef.name)) continue
+
+        if (!isShiftAvailable(emp, shiftDef, date)) continue
+
+        let score = 0
+
+        // Staffing needs (strongest signal)
+        const needed = staffingMap[shiftDef.name] || minStaff
+        const current = shiftCounts[shiftDef.name] || 0
+        if (current < needed) score += 50
+        else score += 5
+
+        // Preference: "想上" still gets bonus even in pass 2 (they lost conflict but still prefer it)
+        if (pref?.preferred.has(shiftDef.name)) score += 15
+
+        // Target hours
+        const shiftHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
+        const afterHours = currentWeekHours + shiftHours
+        if (afterHours <= targetH) score += 15
+        else if (afterHours <= targetH + 4) score += 5
+        else score -= 10
+
+        // Fairness
+        const fatigue = fatigueMap[emp.name] || 0
+        const fatiguePoints = getFatiguePoints(shiftDef, date, holidays)
+        if (fatigue > 15) score -= fatiguePoints * 3
+        if (isWeekendDay(dow) || holidays.includes(date)) {
+          score -= fatigue * 0.5
+          // Consecutive weekend protection: penalize if already worked 2+ consecutive weekends
+          const cw = consecWeekends[emp.name] || 0
+          if (cw >= 2) score -= 40 // Strong penalty: should rest this weekend
+          else if (cw >= 1) score -= 15 // Moderate: try to avoid 3 in a row
+        }
 
         if (score > bestScore) {
           bestScore = score
-          bestShift = shiftDef.name
+          bestShift = shiftDef
         }
       }
 
-      schedule[emp.name][date] = bestShift || '休'
+      if (bestShift) {
+        schedule[emp.name][date] = bestShift.name
+        actualTimes[`${emp.name}_${date}`] = {
+          start: bestShift.start_time?.slice(0, 5),
+          end: bestShift.end_time?.slice(0, 5),
+          hours: getShiftHours(bestShift) - (bestShift.break_minutes || 60) / 60,
+        }
+        shiftCounts[bestShift.name] = (shiftCounts[bestShift.name] || 0) + 1
+      } else {
+        schedule[emp.name][date] = '休'
+      }
     }
   }
 
-  // ── Step 4: Build assignments array ──
+  // ── Step 3b: Post-assignment fixes ──
+
+  // Fix 1: Ensure each day has at least 1 opener and 1 closer
+  for (const date of weekDates) {
+    const dayAssignments = employees.filter(emp => {
+      const s = schedule[emp.name][date]
+      return s && !isAbsence(s)
+    })
+
+    for (const shiftDef of sortedShifts) {
+      const startH = parseTime(shiftDef.start_time)
+      const endH = parseTime(shiftDef.end_time)
+      const isOpening = startH <= 12 // morning shift = opening
+      const isClosing = endH >= 21 || endH < startH // late/cross-midnight = closing
+
+      const scheduled = dayAssignments.filter(emp => schedule[emp.name][date] === shiftDef.name)
+
+      if (isOpening) {
+        const hasOpener = scheduled.some(emp => emp.can_open)
+        if (!hasOpener && scheduled.length > 0) {
+          // Try to swap: find a resting can_open employee and swap with a non-opener
+          const restingOpener = employees.find(emp =>
+            emp.can_open && schedule[emp.name][date] === '休' &&
+            !offMap.has(`${emp.name}_${date}`) &&
+            isShiftAvailable(emp, shiftDef, date)
+          )
+          if (restingOpener) {
+            // Find the weakest non-opener to swap out
+            const swapOut = scheduled.find(emp => !emp.can_open)
+            if (swapOut) {
+              schedule[restingOpener.name][date] = shiftDef.name
+              schedule[swapOut.name][date] = '休'
+              actualTimes[`${restingOpener.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
+              delete actualTimes[`${swapOut.name}_${date}`]
+            }
+          }
+        }
+      }
+
+      if (isClosing) {
+        const hasCloser = scheduled.some(emp => emp.can_close)
+        if (!hasCloser && scheduled.length > 0) {
+          const restingCloser = employees.find(emp =>
+            emp.can_close && schedule[emp.name][date] === '休' &&
+            !offMap.has(`${emp.name}_${date}`) &&
+            isShiftAvailable(emp, shiftDef, date)
+          )
+          if (restingCloser) {
+            const swapOut = scheduled.find(emp => !emp.can_close)
+            if (swapOut) {
+              schedule[restingCloser.name][date] = shiftDef.name
+              schedule[swapOut.name][date] = '休'
+              actualTimes[`${restingCloser.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
+              delete actualTimes[`${swapOut.name}_${date}`]
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Step 4: Build assignments ──
   const assignments = []
   for (const emp of employees) {
     for (const date of weekDates) {
+      const shift = schedule[emp.name][date] || '休'
+      const times = actualTimes[`${emp.name}_${date}`]
       assignments.push({
         employee: emp.name,
         date,
-        shift: schedule[emp.name][date] || '休',
+        shift,
+        actual_start: times?.start || null,
+        actual_end: times?.end || null,
+        actual_hours: times?.hours || null,
       })
     }
   }
@@ -173,17 +488,21 @@ export function runProgrammaticSchedule(data) {
   // ── Step 5: Validate ──
   const violations = validateResult(assignments, data)
 
+  // ── Step 6: Compute stats ──
+  const stats = computeStats(assignments, employees, shiftDefs, weekDates, holidays, targetHoursMap)
+
   return {
     success: true,
     assignments,
-    reasoning: `程式排班：${employees.length} 位員工 × ${weekDates.length} 天，優先滿足最低人力 ${minStaff} 人/天，每人至少 ${MIN_WEEKLY_REST_DAYS} 天休假。`,
+    reasoning: buildReasoning(employees, weekDates, stats),
     aiWarnings: [],
     violations,
     errors: violations.filter(v => v.severity === 'error'),
     warnings: violations.filter(v => v.severity === 'warning'),
+    stats,
     meta: {
-      model: 'programmatic',
-      mode: 'deterministic',
+      model: 'programmatic-v2',
+      mode: 'humanized',
       employeeCount: employees.length,
       totalAssignments: assignments.length,
     },
@@ -194,9 +513,6 @@ export function runProgrammaticSchedule(data) {
 //  Monthly Programmatic Scheduler
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Run programmatic scheduling for a full month using weekly chunks.
- */
 export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const { monthDates, previousWeek } = data
   if (!monthDates || monthDates.length === 0) {
@@ -208,15 +524,32 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const allViolations = []
   let lastWeekContext = previousWeek || []
 
+  // Running fatigue accumulation within this month
+  const monthFatigue = {}
+  for (const emp of data.employees) monthFatigue[emp.name] = 0
+
   for (let i = 0; i < weeks.length; i++) {
     const weekDates = weeks[i]
     onProgress?.(`程式排班中... 第 ${i + 1}/${weeks.length} 週`)
+
+    // Merge base fatigue + accumulated month fatigue
+    const mergedFatigue = (data.fatigueScores || []).map(f => ({
+      ...f,
+      total_score: (f.total_score || 0) + (monthFatigue[f.employee] || 0),
+    }))
+    // Add employees without existing fatigue scores
+    for (const emp of data.employees) {
+      if (!mergedFatigue.find(f => f.employee === emp.name)) {
+        mergedFatigue.push({ employee: emp.name, total_score: monthFatigue[emp.name] || 0 })
+      }
+    }
 
     const weekData = {
       ...data,
       weekDates,
       monthDates: null,
       previousWeek: lastWeekContext,
+      fatigueScores: mergedFatigue,
       existingSchedules: data.existingSchedules.filter(
         s => s.date >= weekDates[0] && s.date <= weekDates[weekDates.length - 1]
       ),
@@ -229,11 +562,28 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     allAssignments.push(...result.assignments)
     allViolations.push(...result.violations)
     lastWeekContext = result.assignments
+
+    // Accumulate fatigue from this week
+    for (const a of result.assignments) {
+      if (!isAbsence(a.shift)) {
+        const def = data.shiftDefs.find(d => d.name === a.shift)
+        if (def) {
+          monthFatigue[a.employee] = (monthFatigue[a.employee] || 0) +
+            getFatiguePoints(def, a.date, data.holidays)
+        }
+      }
+    }
   }
 
   // Monthly validation
   const monthlyViolations = validateMonthlyResult(allAssignments, data)
   const combinedViolations = [...allViolations, ...monthlyViolations]
+
+  const stats = computeStats(
+    allAssignments, data.employees, data.shiftDefs,
+    monthDates, data.holidays || [],
+    Object.fromEntries(data.employees.map(e => [e.name, e.weekly_target_hours || 40]))
+  )
 
   return {
     success: true,
@@ -243,27 +593,32 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     violations: combinedViolations,
     errors: combinedViolations.filter(v => v.severity === 'error'),
     warnings: combinedViolations.filter(v => v.severity === 'warning'),
+    stats,
     meta: {
-      model: 'programmatic',
-      mode: 'monthly-deterministic',
+      model: 'programmatic-v2',
+      mode: 'monthly-humanized',
       employeeCount: data.employees.length,
       totalAssignments: allAssignments.length,
       weeksProcessed: weeks.length,
+      monthFatigue,
     },
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Constraint Checks
+//  L1: Legal Constraint Checks
 // ══════════════════════════════════════════════════════════════
 
-function isShiftValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
-  const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
+function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
+  const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
   // H14: Store match
-  if (shiftDef.store_id && shiftDef.store_id !== emp.store) {
+  if (shiftDef.store_id) {
     const store = data.locations?.find(l => l.name === emp.store)
-    if (store && shiftDef.store_id !== store.id) return false
+    if (store && shiftDef.store_id !== store.id) {
+      const additional = emp.additional_stores || []
+      if (!additional.includes(shiftDef.store_id)) return false
+    }
   }
 
   // H15: Employment type match
@@ -284,7 +639,7 @@ function isShiftValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, da
   // H2: Daily hours ≤ 12h
   if (getShiftHours(shiftDef) > DAILY_MAX_HOURS) return false
 
-  // H3: Would this create > 6 consecutive work days?
+  // H3: Consecutive work days ≤ 6
   const dateIdx = weekDates.indexOf(date)
   let consec = 1
   for (let i = dateIdx - 1; i >= 0; i--) {
@@ -292,29 +647,51 @@ function isShiftValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, da
     if (s && !isAbsence(s)) consec++
     else break
   }
-  for (let i = dateIdx + 1; i < weekDates.length; i++) {
-    const s = schedule[emp.name][weekDates[i]]
-    if (s && !isAbsence(s)) consec++
-    else break
+  // Also check previous week context (only if current date is start of week)
+  if (dateIdx === 0 && data.previousWeek) {
+    const prevAssignments = data.previousWeek
+      .filter(a => a.employee === emp.name)
+      .sort((a, b) => b.date.localeCompare(a.date))
+    // Only count consecutive days that are actually adjacent to this week's start
+    const weekStartDate = new Date(date)
+    for (const a of prevAssignments) {
+      const prevDate = new Date(a.date)
+      const daysBefore = Math.round((weekStartDate - prevDate) / 86400000)
+      // Must be consecutive (1 day, 2 days, etc. before week start matching consec count)
+      if (daysBefore !== consec) break
+      if (!isAbsence(a.shift)) consec++
+      else break
+    }
   }
   if (consec > MAX_CONSECUTIVE_WORK_DAYS) return false
 
-  // H4: Cross-day gap ≥ 11h
+  // H4: Cross-day shift gap ≥ 11h
   if (dateIdx > 0) {
-    const prevDate = weekDates[dateIdx - 1]
-    const prevShift = schedule[emp.name][prevDate]
+    const prevShift = schedule[emp.name][weekDates[dateIdx - 1]]
     if (prevShift && !isAbsence(prevShift)) {
       const prevDef = allShiftDefs.find(d => d.name === prevShift)
       if (prevDef) {
-        const prevEnd = effectiveEndHour(prevDef)
-        const gap = (startH + 24) - prevEnd
+        const gap = (startH + 24) - effectiveEndHour(prevDef)
+        if (gap < MIN_SHIFT_INTERVAL) return false
+      }
+    }
+  } else if (data.previousWeek) {
+    // Check gap from last day of previous week
+    const lastPrev = data.previousWeek
+      .filter(a => a.employee === emp.name && !isAbsence(a.shift))
+      .sort((a, b) => b.date.localeCompare(a.date))[0]
+    if (lastPrev) {
+      const prevDef = allShiftDefs.find(d => d.name === lastPrev.shift)
+      if (prevDef) {
+        const gap = (startH + 24) - effectiveEndHour(prevDef)
         if (gap < MIN_SHIFT_INTERVAL) return false
       }
     }
   }
+
+  // Check forward gap too
   if (dateIdx < weekDates.length - 1) {
-    const nextDate = weekDates[dateIdx + 1]
-    const nextShift = schedule[emp.name][nextDate]
+    const nextShift = schedule[emp.name][weekDates[dateIdx + 1]]
     if (nextShift && !isAbsence(nextShift)) {
       const nextDef = allShiftDefs.find(d => d.name === nextShift)
       if (nextDef) {
@@ -326,15 +703,17 @@ function isShiftValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, da
     }
   }
 
-  // S5: Weekly hours soft cap (don't exceed ~48h)
-  let weeklyHours = getShiftHours(shiftDef)
+  // Weekly hours soft cap — buffer scales with target (20% of target, min 4h)
+  const targetH = emp.weekly_target_hours || (isPT ? 20 : 40)
+  const buffer = Math.max(4, Math.round(targetH * 0.2))
+  let weeklyHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
   for (const d of weekDates) {
     const sName = schedule[emp.name][d]
     if (!sName || isAbsence(sName)) continue
     const sDef = allShiftDefs.find(dd => dd.name === sName)
-    weeklyHours += sDef ? getShiftHours(sDef) : 8
+    weeklyHours += sDef ? getShiftHours(sDef) - (sDef.break_minutes || 60) / 60 : 8
   }
-  if (weeklyHours > 48) return false
+  if (weeklyHours > targetH + buffer) return false
 
   return true
 }
@@ -345,13 +724,13 @@ function isShiftValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, da
 
 function validateResult(assignments, data) {
   const violations = []
-  const { employees, shiftDefs, weekDates, offRequests, storeSettings } = data
+  const { employees, shiftDefs, weekDates, offRequests, storeSettings, staffingRules = [] } = data
 
   const shiftDefMap = {}
   for (const d of shiftDefs) shiftDefMap[d.name] = d
 
-  const offMap = {}
-  for (const o of offRequests) offMap[`${o.employee}_${o.date}`] = true
+  const offMap = new Set()
+  for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
 
   const byEmployee = {}
   for (const a of assignments) {
@@ -364,17 +743,18 @@ function validateResult(assignments, data) {
 
     // H1: Off-request
     for (const a of empAssignments) {
-      if (offMap[`${emp.name}_${a.date}`] && !isAbsence(a.shift)) {
-        violations.push({ employee: emp.name, constraint: 'H1', law: '排班規則', message: `${emp.name} has off-request on ${a.date} but assigned "${a.shift}"`, severity: 'error' })
+      if (offMap.has(`${emp.name}_${a.date}`) && !isAbsence(a.shift)) {
+        violations.push({ employee: emp.name, constraint: 'H1', law: '排班規則', message: `${emp.name} 在 ${a.date} 有請假但被排班 "${a.shift}"`, severity: 'error' })
       }
     }
 
-    // H2: Daily hours
     const workEntries = empAssignments.filter(a => !isAbsence(a.shift))
+
+    // H2: Daily hours
     for (const a of workEntries) {
       const def = shiftDefMap[a.shift]
       if (def && getShiftHours(def) > DAILY_MAX_HOURS) {
-        violations.push({ employee: emp.name, constraint: 'H2', law: '勞基法 §32', message: `${emp.name} on ${a.date}: ${getShiftHours(def).toFixed(1)}h, max ${DAILY_MAX_HOURS}h`, severity: 'error' })
+        violations.push({ employee: emp.name, constraint: 'H2', law: '勞基法 §32', message: `${emp.name} ${a.date}: ${getShiftHours(def).toFixed(1)}h 超過每日上限 ${DAILY_MAX_HOURS}h`, severity: 'error' })
       }
     }
 
@@ -385,35 +765,29 @@ function validateResult(assignments, data) {
       if (a && !isAbsence(a.shift)) {
         consec++
         if (consec > MAX_CONSECUTIVE_WORK_DAYS) {
-          violations.push({ employee: emp.name, constraint: 'H3', law: '勞基法 §36', message: `${emp.name} has ${consec} consecutive work days`, severity: 'error' })
+          violations.push({ employee: emp.name, constraint: 'H3', law: '勞基法 §36', message: `${emp.name} 連續上班 ${consec} 天（上限 ${MAX_CONSECUTIVE_WORK_DAYS} 天）`, severity: 'error' })
         }
       } else consec = 0
     }
 
     // H4: Cross-day shift gap
     for (let i = 0; i < weekDates.length - 1; i++) {
-      const today = weekDates[i]
-      const tomorrow = weekDates[i + 1]
-      const todayA = empAssignments.find(a => a.date === today)
-      const tomorrowA = empAssignments.find(a => a.date === tomorrow)
+      const todayA = empAssignments.find(a => a.date === weekDates[i])
+      const tomorrowA = empAssignments.find(a => a.date === weekDates[i + 1])
       if (!todayA || isAbsence(todayA.shift) || !tomorrowA || isAbsence(tomorrowA.shift)) continue
-
       const todayDef = shiftDefMap[todayA.shift]
       const tomorrowDef = shiftDefMap[tomorrowA.shift]
       if (!todayDef || !tomorrowDef) continue
-
-      const latestEnd = effectiveEndHour(todayDef)
-      const earliestStart = parseTime(tomorrowDef.start_time)
-      const gap = (earliestStart + 24) - latestEnd
+      const gap = (parseTime(tomorrowDef.start_time) + 24) - effectiveEndHour(todayDef)
       if (gap < MIN_SHIFT_INTERVAL) {
-        violations.push({ employee: emp.name, constraint: 'H4', law: '勞基法 §34', message: `${emp.name} ${today}→${tomorrow}: ${gap.toFixed(1)}h gap, min ${MIN_SHIFT_INTERVAL}h`, severity: 'error' })
+        violations.push({ employee: emp.name, constraint: 'H4', law: '勞基法 §34', message: `${emp.name} ${weekDates[i]}→${weekDates[i + 1]}: 間隔 ${gap.toFixed(1)}h（需 ≥${MIN_SHIFT_INTERVAL}h）`, severity: 'error' })
       }
     }
 
     // H10: Min rest days per week
     const restDays = empAssignments.filter(a => isAbsence(a.shift)).length
     if (weekDates.length >= 7 && restDays < MIN_WEEKLY_REST_DAYS) {
-      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} only ${restDays} rest days, min ${MIN_WEEKLY_REST_DAYS}`, severity: 'error' })
+      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} 僅 ${restDays} 天休假（需 ≥${MIN_WEEKLY_REST_DAYS} 天）`, severity: 'error' })
     }
 
     // H13: Pregnant/nursing night shifts
@@ -421,17 +795,45 @@ function validateResult(assignments, data) {
       for (const a of workEntries) {
         const def = shiftDefMap[a.shift]
         if (def && isNightShift(def)) {
-          violations.push({ employee: emp.name, constraint: 'H13', law: '性平法 §15', message: `${emp.name} (pregnant/nursing) assigned night shift on ${a.date}`, severity: 'error' })
+          violations.push({ employee: emp.name, constraint: 'H13', law: '性平法 §15', message: `${emp.name}（孕婦/哺乳）被排夜班 ${a.date}`, severity: 'error' })
         }
       }
     }
   }
 
-  // S1: Staffing per day
+  // S1: Staffing per day per shift
   for (const date of weekDates) {
-    const working = assignments.filter(a => a.date === date && !isAbsence(a.shift)).length
-    if (working < (storeSettings?.minStaff || 1)) {
-      violations.push({ employee: '-', constraint: 'S1', law: '營運需求', message: `${date}: only ${working} staff, min ${storeSettings.minStaff}`, severity: 'warning' })
+    for (const sd of shiftDefs) {
+      const required = staffingRules.find(r => r.shift_name === sd.name)?.required_count || 0
+      if (required <= 0) continue
+      const count = assignments.filter(a => a.date === date && a.shift === sd.name).length
+      if (count < required) {
+        violations.push({ employee: '-', constraint: 'S1', law: '營運需求', message: `${date} ${sd.name}: ${count}/${required} 人（不足）`, severity: 'warning' })
+      }
+    }
+
+    // S8: Open/close coverage check
+    for (const sd of shiftDefs) {
+      const startH = parseTime(sd.start_time)
+      const endH = parseTime(sd.end_time)
+      const isOpening = startH <= 12
+      const isClosing = endH >= 21 || endH < startH
+
+      const shiftWorkers = assignments.filter(a => a.date === date && a.shift === sd.name)
+      if (shiftWorkers.length === 0) continue
+
+      if (isOpening) {
+        const hasOpener = shiftWorkers.some(a => employees.find(e => e.name === a.employee)?.can_open)
+        if (!hasOpener) {
+          violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date} ${sd.name}: 無開店資格人員`, severity: 'warning' })
+        }
+      }
+      if (isClosing) {
+        const hasCloser = shiftWorkers.some(a => employees.find(e => e.name === a.employee)?.can_close)
+        if (!hasCloser) {
+          violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date} ${sd.name}: 無關店資格人員`, severity: 'warning' })
+        }
+      }
     }
   }
 
@@ -458,14 +860,14 @@ function validateMonthlyResult(assignments, data) {
     let totalHours = 0
     for (const a of workEntries) {
       const def = shiftDefMap[a.shift]
-      totalHours += def ? getShiftHours(def) : 8
+      totalHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
     }
     const standardHours = workEntries.length * 8
     const overtime = Math.max(0, totalHours - standardHours)
     if (overtime > MONTHLY_OVERTIME_CAP) {
       violations.push({
         employee: emp.name, constraint: 'H6', law: '勞基法 §32',
-        message: `${emp.name}: 月加班 ${overtime.toFixed(1)}h, 上限 ${MONTHLY_OVERTIME_CAP}h`,
+        message: `${emp.name}: 月加班 ${overtime.toFixed(1)}h（上限 ${MONTHLY_OVERTIME_CAP}h）`,
         severity: 'error',
       })
     }
@@ -476,11 +878,125 @@ function validateMonthlyResult(assignments, data) {
     if (restEntries.length < expectedRest - 2) {
       violations.push({
         employee: emp.name, constraint: 'S7', law: '勞動權益',
-        message: `${emp.name}: 本月僅 ${restEntries.length} 天休假, 建議 ${expectedRest} 天`,
+        message: `${emp.name}: 本月僅 ${restEntries.length} 天休假（建議 ${expectedRest} 天）`,
+        severity: 'warning',
+      })
+    }
+
+    // S5: Weekly hours target check
+    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+    const target = emp.weekly_target_hours || (isPT ? 20 : 40)
+    const avgWeeklyHours = totalDays > 0 ? (totalHours / totalDays) * 7 : 0
+    if (avgWeeklyHours > target * 1.2) {
+      violations.push({
+        employee: emp.name, constraint: 'S5', law: '工時管理',
+        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 超過目標 ${target}h 的 120%`,
+        severity: 'warning',
+      })
+    }
+    if (avgWeeklyHours < target * 0.6 && totalDays >= 7) {
+      violations.push({
+        employee: emp.name, constraint: 'S5', law: '工時管理',
+        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 低於目標 ${target}h 的 60%`,
+        severity: 'warning',
+      })
+    }
+
+    // S9: Consecutive weekend check
+    const weeks = splitIntoWeeks(empAssignments.map(a => a.date).sort())
+    let consecWE = 0
+    let maxConsecWE = 0
+    for (const week of weeks) {
+      const workedWeekend = week.some(d => {
+        const dow = new Date(d).getDay()
+        if (!isWeekendDay(dow)) return false
+        const a = workEntries.find(a => a.date === d)
+        return !!a
+      })
+      if (workedWeekend) {
+        consecWE++
+        maxConsecWE = Math.max(maxConsecWE, consecWE)
+      } else {
+        consecWE = 0
+      }
+    }
+    if (maxConsecWE >= 3) {
+      violations.push({
+        employee: emp.name, constraint: 'S9', law: '公平性',
+        message: `${emp.name}: 連續 ${maxConsecWE} 週排假日班（建議 ≤ 2 週）`,
         severity: 'warning',
       })
     }
   }
 
   return violations
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Statistics
+// ══════════════════════════════════════════════════════════════
+
+function computeStats(assignments, employees, shiftDefs, dates, holidays, targetHoursMap) {
+  const shiftDefMap = {}
+  for (const d of shiftDefs) shiftDefMap[d.name] = d
+
+  const byEmployee = {}
+  for (const emp of employees) {
+    const empA = assignments.filter(a => a.employee === emp.name)
+    const work = empA.filter(a => !isAbsence(a.shift))
+    const rest = empA.filter(a => isAbsence(a.shift))
+
+    let totalHours = 0
+    let fatigue = 0
+    let weekendShifts = 0
+    let eveningShifts = 0
+
+    for (const a of work) {
+      const def = shiftDefMap[a.shift]
+      if (def) {
+        totalHours += getShiftHours(def) - (def.break_minutes || 60) / 60
+        fatigue += getFatiguePoints(def, a.date, holidays)
+        const dow = new Date(a.date).getDay()
+        if (isWeekendDay(dow)) weekendShifts++
+        if (parseTime(def.start_time) >= 15) eveningShifts++
+      }
+    }
+
+    const target = targetHoursMap[emp.name] || 40
+    byEmployee[emp.name] = {
+      totalHours: Math.round(totalHours * 10) / 10,
+      targetHours: target,
+      hoursRatio: Math.round((totalHours / target) * 100),
+      workDays: work.length,
+      restDays: rest.length,
+      weekendShifts,
+      eveningShifts,
+      fatigueScore: fatigue,
+    }
+  }
+
+  return { byEmployee }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Reasoning
+// ══════════════════════════════════════════════════════════════
+
+function buildReasoning(employees, dates, stats) {
+  const lines = [`程式排班 v2：${employees.length} 位員工 × ${dates.length} 天`]
+
+  if (stats?.byEmployee) {
+    const entries = Object.entries(stats.byEmployee)
+    const avgFatigue = entries.reduce((sum, [, s]) => sum + s.fatigueScore, 0) / entries.length
+    const minF = Math.min(...entries.map(([, s]) => s.fatigueScore))
+    const maxF = Math.max(...entries.map(([, s]) => s.fatigueScore))
+    lines.push(`辛苦度分布：平均 ${avgFatigue.toFixed(1)}、最低 ${minF}、最高 ${maxF}`)
+
+    const overTarget = entries.filter(([, s]) => s.hoursRatio > 110).length
+    const underTarget = entries.filter(([, s]) => s.hoursRatio < 80).length
+    if (overTarget > 0) lines.push(`${overTarget} 人超過目標工時 110%`)
+    if (underTarget > 0) lines.push(`${underTarget} 人低於目標工時 80%`)
+  }
+
+  return lines.join('。')
 }

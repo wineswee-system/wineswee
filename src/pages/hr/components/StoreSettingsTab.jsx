@@ -10,17 +10,20 @@ function parseTime(t) {
 
 const DAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY_LABELS_FULL = ['一', '二', '三', '四', '五', '六', '日']
-const DAY_OPTIONS = [
-  { value: '', label: '每天' },
-  { value: '1', label: '週一' },
-  { value: '2', label: '週二' },
-  { value: '3', label: '週三' },
-  { value: '4', label: '週四' },
-  { value: '5', label: '週五' },
-  { value: '6', label: '週六' },
-  { value: '0', label: '週日' },
-  { value: 'weekday', label: '平日 (一~五)' },
-  { value: 'weekend', label: '週末 (六日)' },
+const INDIVIDUAL_DAYS = [
+  { value: 1, label: '一' },
+  { value: 2, label: '二' },
+  { value: 3, label: '三' },
+  { value: 4, label: '四' },
+  { value: 5, label: '五' },
+  { value: 6, label: '六' },
+  { value: 0, label: '日' },
+]
+
+const DAY_PRESETS = [
+  { label: '每天', days: [1, 2, 3, 4, 5, 6, 0] },
+  { label: '平日', days: [1, 2, 3, 4, 5] },
+  { label: '週末', days: [6, 0] },
 ]
 
 const WORK_SYSTEMS = [
@@ -50,27 +53,21 @@ export default function StoreSettingsTab({
   // New staffing form state
   const [newStaff, setNewStaff] = useState({
     shift_name: '',
-    day: '',        // '' | '0'-'6' | 'weekday' | 'weekend'
+    days: [],       // array of day numbers: 0=Sun, 1=Mon ... 6=Sat; empty = all days
     time_start: '',
     time_end: '',
     count: 1,
   })
+  const [dayDropdownOpen, setDayDropdownOpen] = useState(false)
 
   if (!storeFilter) {
     return <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>請先選擇門市</div>
   }
 
-  // Expand day selection into individual records
-  const expandDays = (dayValue) => {
-    if (dayValue === 'weekday') return [1, 2, 3, 4, 5]
-    if (dayValue === 'weekend') return [6, 0]
-    if (dayValue === '') return [null] // null = all days
-    return [parseInt(dayValue)]
-  }
-
   const handleAddStaffing = async () => {
     if (!selectedStore) return
-    const days = expandDays(newStaff.day)
+    // Empty array = all days (store as [null])
+    const days = newStaff.days.length === 0 ? [null] : newStaff.days
 
     const records = days.map(dow => ({
       store_id: selectedStore.id,
@@ -243,13 +240,94 @@ export default function StoreSettingsTab({
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>新增人力需求規則</div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-            {/* Day selection */}
+            {/* Day multiselect */}
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>適用日</label>
-              <select className="form-input" style={{ width: '100%', padding: '8px 10px', fontSize: 13 }}
-                value={newStaff.day} onChange={e => setNewStaff(prev => ({ ...prev, day: e.target.value }))}>
-                {DAY_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
+              <div style={{ position: 'relative' }}>
+                {/* Trigger button */}
+                <button
+                  type="button"
+                  className="form-input"
+                  onClick={() => setDayDropdownOpen(prev => !prev)}
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 13, textAlign: 'left',
+                    cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8,
+                  }}
+                >
+                  <span style={{ color: newStaff.days.length === 0 ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                    {newStaff.days.length === 0
+                      ? '每天'
+                      : newStaff.days.length === 7
+                        ? '每天'
+                        : INDIVIDUAL_DAYS.filter(d => newStaff.days.includes(d.value)).map(d => d.label).join('、')
+                    }
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>▼</span>
+                </button>
+
+                {/* Dropdown panel */}
+                {dayDropdownOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60,
+                    background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+                    borderRadius: 10, padding: 10, boxShadow: 'var(--shadow-lg)', marginTop: 4,
+                  }}>
+                    {/* Preset buttons */}
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                      {DAY_PRESETS.map(preset => {
+                        const isActive = preset.days.length === newStaff.days.length && preset.days.every(d => newStaff.days.includes(d))
+                        return (
+                          <button key={preset.label} type="button" onClick={() => {
+                            setNewStaff(prev => ({ ...prev, days: isActive ? [] : [...preset.days] }))
+                          }} style={{
+                            flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid',
+                            borderColor: isActive ? 'var(--accent-cyan)' : 'var(--border-medium)',
+                            background: isActive ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
+                            color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          }}>
+                            {preset.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {/* Individual day toggles */}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {INDIVIDUAL_DAYS.map(d => {
+                        const isSelected = newStaff.days.includes(d.value)
+                        const isWeekend = d.value === 0 || d.value === 6
+                        return (
+                          <button key={d.value} type="button" onClick={() => {
+                            setNewStaff(prev => ({
+                              ...prev,
+                              days: isSelected
+                                ? prev.days.filter(v => v !== d.value)
+                                : [...prev.days, d.value],
+                            }))
+                          }} style={{
+                            flex: 1, padding: '8px 0', borderRadius: 8, border: '2px solid',
+                            borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-light)',
+                            background: isSelected ? 'rgba(34,211,238,0.12)' : 'transparent',
+                            color: isSelected ? 'var(--accent-cyan)' : isWeekend ? 'var(--accent-red)' : 'var(--text-primary)',
+                            fontSize: 13, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+                          }}>
+                            {d.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {/* Close */}
+                    <button type="button" onClick={() => setDayDropdownOpen(false)} style={{
+                      width: '100%', marginTop: 8, padding: '6px', borderRadius: 6,
+                      border: '1px solid var(--border-medium)', background: 'var(--glass-light)',
+                      color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                    }}>
+                      確定
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Shift selection */}
@@ -293,10 +371,10 @@ export default function StoreSettingsTab({
           <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: '26px' }}>快速設定：</span>
             {[
-              { label: '平日 3人', day: 'weekday', count: 3 },
-              { label: '週末 4人', day: 'weekend', count: 4 },
-              { label: '午間加班 2人', day: '', time_start: '11:00', time_end: '14:00', count: 2 },
-              { label: '晚間加班 2人', day: '', time_start: '18:00', time_end: '22:00', count: 2 },
+              { label: '平日 3人', days: [1, 2, 3, 4, 5], count: 3 },
+              { label: '週末 4人', days: [6, 0], count: 4 },
+              { label: '午間加班 2人', days: [], time_start: '11:00', time_end: '14:00', count: 2 },
+              { label: '晚間加班 2人', days: [], time_start: '18:00', time_end: '22:00', count: 2 },
             ].map((preset, i) => (
               <button key={i} style={{
                 padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-medium)',
@@ -304,7 +382,7 @@ export default function StoreSettingsTab({
                 cursor: 'pointer', fontWeight: 500,
               }} onClick={() => setNewStaff(prev => ({
                 ...prev,
-                day: preset.day ?? prev.day,
+                days: preset.days ?? prev.days,
                 time_start: preset.time_start ?? '',
                 time_end: preset.time_end ?? '',
                 count: preset.count,

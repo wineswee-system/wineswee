@@ -204,7 +204,7 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
                               <input type="time" className="form-input"
                                 style={{ width: 85, padding: '2px 4px', fontSize: 11 }}
                                 defaultValue={slot?.start || '11:00'}
-                                onChange={e => {
+                                onBlur={e => {
                                   const end = empAvail[dow]?.end || '00:00'
                                   handleAvailSave(emp.name, dow, e.target.value, end)
                                 }}
@@ -213,7 +213,7 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
                               <input type="time" className="form-input"
                                 style={{ width: 85, padding: '2px 4px', fontSize: 11 }}
                                 defaultValue={slot?.end || '00:00'}
-                                onChange={e => {
+                                onBlur={e => {
                                   const start = empAvail[dow]?.start || '11:00'
                                   handleAvailSave(emp.name, dow, start, e.target.value)
                                 }}

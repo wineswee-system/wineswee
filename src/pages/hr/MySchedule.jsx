@@ -250,7 +250,6 @@ export default function MySchedule() {
 // ── Off Request Sub-component ──
 function OffRequestForm({ empName, monthDates, schedules }) {
   const [date, setDate] = useState('')
-  const [reason, setReason] = useState('')
   const [myRequests, setMyRequests] = useState([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -266,13 +265,12 @@ function OffRequestForm({ empName, monthDates, schedules }) {
     if (!date) return
     setSubmitting(true)
     const { data, error } = await supabase.from('off_requests')
-      .upsert({ employee: empName, date, reason }, { onConflict: 'employee,date' })
+      .upsert({ employee: empName, date }, { onConflict: 'employee,date' })
       .select().single()
     if (data) setMyRequests(prev => [...prev.filter(r => r.date !== date), data])
     if (error) alert('申請失敗：' + error.message)
     setSubmitting(false)
     setDate('')
-    setReason('')
   }
 
   const handleCancel = async (reqDate) => {

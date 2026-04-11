@@ -160,7 +160,7 @@ export default function Schedule() {
 
     // Load publish status for current month
     const month = activeStart?.slice(0, 7)
-    const store = locations.find(l => l.name === storeFilter)
+    const store = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
     if (month && store) {
       supabase.from('schedule_publish_status').select('*')
         .eq('store_id', store.id).eq('month', month).maybeSingle()
@@ -522,9 +522,9 @@ export default function Schedule() {
     }
   }
 
-  // Load tab-specific data (must be before early returns to maintain hook order)
+  // Load store settings whenever storeFilter changes (not just on tab switch)
   useEffect(() => {
-    if (mainTab === 'store-settings' && storeFilter) {
+    if (storeFilter && locations.length > 0) {
       const store = locations.find(s => s.name === storeFilter)
       if (store) {
         supabase.from('store_settings').select('*').eq('store_id', store.id).maybeSingle()
@@ -533,6 +533,10 @@ export default function Schedule() {
           .then(({ data }) => setStaffing(data || []))
       }
     }
+  }, [storeFilter, locations])
+
+  // Load tab-specific data
+  useEffect(() => {
     if (mainTab === 'preferences') {
       supabase.from('employee_shift_preferences').select('*').order('employee')
         .then(({ data }) => setPreferences(data || []))

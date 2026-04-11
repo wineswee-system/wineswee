@@ -889,7 +889,11 @@ function validateMonthlyResult(assignments, data) {
     if (wsm.periodWeeks > 1) {
       // Check each N-week period within the month
       const weeks = splitIntoWeeks(empAssignments.map(a => a.date).sort())
-      for (let i = 0; i <= weeks.length - wsm.periodWeeks; i++) {
+      // If month has fewer weeks than period, check all available weeks as one period
+      const checkPeriods = weeks.length >= wsm.periodWeeks
+        ? Array.from({ length: weeks.length - wsm.periodWeeks + 1 }, (_, i) => i)
+        : weeks.length > 0 ? [0] : []
+      for (const i of checkPeriods) {
         const periodWeeks = weeks.slice(i, i + wsm.periodWeeks)
         const periodDates = periodWeeks.flat()
         let periodHours = 0
@@ -900,10 +904,15 @@ function validateMonthlyResult(assignments, data) {
             periodHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
           }
         }
-        if (periodHours > wsm.periodTotalHours) {
+        // Pro-rate limit for partial periods (e.g., 3 weeks of a 4-week period)
+        const actualWeeks = periodWeeks.length
+        const adjustedLimit = actualWeeks < wsm.periodWeeks
+          ? Math.round(wsm.periodTotalHours * actualWeeks / wsm.periodWeeks)
+          : wsm.periodTotalHours
+        if (periodHours > adjustedLimit) {
           violations.push({
             employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
-            message: `${emp.name}: ${wsm.periodWeeks}週工時 ${periodHours.toFixed(1)}h 超過上限 ${wsm.periodTotalHours}h`,
+            message: `${emp.name}: ${actualWeeks}週工時 ${periodHours.toFixed(1)}h 超過上限 ${adjustedLimit}h`,
             severity: 'error',
           })
           break // Only report first violation
@@ -911,17 +920,21 @@ function validateMonthlyResult(assignments, data) {
       }
 
       // Check period rest days
-      for (let i = 0; i <= weeks.length - wsm.periodWeeks; i++) {
+      for (const i of checkPeriods) {
         const periodWeeks = weeks.slice(i, i + wsm.periodWeeks)
         const periodDates = periodWeeks.flat()
         const periodRest = periodDates.filter(d => {
           const a = empAssignments.find(a => a.date === d)
           return !a || isAbsence(a.shift)
         }).length
-        if (periodRest < wsm.periodRestDays) {
+        const actualWeeksRest = periodWeeks.length
+        const adjustedRestMin = actualWeeksRest < wsm.periodWeeks
+          ? Math.round(wsm.periodRestDays * actualWeeksRest / wsm.periodWeeks)
+          : wsm.periodRestDays
+        if (periodRest < adjustedRestMin) {
           violations.push({
             employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
-            message: `${emp.name}: ${wsm.periodWeeks}週僅 ${periodRest} 天休假（需 ≥${wsm.periodRestDays} 天）`,
+            message: `${emp.name}: ${actualWeeksRest}週僅 ${periodRest} 天休假（需 ≥${adjustedRestMin} 天）`,
             severity: 'error',
           })
           break

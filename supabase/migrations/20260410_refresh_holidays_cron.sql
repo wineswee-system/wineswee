@@ -83,7 +83,7 @@ BEGIN
     PERFORM cron.schedule(
       'refresh-holidays-jan',
       '30 0 1 1 *',
-      $$
+      $task$
       SELECT net.http_post(
         url := current_setting('app.settings.supabase_url') || '/functions/v1/refresh-holidays',
         headers := jsonb_build_object(
@@ -92,14 +92,14 @@ BEGIN
         ),
         body := '{}'::jsonb
       );
-      $$
+      $task$
     );
 
     -- 每年 7/1 00:30 UTC 刷新
     PERFORM cron.schedule(
       'refresh-holidays-jul',
       '30 0 1 7 *',
-      $$
+      $task$
       SELECT net.http_post(
         url := current_setting('app.settings.supabase_url') || '/functions/v1/refresh-holidays',
         headers := jsonb_build_object(
@@ -108,7 +108,7 @@ BEGIN
         ),
         body := '{}'::jsonb
       );
-      $$
+      $task$
     );
 
     RAISE NOTICE 'pg_cron jobs created: refresh-holidays-jan, refresh-holidays-jul';

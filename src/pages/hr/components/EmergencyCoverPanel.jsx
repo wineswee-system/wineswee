@@ -95,46 +95,54 @@ export default function EmergencyCoverPanel({
 
     setAssigning(emp.name)
 
-    // 1. Mark sick employee as 病假
-    await supabase.from('schedules')
-      .update({ shift: '病', absence_type: '病' })
-      .eq('id', sickSchedule.id)
+    try {
+      // 1. Mark sick employee as 病假
+      const { error: e1 } = await supabase.from('schedules')
+        .update({ shift: '病', absence_type: '病' })
+        .eq('id', sickSchedule.id)
+      if (e1) throw new Error('標記病假失敗：' + e1.message)
 
-    // 2. Assign replacement
-    const existing = schedules.find(s => s.employee === emp.name && s.date === sickDate)
-    if (existing) {
-      await supabase.from('schedules')
-        .update({
+      // 2. Assign replacement
+      const existing = schedules.find(s => s.employee === emp.name && s.date === sickDate)
+      if (existing) {
+        const { error: e2 } = await supabase.from('schedules')
+          .update({
+            shift: sickSchedule.shift,
+            actual_start: sickSchedule.actual_start,
+            actual_end: sickSchedule.actual_end,
+            actual_hours: sickSchedule.actual_hours,
+          })
+          .eq('id', existing.id)
+        if (e2) throw new Error('指派代班失敗：' + e2.message)
+      } else {
+        const { error: e3 } = await supabase.from('schedules').insert({
+          employee: emp.name,
+          date: sickDate,
           shift: sickSchedule.shift,
           actual_start: sickSchedule.actual_start,
           actual_end: sickSchedule.actual_end,
           actual_hours: sickSchedule.actual_hours,
         })
-        .eq('id', existing.id)
-    } else {
-      await supabase.from('schedules').insert({
-        employee: emp.name,
+        if (e3) throw new Error('指派代班失敗：' + e3.message)
+      }
+
+      // 3. Notify replacement via LINE
+      await notifySchedulePublished(emp.name, sickDate, [{
         date: sickDate,
         shift: sickSchedule.shift,
         actual_start: sickSchedule.actual_start,
         actual_end: sickSchedule.actual_end,
-        actual_hours: sickSchedule.actual_hours,
-      })
+      }])
+
+      setDone({ sick: sickEmployee, cover: emp.name, shift: sickSchedule.shift })
+      setSickEmployee('')
+      setCandidates([])
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setAssigning(null)
+      onUpdate?.()
     }
-
-    // 3. Notify replacement via LINE
-    await notifySchedulePublished(emp.name, sickDate, [{
-      date: sickDate,
-      shift: sickSchedule.shift,
-      actual_start: sickSchedule.actual_start,
-      actual_end: sickSchedule.actual_end,
-    }])
-
-    setDone({ sick: sickEmployee, cover: emp.name, shift: sickSchedule.shift })
-    setAssigning(null)
-    setSickEmployee('')
-    setCandidates([])
-    onUpdate?.()
   }
 
   if (!open) {

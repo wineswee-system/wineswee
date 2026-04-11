@@ -211,6 +211,23 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
+  // Helper: get employee's weekly hours so far (used by both modes)
+  const getEmpWeekHours = (empName) => {
+    let h = 0
+    for (const d of weekDates) {
+      const s = schedule[empName][d]
+      if (s && !isAbsence(s)) {
+        const times = actualTimes[`${empName}_${d}`]
+        if (times?.hours) h += times.hours
+        else {
+          const def = shiftDefs.find(sd => sd.name === s)
+          h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+        }
+      }
+    }
+    return h
+  }
+
   // ── Step 2: Sort shifts by start time ──
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
 
@@ -490,19 +507,6 @@ export function runProgrammaticSchedule(data) {
       }
     }
     return true
-  }
-
-  // Helper: get employee's weekly hours so far
-  const getEmpWeekHours = (empName) => {
-    let h = 0
-    for (const d of weekDates) {
-      const s = schedule[empName][d]
-      if (s && !isAbsence(s)) {
-        const def = shiftDefs.find(sd => sd.name === s)
-        h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
-      }
-    }
-    return h
   }
 
   for (const date of weekDates) {

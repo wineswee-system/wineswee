@@ -215,11 +215,11 @@ export function runProgrammaticSchedule(data) {
 
         const dow = new Date(date).getDay()
         let score = 0
-        // Restaurants: weekends are busiest, prefer resting on weekdays
-        if (dow >= 1 && dow <= 4) score += 8
-        if (dow === 5 || dow === 6) score -= 5
-        // Prefer days where many people are already working (less impact)
-        score -= restCountByDay[date] * 3
+        // Restaurants: weekends are busiest, slightly prefer resting on weekdays
+        if (dow >= 1 && dow <= 4) score += 3
+        if (dow === 5 || dow === 6) score -= 2
+        // STRONG: spread rest days evenly — heavily penalize days where others already rest
+        score -= restCountByDay[date] * 15
         // Spread rest days apart
         if (rest.size === 1) {
           const existingIdx = weekDates.indexOf([...rest][0])

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil, Check, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 function parseTime(t) {
@@ -59,6 +59,8 @@ export default function StoreSettingsTab({
     count: 1,
   })
   const [dayDropdownOpen, setDayDropdownOpen] = useState(false)
+  // Inline editing state: { id, shift_name, day_of_week, time_start, time_end, required_count }
+  const [editingRow, setEditingRow] = useState(null)
 
   if (!storeFilter) {
     return <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>請先選擇門市</div>
@@ -103,6 +105,36 @@ export default function StoreSettingsTab({
     if (!error) {
       setStaffing(prev => prev.filter(s => s.id !== id))
     }
+  }
+
+  const handleStartEdit = (s) => {
+    setEditingRow({
+      id: s.id,
+      shift_name: s.shift_name || '',
+      day_of_week: s.day_of_week,
+      time_start: s.time_start?.slice(0, 5) || '',
+      time_end: s.time_end?.slice(0, 5) || '',
+      required_count: s.required_count,
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingRow) return
+    const { data } = await supabase.from('store_staffing')
+      .update({
+        shift_name: editingRow.shift_name || null,
+        day_of_week: editingRow.day_of_week,
+        time_start: editingRow.time_start || null,
+        time_end: editingRow.time_end || null,
+        required_count: editingRow.required_count,
+        label: buildLabel(editingRow.shift_name, editingRow.day_of_week, editingRow.time_start, editingRow.time_end),
+      })
+      .eq('id', editingRow.id)
+      .select().single()
+    if (data) {
+      setStaffing(prev => prev.map(s => s.id === data.id ? data : s))
+    }
+    setEditingRow(null)
   }
 
   const buildLabel = (shiftName, dow, timeStart, timeEnd) => {
@@ -171,64 +203,124 @@ export default function StoreSettingsTab({
                     <th>時段</th>
                     <th>班別</th>
                     <th style={{ textAlign: 'center' }}>需求人數</th>
-                    <th style={{ width: 40 }}></th>
+                    <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {staffing
                     .sort((a, b) => {
-                      // Sort by day_of_week (null first = all days), then time
                       const da = a.day_of_week ?? -1
                       const db = b.day_of_week ?? -1
                       if (da !== db) return da - db
                       return (a.time_start || '').localeCompare(b.time_start || '')
                     })
-                    .map(s => (
-                    <tr key={s.id}>
-                      <td>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                          background: s.day_of_week === 0 || s.day_of_week === 6 ? 'rgba(239,68,68,0.1)' : s.day_of_week === null ? 'rgba(99,102,241,0.1)' : 'var(--glass-light)',
-                          color: s.day_of_week === 0 || s.day_of_week === 6 ? 'var(--accent-red)' : s.day_of_week === null ? '#818cf8' : 'var(--text-primary)',
-                        }}>
-                          {getDayLabel(s.day_of_week)}
-                        </span>
-                      </td>
-                      <td>
-                        {s.time_start || s.time_end ? (
-                          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>
-                            {s.time_start?.slice(0, 5) || '00:00'} ~ {s.time_end?.slice(0, 5) || '24:00'}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>全天</span>
-                        )}
-                      </td>
-                      <td>
-                        {s.shift_name ? (
-                          <span style={{ fontWeight: 600 }}>{s.shift_name}</span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)' }}>不限</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-block', minWidth: 28, padding: '2px 8px', borderRadius: 6,
-                          background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
-                          fontWeight: 700, fontSize: 14, textAlign: 'center',
-                        }}>
-                          {s.required_count}
-                        </span>
-                      </td>
-                      <td>
-                        <button onClick={() => handleDeleteStaffing(s.id)} style={{
-                          background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-                          color: 'var(--text-muted)', opacity: 0.6,
-                        }} title="刪除">
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                    .map(s => {
+                      const isEditing = editingRow?.id === s.id
+                      if (isEditing) {
+                        return (
+                          <tr key={s.id} style={{ background: 'rgba(34,211,238,0.04)' }}>
+                            <td>
+                              <select className="form-input" style={{ padding: '4px 6px', fontSize: 12, width: 70 }}
+                                value={editingRow.day_of_week ?? ''} onChange={e => setEditingRow(prev => ({ ...prev, day_of_week: e.target.value === '' ? null : parseInt(e.target.value) }))}>
+                                <option value="">每天</option>
+                                {INDIVIDUAL_DAYS.map(d => <option key={d.value} value={d.value}>週{d.label}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                <input className="form-input" type="time" style={{ padding: '4px 6px', fontSize: 11, width: 90 }}
+                                  value={editingRow.time_start} onChange={e => setEditingRow(prev => ({ ...prev, time_start: e.target.value }))} />
+                                <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>~</span>
+                                <input className="form-input" type="time" style={{ padding: '4px 6px', fontSize: 11, width: 90 }}
+                                  value={editingRow.time_end} onChange={e => setEditingRow(prev => ({ ...prev, time_end: e.target.value }))} />
+                              </div>
+                            </td>
+                            <td>
+                              <select className="form-input" style={{ padding: '4px 6px', fontSize: 12, width: 100 }}
+                                value={editingRow.shift_name} onChange={e => setEditingRow(prev => ({ ...prev, shift_name: e.target.value }))}>
+                                <option value="">不限</option>
+                                {shiftDefs.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <input className="form-input" type="number" min={1} max={99}
+                                style={{ width: 50, padding: '4px 6px', fontSize: 13, textAlign: 'center', fontWeight: 700 }}
+                                value={editingRow.required_count} onChange={e => setEditingRow(prev => ({ ...prev, required_count: Math.max(1, parseInt(e.target.value) || 1) }))} />
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 2 }}>
+                                <button onClick={handleSaveEdit} style={{
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                                  color: 'var(--accent-green)', opacity: 0.8,
+                                }} title="儲存">
+                                  <Check size={14} />
+                                </button>
+                                <button onClick={() => setEditingRow(null)} style={{
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                                  color: 'var(--text-muted)', opacity: 0.6,
+                                }} title="取消">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
+                      return (
+                        <tr key={s.id}>
+                          <td>
+                            <span style={{
+                              display: 'inline-block', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                              background: s.day_of_week === 0 || s.day_of_week === 6 ? 'rgba(239,68,68,0.1)' : s.day_of_week === null ? 'rgba(99,102,241,0.1)' : 'var(--glass-light)',
+                              color: s.day_of_week === 0 || s.day_of_week === 6 ? 'var(--accent-red)' : s.day_of_week === null ? '#818cf8' : 'var(--text-primary)',
+                            }}>
+                              {getDayLabel(s.day_of_week)}
+                            </span>
+                          </td>
+                          <td>
+                            {s.time_start || s.time_end ? (
+                              <span style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                                {s.time_start?.slice(0, 5) || '00:00'} ~ {s.time_end?.slice(0, 5) || '24:00'}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>全天</span>
+                            )}
+                          </td>
+                          <td>
+                            {s.shift_name ? (
+                              <span style={{ fontWeight: 600 }}>{s.shift_name}</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>不限</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block', minWidth: 28, padding: '2px 8px', borderRadius: 6,
+                              background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
+                              fontWeight: 700, fontSize: 14, textAlign: 'center',
+                            }}>
+                              {s.required_count}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 2 }}>
+                              <button onClick={() => handleStartEdit(s)} style={{
+                                background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                                color: 'var(--text-muted)', opacity: 0.6,
+                              }} title="編輯">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDeleteStaffing(s.id)} style={{
+                                background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                                color: 'var(--text-muted)', opacity: 0.6,
+                              }} title="刪除">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                 </tbody>
               </table>
             </div>

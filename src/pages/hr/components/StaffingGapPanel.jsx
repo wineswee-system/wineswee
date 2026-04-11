@@ -18,6 +18,10 @@ export default function StaffingGapPanel({
 
   if (!weekDates?.length || !staffingRules?.length) return null
 
+  // Don't show gap panel if no schedules exist yet (nothing has been scheduled)
+  const hasAnySchedules = schedules.some(s => weekDates.includes(s.date) && employees.some(e => e.name === s.employee))
+  if (!hasAnySchedules) return null
+
   const shiftDefMap = {}
   for (const d of shiftDefs) shiftDefMap[d.name] = d
 

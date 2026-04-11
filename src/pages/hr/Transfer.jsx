@@ -2,8 +2,8 @@ import { ArrowRightLeft } from 'lucide-react'
 
 export default function Transfer() {
   const transfers = [
-    { id: 1, employee: '吳建宏', fromDept: '業務部 · 台中分店', toDept: '業務部 · 高雄分店', date: '2026-02-01', type: '調店', status: '已完成' },
-    { id: 2, employee: '蔡心怡', fromDept: '客服部 · 台北總部', toDept: '客服部 · 台中分店', date: '2026-01-15', type: '調店', status: '已完成' },
+    { id: 1, employee: '趙亨威', fromDept: '營運部 · 02台中英才門市', toDept: '營運部 · 12台中文心門市', date: '2026-03-01', type: '調店', status: '已完成' },
+    { id: 2, employee: '蘇東俞', fromDept: '營運部 · 03台北永春門市', toDept: '營運部 · mia門店', date: '2026-02-15', type: '調店', status: '已完成' },
   ]
   return (
     <div className="fade-in">

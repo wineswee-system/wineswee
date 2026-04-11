@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
-import { upsertAttendance } from '../../lib/db'
+import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
 
 const QUICK_ACTIONS = [
@@ -56,51 +56,29 @@ export default function PortalHome() {
     setClockingIn(true)
     setClockMsg(null)
     try {
+      // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
 
-      if (result.warning) {
-        setClockMsg({ type: 'warning', text: result.warning })
-      }
+      const action = (todayAttendance?.clock_in && !todayAttendance?.clock_out) ? 'clock_out' : 'clock_in'
 
+      // Server-side validation + record write
+      const data = await serverClockIn({
+        employee: profile.name,
+        action,
+        lat: result.lat,
+        lng: result.lng,
+        accuracy: result.accuracy || null,
+        ip: result.ip,
+      })
+
+      setTodayAttendance(data.record)
       const now = new Date()
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      const dateStr = now.toISOString().slice(0, 10)
-      const isLate = now.getHours() >= 9 && now.getMinutes() > 0
 
-      if (todayAttendance && todayAttendance.clock_in && !todayAttendance.clock_out) {
-        // Clock out
-        const hours = ((now.getTime() - new Date(`${dateStr}T${todayAttendance.clock_in}`).getTime()) / 3600000).toFixed(2)
-        const { data } = await upsertAttendance({
-          ...todayAttendance,
-          clock_out: timeStr,
-          hours: parseFloat(hours),
-          clock_out_lat: result.lat,
-          clock_out_lng: result.lng,
-          clock_out_ip: result.ip,
-        })
-        if (data) {
-          setTodayAttendance(data)
-          setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}` })
-        }
-      } else if (!todayAttendance || !todayAttendance.clock_in) {
-        // Clock in
-        const { data } = await upsertAttendance({
-          employee: profile.name,
-          date: dateStr,
-          clock_in: timeStr,
-          status: isLate ? '遲到' : '正常',
-          hours: 0,
-          clock_in_lat: result.lat,
-          clock_in_lng: result.lng,
-          clock_in_ip: result.ip,
-          clock_in_location: result.locationName || '未知',
-        })
-        if (data) {
-          setTodayAttendance(data)
-          setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${result.locationName || ''}` })
-        }
+      if (action === 'clock_in') {
+        setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}` })
       } else {
-        setClockMsg({ type: 'info', text: '今日已完成打卡' })
+        setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}` })
       }
     } catch (err) {
       setClockMsg({ type: 'error', text: err.message })
@@ -130,7 +108,7 @@ export default function PortalHome() {
           {greeting}，{profile?.name}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-          {profile?.department}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          {profile?.dept}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
         </p>
       </div>
 

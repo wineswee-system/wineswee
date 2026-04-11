@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Printer, RotateCcw, CheckCircle, Loader2, XCircle, Receipt } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createPOSTransaction, createInvoice } from '../../lib/db'
-import { createPaymentRequest, PAYMENT_METHODS, processRefund } from '../../lib/payment'
+import { createPaymentRequest, processRefund } from '../../lib/payment'
 import { processPayment, confirmPayment, refundPayment, getPaymentMethods } from '../../lib/paymentGateway'
 import { calculateInvoiceTax, generateInvoiceNumber } from '../../lib/einvoice'
 import { printReceipt } from '../../lib/receiptPrinter'
-import Modal, { Field } from '../../components/Modal'
+import POSPaymentOverlay from './components/POSPaymentOverlay'
+import POSProductGrid from './components/POSProductGrid'
+import POSCartPanel from './components/POSCartPanel'
+import POSReceiptModal from './components/POSReceiptModal'
+import POSRefundModal from './components/POSRefundModal'
 
 const MOCK_PRODUCTS = [
   { id: 1, name: '美式咖啡', price: 60, category: '飲品', barcode: '4710001001' },
@@ -120,6 +124,12 @@ export default function POSTerminal() {
   // Get display label for current payment method
   const currentPaymentLabel = PAYMENT_METHOD_MAP.find(m => m.code === selectedPayment)?.label || selectedPayment
 
+  const receiptPrintOptions = {
+    companyName: '威士威企業總部',
+    companyTaxId: '12345678',
+    cashierName: '系統',
+  }
+
   const handleCheckout = async () => {
     if (cart.length === 0) return
 
@@ -168,7 +178,7 @@ export default function POSTerminal() {
       // 3. Create POS transaction record
       await createPOSTransaction({
         transaction_number: txnNum,
-        store: '台北總部',
+        store: '威士威企業總部',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
         subtotal, discount, tax, total,
@@ -208,7 +218,7 @@ export default function POSTerminal() {
 
       // Build receipt data
       const receipt = {
-        storeName: '台北總部',
+        storeName: '威士威企業總部',
         txnNum,
         invoiceNum,
         paymentId: payResult.paymentId,
@@ -315,12 +325,6 @@ export default function POSTerminal() {
     }
   }
 
-  const receiptPrintOptions = {
-    companyName: '台北總部',
-    companyTaxId: '12345678',
-    cashierName: '系統',
-  }
-
   const handlePrintReceipt = () => {
     if (!receiptData) return
     const txn = buildPrintTransaction(receiptData)
@@ -371,523 +375,78 @@ export default function POSTerminal() {
         </div>
       </div>
 
-      {/* Payment Processing Overlay */}
-      {paymentStage === 'paying' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 48, textAlign: 'center', minWidth: 320, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-cyan)', marginBottom: 16 }} />
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>付款處理中</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{processingMsg}</div>
-            <div style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: 12 }}>請勿關閉此頁面</div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Success Overlay */}
-      {paymentStage === 'success' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 40, textAlign: 'center', minWidth: 380, maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <CheckCircle size={56} style={{ color: 'var(--accent-green)', marginBottom: 12 }} />
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--accent-green)' }}>
-              {gatewayPending ? '付款待確認' : '付款成功'}
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              交易編號：{receiptData?.txnNum}
-            </div>
-
-            {/* Gateway pending notice */}
-            {gatewayPending && (
-              <div style={{
-                background: 'rgba(251, 191, 36, 0.1)',
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                marginBottom: 12,
-                fontSize: 13,
-                color: 'var(--accent-orange, #f59e0b)',
-                textAlign: 'left',
-              }}>
-                此筆為線上金流付款，需確認 gateway 回呼後才算完成。
-                <br />在正式環境中，付款確認由 ECPay / LINE Pay 自動回呼。
-              </div>
-            )}
-
-            <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: 16, marginBottom: 16, textAlign: 'left', fontSize: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span>付款方式</span><span style={{ fontWeight: 600 }}>{receiptData?.paymentMethod}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span>付款編號</span><span style={{ fontWeight: 600, fontSize: 11 }}>{paymentResult?.paymentId}</span>
-              </div>
-              {paymentResult?.gatewayTransactionId && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span>Gateway ID</span><span style={{ fontWeight: 600, fontSize: 11 }}>{paymentResult.gatewayTransactionId}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span>發票號碼</span><span style={{ fontWeight: 600 }}>{receiptData?.invoiceNum}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span>狀態</span>
-                <span style={{
-                  fontWeight: 600,
-                  color: gatewayConfirmed ? 'var(--accent-green)' : 'var(--accent-orange, #f59e0b)',
-                }}>
-                  {gatewayConfirmed ? '已完成' : '待確認'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, color: 'var(--accent-cyan)' }}>
-                <span>合計</span><span>NT$ {receiptData?.total?.toLocaleString()}</span>
-              </div>
-              {receiptData?.change !== null && receiptData?.change > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, color: 'var(--accent-orange)', fontWeight: 600 }}>
-                  <span>找零</span><span>NT$ {receiptData.change.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Confirm gateway payment button (for pending gateway payments) */}
-            {gatewayPending && (
-              <button
-                className="btn"
-                style={{
-                  width: '100%',
-                  marginBottom: 10,
-                  padding: '10px 0',
-                  background: 'var(--accent-orange, #f59e0b)',
-                  color: '#000',
-                  fontWeight: 700,
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: confirmingPayment ? 'wait' : 'pointer',
-                }}
-                onClick={handleConfirmGateway}
-                disabled={confirmingPayment}
-              >
-                {confirmingPayment ? '確認中...' : '確認付款（模擬 Gateway 回呼）'}
-              </button>
-            )}
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn" style={{ flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }} onClick={() => setShowReceipt(true)}>
-                <Receipt size={14} /> 預覽收據
-              </button>
-              <button className="btn" style={{ flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }} onClick={handlePrintReceipt}>
-                <Printer size={14} /> 列印收據
-              </button>
-            </div>
-
-            {/* Auto-print toggle */}
-            <label style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              marginTop: 10, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer',
-              padding: '6px 0', borderRadius: 8, background: 'var(--bg-secondary)',
-            }}>
-              <input
-                type="checkbox"
-                checked={autoPrint}
-                onChange={e => setAutoPrint(e.target.checked)}
-                style={{ accentColor: 'var(--accent-cyan)' }}
-              />
-              <Printer size={13} />
-              自動列印收據
-            </label>
-
-            {/* Refund button */}
-            <button
-              className="btn"
-              style={{
-                width: '100%',
-                marginTop: 10,
-                padding: '8px 0',
-                background: 'transparent',
-                border: '1px solid var(--accent-red)',
-                color: 'var(--accent-red)',
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
-              onClick={handleQuickRefund}
-            >
-              <RotateCcw size={13} style={{ marginRight: 4 }} /> 退款此筆交易
-            </button>
-
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: 10, padding: '10px 0' }} onClick={resetTerminal}>
-              下一筆交易
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Failed Overlay */}
-      {paymentStage === 'failed' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 40, textAlign: 'center', minWidth: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <XCircle size={56} style={{ color: 'var(--accent-red)', marginBottom: 12 }} />
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--accent-red)' }}>付款失敗</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>{processingMsg}</div>
-            <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0' }} onClick={() => setPaymentStage('cart')}>
-              返回重試
-            </button>
-          </div>
-        </div>
-      )}
+      <POSPaymentOverlay
+        paymentStage={paymentStage}
+        processingMsg={processingMsg}
+        receiptData={receiptData}
+        paymentResult={paymentResult}
+        gatewayPending={gatewayPending}
+        gatewayConfirmed={gatewayConfirmed}
+        confirmingPayment={confirmingPayment}
+        autoPrint={autoPrint}
+        setAutoPrint={setAutoPrint}
+        setShowReceipt={setShowReceipt}
+        handlePrintReceipt={handlePrintReceipt}
+        handleConfirmGateway={handleConfirmGateway}
+        handleQuickRefund={handleQuickRefund}
+        resetTerminal={resetTerminal}
+        setPaymentStage={setPaymentStage}
+      />
 
       <div style={{ display: 'flex', gap: 20, minHeight: 520 }}>
-        {/* Left: Product Selection */}
-        <div style={{ flex: '1 1 55%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Barcode scanner input */}
-          <div className="card" style={{ marginBottom: 0 }}>
-            <div style={{ padding: '12px 16px' }}>
-              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="掃描條碼或輸入商品名稱..."
-                  value={barcodeInput}
-                  onChange={e => setBarcodeInput(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-                <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px' }}>加入</button>
-              </form>
-            </div>
-          </div>
+        <POSProductGrid
+          search={search}
+          setSearch={setSearch}
+          barcodeInput={barcodeInput}
+          setBarcodeInput={setBarcodeInput}
+          handleBarcodeSubmit={handleBarcodeSubmit}
+          filtered={filtered}
+          addToCart={addToCart}
+        />
 
-          <div className="card" style={{ marginBottom: 0 }}>
-            <div className="card-header">
-              <div className="card-title"><span className="card-title-icon">🛒</span> 商品選擇</div>
-              <div className="search-bar">
-                <Search className="search-icon" />
-                <input type="text" placeholder="搜尋商品..." className="form-input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, padding: 16 }}>
-              {filtered.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => addToCart(p)}
-                  style={{
-                    border: '1px solid var(--border-primary)',
-                    borderRadius: 10,
-                    padding: 14,
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    background: 'var(--bg-secondary)',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-cyan)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.transform = 'none' }}
-                >
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: 'var(--bg-tertiary)', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                    {p.category === '飲品' ? '☕' : p.category === '甜點' ? '🍰' : '🥗'}
-                  </div>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.name}</div>
-                  <div style={{ color: 'var(--accent-cyan)', fontWeight: 700, fontSize: 14 }}>NT$ {p.price}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{p.category}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Cart & Payment */}
-        <div style={{ flex: '1 1 40%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ marginBottom: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div className="card-header">
-              <div className="card-title"><ShoppingCart size={16} style={{ marginRight: 6 }} /> 購物車 ({cart.reduce((s, c) => s + c.qty, 0)})</div>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
-              {cart.length === 0 && (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>購物車是空的</div>
-              )}
-              {cart.map(c => (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-primary)' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>NT$ {c.price} x {c.qty}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button onClick={() => updateQty(c.id, -1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Minus size={12} /></button>
-                    <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 600 }}>{c.qty}</span>
-                    <button onClick={() => updateQty(c.id, 1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Plus size={12} /></button>
-                    <button onClick={() => removeFromCart(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: '2px 4px' }}><Trash2 size={14} /></button>
-                  </div>
-                  <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 600 }}>NT$ {(c.price * c.qty).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Totals & Payment */}
-            <div style={{ padding: 16, borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', borderRadius: '0 0 12px 12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                <span>小計</span><span>NT$ {subtotal.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13 }}>
-                <span>折扣</span>
-                <input
-                  type="number" min={0} value={discount}
-                  onChange={e => setDiscount(Math.max(0, Number(e.target.value)))}
-                  style={{ width: 80, textAlign: 'right', background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 8px', color: 'var(--text-primary)', fontSize: 13 }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                <span>稅金 (5%)</span><span>NT$ {tax.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 18, margin: '12px 0', color: 'var(--accent-cyan)' }}>
-                <span>合計</span><span>NT$ {total.toLocaleString()}</span>
-              </div>
-
-              {/* Payment method selection */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }}>
-                  <CreditCard size={12} style={{ marginRight: 4, verticalAlign: -1 }} /> 付款方式
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {PAYMENT_METHOD_MAP.map(m => (
-                    <button
-                      key={m.code}
-                      onClick={() => setSelectedPayment(m.code)}
-                      style={{
-                        flex: '1 1 auto',
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        border: selectedPayment === m.code ? '2px solid var(--accent-cyan)' : '1px solid var(--border-primary)',
-                        background: selectedPayment === m.code ? 'var(--accent-cyan-dim)' : 'var(--bg-primary)',
-                        color: 'var(--text-primary)',
-                        fontWeight: selectedPayment === m.code ? 700 : 400,
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <span>{m.icon}</span> {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cash tendered input */}
-              {selectedPayment === 'cash' && (
-                <div style={{ marginBottom: 10, background: 'var(--bg-primary)', borderRadius: 8, padding: 10, border: '1px solid var(--border-primary)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>收現金額</div>
-                  <input
-                    type="number"
-                    className="form-input"
-                    placeholder="輸入收到的現金金額"
-                    value={cashTendered}
-                    onChange={e => setCashTendered(e.target.value)}
-                    style={{ width: '100%', fontSize: 18, fontWeight: 700, textAlign: 'right', marginBottom: 4 }}
-                  />
-                  {cashTendered && Number(cashTendered) >= total && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, color: 'var(--accent-orange)' }}>
-                      <span>找零</span><span>NT$ {changeAmount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {/* Quick cash buttons */}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    {[100, 500, 1000].map(v => (
-                      <button key={v} onClick={() => setCashTendered(String(v))} style={{
-                        flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid var(--border-primary)',
-                        background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600,
-                      }}>
-                        ${v}
-                      </button>
-                    ))}
-                    <button onClick={() => setCashTendered(String(total))} style={{
-                      flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid var(--accent-cyan)',
-                      background: 'var(--accent-cyan-dim)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600,
-                    }}>
-                      剛好
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* E-Invoice carrier */}
-              <div style={{ marginBottom: 10, background: 'var(--bg-primary)', borderRadius: 8, padding: 10, border: '1px solid var(--border-primary)' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>電子發票載具</div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: carrierType !== 'none' ? 8 : 0 }}>
-                  {[
-                    { value: 'none', label: '無' },
-                    { value: 'phone_barcode', label: '手機條碼' },
-                    { value: 'natural_person', label: '自然人憑證' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setCarrierType(opt.value); setCarrierValue('') }}
-                      style={{
-                        flex: 1, padding: '6px 8px', borderRadius: 6, fontSize: 12,
-                        border: carrierType === opt.value ? '2px solid var(--accent-cyan)' : '1px solid var(--border-primary)',
-                        background: carrierType === opt.value ? 'var(--accent-cyan-dim)' : 'transparent',
-                        color: 'var(--text-primary)', cursor: 'pointer', fontWeight: carrierType === opt.value ? 600 : 400,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                {carrierType !== 'none' && (
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder={carrierType === 'phone_barcode' ? '輸入手機條碼 (例: /ABC1234)' : '輸入自然人憑證號碼'}
-                    value={carrierValue}
-                    onChange={e => setCarrierValue(e.target.value)}
-                    style={{ width: '100%', fontSize: 13 }}
-                  />
-                )}
-              </div>
-
-              <button
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '12px 0', fontSize: 16, fontWeight: 700 }}
-                onClick={handleCheckout}
-                disabled={cart.length === 0}
-              >
-                結帳 — NT$ {total.toLocaleString()}
-              </button>
-            </div>
-          </div>
-        </div>
+        <POSCartPanel
+          cart={cart}
+          updateQty={updateQty}
+          removeFromCart={removeFromCart}
+          subtotal={subtotal}
+          discount={discount}
+          setDiscount={setDiscount}
+          tax={tax}
+          total={total}
+          selectedPayment={selectedPayment}
+          setSelectedPayment={setSelectedPayment}
+          cashTendered={cashTendered}
+          setCashTendered={setCashTendered}
+          changeAmount={changeAmount}
+          carrierType={carrierType}
+          setCarrierType={setCarrierType}
+          carrierValue={carrierValue}
+          setCarrierValue={setCarrierValue}
+          handleCheckout={handleCheckout}
+          paymentMethodMap={PAYMENT_METHOD_MAP}
+        />
       </div>
 
-      {/* Receipt Preview Modal */}
       {showReceipt && receiptData && (
-        <Modal title="收據預覽" onClose={() => setShowReceipt(false)} onSubmit={handlePrintReceipt} submitLabel="列印收據">
-          <div ref={receiptRef} style={{
-            fontFamily: "'Courier New', monospace",
-            background: '#fff',
-            color: '#000',
-            padding: 20,
-            maxWidth: 300,
-            margin: '0 auto',
-            fontSize: 12,
-            lineHeight: 1.6,
-          }}>
-            <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{receiptData.storeName}</div>
-            <div style={{ textAlign: 'center', fontSize: 11, marginBottom: 4 }}>統一編號：12345678</div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'center', marginBottom: 2 }}>電子發票證明聯</div>
-            <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{receiptData.invoiceNum}</div>
-            <div style={{ textAlign: 'center', marginBottom: 4 }}>{receiptData.date}</div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-
-            {receiptData.items.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>{item.name} x{item.qty}</span>
-                <span>${item.amount}</span>
-              </div>
-            ))}
-
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>小計</span><span>${receiptData.subtotal}</span></div>
-            {receiptData.discount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>折扣</span><span>-${receiptData.discount}</span></div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>稅金 (5%)</span><span>${receiptData.tax}</span></div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}><span>合計</span><span>${receiptData.total}</span></div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>付款方式</span><span>{receiptData.paymentMethod}</span></div>
-            {receiptData.cashTendered && (
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>收現</span><span>${receiptData.cashTendered}</span></div>
-            )}
-            {receiptData.change !== null && receiptData.change > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>找零</span><span>${receiptData.change}</span></div>
-            )}
-            {receiptData.carrierType && (
-              <>
-                <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-                <div style={{ textAlign: 'center' }}>載具：{receiptData.carrierType}</div>
-                <div style={{ textAlign: 'center' }}>{receiptData.carrierValue}</div>
-              </>
-            )}
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'center', fontSize: 10, color: '#666' }}>交易編號：{receiptData.txnNum}</div>
-            <div style={{ textAlign: 'center', fontSize: 10, color: '#666' }}>付款編號：{receiptData.paymentId}</div>
-            <div style={{ textAlign: 'center', marginTop: 10, fontWeight: 600 }}>謝謝惠顧</div>
-          </div>
-        </Modal>
+        <POSReceiptModal
+          ref={receiptRef}
+          receiptData={receiptData}
+          onClose={() => setShowReceipt(false)}
+          onPrint={handlePrintReceipt}
+        />
       )}
 
-      {/* Refund Modal */}
       {showRefund && (
-        <Modal title="退貨/退款" onClose={closeRefundModal} onSubmit={refundResult ? closeRefundModal : processRefundSubmit} submitLabel={refundResult ? '關閉' : '確認退款'}>
-          {refundResult ? (
-            <div style={{ textAlign: 'center', padding: 20 }}>
-              <CheckCircle size={48} style={{ color: 'var(--accent-green)', marginBottom: 12 }} />
-              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: 'var(--accent-green)' }}>退款申請已送出</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                退款編號：{refundResult.refundId}
-              </div>
-              <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: 12, fontSize: 13, textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>原交易編號</span><span style={{ fontWeight: 600 }}>{refundResult.paymentId}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>退款金額</span><span style={{ fontWeight: 700, color: 'var(--accent-red)' }}>NT$ {refundResult.amount.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>狀態</span><span>{refundResult.message}</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <Field label="原交易編號">
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    className="form-input"
-                    type="text"
-                    placeholder="輸入 POS 交易編號"
-                    value={refundTxnId}
-                    onChange={e => setRefundTxnId(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="btn btn-primary" onClick={handleRefund} style={{ padding: '8px 16px' }}>查詢</button>
-                </div>
-              </Field>
-
-              {refundItems.length > 0 && (
-                <>
-                  <Field label="選擇退貨商品">
-                    <div style={{ border: '1px solid var(--border-primary)', borderRadius: 8, overflow: 'hidden' }}>
-                      {refundItems.map((item, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => toggleRefundItem(idx)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 12px',
-                            cursor: 'pointer',
-                            background: item.selected ? 'var(--accent-red-dim, rgba(239,68,68,0.1))' : 'transparent',
-                            borderBottom: idx < refundItems.length - 1 ? '1px solid var(--border-primary)' : 'none',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <input type="checkbox" checked={item.selected} readOnly />
-                            <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>x{item.qty}</span>
-                          </div>
-                          <span style={{ fontWeight: 600 }}>NT$ {(item.price * item.qty).toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Field>
-                  <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 700, color: 'var(--accent-red)', padding: '8px 0' }}>
-                    退款小計：NT$ {refundItems.filter(i => i.selected).reduce((sum, i) => sum + i.price * i.qty, 0).toLocaleString()}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </Modal>
+        <POSRefundModal
+          refundTxnId={refundTxnId}
+          setRefundTxnId={setRefundTxnId}
+          refundItems={refundItems}
+          refundResult={refundResult}
+          handleRefund={handleRefund}
+          toggleRefundItem={toggleRefundItem}
+          processRefundSubmit={processRefundSubmit}
+          closeRefundModal={closeRefundModal}
+        />
       )}
 
       <style>{`

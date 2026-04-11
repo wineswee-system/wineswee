@@ -22,7 +22,7 @@ const tickStyle = { color: '#64748b', font: { size: 11 } }
 
 // Generate demo data when no real data exists
 function generateDemoData(locations) {
-  const storeNames = locations.length > 0 ? locations.map(l => l.name) : ['台北總部', '台中分店', '高雄分店']
+  const storeNames = locations.length > 0 ? locations.map(l => l.name) : ['威士威企業總部', '01中山國小門市', '03台北永春門市']
   const storeIds = locations.length > 0 ? locations.map(l => l.id) : [1, 2, 3]
   const today = new Date().toISOString().slice(0, 10)
   const paymentMethods = ['現金', '信用卡', 'LINE Pay', '綠界支付', '銀行轉帳']
@@ -71,7 +71,7 @@ export default function POSOverview() {
   useEffect(() => {
     Promise.all([
       supabase.from('pos_transactions').select('*'),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
     ]).then(([txRes, locRes]) => {
       const locs = locRes.data || []
       setLocations(locs)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, ArrowRightLeft, AlertTriangle, ScanBarcode, Package, History, ArrowUpDown, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { checkStockAndCreatePR } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import { calculateFIFO, calculateWeightedAverage, valuateInventory } from '../../lib/inventoryCosting'
 import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -203,12 +203,13 @@ export default function Inventory() {
             <button className="btn btn-secondary" onClick={async () => {
               const lowItems = stocks.filter(s => (s.quantity || 0) <= (s.min_qty || 10))
               if (lowItems.length === 0) { alert('目前沒有低庫存品項'); return }
-              const result = await checkStockAndCreatePR(
-                lowItems.map(s => ({ name: s.sku_name, qty: (s.min_qty || 10) * 2, unit: s.unit, price: s.unit_cost || 0 })),
-                '系統'
-              )
-              if (result.pr) alert(`已自動建立採購建議 ${result.pr.pr_number}（${result.shortages.length} 項缺料）`)
-              else alert('庫存充足，無需採購')
+              const items = lowItems.map(s => ({ name: s.sku_name, qty: (s.min_qty || 10) * 2, unit: s.unit, price: s.unit_cost || 0 }))
+              getEventBus().publish('sales.order.created', {
+                order_id: `LOW-STOCK-${Date.now()}`,
+                items,
+                total_amount: items.reduce((sum, i) => sum + (i.price * i.qty), 0),
+              }, { source: 'Inventory.jsx' })
+              alert(`已發送低庫存採購事件（${lowItems.length} 項缺料）`)
             }}><AlertTriangle size={14} /> 低庫存檢查</button>
             <button className="btn btn-primary" onClick={() => setShowAdjModal(true)}><Plus size={14} /> 庫存調整</button>
           </div>

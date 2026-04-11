@@ -5,34 +5,31 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
   const modalRef = useRef(null)
   const previousFocusRef = useRef(null)
 
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     previousFocusRef.current = document.activeElement
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', handleKeyDown)
 
-    // Focus the first focusable element inside the modal
-    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    const firstFocusable = modalRef.current?.querySelector(focusableSelector)
-    if (firstFocusable) firstFocusable.focus()
-
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      // Restore focus to the previously focused element
       if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
         previousFocusRef.current.focus()
       }
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       background: 'var(--bg-modal-overlay)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
+    }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         ref={modalRef}
         role="dialog"
@@ -42,17 +39,19 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-medium)',
           borderRadius: 16,
-          width: '100%', maxWidth: 480,
+          width: '100%', maxWidth: 560,
+          maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column',
           boxShadow: 'var(--shadow-xl)',
           animation: 'fadeIn 0.15s ease',
-        }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+        }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
           {children}
         </div>
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

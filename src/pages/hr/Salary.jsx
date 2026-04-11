@@ -1,29 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Download, ChevronDown, ChevronRight, Plus, Calculator, Users, Play } from 'lucide-react'
-import { getSalaryRecords, upsertSalaryRecord, getEmployees } from '../../lib/db'
+import { Download, Plus, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary } from '../../lib/payroll'
 import { exportSalaryPdf } from '../../lib/exportPdf'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import Modal, { Field } from '../../components/Modal'
+import SalaryTable from './components/SalaryTable'
+import SalaryFormModal from './components/SalaryFormModal'
+import BatchPayrollModal from './components/BatchPayrollModal'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
-
-// ── Employee select grouped by department ──
-function EmpSelect({ value, onChange, employees, departments }) {
-  return (
-    <select className="form-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">請選擇員工</option>
-      {departments.map(d => (
-        <optgroup key={d.id} label={d.name}>
-          {employees.filter(e => e.department === d.name).map(e => (
-            <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
-  )
-}
 
 // ── Real-time payroll deduction calculator ──
 function computeDeductions(f) {
@@ -81,6 +66,8 @@ export default function Salary() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState('')
+  const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [expanded, setExpanded] = useState(null)
@@ -97,13 +84,15 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').order('id'),
       supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, department, position, base_salary').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([s, b, e, d]) => {
+      supabase.from('stores').select('*').order('name'),
+    ]).then(([s, b, e, d, st]) => {
       setRecords(s.data || [])
       setBonusRecords(b.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
+      setStores(st.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -180,25 +169,66 @@ export default function Salary() {
   }
 
   // ── Batch payroll run ──
-  const handleBatchPayroll = () => {
+  const handleBatchPayroll = async () => {
+    try {
+    // Pull attendance data for the month
+    const monthStart = month + '-01'
+    const monthEnd = month + '-31'
+    const { data: attendance } = await supabase.from('attendance_records')
+      .select('employee, hours, status').gte('date', monthStart).lte('date', monthEnd)
+    const { data: overtime } = await supabase.from('overtime_requests')
+      .select('employee, hours').eq('status', '已核准').gte('date', monthStart).lte('date', monthEnd)
+    const { data: leaves } = await supabase.from('leave_requests')
+      .select('employee, days, type').eq('status', '已核准').gte('start_date', monthStart).lte('start_date', monthEnd)
+
+    const attMap = {}
+    for (const a of (attendance || [])) {
+      if (!attMap[a.employee]) attMap[a.employee] = { hours: 0, late: 0, days: 0 }
+      attMap[a.employee].hours += Number(a.hours || 0)
+      attMap[a.employee].days++
+      if (a.status === '遲到') attMap[a.employee].late++
+    }
+    const otMap = {}
+    for (const o of (overtime || [])) {
+      otMap[o.employee] = (otMap[o.employee] || 0) + Number(o.hours || 0)
+    }
+    const lvMap = {}
+    for (const l of (leaves || [])) {
+      if (!lvMap[l.employee]) lvMap[l.employee] = { absence: 0 }
+      if (l.type === '事假') lvMap[l.employee].absence += (l.days || 0)
+    }
+
     const preview = employees.map(emp => {
       const baseSalary = emp.base_salary || 0
+      const att = attMap[emp.name] || { hours: 0, late: 0, days: 0 }
+      const otHours = otMap[emp.name] || 0
+      const absenceDays = lvMap[emp.name]?.absence || 0
+      // Tiered OT: first 2h = 1.34x, 3h+ = 1.67x (勞基法 §24)
+      const hourlyRate = baseSalary / 30 / 8
+      const overtimePay = otHours <= 2
+        ? Math.round(otHours * hourlyRate * 1.34)
+        : Math.round(2 * hourlyRate * 1.34 + (otHours - 2) * hourlyRate * 1.67)
+      const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
+      const lateDeduction = att.late * 100
+
       const result = calculateNetSalary(baseSalary, {
-        dependents: 0,
-        voluntaryPensionRate: 0,
-        overtimePay: 0,
-        bonus: 0,
-        otherDeductions: 0,
+        dependents: 0, voluntaryPensionRate: 0,
+        overtimePay, bonus: 0,
+        otherDeductions: absenceDeduction + lateDeduction,
       })
       return {
-        employee: emp.name,
-        department: emp.department,
-        base_salary: baseSalary,
+        employee: emp.name, dept: emp.dept, base_salary: baseSalary,
+        workDays: att.days, workHours: att.hours, otHours, absenceDays, lateCount: att.late,
+        overtimePay, absenceDeduction, lateDeduction,
         ...result,
       }
     })
     setBatchPreview(preview)
     setShowBatchModal(true)
+    } catch (err) {
+      console.error('Batch payroll failed:', err)
+      alert('計薪失敗：' + (err.message || '未知錯誤'))
+    }
   }
 
   const handleBatchSave = async () => {
@@ -208,8 +238,8 @@ export default function Salary() {
         employee: p.employee,
         month,
         base_salary: p.base_salary,
-        allowance: 0,
-        overtime: 0,
+        allowance: (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.housing_allowance || 0),
+        overtime: p.overtimePay || 0,
         bonus: 0,
         dependents: 0,
         voluntary_pension_rate: 0,
@@ -217,8 +247,8 @@ export default function Salary() {
         health_insurance: p.healthInsurance,
         pension_self: p.pension,
         income_tax: p.incomeTax,
-        absence_deduction: 0,
-        late_deduction: 0,
+        absence_deduction: p.absenceDeduction || 0,
+        late_deduction: p.lateDeduction || 0,
         other_deduction: 0,
         deduction_note: '',
         insurance: p.laborInsurance + p.healthInsurance,
@@ -250,18 +280,13 @@ export default function Salary() {
     </div>
   )
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
-
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
+  const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
 
   const filtered = records.filter(r =>
     (!month || !r.month || r.month === month) &&
-    (deptFilter === '' || getEmpDept(r.employee) === deptFilter)
+    (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
+    (storeFilter === '' || getEmpStore(r.employee) === storeFilter)
   )
 
   // Stats
@@ -273,26 +298,6 @@ export default function Salary() {
   const employeeCount = filtered.length
 
   const getBonusDetail = (name) => bonusRecords.filter(b => b.employee_name === name && b.period === month)
-
-  // ── Deduction breakdown row items ──
-  function buildBreakdownItems(r) {
-    return [
-      { label: '底薪', value: r.base_salary || 0, color: 'var(--text-primary)', sign: '', section: 'add' },
-      { label: '加班費', value: r.overtime || 0, color: 'var(--accent-cyan)', sign: '+', section: 'add' },
-      { label: '津貼', value: r.allowance || 0, color: 'var(--accent-green)', sign: '+', section: 'add' },
-      { label: '獎金', value: r.bonus || 0, color: 'var(--accent-purple)', sign: '+', section: 'add' },
-      { label: null, section: 'divider-gross' },
-      { label: '總薪資', value: (r.base_salary || 0) + (r.overtime || 0) + (r.allowance || 0) + (r.bonus || 0), color: 'var(--accent-cyan)', sign: '=', section: 'total', bold: true },
-      { label: null, section: 'divider-deduct' },
-      { label: '勞保自付額', value: r.labor_insurance || 0, color: 'var(--accent-orange)', sign: '-', section: 'deduct', note: '員工自付 20%' },
-      { label: '健保自付額', value: r.health_insurance || 0, color: 'var(--accent-orange)', sign: '-', section: 'deduct', note: `員工自付 30%${r.dependents ? ` (含${r.dependents}眷屬)` : ''}` },
-      { label: '勞退自提', value: r.pension_self || 0, color: 'var(--accent-orange)', sign: '-', section: 'deduct', note: r.voluntary_pension_rate ? `自提 ${r.voluntary_pension_rate}%` : '未自提' },
-      { label: '所得稅扣繳', value: r.income_tax || 0, color: 'var(--accent-red)', sign: '-', section: 'deduct', note: '依薪資所得扣繳表' },
-      { label: '事假扣薪', value: r.absence_deduction || 0, color: 'var(--accent-red)', sign: '-', section: 'deduct' },
-      { label: '遲到扣薪', value: r.late_deduction || 0, color: 'var(--accent-red)', sign: '-', section: 'deduct' },
-      { label: `其他扣款${r.deduction_note ? `（${r.deduction_note}）` : ''}`, value: r.other_deduction || 0, color: 'var(--accent-red)', sign: '-', section: 'deduct' },
-    ]
-  }
 
   return (
     <div className="fade-in">
@@ -318,12 +323,17 @@ export default function Salary() {
         </div>
       </div>
 
-      {/* ── Department filter ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      {/* ── Store filter ── */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* ── Stats cards ── */}
@@ -347,349 +357,38 @@ export default function Salary() {
       </div>
 
       {/* ── Salary table ── */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title"><span className="card-title-icon">📋</span> 薪資明細</div>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>點擊列展開完整計算過程</span>
-        </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: 32 }}></th>
-                <th>員工</th>
-                <th>部門</th>
-                <th>底薪</th>
-                <th>加班費</th>
-                <th>津貼</th>
-                <th>獎金</th>
-                <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
-                <th style={{ color: 'var(--accent-orange)' }}>健保</th>
-                <th style={{ color: 'var(--accent-orange)' }}>勞退自提</th>
-                <th style={{ color: 'var(--accent-red)' }}>所得稅</th>
-                <th style={{ fontWeight: 800 }}>實領薪資</th>
-                <th style={{ width: 40 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={13} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>本月尚無薪資紀錄</td></tr>
-              )}
-              {filtered.map(r => {
-                const bonusDetail = getBonusDetail(r.employee)
-                const isExpanded = expanded === r.id
-                const breakdownItems = buildBreakdownItems(r)
-                const gross = (r.base_salary || 0) + (r.overtime || 0) + (r.allowance || 0) + (r.bonus || 0)
-                return (
-                  <tbody key={r.id}>
-                    <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
-                      <td>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                      <td style={{ fontWeight: 600 }}>{r.employee}</td>
-                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
-                      <td>{fmt(r.base_salary)}</td>
-                      <td style={{ color: 'var(--accent-cyan)' }}>{r.overtime ? `+${(r.overtime).toLocaleString()}` : '-'}</td>
-                      <td style={{ color: 'var(--accent-green)' }}>{r.allowance ? `+${(r.allowance).toLocaleString()}` : '-'}</td>
-                      <td style={{ color: 'var(--accent-purple)' }}>{r.bonus ? `+${(r.bonus).toLocaleString()}` : '-'}</td>
-                      <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.labor_insurance || 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.health_insurance || 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>{r.pension_self ? `-${r.pension_self.toLocaleString()}` : '-'}</td>
-                      <td style={{ color: 'var(--accent-red)', fontSize: 12 }}>{r.income_tax ? `-${r.income_tax.toLocaleString()}` : '-'}</td>
-                      <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>{fmt(r.net_salary)}</td>
-                      <td>
-                        <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={e => { e.stopPropagation(); openEdit(r) }}>編輯</button>
-                      </td>
-                    </tr>
-
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={13} style={{ padding: 0 }}>
-                          <div style={{ background: 'var(--glass-light)', padding: '16px 24px', borderTop: '1px solid var(--border-subtle)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-                              {/* Payroll breakdown */}
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📐 薪資計算明細</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                  {breakdownItems.map((item, i) => {
-                                    if (item.section === 'divider-gross' || item.section === 'divider-deduct') {
-                                      return <div key={i} style={{ borderTop: '1px dashed var(--border-medium)', margin: '4px 0' }} />
-                                    }
-                                    if (item.section === 'total') {
-                                      return (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan)', fontSize: 13 }}>
-                                          <span style={{ fontWeight: 700 }}>{item.sign} {item.label}</span>
-                                          <span style={{ color: item.color, fontWeight: 800 }}>{fmt(item.value)}</span>
-                                        </div>
-                                      )
-                                    }
-                                    return (
-                                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 13 }}>
-                                        <div>
-                                          <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
-                                          {item.note && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.note}</div>}
-                                        </div>
-                                        <span style={{ color: item.value === 0 ? 'var(--text-muted)' : item.color, fontWeight: 600 }}>
-                                          {item.value === 0 ? '—' : `${item.sign} ${fmt(item.value).replace('NT$ ', 'NT$ ')}`}
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                  {/* Net salary */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', fontSize: 14, marginTop: 6 }}>
-                                    <span style={{ fontWeight: 700 }}>= 實領薪資</span>
-                                    <span style={{ color: 'var(--accent-green)', fontWeight: 800 }}>{fmt(r.net_salary)}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Bonus detail */}
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>🏆 獎金明細</div>
-                                {bonusDetail.length === 0 ? (
-                                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 16, background: 'var(--bg-card)', borderRadius: 8, textAlign: 'center' }}>
-                                    本月尚無獎金紀錄<br />
-                                    <span style={{ fontSize: 11 }}>可至「績效獎金」頁面新增</span>
-                                  </div>
-                                ) : bonusDetail.map(b => (
-                                  <div key={b.id} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                      <span style={{ fontSize: 13, fontWeight: 700 }}>{b.role_type} 獎金</span>
-                                      <span style={{ color: 'var(--accent-purple)', fontWeight: 800 }}>{fmt(b.total_bonus)}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-                                        <span>基本績效獎</span><span>{fmt(b.base_bonus)}</span>
-                                      </div>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-                                        <span>數據達標獎</span><span>{fmt(b.data_bonus)}</span>
-                                      </div>
-                                    </div>
-                                    {b.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, padding: '4px 8px', background: 'var(--glass-light)', borderRadius: 6 }}>說明：{b.notes}</div>}
-                                  </div>
-                                ))}
-
-                                {/* Employer cost summary */}
-                                <div style={{ marginTop: 16 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🏢 雇主成本（參考）</div>
-                                  <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {(() => {
-                                      const laborEr = calculateLaborInsurance(r.base_salary || 0).employer_share
-                                      const healthEr = calculateHealthInsurance(r.base_salary || 0, r.dependents || 0).employer_share
-                                      const pensionEr = calculateLaborPension(r.base_salary || 0).employer_contribution
-                                      return (
-                                        <>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>勞保雇主負擔</span><span>{fmt(laborEr)}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>健保雇主負擔</span><span>{fmt(healthEr)}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>勞退 6% 提繳</span><span>{fmt(pensionEr)}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: 4, marginTop: 2 }}>
-                                            <span style={{ fontWeight: 600 }}>雇主額外成本</span>
-                                            <span style={{ fontWeight: 700, color: 'var(--accent-red)' }}>{fmt(laborEr + healthEr + pensionEr)}</span>
-                                          </div>
-                                        </>
-                                      )
-                                    })()}
-                                  </div>
-                                </div>
-                              </div>
-
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SalaryTable
+        filtered={filtered}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        getEmpDept={getEmpDept}
+        getBonusDetail={getBonusDetail}
+        openEdit={openEdit}
+      />
 
       {/* ── Create / Edit Modal ── */}
       {showModal && (
-        <Modal title={editingRecord ? '編輯薪資紀錄' : '新增薪資紀錄'} onClose={() => { setShowModal(false); setEditingRecord(null); setForm(emptyForm) }} onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
-              <EmpSelect value={form.employee} onChange={v => set('employee', v)} employees={employees} departments={departments} />
-            </Field>
-            <Field label="月份">
-              <input className="form-input" type="month" style={{ width: '100%' }} value={form.month} onChange={e => set('month', e.target.value)} />
-            </Field>
-          </div>
-
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-green)', margin: '8px 0 4px' }}>▲ 薪資項目</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
-            <Field label="底薪">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
-            </Field>
-            <Field label="加班費">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.overtime_pay} onChange={e => set('overtime_pay', e.target.value)} />
-            </Field>
-            <Field label="津貼">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.allowances} onChange={e => set('allowances', e.target.value)} />
-            </Field>
-            <Field label="獎金">
-              <input className="form-input" type="number" style={{ width: '100%', borderColor: 'var(--accent-purple)' }} placeholder="0" value={form.bonus} onChange={e => set('bonus', e.target.value)} />
-            </Field>
-          </div>
-
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-orange)', margin: '8px 0 4px' }}>⚙ 保險參數</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Field label="健保眷屬人數">
-              <input className="form-input" type="number" min="0" max="3" style={{ width: '100%' }} value={form.dependents} onChange={e => set('dependents', e.target.value)} />
-            </Field>
-            <Field label="勞退自提比率 (%)">
-              <input className="form-input" type="number" min="0" max="6" step="1" style={{ width: '100%' }} placeholder="0" value={form.voluntary_pension_rate} onChange={e => set('voluntary_pension_rate', e.target.value)} />
-            </Field>
-          </div>
-
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-red)', margin: '8px 0 4px' }}>▼ 其他扣款</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <Field label="事假扣薪">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.absence_deduction} onChange={e => set('absence_deduction', e.target.value)} />
-            </Field>
-            <Field label="遲到扣薪">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.late_deduction} onChange={e => set('late_deduction', e.target.value)} />
-            </Field>
-            <Field label="其他扣款">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.other_deduction} onChange={e => set('other_deduction', e.target.value)} />
-            </Field>
-          </div>
-          <Field label="其他扣款說明">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：預支薪資扣還、公司借款..." value={form.deduction_note} onChange={e => set('deduction_note', e.target.value)} />
-          </Field>
-
-          {/* ── Real-time auto-calculation panel ── */}
-          <div style={{ background: 'var(--glass-light)', borderRadius: 10, padding: '12px 16px', border: '1px solid var(--border-medium)' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
-              <Calculator size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-              自動計算預覽（即時更新）
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>總薪資</span>
-                <span style={{ fontWeight: 600 }}>{fmt(deductions.gross)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--accent-orange)' }}>勞保自付</span>
-                <span style={{ fontWeight: 600 }}>-{deductions.laborIns.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--accent-orange)' }}>健保自付</span>
-                <span style={{ fontWeight: 600 }}>-{deductions.healthIns.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--accent-orange)' }}>勞退自提</span>
-                <span style={{ fontWeight: 600 }}>{deductions.pensionSelf > 0 ? `-${deductions.pensionSelf.toLocaleString()}` : '—'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--accent-red)' }}>所得稅扣繳</span>
-                <span style={{ fontWeight: 600 }}>{deductions.incomeTax > 0 ? `-${deductions.incomeTax.toLocaleString()}` : '—'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 6, background: 'var(--bg-card)' }}>
-                <span style={{ color: 'var(--accent-red)' }}>其他扣款</span>
-                <span style={{ fontWeight: 600 }}>{deductions.manualDeductions > 0 ? `-${deductions.manualDeductions.toLocaleString()}` : '—'}</span>
-              </div>
-            </div>
-            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', fontSize: 14, fontWeight: 700, color: 'var(--accent-green)', textAlign: 'center', marginTop: 10 }}>
-              實領薪資：{fmt(deductions.net)}
-            </div>
-          </div>
-        </Modal>
+        <SalaryFormModal
+          editingRecord={editingRecord}
+          form={form}
+          set={set}
+          deductions={deductions}
+          employees={employees}
+          departments={departments}
+          onClose={() => { setShowModal(false); setEditingRecord(null); setForm(emptyForm) }}
+          onSubmit={handleSubmit}
+        />
       )}
 
       {/* ── Batch Payroll Modal ── */}
       {showBatchModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'var(--bg-modal-overlay)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} onClick={() => setShowBatchModal(false)}>
-          <div style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 16,
-            width: '100%', maxWidth: 900,
-            maxHeight: '85vh',
-            boxShadow: 'var(--shadow-xl)',
-            animation: 'fadeIn 0.15s ease',
-            display: 'flex', flexDirection: 'column',
-          }} onClick={e => e.stopPropagation()}>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700 }}>
-                <Calculator size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                批次計薪預覽 — {month}
-              </h3>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {batchPreview.length} 位員工</span>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-              <div className="data-table-wrapper">
-                <table className="data-table" style={{ fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      <th>員工</th>
-                      <th>部門</th>
-                      <th>底薪</th>
-                      <th>總薪資</th>
-                      <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
-                      <th style={{ color: 'var(--accent-orange)' }}>健保</th>
-                      <th style={{ color: 'var(--accent-red)' }}>所得稅</th>
-                      <th style={{ color: 'var(--accent-red)' }}>扣除合計</th>
-                      <th style={{ color: 'var(--accent-green)', fontWeight: 800 }}>實領</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batchPreview.map((p, i) => (
-                      <tr key={i}>
-                        <td style={{ fontWeight: 600 }}>{p.employee}</td>
-                        <td style={{ color: 'var(--text-muted)' }}>{p.department || '-'}</td>
-                        <td>{fmt(p.base_salary)}</td>
-                        <td>{fmt(p.gross)}</td>
-                        <td style={{ color: 'var(--accent-orange)' }}>-{p.laborInsurance.toLocaleString()}</td>
-                        <td style={{ color: 'var(--accent-orange)' }}>-{p.healthInsurance.toLocaleString()}</td>
-                        <td style={{ color: 'var(--accent-red)' }}>{p.incomeTax > 0 ? `-${p.incomeTax.toLocaleString()}` : '—'}</td>
-                        <td style={{ color: 'var(--accent-red)', fontWeight: 600 }}>-{p.totalDeductions.toLocaleString()}</td>
-                        <td style={{ color: 'var(--accent-green)', fontWeight: 800 }}>{fmt(p.netSalary)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
-                      <td colSpan={3}>合計</td>
-                      <td>{fmt(batchPreview.reduce((s, p) => s + p.gross, 0))}</td>
-                      <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + p.laborInsurance, 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + p.healthInsurance, 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + p.incomeTax, 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + p.totalDeductions, 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-green)' }}>{fmt(batchPreview.reduce((s, p) => s + p.netSalary, 0))}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                使用員工底薪計算，不含加班費 / 獎金 / 扣款。儲存後可逐筆編輯調整。
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-secondary" onClick={() => setShowBatchModal(false)}>取消</button>
-                <button className="btn btn-primary" onClick={handleBatchSave} disabled={batchSaving}>
-                  {batchSaving ? '儲存中...' : (<><Play size={14} /> 確認儲存 {batchPreview.length} 筆</>)}
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
+        <BatchPayrollModal
+          month={month}
+          batchPreview={batchPreview}
+          batchSaving={batchSaving}
+          onClose={() => setShowBatchModal(false)}
+          onSave={handleBatchSave}
+        />
       )}
     </div>
   )

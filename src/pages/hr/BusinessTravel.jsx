@@ -18,7 +18,7 @@ export default function BusinessTravel() {
   useEffect(() => {
     Promise.all([
       getBusinessTrips(),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([t, e, d]) => {
       const emps = e.data || []
@@ -51,21 +51,23 @@ export default function BusinessTravel() {
     if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
   }
 
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    const { data } = await updateBusinessTripStatus(id, '已駁回', reason.trim())
+    if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const filtered = trips.filter(t =>
     deptFilter === '' || getEmpDept(t.employee) === deptFilter
   )
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   return (
     <div className="fade-in">
@@ -80,11 +82,16 @@ export default function BusinessTravel() {
       </div>
 
       {/* 部門篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="">全部部門</option>
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -118,13 +125,19 @@ export default function BusinessTravel() {
                   <td>{t.purpose}</td>
                   <td>NT$ {Number(t.budget).toLocaleString()}</td>
                   <td>
-                    <span className={`badge ${t.status === '已核准' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${t.status === '已核准' ? 'badge-success' : t.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{t.status}
                     </span>
+                    {t.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{t.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {t.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -141,7 +154,7 @@ export default function BusinessTravel() {
               <option value="">請選擇員工</option>
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.department === d.name).map(e => (
+                  {employees.filter(e => e.dept === d.name).map(e => (
                     <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
                   ))}
                 </optgroup>

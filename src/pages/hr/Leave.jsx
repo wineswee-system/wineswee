@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Info } from 'lucide-react'
+import { Plus, Search, Info, Paperclip } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
@@ -23,7 +23,7 @@ export default function Leave() {
   useEffect(() => {
     Promise.all([
       getLeaveRequests(),
-      supabase.from('employees').select('id, name, department, position, join_date, phone').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, join_date, phone').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([l, e, d]) => {
       const emps = e.data || []
@@ -118,28 +118,40 @@ export default function Leave() {
 
   const handleApprove = async (id) => {
     const { data } = await updateLeaveStatus(id, '已核准', '主管')
-    if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
+    if (data) {
+      setLeaves(prev => prev.map(l => l.id === id ? data : l))
+      // Write leave days to schedule as '休'
+      if (data.start_date && data.days) {
+        const totalDays = Math.ceil(data.days) // 0.5天也要標休（半天假整天不排班）
+        for (let i = 0; i < totalDays; i++) {
+          const d = new Date(data.start_date)
+          d.setDate(d.getDate() + i)
+          const dateStr = d.toISOString().slice(0, 10)
+          await supabase.from('schedules').upsert(
+            { employee: data.employee, date: dateStr, shift: '休' },
+            { onConflict: 'employee,date' }
+          )
+        }
+      }
+    }
   }
   const handleReject = async (id) => {
-    const { data } = await updateLeaveStatus(id, '已拒絕', '主管')
+    const reason = prompt('請輸入拒絕原因：')
+    if (reason === null) return // cancelled
+    if (!reason.trim()) { alert('請填寫拒絕原因'); return }
+    const { data } = await updateLeaveStatus(id, '已拒絕', '主管', reason.trim())
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
   const filtered = leaves.filter(l =>
     (deptFilter === '' || getEmpDept(l.employee) === deptFilter) &&
     (search === '' || l.employee.includes(search))
   )
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500,
-  })
 
   return (
     <div className="fade-in">
@@ -157,11 +169,16 @@ export default function Leave() {
       </div>
 
       {/* Department filter */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="">全部部門</option>
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -195,10 +212,10 @@ export default function Leave() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>員工</th><th>部門</th><th>假別</th><th>期間</th><th>天數/時數</th><th>事由</th><th>狀態</th><th>操作</th></tr>
+              <tr><th>員工</th><th>部門</th><th>假別</th><th>期間</th><th>天數/時數</th><th>事由</th><th>附件</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無假單</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無假單</td></tr>}
               {filtered.map(l => (
                 <tr key={l.id}>
                   <td style={{ fontWeight: 600 }}>{l.employee}</td>
@@ -212,9 +229,29 @@ export default function Leave() {
                   <td>{l.hours && l.hours < 8 ? `${l.hours}h` : `${l.days}天`}</td>
                   <td style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</td>
                   <td>
+                    {l.attachments?.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {l.attachments.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', textDecoration: 'none',
+                          }}>
+                            <Paperclip size={10} /> {i + 1}
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
+                    )}
+                  </td>
+                  <td>
                     <span className={`badge ${l.status === '已核准' ? 'badge-success' : l.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}
                     </span>
+                    {l.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{l.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {l.status === '待審核' && (
@@ -239,7 +276,7 @@ export default function Leave() {
               <option value="">請選擇</option>
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.department === d.name).map(e => (
+                  {employees.filter(e => e.dept === d.name).map(e => (
                     <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
                   ))}
                 </optgroup>

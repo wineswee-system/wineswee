@@ -93,7 +93,7 @@ export default function Service() {
     Promise.all([
       supabase.from('service_tickets').select('*').order('created_at', { ascending: false }),
       supabase.from('customers').select('id, name'),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
       supabase.from('opportunities').select('id, name, customer_name'),
     ]).then(([t, c, l, d]) => {
       const ticketData = t.data || []

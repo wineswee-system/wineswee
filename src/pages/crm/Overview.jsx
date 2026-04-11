@@ -27,7 +27,7 @@ export default function CRMOverview() {
       supabase.from('opportunities').select('*'),
       supabase.from('service_tickets').select('*'),
       supabase.from('customer_contacts').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
       supabase.from('marketing_campaigns').select('*'),
     ]).then(([c, o, t, ct, l, cam]) => {
       setCustomers(c.data || [])

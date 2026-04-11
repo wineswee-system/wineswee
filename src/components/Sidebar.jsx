@@ -13,10 +13,11 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
-  UserCheck, Shield, Send, Search
+  UserCheck, Shield, Send, Search, Activity, AlertOctagon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
+import { prefetchGroup } from '../modules/prefetch'
 
 // Init theme from localStorage (default to light)
 const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('theme') : null
@@ -224,6 +225,7 @@ const groupNav = {
       icon: Clock,
       children: [
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
+        { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
@@ -268,7 +270,6 @@ const groupNav = {
         { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
-        { icon: ScrollText, label: 'SOP 範本', path: '/process/sop' },
       ]
     },
   ],
@@ -335,6 +336,9 @@ const superAdminItems = [
   { icon: Building2, label: '組織管理', path: '/super-admin/orgs' },
   { icon: UserCog, label: '使用者配置', path: '/super-admin/users' },
   { icon: Package, label: '模組配置', path: '/super-admin/modules' },
+  { icon: Monitor, label: '系統日誌', path: '/super-admin/system-logs' },
+  { icon: AlertOctagon, label: '錯誤日誌', path: '/super-admin/error-logs' },
+  { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
 ]
 
 // ── Route prefix → group key mapping ──
@@ -464,10 +468,18 @@ export default function Sidebar() {
     }
   }
 
-  // Build all dropdown groups including super-admin
-  const allGroups = isSuperAdmin
-    ? [...majorGroups, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
+  // Role-based filtering: only explicitly 'staff' role is restricted
+  const userRole = profile?.role || 'manager'
+  const STAFF_GROUPS = ['dashboard', 'people']
+  const roleFiltered = userRole === 'staff'
+    ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))
     : majorGroups
+
+  // Build all dropdown groups including super-admin (Demo mode: always show)
+  const showSuperAdmin = isSuperAdmin || !profile
+  const allGroups = showSuperAdmin
+    ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
+    : roleFiltered
 
   return (
     <>
@@ -497,6 +509,7 @@ export default function Sidebar() {
               ref={el => { btnRefs.current[group.key] = el }}
               className={`topnav-group-btn ${active ? 'active' : ''} ${isOpen ? 'mega-open' : ''}`}
               onClick={() => handleGroupClick(group)}
+              onMouseEnter={() => prefetchGroup(group.key)}
               style={{ '--group-color': group.color }}
             >
               <Icon size={16} />

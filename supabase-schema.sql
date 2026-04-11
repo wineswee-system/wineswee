@@ -201,6 +201,43 @@ create table workflows (
   category text
 );
 
+-- Workflow Instances (流程實例)
+CREATE TABLE IF NOT EXISTS workflow_instances (
+  id SERIAL PRIMARY KEY,
+  template_name TEXT NOT NULL,
+  store TEXT,
+  status TEXT DEFAULT '進行中',        -- 進行中, 已完成
+  started_by TEXT,
+  assignee TEXT,
+  groups TEXT[],
+  started_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  due_date DATE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Workflow Steps (流程步驟/任務)
+CREATE TABLE IF NOT EXISTS workflow_steps (
+  id SERIAL PRIMARY KEY,
+  instance_id INT REFERENCES workflow_instances(id) ON DELETE CASCADE,
+  step_order INT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  role TEXT,
+  assignee TEXT,
+  store TEXT,
+  planned_start DATE,
+  due_date DATE,
+  due_time TIME DEFAULT '17:00',
+  status TEXT DEFAULT '待處理',        -- 待處理, 進行中, 已完成, 已擱置
+  notes TEXT,
+  confirmed BOOLEAN DEFAULT false,
+  confirmed_by TEXT,
+  confirmed_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Tasks
 create table tasks (
   id serial primary key,
@@ -1978,3 +2015,124 @@ CREATE TABLE IF NOT EXISTS procurement_workflow_instances (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ══════════════════════════════════════════════════════════════════
+-- Event Architecture (事件驅動架構)
+-- ══════════════════════════════════════════════════════════════════
+
+-- ── Business Events (商業事件存儲) ──
+CREATE TABLE IF NOT EXISTS business_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  event_id TEXT NOT NULL UNIQUE,
+  event_type TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  action TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  payload JSONB NOT NULL DEFAULT '{}',
+  metadata JSONB NOT NULL DEFAULT '{}',
+  timestamp TIMESTAMPTZ NOT NULL,
+  tenant_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_events_type ON business_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_business_events_domain ON business_events(domain);
+CREATE INDEX IF NOT EXISTS idx_business_events_tenant ON business_events(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_business_events_timestamp ON business_events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_business_events_correlation ON business_events USING GIN ((metadata->'correlation_id'));
+
+ALTER TABLE business_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_events ON business_events
+  USING (tenant_id = current_setting('app.tenant_id', true));
+
+-- ── Dead Letter Queue (死信佇列) ──
+CREATE TABLE IF NOT EXISTS dead_letter_queue (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}',
+  metadata JSONB NOT NULL DEFAULT '{}',
+  errors JSONB NOT NULL DEFAULT '[]',
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  retried_at TIMESTAMPTZ
+);
+
+-- ============================================================
+--  系統日誌 (System Logs) — Super Admin 跨組織監控
+-- ============================================================
+CREATE TABLE IF NOT EXISTS system_logs (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id INT REFERENCES tenants(id),
+  level TEXT NOT NULL DEFAULT 'info',        -- debug/info/warn
+  module TEXT,                                -- HR/Finance/CRM/POS/WMS/...
+  action TEXT NOT NULL,                       -- login/logout/export/import/config_change/module_access/...
+  message TEXT NOT NULL,
+  "user" TEXT,
+  user_email TEXT,
+  ip TEXT,
+  user_agent TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_logs_tenant ON system_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level);
+CREATE INDEX IF NOT EXISTS idx_system_logs_module ON system_logs(module);
+CREATE INDEX IF NOT EXISTS idx_system_logs_action ON system_logs(action);
+CREATE INDEX IF NOT EXISTS idx_system_logs_created ON system_logs(created_at DESC);
+
+-- ============================================================
+--  錯誤日誌 (Error Logs) — Super Admin 跨組織錯誤追蹤
+-- ============================================================
+CREATE TABLE IF NOT EXISTS error_logs (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id INT REFERENCES tenants(id),
+  level TEXT NOT NULL DEFAULT 'error',       -- error/fatal
+  module TEXT,
+  error_code TEXT,                            -- e.g. DB_WRITE_FAIL, AUTH_EXPIRED, VALIDATION_ERROR
+  message TEXT NOT NULL,
+  stack_trace TEXT,
+  component TEXT,                             -- React component or function name
+  url TEXT,                                   -- page URL where error occurred
+  "user" TEXT,
+  user_email TEXT,
+  metadata JSONB DEFAULT '{}',
+  resolved BOOLEAN DEFAULT false,
+  resolved_by TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_error_logs_tenant ON error_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level);
+CREATE INDEX IF NOT EXISTS idx_error_logs_module ON error_logs(module);
+CREATE INDEX IF NOT EXISTS idx_error_logs_resolved ON error_logs(resolved);
+CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at DESC);
+
+-- ============================================================
+--  使用者活動日誌 (User Activity Logs)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_activity (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id INT REFERENCES tenants(id),
+  user_name TEXT NOT NULL,
+  user_email TEXT,
+  action TEXT NOT NULL,                       -- page_view/click/create/update/delete/search/export/login/logout
+  module TEXT,                                -- HR/Finance/CRM/...
+  page TEXT,                                  -- route path
+  target TEXT,                                -- what was acted on
+  detail TEXT,                                -- human-readable description
+  duration_sec INT,                           -- time spent on page (if page_view)
+  ip TEXT,
+  device TEXT,                                -- desktop/mobile/tablet
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_activity_tenant ON user_activity(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_name);
+CREATE INDEX IF NOT EXISTS idx_user_activity_action ON user_activity(action);
+CREATE INDEX IF NOT EXISTS idx_user_activity_module ON user_activity(module);
+CREATE INDEX IF NOT EXISTS idx_user_activity_created ON user_activity(created_at DESC);

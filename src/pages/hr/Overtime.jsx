@@ -18,7 +18,7 @@ export default function Overtime() {
   useEffect(() => {
     Promise.all([
       getOvertimeRequests(),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, e, d]) => {
       const emps = e.data || []
@@ -56,9 +56,40 @@ export default function Overtime() {
     try {
       const { data, error } = await updateOvertimeStatus(id, '已核准')
       if (error) throw error
-      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+      if (data) {
+        setRecords(prev => prev.map(r => r.id === id ? data : r))
+        // Update attendance: add overtime hours
+        if (data.employee && data.date && data.hours) {
+          const { data: att } = await supabase.from('attendance_records')
+            .select('id, hours').eq('employee', data.employee).eq('date', data.date).maybeSingle()
+          if (att) {
+            await supabase.from('attendance_records').update({
+              hours: (Number(att.hours) || 0) + Number(data.hours),
+            }).eq('id', att.id)
+          } else {
+            // No attendance record — create one with overtime hours
+            await supabase.from('attendance_records').insert({
+              employee: data.employee, date: data.date,
+              hours: Number(data.hours), status: '加班',
+            })
+          }
+        }
+      }
     } catch (err) {
       console.error('Operation failed:', err)
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    try {
+      const { data, error } = await updateOvertimeStatus(id, '已拒絕', reason.trim())
+      if (error) throw error
+      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+    } catch (err) {
       alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
@@ -66,18 +97,12 @@ export default function Overtime() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const filtered = records.filter(r =>
     deptFilter === '' || getEmpDept(r.employee) === deptFilter
   )
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   const totalHours = filtered.filter(r => r.status === '已核准').reduce((s, r) => s + (r.hours || 0), 0)
 
@@ -94,11 +119,16 @@ export default function Overtime() {
       </div>
 
       {/* 部門篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="">全部部門</option>
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -133,13 +163,19 @@ export default function Overtime() {
                   <td>{o.hours}h</td>
                   <td>{o.reason}</td>
                   <td>
-                    <span className={`badge ${o.status === '已核准' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${o.status === '已核准' ? 'badge-success' : o.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{o.status}
                     </span>
+                    {o.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{o.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {o.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -156,7 +192,7 @@ export default function Overtime() {
               <option value="">請選擇員工</option>
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.department === d.name).map(e => (
+                  {employees.filter(e => e.dept === d.name).map(e => (
                     <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
                   ))}
                 </optgroup>
@@ -170,7 +206,7 @@ export default function Overtime() {
             <input className="form-input" type="number" min="0.5" step="0.5" style={{ width: '100%' }} value={form.hours} onChange={e => set('hours', Number(e.target.value))} />
           </Field>
           <Field label="原因">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />
+            <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />
           </Field>
         </Modal>
       )}

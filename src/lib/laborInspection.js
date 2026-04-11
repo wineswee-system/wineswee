@@ -51,7 +51,7 @@ function formatMonth(month) {
 export function generateEmployeeRoster(employees = []) {
   const items = employees.map(emp => ({
     label: emp.name,
-    value: `${emp.department || '—'} / ${emp.position || '—'} / 到職日: ${emp.hire_date || emp.start_date || '未登錄'}`,
+    value: `${emp.dept || '—'} / ${emp.position || '—'} / 到職日: ${emp.hire_date || emp.join_date || '未登錄'}`,
     status: checkStatus(
       emp.name && (emp.hire_date || emp.start_date) && emp.id_number,
       emp.name && (emp.hire_date || emp.start_date)

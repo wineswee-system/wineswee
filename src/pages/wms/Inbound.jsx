@@ -230,6 +230,10 @@ export default function Inbound() {
             </Field>
             <Field label="預計到貨日"><input className="form-input" type="date" style={{ width: '100%' }} value={form.expected_date} onChange={e => set('expected_date', e.target.value)} /></Field>
           </div>
+          <Field label="備註">
+            <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} placeholder="進貨備註說明..."
+              value={form.notes || ''} onChange={e => set('notes', e.target.value)} />
+          </Field>
         </Modal>
       )}
     </div>

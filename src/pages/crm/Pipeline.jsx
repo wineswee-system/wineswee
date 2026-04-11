@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, AlertTriangle, GripVertical, Clock, Trophy, XCircle, Package, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { createARFromShipment } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import { DEFAULT_PIPELINES, PRODUCT_CATALOG, calculateDealTotal, WIN_REASONS, LOSS_REASONS } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -91,7 +91,7 @@ export default function Pipeline() {
     Promise.all([
       supabase.from('opportunities').select('*').order('created_at', { ascending: false }),
       supabase.from('customers').select('id, name'),
-      supabase.from('locations').select('*'),
+      supabase.from('stores').select('*'),
     ]).then(([o, c, l]) => {
       setOpps(o.data || [])
       setCustomers(c.data || [])
@@ -175,13 +175,13 @@ export default function Pipeline() {
       setOpps(prev => prev.map(o => o.id === id ? data : o))
       // Auto AR on win
       if (isWinStage(STAGES, stage) && data.amount > 0) {
-        const ar = await createARFromShipment({
+        getEventBus().publish('wms.shipment.completed', {
+          shipment_id: data.id,
           customer: data.customer_name,
           order_ref: `OPP-${data.id}`,
           total_amount: data.amount,
-          id: data.id,
-        })
-        if (ar) setAutoMsg(`\u2705 已自動建立應收帳款 ${ar.invoice_number}（NT$ ${data.amount.toLocaleString()}）`)
+        }, { source: 'Pipeline.jsx' })
+        setAutoMsg(`\u2705 已發送成交事件，應收帳款將自動建立（NT$ ${data.amount.toLocaleString()}）`)
         setTimeout(() => setAutoMsg(''), 5000)
       }
     }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { createJEFromExpense } from '../../lib/automation'
+import { getEventBus } from '../../lib/events/index.js'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -21,7 +21,7 @@ export default function Expenses() {
   useEffect(() => {
     Promise.all([
       getExpenses(),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([ex, e, d]) => {
       const emps = e.data || []
@@ -53,29 +53,35 @@ export default function Expenses() {
     const { data } = await updateExpenseStatus(id, '已核銷')
     if (data) {
       setExpenses(prev => prev.map(e => e.id === id ? data : e))
-      // Auto-post journal entry to Finance
-      const result = await createJEFromExpense(data)
-      if (result.ok) {
-        alert(`已核銷並自動產生傳票 ${result.entry.entry_number}`)
-      }
+      getEventBus().publish('hr.expense.approved', {
+        expense_id: data.id,
+        employee: data.employee,
+        category: data.category,
+        amount: data.amount,
+        description: data.description,
+        date: data.date,
+      }, { source: 'Expenses.jsx' })
+      alert('已核銷並發送費用核准事件')
     }
+  }
+
+  const handleReject = async (id) => {
+    const reason = prompt('請輸入駁回原因：')
+    if (reason === null) return
+    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
+    if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
   }
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const filtered = expenses.filter(e =>
     deptFilter === '' || getEmpDept(e.employee) === deptFilter
   )
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   const totalPending = filtered.filter(e => e.status === '待審核').reduce((s, e) => s + Number(e.amount), 0)
   const totalApproved = filtered.filter(e => e.status === '已核銷').reduce((s, e) => s + Number(e.amount), 0)
@@ -93,11 +99,16 @@ export default function Expenses() {
       </div>
 
       {/* 部門篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="">全部部門</option>
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -131,13 +142,19 @@ export default function Expenses() {
                   <td>{e.description}</td>
                   <td>{e.receipt ? <span className="badge badge-success">✓ 有</span> : <span className="badge badge-danger">✗ 無</span>}</td>
                   <td>
-                    <span className={`badge ${e.status === '已核銷' ? 'badge-success' : 'badge-warning'}`}>
+                    <span className={`badge ${e.status === '已核銷' ? 'badge-success' : e.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{e.status}
                     </span>
+                    {e.reject_reason && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{e.reject_reason}</div>
+                    )}
                   </td>
                   <td>
                     {e.status === '待審核' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -154,7 +171,7 @@ export default function Expenses() {
               <option value="">請選擇員工</option>
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.department === d.name).map(e => (
+                  {employees.filter(e => e.dept === d.name).map(e => (
                     <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
                   ))}
                 </optgroup>

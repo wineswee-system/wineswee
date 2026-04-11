@@ -137,7 +137,7 @@ export default function HRAnalytics() {
 
   // Department Headcount
   const deptCount = {}
-  data.employees.filter(e => e.status === '在職').forEach(e => { const dep = e.department || '未分類'; deptCount[dep] = (deptCount[dep] || 0) + 1 })
+  data.employees.filter(e => e.status === '在職').forEach(e => { const dep = e.dept || '未分類'; deptCount[dep] = (deptCount[dep] || 0) + 1 })
   const deptLabels = Object.keys(deptCount)
   const deptData = {
     labels: deptLabels,

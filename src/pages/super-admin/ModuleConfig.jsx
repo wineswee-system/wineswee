@@ -175,7 +175,7 @@ export default function ModuleConfig() {
       </div>
 
       {/* Bulk Operations */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16, padding: '14px 20px' }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>批次操作：</span>
           <select className="form-input" value={bulkAction} onChange={e => setBulkAction(e.target.value)} style={{ width: 100 }}>

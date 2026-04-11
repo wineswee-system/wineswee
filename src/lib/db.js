@@ -22,6 +22,34 @@ export const getAttendance = (date) => {
 export const upsertAttendance = (data) =>
   supabase.from('attendance_records').upsert(data).select().single()
 
+/**
+ * Server-side clock-in via Edge Function (validates GPS + WiFi on server).
+ * @param {{ employee: string, action: 'clock_in'|'clock_out', lat?: number, lng?: number, accuracy?: number, ip?: string }} payload
+ * @returns {Promise<{ success: boolean, record: object, method: string, locationName: string, ip: string }>}
+ * @throws {Error} with descriptive message on validation failure or server error
+ */
+export async function serverClockIn(payload) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/clock-in`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
+      'apikey': key,
+    },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data.reasons ? `${data.error}\n${data.reasons.join('\n')}` : (data.error || '伺服器錯誤')
+    const err = new Error(msg)
+    err.code = res.status === 403 ? 'VALIDATION_FAILED' : 'SERVER_ERROR'
+    throw err
+  }
+  return data
+}
+
 // ── Leave Requests ─────────────────────────────────────────
 export const getLeaveRequests = () =>
   supabase.from('leave_requests').select('*').order('id')
@@ -29,8 +57,8 @@ export const getLeaveRequests = () =>
 export const createLeaveRequest = (data) =>
   supabase.from('leave_requests').insert(data).select().single()
 
-export const updateLeaveStatus = (id, status, approver) =>
-  supabase.from('leave_requests').update({ status, approver }).eq('id', id).select().single()
+export const updateLeaveStatus = (id, status, approver, rejectReason) =>
+  supabase.from('leave_requests').update({ status, approver, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 export const deleteLeaveRequest = (id) =>
   supabase.from('leave_requests').delete().eq('id', id)
@@ -42,8 +70,8 @@ export const getOvertimeRequests = () =>
 export const createOvertimeRequest = (data) =>
   supabase.from('overtime_requests').insert(data).select().single()
 
-export const updateOvertimeStatus = (id, status) =>
-  supabase.from('overtime_requests').update({ status }).eq('id', id).select().single()
+export const updateOvertimeStatus = (id, status, rejectReason) =>
+  supabase.from('overtime_requests').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Salary ─────────────────────────────────────────────────
 export const getSalaryRecords = (month) => {
@@ -70,6 +98,23 @@ export const createHoliday = (data) =>
 
 export const deleteHoliday = (id) =>
   supabase.from('holidays').delete().eq('id', id)
+
+/** 呼叫 Edge Function 刷新國定假日與排班規則 */
+export const refreshHolidays = async (years) => {
+  const { data, error } = await supabase.functions.invoke('refresh-holidays', {
+    body: years ? { years } : {},
+  })
+  if (error) throw error
+  return data
+}
+
+/** 取得排班規則快照 */
+export const getSchedulingRules = (year) =>
+  supabase
+    .from('scheduling_rules_snapshot')
+    .select('*')
+    .eq('effective_year', year || new Date().getFullYear())
+    .order('category')
 
 // ── Performance Reviews ────────────────────────────────────
 export const getPerformanceReviews = () =>
@@ -108,8 +153,8 @@ export const getBusinessTrips = () =>
 export const createBusinessTrip = (data) =>
   supabase.from('business_trips').insert(data).select().single()
 
-export const updateBusinessTripStatus = (id, status) =>
-  supabase.from('business_trips').update({ status }).eq('id', id).select().single()
+export const updateBusinessTripStatus = (id, status, rejectReason) =>
+  supabase.from('business_trips').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Expenses ───────────────────────────────────────────────
 export const getExpenses = () =>
@@ -118,8 +163,8 @@ export const getExpenses = () =>
 export const createExpense = (data) =>
   supabase.from('expenses').insert(data).select().single()
 
-export const updateExpenseStatus = (id, status) =>
-  supabase.from('expenses').update({ status }).eq('id', id).select().single()
+export const updateExpenseStatus = (id, status, rejectReason) =>
+  supabase.from('expenses').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Workflows ──────────────────────────────────────────────
 export const getWorkflows = () =>
@@ -130,6 +175,117 @@ export const createWorkflow = (data) =>
 
 export const updateWorkflow = (id, data) =>
   supabase.from('workflows').update(data).eq('id', id).select().single()
+
+// ── Workflow Instances ────────────────────────────────────
+export const getWorkflowInstances = () =>
+  supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+
+export const createWorkflowInstance = (data) =>
+  supabase.from('workflow_instances').insert(data).select().single()
+
+export const updateWorkflowInstance = (id, data) =>
+  supabase.from('workflow_instances').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowInstance = (id) =>
+  supabase.from('workflow_instances').delete().eq('id', id)
+
+// ── Workflow Steps ────────────────────────────────────────
+export const getWorkflowSteps = (instanceId) => {
+  const q = supabase.from('workflow_steps').select('*').order('step_order')
+  return instanceId ? q.eq('instance_id', instanceId) : q
+}
+
+export const createWorkflowStep = (data) =>
+  supabase.from('workflow_steps').insert(data).select().single()
+
+export const createWorkflowStepsBatch = (rows) =>
+  supabase.from('workflow_steps').insert(rows).select()
+
+export const updateWorkflowStep = (id, data) =>
+  supabase.from('workflow_steps').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowStep = (id) =>
+  supabase.from('workflow_steps').delete().eq('id', id)
+
+// ── Step Dependencies (前置條件 & 觸發動作) ─────────────
+export const getStepDependencies = (stepId) =>
+  supabase.from('workflow_step_dependencies').select('*').or(`step_id.eq.${stepId},depends_on_step_id.eq.${stepId}`)
+
+export const getStepDependenciesByInstance = (stepIds) =>
+  supabase.from('workflow_step_dependencies').select('*').in('step_id', stepIds)
+
+export const createStepDependency = (data) =>
+  supabase.from('workflow_step_dependencies').insert(data).select().single()
+
+export const deleteStepDependency = (id) =>
+  supabase.from('workflow_step_dependencies').delete().eq('id', id)
+
+// ── Step Comments (備註留言) ──────────────────────────────
+export const getStepComments = (stepId) =>
+  supabase.from('workflow_step_comments').select('*').eq('step_id', stepId).order('created_at', { ascending: true })
+
+export const createStepComment = (data) =>
+  supabase.from('workflow_step_comments').insert(data).select().single()
+
+// ── Step Attachments (附件) ──────────────────────────────
+export const getStepAttachments = (stepId) =>
+  supabase.from('workflow_step_attachments').select('*').eq('step_id', stepId).order('created_at')
+
+export const createStepAttachment = (data) =>
+  supabase.from('workflow_step_attachments').insert(data).select().single()
+
+export const deleteStepAttachment = (id) =>
+  supabase.from('workflow_step_attachments').delete().eq('id', id)
+
+// ── Step-Checklist Link (關聯查核清單) ───────────────────
+export const getStepChecklists = (stepId) =>
+  supabase.from('workflow_step_checklists').select('*, checklists(*)').eq('step_id', stepId)
+
+export const linkStepChecklist = (stepId, checklistId) =>
+  supabase.from('workflow_step_checklists').insert({ step_id: stepId, checklist_id: checklistId }).select().single()
+
+export const unlinkStepChecklist = (id) =>
+  supabase.from('workflow_step_checklists').delete().eq('id', id)
+
+// ── Step Checklist Items (任務內建清單) ──────────────────
+export const getStepChecklistItems = (stepId) =>
+  supabase.from('workflow_step_checklist_items').select('*').eq('step_id', stepId).order('sort_order')
+
+export const createStepChecklistItem = (data) =>
+  supabase.from('workflow_step_checklist_items').insert(data).select().single()
+
+export const updateStepChecklistItem = (id, data) =>
+  supabase.from('workflow_step_checklist_items').update(data).eq('id', id).select().single()
+
+export const deleteStepChecklistItem = (id) =>
+  supabase.from('workflow_step_checklist_items').delete().eq('id', id)
+
+// ── Approval Chains (簽核鏈) ─────────────────────────────
+export const getApprovalChains = () =>
+  supabase.from('approval_chains').select('*').order('id')
+
+export const createApprovalChain = (data) =>
+  supabase.from('approval_chains').insert(data).select().single()
+
+// ── Approval Forms (簽核表單) ────────────────────────────
+export const getApprovalFormByStep = (stepId) =>
+  supabase.from('approval_forms').select('*').eq('ref_step_id', stepId).maybeSingle()
+
+export const createApprovalForm = (data) =>
+  supabase.from('approval_forms').insert(data).select().single()
+
+export const updateApprovalForm = (id, data) =>
+  supabase.from('approval_forms').update(data).eq('id', id).select().single()
+
+// ── Approval Form Steps (簽核步驟) ──────────────────────
+export const getApprovalFormSteps = (formId) =>
+  supabase.from('approval_form_steps').select('*').eq('form_id', formId).order('step_order')
+
+export const createApprovalFormSteps = (rows) =>
+  supabase.from('approval_form_steps').insert(rows).select()
+
+export const updateApprovalFormStep = (id, data) =>
+  supabase.from('approval_form_steps').update(data).eq('id', id).select().single()
 
 // ── Tasks ──────────────────────────────────────────────────
 export const getTasks = () =>
@@ -154,6 +310,22 @@ export const createChecklist = (data) =>
 export const updateChecklist = (id, data) =>
   supabase.from('checklists').update(data).eq('id', id).select().single()
 
+export const deleteChecklist = (id) =>
+  supabase.from('checklists').delete().eq('id', id)
+
+// ── Checklist Items (查核清單項目) ────────────────────────
+export const getChecklistItems = (checklistId) =>
+  supabase.from('checklist_items').select('*').eq('checklist_id', checklistId).order('sort_order')
+
+export const createChecklistItem = (data) =>
+  supabase.from('checklist_items').insert(data).select().single()
+
+export const updateChecklistItem = (id, data) =>
+  supabase.from('checklist_items').update(data).eq('id', id).select().single()
+
+export const deleteChecklistItem = (id) =>
+  supabase.from('checklist_items').delete().eq('id', id)
+
 // ── Organizations ──────────────────────────────────────────
 export const getCompanies = () =>
   supabase.from('companies').select('*').order('id')
@@ -166,6 +338,12 @@ export const getStores = () =>
 
 export const createStore = (data) =>
   supabase.from('stores').insert(data).select().single()
+
+export const updateStore = (id, data) =>
+  supabase.from('stores').update(data).eq('id', id).select().single()
+
+export const deleteStore = (id) =>
+  supabase.from('stores').delete().eq('id', id)
 
 export const getDepartments = () =>
   supabase.from('departments').select('*').order('id')
@@ -793,4 +971,46 @@ export const updateRolePermissions = async (roleId, permissionIds) => {
   if (permissionIds.length === 0) return { data: [], error: null }
   const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
   return supabase.from('role_permissions').insert(rows).select()
+}
+
+// ── System Logs (Super Admin) ──
+export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {
+  let q = supabase.from('system_logs').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (level) q = q.eq('level', level)
+  if (module) q = q.eq('module', module)
+  if (action) q = q.eq('action', action)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+}
+
+// ── Error Logs (Super Admin) ──
+export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, level, module, resolved, from, to } = {}) => {
+  let q = supabase.from('error_logs').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (level) q = q.eq('level', level)
+  if (module) q = q.eq('module', module)
+  if (resolved !== undefined) q = q.eq('resolved', resolved)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+}
+export const resolveErrorLog = (id, resolvedBy) =>
+  supabase.from('error_logs').update({ resolved: true, resolved_by: resolvedBy, resolved_at: new Date().toISOString() }).eq('id', id).select().single()
+export const unresolveErrorLog = (id) =>
+  supabase.from('error_logs').update({ resolved: false, resolved_by: null, resolved_at: null }).eq('id', id).select().single()
+export const deleteErrorLog = (id) =>
+  supabase.from('error_logs').delete().eq('id', id)
+
+// ── User Activity (Super Admin) ──
+export const getUserActivity = ({ limit = 200, offset = 0, tenantId, userName, action, module, from, to } = {}) => {
+  let q = supabase.from('user_activity').select('*, tenants(name)', { count: 'exact' })
+  if (tenantId) q = q.eq('tenant_id', tenantId)
+  if (userName) q = q.eq('user_name', userName)
+  if (action) q = q.eq('action', action)
+  if (module) q = q.eq('module', module)
+  if (from) q = q.gte('created_at', from)
+  if (to) q = q.lte('created_at', to)
+  return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
 }

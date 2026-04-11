@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Plus, ExternalLink, Search, Filter } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, ExternalLink, Search, Filter, Pencil, Trash2 } from 'lucide-react'
 import { LABOR_STANDARDS, GENDER_EQUALITY, OCCUPATIONAL_SAFETY } from '../../lib/laborLaw'
+import { supabase } from '../../lib/supabase'
 import Modal, { Field } from '../../components/Modal'
 
 // ══════════════════════════════════════
@@ -105,17 +106,53 @@ export default function ScheduleRules() {
   const [activeLaw, setActiveLaw] = useState('勞基法')
   const [activeCat, setActiveCat] = useState('全部')
   const [searchText, setSearchText] = useState('')
-  const [shiftRules, setShiftRules] = useState(initialShiftRules)
+  const [shiftRules, setShiftRules] = useState([])
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ name: '', hours: '', breakTime: '', lateThreshold: '', type: '固定班' })
+  const [editingShift, setEditingShift] = useState(null)
+  const [form, setForm] = useState({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
+
+  useEffect(() => {
+    supabase.from('shift_definitions').select('*').order('sort_order')
+      .then(({ data }) => setShiftRules(data || []))
+  }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const handleSubmit = () => {
-    if (!form.name || !form.hours) return
-    setShiftRules(prev => [...prev, { id: Date.now(), ...form }])
+  const resetForm = () => {
+    setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
+    setEditingShift(null)
     setShowModal(false)
-    setForm({ name: '', hours: '', breakTime: '', lateThreshold: '', type: '固定班' })
+  }
+
+  const openEdit = (s) => {
+    setForm({ name: s.name, start_time: s.start_time?.slice(0, 5) || '09:00', end_time: s.end_time?.slice(0, 5) || '18:00', break_minutes: s.break_minutes || 60, color: s.color || '#22d3ee', shift_type: s.shift_type || 'morning' })
+    setEditingShift(s)
+    setShowModal(true)
+  }
+
+  const handleDelete = async (s) => {
+    // Check if any schedules use this shift
+    const { data: used } = await supabase.from('schedules').select('id').eq('shift', s.name).limit(1)
+    const warning = used?.length > 0 ? `\n⚠ 有排班紀錄使用此班別，刪除後這些紀錄將無法顯示班別樣式。` : ''
+    if (!confirm(`確定要刪除「${s.name}」班別嗎？${warning}`)) return
+    await supabase.from('shift_definitions').delete().eq('id', s.id)
+    setShiftRules(prev => prev.filter(x => x.id !== s.id))
+  }
+
+  const handleSubmit = async () => {
+    if (!form.name) return
+    const payload = { name: form.name, start_time: form.start_time, end_time: form.end_time, break_minutes: Number(form.break_minutes) || 60, color: form.color, shift_type: form.shift_type || 'morning' }
+
+    if (editingShift) {
+      const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
+      if (data) setShiftRules(prev => prev.map(s => s.id === data.id ? data : s))
+    } else {
+      payload.sort_order = shiftRules.length + 1
+      const { data, error } = await supabase.from('shift_definitions').insert(payload).select().single()
+      if (error) { alert('新增失敗：' + error.message); return }
+      if (data) setShiftRules(prev => [...prev, data])
+    }
+    resetForm()
   }
 
   const lawRules = ALL_RULES.filter(r => r.law === activeLaw)
@@ -135,7 +172,7 @@ export default function ScheduleRules() {
             <h2><span className="header-icon">⚖️</span> 排班規則</h2>
             <p>台灣勞動法排班相關規定一覽</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增班別</button>
+          <button className="btn btn-primary" onClick={() => { setEditingShift(null); setForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' }); setShowModal(true) }}><Plus size={14} /> 新增班別</button>
         </div>
       </div>
 
@@ -243,49 +280,97 @@ export default function ScheduleRules() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>班別</th><th>工作時間</th><th>休息時間</th><th>遲到門檻</th><th>類型</th></tr></thead>
+            <thead><tr><th>班別</th><th>類型</th><th>上班時間</th><th>下班時間</th><th>休息(分鐘)</th><th>工時</th><th>顏色</th><th>操作</th></tr></thead>
             <tbody>
-              {shiftRules.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td>{r.hours}</td>
-                  <td>{r.breakTime}</td>
-                  <td>{r.lateThreshold}</td>
-                  <td>
-                    <span className={`badge ${r.type === '固定班' ? 'badge-info' : r.type === '輪班' ? 'badge-warning' : 'badge-purple'}`}>
-                      <span className="badge-dot"></span>{r.type}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {shiftRules.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
+              {shiftRules.map(r => {
+                const start = r.start_time?.slice(0, 5) || ''
+                const end = r.end_time?.slice(0, 5) || ''
+                const sh = parseInt(start) || 0
+                const eh = parseInt(end) || 0
+                const workHours = eh > sh ? eh - sh - (r.break_minutes || 0) / 60 : (24 - sh + eh) - (r.break_minutes || 0) / 60
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: 3, background: r.color || '#22d3ee' }} />
+                        <span style={{ fontWeight: 700 }}>{r.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: r.shift_type === 'evening' ? 'rgba(139,92,246,0.12)' : 'rgba(251,191,36,0.12)',
+                        color: r.shift_type === 'evening' ? '#8b5cf6' : '#f59e0b',
+                      }}>
+                        {r.shift_type === 'evening' ? '🌙 晚班' : '☀️ 早班'}
+                      </span>
+                    </td>
+                    <td>{start}</td>
+                    <td>{end}</td>
+                    <td>{r.break_minutes || 60} 分鐘</td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{workHours.toFixed(1)}h</td>
+                    <td><div style={{ width: 24, height: 24, borderRadius: 6, background: r.color || '#22d3ee', border: '1px solid var(--border-medium)' }} /></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-sm btn-secondary" onClick={() => openEdit(r)}><Pencil size={12} /></button>
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={() => handleDelete(r)}><Trash2 size={12} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
       {showModal && (
-        <Modal title="新增班別" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title={editingShift ? `編輯班別 — ${editingShift.name}` : '新增班別'} onClose={resetForm} onSubmit={handleSubmit} submitLabel={editingShift ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="班別名稱 *">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：夜班" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
-            <Field label="類型">
-              <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>
-                <option>固定班</option>
-                <option>彈性班</option>
-                <option>輪班</option>
-              </select>
+            <Field label="類型 *">
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => set('shift_type', 'morning')} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid',
+                  borderColor: form.shift_type === 'morning' ? '#f59e0b' : 'var(--border-medium)',
+                  background: form.shift_type === 'morning' ? 'rgba(251,191,36,0.12)' : 'var(--bg-card)',
+                  color: form.shift_type === 'morning' ? '#f59e0b' : 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center',
+                }}>
+                  ☀️ 早班
+                </button>
+                <button type="button" onClick={() => set('shift_type', 'evening')} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid',
+                  borderColor: form.shift_type === 'evening' ? '#8b5cf6' : 'var(--border-medium)',
+                  background: form.shift_type === 'evening' ? 'rgba(139,92,246,0.12)' : 'var(--bg-card)',
+                  color: form.shift_type === 'evening' ? '#8b5cf6' : 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center',
+                }}>
+                  🌙 晚班
+                </button>
+              </div>
             </Field>
           </div>
-          <Field label="工作時間 *">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：22:00-06:00" value={form.hours} onChange={e => set('hours', e.target.value)} />
-          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="休息時間">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：02:00-02:30" value={form.breakTime} onChange={e => set('breakTime', e.target.value)} />
+            <Field label="上班時間 *">
+              <input className="form-input" type="time" style={{ width: '100%' }} value={form.start_time} onChange={e => set('start_time', e.target.value)} />
             </Field>
-            <Field label="遲到門檻">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：22:05" value={form.lateThreshold} onChange={e => set('lateThreshold', e.target.value)} />
+            <Field label="下班時間 *">
+              <input className="form-input" type="time" style={{ width: '100%' }} value={form.end_time} onChange={e => set('end_time', e.target.value)} />
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="休息時間（分鐘）">
+              <input className="form-input" type="number" style={{ width: '100%' }} min={0} step={15} value={form.break_minutes} onChange={e => set('break_minutes', e.target.value)} />
+            </Field>
+            <Field label="顯示顏色">
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="color" value={form.color} onChange={e => set('color', e.target.value)} style={{ width: 40, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
+                <input className="form-input" type="text" style={{ flex: 1 }} value={form.color} onChange={e => set('color', e.target.value)} />
+              </div>
             </Field>
           </div>
         </Modal>

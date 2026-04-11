@@ -27,7 +27,7 @@ export default function Performance() {
     Promise.all([
       getPerformanceReviews(),
       supabase.from('performance_goals').select('*').order('id'),
-      supabase.from('employees').select('id, name, department, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, g, e, d]) => {
       setReviews(r.data || [])
@@ -73,24 +73,18 @@ export default function Performance() {
     if (data) setGoals(prev => prev.map(g => g.id === goal.id ? data : g))
   }
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.department || ''
+  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
   const filteredReviews = reviews.filter(r => deptFilter === '' || getEmpDept(r.employee) === deptFilter)
   const filteredGoals = goals.filter(g => deptFilter === '' || getEmpDept(g.employee) === deptFilter)
   const avg = filteredReviews.length ? Math.round(filteredReviews.reduce((s, p) => s + (p.overall_score || 0), 0) / filteredReviews.length) : 0
 
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   const EmpSelect = ({ value, onChange }) => (
     <select className="form-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
       <option value="">請選擇員工</option>
       {departments.map(d => (
         <optgroup key={d.id} label={d.name}>
-          {employees.filter(e => e.department === d.name).map(e => (
+          {employees.filter(e => e.dept === d.name).map(e => (
             <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
           ))}
         </optgroup>
@@ -119,11 +113,16 @@ export default function Performance() {
       </div>
 
       {/* 部門篩選 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={deptBtnStyle(deptFilter === '')} onClick={() => setDeptFilter('')}>全部部門</button>
-        {departments.map(d => (
-          <button key={d.id} style={deptBtnStyle(deptFilter === d.name)} onClick={() => setDeptFilter(d.name)}>{d.name}</button>
-        ))}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="">全部部門</option>
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
       </div>
 
       {/* Tab 切換 */}

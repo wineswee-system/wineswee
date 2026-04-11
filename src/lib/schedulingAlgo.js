@@ -102,7 +102,9 @@ export function runProgrammaticSchedule(data) {
   const targetHoursMap = {}
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    targetHoursMap[emp.name] = emp.weekly_target_hours || (isPT ? 20 : 40)
+    // Use explicit target if set AND reasonable, otherwise use type-based default
+    const dbTarget = emp.weekly_target_hours
+    targetHoursMap[emp.name] = (isPT && (!dbTarget || dbTarget >= 40)) ? 20 : (dbTarget || 40)
   }
 
   // ── Track consecutive weekends worked ──
@@ -369,8 +371,16 @@ export function runProgrammaticSchedule(data) {
         // Staffing needs (strongest signal)
         const needed = staffingMap[shiftDef.name] || minStaff
         const current = shiftCounts[shiftDef.name] || 0
-        if (current < needed) score += 50
-        else score += 5
+        if (current < needed) {
+          // More urgently needed = higher score (bigger deficit = higher priority)
+          const deficit = needed - current
+          score += 40 + deficit * 10
+        } else {
+          score += 5
+        }
+
+        // Shift balance: prefer the shift with fewer people assigned (break ties)
+        score -= current * 3
 
         // Preference: "想上" still gets bonus even in pass 2 (they lost conflict but still prefer it)
         if (pref?.preferred.has(shiftDef.name)) score += 15

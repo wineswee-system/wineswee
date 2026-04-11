@@ -448,16 +448,12 @@ export function runProgrammaticSchedule(data) {
         }
 
         if (bestWindow) {
-          // Find which shift label best matches this window
-          let shiftLabel = sortedShifts[0]?.name || '早班'
-          for (const sd of sortedShifts) {
-            if (overlaps(bestWindow.start, bestWindow.end, sd.start_time, sd.end_time)) {
-              shiftLabel = sd.name
-              break
-            }
-          }
+          // In time-slot mode, use actual time range as the shift label (e.g., "11-19")
+          const startLabel = bestWindow.start.slice(0, 5).replace(':00', '').replace(':30', ':30')
+          const endLabel = bestWindow.end.slice(0, 5).replace(':00', '').replace(':30', ':30')
+          const timeLabel = `${startLabel.replace(/^0/, '')}-${endLabel.replace(/^0/, '')}`
 
-          schedule[emp.name][date] = shiftLabel
+          schedule[emp.name][date] = timeLabel
           actualTimes[`${emp.name}_${date}`] = {
             start: bestWindow.start,
             end: bestWindow.end,

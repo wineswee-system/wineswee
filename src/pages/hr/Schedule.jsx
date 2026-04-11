@@ -778,6 +778,7 @@ export default function Schedule() {
         <div>
           <StoreSettingsTab
             storeFilter={storeFilter} selectedStore={selectedStore} shiftDefs={shiftDefs}
+            setShiftDefs={setShiftDefs} setShiftTypes={(defs) => setShiftTypes(buildShiftTypes(defs))}
             storeSettings={storeSettings} setStoreSettings={setStoreSettings}
             staffing={staffing} setStaffing={setStaffing}
             operatingHours={operatingHours} setOperatingHours={setOperatingHours}

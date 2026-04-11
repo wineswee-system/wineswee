@@ -689,7 +689,7 @@ export default function Schedule() {
                   <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>員工</th>
                   {activeDates.map(d => {
                     const dow = getDayLabel(d)
-                    const isWeekend = new Date(d).getDay() === 0 || new Date(d).getDay() === 6
+                    const isWeekend = [5, 6].includes(new Date(d).getDay()) // Fri + Sat
                     return (
                       <th key={d} style={{ textAlign: 'center', padding: '6px 2px', color: isWeekend ? 'var(--accent-red)' : 'var(--text-muted)', minWidth: viewMode === 'month' ? 40 : 70, fontSize: viewMode === 'month' ? 10 : 12 }}>
                         {d.slice(5)}<br /><span style={{ fontSize: 9 }}>{dow}</span>

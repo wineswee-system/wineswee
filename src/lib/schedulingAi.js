@@ -80,7 +80,7 @@ export async function gatherSchedulingData({
     minStaff: minStaff || 3,
     maxStaff: storeSettingsData?.max_staff || undefined,
     operatingHours: storeSettingsData?.operating_hours || undefined,
-    peakDays: storeSettingsData?.peak_days || [0, 6],
+    peakDays: storeSettingsData?.peak_days || [5, 6], // Fri + Sat
   }
 
   // Cross-store eligible employees (for borrowing suggestions)

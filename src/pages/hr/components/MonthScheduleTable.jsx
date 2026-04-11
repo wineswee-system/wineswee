@@ -1,4 +1,4 @@
-import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions } from '../../../lib/scheduleUtils'
+import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
 
 export default function MonthScheduleTable({
   monthDates,
@@ -89,7 +89,7 @@ export default function MonthScheduleTable({
                   const dow = getDayLabel(date)
                   const dayNum = parseInt(date.slice(8))
                   const dayOfWeek = new Date(date).getDay()
-                  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+                  const isWeekend = isWeekendDay(dayOfWeek)
                   const isHoliday = holidaySet?.has(date)
                   return (
                     <th key={date} style={{
@@ -229,7 +229,7 @@ function EmployeeRow({
         const shift = getShift(emp.name, date)
         const offReq = getOffRequest(emp.name, date)
         const dayOfWeek = new Date(date).getDay()
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+        const isWeekend = isWeekendDay(dayOfWeek)
         const isHoliday = holidaySet?.has(date)
         const isEditing = editCell?.empName === emp.name && editCell?.date === date
         const isRest = isAbsence(shift)

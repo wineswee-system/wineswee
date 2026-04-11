@@ -203,3 +203,14 @@ export const MAX_CONSECUTIVE_WORK_DAYS = 6
 
 /** Min rest days per week (勞基法 §36 一例一休) */
 export const MIN_WEEKLY_REST_DAYS = 2
+
+/** Weekend days (JS getDay(): 0=Sun, 5=Fri, 6=Sat) — business uses Fri+Sat as weekend */
+export const WEEKEND_DAYS = [5, 6]
+
+/** Weekday days (Sun~Thu) */
+export const WEEKDAY_DAYS = [0, 1, 2, 3, 4]
+
+/** Check if a JS getDay() value is a weekend day */
+export function isWeekendDay(dayOfWeek) {
+  return WEEKEND_DAYS.includes(dayOfWeek)
+}

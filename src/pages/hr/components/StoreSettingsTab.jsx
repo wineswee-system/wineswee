@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trash2, Pencil, Check, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay } from '../../../lib/scheduleUtils'
 
 function parseTime(t) {
   if (!t) return 0
@@ -11,19 +12,19 @@ function parseTime(t) {
 const DAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY_LABELS_FULL = ['一', '二', '三', '四', '五', '六', '日']
 const INDIVIDUAL_DAYS = [
+  { value: 0, label: '日' },
   { value: 1, label: '一' },
   { value: 2, label: '二' },
   { value: 3, label: '三' },
   { value: 4, label: '四' },
   { value: 5, label: '五' },
   { value: 6, label: '六' },
-  { value: 0, label: '日' },
 ]
 
 const DAY_PRESETS = [
-  { label: '每天', days: [1, 2, 3, 4, 5, 6, 0] },
-  { label: '平日', days: [1, 2, 3, 4, 5] },
-  { label: '週末', days: [6, 0] },
+  { label: '每天', days: [0, 1, 2, 3, 4, 5, 6] },
+  { label: '平日 (日~四)', days: [...WEEKDAY_DAYS] },
+  { label: '週末 (五六)', days: [...WEEKEND_DAYS] },
 ]
 
 const WORK_SYSTEMS = [
@@ -271,8 +272,8 @@ export default function StoreSettingsTab({
                           <td>
                             <span style={{
                               display: 'inline-block', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                              background: s.day_of_week === 0 || s.day_of_week === 6 ? 'rgba(239,68,68,0.1)' : s.day_of_week === null ? 'rgba(99,102,241,0.1)' : 'var(--glass-light)',
-                              color: s.day_of_week === 0 || s.day_of_week === 6 ? 'var(--accent-red)' : s.day_of_week === null ? '#818cf8' : 'var(--text-primary)',
+                              background: isWeekendDay(s.day_of_week) ? 'rgba(239,68,68,0.1)' : s.day_of_week === null ? 'rgba(99,102,241,0.1)' : 'var(--glass-light)',
+                              color: isWeekendDay(s.day_of_week) ? 'var(--accent-red)' : s.day_of_week === null ? '#818cf8' : 'var(--text-primary)',
                             }}>
                               {getDayLabel(s.day_of_week)}
                             </span>
@@ -388,7 +389,7 @@ export default function StoreSettingsTab({
                     <div style={{ display: 'flex', gap: 4 }}>
                       {INDIVIDUAL_DAYS.map(d => {
                         const isSelected = newStaff.days.includes(d.value)
-                        const isWeekend = d.value === 0 || d.value === 6
+                        const isWeekend = isWeekendDay(d.value)
                         return (
                           <button key={d.value} type="button" onClick={() => {
                             setNewStaff(prev => ({
@@ -463,8 +464,8 @@ export default function StoreSettingsTab({
           <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: '26px' }}>快速設定：</span>
             {[
-              { label: '平日 3人', days: [1, 2, 3, 4, 5], count: 3 },
-              { label: '週末 4人', days: [6, 0], count: 4 },
+              { label: '平日 3人', days: [...WEEKDAY_DAYS], count: 3 },
+              { label: '週末 4人', days: [...WEEKEND_DAYS], count: 4 },
               { label: '午間加班 2人', days: [], time_start: '11:00', time_end: '14:00', count: 2 },
               { label: '晚間加班 2人', days: [], time_start: '18:00', time_end: '22:00', count: 2 },
             ].map((preset, i) => (
@@ -495,7 +496,7 @@ export default function StoreSettingsTab({
         <div style={{ padding: '12px 16px' }}>
           {DAY_LABELS_FULL.map((label, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span style={{ width: 24, fontWeight: 700, color: i >= 5 ? 'var(--accent-red)' : 'var(--text-primary)' }}>{label}</span>
+              <span style={{ width: 24, fontWeight: 700, color: i === 4 || i === 5 ? 'var(--accent-red)' : 'var(--text-primary)' }}>{label}</span>
               <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.open || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], open: e.target.value } }))} />
               <span style={{ color: 'var(--text-muted)' }}>~</span>
               <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.close || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], close: e.target.value } }))} />

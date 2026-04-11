@@ -97,8 +97,8 @@ export function runProgrammaticSchedule(data) {
       if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return { date, score: -1 } // locked work
       const dow = new Date(date).getDay()
       let score = 0
-      if (dow === 0) score += 10
-      if (dow === 6) score += 8
+      if (dow === 5) score += 10  // Friday (weekend)
+      if (dow === 6) score += 8   // Saturday (weekend)
       if (rest.size === 0 && idx >= 4) score += 5
       if (rest.size === 1) {
         const existingIdx = weekDates.indexOf([...rest][0])

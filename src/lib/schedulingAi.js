@@ -63,6 +63,7 @@ export async function gatherSchedulingData({
     { data: availabilityData },
     { data: fatigueData },
     { data: holidayData },
+    { data: timeSlotsData },
   ] = await Promise.all([
     supabase.from('schedules').select('employee, date, shift, absence_type, source_store')
       .gte('date', dateStart).lte('date', dateEnd),
@@ -83,6 +84,10 @@ export async function gatherSchedulingData({
     supabase.from('employee_availability').select('employee, day_of_week, start_time, end_time'),
     supabase.from('fatigue_scores').select('employee, total_score, month').eq('month', currentMonth),
     supabase.from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd),
+    storeFilter
+      ? supabase.from('store_time_slots').select('*')
+          .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
+      : Promise.resolve({ data: [] }),
   ])
 
   const storeSettings = {
@@ -139,6 +144,12 @@ export async function gatherSchedulingData({
       total_score: f.total_score || 0,
     })),
     holidays: (holidayData || []).map(h => h.date),
+    timeSlots: (timeSlotsData || []).map(s => ({
+      day_type: s.day_type,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      required_count: s.required_count,
+    })),
     crossStoreEligible,
     locations,
     tenantId,

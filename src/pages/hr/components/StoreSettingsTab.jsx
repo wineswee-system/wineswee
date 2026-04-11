@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Trash2, Pencil, Check, X, Plus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay } from '../../../lib/scheduleUtils'
@@ -104,6 +104,32 @@ export default function StoreSettingsTab({
       }
     }
     resetShiftForm()
+  }
+
+  // Time slot staffing
+  const [timeSlots, setTimeSlots] = useState([])
+  const [newSlot, setNewSlot] = useState({ day_type: 'all', start_time: '', end_time: '', required_count: 1 })
+
+  // Load time slots
+  useEffect(() => {
+    if (!selectedStore) return
+    supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
+      .then(({ data }) => setTimeSlots(data || []))
+  }, [selectedStore?.id])
+
+  const handleAddTimeSlot = async () => {
+    if (!selectedStore || !newSlot.start_time || !newSlot.end_time) return
+    const { data, error } = await supabase.from('store_time_slots')
+      .upsert({ store_id: selectedStore.id, ...newSlot }, { onConflict: 'store_id,day_type,start_time' })
+      .select().single()
+    if (error) { alert('新增失敗：' + error.message); return }
+    if (data) setTimeSlots(prev => [...prev.filter(s => s.id !== data.id), data].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
+    setNewSlot(prev => ({ ...prev, start_time: '', end_time: '' }))
+  }
+
+  const handleDeleteTimeSlot = async (id) => {
+    await supabase.from('store_time_slots').delete().eq('id', id)
+    setTimeSlots(prev => prev.filter(s => s.id !== id))
   }
 
   // New staffing form state
@@ -555,6 +581,160 @@ export default function StoreSettingsTab({
                 count: preset.count,
                 shift_name: preset.shift_name ?? prev.shift_name,
               }))}>
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Time Slot Staffing — 時段覆蓋制 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><span className="card-title-icon">⏰</span> 時段人力需求</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>設定各時段需要幾人，演算法會自動計算每人上下班時間</div>
+        </div>
+
+        {/* Existing time slots */}
+        {timeSlots.length > 0 && (
+          <div className="data-table-wrapper" style={{ padding: '0 16px' }}>
+            <table className="data-table" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th>適用</th>
+                  <th>時段</th>
+                  <th style={{ textAlign: 'center' }}>需求人數</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {timeSlots.map(s => (
+                  <tr key={s.id}>
+                    <td>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: s.day_type === 'weekend' ? 'rgba(239,68,68,0.1)' : s.day_type === 'weekday' ? 'rgba(34,211,238,0.1)' : 'rgba(99,102,241,0.1)',
+                        color: s.day_type === 'weekend' ? 'var(--accent-red)' : s.day_type === 'weekday' ? 'var(--accent-cyan)' : '#818cf8',
+                      }}>
+                        {s.day_type === 'weekend' ? '假日' : s.day_type === 'weekday' ? '平日' : '每天'}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'monospace' }}>
+                      {s.start_time?.slice(0, 5)} ~ {s.end_time?.slice(0, 5)}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-block', minWidth: 28, padding: '2px 8px', borderRadius: 6,
+                        background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {s.required_count}
+                      </span>
+                    </td>
+                    <td>
+                      <button onClick={() => handleDeleteTimeSlot(s.id)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                        color: 'var(--text-muted)', opacity: 0.6, fontSize: 12,
+                      }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Visual timeline */}
+        {timeSlots.length > 0 && (
+          <div style={{ padding: '8px 16px 4px' }}>
+            <div style={{ position: 'relative', height: 40, background: 'var(--glass-light)', borderRadius: 8, overflow: 'hidden' }}>
+              {timeSlots.filter(s => s.day_type !== 'weekend').map((s, i) => {
+                const startH = parseInt(s.start_time) || 0
+                const endH = parseInt(s.end_time) || 24
+                const effectiveEnd = endH <= startH ? endH + 24 : endH
+                const barStart = ((startH - 10) / 16) * 100
+                const barWidth = ((effectiveEnd - startH) / 16) * 100
+                return (
+                  <div key={i} style={{
+                    position: 'absolute', top: 4, bottom: 4,
+                    left: `${Math.max(0, barStart)}%`, width: `${Math.min(barWidth, 100 - barStart)}%`,
+                    background: `rgba(34,211,238,${0.15 + s.required_count * 0.1})`,
+                    borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, fontWeight: 700, color: 'var(--accent-cyan)',
+                  }}>
+                    {s.required_count}人
+                  </div>
+                )
+              })}
+              {/* Hour labels */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', padding: '0 4px' }}>
+                {[10, 12, 14, 16, 18, 20, 22, 0, 2].map(h => (
+                  <span key={h} style={{ fontSize: 8, color: 'var(--text-muted)' }}>{h}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add new time slot */}
+        <div style={{ padding: '12px 16px', borderTop: timeSlots.length > 0 ? '1px solid var(--border-subtle)' : 'none' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>適用日</label>
+              <select className="form-input" value={newSlot.day_type} onChange={e => setNewSlot(prev => ({ ...prev, day_type: e.target.value }))} style={{ width: 90, fontSize: 12 }}>
+                <option value="all">每天</option>
+                <option value="weekday">平日</option>
+                <option value="weekend">假日</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>開始</label>
+              <input className="form-input" type="time" value={newSlot.start_time} onChange={e => setNewSlot(prev => ({ ...prev, start_time: e.target.value }))} style={{ width: 100, fontSize: 12 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>結束</label>
+              <input className="form-input" type="time" value={newSlot.end_time} onChange={e => setNewSlot(prev => ({ ...prev, end_time: e.target.value }))} style={{ width: 100, fontSize: 12 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>人數</label>
+              <input className="form-input" type="number" min={1} max={20} value={newSlot.required_count} onChange={e => setNewSlot(prev => ({ ...prev, required_count: Math.max(1, parseInt(e.target.value) || 1) }))} style={{ width: 60, fontSize: 12, textAlign: 'center' }} />
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={handleAddTimeSlot} style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+              + 新增時段
+            </button>
+          </div>
+
+          {/* Quick presets */}
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: '26px' }}>快速設定：</span>
+            {[
+              { label: '餐飲標準', slots: [
+                { day_type: 'all', start_time: '11:00', end_time: '12:00', required_count: 1 },
+                { day_type: 'all', start_time: '12:00', end_time: '14:00', required_count: 3 },
+                { day_type: 'all', start_time: '14:00', end_time: '17:00', required_count: 2 },
+                { day_type: 'all', start_time: '17:00', end_time: '21:00', required_count: 3 },
+                { day_type: 'all', start_time: '21:00', end_time: '00:00', required_count: 1 },
+              ]},
+              { label: '假日加強', slots: [
+                { day_type: 'weekend', start_time: '11:00', end_time: '14:00', required_count: 4 },
+                { day_type: 'weekend', start_time: '14:00', end_time: '17:00', required_count: 3 },
+                { day_type: 'weekend', start_time: '17:00', end_time: '22:00', required_count: 4 },
+                { day_type: 'weekend', start_time: '22:00', end_time: '01:00', required_count: 2 },
+              ]},
+            ].map((preset, i) => (
+              <button key={i} style={{
+                padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-medium)',
+                background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: 11,
+                cursor: 'pointer', fontWeight: 500,
+              }} onClick={async () => {
+                if (!selectedStore) return
+                for (const s of preset.slots) {
+                  await supabase.from('store_time_slots')
+                    .upsert({ store_id: selectedStore.id, ...s }, { onConflict: 'store_id,day_type,start_time' })
+                }
+                const { data } = await supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
+                setTimeSlots(data || [])
+              }}>
                 {preset.label}
               </button>
             ))}

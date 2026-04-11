@@ -58,7 +58,9 @@ export function runProgrammaticSchedule(data) {
   } = data
 
   const staffingRules = data.staffingRules || []
+  const timeSlots = data.timeSlots || []
   const minStaff = storeSettings?.minStaff || 1
+  const useTimeSlotMode = timeSlots.length > 0  // 時段覆蓋制 or 班別制
 
   // Work system constraints (標準工時 / 4週變形 etc.)
   const workSystem = storeSettings?.workHourSystem || storeSettings?.work_hour_system || '標準工時'
@@ -211,6 +213,254 @@ export function runProgrammaticSchedule(data) {
 
   // ── Step 2: Sort shifts by start time ──
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
+
+  // ══════════════════════════════════════════════════════════════
+  //  TIME SLOT COVERAGE MODE (時段覆蓋制)
+  // ══════════════════════════════════════════════════════════════
+  if (useTimeSlotMode) {
+    // Helper: get time slots applicable for a given date
+    const getSlotsForDate = (date) => {
+      const dow = new Date(date).getDay()
+      const isWeekend = isWeekendDay(dow)
+      return timeSlots.filter(s =>
+        s.day_type === 'all' ||
+        (s.day_type === 'weekend' && isWeekend) ||
+        (s.day_type === 'weekday' && !isWeekend)
+      ).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+    }
+
+    // Helper: calculate how many hours a window covers
+    const windowHours = (start, end) => {
+      const s = parseTime(start), e = parseTime(end)
+      return e > s ? e - s : (24 - s + e)
+    }
+
+    // Helper: check if a time window overlaps a slot
+    const overlaps = (wStart, wEnd, sStart, sEnd) => {
+      const ws = parseTime(wStart), we = parseTime(wEnd)
+      const ss = parseTime(sStart), se = parseTime(sEnd)
+      // Normalize for cross-midnight
+      const weEff = we <= ws ? we + 24 : we
+      const seEff = se <= ss ? se + 24 : se
+      return ws < seEff && weEff > ss
+    }
+
+    // For each day, track coverage: slot → how many people covering it
+    for (const date of weekDates) {
+      const daySlots = getSlotsForDate(date)
+      if (daySlots.length === 0) continue
+
+      // Track coverage per slot
+      const slotCoverage = daySlots.map(s => ({ ...s, covered: 0 }))
+
+      // Count already-assigned coverage
+      for (const emp of employees) {
+        const s = schedule[emp.name][date]
+        if (s && !isAbsence(s)) {
+          const times = actualTimes[`${emp.name}_${date}`]
+          if (times) {
+            for (const slot of slotCoverage) {
+              if (overlaps(times.start, times.end, slot.start_time, slot.end_time)) {
+                slot.covered++
+              }
+            }
+          }
+        }
+      }
+
+      // Cache weekly hours
+      const weekHoursCache = {}
+      for (const emp of employees) weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
+
+      // Get assignable employees for this day
+      const toAssign = employees.filter(emp => {
+        if (schedule[emp.name][date]) return false
+        if (restDayPlan[emp.name].has(date)) return false
+        if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
+          schedule[emp.name][date] = '休'
+          return false
+        }
+        return true
+      })
+
+      // Sort by fatigue (fairness) then priority for tie-break
+      const sorted = toAssign.sort((a, b) => {
+        const fa = fatigueMap[a.name] || 0, fb = fatigueMap[b.name] || 0
+        if (fa !== fb) return fa - fb
+        return (a.schedule_priority || 3) - (b.schedule_priority || 3)
+      })
+
+      // Assign each employee the best time window
+      for (const emp of sorted) {
+        if (schedule[emp.name][date]) continue
+
+        // Check if any slot still needs coverage
+        const needsCoverage = slotCoverage.some(s => s.covered < s.required_count)
+        if (!needsCoverage) {
+          schedule[emp.name][date] = '休'
+          continue
+        }
+
+        const pref = prefMap[emp.name]
+        const dow = new Date(date).getDay()
+        const avail = availMap[emp.name]?.[dow]
+        const currentWeekHours = weekHoursCache[emp.name]
+        const targetH = targetHoursMap[emp.name]
+        const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+        const maxDailyH = wsConstraints.dailyNormalMax + 2 // normal + some OT
+
+        // Determine available window for this employee
+        let empStart = avail?.start ?? parseTime('11:00')
+        let empEnd = avail?.end ?? parseTime('01:00')
+        // Default to store operating hours
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+        const oh = storeSettings?.operatingHours?.[dayNames[dow]]
+        if (!avail && oh) {
+          empStart = parseTime(oh.open || '11:00')
+          empEnd = parseTime(oh.close || '00:00')
+        }
+
+        // Find the best start/end time for this employee
+        // Strategy: find the window that covers the most understaffed slots
+        // Try different start times (each slot start is a candidate)
+        let bestWindow = null
+        let bestScore = -Infinity
+
+        const candidateStarts = [...new Set(daySlots.map(s => s.start_time))]
+
+        for (const startTime of candidateStarts) {
+          const startH = parseTime(startTime)
+
+          // Skip if employee not available at this time
+          if (avail) {
+            if (avail.end > avail.start) {
+              if (startH < avail.start) continue
+            } else {
+              if (startH < avail.start && startH > (avail.end || 0)) continue
+            }
+          }
+
+          // Try different durations: target remaining hours, or max daily
+          const remainingTarget = Math.max(4, targetH - currentWeekHours)
+          const durations = isPT
+            ? [Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), 4]
+            : [Math.min(remainingTarget, maxDailyH), 8, Math.min(remainingTarget, 9)]
+
+          for (const duration of durations) {
+            const breakH = duration >= 6 ? 1 : (duration >= 4 ? 0.5 : 0)
+            const grossDuration = duration + breakH
+            const endHour = startH + grossDuration
+            const endTime = `${String(Math.floor(endHour % 24)).padStart(2, '0')}:${String(Math.round((endHour % 1) * 60)).padStart(2, '0')}`
+
+            // Check employee availability end
+            if (avail) {
+              const effectiveEnd = avail.end <= avail.start ? avail.end + 24 : avail.end
+              if (endHour > effectiveEnd && endHour - 24 > avail.end) continue
+            }
+
+            // Check legal: daily hours
+            if (grossDuration > wsConstraints.dailyAbsoluteMax) continue
+
+            // Check H4: gap from previous day
+            const dateIdx = weekDates.indexOf(date)
+            if (dateIdx > 0) {
+              const prevTimes = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
+              if (prevTimes) {
+                const prevEnd = parseTime(prevTimes.end)
+                const effectivePrevEnd = prevEnd < parseTime(prevTimes.start) ? prevEnd + 24 : prevEnd
+                const gap = (startH + 24) - effectivePrevEnd
+                if (gap < MIN_SHIFT_INTERVAL) continue
+              }
+            }
+
+            // Score: how many understaffed slots does this window cover?
+            let score = 0
+            let coveredSlots = 0
+            for (const slot of slotCoverage) {
+              if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
+                if (slot.covered < slot.required_count) {
+                  score += 30 + (slot.required_count - slot.covered) * 10
+                  coveredSlots++
+                } else {
+                  score += 2 // Slight bonus for covering already-staffed slots
+                }
+              }
+            }
+
+            if (coveredSlots === 0) continue // Must cover at least one understaffed slot
+
+            // Preference bonus
+            if (pref?.preferred.size) {
+              // Check if this window aligns with preferred shift times
+              for (const sd of shiftDefs) {
+                if (pref.preferred.has(sd.name) && overlaps(startTime, endTime, sd.start_time, sd.end_time)) {
+                  score += 10
+                }
+              }
+            }
+            // Blocked shift penalty
+            if (pref?.avoid.size) {
+              for (const sd of shiftDefs) {
+                if (pref.avoid.has(sd.name) && overlaps(startTime, endTime, sd.start_time, sd.end_time)) {
+                  score -= 30 // Strong penalty
+                }
+              }
+            }
+
+            // Target hours fit
+            const netHours = duration
+            if (currentWeekHours + netHours <= targetH) score += 15
+            else if (currentWeekHours + netHours <= targetH * 1.1) score += 5
+            else score -= 10
+
+            // Fairness
+            const fatigue = fatigueMap[emp.name] || 0
+            if (isWeekendDay(dow) || holidays.includes(date)) score -= fatigue * 0.5
+
+            if (score > bestScore) {
+              bestScore = score
+              bestWindow = {
+                start: startTime,
+                end: endTime,
+                netHours: duration,
+                grossHours: grossDuration,
+                breakMinutes: Math.round(breakH * 60),
+              }
+            }
+          }
+        }
+
+        if (bestWindow) {
+          // Find which shift label best matches this window
+          let shiftLabel = sortedShifts[0]?.name || '早班'
+          for (const sd of sortedShifts) {
+            if (overlaps(bestWindow.start, bestWindow.end, sd.start_time, sd.end_time)) {
+              shiftLabel = sd.name
+              break
+            }
+          }
+
+          schedule[emp.name][date] = shiftLabel
+          actualTimes[`${emp.name}_${date}`] = {
+            start: bestWindow.start,
+            end: bestWindow.end,
+            hours: bestWindow.netHours,
+          }
+
+          // Update coverage
+          for (const slot of slotCoverage) {
+            if (overlaps(bestWindow.start, bestWindow.end, slot.start_time, slot.end_time)) {
+              slot.covered++
+            }
+          }
+        } else {
+          schedule[emp.name][date] = '休'
+        }
+      }
+    }
+
+    // Skip to Step 4 (build assignments) — skip shift-based Step 3
+  } else {
 
   // ── Step 3: Two-pass shift assignment with conflict resolution ──
   //
@@ -480,6 +730,7 @@ export function runProgrammaticSchedule(data) {
       }
     }
   }
+  } // end else (shift-based mode)
 
   // ── Step 4: Build assignments ──
   const assignments = []

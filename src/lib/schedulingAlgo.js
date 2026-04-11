@@ -13,7 +13,7 @@
 
 import {
   parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
-  splitIntoWeeks, isWeekendDay,
+  splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS,
   MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS, MONTHLY_OVERTIME_CAP,
   MONTHLY_REST_DAYS_TARGET,
@@ -59,6 +59,12 @@ export function runProgrammaticSchedule(data) {
 
   const staffingRules = data.staffingRules || []
   const minStaff = storeSettings?.minStaff || 1
+
+  // Work system constraints (標準工時 / 4週變形 etc.)
+  const workSystem = storeSettings?.workHourSystem || storeSettings?.work_hour_system || '標準工時'
+  const wsConstraints = getWorkSystemConstraints(workSystem)
+  // Attach to data so isLegallyValid can access it
+  data._wsConstraints = wsConstraints
 
   // ── Build lookup maps ──
   const offMap = new Set()
@@ -158,10 +164,11 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // H10: Ensure at least 2 rest days per week
+  // H10: Ensure minimum rest days per week (varies by work system)
+  const weeklyRestMin = wsConstraints.weeklyRestMin
   for (const emp of employees) {
     const rest = restDayPlan[emp.name]
-    if (rest.size >= MIN_WEEKLY_REST_DAYS) continue
+    if (rest.size >= weeklyRestMin) continue
 
     // Score candidate rest days
     const candidates = weekDates
@@ -186,7 +193,7 @@ export function runProgrammaticSchedule(data) {
       .filter(Boolean)
       .sort((a, b) => b.score - a.score)
 
-    while (rest.size < MIN_WEEKLY_REST_DAYS && candidates.length > 0) {
+    while (rest.size < weeklyRestMin && candidates.length > 0) {
       rest.add(candidates.shift().date)
     }
   }
@@ -611,6 +618,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
 function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
   const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+  const wsc = data._wsConstraints || getWorkSystemConstraints('標準工時')
 
   // H14: Store match
   if (shiftDef.store_id) {
@@ -636,8 +644,8 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
   // H13: Pregnant/nursing → no night shifts
   if ((emp.is_pregnant || emp.is_nursing) && isNightShift(shiftDef)) return false
 
-  // H2: Daily hours ≤ 12h
-  if (getShiftHours(shiftDef) > DAILY_MAX_HOURS) return false
+  // H2: Daily hours ≤ absolute max (12h) and normal hours check
+  if (getShiftHours(shiftDef) > wsc.dailyAbsoluteMax) return false
 
   // H3: Consecutive work days ≤ 6
   const dateIdx = weekDates.indexOf(date)
@@ -704,8 +712,11 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
   }
 
   // Weekly hours soft cap — buffer scales with target (20% of target, min 4h)
+  // For flexible work systems (4週變形), weekly cap is looser since hours balance across period
   const targetH = emp.weekly_target_hours || (isPT ? 20 : 40)
-  const buffer = Math.max(4, Math.round(targetH * 0.2))
+  const buffer = wsc.canConcentrateRest
+    ? Math.max(8, Math.round(targetH * 0.3))  // Flexible: allow more per-week variance
+    : Math.max(4, Math.round(targetH * 0.2))  // Standard: tighter
   let weeklyHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
   for (const d of weekDates) {
     const sName = schedule[emp.name][d]
@@ -784,10 +795,11 @@ function validateResult(assignments, data) {
       }
     }
 
-    // H10: Min rest days per week
+    // H10: Min rest days per week (adjusted for work system)
+    const wsVal = getWorkSystemConstraints(storeSettings?.work_hour_system || '標準工時')
     const restDays = empAssignments.filter(a => isAbsence(a.shift)).length
-    if (weekDates.length >= 7 && restDays < MIN_WEEKLY_REST_DAYS) {
-      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} 僅 ${restDays} 天休假（需 ≥${MIN_WEEKLY_REST_DAYS} 天）`, severity: 'error' })
+    if (weekDates.length >= 7 && restDays < wsVal.weeklyRestMin) {
+      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} 僅 ${restDays} 天休假（需 ≥${wsVal.weeklyRestMin} 天）`, severity: 'error' })
     }
 
     // H13: Pregnant/nursing night shifts
@@ -846,7 +858,8 @@ function validateResult(assignments, data) {
 
 function validateMonthlyResult(assignments, data) {
   const violations = []
-  const { employees, shiftDefs } = data
+  const { employees, shiftDefs, storeSettings } = data
+  const wsm = getWorkSystemConstraints(storeSettings?.work_hour_system || '標準工時')
 
   const shiftDefMap = {}
   for (const d of shiftDefs) shiftDefMap[d.name] = d
@@ -870,6 +883,50 @@ function validateMonthlyResult(assignments, data) {
         message: `${emp.name}: 月加班 ${overtime.toFixed(1)}h（上限 ${MONTHLY_OVERTIME_CAP}h）`,
         severity: 'error',
       })
+    }
+
+    // H11: Period total hours check (for flexible work systems)
+    if (wsm.periodWeeks > 1) {
+      // Check each N-week period within the month
+      const weeks = splitIntoWeeks(empAssignments.map(a => a.date).sort())
+      for (let i = 0; i <= weeks.length - wsm.periodWeeks; i++) {
+        const periodWeeks = weeks.slice(i, i + wsm.periodWeeks)
+        const periodDates = periodWeeks.flat()
+        let periodHours = 0
+        for (const d of periodDates) {
+          const a = workEntries.find(a => a.date === d)
+          if (a) {
+            const def = shiftDefMap[a.shift]
+            periodHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+          }
+        }
+        if (periodHours > wsm.periodTotalHours) {
+          violations.push({
+            employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
+            message: `${emp.name}: ${wsm.periodWeeks}週工時 ${periodHours.toFixed(1)}h 超過上限 ${wsm.periodTotalHours}h`,
+            severity: 'error',
+          })
+          break // Only report first violation
+        }
+      }
+
+      // Check period rest days
+      for (let i = 0; i <= weeks.length - wsm.periodWeeks; i++) {
+        const periodWeeks = weeks.slice(i, i + wsm.periodWeeks)
+        const periodDates = periodWeeks.flat()
+        const periodRest = periodDates.filter(d => {
+          const a = empAssignments.find(a => a.date === d)
+          return !a || isAbsence(a.shift)
+        }).length
+        if (periodRest < wsm.periodRestDays) {
+          violations.push({
+            employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
+            message: `${emp.name}: ${wsm.periodWeeks}週僅 ${periodRest} 天休假（需 ≥${wsm.periodRestDays} 天）`,
+            severity: 'error',
+          })
+          break
+        }
+      }
     }
 
     // S7: Monthly rest day target

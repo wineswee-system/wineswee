@@ -7,6 +7,7 @@
 
 import {
   parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
+  getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS,
 } from './scheduleUtils'
 
@@ -16,9 +17,11 @@ import {
  */
 export function validateShiftChange({
   empName, date, newShift, employees, schedules, shiftDefs, weekDates,
+  workHourSystem,
 }) {
   const errors = []
   const warnings = []
+  const wsc = getWorkSystemConstraints(workHourSystem || '標準工時')
 
   if (!newShift || isAbsence(newShift)) {
     return { ok: true, warnings: [], errors: [] }
@@ -100,8 +103,8 @@ export function validateShiftChange({
       const s = getShiftForDate(d)
       if (!s || isAbsence(s)) restCount++
     }
-    if (weekDates.length >= 7 && restCount < MIN_WEEKLY_REST_DAYS) {
-      errors.push(`本週僅剩 ${restCount} 天休假，需 ≥${MIN_WEEKLY_REST_DAYS} 天（勞基法 §36）`)
+    if (weekDates.length >= 7 && restCount < wsc.weeklyRestMin) {
+      errors.push(`本週僅剩 ${restCount} 天休假，需 ≥${wsc.weeklyRestMin} 天（勞基法 §36）`)
     }
   }
 

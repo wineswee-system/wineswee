@@ -189,6 +189,7 @@ export default function Schedule() {
       const validation = validateShiftChange({
         empName, date, newShift: shift,
         employees: filtered, schedules, shiftDefs, weekDates,
+        workHourSystem: storeSettings?.work_hour_system,
       })
 
       if (validation.errors.length > 0) {

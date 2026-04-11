@@ -168,23 +168,58 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
+  // Calculate minimum workers needed per day (from time slots or staffing rules)
+  const minWorkersPerDay = {}
+  for (const date of weekDates) {
+    const dow = new Date(date).getDay()
+    const isWeekend = isWeekendDay(dow)
+    if (useTimeSlotMode) {
+      // Max concurrent requirement from time slots
+      const daySlots = timeSlots.filter(s =>
+        s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
+      )
+      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), minStaff)
+    } else {
+      // Sum of shift staffing requirements
+      const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
+      minWorkersPerDay[date] = total || minStaff
+    }
+  }
+
   // H10: Ensure minimum rest days per week (varies by work system)
+  // BUT also ensure every day has enough workers (no store closure)
   const weeklyRestMin = wsConstraints.weeklyRestMin
   for (const emp of employees) {
     const rest = restDayPlan[emp.name]
     if (rest.size >= weeklyRestMin) continue
+
+    // Count how many people are already resting per day
+    const restCountByDay = {}
+    for (const date of weekDates) {
+      restCountByDay[date] = 0
+      for (const e of employees) {
+        if (restDayPlan[e.name].has(date)) restCountByDay[date]++
+      }
+    }
 
     // Score candidate rest days
     const candidates = weekDates
       .map((date, idx) => {
         if (rest.has(date)) return null
         if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return null
+
+        // Check: would this rest day leave too few workers?
+        const workersIfRest = employees.length - restCountByDay[date] - 1
+        const needed = minWorkersPerDay[date] || minStaff
+        if (workersIfRest < needed) return null // Can't rest on this day — not enough coverage
+
         const dow = new Date(date).getDay()
         let score = 0
         // Restaurants: weekends are busiest, prefer resting on weekdays
-        // Mon-Thu (1-4) get higher rest scores, Fri-Sat (5-6) get lower
-        if (dow >= 1 && dow <= 4) score += 8  // Prefer weekday rest
-        if (dow === 5 || dow === 6) score -= 5  // Avoid weekend rest
+        if (dow >= 1 && dow <= 4) score += 8
+        if (dow === 5 || dow === 6) score -= 5
+        // Prefer days where many people are already working (less impact)
+        score -= restCountByDay[date] * 3
         // Spread rest days apart
         if (rest.size === 1) {
           const existingIdx = weekDates.indexOf([...rest][0])

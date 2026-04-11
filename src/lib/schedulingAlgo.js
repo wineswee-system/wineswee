@@ -645,11 +645,13 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     if (!isPT && shiftDef.employee_type === 'pt') return false
   }
 
-  // H9: can_open / can_close
+  // H9: can_open / can_close — only block if EXPLICITLY set to false (not null/undefined)
+  // null = not configured = allow; true = explicitly allowed; false = explicitly blocked
   const startH = parseTime(shiftDef.start_time)
   const endH = parseTime(shiftDef.end_time)
   if (startH <= 9 && emp.can_open === false) return false
   if ((endH >= 21 || endH < startH) && emp.can_close === false) return false
+  // Note: when can_close is null/undefined, employee is NOT blocked from closing shifts
 
   // H13: Pregnant/nursing → no night shifts
   if ((emp.is_pregnant || emp.is_nursing) && isNightShift(shiftDef)) return false

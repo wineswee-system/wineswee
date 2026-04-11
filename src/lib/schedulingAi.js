@@ -106,8 +106,8 @@ export async function gatherSchedulingData({
       store: e.store,
       employment_type: e.employment_type || 'full_time',
       schedule_priority: e.schedule_priority || 3,
-      can_open: e.can_open !== false,
-      can_close: e.can_close !== false,
+      can_open: e.can_open,       // null=未設定(不限制), true=可開店, false=不可開店
+      can_close: e.can_close,     // null=未設定(不限制), true=可關店, false=不可關店
       additional_stores: e.additional_stores || [],
       gender: e.gender,
       is_pregnant: e.is_pregnant,

@@ -595,15 +595,17 @@ export default function StoreSettingsTab({
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>設定各時段需要幾人，演算法會自動計算每人上下班時間</div>
         </div>
 
-        {/* Existing time slots */}
+        {/* Existing time slots — inline editable */}
         {timeSlots.length > 0 && (
           <div className="data-table-wrapper" style={{ padding: '0 16px' }}>
             <table className="data-table" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
                   <th>適用</th>
-                  <th>時段</th>
-                  <th style={{ textAlign: 'center' }}>最少~最多</th>
+                  <th>開始</th>
+                  <th>結束</th>
+                  <th style={{ textAlign: 'center' }}>最少</th>
+                  <th style={{ textAlign: 'center' }}>最多</th>
                   <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
@@ -611,25 +613,50 @@ export default function StoreSettingsTab({
                 {timeSlots.map(s => (
                   <tr key={s.id}>
                     <td>
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        background: s.day_type === 'weekend' ? 'rgba(239,68,68,0.1)' : s.day_type === 'weekday' ? 'rgba(34,211,238,0.1)' : 'rgba(99,102,241,0.1)',
-                        color: s.day_type === 'weekend' ? 'var(--accent-red)' : s.day_type === 'weekday' ? 'var(--accent-cyan)' : '#818cf8',
-                      }}>
-                        {s.day_type === 'weekend' ? '假日' : s.day_type === 'weekday' ? '平日' : '每天'}
-                      </span>
+                      <select className="form-input" value={s.day_type} style={{ padding: '4px 6px', fontSize: 11, width: 70 }}
+                        onChange={async e => {
+                          const { data } = await supabase.from('store_time_slots').update({ day_type: e.target.value }).eq('id', s.id).select().single()
+                          if (data) setTimeSlots(prev => prev.map(x => x.id === data.id ? data : x))
+                        }}>
+                        <option value="all">每天</option>
+                        <option value="weekday">平日</option>
+                        <option value="weekend">假日</option>
+                      </select>
                     </td>
-                    <td style={{ fontFamily: 'monospace' }}>
-                      {s.start_time?.slice(0, 5)} ~ {s.end_time?.slice(0, 5)}
+                    <td>
+                      <input type="time" className="form-input" value={s.start_time?.slice(0, 5) || ''} style={{ padding: '4px 6px', fontSize: 12, width: 90 }}
+                        onBlur={async e => {
+                          if (!e.target.value || e.target.value === s.start_time?.slice(0, 5)) return
+                          const { data } = await supabase.from('store_time_slots').update({ start_time: e.target.value }).eq('id', s.id).select().single()
+                          if (data) setTimeSlots(prev => prev.map(x => x.id === data.id ? data : x))
+                        }} />
+                    </td>
+                    <td>
+                      <input type="time" className="form-input" value={s.end_time?.slice(0, 5) || ''} style={{ padding: '4px 6px', fontSize: 12, width: 90 }}
+                        onBlur={async e => {
+                          if (!e.target.value || e.target.value === s.end_time?.slice(0, 5)) return
+                          const { data } = await supabase.from('store_time_slots').update({ end_time: e.target.value }).eq('id', s.id).select().single()
+                          if (data) setTimeSlots(prev => prev.map(x => x.id === data.id ? data : x))
+                        }} />
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 6,
-                        background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
-                        fontWeight: 700, fontSize: 13,
-                      }}>
-                        {s.required_count}~{s.max_count || s.required_count * 2}
-                      </span>
+                      <input type="number" className="form-input" min={1} max={20} value={s.required_count}
+                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--accent-cyan)' }}
+                        onChange={async e => {
+                          const v = Math.max(1, parseInt(e.target.value) || 1)
+                          const { data } = await supabase.from('store_time_slots').update({ required_count: v }).eq('id', s.id).select().single()
+                          if (data) setTimeSlots(prev => prev.map(x => x.id === data.id ? data : x))
+                        }} />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <input type="number" className="form-input" min={1} max={20} value={s.max_count || ''}
+                        placeholder="不限"
+                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--accent-cyan)' }}
+                        onChange={async e => {
+                          const v = e.target.value ? Math.max(s.required_count, parseInt(e.target.value) || 1) : null
+                          const { data } = await supabase.from('store_time_slots').update({ max_count: v }).eq('id', s.id).select().single()
+                          if (data) setTimeSlots(prev => prev.map(x => x.id === data.id ? data : x))
+                        }} />
                     </td>
                     <td>
                       <button onClick={() => handleDeleteTimeSlot(s.id)} style={{

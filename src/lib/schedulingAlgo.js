@@ -233,57 +233,8 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // H10: Ensure minimum rest days per week (varies by work system)
-  // BUT also ensure every day has enough workers (no store closure)
-  const weeklyRestMin = wsConstraints.weeklyRestMin
-  for (const emp of employees) {
-    const rest = restDayPlan[emp.name]
-    if (rest.size >= weeklyRestMin) continue
-
-    // Count how many people are already resting per day
-    const restCountByDay = {}
-    for (const date of weekDates) {
-      restCountByDay[date] = 0
-      for (const e of employees) {
-        if (restDayPlan[e.name].has(date)) restCountByDay[date]++
-      }
-    }
-
-    // Score candidate rest days
-    const candidates = weekDates
-      .map((date, idx) => {
-        if (rest.has(date)) return null
-        if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return null
-
-        // Check: would this rest day leave too few workers?
-        const workersIfRest = employees.length - restCountByDay[date] - 1
-        const needed = minWorkersPerDay[date] || minStaff
-        if (workersIfRest < needed) return null // Can't rest on this day — not enough coverage
-
-        const dow = new Date(date).getDay()
-        let score = 0
-        // Restaurants: weekends are busiest, slightly prefer resting on weekdays
-        if (dow >= 1 && dow <= 4) score += 3
-        if (dow === 5 || dow === 6) score -= 2
-        // STRONG: spread rest days evenly — heavily penalize days where others already rest
-        score -= restCountByDay[date] * 15
-        // Spread rest days apart
-        if (rest.size === 1) {
-          const existingIdx = weekDates.indexOf([...rest][0])
-          score += Math.abs(idx - existingIdx)
-        }
-        // If high fatigue, give rest on busy days
-        const fatigue = fatigueMap[emp.name] || 0
-        if (fatigue > 20) score += 3
-        return { date, score }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score)
-
-    while (rest.size < weeklyRestMin && candidates.length > 0) {
-      rest.add(candidates.shift().date)
-    }
-  }
+  // 四週變形：不再按週補休，休假完全由 off_requests（希望休）決定
+  // 正職月休上限 10 天，兼職彈性
 
   // Fill rest into schedule
   for (const emp of employees) {

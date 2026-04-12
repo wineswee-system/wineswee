@@ -298,7 +298,19 @@ export function runProgrammaticSchedule(data) {
       return ws < seEff && weEff > ss
     }
 
-    // For each day, track coverage: slot → how many people covering it
+    // ── Pre-planning: calculate how many work days each employee should have ──
+    const workDaysPlan = {}
+    for (const emp of employees) {
+      const restDays = restDayPlan[emp.name].size
+      const availableDays = weekDates.length - restDays
+      const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+      const targetH = targetHoursMap[emp.name]
+      const hoursPerDay = isPT ? 6 : 8 // average net hours per shift
+      const idealWorkDays = Math.min(availableDays, Math.ceil(targetH / hoursPerDay))
+      workDaysPlan[emp.name] = { target: idealWorkDays, assigned: 0 }
+    }
+
+    // ── Assign shifts day by day ──
     for (const date of weekDates) {
       const daySlots = getSlotsForDate(date)
       if (daySlots.length === 0) continue
@@ -321,22 +333,18 @@ export function runProgrammaticSchedule(data) {
         }
       }
 
-      // Cache weekly hours
-      const weekHoursCache = {}
-      for (const emp of employees) weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
-
-      // Get assignable employees for this day (don't auto-rest yet — let coverage decide)
+      // Get assignable employees for this day
       const toAssign = employees.filter(emp => {
         if (schedule[emp.name][date]) return false
         if (restDayPlan[emp.name].has(date)) return false
         return true
       })
 
-      // Sort: prioritize employees who are UNDER target hours, then by fatigue
+      // Sort: prioritize employees with more remaining work days needed
       const sorted = toAssign.sort((a, b) => {
-        const aUnder = weekHoursCache[a.name] < targetHoursMap[a.name] ? 0 : 1
-        const bUnder = weekHoursCache[b.name] < targetHoursMap[b.name] ? 0 : 1
-        if (aUnder !== bUnder) return aUnder - bUnder // Under-target employees first
+        const aRemaining = workDaysPlan[a.name].target - workDaysPlan[a.name].assigned
+        const bRemaining = workDaysPlan[b.name].target - workDaysPlan[b.name].assigned
+        if (bRemaining !== aRemaining) return bRemaining - aRemaining // More remaining = higher priority
         const fa = fatigueMap[a.name] || 0, fb = fatigueMap[b.name] || 0
         if (fa !== fb) return fa - fb
         return (a.schedule_priority || 3) - (b.schedule_priority || 3)
@@ -351,11 +359,15 @@ export function runProgrammaticSchedule(data) {
         const needsMinCoverage = slotCoverage.some(s => s.covered < s.required_count)
         // Check if any slot can accept more (under maximum)
         const canAcceptMore = slotCoverage.some(s => s.covered < (s.max_count || s.required_count * 2))
-        // If minimum is met AND employee is over target hours, rest
-        // If minimum is NOT met, must assign regardless of target
-        // If minimum is met but under max and employee is under target, still assign
-        const empOverTarget = weekHoursCache[emp.name] >= targetHoursMap[emp.name]
-        if (!needsMinCoverage && (empOverTarget || !canAcceptMore)) {
+        // Has this employee used up their planned work days?
+        const empPlan = workDaysPlan[emp.name]
+        const empHasRemainingDays = empPlan.assigned < empPlan.target
+
+        // Decision:
+        // - Minimum not met → must assign (no matter what)
+        // - Employee still has planned work days + slots can accept → assign
+        // - Otherwise → rest
+        if (!needsMinCoverage && (!empHasRemainingDays || !canAcceptMore)) {
           schedule[emp.name][date] = '休'
           continue
         }
@@ -516,6 +528,7 @@ export function runProgrammaticSchedule(data) {
               slot.covered++
             }
           }
+          workDaysPlan[emp.name].assigned++
         } else {
           schedule[emp.name][date] = '休'
         }

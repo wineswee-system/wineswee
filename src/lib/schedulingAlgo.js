@@ -325,26 +325,18 @@ export function runProgrammaticSchedule(data) {
       const weekHoursCache = {}
       for (const emp of employees) weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
 
-      // Check if this day still needs coverage
-      const dayNeedsCoverage = slotCoverage.some(s => s.covered < s.required_count)
-
-      // Get assignable employees for this day
+      // Get assignable employees for this day (don't auto-rest yet — let coverage decide)
       const toAssign = employees.filter(emp => {
         if (schedule[emp.name][date]) return false
         if (restDayPlan[emp.name].has(date)) return false
-        // Only auto-rest for target hours if day already has enough coverage
-        if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
-          if (!dayNeedsCoverage) {
-            schedule[emp.name][date] = '休'
-            return false
-          }
-          // Day needs coverage — keep this employee available even if over target
-        }
         return true
       })
 
-      // Sort by fatigue (fairness) then priority for tie-break
+      // Sort: prioritize employees who are UNDER target hours, then by fatigue
       const sorted = toAssign.sort((a, b) => {
+        const aUnder = weekHoursCache[a.name] < targetHoursMap[a.name] ? 0 : 1
+        const bUnder = weekHoursCache[b.name] < targetHoursMap[b.name] ? 0 : 1
+        if (aUnder !== bUnder) return aUnder - bUnder // Under-target employees first
         const fa = fatigueMap[a.name] || 0, fb = fatigueMap[b.name] || 0
         if (fa !== fb) return fa - fb
         return (a.schedule_priority || 3) - (b.schedule_priority || 3)
@@ -355,8 +347,15 @@ export function runProgrammaticSchedule(data) {
         if (schedule[emp.name][date]) continue
 
         // Check if any slot still needs coverage
-        const needsCoverage = slotCoverage.some(s => s.covered < s.required_count)
-        if (!needsCoverage) {
+        // Check if any slot still needs coverage (under minimum)
+        const needsMinCoverage = slotCoverage.some(s => s.covered < s.required_count)
+        // Check if any slot can accept more (under maximum)
+        const canAcceptMore = slotCoverage.some(s => s.covered < (s.max_count || s.required_count * 2))
+        // If minimum is met AND employee is over target hours, rest
+        // If minimum is NOT met, must assign regardless of target
+        // If minimum is met but under max and employee is under target, still assign
+        const empOverTarget = weekHoursCache[emp.name] >= targetHoursMap[emp.name]
+        if (!needsMinCoverage && (empOverTarget || !canAcceptMore)) {
           schedule[emp.name][date] = '休'
           continue
         }

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
 import { getShiftHours } from '../../../lib/scheduleUtils'
 
@@ -174,40 +175,15 @@ export default function ScheduleTable({
                     return (
                       <td key={date} style={{ textAlign: 'center', padding: '6px 4px', position: 'relative' }}>
                         {isEditing ? (
-                          <div style={{
-                            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                            zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-                            borderRadius: 10, padding: 8, boxShadow: 'var(--shadow-lg)',
-                            display: 'flex', flexDirection: 'column', gap: 4, minWidth: 90,
-                          }}>
-                            {(() => {
-                              const empStore = emp.store || storeFilter || ''
-                              const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
-                              const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
-                              const storeShiftLabels = storeShiftDefs.map(d => d.name)
-                              const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
-                              return shiftOptions.map(t => (
-                                <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
-                                  style={{
-                                    padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                    fontSize: 12, fontWeight: 600, textAlign: 'center',
-                                    background: t.dim, color: t.color,
-                                  }}>
-                                  {t.label}
-                                </button>
-                              ))
-                            })()}
-                            {shift && handleDeleteShift && (
-                              <button onClick={() => handleDeleteShift(emp.name, date)} style={{
-                                padding: '4px', borderRadius: 6, border: '1px solid rgba(248,113,113,0.3)',
-                                background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                              }}>刪除</button>
-                            )}
-                            <button onClick={() => setEditCell(null)} style={{
-                              padding: '4px', borderRadius: 6, border: '1px solid var(--border-medium)',
-                              background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                            }}>取消</button>
-                          </div>
+                          <ShiftEditPopup
+                            emp={emp} date={date} shift={shift}
+                            shiftDefs={shiftDefs} SHIFT_TYPES={SHIFT_TYPES}
+                            storeFilter={storeFilter} getStoreShifts={getStoreShifts}
+                            schedules={schedules}
+                            handleSetShift={handleSetShift}
+                            handleDeleteShift={handleDeleteShift}
+                            onClose={() => setEditCell(null)}
+                          />
                         ) : null}
                         {getOffRequest(emp.name, date) && !shift && (
                           <div style={{ fontSize: 9, color: 'var(--accent-orange)', marginBottom: 2 }}>
@@ -258,5 +234,102 @@ export default function ScheduleTable({
         </div>
       </div>
     </>
+  )
+}
+
+// ── Shift Edit Popup with Time Pickers ──
+function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, schedules, handleSetShift, handleDeleteShift, onClose }) {
+  const existing = schedules.find(s => s.employee === emp.name && s.date === date)
+  const [startTime, setStartTime] = useState(existing?.actual_start?.slice(0, 5) || '11:00')
+  const [endTime, setEndTime] = useState(existing?.actual_end?.slice(0, 5) || '20:00')
+
+  const quickPresets = [
+    { label: '11-20', start: '11:00', end: '20:00' },
+    { label: '11-18', start: '11:00', end: '18:00' },
+    { label: '15-24', start: '15:00', end: '00:00' },
+    { label: '16-01', start: '16:00', end: '01:00' },
+    { label: '18-01', start: '18:00', end: '01:00' },
+    { label: '11-15', start: '11:00', end: '15:00' },
+    { label: '15-22', start: '15:00', end: '22:00' },
+    { label: '18-24', start: '18:00', end: '00:00' },
+  ]
+
+  const handleConfirm = () => {
+    if (!startTime || !endTime) return
+    const s = startTime.replace(':00', '').replace(/^0/, '')
+    const e = endTime.replace(':00', '').replace(/^0/, '')
+    const label = `${s}-${e}`
+    handleSetShift(emp.name, date, label, startTime, endTime)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+      zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      borderRadius: 12, padding: 12, boxShadow: 'var(--shadow-lg)',
+      minWidth: 200,
+    }}>
+      {/* Time pickers */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <input type="time" className="form-input" value={startTime} onChange={e => setStartTime(e.target.value)}
+          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>~</span>
+        <input type="time" className="form-input" value={endTime} onChange={e => setEndTime(e.target.value)}
+          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+      </div>
+
+      {/* Confirm button */}
+      <button onClick={handleConfirm} style={{
+        width: '100%', padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
+        background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 700, marginBottom: 8,
+      }}>
+        確認排班
+      </button>
+
+      {/* Quick presets */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, marginBottom: 8 }}>
+        {quickPresets.map(p => (
+          <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end) }}
+            style={{
+              padding: '4px 2px', borderRadius: 6, border: '1px solid var(--border-medium)',
+              background: startTime === p.start && endTime === p.end ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
+              color: startTime === p.start && endTime === p.end ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              fontSize: 10, fontWeight: 600, cursor: 'pointer',
+            }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Rest / Absence */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        <button onClick={() => handleSetShift(emp.name, date, '休')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'var(--glass-medium)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+        }}>😴 休</button>
+        <button onClick={() => handleSetShift(emp.name, date, '病')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 11, fontWeight: 600,
+        }}>🏥 病</button>
+        <button onClick={() => handleSetShift(emp.name, date, '特休')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'rgba(16,185,129,0.08)', color: '#10b981', fontSize: 11, fontWeight: 600,
+        }}>🌴 特休</button>
+      </div>
+
+      {/* Delete + Cancel */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        {shift && handleDeleteShift && (
+          <button onClick={() => handleDeleteShift(emp.name, date)} style={{
+            flex: 1, padding: '4px', borderRadius: 6, border: '1px solid rgba(248,113,113,0.3)',
+            background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}>刪除</button>
+        )}
+        <button onClick={onClose} style={{
+          flex: 1, padding: '4px', borderRadius: 6, border: '1px solid var(--border-medium)',
+          background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+        }}>取消</button>
+      </div>
+    </div>
   )
 }

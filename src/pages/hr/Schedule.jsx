@@ -181,7 +181,7 @@ export default function Schedule() {
     return s?.shift || ''
   }
 
-  const handleSetShift = async (empName, date, shift) => {
+  const handleSetShift = async (empName, date, shift, actualStart, actualEnd) => {
     if (!canEditSchedule) return
 
     // Real-time validation before saving
@@ -208,12 +208,19 @@ export default function Schedule() {
       }
     }
 
+    const record = {
+      shift,
+      actual_start: actualStart || null,
+      actual_end: actualEnd || null,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+    }
+
     const existing = schedules.find(s => s.employee === empName && s.date === date)
     if (existing) {
-      const { data } = await supabase.from('schedules').update({ shift }).eq('id', existing.id).select().single()
+      const { data } = await supabase.from('schedules').update(record).eq('id', existing.id).select().single()
       if (data) setSchedules(prev => prev.map(s => s.id === existing.id ? data : s))
     } else {
-      const { data } = await supabase.from('schedules').insert({ employee: empName, date, shift, ...(tenantId ? { tenant_id: tenantId } : {}) }).select().single()
+      const { data } = await supabase.from('schedules').insert({ employee: empName, date, ...record }).select().single()
       if (data) setSchedules(prev => [...prev, data])
     }
     setEditCell(null)

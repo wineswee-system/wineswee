@@ -100,13 +100,19 @@ export function runProgrammaticSchedule(data) {
     staffingMap[s.shift_name] = s.required_count || 0
   }
 
-  // Target weekly hours per employee
+  // Target weekly hours per employee (range-based)
+  // 正職 40-48h/週，兼職 24-36h/週
   const targetHoursMap = {}
+  const hoursRange = {}
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    // Use explicit target if set AND reasonable, otherwise use type-based default
-    const dbTarget = emp.weekly_target_hours
-    targetHoursMap[emp.name] = (isPT && (!dbTarget || dbTarget >= 40)) ? 30 : (dbTarget || 48)
+    if (isPT) {
+      targetHoursMap[emp.name] = 30   // midpoint of 24-36
+      hoursRange[emp.name] = { min: 24, max: 36 }
+    } else {
+      targetHoursMap[emp.name] = 44   // midpoint of 40-48
+      hoursRange[emp.name] = { min: 40, max: 48 }
+    }
   }
 
   // ── Track consecutive weekends worked ──
@@ -272,12 +278,15 @@ export function runProgrammaticSchedule(data) {
   // ══════════════════════════════════════════════════════════════
   if (useTimeSlotMode) {
     // ══════════════════════════════════════════════════════════════
-    //  TIME SLOT COVERAGE MODE — 完整重寫
+    //  TIME SLOT COVERAGE MODE — 三階段排班
+    //  Phase 1: 開店人員  Phase 2: 關店人員  Phase 3: 補滿覆蓋
+    //  正職 9h gross (8h net + 1h break)，兼職 4-7h 彈性
+    //  正職週時 40-48h，兼職週時 24-36h
     // ══════════════════════════════════════════════════════════════
 
     const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
-    // Helpers
+    // ── Helpers ──
     const getSlotsForDate = (date) => {
       const dow = new Date(date).getDay()
       const isWE = isWeekendDay(dow)
@@ -302,27 +311,37 @@ export function runProgrammaticSchedule(data) {
       return `${s}-${e}`
     }
 
-    // Get operating hours for a date
     const getOH = (date) => {
       const dow = new Date(date).getDay()
       return storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
     }
+
+    const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+
+    // Sort by weekly hours deficit (who needs the most hours first)
+    const sortByNeed = (list) => [...list].sort((a, b) => {
+      const aDef = hoursRange[a.name].min - getEmpWeekHours(a.name)
+      const bDef = hoursRange[b.name].min - getEmpWeekHours(b.name)
+      return bDef - aDef
+    })
 
     // ── Day-by-day assignment ──
     for (const date of weekDates) {
       const daySlots = getSlotsForDate(date)
       if (daySlots.length === 0) continue
 
+      // ── Detect operating hours ──
       const oh = getOH(date)
       const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')
       const storeCloseStr = oh?.close || daySlots[daySlots.length - 1]?.end_time || '00:00'
       const storeCloseH = parseTime(storeCloseStr)
       const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
+      const maxGrossH = effectiveCloseH - storeOpenH // max shift length = store hours
 
-      // Track coverage
+      // Track slot coverage
       const slotCoverage = daySlots.map(s => ({ ...s, covered: 0 }))
 
-      // Count locked assignments
+      // Count locked (existing) assignments into coverage
       for (const emp of employees) {
         const s = schedule[emp.name][date]
         if (s && !isAbsence(s)) {
@@ -331,159 +350,188 @@ export function runProgrammaticSchedule(data) {
         }
       }
 
-      // Generate all possible start hours
-      const startHours = []
-      for (let h = storeOpenH; h <= effectiveCloseH - 3; h++) {
-        startHours.push(fmtH(h))
+      // Check if opener/closer already covered by locked schedules
+      let hasOpener = false
+      let hasCloser = false
+      for (const emp of employees) {
+        const t = actualTimes[`${emp.name}_${date}`]
+        if (!t) continue
+        const tStartH = parseTime(t.start)
+        if (Math.abs(tStartH - storeOpenH) < 0.5) hasOpener = true
+        const tEndH = parseTime(t.end)
+        const effEnd = tEndH <= tStartH ? tEndH + 24 : tEndH
+        if (effEnd >= effectiveCloseH - 0.5) hasCloser = true
       }
 
-      // Get available employees
+      // Get available employees for today
       const available = employees.filter(emp =>
         !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
       )
 
-      // Sort: full-time openers first, then full-time, then part-time
-      available.sort((a, b) => {
-        const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT'
-        const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT'
-        // Openers first (they must start at 11)
-        const aOpener = !aIsPT && a.can_open === true ? 0 : 1
-        const bOpener = !bIsPT && b.can_open === true ? 0 : 1
-        if (aOpener !== bOpener) return aOpener - bOpener
-        if (aIsPT !== bIsPT) return aIsPT ? 1 : -1
-        const aH = getEmpWeekHours(a.name), bH = getEmpWeekHours(b.name)
-        return (targetHoursMap[b.name] - bH) - (targetHoursMap[a.name] - aH)
-      })
+      // ── Shift assignment helper: validate & create a shift window ──
+      const tryShift = (emp, startH, grossH) => {
+        const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+        const endH = startH + grossH
 
-      // Track if we have opener and closer assigned for today
-      let hasOpener = false
-      let hasCloser = false
-
-      for (const emp of available) {
-        if (schedule[emp.name][date]) continue
-
-        // All slots covered (min met) AND no more room (max met)?
-        const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
-        const allMaxMet = slotCoverage.every(s => s.covered >= (s.max_count || s.required_count + 2))
-        if (allMinMet && allMaxMet) { schedule[emp.name][date] = '休'; continue }
-
-        const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+        // Don't go past store closing
+        if (endH > effectiveCloseH + 0.5) return null
+        // Legal: max daily hours
+        if (grossH > wsConstraints.dailyAbsoluteMax) return null
+        // Weekly hours hard cap (with 2h buffer for rounding)
         const weekHours = getEmpWeekHours(emp.name)
-        const targetH = targetHoursMap[emp.name]
+        if (weekHours + netH > hoursRange[emp.name].max + 2) return null
+        // can_open restriction: can_open=false → must start ≥ 2h after opening
+        if (emp.can_open === false && startH < storeOpenH + 2) return null
+        // can_close restriction: can_close=false → must end ≥ 2h before closing
+        if (emp.can_close === false && endH > effectiveCloseH - 2) return null
 
-        // If over target AND all minimum covered → rest
-        if (weekHours >= targetH && allMinMet) { schedule[emp.name][date] = '休'; continue }
+        // H4: gap from previous day ≥ 11h
+        const dateIdx = weekDates.indexOf(date)
+        if (dateIdx > 0) {
+          const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
+          if (prevT) {
+            const prevEndH = parseTime(prevT.end)
+            const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
+            if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
+          }
+        }
 
-        // Determine shift duration (NET hours, excluding break)
-        // Full-time: 8h net (9h gross with 1h break)
-        // Part-time: flexible, fill what's needed
-        const netDurations = isPT
-          ? [7, 6, 5, 4, 3]
-          : [8]
+        return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
+      }
+
+      // ── Assign a shift and update all tracking ──
+      const doAssign = (emp, window) => {
+        schedule[emp.name][date] = fmtLabel(window.start, window.end)
+        actualTimes[`${emp.name}_${date}`] = { start: window.start, end: window.end, hours: window.netH }
+        slotCoverage.forEach(slot => {
+          if (overlaps(window.start, window.end, slot.start_time, slot.end_time)) slot.covered++
+        })
+        const sH = parseTime(window.start)
+        const eH = parseTime(window.end)
+        const effE = eH <= sH ? eH + 24 : eH
+        if (Math.abs(sH - storeOpenH) < 0.5) hasOpener = true
+        if (effE >= effectiveCloseH - 0.5) hasCloser = true
+      }
+
+      // ── Coverage scoring: how well a window fills uncovered slots ──
+      const scoreCoverage = (startTime, endTime) => {
+        let score = 0
+        for (const slot of slotCoverage) {
+          if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
+            const maxC = slot.max_count || slot.required_count + 2
+            if (slot.covered >= maxC) score -= 100
+            else if (slot.covered < slot.required_count) {
+              score += 40
+              if (slot.covered === 0) score += 30  // empty slot = most urgent
+            } else {
+              score += 3  // over min, under max
+            }
+          }
+        }
+        return score
+      }
+
+      // ════════════════════════════════════════════
+      //  Phase 1: 開店人員 — can_open 排在營業開始
+      // ════════════════════════════════════════════
+      if (!hasOpener) {
+        const openers = sortByNeed(
+          available.filter(e => e.can_open === true && !schedule[e.name]?.[date])
+        )
+        for (const emp of openers) {
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const window = tryShift(emp, storeOpenH, grossH)
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            break
+          }
+        }
+      }
+
+      // ════════════════════════════════════════════
+      //  Phase 2: 關店人員 — can_close 排到打烊
+      // ════════════════════════════════════════════
+      if (!hasCloser) {
+        const closers = sortByNeed(
+          available.filter(e => e.can_close === true && !schedule[e.name]?.[date])
+        )
+        for (const emp of closers) {
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const startH = effectiveCloseH - grossH
+          if (startH < storeOpenH) continue
+          const window = tryShift(emp, startH, grossH)
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            break
+          }
+        }
+      }
+
+      // ════════════════════════════════════════════
+      //  Phase 3: 補滿覆蓋 — 按需求填補時段缺口
+      //  正職固定 9h gross，兼職 4-7h 彈性
+      // ════════════════════════════════════════════
+      const unassigned = sortByNeed(
+        available.filter(e => !schedule[e.name]?.[date])
+      )
+
+      for (const emp of unassigned) {
+        // All slots at max capacity → rest
+        const allMaxMet = slotCoverage.every(s => s.covered >= (s.max_count || s.required_count + 2))
+        if (allMaxMet) { schedule[emp.name][date] = '休'; continue }
+
+        const weekHours = getEmpWeekHours(emp.name)
+        const range = hoursRange[emp.name]
+        const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
+
+        // Over weekly max → must rest
+        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
+        // Reached weekly target and coverage is met → rest (save hours for other days)
+        if (weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
+
+        const pt = isPTEmp(emp)
+        // 正職 9h gross (8h net)，兼職彈性 4-7h gross
+        const grossDurations = pt
+          ? [7, 6, 5, 4].filter(h => h <= maxGrossH)
+          : [Math.min(9, maxGrossH)]
 
         let bestWindow = null
         let bestScore = -Infinity
 
-        // Force opener: first full-time opener MUST start at store opening
-        const mustOpen = !hasOpener && emp.can_open === true && !isPT
-        // Force closer: if this is a can_close full-time and no closer yet, prefer closing shift
-        const preferClose = !hasCloser && emp.can_close === true && !isPT
+        for (const grossH of grossDurations) {
+          for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
+            const window = tryShift(emp, h, grossH)
+            if (!window) continue
 
-        for (const startTime of startHours) {
-          const startH = parseTime(startTime)
+            let score = scoreCoverage(window.start, window.end)
+            if (score <= -100) continue  // would exceed max in some slot
 
-          // If must open, ONLY allow store opening time
-          if (mustOpen && startH !== storeOpenH) continue
-
-          // can_open check: employee with can_open=false must start at least 2h after opening
-          if (emp.can_open === false && startH < storeOpenH + 2) continue
-
-          for (const netH of netDurations) {
-            const breakH = netH >= 6 ? 1 : (netH >= 4 ? 0.5 : 0)
-            const grossH = netH + breakH
-            const endH = startH + grossH
-            const endTime = fmtH(endH)
-
-            // can_close check: employee with can_close=false must end at least 2h before closing
-            const effEndH = endH <= startH ? endH + 24 : endH
-            if (emp.can_close === false && effEndH > effectiveCloseH - 2) continue
-
-            // Legal: max daily hours
-            if (grossH > wsConstraints.dailyAbsoluteMax) continue
-
-            // Don't go past store closing
-            if (endH > effectiveCloseH + 0.5) continue
-
-            // H4: gap from previous day
-            const dateIdx = weekDates.indexOf(date)
-            if (dateIdx > 0) {
-              const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
-              if (prevT) {
-                const prevEndH = parseTime(prevT.end)
-                const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
-                if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) continue
-              }
-            }
-
-            // Score this window
-            let score = 0
-            let anyUnderMin = false
-
-            for (const slot of slotCoverage) {
-              if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
-                const maxC = slot.max_count || slot.required_count + 2
-                if (slot.covered >= maxC) { score -= 100; break } // Would exceed max
-
-                if (slot.covered < slot.required_count) {
-                  score += 40 // Under minimum — critical
-                  anyUnderMin = true
-                  if (slot.covered === 0) score += 30 // Empty slot — most critical
-                } else {
-                  score += 3 // Over minimum, under max — OK but low priority
-                }
-              }
-            }
-
-            // If nothing needs coverage and employee is over target → skip
-            if (!anyUnderMin && weekHours >= targetH) continue
-
-            // Prefer windows that start at the earliest uncovered slot
+            // Bonus: starts at first uncovered slot
             const firstUncovered = slotCoverage.find(s => s.covered < s.required_count)
             if (firstUncovered) {
               const uncovStart = parseTime(firstUncovered.start_time)
-              if (Math.abs(startH - uncovStart) < 0.5) score += 25 // Starts at the gap
+              if (Math.abs(h - uncovStart) < 1) score += 25
             }
 
-            // Closer bonus: prefer shifts that end at store closing
-            if (preferClose && endH >= effectiveCloseH - 0.5) score += 20
+            // Weekly hours fit within range
+            const afterHours = weekHours + window.netH
+            if (afterHours <= range.max) score += 10
+            if (afterHours >= range.min) score += 5
+            if (afterHours > range.max) score -= 20
 
-            // Target hours fit
-            if (weekHours + netH <= targetH) score += 10
-            else if (weekHours + netH <= targetH * 1.15) score += 3
-            else score -= 5
+            // Fatigue balancing
+            const fatigue = fatigueMap[emp.name] || 0
+            if (fatigue > 15) score -= fatigue * 0.3
 
             if (score > bestScore) {
               bestScore = score
-              bestWindow = { start: startTime, end: endTime, netH, grossH, breakH }
+              bestWindow = window
             }
           }
         }
 
         if (bestWindow && bestScore > -50) {
-          schedule[emp.name][date] = fmtLabel(bestWindow.start, bestWindow.end)
-          actualTimes[`${emp.name}_${date}`] = { start: bestWindow.start, end: bestWindow.end, hours: bestWindow.netH }
-
-          // Update coverage
-          slotCoverage.forEach(slot => {
-            if (overlaps(bestWindow.start, bestWindow.end, slot.start_time, slot.end_time)) slot.covered++
-          })
-
-          // Track opener/closer
-          const assignedStartH = parseTime(bestWindow.start)
-          const assignedEndH = parseTime(bestWindow.end)
-          const effAssignedEndH = assignedEndH <= assignedStartH ? assignedEndH + 24 : assignedEndH
-          if (Math.abs(assignedStartH - storeOpenH) < 0.5) hasOpener = true
-          if (effAssignedEndH >= effectiveCloseH - 0.5) hasCloser = true
+          doAssign(emp, bestWindow)
         } else {
           schedule[emp.name][date] = '休'
         }
@@ -998,12 +1046,11 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     }
   }
 
-  // Weekly hours soft cap — buffer scales with target (20% of target, min 4h)
-  // For flexible work systems (4週變形), weekly cap is looser since hours balance across period
-  const targetH = emp.weekly_target_hours || (isPT ? 20 : 40)
+  // Weekly hours soft cap — 正職 40-48h, 兼職 24-36h
+  const targetH = isPT ? 36 : 48  // use upper bound as cap
   const buffer = wsc.canConcentrateRest
     ? Math.max(8, Math.round(targetH * 0.3))  // Flexible: allow more per-week variance
-    : Math.max(4, Math.round(targetH * 0.2))  // Standard: tighter
+    : Math.max(4, Math.round(targetH * 0.15))  // Standard: tighter
   let weeklyHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
   for (const d of weekDates) {
     const sName = schedule[emp.name][d]
@@ -1240,21 +1287,22 @@ function validateMonthlyResult(assignments, data) {
       })
     }
 
-    // S5: Weekly hours target check
+    // S5: Weekly hours range check — 正職 40-48h, 兼職 24-36h
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-    const target = emp.weekly_target_hours || (isPT ? 20 : 40)
+    const rangeMin = isPT ? 24 : 40
+    const rangeMax = isPT ? 36 : 48
     const avgWeeklyHours = totalDays > 0 ? (totalHours / totalDays) * 7 : 0
-    if (avgWeeklyHours > target * 1.2) {
+    if (avgWeeklyHours > rangeMax) {
       violations.push({
         employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 超過目標 ${target}h 的 120%`,
+        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 超過上限 ${rangeMax}h`,
         severity: 'warning',
       })
     }
-    if (avgWeeklyHours < target * 0.6 && totalDays >= 7) {
+    if (avgWeeklyHours < rangeMin && totalDays >= 7) {
       violations.push({
         employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 低於目標 ${target}h 的 60%`,
+        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 低於下限 ${rangeMin}h`,
         severity: 'warning',
       })
     }

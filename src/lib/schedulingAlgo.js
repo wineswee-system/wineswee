@@ -271,6 +271,8 @@ export function runProgrammaticSchedule(data) {
   //  TIME SLOT COVERAGE MODE (時段覆蓋制)
   // ══════════════════════════════════════════════════════════════
   if (useTimeSlotMode) {
+    console.log('[TimeSlot] Mode active, timeSlots:', timeSlots.length, 'employees:', employees.length, 'weekDates:', weekDates.length, weekDates[0], '~', weekDates[weekDates.length - 1])
+
     // Helper: get time slots applicable for a given date
     const getSlotsForDate = (date) => {
       const dow = new Date(date).getDay()

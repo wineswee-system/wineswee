@@ -305,7 +305,7 @@ export function runProgrammaticSchedule(data) {
       const availableDays = weekDates.length - restDays
       const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
       const targetH = targetHoursMap[emp.name]
-      const hoursPerDay = isPT ? 6 : 8 // average net hours per shift
+      const hoursPerDay = isPT ? 4 : 8 // PT: shorter shifts to spread across more days
       const idealWorkDays = Math.min(availableDays, Math.ceil(targetH / hoursPerDay))
       workDaysPlan[emp.name] = { target: idealWorkDays, assigned: 0 }
     }
@@ -420,10 +420,10 @@ export function runProgrammaticSchedule(data) {
 
           // Try different net durations (excluding break)
           // Full-time: fixed 8h net (+ 1h break = 9h gross)
-          // Part-time: flexible 4~8h net, try from longest to shortest
-          const remainingTarget = Math.max(4, targetH - currentWeekHours)
+          // Part-time: flexible 2~8h net — can be very short shifts to fill gaps
+          const remainingTarget = Math.max(2, targetH - currentWeekHours)
           const durations = isPT
-            ? [...new Set([Math.min(remainingTarget, 8), Math.min(remainingTarget, 7), Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), 4])].filter(d => d >= 4)
+            ? [...new Set([Math.min(remainingTarget, 8), Math.min(remainingTarget, 7), Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), Math.min(remainingTarget, 4), Math.min(remainingTarget, 3), 2])].filter(d => d >= 2)
             : [8] // Full-time always 8h net
 
           for (const duration of durations) {

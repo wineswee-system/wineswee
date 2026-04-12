@@ -395,8 +395,8 @@ export function runProgrammaticSchedule(data) {
           // If must open, ONLY allow store opening time
           if (mustOpen && startH !== storeOpenH) continue
 
-          // can_open check: employee with can_open=false cannot start within first hour of opening
-          if (emp.can_open === false && startH < storeOpenH + 1) continue
+          // can_open check: employee with can_open=false must start at least 2h after opening
+          if (emp.can_open === false && startH < storeOpenH + 2) continue
 
           for (const netH of netDurations) {
             const breakH = netH >= 6 ? 1 : (netH >= 4 ? 0.5 : 0)
@@ -404,9 +404,9 @@ export function runProgrammaticSchedule(data) {
             const endH = startH + grossH
             const endTime = fmtH(endH)
 
-            // can_close check: employee with can_close=false cannot end within last hour before closing
+            // can_close check: employee with can_close=false must end at least 2h before closing
             const effEndH = endH <= startH ? endH + 24 : endH
-            if (emp.can_close === false && effEndH > effectiveCloseH - 1) continue
+            if (emp.can_close === false && effEndH > effectiveCloseH - 2) continue
 
             // Legal: max daily hours
             if (grossH > wsConstraints.dailyAbsoluteMax) continue

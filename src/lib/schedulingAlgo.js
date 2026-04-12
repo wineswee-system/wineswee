@@ -106,7 +106,7 @@ export function runProgrammaticSchedule(data) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     // Use explicit target if set AND reasonable, otherwise use type-based default
     const dbTarget = emp.weekly_target_hours
-    targetHoursMap[emp.name] = (isPT && (!dbTarget || dbTarget >= 40)) ? 20 : (dbTarget || 40)
+    targetHoursMap[emp.name] = (isPT && (!dbTarget || dbTarget >= 40)) ? 30 : (dbTarget || 48)
   }
 
   // ── Track consecutive weekends worked ──
@@ -305,7 +305,7 @@ export function runProgrammaticSchedule(data) {
       const availableDays = weekDates.length - restDays
       const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
       const targetH = targetHoursMap[emp.name]
-      const hoursPerDay = isPT ? 4 : 8 // PT: shorter shifts to spread across more days
+      const hoursPerDay = isPT ? 5 : 9 // PT avg 5h, FT avg 9h per day
       const idealWorkDays = Math.min(availableDays, Math.ceil(targetH / hoursPerDay))
       workDaysPlan[emp.name] = { target: idealWorkDays, assigned: 0 }
     }
@@ -436,12 +436,12 @@ export function runProgrammaticSchedule(data) {
           }
 
           // Try different net durations (excluding break)
-          // Full-time: fixed 8h net (+ 1h break = 9h gross)
-          // Part-time: flexible 2~8h net — can be very short shifts to fill gaps
-          const remainingTarget = Math.max(2, targetH - currentWeekHours)
+          // Full-time: 8~10h net, flexible to cover more slots
+          // Part-time: 3~8h net, very flexible to fill gaps everywhere
+          const remainingTarget = Math.max(isPT ? 3 : 8, targetH - currentWeekHours)
           const durations = isPT
-            ? [...new Set([Math.min(remainingTarget, 8), Math.min(remainingTarget, 7), Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), Math.min(remainingTarget, 4), Math.min(remainingTarget, 3), 2])].filter(d => d >= 2)
-            : [8] // Full-time always 8h net
+            ? [...new Set([Math.min(remainingTarget, 8), Math.min(remainingTarget, 7), Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), Math.min(remainingTarget, 4), 3])].filter(d => d >= 3)
+            : [...new Set([Math.min(remainingTarget, 10), Math.min(remainingTarget, 9), 8])].filter(d => d >= 8)
 
           for (const duration of durations) {
             const breakH = duration >= 6 ? 1 : (duration >= 4 ? 0.5 : 0)

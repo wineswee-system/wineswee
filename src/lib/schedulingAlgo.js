@@ -399,11 +399,13 @@ export function runProgrammaticSchedule(data) {
             }
           }
 
-          // Try different durations: target remaining hours, or max daily
+          // Try different net durations (excluding break)
+          // Full-time: fixed 8h net (+ 1h break = 9h gross)
+          // Part-time: flexible 4~8h net, try from longest to shortest
           const remainingTarget = Math.max(4, targetH - currentWeekHours)
           const durations = isPT
-            ? [Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), 4]
-            : [Math.min(remainingTarget, maxDailyH), 8, Math.min(remainingTarget, 9)]
+            ? [...new Set([Math.min(remainingTarget, 8), Math.min(remainingTarget, 7), Math.min(remainingTarget, 6), Math.min(remainingTarget, 5), 4])].filter(d => d >= 4)
+            : [8] // Full-time always 8h net
 
           for (const duration of durations) {
             const breakH = duration >= 6 ? 1 : (duration >= 4 ? 0.5 : 0)

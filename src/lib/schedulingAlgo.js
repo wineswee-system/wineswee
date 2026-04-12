@@ -1147,7 +1147,7 @@ function validateResult(assignments, data) {
     }
   }
 
-  // S1: Staffing per day per shift
+  // S1: Staffing per day per shift (班別制)
   for (const date of weekDates) {
     for (const sd of shiftDefs) {
       const required = staffingRules.find(r => r.shift_name === sd.name)?.required_count || 0
@@ -1158,27 +1158,70 @@ function validateResult(assignments, data) {
       }
     }
 
-    // S8: Open/close coverage check
-    for (const sd of shiftDefs) {
-      const startH = parseTime(sd.start_time)
-      const endH = parseTime(sd.end_time)
-      const isOpening = startH <= 12
-      const isClosing = endH >= 21 || endH < startH
-
-      const shiftWorkers = assignments.filter(a => a.date === date && a.shift === sd.name)
-      if (shiftWorkers.length === 0) continue
-
-      if (isOpening) {
-        const hasOpener = shiftWorkers.some(a => employees.find(e => e.name === a.employee)?.can_open)
-        if (!hasOpener) {
-          violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date} ${sd.name}: 無開店資格人員`, severity: 'warning' })
+    // S10: Per-time-slot coverage check (時段覆蓋制)
+    const timeSlots = data.timeSlots || []
+    if (timeSlots.length > 0) {
+      const dow = new Date(date).getDay()
+      const isWE = isWeekendDay(dow)
+      const daySlots = timeSlots.filter(s =>
+        s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
+      )
+      for (const slot of daySlots) {
+        const slotStart = parseTime(slot.start_time)
+        const slotEnd = parseTime(slot.end_time)
+        const slotEndEff = slotEnd <= slotStart ? slotEnd + 24 : slotEnd
+        // Count workers whose shift overlaps this slot
+        const covering = assignments.filter(a => {
+          if (a.date !== date || isAbsence(a.shift)) return false
+          const startH = a.actual_start ? parseTime(a.actual_start) : null
+          const endH = a.actual_end ? parseTime(a.actual_end) : null
+          if (startH == null || endH == null) return false
+          const endEff = endH <= startH ? endH + 24 : endH
+          return startH < slotEndEff && endEff > slotStart
+        }).length
+        if (covering < slot.required_count) {
+          violations.push({
+            employee: '-', constraint: 'S10', law: '營運需求',
+            message: `${date} ${slot.start_time}-${slot.end_time}: ${covering}/${slot.required_count} 人（不足）`,
+            severity: 'warning',
+          })
         }
       }
-      if (isClosing) {
-        const hasCloser = shiftWorkers.some(a => employees.find(e => e.name === a.employee)?.can_close)
-        if (!hasCloser) {
-          violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date} ${sd.name}: 無關店資格人員`, severity: 'warning' })
-        }
+    }
+
+    // S8: Open/close coverage check
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+    const ohKey = dayNames[new Date(date).getDay()]
+    const oh = storeSettings?.operating_hours?.[ohKey] || storeSettings?.operatingHours?.[ohKey]
+    const storeOpenH = parseTime(oh?.open || '11:00')
+    const storeCloseStr = oh?.close || '00:00'
+    const storeCloseH = parseTime(storeCloseStr)
+    const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
+
+    const dayWorkers = assignments.filter(a => a.date === date && !isAbsence(a.shift))
+    if (dayWorkers.length > 0) {
+      // Check opener: someone starting near store open
+      const hasOpener = dayWorkers.some(a => {
+        const startH = a.actual_start ? parseTime(a.actual_start) : null
+        if (startH == null) return false
+        return Math.abs(startH - storeOpenH) < 0.5 &&
+          employees.find(e => e.name === a.employee)?.can_open
+      })
+      if (!hasOpener) {
+        violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date}: 無開店資格人員（${oh?.open || '11:00'} 開店）`, severity: 'warning' })
+      }
+
+      // Check closer: someone ending near store close
+      const hasCloser = dayWorkers.some(a => {
+        const startH = a.actual_start ? parseTime(a.actual_start) : null
+        const endH = a.actual_end ? parseTime(a.actual_end) : null
+        if (endH == null || startH == null) return false
+        const effEnd = endH <= startH ? endH + 24 : endH
+        return effEnd >= effectiveCloseH - 0.5 &&
+          employees.find(e => e.name === a.employee)?.can_close
+      })
+      if (!hasCloser) {
+        violations.push({ employee: '-', constraint: 'S8', law: '營運需求', message: `${date}: 無關店資格人員（${storeCloseStr} 打烊）`, severity: 'warning' })
       }
     }
   }

@@ -375,7 +375,7 @@ export function runProgrammaticSchedule(data) {
         const pref = prefMap[emp.name]
         const dow = new Date(date).getDay()
         const avail = availMap[emp.name]?.[dow]
-        const currentWeekHours = weekHoursCache[emp.name]
+        const currentWeekHours = getEmpWeekHours(emp.name)
         const targetH = targetHoursMap[emp.name]
         const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
         const maxDailyH = wsConstraints.dailyNormalMax + 2 // normal + some OT

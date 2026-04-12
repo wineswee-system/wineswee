@@ -872,11 +872,14 @@ export function runProgrammaticSchedule(data) {
 
 export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const { monthDates, previousWeek } = data
+  console.log('[Monthly] monthDates:', monthDates?.length, 'first:', monthDates?.[0], 'last:', monthDates?.[monthDates?.length - 1])
   if (!monthDates || monthDates.length === 0) {
+    console.warn('[Monthly] No monthDates, falling back to weekly')
     return runProgrammaticSchedule(data)
   }
 
   const weeks = splitIntoWeeks(monthDates)
+  console.log('[Monthly] Split into', weeks.length, 'weeks:', weeks.map(w => w[0] + '~' + w[w.length - 1]))
   const allAssignments = []
   const allViolations = []
   let lastWeekContext = previousWeek || []
@@ -915,7 +918,14 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       ),
     }
 
-    const result = runProgrammaticSchedule(weekData)
+    let result
+    try {
+      result = runProgrammaticSchedule(weekData)
+    } catch (err) {
+      console.error(`[Monthly] Week ${i + 1} error:`, err.message, err.stack)
+      // Skip this week but continue
+      continue
+    }
     allAssignments.push(...result.assignments)
     allViolations.push(...result.violations)
     lastWeekContext = result.assignments

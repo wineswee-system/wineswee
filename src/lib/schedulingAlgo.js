@@ -399,8 +399,15 @@ export function runProgrammaticSchedule(data) {
 
         const candidateStarts = [...new Set(daySlots.map(s => s.start_time))]
 
+        // Get store opening time for open/close check
+        const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')
+        const storeCloseTime = oh?.close || daySlots[daySlots.length - 1]?.end_time || '00:00'
+
         for (const startTime of candidateStarts) {
           const startH = parseTime(startTime)
+
+          // H9: can_open check — if this shift starts at store opening, employee must be able to open
+          if (emp.can_open === false && startH <= storeOpenH) continue
 
           // Skip if employee not available at this time
           if (avail) {
@@ -430,6 +437,12 @@ export function runProgrammaticSchedule(data) {
               const effectiveEnd = avail.end <= avail.start ? avail.end + 24 : avail.end
               if (endHour > effectiveEnd && endHour - 24 > avail.end) continue
             }
+
+            // H9: can_close check — if this shift ends at store closing, employee must be able to close
+            const storeCloseH = parseTime(storeCloseTime)
+            const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
+            const effectiveEndH = endHour <= startH ? endHour + 24 : endHour
+            if (emp.can_close === false && effectiveEndH >= effectiveCloseH - 1) continue
 
             // Check legal: daily hours
             if (grossDuration > wsConstraints.dailyAbsoluteMax) continue

@@ -865,7 +865,7 @@ export default function Schedule() {
           editCell={editCell} setEditCell={setEditCell} handleSetShift={handleSetShift}
           handleDeleteShift={handleDeleteShift} canEditSchedule={canEditSchedule}
           SHIFT_TYPES={SHIFT_TYPES} shiftDefs={shiftDefs}
-          getStoreShifts={getStoreShifts} storeFilter={storeFilter}
+          getStoreShifts={getStoreShifts} storeFilter={storeFilter} storeSettings={storeSettings}
           compliance={compliance} holidaySet={holidaySet}
           setCoverModal={setCoverModal} findCoverCandidates={findCoverCandidates}
         />

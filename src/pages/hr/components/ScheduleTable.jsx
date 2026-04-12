@@ -10,7 +10,7 @@ export default function ScheduleTable({
   schedules, getShift, getShiftStyle, getOffRequest,
   editCell, setEditCell, handleSetShift,
   handleDeleteShift, canEditSchedule = true,
-  SHIFT_TYPES, shiftDefs, getStoreShifts, storeFilter,
+  SHIFT_TYPES, shiftDefs, getStoreShifts, storeFilter, storeSettings,
   compliance, holidaySet,
   setCoverModal, findCoverCandidates,
 }) {
@@ -179,6 +179,7 @@ export default function ScheduleTable({
                             emp={emp} date={date} shift={shift}
                             shiftDefs={shiftDefs} SHIFT_TYPES={SHIFT_TYPES}
                             storeFilter={storeFilter} getStoreShifts={getStoreShifts}
+                            storeSettings={storeSettings}
                             schedules={schedules}
                             handleSetShift={handleSetShift}
                             handleDeleteShift={handleDeleteShift}
@@ -238,21 +239,42 @@ export default function ScheduleTable({
 }
 
 // ── Shift Edit Popup with Time Pickers ──
-function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, schedules, handleSetShift, handleDeleteShift, onClose }) {
+function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, storeSettings, schedules, handleSetShift, handleDeleteShift, onClose }) {
   const existing = schedules.find(s => s.employee === emp.name && s.date === date)
-  const [startTime, setStartTime] = useState(existing?.actual_start?.slice(0, 5) || '11:00')
-  const [endTime, setEndTime] = useState(existing?.actual_end?.slice(0, 5) || '20:00')
+
+  // Get operating hours for this day
+  const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const dow = new Date(date).getDay()
+  const oh = storeSettings?.operating_hours?.[dayNames[dow]]
+  const storeOpen = oh?.open || '11:00'
+  const storeClose = oh?.close || '00:00'
+
+  const [startTime, setStartTime] = useState(existing?.actual_start?.slice(0, 5) || storeOpen)
+  const [endTime, setEndTime] = useState(existing?.actual_end?.slice(0, 5) || storeClose)
+
+  // Generate smart presets based on operating hours
+  const openH = parseInt(storeOpen) || 11
+  const closeH = parseInt(storeClose) || 0
+  const effectiveClose = closeH <= openH ? closeH + 24 : closeH
+  const totalHours = effectiveClose - openH
+  const midH = openH + Math.floor(totalHours / 2)
+  const fmt = (h) => `${String(h % 24).padStart(2, '0')}:00`
+  const lbl = (h) => String(h % 24)
 
   const quickPresets = [
-    { label: '11-20', start: '11:00', end: '20:00' },
-    { label: '11-18', start: '11:00', end: '18:00' },
-    { label: '15-24', start: '15:00', end: '00:00' },
-    { label: '16-01', start: '16:00', end: '01:00' },
-    { label: '18-01', start: '18:00', end: '01:00' },
-    { label: '11-15', start: '11:00', end: '15:00' },
-    { label: '15-22', start: '15:00', end: '22:00' },
-    { label: '18-24', start: '18:00', end: '00:00' },
-  ]
+    // Full day
+    { label: `${lbl(openH)}-${lbl(effectiveClose)}`, start: fmt(openH), end: fmt(effectiveClose) },
+    // First half
+    { label: `${lbl(openH)}-${lbl(midH)}`, start: fmt(openH), end: fmt(midH) },
+    // Second half
+    { label: `${lbl(midH)}-${lbl(effectiveClose)}`, start: fmt(midH), end: fmt(effectiveClose) },
+    // Common patterns
+    { label: `${lbl(openH)}-${lbl(openH + 8)}`, start: fmt(openH), end: fmt(openH + 8) },
+    { label: `${lbl(openH + 4)}-${lbl(effectiveClose)}`, start: fmt(openH + 4), end: fmt(effectiveClose) },
+    { label: `${lbl(openH)}-${lbl(openH + 6)}`, start: fmt(openH), end: fmt(openH + 6) },
+    { label: `${lbl(midH - 1)}-${lbl(effectiveClose)}`, start: fmt(midH - 1), end: fmt(effectiveClose) },
+    { label: `${lbl(midH)}-${lbl(midH + 6)}`, start: fmt(midH), end: fmt(midH + 6) },
+  ].filter((p, i, arr) => arr.findIndex(x => x.label === p.label) === i) // deduplicate
 
   const handleConfirm = () => {
     if (!startTime || !endTime) return

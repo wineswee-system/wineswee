@@ -398,18 +398,6 @@ export function runProgrammaticSchedule(data) {
         let bestWindow = null
         let bestScore = -Infinity
 
-        // Priority: if earliest uncovered slot exists, try starting there first
-        const earliestUncovered = slotCoverage.find(s => s.covered === 0)
-        if (earliestUncovered) {
-          // Move this start time to front of candidates
-          const earlyStart = earliestUncovered.start_time?.slice(0, 5)
-          const idx = candidateStarts.indexOf(earlyStart)
-          if (idx > 0) {
-            candidateStarts.splice(idx, 1)
-            candidateStarts.unshift(earlyStart)
-          }
-        }
-
         // Generate candidate start times: slot starts + hourly intervals between slots
         const slotStarts = daySlots.map(s => parseTime(s.start_time))
         const allStartHours = new Set()
@@ -428,6 +416,17 @@ export function runProgrammaticSchedule(data) {
         // Also add original slot start times (might have :30 etc.)
         daySlots.forEach(s => allStartHours.add(s.start_time?.slice(0, 5)))
         const candidateStarts = [...allStartHours].sort()
+
+        // Priority: if earliest uncovered slot exists, try starting there first
+        const earliestUncovered = slotCoverage.find(s => s.covered === 0)
+        if (earliestUncovered) {
+          const earlyStart = earliestUncovered.start_time?.slice(0, 5)
+          const idx = candidateStarts.indexOf(earlyStart)
+          if (idx > 0) {
+            candidateStarts.splice(idx, 1)
+            candidateStarts.unshift(earlyStart)
+          }
+        }
 
         // Get store opening time for open/close check
         const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')

@@ -70,4 +70,63 @@ export const HR_EVENTS = {
       hours: { type: 'number', required: false },
     },
   },
+  'hr.offboarding.started': {
+    domain: 'hr',
+    action: 'offboarding.started',
+    version: 1,
+    description: '員工離職流程啟動',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      dept: { type: 'string', required: false },
+      last_working_date: { type: 'string', required: true },
+    },
+  },
+  'hr.probation.expiring': {
+    domain: 'hr',
+    action: 'probation.expiring',
+    version: 1,
+    description: '試用期即將到期',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      end_date: { type: 'string', required: true },
+      days_remaining: { type: 'number', required: true },
+    },
+  },
+  'hr.survey.completed': {
+    domain: 'hr',
+    action: 'survey.completed',
+    version: 1,
+    description: '滿意度調查已結束',
+    payload: {
+      survey_id: { type: 'string', required: true },
+      title: { type: 'string', required: true },
+      response_count: { type: 'number', required: true },
+      overall_score: { type: 'number', required: false },
+    },
+  },
+  'hr.attrition.high_risk': {
+    domain: 'hr',
+    action: 'attrition.high_risk',
+    version: 1,
+    description: '員工離職風險達高風險',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      risk_score: { type: 'number', required: true },
+      factors: { type: 'array', required: false },
+    },
+  },
+  'hr.payslip.sent': {
+    domain: 'hr',
+    action: 'payslip.sent',
+    version: 1,
+    description: '薪資單已發送',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      month: { type: 'string', required: true },
+      channel: { type: 'string', required: false },
+    },
+  },
 }

@@ -483,15 +483,24 @@ export function runProgrammaticSchedule(data) {
             for (const slot of slotCoverage) {
               if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
                 // Check max_count cap
-                const maxCount = slot.max_count || slot.required_count * 2 // default: 2x min
+                const maxCount = slot.max_count || slot.required_count * 2
                 if (slot.covered >= maxCount) { wouldExceedMax = true; break }
 
                 if (slot.covered < slot.required_count) {
                   score += 30 + (slot.required_count - slot.covered) * 10
                   coveredSlots++
+                  // Bonus: covering a slot with 0 people is critical
+                  if (slot.covered === 0) score += 20
                 } else {
                   score += 2
                 }
+              }
+            }
+            // Penalty: uncovered slots NOT covered by this window
+            for (const slot of slotCoverage) {
+              if (slot.covered === 0 && !overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
+                // This window misses an empty slot — penalize slightly to prefer windows that cover earliest gaps
+                score -= 5
               }
             }
             if (wouldExceedMax) continue

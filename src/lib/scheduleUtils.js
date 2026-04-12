@@ -58,8 +58,10 @@ export function getMonthDates(year, month) {
   const dates = []
   const daysInMonth = new Date(year, month, 0).getDate()
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month - 1, d)
-    dates.push(date.toISOString().slice(0, 10))
+    // Use local date format to avoid timezone issues with toISOString()
+    const mm = String(month).padStart(2, '0')
+    const dd = String(d).padStart(2, '0')
+    dates.push(`${year}-${mm}-${dd}`)
   }
   return dates
 }
@@ -93,7 +95,11 @@ export function getWeekDates(offset = 0) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    // Use local date format to avoid timezone issues
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   })
 }
 

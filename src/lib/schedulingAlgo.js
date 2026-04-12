@@ -116,26 +116,18 @@ export function runProgrammaticSchedule(data) {
     const monthMid = Math.round((monthMin + MONTHLY_MAX) / 2)  // FT: 155, PT: 120
 
     if (monthlyCtx) {
-      // Monthly mode: distribute remaining hours across remaining weeks
+      // 四週變形：無每週上下限，只看月總量
       const accumulated = monthlyCtx.hoursAccumulated?.[emp.name] || 0
-      const weeksLeft = (monthlyCtx.weeksRemaining || 0) + 1  // including this week
-      const remainMin = Math.max(0, monthMin - accumulated)
+      const weeksLeft = (monthlyCtx.weeksRemaining || 0) + 1
+      const remainTarget = Math.max(0, monthMin - accumulated)
       const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
-      const weekTarget = Math.round(remainMin / weeksLeft)
-      const weekMax = Math.round(remainMax / weeksLeft)
-      targetHoursMap[emp.name] = Math.max(weekTarget, isPT ? 12 : 28)
-      hoursRange[emp.name] = {
-        min: Math.max(isPT ? 12 : 28, weekTarget - 2),
-        max: Math.min(isPT ? 40 : 44, weekMax + 2),
-      }
+      // weekTarget 只是分配參考，不是硬限
+      targetHoursMap[emp.name] = Math.round(remainTarget / weeksLeft)
+      hoursRange[emp.name] = { min: 0, max: Math.round(remainMax) }  // 無週限，月底收斂
     } else {
-      // Standalone weekly mode: divide monthly target by ~4.3
-      const weekTarget = Math.round(monthMid / 4.3)
-      targetHoursMap[emp.name] = weekTarget
-      hoursRange[emp.name] = {
-        min: Math.max(isPT ? 12 : 28, Math.round(monthMin / 4.3) - 2),
-        max: Math.min(isPT ? 40 : 44, Math.round(MONTHLY_MAX / 4.3) + 2),
-      }
+      // Standalone weekly: 用月目標÷4.3 做參考
+      targetHoursMap[emp.name] = Math.round(monthMid / 4.3)
+      hoursRange[emp.name] = { min: 0, max: MONTHLY_MAX }
     }
   }
 
@@ -177,11 +169,38 @@ export function runProgrammaticSchedule(data) {
   const restDayPlan = {}
   for (const emp of employees) restDayPlan[emp.name] = new Set()
 
-  // H1: Off-request = mandatory rest
+  // H1: Off-request = mandatory rest (but respect minimum coverage)
   for (const emp of employees) {
     for (const date of weekDates) {
       if (offMap.has(`${emp.name}_${date}`)) {
         restDayPlan[emp.name].add(date)
+      }
+    }
+  }
+
+  // H1b: Conflict resolution — if too many people rest on the same day, override lowest-priority
+  for (const date of weekDates) {
+    const restingOnDay = employees.filter(e => restDayPlan[e.name].has(date))
+    const needed = minWorkersPerDay[date] || minStaff
+    const working = employees.length - restingOnDay.length
+
+    if (working < needed && restingOnDay.length > 0) {
+      // Need to remove some off_requests from restDayPlan to ensure coverage
+      // Sort by priority: remove PT first, then higher schedule_priority number
+      const removable = restingOnDay
+        .filter(e => offMap.has(`${e.name}_${date}`))  // only override off_requests, not availability
+        .sort((a, b) => {
+          const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT' ? 0 : 1
+          const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT' ? 0 : 1
+          if (aIsPT !== bIsPT) return aIsPT - bIsPT  // PT first
+          return (b.schedule_priority || 3) - (a.schedule_priority || 3)  // lower priority first
+        })
+
+      let toRemove = needed - working
+      for (const emp of removable) {
+        if (toRemove <= 0) break
+        restDayPlan[emp.name].delete(date)
+        toRemove--
       }
     }
   }
@@ -1108,8 +1127,8 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     }
   }
 
-  // Weekly hours soft cap — derived from monthly: 160h/月 ÷ 4.3 ≈ 37h + buffer
-  const targetH = isPT ? 36 : 44  // use reasonable weekly cap
+  // 四週變形：無每週工時上限，只有月上限 160h，這裡只擋極端值
+  const targetH = isPT ? 40 : 48  // 單週安全上限（不是法定限制）
   const buffer = wsc.canConcentrateRest
     ? Math.max(8, Math.round(targetH * 0.3))  // Flexible: allow more per-week variance
     : Math.max(4, Math.round(targetH * 0.15))  // Standard: tighter

@@ -229,6 +229,7 @@ const groupNav = {
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
+        { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
         { icon: Workflow, label: '排班規則', path: '/hr/schedule-rules' },
         { icon: CalendarDays, label: '假日管理', path: '/hr/holidays' },
       ]

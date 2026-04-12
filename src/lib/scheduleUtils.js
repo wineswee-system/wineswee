@@ -58,8 +58,10 @@ export function getMonthDates(year, month) {
   const dates = []
   const daysInMonth = new Date(year, month, 0).getDate()
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month - 1, d)
-    dates.push(date.toISOString().slice(0, 10))
+    // Use local date format to avoid timezone issues with toISOString()
+    const mm = String(month).padStart(2, '0')
+    const dd = String(d).padStart(2, '0')
+    dates.push(`${year}-${mm}-${dd}`)
   }
   return dates
 }
@@ -93,7 +95,11 @@ export function getWeekDates(offset = 0) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    // Use local date format to avoid timezone issues
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   })
 }
 
@@ -195,6 +201,9 @@ export const WEEKLY_STANDARD_HOURS = 40
 /** Daily max hours (勞基法 §30 + §32) */
 export const DAILY_MAX_HOURS = 12
 
+/** Daily max NORMAL hours for flexible work systems (勞基法 §30-3) */
+export const DAILY_MAX_NORMAL_HOURS_FLEX = 10
+
 /** Min shift interval hours (勞基法 §34) */
 export const MIN_SHIFT_INTERVAL = 11
 
@@ -203,6 +212,60 @@ export const MAX_CONSECUTIVE_WORK_DAYS = 6
 
 /** Min rest days per week (勞基法 §36 一例一休) */
 export const MIN_WEEKLY_REST_DAYS = 2
+
+/** 4-week flexible work system constants (勞基法 §30-3) */
+export const FLEX_4W_TOTAL_HOURS = 160
+export const FLEX_4W_REST_DAYS = 8
+export const FLEX_4W_PERIOD_WEEKS = 4
+
+/**
+ * Get scheduling constraints based on work hour system
+ * @param {string} system - '標準工時' | '2週變形' | '4週變形' | '8週變形'
+ */
+export function getWorkSystemConstraints(system) {
+  switch (system) {
+    case '4週變形':
+      return {
+        dailyNormalMax: 10,
+        dailyAbsoluteMax: 12,
+        periodWeeks: 4,
+        periodTotalHours: 160,
+        periodRestDays: 8,
+        weeklyRestMin: 1,         // 可以單週只休 1 天（但 4 週要補回 8 天）
+        canConcentrateRest: true,  // 休息日可集中
+      }
+    case '2週變形':
+      return {
+        dailyNormalMax: 10,
+        dailyAbsoluteMax: 12,
+        periodWeeks: 2,
+        periodTotalHours: 84,
+        periodRestDays: 4,
+        weeklyRestMin: 1,
+        canConcentrateRest: true,
+      }
+    case '8週變形':
+      return {
+        dailyNormalMax: 8,
+        dailyAbsoluteMax: 12,
+        periodWeeks: 8,
+        periodTotalHours: 320,
+        periodRestDays: 16,
+        weeklyRestMin: 1,
+        canConcentrateRest: true,
+      }
+    default: // 標準工時
+      return {
+        dailyNormalMax: 8,
+        dailyAbsoluteMax: 12,
+        periodWeeks: 1,
+        periodTotalHours: 40,
+        periodRestDays: 2,
+        weeklyRestMin: 2,
+        canConcentrateRest: false,
+      }
+  }
+}
 
 /** Weekend days (JS getDay(): 0=Sun, 5=Fri, 6=Sat) — business uses Fri+Sat as weekend */
 export const WEEKEND_DAYS = [5, 6]

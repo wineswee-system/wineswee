@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Download, MapPin, Wifi, Clock } from 'lucide-react'
+import { Search, Download, MapPin, Wifi, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { exportAttendancePdf } from '../../lib/exportPdf'
@@ -135,6 +135,7 @@ export default function Attendance() {
         {[
           { key: 'records', label: '📋 打卡紀錄' },
           { key: 'hours', label: '⏱️ 工時統整' },
+          { key: 'comparison', label: '📊 排班比對' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -360,6 +361,133 @@ export default function Attendance() {
           </>
         )
       })()}
+
+      {tab === 'comparison' && <ScheduleComparisonTab storeFilter={storeFilter} />}
     </div>
+  )
+}
+
+// ── Schedule Comparison Tab ──
+function ScheduleComparisonTab({ storeFilter }) {
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    const end = now.toISOString().slice(0, 10)
+    return { start, end }
+  })
+
+  useEffect(() => {
+    setLoading(true)
+    import('../../lib/attendanceComparison').then(({ compareAttendanceWithSchedule }) => {
+      compareAttendanceWithSchedule(dateRange.start, dateRange.end, storeFilter).then(data => {
+        setResults(data)
+        setLoading(false)
+      })
+    })
+  }, [dateRange, storeFilter])
+
+  const normal = results.filter(r => r.status === 'normal').length
+  const late = results.filter(r => r.status === 'late').length
+  const earlyLeave = results.filter(r => r.status === 'early_leave').length
+  const noShow = results.filter(r => r.status === 'no_show').length
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>期間</label>
+        <input className="form-input" type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} style={{ width: 150 }} />
+        <span style={{ color: 'var(--text-muted)' }}>~</span>
+        <input className="form-input" type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} style={{ width: 150 }} />
+      </div>
+
+      {loading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>比對中...</div> : (
+        <>
+          <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+              <div className="stat-card-label">正常</div>
+              <div className="stat-card-value">{normal}</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
+              <div className="stat-card-label">遲到</div>
+              <div className="stat-card-value">{late}</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-pink)', '--card-accent-dim': 'rgba(236,72,153,0.1)' }}>
+              <div className="stat-card-label">早退</div>
+              <div className="stat-card-value">{earlyLeave}</div>
+            </div>
+            <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)' }}>
+              <div className="stat-card-label">未打卡</div>
+              <div className="stat-card-value">{noShow}</div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title"><CalendarCheck size={16} /> 排班 vs 打卡比對</div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {results.length} 筆</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th>員工</th>
+                    <th>日期</th>
+                    <th>班別</th>
+                    <th style={{ textAlign: 'center' }}>排班時間</th>
+                    <th style={{ textAlign: 'center' }}>實際打卡</th>
+                    <th style={{ textAlign: 'center' }}>遲到</th>
+                    <th style={{ textAlign: 'center' }}>早退</th>
+                    <th>狀態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無比對資料</td></tr>}
+                  {results
+                    .filter(r => r.status !== 'normal') // Only show anomalies by default
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                    .map((r, i) => (
+                    <tr key={i} style={{ background: r.status === 'no_show' ? 'rgba(239,68,68,0.03)' : undefined }}>
+                      <td style={{ fontWeight: 600 }}>{r.employee}</td>
+                      <td>{r.date.slice(5)}</td>
+                      <td>
+                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: 'var(--glass-light)' }}>
+                          {r.shift}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12 }}>
+                        {r.scheduled_start}~{r.scheduled_end}
+                      </td>
+                      <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12 }}>
+                        {r.clock_in || '—'} ~ {r.clock_out || '—'}
+                      </td>
+                      <td style={{ textAlign: 'center', color: r.late_minutes > 0 ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: r.late_minutes > 0 ? 700 : 400 }}>
+                        {r.late_minutes > 0 ? `${r.late_minutes}分` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center', color: r.early_leave_minutes > 0 ? '#ec4899' : 'var(--text-muted)', fontWeight: r.early_leave_minutes > 0 ? 700 : 400 }}>
+                        {r.early_leave_minutes > 0 ? `${r.early_leave_minutes}分` : '—'}
+                      </td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                          background: r.status === 'normal' ? 'rgba(52,211,153,0.12)' : r.status === 'late' ? 'rgba(251,146,60,0.12)' : r.status === 'early_leave' ? 'rgba(236,72,153,0.12)' : 'rgba(239,68,68,0.12)',
+                          color: r.status === 'normal' ? '#10b981' : r.status === 'late' ? '#f97316' : r.status === 'early_leave' ? '#ec4899' : '#ef4444',
+                        }}>
+                          {r.status === 'normal' ? '正常' : r.status === 'late' ? '遲到' : r.status === 'early_leave' ? '早退' : '未打卡'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {results.filter(r => r.status !== 'normal').length === 0 && results.length > 0 && (
+                    <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--accent-green)', padding: 20, fontWeight: 600 }}>✓ 全部正常，無遲到/早退/未打卡</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }

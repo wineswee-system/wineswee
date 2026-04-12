@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react'
-import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code, Calendar } from 'lucide-react'
+import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code, Calendar, CalendarOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
@@ -13,8 +13,14 @@ import StoreSettingsTab from './components/StoreSettingsTab'
 import PreferencesTab from './components/PreferencesTab'
 import SwapsTab from './components/SwapsTab'
 import AnalyticsTab from './components/AnalyticsTab'
+import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
+import StaffingGapPanel from './components/StaffingGapPanel'
+import EmergencyCoverPanel from './components/EmergencyCoverPanel'
+import { notifySchedulePublished } from '../../lib/lineNotify'
+import { persistFatigueScores } from '../../lib/fatigueEngine'
+import { validateShiftChange } from '../../lib/scheduleValidator'
 
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
@@ -81,6 +87,7 @@ export default function Schedule() {
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
   // Store settings
+  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at }
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
   const [operatingHours, setOperatingHours] = useState({})
@@ -119,7 +126,7 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -150,7 +157,16 @@ export default function Schedule() {
     }).catch(err => {
       console.error('Failed to load schedule data:', err)
     })
-  }, [activeStart, activeEnd])
+
+    // Load publish status for current month
+    const month = activeStart?.slice(0, 7)
+    const store = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
+    if (month && store) {
+      supabase.from('schedule_publish_status').select('*')
+        .eq('store_id', store.id).eq('month', month).maybeSingle()
+        .then(({ data }) => setPublishStatus(data))
+    }
+  }, [activeStart, activeEnd, storeFilter, locations])
 
   // Run compliance check when schedules update
   useEffect(() => {
@@ -165,14 +181,46 @@ export default function Schedule() {
     return s?.shift || ''
   }
 
-  const handleSetShift = async (empName, date, shift) => {
+  const handleSetShift = async (empName, date, shift, actualStart, actualEnd) => {
     if (!canEditSchedule) return
+
+    // Real-time validation before saving
+    if (!isAbsence(shift)) {
+      const validation = validateShiftChange({
+        empName, date, newShift: shift,
+        employees: filtered, schedules, shiftDefs, weekDates,
+        workHourSystem: storeSettings?.work_hour_system,
+      })
+
+      if (validation.errors.length > 0) {
+        const proceed = confirm(
+          `⚠️ 違規警告：\n\n${validation.errors.map(e => `❌ ${e}`).join('\n')}` +
+          (validation.warnings.length > 0 ? `\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` : '') +
+          `\n\n確定要強制排班嗎？`
+        )
+        if (!proceed) return
+      } else if (validation.warnings.length > 0) {
+        const proceed = confirm(
+          `注意事項：\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` +
+          `\n\n確定要排班嗎？`
+        )
+        if (!proceed) return
+      }
+    }
+
+    const record = {
+      shift,
+      actual_start: actualStart || null,
+      actual_end: actualEnd || null,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
+    }
+
     const existing = schedules.find(s => s.employee === empName && s.date === date)
     if (existing) {
-      const { data } = await supabase.from('schedules').update({ shift }).eq('id', existing.id).select().single()
+      const { data } = await supabase.from('schedules').update(record).eq('id', existing.id).select().single()
       if (data) setSchedules(prev => prev.map(s => s.id === existing.id ? data : s))
     } else {
-      const { data } = await supabase.from('schedules').insert({ employee: empName, date, shift, ...(tenantId ? { tenant_id: tenantId } : {}) }).select().single()
+      const { data } = await supabase.from('schedules').insert({ employee: empName, date, ...record }).select().single()
       if (data) setSchedules(prev => [...prev, data])
     }
     setEditCell(null)
@@ -372,6 +420,9 @@ export default function Schedule() {
       date: a.date,
       shift: a.shift,
       absence_type: isAbsence(a.shift) ? a.shift : null,
+      actual_start: a.actual_start || null,
+      actual_end: a.actual_end || null,
+      actual_hours: a.actual_hours || null,
       source_store: a.store || null,
       month_group: monthGroup,
       ...(tenantId ? { tenant_id: tenantId } : {}),
@@ -386,7 +437,36 @@ export default function Schedule() {
       })
     }
     setAiDraft(null)
-    alert(`已發布排班！共 ${newSchedules.length} 筆`)
+
+    // Send LINE notifications to employees
+    const dateRange = `${dates[0]} ~ ${dates[dates.length - 1]}`
+    let notified = 0
+    for (const empName of empNames) {
+      const empAssignments = newSchedules
+        .filter(s => s.employee === empName)
+        .sort((a, b) => a.date.localeCompare(b.date))
+      const result = await notifySchedulePublished(empName, dateRange, empAssignments)
+      if (result?.ok) notified++
+    }
+
+    // Auto-persist fatigue scores for the month
+    const month = dates[0]?.slice(0, 7)
+    if (month) {
+      persistFatigueScores(month).then(r => {
+        if (r.success) console.log(`[Fatigue] 已結算 ${month} 辛苦度：${r.count} 人`)
+      })
+    }
+
+    // Update publish status
+    const store = locations.find(l => l.name === storeFilter)
+    if (month && store) {
+      const profile = JSON.parse(localStorage.getItem('sme_profile') || '{}')
+      const pubData = { store_id: store.id, month, status: 'published', published_at: new Date().toISOString(), published_by: profile?.name || 'unknown' }
+      await supabase.from('schedule_publish_status').upsert(pubData, { onConflict: 'store_id,month' })
+      setPublishStatus(pubData)
+    }
+
+    alert(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
   }
 
   // ── Fix violations (re-run AI with violation context) ──
@@ -449,9 +529,92 @@ export default function Schedule() {
     }
   }
 
-  // Load tab-specific data (must be before early returns to maintain hook order)
+  // ── Import rest days (休) from current schedule as off_requests (希望休) ──
+  const handleImportRestAsOffRequests = async () => {
+    const empNames = filtered.map(e => e.name)
+    const isMonthly = viewMode === 'month'
+    const dateStart = isMonthly ? monthStart : weekStart
+    const dateEnd = isMonthly ? monthEnd : weekEnd
+    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
+
+    // Find all 休 days from current schedule
+    const restDays = schedules.filter(s =>
+      empNames.includes(s.employee) &&
+      s.date >= dateStart && s.date <= dateEnd &&
+      isAbsence(s.shift)
+    ).map(s => ({ employee: s.employee, date: s.date }))
+
+    if (restDays.length === 0) {
+      alert('目前排班沒有找到任何休假日')
+      return
+    }
+
+    if (!confirm(
+      `將 ${storeFilter || '所有門市'} ${rangeLabel} 的排班「休」匯入為希望休：\n\n` +
+      `共 ${restDays.length} 筆休假日\n\n` +
+      `此操作會先清除該期間現有的希望休，再匯入新的。確定嗎？`
+    )) return
+
+    try {
+      // Step 1: Delete existing off_requests for this store + period
+      await supabase.from('off_requests').delete()
+        .in('employee', empNames)
+        .gte('date', dateStart).lte('date', dateEnd)
+
+      // Step 2: Insert rest days as off_requests
+      const rows = restDays.map(r => ({ employee: r.employee, date: r.date }))
+      const { error } = await supabase.from('off_requests').upsert(rows, { onConflict: 'employee,date' })
+      if (error) throw error
+
+      // Step 3: Refresh off_requests state
+      const { data: refreshed } = await supabase.from('off_requests').select('*')
+        .gte('date', activeStart).lte('date', activeEnd)
+      setOffRequests(refreshed || [])
+
+      alert(`已匯入 ${restDays.length} 筆希望休`)
+    } catch (err) {
+      console.error('[ImportRest] Error:', err)
+      alert(`匯入失敗：${err.message}`)
+    }
+  }
+
+  // ── Clear all off_requests for current store + period ──
+  const handleClearOffRequests = async () => {
+    const empNames = filtered.map(e => e.name)
+    const isMonthly = viewMode === 'month'
+    const dateStart = isMonthly ? monthStart : weekStart
+    const dateEnd = isMonthly ? monthEnd : weekEnd
+    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
+
+    const currentCount = offRequests.filter(o =>
+      empNames.includes(o.employee) && o.date >= dateStart && o.date <= dateEnd
+    ).length
+
+    if (currentCount === 0) {
+      alert('目前沒有希望休資料')
+      return
+    }
+
+    if (!confirm(`確定要清除 ${storeFilter || '所有門市'} ${rangeLabel} 的 ${currentCount} 筆希望休嗎？`)) return
+
+    try {
+      await supabase.from('off_requests').delete()
+        .in('employee', empNames)
+        .gte('date', dateStart).lte('date', dateEnd)
+
+      setOffRequests(prev => prev.filter(o =>
+        !empNames.includes(o.employee) || o.date < dateStart || o.date > dateEnd
+      ))
+      alert(`已清除 ${currentCount} 筆希望休`)
+    } catch (err) {
+      console.error('[ClearOffReq] Error:', err)
+      alert(`清除失敗：${err.message}`)
+    }
+  }
+
+  // Load store settings whenever storeFilter changes (not just on tab switch)
   useEffect(() => {
-    if (mainTab === 'store-settings' && storeFilter) {
+    if (storeFilter && locations.length > 0) {
       const store = locations.find(s => s.name === storeFilter)
       if (store) {
         supabase.from('store_settings').select('*').eq('store_id', store.id).maybeSingle()
@@ -460,6 +623,10 @@ export default function Schedule() {
           .then(({ data }) => setStaffing(data || []))
       }
     }
+  }, [storeFilter, locations])
+
+  // Load tab-specific data
+  useEffect(() => {
     if (mainTab === 'preferences') {
       supabase.from('employee_shift_preferences').select('*').order('employee')
         .then(({ data }) => setPreferences(data || []))
@@ -492,7 +659,23 @@ export default function Schedule() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">📅</span> 排班管理</h2>
-            <p>管理班表、排班偏好與AI自動排班</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <p style={{ margin: 0 }}>管理班表、排班偏好與AI自動排班</p>
+              {publishStatus && (
+                <span style={{
+                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: publishStatus.status === 'published' ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)',
+                  color: publishStatus.status === 'published' ? '#10b981' : '#f59e0b',
+                }}>
+                  {publishStatus.status === 'published' ? `✓ 已發布 ${publishStatus.published_at?.slice(0, 10) || ''}` : '草稿'}
+                </span>
+              )}
+              {!publishStatus && storeFilter && (
+                <span style={{ padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
+                  未發布
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -526,6 +709,12 @@ export default function Schedule() {
               setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < weekStart || s.date > weekEnd))
             }}>
               🗑️ 清除本週
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleImportRestAsOffRequests}>
+              <CalendarOff size={14} /> 休→希望休
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleClearOffRequests}>
+              🗑️ 清希望休
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件
@@ -606,6 +795,7 @@ export default function Schedule() {
             { key: 'store-settings', label: '⚙️ 門市設定' },
             { key: 'preferences', label: '👤 排班偏好' },
             { key: 'swaps', label: '🔄 換班申請' },
+            { key: 'cross-store', label: '🏪 跨店調度' },
             { key: 'analytics', label: '📊 分析報表' },
           ].map(tab => (
             <button key={tab.key} onClick={() => setMainTab(tab.key)} style={{
@@ -733,6 +923,28 @@ export default function Schedule() {
       )}
 
       {mainTab === 'schedule' && viewMode === 'week' && (
+        <EmergencyCoverPanel
+          employees={filtered} schedules={schedules} shiftDefs={shiftDefs}
+          weekDates={weekDates} storeFilter={storeFilter} locations={locations}
+          offRequests={offRequests}
+          onUpdate={() => {
+            // Reload schedules after emergency cover
+            supabase.from('schedules').select('*').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1])
+              .then(({ data }) => { if (data) setSchedules(data) })
+          }}
+        />
+      )}
+
+      {mainTab === 'schedule' && viewMode === 'week' && (
+        <StaffingGapPanel
+          weekDates={weekDates} schedules={schedules} employees={filtered}
+          shiftDefs={shiftDefs} staffingRules={staffing}
+          offRequests={offRequests} storeFilter={storeFilter} locations={locations}
+          onAssign={handleSetShift}
+        />
+      )}
+
+      {mainTab === 'schedule' && viewMode === 'week' && (
         <ScheduleTable
           weekDates={weekDates} weekStart={weekStart} weekEnd={weekEnd}
           weekOffset={weekOffset} setWeekOffset={setWeekOffset}
@@ -742,7 +954,7 @@ export default function Schedule() {
           editCell={editCell} setEditCell={setEditCell} handleSetShift={handleSetShift}
           handleDeleteShift={handleDeleteShift} canEditSchedule={canEditSchedule}
           SHIFT_TYPES={SHIFT_TYPES} shiftDefs={shiftDefs}
-          getStoreShifts={getStoreShifts} storeFilter={storeFilter}
+          getStoreShifts={getStoreShifts} storeFilter={storeFilter} storeSettings={storeSettings}
           compliance={compliance} holidaySet={holidaySet}
           setCoverModal={setCoverModal} findCoverCandidates={findCoverCandidates}
         />
@@ -778,6 +990,7 @@ export default function Schedule() {
         <div>
           <StoreSettingsTab
             storeFilter={storeFilter} selectedStore={selectedStore} shiftDefs={shiftDefs}
+            setShiftDefs={setShiftDefs} setShiftTypes={(defs) => setShiftTypes(buildShiftTypes(defs))}
             storeSettings={storeSettings} setStoreSettings={setStoreSettings}
             staffing={staffing} setStaffing={setStaffing}
             operatingHours={operatingHours} setOperatingHours={setOperatingHours}
@@ -796,10 +1009,17 @@ export default function Schedule() {
         <SwapsTab swaps={swaps} setSwaps={setSwaps} />
       )}
 
+      {mainTab === 'cross-store' && (
+        <CrossStoreTab
+          storeFilter={storeFilter} locations={locations}
+          shiftDefs={shiftDefs} weekDates={weekDates}
+        />
+      )}
+
       {mainTab === 'analytics' && (
         <AnalyticsTab
           filtered={filtered} schedules={schedules} weekDates={weekDates}
-          getShift={getShift} storeSettings={storeSettings}
+          shiftDefs={shiftDefs} storeSettings={storeSettings} holidays={holidays}
         />
       )}
 

@@ -17,6 +17,7 @@ import Expenses from '../pages/hr/Expenses'
 import Bonus from '../pages/hr/Bonus'
 import LaborInspection from '../pages/hr/LaborInspection'
 import Training from '../pages/hr/Training'
+import MySchedule from '../pages/hr/MySchedule'
 
 export default function HRModule() {
   return (
@@ -39,6 +40,7 @@ export default function HRModule() {
       <Route path="bonus" element={<Bonus />} />
       <Route path="labor-inspection" element={<LaborInspection />} />
       <Route path="training" element={<Training />} />
+      <Route path="my-schedule" element={<MySchedule />} />
     </Routes>
   )
 }

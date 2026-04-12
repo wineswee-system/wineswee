@@ -155,6 +155,68 @@ export async function notifyTaskDue(assigneeName, taskTitle, dueDate) {
   }])
 }
 
+/**
+ * Notify employee about published schedule via LINE.
+ * @param {string} employeeName
+ * @param {string} dateRange - e.g. "2026-04-13 ~ 2026-04-19"
+ * @param {Array} assignments - [{ date, shift, actual_start, actual_end }]
+ */
+export async function notifySchedulePublished(employeeName, dateRange, assignments) {
+  if (!employeeName) return { ok: false, reason: 'no_employee' }
+
+  const { data: emp } = await supabase.from('employees')
+    .select('line_user_id').eq('name', employeeName).maybeSingle()
+
+  if (!emp?.line_user_id) return { ok: false, reason: 'no_line_user_id' }
+
+  const dayLabels = ['日', '一', '二', '三', '四', '五', '六']
+  const lines = assignments.slice(0, 7).map(a => {
+    const dow = dayLabels[new Date(a.date).getDay()]
+    const time = a.actual_start && a.actual_end
+      ? `${a.actual_start.slice(0, 5)}~${a.actual_end.slice(0, 5)}`
+      : ''
+    return `${a.date.slice(5)} (${dow}) ${a.shift}${time ? ' ' + time : ''}`
+  })
+
+  const liffUrl = LIFF_ID
+    ? `https://liff.line.me/${LIFF_ID}/my-schedule`
+    : `${window.location.origin}/hr/my-schedule`
+
+  const messages = [{
+    type: 'flex',
+    altText: `📋 班表已發布：${dateRange}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical',
+        backgroundColor: '#06b6d4',
+        paddingAll: '14px',
+        contents: [{ type: 'text', text: '📋 班表通知', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
+        contents: [
+          { type: 'text', text: `${dateRange} 班表已發布`, weight: 'bold', size: 'md', wrap: true },
+          { type: 'separator', margin: 'md' },
+          ...lines.map(line => ({ type: 'text', text: line, size: 'sm', color: '#555555', margin: 'sm' })),
+          ...(assignments.length > 7 ? [{ type: 'text', text: `...共 ${assignments.length} 天`, size: 'xs', color: '#aaaaaa', margin: 'sm' }] : []),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '查看完整班表', uri: liffUrl },
+          style: 'primary', color: '#06b6d4', height: 'sm',
+        }],
+      },
+    },
+  }]
+
+  return sendLinePush(emp.line_user_id, messages)
+}
+
 async function logMessage(recipient, messages, status = 'logged') {
   try {
     await supabase.from('message_logs').insert({

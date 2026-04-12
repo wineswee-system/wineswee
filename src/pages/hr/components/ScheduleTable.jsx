@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
+import { getShiftHours } from '../../../lib/scheduleUtils'
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -8,7 +10,7 @@ export default function ScheduleTable({
   schedules, getShift, getShiftStyle, getOffRequest,
   editCell, setEditCell, handleSetShift,
   handleDeleteShift, canEditSchedule = true,
-  SHIFT_TYPES, shiftDefs, getStoreShifts, storeFilter,
+  SHIFT_TYPES, shiftDefs, getStoreShifts, storeFilter, storeSettings,
   compliance, holidaySet,
   setCoverModal, findCoverCandidates,
 }) {
@@ -153,7 +155,18 @@ export default function ScheduleTable({
                   <td>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{emp.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {emp.position || emp.dept} · {weekDates.filter(d => { const s = getShift(emp.name, d); return s && s !== '休' }).length * 8}h
+                      {emp.position || emp.dept} · {(() => {
+                        let h = 0
+                        weekDates.forEach(d => {
+                          const s = schedules.find(x => x.employee === emp.name && x.date === d)
+                          if (s?.actual_hours) h += s.actual_hours
+                          else if (s?.shift && s.shift !== '休') {
+                            const def = shiftDefs.find(sd => sd.name === s.shift)
+                            h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+                          }
+                        })
+                        return Math.round(h)
+                      })()}h
                     </div>
                   </td>
                   {weekDates.map(date => {
@@ -162,40 +175,16 @@ export default function ScheduleTable({
                     return (
                       <td key={date} style={{ textAlign: 'center', padding: '6px 4px', position: 'relative' }}>
                         {isEditing ? (
-                          <div style={{
-                            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                            zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-                            borderRadius: 10, padding: 8, boxShadow: 'var(--shadow-lg)',
-                            display: 'flex', flexDirection: 'column', gap: 4, minWidth: 90,
-                          }}>
-                            {(() => {
-                              const empStore = emp.store || storeFilter || ''
-                              const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
-                              const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
-                              const storeShiftLabels = storeShiftDefs.map(d => d.name)
-                              const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
-                              return shiftOptions.map(t => (
-                                <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
-                                  style={{
-                                    padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                    fontSize: 12, fontWeight: 600, textAlign: 'center',
-                                    background: t.dim, color: t.color,
-                                  }}>
-                                  {t.label}
-                                </button>
-                              ))
-                            })()}
-                            {shift && handleDeleteShift && (
-                              <button onClick={() => handleDeleteShift(emp.name, date)} style={{
-                                padding: '4px', borderRadius: 6, border: '1px solid rgba(248,113,113,0.3)',
-                                background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                              }}>刪除</button>
-                            )}
-                            <button onClick={() => setEditCell(null)} style={{
-                              padding: '4px', borderRadius: 6, border: '1px solid var(--border-medium)',
-                              background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                            }}>取消</button>
-                          </div>
+                          <ShiftEditPopup
+                            emp={emp} date={date} shift={shift}
+                            shiftDefs={shiftDefs} SHIFT_TYPES={SHIFT_TYPES}
+                            storeFilter={storeFilter} getStoreShifts={getStoreShifts}
+                            storeSettings={storeSettings}
+                            schedules={schedules}
+                            handleSetShift={handleSetShift}
+                            handleDeleteShift={handleDeleteShift}
+                            onClose={() => setEditCell(null)}
+                          />
                         ) : null}
                         {getOffRequest(emp.name, date) && !shift && (
                           <div style={{ fontSize: 9, color: 'var(--accent-orange)', marginBottom: 2 }}>
@@ -214,6 +203,17 @@ export default function ScheduleTable({
                           >
                             {shift || '+'}
                           </span>
+                          {shift && shift !== '休' && (() => {
+                            const sched = schedules.find(x => x.employee === emp.name && x.date === date)
+                            const def = shiftDefs.find(d => d.name === shift)
+                            const startT = sched?.actual_start?.slice(0, 5) || def?.start_time?.slice(0, 5)
+                            const endT = sched?.actual_end?.slice(0, 5) || def?.end_time?.slice(0, 5)
+                            return startT && endT ? (
+                              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1, fontFamily: 'monospace' }}>
+                                {startT}~{endT}
+                              </div>
+                            ) : null
+                          })()}
                           {shift && shift !== '休' && (
                             <button title="找人代班" onClick={e => {
                               e.stopPropagation()
@@ -235,5 +235,123 @@ export default function ScheduleTable({
         </div>
       </div>
     </>
+  )
+}
+
+// ── Shift Edit Popup with Time Pickers ──
+function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, storeSettings, schedules, handleSetShift, handleDeleteShift, onClose }) {
+  const existing = schedules.find(s => s.employee === emp.name && s.date === date)
+
+  // Get operating hours for this day
+  const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const dow = new Date(date).getDay()
+  const oh = storeSettings?.operating_hours?.[dayNames[dow]]
+  const storeOpen = oh?.open || '11:00'
+  const storeClose = oh?.close || '00:00'
+
+  const [startTime, setStartTime] = useState(existing?.actual_start?.slice(0, 5) || storeOpen)
+  const [endTime, setEndTime] = useState(existing?.actual_end?.slice(0, 5) || storeClose)
+
+  // Generate smart presets based on operating hours
+  const openH = parseInt(storeOpen) || 11
+  const closeH = parseInt(storeClose) || 0
+  const effectiveClose = closeH <= openH ? closeH + 24 : closeH
+  const totalHours = effectiveClose - openH
+  const midH = openH + Math.floor(totalHours / 2)
+  const fmt = (h) => `${String(h % 24).padStart(2, '0')}:00`
+  const lbl = (h) => String(h % 24)
+
+  const quickPresets = [
+    // Full day
+    { label: `${lbl(openH)}-${lbl(effectiveClose)}`, start: fmt(openH), end: fmt(effectiveClose) },
+    // First half
+    { label: `${lbl(openH)}-${lbl(midH)}`, start: fmt(openH), end: fmt(midH) },
+    // Second half
+    { label: `${lbl(midH)}-${lbl(effectiveClose)}`, start: fmt(midH), end: fmt(effectiveClose) },
+    // Common patterns
+    { label: `${lbl(openH)}-${lbl(openH + 8)}`, start: fmt(openH), end: fmt(openH + 8) },
+    { label: `${lbl(openH + 4)}-${lbl(effectiveClose)}`, start: fmt(openH + 4), end: fmt(effectiveClose) },
+    { label: `${lbl(openH)}-${lbl(openH + 6)}`, start: fmt(openH), end: fmt(openH + 6) },
+    { label: `${lbl(midH - 1)}-${lbl(effectiveClose)}`, start: fmt(midH - 1), end: fmt(effectiveClose) },
+    { label: `${lbl(midH)}-${lbl(midH + 6)}`, start: fmt(midH), end: fmt(midH + 6) },
+  ].filter((p, i, arr) => arr.findIndex(x => x.label === p.label) === i) // deduplicate
+
+  const handleConfirm = () => {
+    if (!startTime || !endTime) return
+    const s = startTime.replace(':00', '').replace(/^0/, '')
+    const e = endTime.replace(':00', '').replace(/^0/, '')
+    const label = `${s}-${e}`
+    handleSetShift(emp.name, date, label, startTime, endTime)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+      zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      borderRadius: 12, padding: 12, boxShadow: 'var(--shadow-lg)',
+      minWidth: 200,
+    }}>
+      {/* Time pickers */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <input type="time" className="form-input" value={startTime} onChange={e => setStartTime(e.target.value)}
+          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>~</span>
+        <input type="time" className="form-input" value={endTime} onChange={e => setEndTime(e.target.value)}
+          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+      </div>
+
+      {/* Confirm button */}
+      <button onClick={handleConfirm} style={{
+        width: '100%', padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
+        background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 700, marginBottom: 8,
+      }}>
+        確認排班
+      </button>
+
+      {/* Quick presets */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, marginBottom: 8 }}>
+        {quickPresets.map(p => (
+          <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end) }}
+            style={{
+              padding: '4px 2px', borderRadius: 6, border: '1px solid var(--border-medium)',
+              background: startTime === p.start && endTime === p.end ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
+              color: startTime === p.start && endTime === p.end ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              fontSize: 10, fontWeight: 600, cursor: 'pointer',
+            }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Rest / Absence */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        <button onClick={() => handleSetShift(emp.name, date, '休')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'var(--glass-medium)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+        }}>😴 休</button>
+        <button onClick={() => handleSetShift(emp.name, date, '病')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 11, fontWeight: 600,
+        }}>🏥 病</button>
+        <button onClick={() => handleSetShift(emp.name, date, '特休')} style={{
+          flex: 1, padding: '5px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: 'rgba(16,185,129,0.08)', color: '#10b981', fontSize: 11, fontWeight: 600,
+        }}>🌴 特休</button>
+      </div>
+
+      {/* Delete + Cancel */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        {shift && handleDeleteShift && (
+          <button onClick={() => handleDeleteShift(emp.name, date)} style={{
+            flex: 1, padding: '4px', borderRadius: 6, border: '1px solid rgba(248,113,113,0.3)',
+            background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}>刪除</button>
+        )}
+        <button onClick={onClose} style={{
+          flex: 1, padding: '4px', borderRadius: 6, border: '1px solid var(--border-medium)',
+          background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+        }}>取消</button>
+      </div>
+    </div>
   )
 }

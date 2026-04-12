@@ -342,15 +342,22 @@ export function runProgrammaticSchedule(data) {
         !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
       )
 
-      // Sort: full-time first (they anchor the schedule), then by who needs more hours
+      // Sort: full-time openers first, then full-time, then part-time
       available.sort((a, b) => {
         const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT'
         const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT'
-        if (aIsPT !== bIsPT) return aIsPT ? 1 : -1 // Full-time first
+        // Openers first (they must start at 11)
+        const aOpener = !aIsPT && a.can_open === true ? 0 : 1
+        const bOpener = !bIsPT && b.can_open === true ? 0 : 1
+        if (aOpener !== bOpener) return aOpener - bOpener
+        if (aIsPT !== bIsPT) return aIsPT ? 1 : -1
         const aH = getEmpWeekHours(a.name), bH = getEmpWeekHours(b.name)
-        const aRem = targetHoursMap[a.name] - aH, bRem = targetHoursMap[b.name] - bH
-        return bRem - aRem // More remaining hours = higher priority
+        return (targetHoursMap[b.name] - bH) - (targetHoursMap[a.name] - aH)
       })
+
+      // Track if we have opener and closer assigned for today
+      let hasOpener = false
+      let hasCloser = false
 
       for (const emp of available) {
         if (schedule[emp.name][date]) continue
@@ -377,8 +384,16 @@ export function runProgrammaticSchedule(data) {
         let bestWindow = null
         let bestScore = -Infinity
 
+        // Force opener: first full-time opener MUST start at store opening
+        const mustOpen = !hasOpener && emp.can_open === true && !isPT
+        // Force closer: if this is a can_close full-time and no closer yet, prefer closing shift
+        const preferClose = !hasCloser && emp.can_close === true && !isPT
+
         for (const startTime of startHours) {
           const startH = parseTime(startTime)
+
+          // If must open, ONLY allow store opening time
+          if (mustOpen && Math.abs(startH - storeOpenH) > 0.5) continue
 
           // can_open check: only employees with can_open can start at store opening
           if (emp.can_open === false && Math.abs(startH - storeOpenH) < 0.5) continue
@@ -438,6 +453,9 @@ export function runProgrammaticSchedule(data) {
               if (Math.abs(startH - uncovStart) < 0.5) score += 25 // Starts at the gap
             }
 
+            // Closer bonus: prefer shifts that end at store closing
+            if (preferClose && endH >= effectiveCloseH - 0.5) score += 20
+
             // Target hours fit
             if (weekHours + netH <= targetH) score += 10
             else if (weekHours + netH <= targetH * 1.15) score += 3
@@ -458,6 +476,13 @@ export function runProgrammaticSchedule(data) {
           slotCoverage.forEach(slot => {
             if (overlaps(bestWindow.start, bestWindow.end, slot.start_time, slot.end_time)) slot.covered++
           })
+
+          // Track opener/closer
+          const assignedStartH = parseTime(bestWindow.start)
+          const assignedEndH = parseTime(bestWindow.end)
+          const effAssignedEndH = assignedEndH <= assignedStartH ? assignedEndH + 24 : assignedEndH
+          if (Math.abs(assignedStartH - storeOpenH) < 0.5) hasOpener = true
+          if (effAssignedEndH >= effectiveCloseH - 0.5) hasCloser = true
         } else {
           schedule[emp.name][date] = '休'
         }

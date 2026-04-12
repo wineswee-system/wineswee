@@ -1213,3 +1213,23 @@ export const getTaxWithholdingRecords = (year) => {
 
 export const upsertTaxWithholding = (data) =>
   supabase.from('tax_withholding_records').upsert(data, { onConflict: 'employee,year' }).select().single()
+
+// ── Employee Personality ───────────────────────────────────
+export const getEmployeePersonality = (employeeId) =>
+  supabase.from('employee_personality_profiles').select('*').eq('employee_id', employeeId).maybeSingle()
+
+export const upsertEmployeePersonality = (data) =>
+  supabase.from('employee_personality_profiles').upsert(data, { onConflict: 'employee_id' }).select().single()
+
+// ── Employee Development Plans ────────────────────────────
+export const getEmployeeDevelopmentPlans = (employeeId) =>
+  supabase.from('employee_development_plans').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false })
+
+export const createDevelopmentPlan = (data) =>
+  supabase.from('employee_development_plans').insert(data).select().single()
+
+export const updateDevelopmentPlan = (id, data) =>
+  supabase.from('employee_development_plans').update(data).eq('id', id).select().single()
+
+export const deleteDevelopmentPlan = (id) =>
+  supabase.from('employee_development_plans').delete().eq('id', id)

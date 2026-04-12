@@ -2471,3 +2471,35 @@ CREATE TABLE IF NOT EXISTS tax_withholding_records (
   UNIQUE(employee, year)
 );
 CREATE INDEX IF NOT EXISTS idx_tax_wh_year ON tax_withholding_records(year);
+
+-- ── Employee Personality Profiles ──
+CREATE TABLE IF NOT EXISTS employee_personality_profiles (
+  id SERIAL PRIMARY KEY,
+  employee_id INT REFERENCES employees(id) ON DELETE CASCADE,
+  mbti_type TEXT,
+  astrology JSONB DEFAULT '{}',
+  notes TEXT,
+  assessed_by TEXT,
+  assessed_at DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(employee_id)
+);
+
+-- ── Employee Development Plans ──
+CREATE TABLE IF NOT EXISTS employee_development_plans (
+  id SERIAL PRIMARY KEY,
+  employee_id INT REFERENCES employees(id) ON DELETE CASCADE,
+  skill_name TEXT NOT NULL,
+  skill_type TEXT NOT NULL DEFAULT 'hard',
+  current_level TEXT DEFAULT '基礎',
+  target_level TEXT DEFAULT '中級',
+  course_name TEXT,
+  course_provider TEXT,
+  status TEXT DEFAULT '規劃中',
+  start_date DATE,
+  target_date DATE,
+  completed_date DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dev_plan_emp ON employee_development_plans(employee_id);

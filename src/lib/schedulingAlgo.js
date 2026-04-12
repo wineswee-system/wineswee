@@ -393,9 +393,20 @@ export function runProgrammaticSchedule(data) {
 
         // Find the best start/end time for this employee
         // Strategy: find the window that covers the most understaffed slots
-        // Try different start times (each slot start is a candidate)
         let bestWindow = null
         let bestScore = -Infinity
+
+        // Priority: if earliest uncovered slot exists, try starting there first
+        const earliestUncovered = slotCoverage.find(s => s.covered === 0)
+        if (earliestUncovered) {
+          // Move this start time to front of candidates
+          const earlyStart = earliestUncovered.start_time?.slice(0, 5)
+          const idx = candidateStarts.indexOf(earlyStart)
+          if (idx > 0) {
+            candidateStarts.splice(idx, 1)
+            candidateStarts.unshift(earlyStart)
+          }
+        }
 
         // Generate candidate start times: slot starts + hourly intervals between slots
         const slotStarts = daySlots.map(s => parseTime(s.start_time))

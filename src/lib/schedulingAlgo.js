@@ -368,6 +368,23 @@ export function runProgrammaticSchedule(data) {
         !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
       )
 
+      // ── Calculate ideal FT gross hours based on remaining work days ──
+      const calcFTGross = (empName) => {
+        const weekHours = getEmpWeekHours(empName)
+        const range = hoursRange[empName]
+        const hoursNeeded = range.min - weekHours  // net hours still needed to hit minimum
+        // Count remaining work days (today + future days not resting)
+        const todayIdx = weekDates.indexOf(date)
+        const remainingWorkDays = weekDates.filter((d, i) =>
+          i >= todayIdx && !restDayPlan[empName].has(d) && !schedule[empName][d]
+        ).length || 1
+        const idealNetPerDay = hoursNeeded / remainingWorkDays
+        // gross = net + 1h break (for shifts ≥ 6h)
+        const idealGross = Math.ceil(idealNetPerDay) + 1
+        // Clamp: min 9h, max 11h, max store hours
+        return Math.min(Math.max(idealGross, 9), 11, maxGrossH)
+      }
+
       // ── Shift assignment helper: validate & create a shift window ──
       const tryShift = (emp, startH, grossH) => {
         const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
@@ -439,7 +456,7 @@ export function runProgrammaticSchedule(data) {
           available.filter(e => e.can_open === true && !schedule[e.name]?.[date])
         )
         for (const emp of openers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
           const window = tryShift(emp, storeOpenH, grossH)
           if (window && scoreCoverage(window.start, window.end) > -50) {
             doAssign(emp, window)
@@ -456,7 +473,7 @@ export function runProgrammaticSchedule(data) {
           available.filter(e => e.can_close === true && !schedule[e.name]?.[date])
         )
         for (const emp of closers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
           const startH = effectiveCloseH - grossH
           if (startH < storeOpenH) continue
           const window = tryShift(emp, startH, grossH)
@@ -469,7 +486,7 @@ export function runProgrammaticSchedule(data) {
 
       // ════════════════════════════════════════════
       //  Phase 3: 補滿覆蓋 — 按需求填補時段缺口
-      //  正職固定 9h gross，兼職 4-7h 彈性
+      //  正職 9-11h gross（動態），兼職 3-6h 彈性
       // ════════════════════════════════════════════
       const unassigned = sortByNeed(
         available.filter(e => !schedule[e.name]?.[date])
@@ -490,10 +507,14 @@ export function runProgrammaticSchedule(data) {
         if (weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
 
         const pt = isPTEmp(emp)
-        // 正職 9h gross (8h net)，兼職彈性 4-7h gross
+        // 正職：動態計算需要的班時（9-11h gross），確保能達到週 40h
+        // 兼職：縮短為 3-6h，讓正職有足夠空間
+        const ftIdeal = calcFTGross(emp.name)
         const grossDurations = pt
-          ? [7, 6, 5, 4].filter(h => h <= maxGrossH)
-          : [Math.min(9, maxGrossH)]
+          ? [6, 5, 4, 3].filter(h => h <= maxGrossH)
+          : (ftIdeal > 9
+              ? [ftIdeal, ftIdeal - 1, 9].filter(h => h >= 9 && h <= maxGrossH)
+              : [9].filter(h => h <= maxGrossH))
 
         let bestWindow = null
         let bestScore = -Infinity
@@ -515,9 +536,14 @@ export function runProgrammaticSchedule(data) {
 
             // Weekly hours fit within range
             const afterHours = weekHours + window.netH
-            if (afterHours <= range.max) score += 10
-            if (afterHours >= range.min) score += 5
+            if (afterHours >= range.min && afterHours <= range.max) score += 15  // in range: best
+            else if (afterHours < range.min) score += 3                          // still below
             if (afterHours > range.max) score -= 20
+
+            // FT below minimum: bonus for longer shifts that help reach 40h
+            if (!pt && afterHours < range.min) {
+              score += (window.netH - 8) * 8  // bonus per extra hour above 8h net
+            }
 
             // Fatigue balancing
             const fatigue = fatigueMap[emp.name] || 0

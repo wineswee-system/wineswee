@@ -304,7 +304,7 @@ function OffRequestForm({ empName, employmentType }) {
 
   // Rest day limit: FT = 10, PT = 13
   const isPT = employmentType === '兼職' || employmentType === 'PT'
-  const maxRestDays = isPT ? 13 : 10
+  const maxRestDays = isPT ? 15 : 10
   const isAtLimit = myRequests.length >= maxRestDays
 
   useEffect(() => {

@@ -397,7 +397,24 @@ export function runProgrammaticSchedule(data) {
         let bestWindow = null
         let bestScore = -Infinity
 
-        const candidateStarts = [...new Set(daySlots.map(s => s.start_time))]
+        // Generate candidate start times: slot starts + hourly intervals between slots
+        const slotStarts = daySlots.map(s => parseTime(s.start_time))
+        const allStartHours = new Set()
+        const firstSlotH = Math.min(...slotStarts)
+        const lastSlotEndH = (() => {
+          const ends = daySlots.map(s => {
+            const se = parseTime(s.end_time), ss = parseTime(s.start_time)
+            return se <= ss ? se + 24 : se
+          })
+          return Math.max(...ends)
+        })()
+        // Add every hour from first slot start to (last slot end - min shift length)
+        for (let h = firstSlotH; h <= lastSlotEndH - 2; h++) {
+          allStartHours.add(`${String(Math.floor(h % 24)).padStart(2, '0')}:00`)
+        }
+        // Also add original slot start times (might have :30 etc.)
+        daySlots.forEach(s => allStartHours.add(s.start_time?.slice(0, 5)))
+        const candidateStarts = [...allStartHours].sort()
 
         // Get store opening time for open/close check
         const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')

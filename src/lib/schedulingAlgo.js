@@ -100,18 +100,42 @@ export function runProgrammaticSchedule(data) {
     staffingMap[s.shift_name] = s.required_count || 0
   }
 
-  // Target weekly hours per employee (range-based)
-  // 正職 40-48h/週，兼職 24-36h/週
+  // Target hours per employee — 四週變形工時（月制）
+  // 月目標：正職 150-160h，兼職 80-160h
+  // 每週目標根據 monthlyContext 動態計算（剩餘時數 ÷ 剩餘週數）
+  const MONTHLY_FT_MIN = 150
+  const MONTHLY_PT_MIN = 80
+  const MONTHLY_MAX = 160  // 所有人月工時上限
+  const monthlyCtx = data.monthlyContext || null  // { hoursAccumulated: {name: h}, weeksRemaining: n }
+
   const targetHoursMap = {}
   const hoursRange = {}
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    if (isPT) {
-      targetHoursMap[emp.name] = 30   // midpoint of 24-36
-      hoursRange[emp.name] = { min: 24, max: 36 }
+    const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
+    const monthMid = Math.round((monthMin + MONTHLY_MAX) / 2)  // FT: 155, PT: 120
+
+    if (monthlyCtx) {
+      // Monthly mode: distribute remaining hours across remaining weeks
+      const accumulated = monthlyCtx.hoursAccumulated?.[emp.name] || 0
+      const weeksLeft = (monthlyCtx.weeksRemaining || 0) + 1  // including this week
+      const remainMin = Math.max(0, monthMin - accumulated)
+      const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
+      const weekTarget = Math.round(remainMin / weeksLeft)
+      const weekMax = Math.round(remainMax / weeksLeft)
+      targetHoursMap[emp.name] = Math.max(weekTarget, isPT ? 12 : 28)
+      hoursRange[emp.name] = {
+        min: Math.max(isPT ? 12 : 28, weekTarget - 2),
+        max: Math.min(isPT ? 40 : 44, weekMax + 2),
+      }
     } else {
-      targetHoursMap[emp.name] = 44   // midpoint of 40-48
-      hoursRange[emp.name] = { min: 40, max: 48 }
+      // Standalone weekly mode: divide monthly target by ~4.3
+      const weekTarget = Math.round(monthMid / 4.3)
+      targetHoursMap[emp.name] = weekTarget
+      hoursRange[emp.name] = {
+        min: Math.max(isPT ? 12 : 28, Math.round(monthMin / 4.3) - 2),
+        max: Math.min(isPT ? 40 : 44, Math.round(MONTHLY_MAX / 4.3) + 2),
+      }
     }
   }
 
@@ -887,6 +911,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const monthFatigue = {}
   for (const emp of data.employees) monthFatigue[emp.name] = 0
 
+  // Running hours accumulation — 四週變形用月總時數分配每週目標
+  const monthHours = {}
+  for (const emp of data.employees) monthHours[emp.name] = 0
+
   for (let i = 0; i < weeks.length; i++) {
     const weekDates = weeks[i]
     onProgress?.(`程式排班中... 第 ${i + 1}/${weeks.length} 週`)
@@ -915,6 +943,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       offRequests: data.offRequests.filter(
         o => o.date >= weekDates[0] && o.date <= weekDates[weekDates.length - 1]
       ),
+      // 月制上下文：告訴每週排班器目前累積了多少時數、還剩幾週
+      monthlyContext: {
+        hoursAccumulated: { ...monthHours },
+        weeksRemaining: weeks.length - i - 1,
+      },
     }
 
     let result
@@ -929,9 +962,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     allViolations.push(...result.violations)
     lastWeekContext = result.assignments
 
-    // Accumulate fatigue from this week
+    // Accumulate hours + fatigue from this week
     for (const a of result.assignments) {
       if (!isAbsence(a.shift)) {
+        const hours = a.actual_hours || 8
+        monthHours[a.employee] = (monthHours[a.employee] || 0) + hours
         const def = data.shiftDefs.find(d => d.name === a.shift)
         if (def) {
           monthFatigue[a.employee] = (monthFatigue[a.employee] || 0) +
@@ -939,6 +974,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         }
       }
     }
+    console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
   }
 
   // Monthly validation
@@ -1072,8 +1108,8 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     }
   }
 
-  // Weekly hours soft cap — 正職 40-48h, 兼職 24-36h
-  const targetH = isPT ? 36 : 48  // use upper bound as cap
+  // Weekly hours soft cap — derived from monthly: 160h/月 ÷ 4.3 ≈ 37h + buffer
+  const targetH = isPT ? 36 : 44  // use reasonable weekly cap
   const buffer = wsc.canConcentrateRest
     ? Math.max(8, Math.round(targetH * 0.3))  // Flexible: allow more per-week variance
     : Math.max(4, Math.round(targetH * 0.15))  // Standard: tighter
@@ -1356,22 +1392,25 @@ function validateMonthlyResult(assignments, data) {
       })
     }
 
-    // S5: Weekly hours range check — 正職 40-48h, 兼職 24-36h
+    // S5: Monthly hours check — 四週變形：正職 150-160h/月, 兼職 80-160h/月
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-    const rangeMin = isPT ? 24 : 40
-    const rangeMax = isPT ? 36 : 48
-    const avgWeeklyHours = totalDays > 0 ? (totalHours / totalDays) * 7 : 0
-    if (avgWeeklyHours > rangeMax) {
+    const monthlyMin = isPT ? 80 : 150
+    const monthlyMax = 160
+    // Pro-rate for partial months (e.g., 3 weeks instead of 4)
+    const monthWeeks = totalDays / 7
+    const proRatedMin = Math.round(monthlyMin * monthWeeks / 4.3)
+    const proRatedMax = Math.round(monthlyMax * monthWeeks / 4.3)
+    if (totalHours > proRatedMax) {
       violations.push({
-        employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 超過上限 ${rangeMax}h`,
+        employee: emp.name, constraint: 'S5', law: '四週變形 ≤160h',
+        message: `${emp.name}: 月工時 ${totalHours.toFixed(1)}h 超過上限 ${proRatedMax}h`,
         severity: 'warning',
       })
     }
-    if (avgWeeklyHours < rangeMin && totalDays >= 7) {
+    if (totalHours < proRatedMin && totalDays >= 7) {
       violations.push({
-        employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 低於下限 ${rangeMin}h`,
+        employee: emp.name, constraint: 'S5', law: '四週變形',
+        message: `${emp.name}: 月工時 ${totalHours.toFixed(1)}h 低於下限 ${proRatedMin}h（目標 ≥${monthlyMin}h）`,
         severity: 'warning',
       })
     }

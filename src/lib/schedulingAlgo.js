@@ -178,33 +178,6 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // H1b: Conflict resolution — if too many people rest on the same day, override lowest-priority
-  for (const date of weekDates) {
-    const restingOnDay = employees.filter(e => restDayPlan[e.name].has(date))
-    const needed = minWorkersPerDay[date] || minStaff
-    const working = employees.length - restingOnDay.length
-
-    if (working < needed && restingOnDay.length > 0) {
-      // Need to remove some off_requests from restDayPlan to ensure coverage
-      // Sort by priority: remove PT first, then higher schedule_priority number
-      const removable = restingOnDay
-        .filter(e => offMap.has(`${e.name}_${date}`))  // only override off_requests, not availability
-        .sort((a, b) => {
-          const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT' ? 0 : 1
-          const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT' ? 0 : 1
-          if (aIsPT !== bIsPT) return aIsPT - bIsPT  // PT first
-          return (b.schedule_priority || 3) - (a.schedule_priority || 3)  // lower priority first
-        })
-
-      let toRemove = needed - working
-      for (const emp of removable) {
-        if (toRemove <= 0) break
-        restDayPlan[emp.name].delete(date)
-        toRemove--
-      }
-    }
-  }
-
   // L2: Days with no availability = rest
   for (const emp of employees) {
     for (const date of weekDates) {
@@ -232,6 +205,31 @@ export function runProgrammaticSchedule(data) {
       // Sum of shift staffing requirements
       const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
       minWorkersPerDay[date] = total || minStaff
+    }
+  }
+
+  // H1b: Conflict resolution — if too many people rest on the same day, override lowest-priority
+  for (const date of weekDates) {
+    const restingOnDay = employees.filter(e => restDayPlan[e.name].has(date))
+    const needed = minWorkersPerDay[date] || minStaff
+    const working = employees.length - restingOnDay.length
+
+    if (working < needed && restingOnDay.length > 0) {
+      const removable = restingOnDay
+        .filter(e => offMap.has(`${e.name}_${date}`))
+        .sort((a, b) => {
+          const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT' ? 0 : 1
+          const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT' ? 0 : 1
+          if (aIsPT !== bIsPT) return aIsPT - bIsPT
+          return (b.schedule_priority || 3) - (a.schedule_priority || 3)
+        })
+
+      let toRemove = needed - working
+      for (const emp of removable) {
+        if (toRemove <= 0) break
+        restDayPlan[emp.name].delete(date)
+        toRemove--
+      }
     }
   }
 

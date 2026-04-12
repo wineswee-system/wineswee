@@ -1163,12 +1163,7 @@ function validateResult(assignments, data) {
       }
     }
 
-    // H10: Min rest days per week (adjusted for work system)
-    const wsVal = getWorkSystemConstraints(storeSettings?.work_hour_system || '標準工時')
-    const restDays = empAssignments.filter(a => isAbsence(a.shift)).length
-    if (weekDates.length >= 7 && restDays < wsVal.weeklyRestMin) {
-      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} 僅 ${restDays} 天休假（需 ≥${wsVal.weeklyRestMin} 天）`, severity: 'error' })
-    }
+    // H10: 四週變形不檢查每週休假，由月制 off_requests 控制
 
     // H13: Pregnant/nursing night shifts
     if (emp.is_pregnant || emp.is_nursing) {
@@ -1368,10 +1363,10 @@ function validateMonthlyResult(assignments, data) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
     const monthlyMin = isPT ? 80 : 150
     const monthlyMax = 160
-    // Pro-rate for partial months (e.g., 3 weeks instead of 4)
-    const monthWeeks = totalDays / 7
-    const proRatedMin = Math.round(monthlyMin * monthWeeks / 4.3)
-    const proRatedMax = Math.round(monthlyMax * monthWeeks / 4.3)
+    // 按天數比例：不足整月時按比例，整月直接用原值
+    const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
+    const proRatedMin = Math.round(monthlyMin * dayRatio)
+    const proRatedMax = Math.round(monthlyMax * dayRatio)
     if (totalHours > proRatedMax) {
       violations.push({
         employee: emp.name, constraint: 'S5', law: '四週變形 ≤160h',

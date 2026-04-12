@@ -359,11 +359,14 @@ export function runProgrammaticSchedule(data) {
 
     const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
-    // Sort by weekly hours deficit (who needs the most hours first)
+    // Sort: 正職先排，兼職後排，同類別按時數缺口排
     const sortByNeed = (list) => [...list].sort((a, b) => {
-      const aDef = hoursRange[a.name].min - getEmpWeekHours(a.name)
-      const bDef = hoursRange[b.name].min - getEmpWeekHours(b.name)
-      return bDef - aDef
+      const aIsPT = isPTEmp(a) ? 1 : 0
+      const bIsPT = isPTEmp(b) ? 1 : 0
+      if (aIsPT !== bIsPT) return aIsPT - bIsPT  // FT first
+      const aDef = targetHoursMap[a.name] - getEmpWeekHours(a.name)
+      const bDef = targetHoursMap[b.name] - getEmpWeekHours(b.name)
+      return bDef - aDef  // higher deficit first
     })
 
     // ── Day-by-day assignment ──
@@ -541,14 +544,15 @@ export function runProgrammaticSchedule(data) {
         const weekHours = getEmpWeekHours(emp.name)
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
-
-        // Over weekly max → must rest
-        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-        // Reached weekly target and coverage is met → rest (save hours for other days)
-        if (weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
-
         const pt = isPTEmp(emp)
-        // 正職：動態計算需要的班時（9-11h gross），確保能達到週 40h
+
+        // 月工時上限到了 → 必須休
+        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
+        // 正職：能排就排（四週變形不提早休，月底收斂）
+        // 兼職：達到週目標且覆蓋足夠 → 休
+        if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
+
+        // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：縮短為 3-6h，讓正職有足夠空間
         const ftIdeal = calcFTGross(emp.name)
         const grossDurations = pt

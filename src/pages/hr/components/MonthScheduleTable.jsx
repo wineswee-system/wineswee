@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
 
 export default function MonthScheduleTable({
@@ -303,8 +304,6 @@ function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, S
   const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]
 
   // Use createPortal to escape overflow:auto containers
-  const { createPortal } = require('react-dom')
-
   return createPortal(
     <>
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.15)' }} onMouseDown={onClose} />

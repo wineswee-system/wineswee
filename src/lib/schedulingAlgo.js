@@ -100,18 +100,34 @@ export function runProgrammaticSchedule(data) {
     staffingMap[s.shift_name] = s.required_count || 0
   }
 
-  // Target weekly hours per employee (range-based)
-  // 正職 40-48h/週，兼職 24-36h/週
+  // Target hours per employee — 四週變形工時（月制）
+  // 月目標：正職 150-160h，兼職 80-160h
+  // 每週目標根據 monthlyContext 動態計算（剩餘時數 ÷ 剩餘週數）
+  const MONTHLY_FT_MIN = 150
+  const MONTHLY_PT_MIN = 80
+  const MONTHLY_MAX = 160  // 所有人月工時上限
+  const monthlyCtx = data.monthlyContext || null  // { hoursAccumulated: {name: h}, weeksRemaining: n }
+
   const targetHoursMap = {}
   const hoursRange = {}
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    if (isPT) {
-      targetHoursMap[emp.name] = 30   // midpoint of 24-36
-      hoursRange[emp.name] = { min: 24, max: 36 }
+    const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
+    const monthMid = Math.round((monthMin + MONTHLY_MAX) / 2)  // FT: 155, PT: 120
+
+    if (monthlyCtx) {
+      // 四週變形：無每週上下限，只看月總量
+      const accumulated = monthlyCtx.hoursAccumulated?.[emp.name] || 0
+      const weeksLeft = (monthlyCtx.weeksRemaining || 0) + 1
+      const remainTarget = Math.max(0, monthMin - accumulated)
+      const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
+      // weekTarget 只是分配參考，不是硬限
+      targetHoursMap[emp.name] = Math.round(remainTarget / weeksLeft)
+      hoursRange[emp.name] = { min: 0, max: Math.round(remainMax) }  // 無週限，月底收斂
     } else {
-      targetHoursMap[emp.name] = 44   // midpoint of 40-48
-      hoursRange[emp.name] = { min: 40, max: 48 }
+      // Standalone weekly: 用月目標÷4.3 做參考
+      targetHoursMap[emp.name] = Math.round(monthMid / 4.3)
+      hoursRange[emp.name] = { min: 0, max: MONTHLY_MAX }
     }
   }
 
@@ -153,7 +169,7 @@ export function runProgrammaticSchedule(data) {
   const restDayPlan = {}
   for (const emp of employees) restDayPlan[emp.name] = new Set()
 
-  // H1: Off-request = mandatory rest
+  // H1: Off-request = mandatory rest (but respect minimum coverage)
   for (const emp of employees) {
     for (const date of weekDates) {
       if (offMap.has(`${emp.name}_${date}`)) {
@@ -192,57 +208,33 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // H10: Ensure minimum rest days per week (varies by work system)
-  // BUT also ensure every day has enough workers (no store closure)
-  const weeklyRestMin = wsConstraints.weeklyRestMin
-  for (const emp of employees) {
-    const rest = restDayPlan[emp.name]
-    if (rest.size >= weeklyRestMin) continue
+  // H1b: Conflict resolution — if too many people rest on the same day, override lowest-priority
+  for (const date of weekDates) {
+    const restingOnDay = employees.filter(e => restDayPlan[e.name].has(date))
+    const needed = minWorkersPerDay[date] || minStaff
+    const working = employees.length - restingOnDay.length
 
-    // Count how many people are already resting per day
-    const restCountByDay = {}
-    for (const date of weekDates) {
-      restCountByDay[date] = 0
-      for (const e of employees) {
-        if (restDayPlan[e.name].has(date)) restCountByDay[date]++
+    if (working < needed && restingOnDay.length > 0) {
+      const removable = restingOnDay
+        .filter(e => offMap.has(`${e.name}_${date}`))
+        .sort((a, b) => {
+          const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT' ? 0 : 1
+          const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT' ? 0 : 1
+          if (aIsPT !== bIsPT) return aIsPT - bIsPT
+          return (b.schedule_priority || 3) - (a.schedule_priority || 3)
+        })
+
+      let toRemove = needed - working
+      for (const emp of removable) {
+        if (toRemove <= 0) break
+        restDayPlan[emp.name].delete(date)
+        toRemove--
       }
     }
-
-    // Score candidate rest days
-    const candidates = weekDates
-      .map((date, idx) => {
-        if (rest.has(date)) return null
-        if (schedule[emp.name][date] && !isAbsence(schedule[emp.name][date])) return null
-
-        // Check: would this rest day leave too few workers?
-        const workersIfRest = employees.length - restCountByDay[date] - 1
-        const needed = minWorkersPerDay[date] || minStaff
-        if (workersIfRest < needed) return null // Can't rest on this day — not enough coverage
-
-        const dow = new Date(date).getDay()
-        let score = 0
-        // Restaurants: weekends are busiest, slightly prefer resting on weekdays
-        if (dow >= 1 && dow <= 4) score += 3
-        if (dow === 5 || dow === 6) score -= 2
-        // STRONG: spread rest days evenly — heavily penalize days where others already rest
-        score -= restCountByDay[date] * 15
-        // Spread rest days apart
-        if (rest.size === 1) {
-          const existingIdx = weekDates.indexOf([...rest][0])
-          score += Math.abs(idx - existingIdx)
-        }
-        // If high fatigue, give rest on busy days
-        const fatigue = fatigueMap[emp.name] || 0
-        if (fatigue > 20) score += 3
-        return { date, score }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score)
-
-    while (rest.size < weeklyRestMin && candidates.length > 0) {
-      rest.add(candidates.shift().date)
-    }
   }
+
+  // 四週變形：不再按週補休，休假完全由 off_requests（希望休）決定
+  // 正職月休上限 10 天，兼職彈性
 
   // Fill rest into schedule
   for (const emp of employees) {
@@ -318,11 +310,14 @@ export function runProgrammaticSchedule(data) {
 
     const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
-    // Sort by weekly hours deficit (who needs the most hours first)
+    // Sort: 正職先排，兼職後排，同類別按時數缺口排
     const sortByNeed = (list) => [...list].sort((a, b) => {
-      const aDef = hoursRange[a.name].min - getEmpWeekHours(a.name)
-      const bDef = hoursRange[b.name].min - getEmpWeekHours(b.name)
-      return bDef - aDef
+      const aIsPT = isPTEmp(a) ? 1 : 0
+      const bIsPT = isPTEmp(b) ? 1 : 0
+      if (aIsPT !== bIsPT) return aIsPT - bIsPT  // FT first
+      const aDef = targetHoursMap[a.name] - getEmpWeekHours(a.name)
+      const bDef = targetHoursMap[b.name] - getEmpWeekHours(b.name)
+      return bDef - aDef  // higher deficit first
     })
 
     // ── Day-by-day assignment ──
@@ -367,6 +362,23 @@ export function runProgrammaticSchedule(data) {
       const available = employees.filter(emp =>
         !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
       )
+
+      // ── Calculate ideal FT gross hours based on remaining work days ──
+      const calcFTGross = (empName) => {
+        const weekHours = getEmpWeekHours(empName)
+        const range = hoursRange[empName]
+        const hoursNeeded = range.min - weekHours  // net hours still needed to hit minimum
+        // Count remaining work days (today + future days not resting)
+        const todayIdx = weekDates.indexOf(date)
+        const remainingWorkDays = weekDates.filter((d, i) =>
+          i >= todayIdx && !restDayPlan[empName].has(d) && !schedule[empName][d]
+        ).length || 1
+        const idealNetPerDay = hoursNeeded / remainingWorkDays
+        // gross = net + 1h break (for shifts ≥ 6h)
+        const idealGross = Math.ceil(idealNetPerDay) + 1
+        // Clamp: min 9h, max 11h, max store hours
+        return Math.min(Math.max(idealGross, 9), 11, maxGrossH)
+      }
 
       // ── Shift assignment helper: validate & create a shift window ──
       const tryShift = (emp, startH, grossH) => {
@@ -439,7 +451,7 @@ export function runProgrammaticSchedule(data) {
           available.filter(e => e.can_open === true && !schedule[e.name]?.[date])
         )
         for (const emp of openers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
           const window = tryShift(emp, storeOpenH, grossH)
           if (window && scoreCoverage(window.start, window.end) > -50) {
             doAssign(emp, window)
@@ -456,7 +468,7 @@ export function runProgrammaticSchedule(data) {
           available.filter(e => e.can_close === true && !schedule[e.name]?.[date])
         )
         for (const emp of closers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : Math.min(9, maxGrossH)
+          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
           const startH = effectiveCloseH - grossH
           if (startH < storeOpenH) continue
           const window = tryShift(emp, startH, grossH)
@@ -469,7 +481,7 @@ export function runProgrammaticSchedule(data) {
 
       // ════════════════════════════════════════════
       //  Phase 3: 補滿覆蓋 — 按需求填補時段缺口
-      //  正職固定 9h gross，兼職 4-7h 彈性
+      //  正職 9-11h gross（動態），兼職 3-6h 彈性
       // ════════════════════════════════════════════
       const unassigned = sortByNeed(
         available.filter(e => !schedule[e.name]?.[date])
@@ -483,17 +495,22 @@ export function runProgrammaticSchedule(data) {
         const weekHours = getEmpWeekHours(emp.name)
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
-
-        // Over weekly max → must rest
-        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-        // Reached weekly target and coverage is met → rest (save hours for other days)
-        if (weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
-
         const pt = isPTEmp(emp)
-        // 正職 9h gross (8h net)，兼職彈性 4-7h gross
+
+        // 月工時上限到了 → 必須休
+        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
+        // 正職：能排就排（四週變形不提早休，月底收斂）
+        // 兼職：達到週目標且覆蓋足夠 → 休
+        if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
+
+        // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
+        // 兼職：縮短為 3-6h，讓正職有足夠空間
+        const ftIdeal = calcFTGross(emp.name)
         const grossDurations = pt
-          ? [7, 6, 5, 4].filter(h => h <= maxGrossH)
-          : [Math.min(9, maxGrossH)]
+          ? [6, 5, 4, 3].filter(h => h <= maxGrossH)
+          : (ftIdeal > 9
+              ? [ftIdeal, ftIdeal - 1, 9].filter(h => h >= 9 && h <= maxGrossH)
+              : [9].filter(h => h <= maxGrossH))
 
         let bestWindow = null
         let bestScore = -Infinity
@@ -515,9 +532,14 @@ export function runProgrammaticSchedule(data) {
 
             // Weekly hours fit within range
             const afterHours = weekHours + window.netH
-            if (afterHours <= range.max) score += 10
-            if (afterHours >= range.min) score += 5
+            if (afterHours >= range.min && afterHours <= range.max) score += 15  // in range: best
+            else if (afterHours < range.min) score += 3                          // still below
             if (afterHours > range.max) score -= 20
+
+            // FT below minimum: bonus for longer shifts that help reach 40h
+            if (!pt && afterHours < range.min) {
+              score += (window.netH - 8) * 8  // bonus per extra hour above 8h net
+            }
 
             // Fatigue balancing
             const fatigue = fatigueMap[emp.name] || 0
@@ -861,6 +883,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const monthFatigue = {}
   for (const emp of data.employees) monthFatigue[emp.name] = 0
 
+  // Running hours accumulation — 四週變形用月總時數分配每週目標
+  const monthHours = {}
+  for (const emp of data.employees) monthHours[emp.name] = 0
+
   for (let i = 0; i < weeks.length; i++) {
     const weekDates = weeks[i]
     onProgress?.(`程式排班中... 第 ${i + 1}/${weeks.length} 週`)
@@ -889,6 +915,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       offRequests: data.offRequests.filter(
         o => o.date >= weekDates[0] && o.date <= weekDates[weekDates.length - 1]
       ),
+      // 月制上下文：告訴每週排班器目前累積了多少時數、還剩幾週
+      monthlyContext: {
+        hoursAccumulated: { ...monthHours },
+        weeksRemaining: weeks.length - i - 1,
+      },
     }
 
     let result
@@ -903,9 +934,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     allViolations.push(...result.violations)
     lastWeekContext = result.assignments
 
-    // Accumulate fatigue from this week
+    // Accumulate hours + fatigue from this week
     for (const a of result.assignments) {
       if (!isAbsence(a.shift)) {
+        const hours = a.actual_hours || 8
+        monthHours[a.employee] = (monthHours[a.employee] || 0) + hours
         const def = data.shiftDefs.find(d => d.name === a.shift)
         if (def) {
           monthFatigue[a.employee] = (monthFatigue[a.employee] || 0) +
@@ -913,6 +946,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         }
       }
     }
+    console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
   }
 
   // Monthly validation
@@ -1046,8 +1080,8 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     }
   }
 
-  // Weekly hours soft cap — 正職 40-48h, 兼職 24-36h
-  const targetH = isPT ? 36 : 48  // use upper bound as cap
+  // 四週變形：無每週工時上限，只有月上限 160h，這裡只擋極端值
+  const targetH = isPT ? 40 : 48  // 單週安全上限（不是法定限制）
   const buffer = wsc.canConcentrateRest
     ? Math.max(8, Math.round(targetH * 0.3))  // Flexible: allow more per-week variance
     : Math.max(4, Math.round(targetH * 0.15))  // Standard: tighter
@@ -1129,12 +1163,7 @@ function validateResult(assignments, data) {
       }
     }
 
-    // H10: Min rest days per week (adjusted for work system)
-    const wsVal = getWorkSystemConstraints(storeSettings?.work_hour_system || '標準工時')
-    const restDays = empAssignments.filter(a => isAbsence(a.shift)).length
-    if (weekDates.length >= 7 && restDays < wsVal.weeklyRestMin) {
-      violations.push({ employee: emp.name, constraint: 'H10', law: '勞基法 §36', message: `${emp.name} 僅 ${restDays} 天休假（需 ≥${wsVal.weeklyRestMin} 天）`, severity: 'error' })
-    }
+    // H10: 四週變形不檢查每週休假，由月制 off_requests 控制
 
     // H13: Pregnant/nursing night shifts
     if (emp.is_pregnant || emp.is_nursing) {
@@ -1330,22 +1359,25 @@ function validateMonthlyResult(assignments, data) {
       })
     }
 
-    // S5: Weekly hours range check — 正職 40-48h, 兼職 24-36h
+    // S5: Monthly hours check — 四週變形：正職 150-160h/月, 兼職 80-160h/月
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-    const rangeMin = isPT ? 24 : 40
-    const rangeMax = isPT ? 36 : 48
-    const avgWeeklyHours = totalDays > 0 ? (totalHours / totalDays) * 7 : 0
-    if (avgWeeklyHours > rangeMax) {
+    const monthlyMin = isPT ? 80 : 150
+    const monthlyMax = 160
+    // 按天數比例：不足整月時按比例，整月直接用原值
+    const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
+    const proRatedMin = Math.round(monthlyMin * dayRatio)
+    const proRatedMax = Math.round(monthlyMax * dayRatio)
+    if (totalHours > proRatedMax) {
       violations.push({
-        employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 超過上限 ${rangeMax}h`,
+        employee: emp.name, constraint: 'S5', law: '四週變形 ≤160h',
+        message: `${emp.name}: 月工時 ${totalHours.toFixed(1)}h 超過上限 ${proRatedMax}h`,
         severity: 'warning',
       })
     }
-    if (avgWeeklyHours < rangeMin && totalDays >= 7) {
+    if (totalHours < proRatedMin && totalDays >= 7) {
       violations.push({
-        employee: emp.name, constraint: 'S5', law: '工時管理',
-        message: `${emp.name}: 週均工時 ${avgWeeklyHours.toFixed(1)}h 低於下限 ${rangeMin}h`,
+        employee: emp.name, constraint: 'S5', law: '四週變形',
+        message: `${emp.name}: 月工時 ${totalHours.toFixed(1)}h 低於下限 ${proRatedMin}h（目標 ≥${monthlyMin}h）`,
         severity: 'warning',
       })
     }

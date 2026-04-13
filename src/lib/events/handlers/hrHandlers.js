@@ -107,4 +107,54 @@ export function registerHRHandlers(bus) {
       }).eq('employee_id', employee_id).eq('date', date)
     }
   })
+
+  // ── Offboarding started → revoke access across modules ──
+  bus.subscribe('hr.offboarding.started', async function onOffboardingStarted(event) {
+    const { employee_id, name, dept, last_working_date } = event.payload
+
+    // Deactivate POS access
+    await supabase.from('employees').update({ status: '離職中' }).eq('id', employee_id)
+      .then(({ error }) => { if (error) console.warn(`[HR] Failed to update status for ${name}:`, error.message) })
+
+    // Notify related modules via events
+    await bus.publish('pos.access.revoked', { employee_id, name, reason: '離職流程' }, {
+      causation_id: event.id,
+      correlation_id: event.metadata?.correlation_id,
+    }).catch(() => {})
+
+    await bus.publish('wms.access.revoked', { employee_id, name, reason: '離職流程' }, {
+      causation_id: event.id,
+      correlation_id: event.metadata?.correlation_id,
+    }).catch(() => {})
+  })
+
+  // ── High attrition risk → log for HR review ──
+  bus.subscribe('hr.attrition.high_risk', async function onHighAttritionRisk(event) {
+    const { employee_id, name, risk_score, factors } = event.payload
+
+    await supabase.from('notifications').insert({
+      type: 'attrition_alert',
+      title: `離職風險警示：${name}`,
+      message: `風險分數 ${risk_score}，因素：${(factors || []).join('、')}`,
+      target_role: 'HR',
+      priority: 'high',
+    }).then(({ error }) => {
+      if (error) console.warn(`[HR] Failed to create attrition notification for ${name}:`, error.message)
+    })
+  })
+
+  // ── Survey completed → generate summary notification ──
+  bus.subscribe('hr.survey.completed', async function onSurveyCompleted(event) {
+    const { survey_id, title, response_count, overall_score } = event.payload
+
+    await supabase.from('notifications').insert({
+      type: 'survey_result',
+      title: `問卷已結束：${title}`,
+      message: `收到 ${response_count} 份回覆，整體分數 ${overall_score ?? '-'}/5`,
+      target_role: 'HR',
+      priority: 'normal',
+    }).then(({ error }) => {
+      if (error) console.warn(`[HR] Failed to create survey notification:`, error.message)
+    })
+  })
 }

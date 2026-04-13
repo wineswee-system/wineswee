@@ -5,10 +5,12 @@ import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMon
 
 export default function MySchedule() {
   const [profile, setProfile] = useState(null)
+  const [empInfo, setEmpInfo] = useState(null)  // { employment_type, ... }
   const [schedules, setSchedules] = useState([])
   const [shiftDefs, setShiftDefs] = useState([])
   const [monthOffset, setMonthOffset] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [nextMonthRequests, setNextMonthRequests] = useState(null)  // count for reminder
 
   const now = new Date()
   const viewYear = now.getFullYear()
@@ -35,10 +37,19 @@ export default function MySchedule() {
 
     // Check if this month's schedule has been published for employee's store
     const loadData = async () => {
-      // Get employee's store
+      // Get employee info (store + employment_type)
       const { data: empData } = await supabase.from('employees')
-        .select('store').eq('name', profile.name).maybeSingle()
+        .select('store, employment_type').eq('name', profile.name).maybeSingle()
       const storeName = empData?.store
+      setEmpInfo(empData)
+
+      // Check next month off_request count (for reminder)
+      const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      const nextDates = getMonthDates(nextM.getFullYear(), nextM.getMonth() + 1)
+      const { data: nextReqs } = await supabase.from('off_requests').select('date')
+        .eq('employee', profile.name)
+        .gte('date', nextDates[0]).lte('date', nextDates[nextDates.length - 1])
+      setNextMonthRequests(nextReqs?.length || 0)
 
       // Check publish status
       let isPublished = false
@@ -223,110 +234,169 @@ export default function MySchedule() {
         </div>
       </div>
 
-      {/* Self-service: Off Request + Swap */}
-      {published && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-          {/* Off Request */}
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title"><CalendarOff size={16} /> 請假申請</div>
-            </div>
-            <OffRequestForm empName={profile.name} monthDates={monthDates} schedules={schedules} />
+      {/* Reminder: haven't submitted next month rest days */}
+      {(() => {
+        const deadlineDay = 16
+        const currentDay = now.getDate()
+        const currentMonth = now.getMonth() + 1
+        const isPT = empInfo?.employment_type === '兼職' || empInfo?.employment_type === 'PT'
+        const maxDays = isPT ? 13 : 10
+        const needsReminder = currentDay <= deadlineDay && nextMonthRequests !== null && nextMonthRequests < maxDays
+        if (!needsReminder) return null
+        const nextMonth = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2
+        return (
+          <div style={{
+            padding: '12px 16px', borderRadius: 10, marginBottom: 16,
+            background: nextMonthRequests === 0 ? 'rgba(239,68,68,0.08)' : 'rgba(251,191,36,0.1)',
+            border: `1px solid ${nextMonthRequests === 0 ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)'}`,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontSize: 16 }}>{nextMonthRequests === 0 ? '⚠️' : '📅'}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: nextMonthRequests === 0 ? '#ef4444' : '#f59e0b' }}>
+              {nextMonth} 月希望休{nextMonthRequests === 0 ? '尚未提交' : `已選 ${nextMonthRequests}/${maxDays} 天`}，請在 {currentMonth}/16 前完成（下方提交）
+            </span>
           </div>
+        )
+      })()}
 
-          {/* Swap Request */}
+      {/* Self-service: Off Request + Swap */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+        {/* Off Request — always visible (picks next month, not tied to published status) */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><CalendarOff size={16} /> 希望休申請</div>
+          </div>
+          <OffRequestForm empName={profile.name} employmentType={empInfo?.employment_type} />
+        </div>
+
+      {published && (
           <div className="card">
             <div className="card-header">
               <div className="card-title"><ArrowLeftRight size={16} /> 換班申請</div>
             </div>
             <SwapRequestForm empName={profile.name} monthDates={monthDates} schedules={schedules} shiftDefs={shiftDefs} />
           </div>
-        </div>
       )}
+      </div>
     </div>
   )
 }
 
 // ── Off Request Sub-component ──
-function OffRequestForm({ empName, monthDates, schedules }) {
-  const [date, setDate] = useState('')
+// 每月 16 號前選下個月希望休，正職限 10 天，兼職限 13 天
+function OffRequestForm({ empName, employmentType }) {
   const [myRequests, setMyRequests] = useState([])
   const [submitting, setSubmitting] = useState(false)
+
+  // Target month = next month (employees pick next month's rest days)
+  const now = new Date()
+  const targetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const targetYear = targetDate.getFullYear()
+  const targetMonth = targetDate.getMonth() + 1
+  const targetMonthLabel = `${targetYear} 年 ${targetMonth} 月`
+  const targetDates = getMonthDates(targetYear, targetMonth)
+
+  // Deadline: 16th of current month
+  const deadlineDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-16`
+  const today = now.toISOString().slice(0, 10)
+  const isLocked = today > deadlineDate
+  const deadlineLabel = `${now.getMonth() + 1}/16`
+
+  // Rest day limit: FT = 10, PT = 13
+  const isPT = employmentType === '兼職' || employmentType === 'PT'
+  const maxRestDays = isPT ? 15 : 10
+  const isAtLimit = myRequests.length >= maxRestDays
 
   useEffect(() => {
     supabase.from('off_requests').select('*')
       .eq('employee', empName)
-      .gte('date', monthDates[0])
-      .lte('date', monthDates[monthDates.length - 1])
+      .gte('date', targetDates[0])
+      .lte('date', targetDates[targetDates.length - 1])
       .then(({ data }) => setMyRequests(data || []))
-  }, [empName, monthDates])
+  }, [empName, targetYear, targetMonth])
 
-  const handleSubmit = async () => {
-    if (!date) return
+  const handleToggle = async (date) => {
+    if (isLocked) return
     setSubmitting(true)
-    const { data, error } = await supabase.from('off_requests')
-      .upsert({ employee: empName, date }, { onConflict: 'employee,date' })
-      .select().single()
-    if (data) setMyRequests(prev => [...prev.filter(r => r.date !== date), data])
-    if (error) alert('申請失敗：' + error.message)
+    const exists = myRequests.find(r => r.date === date)
+    if (exists) {
+      await supabase.from('off_requests').delete().eq('employee', empName).eq('date', date)
+      setMyRequests(prev => prev.filter(r => r.date !== date))
+    } else {
+      if (isAtLimit) { setSubmitting(false); return }
+      const { data, error } = await supabase.from('off_requests')
+        .upsert({ employee: empName, date }, { onConflict: 'employee,date' })
+        .select().single()
+      if (data) setMyRequests(prev => [...prev, data])
+      if (error) alert('申請失敗：' + error.message)
+    }
     setSubmitting(false)
-    setDate('')
   }
 
-  const handleCancel = async (reqDate) => {
-    await supabase.from('off_requests').delete().eq('employee', empName).eq('date', reqDate)
-    setMyRequests(prev => prev.filter(r => r.date !== reqDate))
-  }
-
-  // Only show future work days
-  const futureDates = monthDates.filter(d => {
-    const today = new Date().toISOString().slice(0, 10)
-    if (d <= today) return false
-    const sched = schedules.find(s => s.date === d)
-    return sched && !isAbsence(sched.shift)
-  })
+  const dows = ['日', '一', '二', '三', '四', '五', '六']
+  const firstDow = new Date(targetDates[0]).getDay()
 
   return (
     <div style={{ padding: '12px 16px' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'end' }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>請假日期</label>
-          <select className="form-input" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%' }}>
-            <option value="">選擇日期</option>
-            {futureDates.map(d => {
-              const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(d).getDay()]
-              const sched = schedules.find(s => s.date === d)
-              const alreadyRequested = myRequests.some(r => r.date === d)
-              return <option key={d} value={d} disabled={alreadyRequested}>{d.slice(5)} (週{dow}) {sched?.shift}{alreadyRequested ? ' ✓已申請' : ''}</option>
-            })}
-          </select>
+      {/* Header: target month + status */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{targetMonthLabel} 希望休</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: isLocked ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+          {isLocked ? `已截止（${deadlineLabel}）` : `截止 ${deadlineLabel}`}
         </div>
-        <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={!date || submitting} style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
-          提出申請
-        </button>
       </div>
 
-      {myRequests.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>已申請的請假</div>
-          {myRequests.sort((a, b) => a.date.localeCompare(b.date)).map(r => {
-            const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(r.date).getDay()]
-            const isPast = r.date <= new Date().toISOString().slice(0, 10)
-            return (
-              <div key={r.date} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span style={{ fontSize: 13 }}>{r.date.slice(5)} (週{dow})</span>
-                {!isPast && (
-                  <button onClick={() => handleCancel(r.date)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent-red)' }}>
-                    取消
-                  </button>
-                )}
-              </div>
-            )
-          })}
+      {/* Count + limit */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: isAtLimit ? 'rgba(251,191,36,0.1)' : 'rgba(34,211,238,0.06)' }}>
+        <span style={{ fontSize: 13 }}>已選 <strong>{myRequests.length}</strong> / {maxRestDays} 天</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isPT ? '兼職' : '正職'}上限</span>
+      </div>
+
+      {isLocked && (
+        <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: 12, color: 'var(--accent-red)' }}>
+          已過截止日（每月 16 號前提交），本月無法修改
         </div>
       )}
 
-      {myRequests.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>本月無請假申請</div>}
+      {/* Calendar grid for target month */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 12 }}>
+        {dows.map((d, i) => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: i === 0 || i === 6 ? 'var(--accent-red)' : 'var(--text-muted)', padding: '4px 0' }}>{d}</div>
+        ))}
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+        {targetDates.map(date => {
+          const selected = myRequests.some(r => r.date === date)
+          const dow = new Date(date).getDay()
+          const isWeekend = dow === 0 || dow === 6
+          const disabled = isLocked || submitting || (!selected && isAtLimit)
+          return (
+            <button key={date} onClick={() => !disabled && handleToggle(date)}
+              style={{
+                padding: '6px 2px', borderRadius: 8, fontSize: 12, fontWeight: selected ? 700 : 500,
+                border: selected ? '2px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                background: selected ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
+                color: selected ? 'var(--accent-cyan)' : isWeekend ? 'var(--accent-red)' : 'var(--text-primary)',
+                cursor: disabled ? 'default' : 'pointer', opacity: disabled && !selected ? 0.4 : 1,
+                position: 'relative',
+              }}>
+              {parseInt(date.slice(8))}
+              {selected && <div style={{ position: 'absolute', top: 1, right: 3, fontSize: 8, color: 'var(--accent-cyan)' }}>休</div>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Selected dates list */}
+      {myRequests.length > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          已選：{myRequests.sort((a, b) => a.date.localeCompare(b.date)).map(r => {
+            const d = parseInt(r.date.slice(8))
+            const dow = dows[new Date(r.date).getDay()]
+            return `${d}(${dow})`
+          }).join('、')}
+        </div>
+      )}
+      {myRequests.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>點選日期選擇希望休</div>}
     </div>
   )
 }

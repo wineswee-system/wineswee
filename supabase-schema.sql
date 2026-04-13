@@ -2136,3 +2136,370 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_name);
 CREATE INDEX IF NOT EXISTS idx_user_activity_action ON user_activity(action);
 CREATE INDEX IF NOT EXISTS idx_user_activity_module ON user_activity(module);
 CREATE INDEX IF NOT EXISTS idx_user_activity_created ON user_activity(created_at DESC);
+
+-- ── CRM Forms ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_forms (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  fields JSONB DEFAULT '[]',
+  settings JSONB DEFAULT '{}',
+  style JSONB DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'draft',          -- draft, active, archived
+  submissions_count INT NOT NULL DEFAULT 0,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS crm_form_submissions (
+  id SERIAL PRIMARY KEY,
+  form_id INT NOT NULL REFERENCES crm_forms(id) ON DELETE CASCADE,
+  data JSONB NOT NULL DEFAULT '{}',
+  source TEXT DEFAULT 'web',                     -- web, api, manual
+  ip_address TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_form_submissions_form ON crm_form_submissions(form_id);
+CREATE INDEX IF NOT EXISTS idx_crm_form_submissions_date ON crm_form_submissions(submitted_at DESC);
+
+-- ── CRM Workflows (自動化工作流程) ──────────────────────────
+-- ── Ticket History (工單異動紀錄) ──────────────────────────
+CREATE TABLE IF NOT EXISTS ticket_history (
+  id SERIAL PRIMARY KEY,
+  ticket_id INT NOT NULL,
+  action TEXT NOT NULL,                          -- status_changed, assigned, commented, escalated, created, merged
+  old_value TEXT,
+  new_value TEXT,
+  comment TEXT,
+  actor TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_history_ticket ON ticket_history(ticket_id);
+
+-- ── Custom SLA Policies ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS sla_policies (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  priority TEXT,
+  ticket_type TEXT,
+  customer_tier TEXT,
+  response_hours NUMERIC(6,1) NOT NULL,
+  resolution_hours NUMERIC(6,1) NOT NULL,
+  is_default BOOLEAN DEFAULT false,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── CRM Territories (銷售區域) ─────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_territories (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,                            -- 北區, 中區, 南區, 東區
+  region TEXT,
+  cities TEXT[],                                 -- {'台北市','新北市','基隆市'}
+  assigned_reps TEXT[],
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS territory_id INT REFERENCES crm_territories(id);
+
+-- ── CRM Leads (線索管理) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_leads (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  company TEXT,
+  phone TEXT,
+  email TEXT,
+  source TEXT,                                   -- 官網, 展覽, 轉介, LINE, 廣告, 表單
+  stage TEXT NOT NULL DEFAULT '新線索',            -- 新線索, 已聯繫, 合格, 已轉換, 不合格
+  score INT DEFAULT 0,
+  assigned_to TEXT,
+  notes TEXT,
+  tags TEXT,
+  converted_customer_id INT,
+  converted_deal_id INT,
+  disqualify_reason TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_stage ON crm_leads(stage);
+CREATE INDEX IF NOT EXISTS idx_crm_leads_assigned ON crm_leads(assigned_to);
+
+-- ── CRM Activities (活動/排程) ─────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_activities (
+  id SERIAL PRIMARY KEY,
+  type TEXT NOT NULL,                            -- call, meeting, task, email, follow_up
+  subject TEXT NOT NULL,
+  description TEXT,
+  entity_type TEXT,                              -- customer, opportunity, service_ticket
+  entity_id INT,
+  assignee TEXT,
+  due_date TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'planned',         -- planned, in_progress, completed, cancelled
+  duration_minutes INT,
+  outcome TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_crm_activities_entity ON crm_activities(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_crm_activities_assignee ON crm_activities(assignee, due_date);
+
+-- ── CRM Notes (備註) ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_notes (
+  id SERIAL PRIMARY KEY,
+  entity_type TEXT NOT NULL,                     -- customer, opportunity, service_ticket
+  entity_id INT NOT NULL,
+  content TEXT,
+  is_pinned BOOLEAN DEFAULT false,
+  author TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_crm_notes_entity ON crm_notes(entity_type, entity_id);
+
+-- ── CRM Attachments (附件) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS crm_attachments (
+  id SERIAL PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id INT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_size INT,
+  file_type TEXT,
+  storage_path TEXT NOT NULL,
+  uploaded_by TEXT,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_crm_attachments_entity ON crm_attachments(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS crm_workflows (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  trigger_event TEXT NOT NULL,                   -- contact_created, deal_won, form_submitted, etc.
+  trigger_config JSONB DEFAULT '{}',
+  steps JSONB DEFAULT '[]',                      -- [{id, action, config}]
+  status TEXT NOT NULL DEFAULT 'draft',           -- draft, active, paused
+  executions INT NOT NULL DEFAULT 0,
+  tenant_id INT REFERENCES tenants(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================
+--  GAP FEATURES: Supplier SKU Mapping, Returns, Kitting, Variants
+-- ============================================================
+
+-- ── Supplier-SKU Mappings (供應商-商品對應) ──
+CREATE TABLE IF NOT EXISTS supplier_sku_mappings (
+  id SERIAL PRIMARY KEY,
+  sku_id INT REFERENCES skus(id) ON DELETE CASCADE,
+  supplier_id INT REFERENCES suppliers(id) ON DELETE CASCADE,
+  supplier_sku_code TEXT,
+  lead_time_days INT DEFAULT 7,
+  min_order_qty NUMERIC(12,2) DEFAULT 1,
+  unit_cost NUMERIC(12,2) DEFAULT 0,
+  is_preferred BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(sku_id, supplier_id)
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_sku_sku ON supplier_sku_mappings(sku_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_sku_supplier ON supplier_sku_mappings(supplier_id);
+
+-- ── Return Orders (退貨單) ──
+CREATE TABLE IF NOT EXISTS return_orders (
+  id SERIAL PRIMARY KEY,
+  return_number TEXT UNIQUE NOT NULL,
+  sales_order_id INT,
+  customer_name TEXT,
+  reason TEXT NOT NULL,               -- defective, wrong_item, customer_change, damaged, expired
+  status TEXT DEFAULT '待收貨',        -- 待收貨, 已收貨, 品檢中, 已入庫, 已報廢, 已取消
+  items JSONB DEFAULT '[]',           -- [{sku_code, sku_name, qty, condition, disposition}]
+  inspection_result JSONB,            -- {inspector, date, notes, items: [{sku_code, pass_qty, fail_qty}]}
+  warehouse TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_return_orders_status ON return_orders(status);
+
+-- ── Kit / Bundle Definitions (組合商品) ──
+CREATE TABLE IF NOT EXISTS kit_definitions (
+  id SERIAL PRIMARY KEY,
+  kit_sku_id INT REFERENCES skus(id) ON DELETE CASCADE,
+  kit_type TEXT DEFAULT 'kit',         -- kit (固定組合), bundle (促銷組合)
+  name TEXT NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS kit_components (
+  id SERIAL PRIMARY KEY,
+  kit_id INT REFERENCES kit_definitions(id) ON DELETE CASCADE,
+  component_sku_id INT REFERENCES skus(id) ON DELETE CASCADE,
+  quantity NUMERIC(12,2) NOT NULL DEFAULT 1,
+  sort_order INT DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_kit_components_kit ON kit_components(kit_id);
+
+-- ── SKU Variant Support ──
+ALTER TABLE skus ADD COLUMN IF NOT EXISTS parent_sku_id INT REFERENCES skus(id);
+ALTER TABLE skus ADD COLUMN IF NOT EXISTS variant_attributes JSONB;
+ALTER TABLE skus ADD COLUMN IF NOT EXISTS is_variant BOOLEAN DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_skus_parent ON skus(parent_sku_id) WHERE parent_sku_id IS NOT NULL;
+
+-- ============================================================
+--  HR Analytics & People Intelligence
+-- ============================================================
+
+-- ── Attrition Risk Snapshots ──
+CREATE TABLE IF NOT EXISTS attrition_risk_snapshots (
+  id SERIAL PRIMARY KEY,
+  employee TEXT NOT NULL,
+  snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  risk_score NUMERIC(5,2) NOT NULL DEFAULT 0,
+  risk_level TEXT NOT NULL DEFAULT '低',
+  factors JSONB DEFAULT '[]',
+  tenure_months INT,
+  avg_hours_monthly NUMERIC(6,2),
+  late_count_90d INT DEFAULT 0,
+  leave_count_90d INT DEFAULT 0,
+  performance_score NUMERIC(5,2),
+  salary_percentile NUMERIC(5,2),
+  last_promotion_months INT,
+  engagement_score NUMERIC(5,2),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_attrition_employee ON attrition_risk_snapshots(employee);
+CREATE INDEX IF NOT EXISTS idx_attrition_date ON attrition_risk_snapshots(snapshot_date);
+
+-- ── Compensation Bands ──
+CREATE TABLE IF NOT EXISTS compensation_bands (
+  id SERIAL PRIMARY KEY,
+  dept TEXT NOT NULL,
+  position TEXT NOT NULL,
+  band_name TEXT,
+  min_salary INT NOT NULL,
+  mid_salary INT NOT NULL,
+  max_salary INT NOT NULL,
+  currency TEXT DEFAULT 'TWD',
+  effective_date DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_comp_band_dept ON compensation_bands(dept, position);
+
+-- ── Engagement Surveys ──
+CREATE TABLE IF NOT EXISTS engagement_surveys (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT '草稿',
+  start_date DATE,
+  end_date DATE,
+  is_anonymous BOOLEAN DEFAULT true,
+  questions JSONB DEFAULT '[]',
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS engagement_responses (
+  id SERIAL PRIMARY KEY,
+  survey_id INT REFERENCES engagement_surveys(id) ON DELETE CASCADE,
+  employee TEXT,
+  dept TEXT,
+  answers JSONB DEFAULT '{}',
+  overall_score NUMERIC(3,1),
+  submitted_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_engagement_resp_survey ON engagement_responses(survey_id);
+
+-- ── Probation Tracking ──
+CREATE TABLE IF NOT EXISTS probation_records (
+  id SERIAL PRIMARY KEY,
+  employee TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status TEXT DEFAULT '試用中',
+  evaluations JSONB DEFAULT '[]',
+  mentor TEXT,
+  notes TEXT,
+  result TEXT,
+  decided_at DATE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_probation_employee ON probation_records(employee);
+
+-- ── Approval Delegation ──
+CREATE TABLE IF NOT EXISTS approval_delegations (
+  id SERIAL PRIMARY KEY,
+  delegator TEXT NOT NULL,
+  delegate TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  scope TEXT DEFAULT '全部',
+  reason TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── Tax Withholding Records (扣繳憑單) ──
+CREATE TABLE IF NOT EXISTS tax_withholding_records (
+  id SERIAL PRIMARY KEY,
+  employee TEXT NOT NULL,
+  year INT NOT NULL,
+  gross_salary NUMERIC(12,0) DEFAULT 0,
+  taxable_income NUMERIC(12,0) DEFAULT 0,
+  tax_withheld NUMERIC(12,0) DEFAULT 0,
+  labor_insurance NUMERIC(10,0) DEFAULT 0,
+  health_insurance NUMERIC(10,0) DEFAULT 0,
+  pension_employee NUMERIC(10,0) DEFAULT 0,
+  pension_employer NUMERIC(10,0) DEFAULT 0,
+  bonus_total NUMERIC(12,0) DEFAULT 0,
+  status TEXT DEFAULT '計算中',
+  generated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(employee, year)
+);
+CREATE INDEX IF NOT EXISTS idx_tax_wh_year ON tax_withholding_records(year);
+
+-- ── Employee Personality Profiles ──
+CREATE TABLE IF NOT EXISTS employee_personality_profiles (
+  id SERIAL PRIMARY KEY,
+  employee_id INT REFERENCES employees(id) ON DELETE CASCADE,
+  mbti_type TEXT,
+  astrology JSONB DEFAULT '{}',
+  notes TEXT,
+  assessed_by TEXT,
+  assessed_at DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(employee_id)
+);
+
+-- ── Employee Development Plans ──
+CREATE TABLE IF NOT EXISTS employee_development_plans (
+  id SERIAL PRIMARY KEY,
+  employee_id INT REFERENCES employees(id) ON DELETE CASCADE,
+  skill_name TEXT NOT NULL,
+  skill_type TEXT NOT NULL DEFAULT 'hard',
+  current_level TEXT DEFAULT '基礎',
+  target_level TEXT DEFAULT '中級',
+  course_name TEXT,
+  course_provider TEXT,
+  status TEXT DEFAULT '規劃中',
+  start_date DATE,
+  target_date DATE,
+  completed_date DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dev_plan_emp ON employee_development_plans(employee_id);

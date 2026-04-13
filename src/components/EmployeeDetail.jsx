@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { X, Save, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
+import PersonalityTab from './employee/PersonalityTab'
+import DevelopmentTab from './employee/DevelopmentTab'
 
 const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '中高齡者 (45+)', '長期失業者', '更生人', '獨力負擔家計者', '家庭暴力被害人', '二度就業婦女']
 
@@ -207,6 +209,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     { key: 'personal', label: '個人資訊', icon: '👤' },
     { key: 'org', label: '組織', icon: '🏢' },
     { key: 'skills', label: '技能', icon: '🏷️' },
+    { key: 'personality', label: '性格分析', icon: '🧬' },
+    { key: 'development', label: '能力發展', icon: '📚' },
     { key: 'schedule', label: '排班', icon: '📅' },
     { key: 'records', label: '紀錄', icon: '📋' },
   ]
@@ -612,6 +616,12 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
             </>
           )}
+
+          {/* ═══ 性格分析 ═══ */}
+          {tab === 'personality' && <PersonalityTab employee={employee} />}
+
+          {/* ═══ 能力發展 ═══ */}
+          {tab === 'development' && <DevelopmentTab employee={employee} />}
 
           {/* ═══ 排班 ═══ */}
           {tab === 'schedule' && (

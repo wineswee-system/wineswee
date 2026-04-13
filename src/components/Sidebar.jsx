@@ -13,7 +13,8 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
-  UserCheck, Shield, Send, Search, Activity, AlertOctagon
+  UserCheck, Shield, Send, Search, Activity, AlertOctagon, UserPlus, Layers,
+  Brain, ClipboardCheck, Heart, BarChart, Scale, MessageSquare, FileBarChart,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
@@ -41,10 +42,13 @@ const groupNav = {
       icon: Handshake,
       children: [
         { icon: Eye, label: '總覽', path: '/crm/overview' },
+        { icon: UserPlus, label: '線索管理', path: '/crm/leads' },
         { icon: Users, label: '客戶管理', path: '/crm/customers' },
+        { icon: UserCheck, label: '聯絡人', path: '/crm/contacts' },
         { icon: UserCircle, label: '客戶 360', path: '/crm/customer-360' },
         { icon: Users, label: '客戶分群', path: '/crm/segments' },
         { icon: TrendingUp, label: '銷售漏斗', path: '/crm/pipeline' },
+        { icon: Calendar, label: '活動排程', path: '/crm/activities' },
         { icon: Award, label: '會員管理', path: '/crm/members' },
       ]
     },
@@ -59,6 +63,7 @@ const groupNav = {
         { icon: Zap, label: '工作流程', path: '/crm/workflows' },
         { icon: Send, label: '發送紀錄', path: '/crm/messages' },
         { icon: HeadphonesIcon, label: '客服工單', path: '/crm/service' },
+        { icon: BarChart2, label: 'CRM 報表', path: '/crm/reports' },
       ]
     },
     {
@@ -131,6 +136,8 @@ const groupNav = {
         { icon: Truck, label: '出貨管理', path: '/wms/outbound' },
         { icon: Truck, label: '揀貨/包裝/出貨', path: '/wms/pick-pack-ship' },
         { icon: ArrowRightLeft, label: '倉庫調撥', path: '/wms/transfers' },
+        { icon: RotateCcw, label: '退貨管理 (RMA)', path: '/wms/returns' },
+        { icon: Layers, label: '組合商品', path: '/wms/kitting' },
       ]
     },
     {
@@ -142,6 +149,7 @@ const groupNav = {
         { icon: CheckSquare, label: '盤點作業', path: '/wms/stock-count' },
         { icon: Calculator, label: '庫存估價', path: '/wms/valuation' },
         { icon: BarChart2, label: '異常與報表', path: '/wms/reports' },
+        { icon: Sparkles, label: 'AI 庫存管理', path: '/wms/ai' },
       ]
     },
     {
@@ -227,6 +235,7 @@ const groupNav = {
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
+        { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
@@ -241,6 +250,8 @@ const groupNav = {
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
+        { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
+        { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
       ]
     },
     {
@@ -249,7 +260,18 @@ const groupNav = {
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
         { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
-        { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
+        { icon: ArrowRightLeft, label: '轉調紀��', path: '/hr/transfer' },
+        { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
+      ]
+    },
+    {
+      label: '人才分析',
+      icon: Brain,
+      children: [
+        { icon: Bot, label: 'HR AI 助理', path: '/hr/assistant' },
+        { icon: Brain, label: 'AI 離職預測', path: '/hr/attrition' },
+        { icon: MessageSquare, label: '滿意度調查', path: '/hr/surveys' },
+        { icon: UserCircle, label: '員工自助', path: '/hr/self-service' },
       ]
     },
     {

@@ -18,6 +18,14 @@ import Bonus from '../pages/hr/Bonus'
 import LaborInspection from '../pages/hr/LaborInspection'
 import Training from '../pages/hr/Training'
 import MySchedule from '../pages/hr/MySchedule'
+import AttritionPrediction from '../pages/hr/AttritionPrediction'
+import CompensationBenchmark from '../pages/hr/CompensationBenchmark'
+import EngagementSurveys from '../pages/hr/EngagementSurveys'
+import TaxForms from '../pages/hr/TaxForms'
+import SelfService from '../pages/hr/SelfService'
+import LeaveCalendar from '../pages/hr/LeaveCalendar'
+import ProbationTracker from '../pages/hr/ProbationTracker'
+import HRAssistant from '../pages/hr/HRAssistant'
 
 export default function HRModule() {
   return (
@@ -41,6 +49,14 @@ export default function HRModule() {
       <Route path="labor-inspection" element={<LaborInspection />} />
       <Route path="training" element={<Training />} />
       <Route path="my-schedule" element={<MySchedule />} />
+      <Route path="attrition" element={<AttritionPrediction />} />
+      <Route path="compensation" element={<CompensationBenchmark />} />
+      <Route path="surveys" element={<EngagementSurveys />} />
+      <Route path="tax-forms" element={<TaxForms />} />
+      <Route path="self-service" element={<SelfService />} />
+      <Route path="leave-calendar" element={<LeaveCalendar />} />
+      <Route path="probation" element={<ProbationTracker />} />
+      <Route path="assistant" element={<HRAssistant />} />
     </Routes>
   )
 }

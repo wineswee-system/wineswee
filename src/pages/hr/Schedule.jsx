@@ -368,12 +368,18 @@ export default function Schedule() {
     setAiProgress('正在收集排班資料...')
 
     try {
-      const schedulingData = await gatherSchedulingData({
+      const dateStart = isMonthly ? monthStart : weekStart
+      const dateEnd = isMonthly ? monthEnd : weekEnd
+
+      let schedulingData = await gatherSchedulingData({
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
         employees: filtered, shiftDefs,
         storeFilter, locations, minStaff, tenantId,
       })
+
+      // 自動讀取現有班表的休假，合併為 offRequests
+      schedulingData = mergeRestDaysAsOffRequests(schedulingData, dateStart, dateEnd)
 
       if (isMonthly) {
         setAiProgress('AI 月排班中...')
@@ -496,6 +502,31 @@ export default function Schedule() {
     if (confirm('確定要捨棄排班草稿嗎？')) setAiDraft(null)
   }
 
+  // ── Helper: merge current schedule 休 into offRequests ──
+  const mergeRestDaysAsOffRequests = (schedulingData, dateStart, dateEnd) => {
+    const empNames = filtered.map(e => e.name)
+    // Extract 休 from currently displayed schedule
+    const restFromSchedule = schedules
+      .filter(s => empNames.includes(s.employee) && s.date >= dateStart && s.date <= dateEnd && isAbsence(s.shift))
+      .map(s => ({ employee: s.employee, date: s.date }))
+
+    if (restFromSchedule.length > 0) {
+      // Merge with existing offRequests (deduplicate)
+      const existing = new Set(schedulingData.offRequests.map(o => `${o.employee}_${o.date}`))
+      const merged = [...schedulingData.offRequests]
+      for (const r of restFromSchedule) {
+        const key = `${r.employee}_${r.date}`
+        if (!existing.has(key)) {
+          merged.push(r)
+          existing.add(key)
+        }
+      }
+      schedulingData.offRequests = merged
+      console.log(`[排班] 從現有班表讀取 ${restFromSchedule.length} 筆休假，合併後共 ${merged.length} 筆 offRequests`)
+    }
+    return schedulingData
+  }
+
   // ── Programmatic Schedule (no AI) ──
   const handleCodeSchedule = async () => {
     if (!canUseAISchedule) { alert('您沒有使用排班功能的權限'); return }
@@ -507,12 +538,18 @@ export default function Schedule() {
     setAiProgress('程式排班計算中...')
 
     try {
-      const schedulingData = await gatherSchedulingData({
+      const dateStart = isMonthly ? monthStart : weekStart
+      const dateEnd = isMonthly ? monthEnd : weekEnd
+
+      let schedulingData = await gatherSchedulingData({
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
         employees: filtered, shiftDefs,
         storeFilter, locations, minStaff, tenantId,
       })
+
+      // 自動讀取現有班表的休假，合併為 offRequests
+      schedulingData = mergeRestDaysAsOffRequests(schedulingData, dateStart, dateEnd)
 
       const result = isMonthly
         ? runMonthlyProgrammaticSchedule(schedulingData, setAiProgress)

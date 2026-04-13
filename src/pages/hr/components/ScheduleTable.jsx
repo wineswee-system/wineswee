@@ -244,14 +244,20 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
   const anchorRef = useRef(null)
   const [pos, setPos] = useState(null)
 
-  // Position near the anchor element once mounted
+  // Position: prefer above the cell, fallback to below
   useEffect(() => {
     if (anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect()
-      setPos({
-        top: Math.min(rect.bottom + 4, window.innerHeight - 420),
-        left: Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230)),
-      })
+      const popupH = 380  // approximate popup height
+      const spaceAbove = rect.top
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceAbove > popupH
+        ? rect.top - popupH - 4   // above
+        : spaceBelow > popupH
+          ? rect.bottom + 4       // below
+          : Math.max(8, (window.innerHeight - popupH) / 2)  // center
+      const left = Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230))
+      setPos({ top, left })
     }
   }, [])
 

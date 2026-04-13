@@ -530,6 +530,10 @@ export function runProgrammaticSchedule(data) {
               if (Math.abs(h - uncovStart) < 1) score += 25
             }
 
+            // 開關店加分：如果今天還沒有 opener/closer，優先排在營業頭尾
+            if (!hasOpener && Math.abs(h - storeOpenH) < 0.5) score += 50
+            if (!hasCloser && (h + grossH) >= effectiveCloseH - 0.5) score += 50
+
             // Weekly hours fit within range
             const afterHours = weekHours + window.netH
             if (afterHours >= range.min && afterHours <= range.max) score += 15  // in range: best

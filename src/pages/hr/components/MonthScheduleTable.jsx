@@ -1,4 +1,3 @@
-import { useRef, useEffect, useState } from 'react'
 import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
 
 export default function MonthScheduleTable({
@@ -242,8 +241,11 @@ function EmployeeRow({
             background: isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
           }}
-          onClick={() => {
-            if (canEditSchedule && !isEditing) setEditCell({ empName: emp.name, date })
+          onClick={(e) => {
+            if (canEditSchedule && !isEditing) {
+              const rect = e.currentTarget.getBoundingClientRect()
+              setEditCell({ empName: emp.name, date, rect })
+            }
           }}>
             {/* Cell Content */}
             {isRest ? (
@@ -274,6 +276,7 @@ function EmployeeRow({
                 emp={emp} date={date} shift={shift} isPT={isPT}
                 storeFilter={storeFilter} getStoreShifts={getStoreShifts}
                 SHIFT_TYPES={SHIFT_TYPES}
+                cellRect={editCell.rect}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}
               />
@@ -296,22 +299,15 @@ function EmployeeRow({
 }
 
 // ── Fixed-position edit popup for month view ──
-function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, handleSetShift, handleDeleteShift, onClose }) {
-  const anchorRef = useRef(null)
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (anchorRef.current) {
-      const rect = anchorRef.current.getBoundingClientRect()
-      const popupH = 300
-      const spaceAbove = rect.top
-      const top = spaceAbove > popupH
-        ? rect.top - popupH - 4
-        : Math.max(8, (window.innerHeight - popupH) / 2)
-      const left = Math.max(8, Math.min(rect.left - 30, window.innerWidth - 120))
-      setPos({ top, left })
-    }
-  }, [])
+function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, cellRect, handleSetShift, handleDeleteShift, onClose }) {
+  const popupH = 300
+  const rect = cellRect || { top: window.innerHeight / 2, left: window.innerWidth / 2, bottom: window.innerHeight / 2 }
+  const spaceAbove = rect.top
+  const top = spaceAbove > popupH
+    ? rect.top - popupH - 4
+    : rect.bottom + 4
+  const left = Math.max(8, Math.min(rect.left - 10, window.innerWidth - 120))
+  const pos = { top: Math.max(8, Math.min(top, window.innerHeight - popupH - 8)), left }
 
   const empStore = emp.store || storeFilter || ''
   const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
@@ -320,7 +316,6 @@ function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, S
 
   return (
     <>
-      <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
       <div style={{
         position: 'fixed',

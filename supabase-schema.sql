@@ -77,6 +77,7 @@ create table leave_requests (
   reason text,
   status text default '待審核',
   approver text default '-',
+  reject_reason text,
   created_at timestamptz default now()
 );
 
@@ -88,6 +89,8 @@ create table overtime_requests (
   hours numeric(4,1) not null,
   reason text,
   status text default '待審核',
+  approver text,
+  reject_reason text,
   created_at timestamptz default now()
 );
 
@@ -174,6 +177,8 @@ create table business_trips (
   purpose text,
   budget int,
   status text default '待審核',
+  approver text,
+  reject_reason text,
   created_at timestamptz default now()
 );
 
@@ -186,6 +191,8 @@ create table expenses (
   date date,
   description text,
   status text default '待審核',
+  approver text,
+  reject_reason text,
   receipt boolean default false,
   created_at timestamptz default now()
 );

@@ -173,7 +173,7 @@ export default function ScheduleTable({
                     const shift = getShift(emp.name, date)
                     const isEditing = editCell?.empName === emp.name && editCell?.date === date
                     return (
-                      <td key={date} style={{ textAlign: 'center', padding: '6px 4px' }}>
+                      <td key={date} style={{ textAlign: 'center', padding: '6px 4px', position: 'relative' }}>
                         {isEditing ? (
                           <ShiftEditPopup
                             emp={emp} date={date} shift={shift}
@@ -241,22 +241,17 @@ export default function ScheduleTable({
 // ── Shift Edit Popup with Time Pickers ──
 function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, storeSettings, schedules, handleSetShift, handleDeleteShift, onClose }) {
   const existing = schedules.find(s => s.employee === emp.name && s.date === date)
-  const popupRef = useRef(null)
+  const anchorRef = useRef(null)
   const [pos, setPos] = useState(null)
 
-  // Position the popup near the clicked cell using fixed positioning
+  // Position near the anchor element once mounted
   useEffect(() => {
-    // Find the td that contains this popup by looking for the cell matching emp+date
-    const allCells = document.querySelectorAll('td')
-    for (const td of allCells) {
-      if (td.querySelector('[data-edit-popup]')) {
-        const rect = td.getBoundingClientRect()
-        setPos({
-          top: Math.min(rect.bottom + 4, window.innerHeight - 420),
-          left: Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230)),
-        })
-        break
-      }
+    if (anchorRef.current) {
+      const rect = anchorRef.current.getBoundingClientRect()
+      setPos({
+        top: Math.min(rect.bottom + 4, window.innerHeight - 420),
+        left: Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230)),
+      })
     }
   }, [])
 
@@ -304,8 +299,10 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
 
   return (
     <>
-    {/* Backdrop to catch clicks outside */}
-    <div data-edit-popup style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+    {/* Invisible anchor to measure position */}
+    <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
+    {/* Backdrop — uses onMouseDown to avoid same-click-close */}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
     <div style={{
       position: 'fixed',
       top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
@@ -313,7 +310,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
       zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
       borderRadius: 12, padding: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
       minWidth: 200,
-    }}>
+    }} onMouseDown={e => e.stopPropagation()}>
       {/* Time pickers */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
         <input type="time" className="form-input" value={startTime} onChange={e => setStartTime(e.target.value)}

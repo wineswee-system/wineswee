@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
 import { getShiftHours } from '../../../lib/scheduleUtils'
 
@@ -173,7 +173,7 @@ export default function ScheduleTable({
                     const shift = getShift(emp.name, date)
                     const isEditing = editCell?.empName === emp.name && editCell?.date === date
                     return (
-                      <td key={date} style={{ textAlign: 'center', padding: '6px 4px', position: 'relative' }}>
+                      <td key={date} style={{ textAlign: 'center', padding: '6px 4px' }}>
                         {isEditing ? (
                           <ShiftEditPopup
                             emp={emp} date={date} shift={shift}
@@ -241,6 +241,24 @@ export default function ScheduleTable({
 // ── Shift Edit Popup with Time Pickers ──
 function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, storeSettings, schedules, handleSetShift, handleDeleteShift, onClose }) {
   const existing = schedules.find(s => s.employee === emp.name && s.date === date)
+  const popupRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  // Position the popup near the clicked cell using fixed positioning
+  useEffect(() => {
+    // Find the td that contains this popup by looking for the cell matching emp+date
+    const allCells = document.querySelectorAll('td')
+    for (const td of allCells) {
+      if (td.querySelector('[data-edit-popup]')) {
+        const rect = td.getBoundingClientRect()
+        setPos({
+          top: Math.min(rect.bottom + 4, window.innerHeight - 420),
+          left: Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230)),
+        })
+        break
+      }
+    }
+  }, [])
 
   // Get operating hours for this day
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -285,10 +303,15 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
   }
 
   return (
+    <>
+    {/* Backdrop to catch clicks outside */}
+    <div data-edit-popup style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
     <div style={{
-      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-      zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-      borderRadius: 12, padding: 12, boxShadow: 'var(--shadow-lg)',
+      position: 'fixed',
+      top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
+      ...(pos ? {} : { transform: 'translate(-50%, -50%)' }),
+      zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      borderRadius: 12, padding: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
       minWidth: 200,
     }}>
       {/* Time pickers */}
@@ -353,5 +376,6 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
         }}>取消</button>
       </div>
     </div>
+    </>
   )
 }

@@ -240,7 +240,7 @@ export default function MySchedule() {
         const currentDay = now.getDate()
         const currentMonth = now.getMonth() + 1
         const isPT = empInfo?.employment_type === '兼職' || empInfo?.employment_type === 'PT'
-        const maxDays = isPT ? 13 : 10
+        const maxDays = isPT ? 15 : 10
         const needsReminder = currentDay <= deadlineDay && nextMonthRequests !== null && nextMonthRequests < maxDays
         if (!needsReminder) return null
         const nextMonth = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2

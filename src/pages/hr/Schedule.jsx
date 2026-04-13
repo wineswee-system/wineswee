@@ -1,13 +1,12 @@
-import { useState, useEffect, useContext } from 'react'
-import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code, Calendar, CalendarOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, isAbsence, getAbsenceOptions, ABSENCE_TYPES, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import ScheduleTable from './components/ScheduleTable'
 import MonthScheduleTable from './components/MonthScheduleTable'
 import StoreSettingsTab from './components/StoreSettingsTab'
 import PreferencesTab from './components/PreferencesTab'
@@ -16,8 +15,6 @@ import AnalyticsTab from './components/AnalyticsTab'
 import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
-import StaffingGapPanel from './components/StaffingGapPanel'
-import EmergencyCoverPanel from './components/EmergencyCoverPanel'
 import { notifySchedulePublished } from '../../lib/lineNotify'
 import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
@@ -38,18 +35,6 @@ function buildShiftTypes(dbShifts) {
     end_time: s.end_time?.slice(0, 5),
   }))
   return [...fromDB, REST_SHIFT]
-}
-
-function getWeekDates(offset = 0) {
-  const now = new Date()
-  const dayOfWeek = now.getDay() || 7
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - dayOfWeek + 1 + offset * 7)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
-  })
 }
 
 export default function Schedule() {
@@ -569,89 +554,6 @@ export default function Schedule() {
     }
   }
 
-  // ── Import rest days (休) from current schedule as off_requests (希望休) ──
-  const handleImportRestAsOffRequests = async () => {
-    const empNames = filtered.map(e => e.name)
-    const isMonthly = viewMode === 'month'
-    const dateStart = isMonthly ? monthStart : weekStart
-    const dateEnd = isMonthly ? monthEnd : weekEnd
-    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
-
-    // Find all 休 days from current schedule
-    const restDays = schedules.filter(s =>
-      empNames.includes(s.employee) &&
-      s.date >= dateStart && s.date <= dateEnd &&
-      isAbsence(s.shift)
-    ).map(s => ({ employee: s.employee, date: s.date }))
-
-    if (restDays.length === 0) {
-      alert('目前排班沒有找到任何休假日')
-      return
-    }
-
-    if (!confirm(
-      `將 ${storeFilter || '所有門市'} ${rangeLabel} 的排班「休」匯入為希望休：\n\n` +
-      `共 ${restDays.length} 筆休假日\n\n` +
-      `此操作會先清除該期間現有的希望休，再匯入新的。確定嗎？`
-    )) return
-
-    try {
-      // Step 1: Delete existing off_requests for this store + period
-      await supabase.from('off_requests').delete()
-        .in('employee', empNames)
-        .gte('date', dateStart).lte('date', dateEnd)
-
-      // Step 2: Insert rest days as off_requests
-      const rows = restDays.map(r => ({ employee: r.employee, date: r.date }))
-      const { error } = await supabase.from('off_requests').upsert(rows, { onConflict: 'employee,date' })
-      if (error) throw error
-
-      // Step 3: Refresh off_requests state
-      const { data: refreshed } = await supabase.from('off_requests').select('*')
-        .gte('date', activeStart).lte('date', activeEnd)
-      setOffRequests(refreshed || [])
-
-      alert(`已匯入 ${restDays.length} 筆希望休`)
-    } catch (err) {
-      console.error('[ImportRest] Error:', err)
-      alert(`匯入失敗：${err.message}`)
-    }
-  }
-
-  // ── Clear all off_requests for current store + period ──
-  const handleClearOffRequests = async () => {
-    const empNames = filtered.map(e => e.name)
-    const isMonthly = viewMode === 'month'
-    const dateStart = isMonthly ? monthStart : weekStart
-    const dateEnd = isMonthly ? monthEnd : weekEnd
-    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
-
-    const currentCount = offRequests.filter(o =>
-      empNames.includes(o.employee) && o.date >= dateStart && o.date <= dateEnd
-    ).length
-
-    if (currentCount === 0) {
-      alert('目前沒有希望休資料')
-      return
-    }
-
-    if (!confirm(`確定要清除 ${storeFilter || '所有門市'} ${rangeLabel} 的 ${currentCount} 筆希望休嗎？`)) return
-
-    try {
-      await supabase.from('off_requests').delete()
-        .in('employee', empNames)
-        .gte('date', dateStart).lte('date', dateEnd)
-
-      setOffRequests(prev => prev.filter(o =>
-        !empNames.includes(o.employee) || o.date < dateStart || o.date > dateEnd
-      ))
-      alert(`已清除 ${currentCount} 筆希望休`)
-    } catch (err) {
-      console.error('[ClearOffReq] Error:', err)
-      alert(`清除失敗：${err.message}`)
-    }
-  }
-
   // Load store settings + events whenever storeFilter changes
   useEffect(() => {
     if (storeFilter && locations.length > 0) {
@@ -668,7 +570,7 @@ export default function Schedule() {
           .catch(() => setStoreEvents([]))  // table might not exist yet
       }
     }
-  }, [storeFilter, locations])
+  }, [storeFilter, locations, selectedMonth])
 
   // Load tab-specific data
   useEffect(() => {
@@ -981,19 +883,6 @@ export default function Schedule() {
             </table>
           </div>
         </div>
-      )}
-
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <EmergencyCoverPanel
-          employees={filtered} schedules={schedules} shiftDefs={shiftDefs}
-          weekDates={weekDates} storeFilter={storeFilter} locations={locations}
-          offRequests={offRequests}
-          onUpdate={() => {
-            // Reload schedules after emergency cover
-            supabase.from('schedules').select('*').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1])
-              .then(({ data }) => { if (data) setSchedules(data) })
-          }}
-        />
       )}
 
       {/* Calendar Events / Holiday + Custom Events */}

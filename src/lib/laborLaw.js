@@ -268,16 +268,8 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     const workDays = empSchedules.filter(s => s.shift && s.shift !== '休')
     const restDays = empSchedules.filter(s => s.shift === '休')
 
-    // H10: 每週至少2天休息 (§36)
-    if (restDays.length < 2 && empSchedules.length >= 7) {
-      errors.push({
-        employee: emp,
-        constraint: 'H10',
-        law: '勞基法 §36',
-        message: `${emp} 本週僅排 ${restDays.length} 天休息，違反每7日應有2日休息之規定`,
-        severity: 'error',
-      })
-    }
+    // H10: 四週變形工時制不檢查每週休假（由月制 off_requests 控制）
+    // 原規則：每週至少2天休息 (§36) — 已停用
 
     // H2: 每日工時檢查 — 正常8h，含加班最高12h (§30, §32)
     for (const s of workDays) {

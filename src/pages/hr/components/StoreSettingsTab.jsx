@@ -56,18 +56,18 @@ export default function StoreSettingsTab({
   // Shift CRUD state
   const [showShiftModal, setShowShiftModal] = useState(false)
   const [editingShift, setEditingShift] = useState(null)
-  const [shiftForm, setShiftForm] = useState({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
+  const [shiftForm, setShiftForm] = useState({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning', employee_type: 'all', day_type: 'all' })
 
   const setField = (k, v) => setShiftForm(f => ({ ...f, [k]: v }))
 
   const resetShiftForm = () => {
-    setShiftForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' })
+    setShiftForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning', employee_type: 'all', day_type: 'all' })
     setEditingShift(null)
     setShowShiftModal(false)
   }
 
   const openShiftEdit = (s) => {
-    setShiftForm({ name: s.name, start_time: s.start_time?.slice(0, 5) || '09:00', end_time: s.end_time?.slice(0, 5) || '18:00', break_minutes: s.break_minutes || 60, color: s.color || '#22d3ee', shift_type: s.shift_type || 'morning' })
+    setShiftForm({ name: s.name, start_time: s.start_time?.slice(0, 5) || '09:00', end_time: s.end_time?.slice(0, 5) || '18:00', break_minutes: s.break_minutes || 60, color: s.color || '#22d3ee', shift_type: s.shift_type || 'morning', employee_type: s.employee_type || 'all', day_type: s.day_type || 'all' })
     setEditingShift(s)
     setShowShiftModal(true)
   }
@@ -84,7 +84,7 @@ export default function StoreSettingsTab({
 
   const handleShiftSubmit = async () => {
     if (!shiftForm.name) return
-    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning' }
+    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all' }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
@@ -241,13 +241,13 @@ export default function StoreSettingsTab({
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="card-title"><span className="card-title-icon">⏰</span> 班別設定</div>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditingShift(null); setShiftForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning' }); setShowShiftModal(true) }}>
+          <button className="btn btn-primary btn-sm" onClick={() => { setEditingShift(null); setShiftForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: 60, color: '#22d3ee', shift_type: 'morning', employee_type: 'all', day_type: 'all' }); setShowShiftModal(true) }}>
             <Plus size={12} /> 新增班別
           </button>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>班別</th><th>類型</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th><th>顏色</th><th style={{ width: 70 }}>操作</th></tr></thead>
+            <thead><tr><th>班別</th><th>類型</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th><th>適用</th><th style={{ width: 70 }}>操作</th></tr></thead>
             <tbody>
               {shiftDefs.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
               {shiftDefs.map(d => {
@@ -269,7 +269,10 @@ export default function StoreSettingsTab({
                     <td>{d.end_time?.slice(0, 5)}</td>
                     <td>{d.break_minutes}分鐘</td>
                     <td style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
-                    <td><div style={{ width: 20, height: 20, borderRadius: 4, background: d.color || '#22d3ee', border: '1px solid var(--border-medium)' }} /></td>
+                    <td style={{ fontSize: 10 }}>
+                      {d.employee_type === 'pt' ? '兼職' : d.employee_type === 'full_time' ? '正職' : '全部'}
+                      {d.day_type && d.day_type !== 'all' ? ` · ${d.day_type === 'weekday' ? '平日' : '假日'}` : ''}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-sm btn-secondary" onClick={() => openShiftEdit(d)}><Pencil size={12} /></button>
@@ -581,6 +584,22 @@ export default function StoreSettingsTab({
                 <input type="color" value={shiftForm.color} onChange={e => setField('color', e.target.value)} style={{ width: 40, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
                 <input className="form-input" type="text" style={{ flex: 1 }} value={shiftForm.color} onChange={e => setField('color', e.target.value)} />
               </div>
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="適用對象">
+              <select className="form-input" style={{ width: '100%' }} value={shiftForm.employee_type} onChange={e => setField('employee_type', e.target.value)}>
+                <option value="all">全部</option>
+                <option value="full_time">正職</option>
+                <option value="pt">兼職</option>
+              </select>
+            </Field>
+            <Field label="適用日">
+              <select className="form-input" style={{ width: '100%' }} value={shiftForm.day_type} onChange={e => setField('day_type', e.target.value)}>
+                <option value="all">每天</option>
+                <option value="weekday">平日</option>
+                <option value="weekend">假日</option>
+              </select>
             </Field>
           </div>
         </Modal>

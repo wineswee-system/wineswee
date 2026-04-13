@@ -105,7 +105,7 @@ export default function Schedule() {
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // View mode: week or month
-  const [viewMode, setViewMode] = useState('week') // 'week' | 'month'
+  const [viewMode] = useState('month') // only month view
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return formatYearMonth(now.getFullYear(), now.getMonth() + 1)
@@ -724,33 +724,69 @@ export default function Schedule() {
               人/天
             </div>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              // Copy last week's schedule
-              const lastWeek = getWeekDates(weekOffset - 1)
-              const { data: lastSchedules } = await supabase.from('schedules').select('*').gte('date', lastWeek[0]).lte('date', lastWeek[6])
-              if (!lastSchedules?.length) { alert('上週無排班資料'); return }
-              const newSchedules = lastSchedules.map(s => {
-                const dayIdx = lastWeek.indexOf(s.date)
-                return dayIdx >= 0 ? { employee: s.employee, date: weekDates[dayIdx], shift: s.shift } : null
-              }).filter(Boolean)
+              // Copy last month's schedule
+              const prevMonth = new Date(monthYear, monthNum - 2, 1)
+              const prevDates = getMonthDates(prevMonth.getFullYear(), prevMonth.getMonth() + 1)
+              const empNames = filtered.map(e => e.name)
+              const { data: lastSchedules } = await supabase.from('schedules').select('*')
+                .in('employee', empNames)
+                .gte('date', prevDates[0]).lte('date', prevDates[prevDates.length - 1])
+              if (!lastSchedules?.length) { alert('上月無排班資料'); return }
+              if (!confirm(`將上月 ${lastSchedules.length} 筆排班複製到 ${selectedMonth}？\n\n會根據星期幾對應，已有的排班會被覆蓋。`)) return
+              // Map by day-of-week: group last month shifts by (employee, dow)
+              const byEmpDow = {}
+              for (const s of lastSchedules) {
+                const dow = new Date(s.date).getDay()
+                const key = `${s.employee}_${dow}`
+                if (!byEmpDow[key]) byEmpDow[key] = s
+              }
+              const newSchedules = []
+              for (const date of monthDates) {
+                const dow = new Date(date).getDay()
+                for (const emp of empNames) {
+                  const src = byEmpDow[`${emp}_${dow}`]
+                  if (src) newSchedules.push({ employee: emp, date, shift: src.shift, actual_start: src.actual_start, actual_end: src.actual_end })
+                }
+              }
               if (newSchedules.length > 0) {
                 const withTenant = tenantId ? newSchedules.map(s => ({ ...s, tenant_id: tenantId })) : newSchedules
                 const { data } = await supabase.from('schedules').upsert(withTenant, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
-                alert(`已複製 ${newSchedules.length} 筆排班`)
+                alert(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
               }
             }}>
-              📋 複製上週
+              📋 複製上月
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
-              if (!confirm(`確定要清除本週（${weekStart} ~ ${weekEnd}）${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
-              await supabase.from('schedules').delete().in('employee', empNames).gte('date', weekStart).lte('date', weekEnd)
-              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < weekStart || s.date > weekEnd))
+              if (!confirm(`確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
+              await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
+              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
             }}>
-              🗑️ 清除本週
+              🗑️ 清除本月
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }} onClick={() => setShowCompOff(true)}>
               🔄 指派補休
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
+              // Export schedule as CSV
+              const rows = [['員工', ...monthDates.map(d => d.slice(5))]]
+              for (const emp of filtered) {
+                const row = [emp.name]
+                for (const date of monthDates) {
+                  const s = schedules.find(x => x.employee === emp.name && x.date === date)
+                  row.push(s?.shift || '')
+                }
+                rows.push(row)
+              }
+              const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url; a.download = `排班表_${storeFilter || '全部'}_${selectedMonth}.csv`
+              a.click(); URL.revokeObjectURL(url)
+            }}>
+              📥 匯出 CSV
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件
@@ -783,25 +819,8 @@ export default function Schedule() {
 
       {/* View mode toggle + Store selector + Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* View mode: Week / Month */}
-        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
-          <button onClick={() => setViewMode('week')} style={{
-            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            background: viewMode === 'week' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-            color: viewMode === 'week' ? '#fff' : 'var(--text-muted)',
-          }}>
-            <Calendar size={12} style={{ marginRight: 4 }} />週
-          </button>
-          <button onClick={() => setViewMode('month')} style={{
-            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            background: viewMode === 'month' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-            color: viewMode === 'month' ? '#fff' : 'var(--text-muted)',
-          }}>
-            <Calendar size={12} style={{ marginRight: 4 }} />月
-          </button>
-        </div>
-        {/* Month navigator (only in month mode) */}
-        {viewMode === 'month' && (
+        {/* Month navigator */}
+        {(
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
               onClick={() => {
@@ -971,32 +990,31 @@ export default function Schedule() {
         />
       )}
 
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <StaffingGapPanel
-          weekDates={weekDates} schedules={schedules} employees={filtered}
-          shiftDefs={shiftDefs} staffingRules={staffing}
-          offRequests={offRequests} storeFilter={storeFilter} locations={locations}
-          onAssign={handleSetShift}
-        />
+      {/* Calendar Events / Holiday Notes */}
+      {mainTab === 'schedule' && holidays.length > 0 && (
+        <div className="card" style={{ marginBottom: 12, padding: '10px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>📅 {selectedMonth} 節慶/活動：</span>
+            {monthDates.filter(d => holidays.includes(d)).map(d => {
+              const day = parseInt(d.slice(8))
+              const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(d).getDay()]
+              return (
+                <span key={d} style={{
+                  padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: 'rgba(239,68,68,0.1)', color: 'var(--accent-red)',
+                }}>
+                  {day}({dow})
+                </span>
+              )
+            })}
+            {monthDates.filter(d => holidays.includes(d)).length === 0 && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>本月無國定假日</span>
+            )}
+          </div>
+        </div>
       )}
 
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <ScheduleTable
-          weekDates={weekDates} weekStart={weekStart} weekEnd={weekEnd}
-          weekOffset={weekOffset} setWeekOffset={setWeekOffset}
-          filtered={filtered} deptFilter={deptFilter} setDeptFilter={setDeptFilter}
-          departments={departments} schedules={schedules}
-          getShift={getShift} getShiftStyle={getShiftStyle} getOffRequest={getOffRequest}
-          editCell={editCell} setEditCell={setEditCell} handleSetShift={handleSetShift}
-          handleDeleteShift={handleDeleteShift} canEditSchedule={canEditSchedule}
-          SHIFT_TYPES={SHIFT_TYPES} shiftDefs={shiftDefs}
-          getStoreShifts={getStoreShifts} storeFilter={storeFilter} storeSettings={storeSettings}
-          compliance={compliance} holidaySet={holidaySet}
-          setCoverModal={setCoverModal} findCoverCandidates={findCoverCandidates}
-        />
-      )}
-
-      {mainTab === 'schedule' && viewMode === 'month' && (
+      {mainTab === 'schedule' && (
         <MonthScheduleTable
           monthDates={monthDates}
           filtered={filtered}

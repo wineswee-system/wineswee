@@ -241,10 +241,8 @@ function EmployeeRow({
             background: isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
           }}
-          onClick={(e) => {
-            if (canEditSchedule && !isEditing) {
-              setEditCell({ empName: emp.name, date, clickX: e.clientX, clickY: e.clientY })
-            }
+          onClick={() => {
+            if (canEditSchedule && !isEditing) setEditCell({ empName: emp.name, date })
           }}>
             {/* Cell Content */}
             {isRest ? (
@@ -275,7 +273,6 @@ function EmployeeRow({
                 emp={emp} date={date} shift={shift} isPT={isPT}
                 storeFilter={storeFilter} getStoreShifts={getStoreShifts}
                 SHIFT_TYPES={SHIFT_TYPES}
-                clickX={editCell.clickX} clickY={editCell.clickY}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}
               />
@@ -298,15 +295,7 @@ function EmployeeRow({
 }
 
 // ── Fixed-position edit popup for month view ──
-function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, clickX, clickY, handleSetShift, handleDeleteShift, onClose }) {
-  const popupH = 300
-  const popupW = 100
-  const cx = clickX || window.innerWidth / 2
-  const cy = clickY || window.innerHeight / 2
-  // Position: above click point if space, otherwise below
-  const top = cy > popupH + 20 ? cy - popupH - 8 : cy + 8
-  const left = Math.max(8, Math.min(cx - popupW / 2, window.innerWidth - popupW - 8))
-  const pos = { top: Math.max(8, top), left }
+function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, handleSetShift, handleDeleteShift, onClose }) {
 
   const empStore = emp.store || storeFilter || ''
   const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
@@ -318,11 +307,10 @@ function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, S
       <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
       <div style={{
         position: 'fixed',
-        top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
-        ...(pos ? {} : { transform: 'translate(-50%, -50%)' }),
+        top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
         zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-        borderRadius: 8, padding: 6, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        display: 'flex', flexDirection: 'column', gap: 3, minWidth: 80,
+        borderRadius: 12, padding: 10, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120,
       }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
         {shiftOptions.map(t => (
           <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}

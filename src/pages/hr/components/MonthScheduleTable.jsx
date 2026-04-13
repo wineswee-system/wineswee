@@ -1,3 +1,4 @@
+import { useRef, useEffect, useState } from 'react'
 import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
 
 export default function MonthScheduleTable({
@@ -267,58 +268,15 @@ function EmployeeRow({
               <span style={{ fontSize: 9, color: 'var(--border-medium)' }}>·</span>
             )}
 
-            {/* Inline Editor */}
+            {/* Fixed Editor Popup */}
             {isEditing && (
-              <div style={{
-                position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-                borderRadius: 8, padding: 6, boxShadow: 'var(--shadow-lg)',
-                display: 'flex', flexDirection: 'column', gap: 3, minWidth: 80,
-              }}
-              onClick={e => e.stopPropagation()}>
-                {(() => {
-                  const empStore = emp.store || storeFilter || ''
-                  const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
-                  const storeShiftLabels = storeShiftDefs.map(d => d.name)
-                  const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
-                  return (
-                    <>
-                      {shiftOptions.map(t => (
-                        <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
-                          style={{
-                            padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                            fontSize: 10, fontWeight: 600, textAlign: 'center',
-                            background: t.dim, color: t.color,
-                          }}>
-                          {t.label}
-                        </button>
-                      ))}
-                      {/* Additional absence types */}
-                      {getAbsenceOptions().filter(a => a.value !== '休').map(a => (
-                        <button key={a.value} onClick={() => handleSetShift(emp.name, date, a.value)}
-                          style={{
-                            padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                            fontSize: 10, fontWeight: 600, textAlign: 'center',
-                            color: getAbsenceConfig(a.value)?.color || '#666',
-                            background: (getAbsenceConfig(a.value)?.color || '#666') + '15',
-                          }}>
-                          {a.icon} {a.label}
-                        </button>
-                      ))}
-                    </>
-                  )
-                })()}
-                {shift && handleDeleteShift && (
-                  <button onClick={() => handleDeleteShift(emp.name, date)} style={{
-                    padding: '3px', borderRadius: 5, border: '1px solid rgba(248,113,113,0.3)',
-                    background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 10, cursor: 'pointer',
-                  }}>刪除</button>
-                )}
-                <button onClick={() => setEditCell(null)} style={{
-                  padding: '3px', borderRadius: 5, border: '1px solid var(--border-medium)',
-                  background: 'none', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer',
-                }}>取消</button>
-              </div>
+              <MonthEditPopup
+                emp={emp} date={date} shift={shift} isPT={isPT}
+                storeFilter={storeFilter} getStoreShifts={getStoreShifts}
+                SHIFT_TYPES={SHIFT_TYPES}
+                handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
+                onClose={() => setEditCell(null)}
+              />
             )}
           </td>
         )
@@ -334,5 +292,76 @@ function EmployeeRow({
         <span style={{ color: 'var(--text-muted)' }}>{restDays}</span>
       </td>
     </tr>
+  )
+}
+
+// ── Fixed-position edit popup for month view ──
+function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, handleSetShift, handleDeleteShift, onClose }) {
+  const anchorRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  useEffect(() => {
+    if (anchorRef.current) {
+      const rect = anchorRef.current.getBoundingClientRect()
+      const popupH = 300
+      const spaceAbove = rect.top
+      const top = spaceAbove > popupH
+        ? rect.top - popupH - 4
+        : Math.max(8, (window.innerHeight - popupH) / 2)
+      const left = Math.max(8, Math.min(rect.left - 30, window.innerWidth - 120))
+      setPos({ top, left })
+    }
+  }, [])
+
+  const empStore = emp.store || storeFilter || ''
+  const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
+  const storeShiftLabels = storeShiftDefs.map(d => d.name)
+  const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
+
+  return (
+    <>
+      <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
+      <div style={{
+        position: 'fixed',
+        top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
+        ...(pos ? {} : { transform: 'translate(-50%, -50%)' }),
+        zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+        borderRadius: 8, padding: 6, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        display: 'flex', flexDirection: 'column', gap: 3, minWidth: 80,
+      }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+        {shiftOptions.map(t => (
+          <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
+            style={{
+              padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, textAlign: 'center',
+              background: t.dim, color: t.color,
+            }}>
+            {t.label}
+          </button>
+        ))}
+        {getAbsenceOptions().filter(a => a.value !== '休').map(a => (
+          <button key={a.value} onClick={() => handleSetShift(emp.name, date, a.value)}
+            style={{
+              padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, textAlign: 'center',
+              color: getAbsenceConfig(a.value)?.color || '#666',
+              background: (getAbsenceConfig(a.value)?.color || '#666') + '15',
+            }}>
+            {a.icon} {a.label}
+          </button>
+        ))}
+        {shift && handleDeleteShift && (
+          <button onClick={() => handleDeleteShift(emp.name, date)} style={{
+            padding: '3px', borderRadius: 5, border: '1px solid rgba(248,113,113,0.3)',
+            background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 10, cursor: 'pointer',
+          }}>刪除</button>
+        )}
+        <button onClick={onClose} style={{
+          padding: '3px', borderRadius: 5, border: '1px solid var(--border-medium)',
+          background: 'none', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer',
+        }}>取消</button>
+      </div>
+    </>
   )
 }

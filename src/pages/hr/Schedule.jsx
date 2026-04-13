@@ -1019,6 +1019,7 @@ export default function Schedule() {
           deptFilter={deptFilter}
           setDeptFilter={setDeptFilter}
           departments={departments}
+          storeSettings={storeSettings}
         />
       )}
 

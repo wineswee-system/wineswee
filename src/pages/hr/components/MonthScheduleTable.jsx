@@ -294,56 +294,62 @@ function EmployeeRow({
   )
 }
 
-// ── Fixed-position edit popup for month view ──
+// ── Edit popup for month view (rendered via portal at body level) ──
 function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, handleSetShift, handleDeleteShift, onClose }) {
-
   const empStore = emp.store || storeFilter || ''
   const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')
   const storeShiftLabels = storeShiftDefs.map(d => d.name)
   const shiftOptions = SHIFT_TYPES.filter(t => t.label === '休' || storeShiftLabels.includes(t.label) || storeShiftDefs.length === 0)
+  const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]
 
-  return (
+  // Use createPortal to escape overflow:auto containers
+  const { createPortal } = require('react-dom')
+
+  return createPortal(
     <>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
-      <div style={{
-        position: 'fixed',
-        top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-        zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-        borderRadius: 12, padding: 10, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120,
-      }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-        {shiftOptions.map(t => (
-          <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
-            style={{
-              padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
-              fontSize: 10, fontWeight: 600, textAlign: 'center',
-              background: t.dim, color: t.color,
-            }}>
-            {t.label}
-          </button>
-        ))}
-        {getAbsenceOptions().filter(a => a.value !== '休').map(a => (
-          <button key={a.value} onClick={() => handleSetShift(emp.name, date, a.value)}
-            style={{
-              padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer',
-              fontSize: 10, fontWeight: 600, textAlign: 'center',
-              color: getAbsenceConfig(a.value)?.color || '#666',
-              background: (getAbsenceConfig(a.value)?.color || '#666') + '15',
-            }}>
-            {a.icon} {a.label}
-          </button>
-        ))}
-        {shift && handleDeleteShift && (
-          <button onClick={() => handleDeleteShift(emp.name, date)} style={{
-            padding: '3px', borderRadius: 5, border: '1px solid rgba(248,113,113,0.3)',
-            background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 10, cursor: 'pointer',
-          }}>刪除</button>
-        )}
-        <button onClick={onClose} style={{
-          padding: '3px', borderRadius: 5, border: '1px solid var(--border-medium)',
-          background: 'none', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer',
-        }}>取消</button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.15)' }} onMouseDown={onClose} />
+    <div style={{
+      position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+      zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      borderRadius: 14, padding: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+      display: 'flex', flexDirection: 'column', gap: 6, minWidth: 160,
+    }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 4 }}>
+        {emp.name} · {date.slice(5)}({dow})
       </div>
-    </>
+      {shiftOptions.map(t => (
+        <button key={t.label} onClick={() => handleSetShift(emp.name, date, t.label)}
+          style={{
+            padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, textAlign: 'center',
+            background: t.dim, color: t.color,
+          }}>
+          {t.label}
+        </button>
+      ))}
+      {getAbsenceOptions().filter(a => a.value !== '休').map(a => (
+        <button key={a.value} onClick={() => handleSetShift(emp.name, date, a.value)}
+          style={{
+            padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, textAlign: 'center',
+            color: getAbsenceConfig(a.value)?.color || '#666',
+            background: (getAbsenceConfig(a.value)?.color || '#666') + '15',
+          }}>
+          {a.icon} {a.label}
+        </button>
+      ))}
+      {shift && handleDeleteShift && (
+        <button onClick={() => handleDeleteShift(emp.name, date)} style={{
+          padding: '6px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.3)',
+          background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        }}>刪除</button>
+      )}
+      <button onClick={onClose} style={{
+        padding: '6px', borderRadius: 8, border: '1px solid var(--border-medium)',
+        background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+      }}>取消</button>
+    </div>
+    </>,
+    document.body
   )
 }

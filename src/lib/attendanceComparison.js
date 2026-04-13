@@ -3,6 +3,11 @@
  *
  * Compares actual punch-in/out times with scheduled times
  * to detect late arrivals, early departures, and no-shows.
+ *
+ * Uses schedule's actual_start/actual_end (from 時段覆蓋制) first,
+ * falls back to shift_definitions for named shifts.
+ *
+ * Late tolerance is read from store_settings.late_tolerance_minutes.
  */
 
 import { supabase } from './supabase'
@@ -16,17 +21,25 @@ import { parseTime, isAbsence } from './scheduleUtils'
  * @returns {Array<{ employee, date, scheduled_start, scheduled_end, clock_in, clock_out, late_minutes, early_leave_minutes, status }>}
  */
 export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeName) {
-  const [
-    { data: schedules },
-    { data: attendance },
-    { data: shiftDefs },
-  ] = await Promise.all([
-    supabase.from('schedules').select('employee, date, shift, actual_start, actual_end')
-      .gte('date', dateStart).lte('date', dateEnd),
-    supabase.from('attendance_records').select('employee_name, date, clock_in, clock_out, status')
-      .gte('date', dateStart).lte('date', dateEnd),
-    supabase.from('shift_definitions').select('name, start_time, end_time'),
-  ])
+  // Build queries
+  const schedQ = supabase.from('schedules').select('employee, date, shift, actual_start, actual_end')
+    .gte('date', dateStart).lte('date', dateEnd)
+  const attQ = supabase.from('attendance_records').select('employee_name, date, clock_in, clock_out, status')
+    .gte('date', dateStart).lte('date', dateEnd)
+  const defQ = supabase.from('shift_definitions').select('name, start_time, end_time')
+
+  // Load store settings for late tolerance
+  let lateTolerance = 5  // default: 5 minutes
+  if (storeName) {
+    const { data: store } = await supabase.from('stores').select('id').eq('name', storeName).maybeSingle()
+    if (store) {
+      const { data: settings } = await supabase.from('store_settings').select('late_tolerance_minutes')
+        .eq('store_id', store.id).maybeSingle()
+      if (settings?.late_tolerance_minutes != null) lateTolerance = settings.late_tolerance_minutes
+    }
+  }
+
+  const [{ data: schedules }, { data: attendance }, { data: shiftDefs }] = await Promise.all([schedQ, attQ, defQ])
 
   const shiftDefMap = {}
   for (const d of (shiftDefs || [])) shiftDefMap[d.name] = d
@@ -36,6 +49,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
   for (const sched of (schedules || [])) {
     if (isAbsence(sched.shift)) continue
 
+    // Priority: actual_start/end from schedule (時段覆蓋制) > shift definition
     const def = shiftDefMap[sched.shift]
     const scheduledStart = sched.actual_start?.slice(0, 5) || def?.start_time?.slice(0, 5)
     const scheduledEnd = sched.actual_end?.slice(0, 5) || def?.end_time?.slice(0, 5)
@@ -46,6 +60,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     const att = (attendance || []).find(a => a.employee_name === sched.employee && a.date === sched.date)
 
     const scheduledStartH = parseTime(scheduledStart)
+    const scheduledEndH = parseTime(scheduledEnd)
     let lateMinutes = 0
     let earlyLeaveMinutes = 0
     let status = 'normal'
@@ -53,11 +68,12 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     if (!att || !att.clock_in) {
       status = 'no_show'
     } else {
+      // Late check: clock_in vs scheduled_start
       const clockInH = parseTime(att.clock_in)
       lateMinutes = Math.max(0, Math.round((clockInH - scheduledStartH) * 60))
 
+      // Early leave check: clock_out vs scheduled_end
       if (att.clock_out && scheduledEnd) {
-        const scheduledEndH = parseTime(scheduledEnd)
         const clockOutH = parseTime(att.clock_out)
         // Handle cross-midnight
         const effectiveEnd = scheduledEndH < scheduledStartH ? scheduledEndH + 24 : scheduledEndH
@@ -65,8 +81,9 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
         earlyLeaveMinutes = Math.max(0, Math.round((effectiveEnd - effectiveClockOut) * 60))
       }
 
-      if (lateMinutes > 5) status = 'late'
-      else if (earlyLeaveMinutes > 5) status = 'early_leave'
+      // Status: use store's late tolerance setting
+      if (lateMinutes > lateTolerance) status = 'late'
+      else if (earlyLeaveMinutes > lateTolerance) status = 'early_leave'
       else status = 'normal'
     }
 
@@ -81,6 +98,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
       late_minutes: lateMinutes,
       early_leave_minutes: earlyLeaveMinutes,
       status,
+      late_tolerance: lateTolerance,
     })
   }
 

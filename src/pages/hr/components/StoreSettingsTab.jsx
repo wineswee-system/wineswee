@@ -509,6 +509,57 @@ export default function StoreSettingsTab({
         </div>
       </div>
 
+      {/* Attendance / Clock-in Settings */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><span className="card-title-icon">⏱️</span> 打卡設定</div>
+        </div>
+        <div style={{ padding: '12px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>遲到容許（分鐘）</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input className="form-input" type="number" min={0} max={60} step={1}
+                  style={{ width: 80, textAlign: 'center', fontSize: 16, fontWeight: 700 }}
+                  value={storeSettings?.late_tolerance_minutes ?? 5}
+                  onChange={async e => {
+                    if (!selectedStore) return
+                    const val = Math.max(0, Math.min(60, parseInt(e.target.value) || 0))
+                    const { data } = await supabase.from('store_settings')
+                      .upsert({ store_id: selectedStore.id, late_tolerance_minutes: val }, { onConflict: 'store_id' })
+                      .select().single()
+                    if (data) setStoreSettings(data)
+                  }} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>分鐘內不算遲到</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                例：設 5 分鐘，排 11:00 上班，11:05 前打卡都算正常
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>提前打卡容許（分鐘）</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input className="form-input" type="number" min={0} max={60} step={1}
+                  style={{ width: 80, textAlign: 'center', fontSize: 16, fontWeight: 700 }}
+                  value={storeSettings?.early_clock_minutes ?? 30}
+                  onChange={async e => {
+                    if (!selectedStore) return
+                    const val = Math.max(0, Math.min(60, parseInt(e.target.value) || 0))
+                    const { data } = await supabase.from('store_settings')
+                      .upsert({ store_id: selectedStore.id, early_clock_minutes: val }, { onConflict: 'store_id' })
+                      .select().single()
+                    if (data) setStoreSettings(data)
+                  }} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>分鐘前可打卡</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                例：設 30 分鐘，排 11:00 上班，10:30 起可打卡上班
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Labor Cost Budget */}
       <div className="card">
         <div className="card-header">

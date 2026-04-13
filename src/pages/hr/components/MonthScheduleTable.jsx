@@ -243,8 +243,7 @@ function EmployeeRow({
           }}
           onClick={(e) => {
             if (canEditSchedule && !isEditing) {
-              const rect = e.currentTarget.getBoundingClientRect()
-              setEditCell({ empName: emp.name, date, rect })
+              setEditCell({ empName: emp.name, date, clickX: e.clientX, clickY: e.clientY })
             }
           }}>
             {/* Cell Content */}
@@ -276,7 +275,7 @@ function EmployeeRow({
                 emp={emp} date={date} shift={shift} isPT={isPT}
                 storeFilter={storeFilter} getStoreShifts={getStoreShifts}
                 SHIFT_TYPES={SHIFT_TYPES}
-                cellRect={editCell.rect}
+                clickX={editCell.clickX} clickY={editCell.clickY}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}
               />
@@ -299,15 +298,15 @@ function EmployeeRow({
 }
 
 // ── Fixed-position edit popup for month view ──
-function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, cellRect, handleSetShift, handleDeleteShift, onClose }) {
+function MonthEditPopup({ emp, date, shift, isPT, storeFilter, getStoreShifts, SHIFT_TYPES, clickX, clickY, handleSetShift, handleDeleteShift, onClose }) {
   const popupH = 300
-  const rect = cellRect || { top: window.innerHeight / 2, left: window.innerWidth / 2, bottom: window.innerHeight / 2 }
-  const spaceAbove = rect.top
-  const top = spaceAbove > popupH
-    ? rect.top - popupH - 4
-    : rect.bottom + 4
-  const left = Math.max(8, Math.min(rect.left - 10, window.innerWidth - 120))
-  const pos = { top: Math.max(8, Math.min(top, window.innerHeight - popupH - 8)), left }
+  const popupW = 100
+  const cx = clickX || window.innerWidth / 2
+  const cy = clickY || window.innerHeight / 2
+  // Position: above click point if space, otherwise below
+  const top = cy > popupH + 20 ? cy - popupH - 8 : cy + 8
+  const left = Math.max(8, Math.min(cx - popupW / 2, window.innerWidth - popupW - 8))
+  const pos = { top: Math.max(8, top), left }
 
   const empStore = emp.store || storeFilter || ''
   const storeShiftDefs = getStoreShifts(empStore, isPT ? 'pt' : 'full_time')

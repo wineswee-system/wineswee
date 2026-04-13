@@ -28,15 +28,12 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     .gte('date', dateStart).lte('date', dateEnd)
   const defQ = supabase.from('shift_definitions').select('name, start_time, end_time')
 
-  // Load store settings for late tolerance
+  // Load late tolerance from stores table
   let lateTolerance = 5  // default: 5 minutes
   if (storeName) {
-    const { data: store } = await supabase.from('stores').select('id').eq('name', storeName).maybeSingle()
-    if (store) {
-      const { data: settings } = await supabase.from('store_settings').select('late_tolerance_minutes')
-        .eq('store_id', store.id).maybeSingle()
-      if (settings?.late_tolerance_minutes != null) lateTolerance = settings.late_tolerance_minutes
-    }
+    const { data: store } = await supabase.from('stores').select('late_tolerance_minutes')
+      .eq('name', storeName).maybeSingle()
+    if (store?.late_tolerance_minutes != null) lateTolerance = store.late_tolerance_minutes
   }
 
   const [{ data: schedules }, { data: attendance }, { data: shiftDefs }] = await Promise.all([schedQ, attQ, defQ])

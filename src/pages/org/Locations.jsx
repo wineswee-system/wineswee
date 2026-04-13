@@ -4,7 +4,7 @@ import { getStores, createStore, updateStore, deleteStore } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
-const EMPTY_FORM = { name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '' }
+const EMPTY_FORM = { name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30 }
 
 export default function Locations() {
   const [stores, setStores] = useState([])
@@ -42,6 +42,8 @@ export default function Locations() {
       lng: s.lng || '',
       clock_radius: s.clock_radius || 150,
       allowed_wifi: s.allowed_wifi ? s.allowed_wifi.join(', ') : '',
+      late_tolerance_minutes: s.late_tolerance_minutes ?? 5,
+      early_clock_minutes: s.early_clock_minutes ?? 30,
     })
     setShowModal(true)
   }
@@ -69,6 +71,8 @@ export default function Locations() {
       lng: form.lng ? parseFloat(form.lng) : null,
       clock_radius: parseInt(form.clock_radius) || 150,
       allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
+      late_tolerance_minutes: parseInt(form.late_tolerance_minutes) || 5,
+      early_clock_minutes: parseInt(form.early_clock_minutes) || 30,
     }
     try {
       if (editingStore) {
@@ -215,6 +219,25 @@ export default function Locations() {
             </Field>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               填入門市 WiFi 的公共 IP 或網段。員工連上門市 WiFi 時，IP 符合即可打卡（與 GPS 擇一通過即可）。
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>⏱️ 遲到判定設定</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="遲到容許（分鐘）">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input className="form-input" type="number" min={0} max={60} style={{ width: 80, textAlign: 'center' }}
+                    value={form.late_tolerance_minutes} onChange={e => set('late_tolerance_minutes', e.target.value)} />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>分鐘內不算遲到</span>
+                </div>
+              </Field>
+              <Field label="提前打卡容許（分鐘）">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input className="form-input" type="number" min={0} max={120} style={{ width: 80, textAlign: 'center' }}
+                    value={form.early_clock_minutes} onChange={e => set('early_clock_minutes', e.target.value)} />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>分鐘前可打卡</span>
+                </div>
+              </Field>
             </div>
           </div>
         </Modal>

@@ -749,12 +749,6 @@ export default function Schedule() {
             }}>
               🗑️ 清除本週
             </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleImportRestAsOffRequests}>
-              <CalendarOff size={14} /> 休→希望休
-            </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleClearOffRequests}>
-              🗑️ 清希望休
-            </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }} onClick={() => setShowCompOff(true)}>
               🔄 指派補休
             </button>

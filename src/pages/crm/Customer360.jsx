@@ -1,9 +1,74 @@
 import { useState, useEffect } from 'react'
-import { Search, X, User, DollarSign, ShoppingCart, Award, Clock, Phone, Mail } from 'lucide-react'
-import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions, getPOSTransactions } from '../../lib/db'
+import { Search, X, User, DollarSign, ShoppingCart, Award, Clock, Phone, Mail, Video, MapPin, MessageCircle, Share2, Headphones, CheckSquare, UserPlus, FileText, Send, Paperclip, Plus } from 'lucide-react'
+import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions, getPOSTransactions, getCRMActivities, getCRMNotes, createCRMActivity } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AttachmentsPanel from './components/AttachmentsPanel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+
+const TOUCHPOINT_ICONS = {
+  call: { icon: Phone, label: '電話', color: 'var(--accent-green)' },
+  meeting: { icon: Video, label: '會議', color: 'var(--accent-blue)' },
+  visit: { icon: MapPin, label: '到訪', color: 'var(--accent-orange)' },
+  email: { icon: Mail, label: 'Email', color: 'var(--accent-cyan)' },
+  line: { icon: MessageCircle, label: 'LINE', color: '#06C755' },
+  chat: { icon: Headphones, label: '線上客服', color: 'var(--accent-purple)' },
+  social: { icon: Share2, label: '社群', color: '#E4405F' },
+  task: { icon: CheckSquare, label: '任務', color: 'var(--accent-yellow, #f59e0b)' },
+  follow_up: { icon: UserPlus, label: '跟進', color: 'var(--accent-purple)' },
+  note: { icon: FileText, label: '備註', color: 'var(--text-secondary)' },
+  sms: { icon: Send, label: '簡訊', color: 'var(--accent-orange)' },
+  order: { icon: ShoppingCart, label: '訂單', color: 'var(--accent-green)' },
+  points: { icon: Award, label: '點數', color: 'var(--accent-purple)' },
+  attachment: { icon: Paperclip, label: '附件', color: 'var(--text-secondary)' },
+}
+
+function getTouchpoint(type) {
+  return TOUCHPOINT_ICONS[type] || { icon: Clock, label: type || '其他', color: 'var(--text-secondary)' }
+}
+
+function buildUnifiedTimeline({ activities = [], notes = [], messages = [], orders = [], points = [] }) {
+  const items = []
+
+  activities.forEach(a => items.push({
+    id: `act-${a.id}`, source: 'activity', type: a.type,
+    title: a.subject, detail: a.description || a.outcome || '',
+    assignee: a.assignee, status: a.status,
+    date: a.due_date || a.created_at,
+  }))
+
+  notes.forEach(n => items.push({
+    id: `note-${n.id}`, source: 'note', type: 'note',
+    title: n.content?.slice(0, 60) + (n.content?.length > 60 ? '...' : ''),
+    detail: n.content, assignee: n.author, pinned: n.is_pinned,
+    date: n.created_at,
+  }))
+
+  messages.forEach(m => items.push({
+    id: `msg-${m.id}`, source: 'message', type: m.channel,
+    title: m.subject || `${m.channel.toUpperCase()} → ${m.recipient}`,
+    detail: m.body?.slice(0, 80) || '', status: m.status,
+    date: m.sent_at || m.created_at,
+  }))
+
+  orders.forEach(o => items.push({
+    id: `order-${o.id}`, source: 'order', type: 'order',
+    title: `${o.order_number} — ${fmt(o.total || o.total_amount)}`,
+    detail: `付款: ${o.payment_status || '—'} / 出貨: ${o.shipping_status || '—'}`,
+    date: o.created_at,
+  }))
+
+  points.forEach(p => items.push({
+    id: `pts-${p.id}`, source: 'points', type: 'points',
+    title: `${p.type} ${p.points > 0 ? '+' : ''}${p.points} 點`,
+    detail: p.description || '', date: p.created_at,
+  }))
+
+  return items.sort((a, b) => new Date(b.date) - new Date(a.date))
+}
+
+const SALES_REPS = ['王經理', '李業務', '陳主任', '張專員', '林業務']
 
 export default function Customer360() {
   const [members, setMembers] = useState([])
@@ -23,22 +88,51 @@ export default function Customer360() {
     return (m.name || '').toLowerCase().includes(q) || (m.member_number || '').toLowerCase().includes(q) || (m.phone || '').includes(q)
   })
 
+  const [timelineFilter, setTimelineFilter] = useState('all')
+  const [showQuickLog, setShowQuickLog] = useState(false)
+  const [quickForm, setQuickForm] = useState({ type: 'call', subject: '', description: '' })
+
   const loadDetail = async (member) => {
     setSelected(member)
     setDetailLoading(true)
-    const [soRes, arRes, ptRes, posRes] = await Promise.all([
+    setTimelineFilter('all')
+    const [soRes, arRes, ptRes, posRes, actRes, noteRes, msgRes] = await Promise.all([
       getSalesOrders(),
       getAccountsReceivable(),
       member.id ? getPointTransactions(member.id) : { data: [] },
       getPOSTransactions(),
+      getCRMActivities({ entity_type: 'customer', entity_id: member.id }),
+      getCRMNotes('customer', member.id),
+      supabase.from('message_logs').select('*').or(`recipient.eq.${member.email},recipient.eq.${member.phone}`).order('sent_at', { ascending: false }).limit(50),
     ])
     const orders = (soRes.data || []).filter(o => o.customer === member.name)
     const ar = (arRes.data || []).filter(r => r.customer === member.name)
     const points = ptRes.data || []
     const pos = (posRes.data || []).filter(t => t.member_id === String(member.id) || t.member_id === member.member_number)
+    const activities = actRes.data || []
+    const notes = noteRes.data || []
+    const messages = msgRes.data || []
 
-    setDetail({ orders, ar, points, pos })
+    setDetail({ orders, ar, points, pos, activities, notes, messages })
     setDetailLoading(false)
+  }
+
+  const handleQuickLog = async () => {
+    if (!quickForm.subject || !selected) return
+    const { data, error } = await createCRMActivity({
+      type: quickForm.type,
+      subject: quickForm.subject,
+      description: quickForm.description,
+      entity_type: 'customer',
+      entity_id: selected.id,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    })
+    if (!error && data) {
+      setDetail(prev => ({ ...prev, activities: [data, ...(prev?.activities || [])] }))
+    }
+    setQuickForm({ type: 'call', subject: '', description: '' })
+    setShowQuickLog(false)
   }
 
   if (loading) return <LoadingSpinner />
@@ -142,7 +236,145 @@ export default function Customer360() {
                 )}
               </div>
 
-              {/* AR + Points side by side */}
+              {/* ═══ Unified Interaction Timeline ═══ */}
+              {(() => {
+                const timeline = buildUnifiedTimeline({
+                  activities: detail?.activities || [],
+                  notes: detail?.notes || [],
+                  messages: detail?.messages || [],
+                  orders: detail?.orders || [],
+                  points: detail?.points || [],
+                })
+                const FILTER_GROUPS = [
+                  { key: 'all', label: '全部', count: timeline.length },
+                  { key: 'comms', label: '通訊', types: ['call', 'email', 'line', 'sms', 'chat'] },
+                  { key: 'meetings', label: '面對面', types: ['meeting', 'visit'] },
+                  { key: 'social', label: '社群', types: ['social'] },
+                  { key: 'notes', label: '備註', types: ['note'] },
+                  { key: 'orders', label: '訂單/點數', types: ['order', 'points'] },
+                  { key: 'tasks', label: '任務/跟進', types: ['task', 'follow_up'] },
+                ]
+                const filteredTimeline = timelineFilter === 'all' ? timeline
+                  : timeline.filter(item => {
+                    const group = FILTER_GROUPS.find(g => g.key === timelineFilter)
+                    return group?.types?.includes(item.type)
+                  })
+
+                return (
+                  <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', padding: 16, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <h4 style={{ margin: 0, fontSize: 14 }}>
+                        <Clock size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                        互動時間軸 ({filteredTimeline.length})
+                      </h4>
+                      <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setShowQuickLog(true)}>
+                        <Plus size={12} /> 記錄互動
+                      </button>
+                    </div>
+
+                    {/* Filter tabs */}
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                      {FILTER_GROUPS.map(g => {
+                        const count = g.key === 'all' ? timeline.length : timeline.filter(i => g.types?.includes(i.type)).length
+                        if (g.key !== 'all' && count === 0) return null
+                        return (
+                          <button
+                            key={g.key}
+                            onClick={() => setTimelineFilter(g.key)}
+                            style={{
+                              padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border)',
+                              background: timelineFilter === g.key ? 'var(--accent-cyan)' : 'var(--bg-main)',
+                              color: timelineFilter === g.key ? '#fff' : 'var(--text-secondary)',
+                              fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                            }}
+                          >{g.label} ({count})</button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Timeline items */}
+                    {filteredTimeline.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)', fontSize: 13 }}>尚無互動紀錄</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {filteredTimeline.slice(0, 50).map(item => {
+                          const tp = getTouchpoint(item.type)
+                          const Icon = tp.icon
+                          return (
+                            <div key={item.id} style={{ display: 'flex', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--glass-light, transparent)' }}>
+                              <div style={{ width: 28, height: 28, borderRadius: '50%', background: `${tp.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon size={13} style={{ color: tp.color }} />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4 }}>
+                                    <span style={{ color: tp.color, fontSize: 10, fontWeight: 700, marginRight: 6, padding: '1px 6px', borderRadius: 4, background: `${tp.color}15` }}>{tp.label}</span>
+                                    {item.title}
+                                  </div>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    {item.date ? new Date(item.date).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                                  </span>
+                                </div>
+                                {item.detail && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{item.detail.slice(0, 120)}</div>}
+                                {(item.assignee || item.status) && (
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {item.assignee && <span>{item.assignee}</span>}
+                                    {item.status && <span style={{ marginLeft: 8 }}>{item.status}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {filteredTimeline.length > 50 && <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', padding: 8 }}>顯示前 50 筆，共 {filteredTimeline.length} 筆</div>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Quick Log Modal */}
+              {showQuickLog && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowQuickLog(false)}>
+                  <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 440, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                    <h3 style={{ margin: '0 0 16px' }}>記錄客戶互動</h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {['call', 'meeting', 'visit', 'email', 'line', 'chat', 'social', 'note'].map(type => {
+                        const tp = getTouchpoint(type)
+                        const TpIcon = tp.icon
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => setQuickForm(f => ({ ...f, type }))}
+                            style={{
+                              padding: '5px 10px', borderRadius: 6, border: `1px solid ${quickForm.type === type ? tp.color : 'var(--border)'}`,
+                              background: quickForm.type === type ? `${tp.color}18` : 'var(--bg-main)',
+                              color: quickForm.type === type ? tp.color : 'var(--text-secondary)',
+                              cursor: 'pointer', fontSize: 11, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4,
+                            }}
+                          ><TpIcon size={12} />{tp.label}</button>
+                        )
+                      })}
+                    </div>
+                    <input
+                      type="text" placeholder="主題（例：跟客戶確認報價）" value={quickForm.subject}
+                      onChange={e => setQuickForm(f => ({ ...f, subject: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', marginBottom: 8, fontSize: 13 }}
+                    />
+                    <textarea
+                      placeholder="備註（選填）" value={quickForm.description}
+                      onChange={e => setQuickForm(f => ({ ...f, description: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 60, fontSize: 13, resize: 'vertical' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                      <button className="btn btn-secondary" onClick={() => setShowQuickLog(false)}>取消</button>
+                      <button className="btn btn-primary" onClick={handleQuickLog} disabled={!quickForm.subject}>儲存</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AR + Attachments side by side */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', padding: 16 }}>
                   <h4 style={{ margin: '0 0 12px', fontSize: 14 }}><DollarSign size={14} style={{ verticalAlign: -2, marginRight: 6 }} />應收帳款</h4>
@@ -156,15 +388,7 @@ export default function Customer360() {
                   ))}
                 </div>
                 <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', padding: 16 }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: 14 }}><Award size={14} style={{ verticalAlign: -2, marginRight: 6 }} />點數紀錄</h4>
-                  {(!detail?.points || detail.points.length === 0) ? (
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>無點數紀錄</div>
-                  ) : detail.points.slice(0, 5).map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
-                      <span>{p.type}</span>
-                      <span style={{ fontFamily: 'monospace', color: p.points > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.points > 0 ? '+' : ''}{p.points}</span>
-                    </div>
-                  ))}
+                  <AttachmentsPanel entityType="customer" entityId={selected.id} />
                 </div>
               </div>
             </div>

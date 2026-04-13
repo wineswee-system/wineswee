@@ -11,6 +11,9 @@ import Valuation from '../pages/wms/Valuation'
 import Bins from '../pages/wms/Bins'
 import PickPackShip from '../pages/wms/PickPackShip'
 import Transfers from '../pages/wms/Transfers'
+import Returns from '../pages/wms/Returns'
+import Kitting from '../pages/wms/Kitting'
+import AIInventory from '../pages/wms/AIInventory'
 
 export default function WMSModule() {
   return (
@@ -27,6 +30,9 @@ export default function WMSModule() {
       <Route path="bins" element={<Bins />} />
       <Route path="pick-pack-ship" element={<PickPackShip />} />
       <Route path="transfers" element={<Transfers />} />
+      <Route path="returns" element={<Returns />} />
+      <Route path="kitting" element={<Kitting />} />
+      <Route path="ai" element={<AIInventory />} />
     </Routes>
   )
 }

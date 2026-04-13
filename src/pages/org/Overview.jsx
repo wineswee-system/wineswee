@@ -28,7 +28,8 @@ export default function OrgOverview() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const maxCount = Math.max(...departments.map(d => d.member_count), 1)
+  const deptCount = (deptName) => employees.filter(e => e.dept === deptName && e.status === '在職').length
+  const maxCount = Math.max(...departments.map(d => deptCount(d.name)), 1)
 
   return (
     <div className="fade-in">
@@ -74,7 +75,7 @@ export default function OrgOverview() {
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td>{s.manager}</td>
-                    <td>{s.employee_count}</td>
+                    <td>{employees.filter(e => e.store === s.name && e.status === '在職').length}</td>
                     <td><span className={`badge ${s.status === '營運中' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{s.status}</span></td>
                   </tr>
                 ))}
@@ -92,10 +93,10 @@ export default function OrgOverview() {
               <div key={d.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                   <span style={{ fontSize: 13 }}>{d.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{d.member_count} 人</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{deptCount(d.name)} 人</span>
                 </div>
                 <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${Math.round(d.member_count / maxCount * 100)}%` }}></div>
+                  <div className="progress-fill" style={{ width: `${Math.round(deptCount(d.name) / maxCount * 100)}%` }}></div>
                 </div>
               </div>
             ))}

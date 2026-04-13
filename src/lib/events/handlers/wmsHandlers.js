@@ -130,4 +130,54 @@ export function registerWMSHandlers(bus) {
       })
     }
   })
+
+  // ── Return restocked → increase stock for passed items ──
+  bus.subscribe('wms.return.restocked', async function onReturnRestocked(event) {
+    const { return_id, return_number, items } = event.payload
+    if (!items || items.length === 0) return
+
+    for (const item of items) {
+      if (!item.pass_qty || item.pass_qty <= 0) continue
+
+      const { data: stock } = await supabase
+        .from('stock_levels')
+        .select('*')
+        .eq('sku_code', item.sku_code)
+        .maybeSingle()
+
+      if (stock) {
+        await supabase
+          .from('stock_levels')
+          .update({ quantity: (stock.quantity || 0) + item.pass_qty })
+          .eq('id', stock.id)
+      }
+    }
+
+    await bus.publish('wms.stock.adjusted', {
+      reason: '退貨入庫',
+      source_type: 'return_order',
+      source_id: return_number,
+      items: items.filter(i => i.pass_qty > 0).map(i => ({ name: i.sku_code, qty: i.pass_qty })),
+    }, {
+      causation_id: event.id,
+      correlation_id: event.metadata.correlation_id,
+    })
+  })
+
+  // ── Auto-reorder triggered → create draft purchase orders ──
+  bus.subscribe('wms.auto_reorder.triggered', async function onAutoReorderCreatePOs(event) {
+    const { purchase_orders } = event.payload
+    if (!purchase_orders || purchase_orders.length === 0) return
+
+    for (const po of purchase_orders) {
+      await supabase.from('purchase_orders').insert({
+        po_number: po.poNumber,
+        supplier: po.supplier,
+        items: po.items,
+        total_amount: po.totalAmount,
+        expected_date: po.expectedDate,
+        status: po.status,
+      })
+    }
+  })
 }

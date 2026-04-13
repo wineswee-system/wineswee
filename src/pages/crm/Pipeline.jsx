@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, AlertTriangle, GripVertical, Clock, Trophy, XCircle, Package, ChevronDown } from 'lucide-react'
+import { Plus, AlertTriangle, GripVertical, Clock, Trophy, XCircle, Package, ChevronDown, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
+import { createQuotation, batchCreateQuotationLines } from '../../lib/db'
 import { DEFAULT_PIPELINES, PRODUCT_CATALOG, calculateDealTotal, WIN_REASONS, LOSS_REASONS } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import ActivityTimeline from './components/ActivityTimeline'
+import NotesPanel from './components/NotesPanel'
 
 const STAGE_PALETTE = [
   { accent: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
@@ -244,6 +247,47 @@ export default function Pipeline() {
     setDragOverStage(null)
   }
 
+  /* ── Generate quotation from deal ─────────────── */
+  const generateQuote = async (opp) => {
+    try {
+      const quoteNumber = `QT-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-4)}`
+      const lineItems = opp.line_items || []
+      const totals = lineItems.length > 0 ? calculateDealTotal(lineItems) : null
+
+      const { data: quote, error: qErr } = await createQuotation({
+        quote_number: quoteNumber,
+        customer: opp.customer_name,
+        items: lineItems,
+        subtotal: totals ? totals.subtotal : (opp.amount || 0),
+        discount: totals ? totals.totalDiscount : 0,
+        tax: totals ? totals.totalTax : 0,
+        total: totals ? totals.grandTotal : (opp.amount || 0),
+        valid_until: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        notes: `來自商機：${opp.title}`,
+        status: '草稿',
+        created_by: opp.assignee || '系統',
+      })
+      if (qErr) throw qErr
+
+      // Create quotation lines if deal has line items
+      if (lineItems.length > 0 && quote) {
+        const lines = lineItems.map(item => ({
+          quotation_id: quote.id,
+          description: item.product_name || item.name || '',
+          quantity: item.quantity || 1,
+          unit_price: item.unit_price || 0,
+          discount_percent: item.discount_percent || 0,
+          tax_rate: (item.tax_rate || 5) / 100,
+        }))
+        await batchCreateQuotationLines(lines)
+      }
+
+      alert(`報價單 ${quoteNumber} 已建立！\n金額：NT$ ${(quote.total || opp.amount || 0).toLocaleString()}\n可在「銷售管理 > 報價單」查看`)
+    } catch (err) {
+      alert('建立報價單失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -397,9 +441,9 @@ export default function Pipeline() {
         <div className="card">
           <div className="data-table-wrapper">
             <table className="data-table">
-              <thead><tr><th>商機名稱</th><th>客戶</th><th>分店</th><th>金額</th><th>成交率</th><th>預計成交</th><th>負責人</th><th>狀態</th><th>階段</th></tr></thead>
+              <thead><tr><th>商機名稱</th><th>客戶</th><th>分店</th><th>金額</th><th>成交率</th><th>預計成交</th><th>負責人</th><th>狀態</th><th>階段</th><th style={{ width: 60 }}>操作</th></tr></thead>
               <tbody>
-                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無商機</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無商機</td></tr>}
                 {filtered.map(o => {
                   const stale = isDealStale(o, STAGES)
                   return (
@@ -426,6 +470,11 @@ export default function Pipeline() {
                           {STAGES.map(s => <option key={s}>{s}</option>)}
                         </select>
                       </td>
+                      <td>
+                        <button className="btn btn-sm" style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-purple)' }} onClick={() => generateQuote(o)} title="產生報價單">
+                          <FileText size={12} />
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -440,7 +489,7 @@ export default function Pipeline() {
         <Modal title="新增商機" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-elevated)', borderRadius: 8, padding: 3, border: '1px solid var(--border-subtle)' }}>
-            {[['details', '\u{1F4DD} 基本資料'], ['items', '\u{1F4E6} 產品明細']].map(([k, l]) => (
+            {[['details', '\u{1F4DD} 基本資料'], ['items', '\u{1F4E6} 產品明細'], ['related', '\u{1F4CB} 活動/備註']].map(([k, l]) => (
               <button key={k} type="button" onClick={() => setModalTab(k)} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, background: modalTab === k ? 'var(--accent-cyan)' : 'transparent', color: modalTab === k ? '#fff' : 'var(--text-muted)' }}>{l}</button>
             ))}
           </div>
@@ -548,6 +597,21 @@ export default function Pipeline() {
               )}
             </div>
           )}
+
+          {modalTab === 'related' && form.id ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ background: 'var(--glass-light)', borderRadius: 10, padding: 12 }}>
+                <ActivityTimeline entityType="opportunity" entityId={form.id} />
+              </div>
+              <div style={{ background: 'var(--glass-light)', borderRadius: 10, padding: 12 }}>
+                <NotesPanel entityType="opportunity" entityId={form.id} />
+              </div>
+            </div>
+          ) : modalTab === 'related' ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              請先儲存商機後再新增活動與備註
+            </div>
+          ) : null}
         </Modal>
       )}
 

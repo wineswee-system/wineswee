@@ -44,4 +44,73 @@ export const CRM_EVENTS = {
       target_count: { type: 'number', required: false },
     },
   },
+  'crm.lead.created': {
+    domain: 'crm',
+    action: 'lead.created',
+    version: 1,
+    description: '線索建立',
+    payload: {
+      lead_id: { type: 'number', required: true },
+      name: { type: 'string', required: true },
+      source: { type: 'string', required: false },
+    },
+  },
+  'crm.lead.converted': {
+    domain: 'crm',
+    action: 'lead.converted',
+    version: 1,
+    description: '線索轉換為客戶',
+    payload: {
+      lead_id: { type: 'number', required: true },
+      customer_id: { type: 'number', required: true },
+      deal_id: { type: 'number', required: false },
+    },
+  },
+  'crm.activity.created': {
+    domain: 'crm',
+    action: 'activity.created',
+    version: 1,
+    description: '活動建立',
+    payload: {
+      activity_id: { type: 'number', required: true },
+      type: { type: 'string', required: true },
+      subject: { type: 'string', required: true },
+      assignee: { type: 'string', required: false },
+    },
+  },
+  'crm.activity.overdue': {
+    domain: 'crm',
+    action: 'activity.overdue',
+    version: 1,
+    description: '活動逾期',
+    payload: {
+      activity_id: { type: 'number', required: true },
+      subject: { type: 'string', required: true },
+      assignee: { type: 'string', required: false },
+      due_date: { type: 'string', required: true },
+    },
+  },
+  'crm.quote.generated': {
+    domain: 'crm',
+    action: 'quote.generated',
+    version: 1,
+    description: '從商機產生報價單',
+    payload: {
+      opportunity_id: { type: 'number', required: true },
+      quotation_id: { type: 'number', required: true },
+      amount: { type: 'number', required: true },
+    },
+  },
+  'crm.form.submitted': {
+    domain: 'crm',
+    action: 'form.submitted',
+    version: 1,
+    description: '表單提交',
+    payload: {
+      form_id: { type: 'number', required: true },
+      form_name: { type: 'string', required: true },
+      submission_id: { type: 'number', required: true },
+      data: { type: 'object', required: true },
+    },
+  },
 }

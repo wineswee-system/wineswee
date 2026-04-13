@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Zap, Play, Pause, Plus, Trash2, Settings, ChevronDown, ChevronRight, Copy, ArrowDown } from 'lucide-react'
+import { getCRMWorkflows, createCRMWorkflow, updateCRMWorkflow, deleteCRMWorkflow } from '../../lib/db'
 import Modal, { Field } from '../../components/Modal'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { WORKFLOW_TRIGGERS, WORKFLOW_ACTIONS, createWorkflow } from '../../lib/crmEngine'
+import { WORKFLOW_TRIGGERS, WORKFLOW_ACTIONS } from '../../lib/crmEngine'
 
 // --- Action config field definitions ---
 const ACTION_CONFIG_FIELDS = {
@@ -84,7 +85,7 @@ const ACTION_COLORS = {
   notify: 'var(--accent-blue)',
 }
 
-// --- Demo templates ---
+// --- Templates ---
 const TEMPLATES = [
   {
     name: '新客戶歡迎',
@@ -117,33 +118,14 @@ const TEMPLATES = [
   },
 ]
 
-// --- Demo saved workflows ---
-const INITIAL_WORKFLOWS = [
-  createWorkflow({ id: 'WF-001', name: '新客戶歡迎流程', description: '自動歡迎新聯絡人', trigger: 'contact_created', status: 'active', steps: TEMPLATES[0].steps }),
-  createWorkflow({ id: 'WF-002', name: 'SLA 逾期自動指派', description: '逾期工單自動通知與指派', trigger: 'ticket_sla_breached', status: 'active', steps: TEMPLATES[1].steps }),
-  createWorkflow({ id: 'WF-003', name: '贏單感謝流程', description: '自動發送感謝信與建立後續任務', trigger: 'deal_won', status: 'paused', steps: TEMPLATES[2].steps }),
-  createWorkflow({ id: 'WF-004', name: '潛客養成流程', description: '草稿中', trigger: 'form_submitted', status: 'draft', steps: [] }),
-]
-INITIAL_WORKFLOWS[0].executions = 47
-INITIAL_WORKFLOWS[1].executions = 12
-INITIAL_WORKFLOWS[2].executions = 23
-INITIAL_WORKFLOWS[3].executions = 0
-
-// --- Demo execution log ---
-const INITIAL_LOGS = [
-  { id: 'L1', timestamp: '2026-04-05 09:15:00', workflow: '新客戶歡迎流程', trigger: '新聯絡人建立', stepsExecuted: 3, status: '成功' },
-  { id: 'L2', timestamp: '2026-04-05 08:42:00', workflow: 'SLA 逾期自動指派', trigger: '工單 SLA 已逾期', stepsExecuted: 2, status: '成功' },
-  { id: 'L3', timestamp: '2026-04-04 17:30:00', workflow: '贏單感謝流程', trigger: '商機贏單', stepsExecuted: 3, status: '成功' },
-  { id: 'L4', timestamp: '2026-04-04 14:10:00', workflow: '新客戶歡迎流程', trigger: '新聯絡人建立', stepsExecuted: 2, status: '部分失敗' },
-  { id: 'L5', timestamp: '2026-04-04 11:05:00', workflow: 'SLA 逾期自動指派', trigger: '工單 SLA 已逾期', stepsExecuted: 2, status: '成功' },
-  { id: 'L6', timestamp: '2026-04-03 16:20:00', workflow: '新客戶歡迎流程', trigger: '新聯絡人建立', stepsExecuted: 3, status: '成功' },
-  { id: 'L7', timestamp: '2026-04-03 10:45:00', workflow: '贏單感謝流程', trigger: '商機贏單', stepsExecuted: 3, status: '失敗' },
-  { id: 'L8', timestamp: '2026-04-02 15:00:00', workflow: '新客戶歡迎流程', trigger: '新聯絡人建立', stepsExecuted: 3, status: '成功' },
-]
-
 // --- Helpers ---
 const getTriggerLabel = (val) => WORKFLOW_TRIGGERS.find(t => t.value === val)?.label || val
 const getActionDef = (val) => WORKFLOW_ACTIONS.find(a => a.value === val) || { value: val, label: val, icon: '?' }
+
+function generateCode() {
+  return 'WF-' + Date.now().toString(36).toUpperCase().slice(-6)
+}
+
 const statusBadge = (status) => {
   const map = {
     draft: { label: '草稿', bg: 'var(--accent-purple)', dim: 'var(--accent-purple-dim, rgba(139,92,246,0.15))' },
@@ -162,8 +144,10 @@ const statusBadge = (status) => {
 
 export default function WorkflowBuilder() {
   const [tab, setTab] = useState('list')
-  const [workflows, setWorkflows] = useState(INITIAL_WORKFLOWS)
-  const [logs] = useState(INITIAL_LOGS)
+  const [workflows, setWorkflows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   // Builder state
   const [builderName, setBuilderName] = useState('')
@@ -183,6 +167,20 @@ export default function WorkflowBuilder() {
   // Template modal
   const [showTemplates, setShowTemplates] = useState(false)
 
+  // Load data
+  useEffect(() => {
+    getCRMWorkflows()
+      .then(({ data, error: err }) => {
+        if (err) throw err
+        setWorkflows(data || [])
+      })
+      .catch(err => {
+        console.error('Failed to load workflows:', err)
+        setError('資料載入失敗，請重新整理頁面')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
   // --- Tab style ---
   const tabStyle = (active) => ({
     padding: '10px 20px', cursor: 'pointer', fontWeight: 600, fontSize: 13,
@@ -194,25 +192,28 @@ export default function WorkflowBuilder() {
   })
 
   // --- Workflow CRUD ---
-  const toggleStatus = (id) => {
-    setWorkflows(prev => prev.map(w => {
-      if (w.id !== id) return w
-      const next = w.status === 'active' ? 'paused' : 'active'
-      return { ...w, status: next }
-    }))
+  const toggleStatus = async (id) => {
+    const wf = workflows.find(w => w.id === id)
+    if (!wf) return
+    const next = wf.status === 'active' ? 'paused' : 'active'
+    const { data, error: err } = await updateCRMWorkflow(id, { status: next })
+    if (err) { alert('狀態更新失敗'); return }
+    setWorkflows(prev => prev.map(w => w.id === id ? data : w))
   }
 
-  const deleteWorkflow = (id) => {
+  const deleteWorkflow = async (id) => {
     if (!confirm('確定要刪除此工作流程？')) return
+    const { error: err } = await deleteCRMWorkflow(id)
+    if (err) { alert('刪除失敗'); return }
     setWorkflows(prev => prev.filter(w => w.id !== id))
   }
 
   const editWorkflow = (wf) => {
     setEditingWorkflowId(wf.id)
     setBuilderName(wf.name)
-    setBuilderDesc(wf.description)
-    setBuilderTrigger(wf.trigger)
-    setBuilderSteps([...wf.steps])
+    setBuilderDesc(wf.description || '')
+    setBuilderTrigger(wf.trigger_event)
+    setBuilderSteps([...(wf.steps || [])])
     setTab('builder')
   }
 
@@ -224,25 +225,36 @@ export default function WorkflowBuilder() {
     setBuilderSteps([])
   }
 
-  const saveWorkflow = () => {
+  const saveWorkflow = async () => {
     if (!builderName.trim()) { alert('請輸入流程名稱'); return }
-    if (editingWorkflowId) {
-      setWorkflows(prev => prev.map(w => w.id === editingWorkflowId
-        ? { ...w, name: builderName, description: builderDesc, trigger: builderTrigger, steps: builderSteps }
-        : w
-      ))
-    } else {
-      const wf = createWorkflow({
+    if (saving) return
+    setSaving(true)
+    try {
+      const payload = {
         name: builderName,
         description: builderDesc,
-        trigger: builderTrigger,
+        trigger_event: builderTrigger,
         steps: builderSteps,
-        status: 'draft',
-      })
-      setWorkflows(prev => [wf, ...prev])
+      }
+      if (editingWorkflowId) {
+        const { data, error: err } = await updateCRMWorkflow(editingWorkflowId, payload)
+        if (err) throw err
+        setWorkflows(prev => prev.map(w => w.id === editingWorkflowId ? data : w))
+      } else {
+        payload.code = generateCode()
+        payload.status = 'draft'
+        const { data, error: err } = await createCRMWorkflow(payload)
+        if (err) throw err
+        setWorkflows(prev => [data, ...prev])
+      }
+      resetBuilder()
+      setTab('list')
+    } catch (err) {
+      console.error('Save workflow failed:', err)
+      alert('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setSaving(false)
     }
-    resetBuilder()
-    setTab('list')
   }
 
   // --- Step management ---
@@ -286,6 +298,9 @@ export default function WorkflowBuilder() {
     setTab('builder')
   }
 
+  if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>{error}</div>
+
   // --- Render ---
   return (
     <div className="fade-in">
@@ -298,7 +313,6 @@ export default function WorkflowBuilder() {
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20 }}>
         <button style={tabStyle(tab === 'list')} onClick={() => setTab('list')}>📋 工作流程</button>
         <button style={tabStyle(tab === 'builder')} onClick={() => { setTab('builder'); if (!editingWorkflowId) resetBuilder() }}>✏️ 建立流程</button>
-        <button style={tabStyle(tab === 'logs')} onClick={() => setTab('logs')}>📊 執行紀錄</button>
       </div>
 
       {/* ======== TAB: Workflow List ======== */}
@@ -354,10 +368,10 @@ export default function WorkflowBuilder() {
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{wf.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wf.description}</div>
                     </td>
-                    <td><span style={{ fontSize: 12 }}>{getTriggerLabel(wf.trigger)}</span></td>
-                    <td>{wf.steps.length}</td>
+                    <td><span style={{ fontSize: 12 }}>{getTriggerLabel(wf.trigger_event)}</span></td>
+                    <td>{(wf.steps || []).length}</td>
                     <td>{statusBadge(wf.status)}</td>
-                    <td style={{ fontWeight: 600 }}>{wf.executions}</td>
+                    <td style={{ fontWeight: 600 }}>{wf.executions || 0}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
                         {wf.status !== 'draft' && (
@@ -538,59 +552,10 @@ export default function WorkflowBuilder() {
 
           {/* Save / Cancel */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 28 }}>
-            <button className="btn btn-primary" onClick={saveWorkflow}>
-              {editingWorkflowId ? '儲存變更' : '建立流程'}
+            <button className="btn btn-primary" onClick={saveWorkflow} disabled={saving}>
+              {saving ? '儲存中...' : editingWorkflowId ? '儲存變更' : '建立流程'}
             </button>
             <button className="btn btn-secondary" onClick={() => { resetBuilder(); setTab('list') }}>取消</button>
-          </div>
-        </div>
-      )}
-
-      {/* ======== TAB: Execution Logs ======== */}
-      {tab === 'logs' && (
-        <div>
-          <div className="card">
-            <div className="card-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700 }}>近期執行紀錄</h3>
-            </div>
-            <table className="data-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>時間</th>
-                  <th>工作流程</th>
-                  <th>觸發條件</th>
-                  <th>已執行步驟</th>
-                  <th>狀態</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(log => (
-                  <tr key={log.id}>
-                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{log.timestamp}</td>
-                    <td style={{ fontWeight: 600, fontSize: 13 }}>{log.workflow}</td>
-                    <td style={{ fontSize: 12 }}>{log.trigger}</td>
-                    <td>{log.stepsExecuted}</td>
-                    <td>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600,
-                        background: log.status === '成功'
-                          ? 'var(--accent-green-dim, rgba(34,197,94,0.15))'
-                          : log.status === '部分失敗'
-                            ? 'var(--accent-orange-dim, rgba(249,115,22,0.15))'
-                            : 'var(--accent-red-dim, rgba(239,68,68,0.15))',
-                        color: log.status === '成功'
-                          ? 'var(--accent-green)'
-                          : log.status === '部分失敗'
-                            ? 'var(--accent-orange)'
-                            : 'var(--accent-red)',
-                      }}>
-                        {log.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}

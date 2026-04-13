@@ -5,6 +5,7 @@ import {
   calculateFunnelConversion,
   calculateRepPerformance,
   calculateCLV,
+  forecastRevenue,
   toCSV,
   downloadCSV,
 } from '../../lib/crmEngine'
@@ -267,6 +268,42 @@ export default function CRMOverview() {
           </div>
         </div>
       </div>
+
+      {/* Pipeline Revenue Forecast */}
+      {(() => {
+        const forecast = forecastRevenue(opportunities)
+        const maxVal = Math.max(1, ...forecast.map(f => f.bestCase))
+        return forecast.some(f => f.dealCount > 0) ? (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <div className="card-title"><span className="card-title-icon"><BarChart3 size={16} /></span> 營收預測（6 個月）</div>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent-cyan)' }} /> 加權預測</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent-blue)', opacity: 0.3 }} /> 最佳情況</span>
+              </div>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-end', height: 200 }}>
+              {forecast.map(f => (
+                <div key={f.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    {f.weighted > 0 ? `$${(f.weighted / 1000).toFixed(0)}K` : '-'}
+                  </div>
+                  <div style={{ width: '100%', height: 140, position: 'relative', display: 'flex', alignItems: 'flex-end' }}>
+                    {/* Best case (background bar) */}
+                    <div style={{ position: 'absolute', bottom: 0, left: '15%', width: '70%', height: `${Math.max(4, (f.bestCase / maxVal) * 100)}%`, background: 'var(--accent-blue)', opacity: 0.15, borderRadius: '4px 4px 0 0' }} />
+                    {/* Weighted (foreground bar) */}
+                    <div style={{ position: 'absolute', bottom: 0, left: '15%', width: '70%', height: `${Math.max(4, (f.weighted / maxVal) * 100)}%`, background: 'var(--accent-cyan)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    <div>{f.label.replace(/\d{4}年/, '')}</div>
+                    <div style={{ fontSize: 9 }}>{f.dealCount} 筆</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null
+      })()}
 
       {/* Row: CLV + Campaign ROI */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>

@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
-import { getCompanies, createCompany } from '../../lib/db'
+import { getCompanies, createCompany, getStores, getEmployees } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Companies() {
   const [companies, setCompanies] = useState([])
+  const [stores, setStores] = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', short_name: '', tax_id: '', phone: '', status: '營運中' })
 
   useEffect(() => {
-    getCompanies().then(({ data }) => { setCompanies(data || []) }).catch(err => {
+    Promise.all([getCompanies(), getStores(), getEmployees()]).then(([c, s, e]) => {
+      setCompanies(c.data || [])
+      setStores(s.data || [])
+      setEmployees(e.data || [])
+    }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
@@ -23,7 +29,7 @@ export default function Companies() {
   const handleSubmit = async () => {
     if (!form.name) return
     try {
-      const { data, error } = await createCompany({ ...form, stores: 0, employees: 0 })
+      const { data, error } = await createCompany(form)
       if (error) throw error
       if (data) {
         setCompanies(prev => [...prev, data])
@@ -64,8 +70,8 @@ export default function Companies() {
                   <td><span className="badge badge-cyan">{c.short_name}</span></td>
                   <td style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{c.tax_id}</td>
                   <td>{c.phone}</td>
-                  <td>{c.stores ?? 0}</td>
-                  <td>{c.employees ?? 0}</td>
+                  <td>{stores.filter(s => s.company === c.name).length}</td>
+                  <td>{(() => { const companyStores = stores.filter(s => s.company === c.name).map(s => s.name); return employees.filter(e => companyStores.includes(e.store) && e.status === '在職').length })()}</td>
                   <td>
                     <span className={`badge ${c.status === '營運中' ? 'badge-success' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{c.status}

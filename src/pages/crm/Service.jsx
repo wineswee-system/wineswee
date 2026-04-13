@@ -2,15 +2,18 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Phone, Mail, MessageSquare, FileText, PenLine,
   AlertTriangle, Clock, CheckCircle, Star, Shield, ArrowUpCircle,
-  Users, Settings, Link2
+  Users, Settings, Link2, Trash2, Edit3, History, Merge, Sparkles, Loader, Copy
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getTicketHistory, createTicketHistoryEntry, getSLAPolicies, createSLAPolicy, updateSLAPolicy, deleteSLAPolicy } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import {
   calculateSLAStatus, SLA_POLICIES, checkEscalation,
   autoAssignTicket, createCSATSurvey, calculateCSATMetrics
 } from '../../lib/crmEngine'
+import { generateTicketReply, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
+import NotesPanel from './components/NotesPanel'
 
 const TICKET_TYPES = ['商品瑕疵', '出貨錯誤', '退換貨', '付款問題', '諮詢', '其他']
 const PRIORITIES = ['緊急', '高', '一般', '低']
@@ -81,6 +84,29 @@ export default function Service() {
   const [csatModal, setCsatModal] = useState(null) // ticket to rate
   const [csatScore, setCsatScore] = useState(0)
   const [csatComment, setCsatComment] = useState('')
+
+  // Phase 2: Ticket history
+  const [historyTicketId, setHistoryTicketId] = useState(null)
+  const [ticketHistory, setTicketHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Phase 2: Bulk actions
+  const [selected, setSelected] = useState(new Set())
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkAction, setBulkAction] = useState('') // status, assignee, merge
+  const [bulkValue, setBulkValue] = useState('')
+
+  // Phase 2: Custom SLA
+  const [customSLAs, setCustomSLAs] = useState([])
+  const [showSLAForm, setShowSLAForm] = useState(false)
+  const [slaForm, setSlaForm] = useState({ name: '', priority: '一般', response_hours: 24, resolution_hours: 72, is_default: false })
+
+  // AI Smart Reply
+  const [aiReplyTicketId, setAiReplyTicketId] = useState(null)
+  const [aiReplyLoading, setAiReplyLoading] = useState(false)
+  const [aiReplyResult, setAiReplyResult] = useState(null)
+  const [aiReplyError, setAiReplyError] = useState(null)
+  const [editingSLAId, setEditingSLAId] = useState(null)
   const emptyForm = {
     customer_name: '', subject: '', type: '商品瑕疵', priority: '一般',
     assignee: '', description: '', status: '待處理', location_id: '',
@@ -95,12 +121,14 @@ export default function Service() {
       supabase.from('customers').select('id, name'),
       supabase.from('stores').select('*'),
       supabase.from('opportunities').select('id, name, customer_name'),
-    ]).then(([t, c, l, d]) => {
+      getSLAPolicies(),
+    ]).then(([t, c, l, d, sla]) => {
       const ticketData = t.data || []
       setTickets(ticketData)
       setCustomers(c.data || [])
       setLocations(l.data || [])
       setDeals(d.data || [])
+      setCustomSLAs(sla.data || [])
 
       // Build initial CSAT surveys for resolved tickets
       const resolved = ticketData.filter(tk => tk.status === '已解決' || tk.status === '已關閉')
@@ -142,6 +170,7 @@ export default function Service() {
         setTickets(prev => [data, ...prev])
         setShowModal(false)
         setForm(emptyForm)
+        createTicketHistoryEntry({ ticket_id: data.id, action: 'created', new_value: `建立工單：${data.subject}`, actor: '系統使用者' })
       }
     } catch (err) {
       console.error('Operation failed:', err)
@@ -149,15 +178,19 @@ export default function Service() {
     }
   }
 
-  /* ── status update (with CSAT auto-create) ─────── */
+  /* ── status update (with CSAT auto-create + history log) ── */
   const updateStatus = async (id, status) => {
     try {
+      const ticket = tickets.find(t => t.id === id)
+      const oldStatus = ticket?.status
       const updates = { status }
       if (status === '已解決') updates.resolved_at = new Date().toISOString()
       const { data, error } = await supabase.from('service_tickets').update(updates).eq('id', id).select().single()
       if (error) throw error
       if (data) {
         setTickets(prev => prev.map(t => t.id === id ? data : t))
+        // Log history
+        createTicketHistoryEntry({ ticket_id: id, action: 'status_changed', old_value: oldStatus, new_value: status, actor: '系統使用者' })
         // Auto-create CSAT survey when resolved
         if (status === '已解決') {
           const survey = createCSATSurvey(data.id, data.customer_name)
@@ -168,6 +201,99 @@ export default function Service() {
       console.error('Operation failed:', err)
       alert('操作失敗：' + (err.message || '未知錯誤'))
     }
+  }
+
+  /* ── ticket history ────────────────────────────── */
+  const loadHistory = async (ticketId) => {
+    if (historyTicketId === ticketId) { setHistoryTicketId(null); return }
+    setHistoryTicketId(ticketId)
+    setHistoryLoading(true)
+    const { data } = await getTicketHistory(ticketId)
+    setTicketHistory(data || [])
+    setHistoryLoading(false)
+  }
+
+  /* ── bulk actions ──────────────────────────────── */
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) setSelected(new Set())
+    else setSelected(new Set(filtered.map(t => t.id)))
+  }
+  const executeBulkAction = async () => {
+    if (selected.size === 0 || !bulkAction) return
+    const ids = [...selected]
+    try {
+      if (bulkAction === 'status') {
+        if (!bulkValue) return
+        await supabase.from('service_tickets').update({ status: bulkValue }).in('id', ids)
+        for (const id of ids) {
+          const t = tickets.find(tk => tk.id === id)
+          createTicketHistoryEntry({ ticket_id: id, action: 'status_changed', old_value: t?.status, new_value: bulkValue, actor: '批次操作' })
+        }
+      } else if (bulkAction === 'assignee') {
+        if (!bulkValue) return
+        await supabase.from('service_tickets').update({ assignee: bulkValue }).in('id', ids)
+        for (const id of ids) {
+          const t = tickets.find(tk => tk.id === id)
+          createTicketHistoryEntry({ ticket_id: id, action: 'assigned', old_value: t?.assignee, new_value: bulkValue, actor: '批次操作' })
+        }
+      } else if (bulkAction === 'merge') {
+        // Merge into first selected ticket
+        const primaryId = ids[0]
+        const mergeIds = ids.slice(1)
+        // Close merged tickets and add reference
+        for (const id of mergeIds) {
+          await supabase.from('service_tickets').update({ status: '已關閉' }).eq('id', id)
+          createTicketHistoryEntry({ ticket_id: id, action: 'merged', new_value: `合併至 #${String(primaryId).padStart(4, '0')}`, actor: '批次操作' })
+        }
+        createTicketHistoryEntry({ ticket_id: primaryId, action: 'merged', new_value: `合併了 ${mergeIds.map(id => `#${String(id).padStart(4, '0')}`).join(', ')}`, actor: '批次操作' })
+      }
+      // Reload tickets
+      const { data: refreshed } = await supabase.from('service_tickets').select('*').order('created_at', { ascending: false })
+      setTickets(refreshed || [])
+      setSelected(new Set())
+      setShowBulkModal(false)
+      setBulkAction('')
+      setBulkValue('')
+    } catch (err) {
+      alert('批次操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  /* ── custom SLA CRUD ───────────────────────────── */
+  const handleSLASave = async () => {
+    try {
+      if (editingSLAId) {
+        const { data, error: err } = await updateSLAPolicy(editingSLAId, slaForm)
+        if (err) throw err
+        setCustomSLAs(prev => prev.map(s => s.id === editingSLAId ? data : s))
+      } else {
+        const { data, error: err } = await createSLAPolicy(slaForm)
+        if (err) throw err
+        setCustomSLAs(prev => [...prev, data])
+      }
+      setShowSLAForm(false)
+      setEditingSLAId(null)
+      setSlaForm({ name: '', priority: '一般', response_hours: 24, resolution_hours: 72, is_default: false })
+    } catch (err) {
+      alert('SLA 儲存失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+  const handleSLAEdit = (sla) => {
+    setSlaForm({ name: sla.name, priority: sla.priority, response_hours: sla.response_hours, resolution_hours: sla.resolution_hours, is_default: sla.is_default })
+    setEditingSLAId(sla.id)
+    setShowSLAForm(true)
+  }
+  const handleSLADelete = async (id) => {
+    if (!confirm('確定要刪除此 SLA 政策？')) return
+    await deleteSLAPolicy(id)
+    setCustomSLAs(prev => prev.filter(s => s.id !== id))
   }
 
   /* ── CSAT submit ────────────────────────────────── */
@@ -181,6 +307,34 @@ export default function Service() {
     setCsatModal(null)
     setCsatScore(0)
     setCsatComment('')
+  }
+
+  /* ── AI smart reply ──────────────────────────────── */
+  const handleAiReply = async (ticket) => {
+    if (aiReplyTicketId === ticket.id) { setAiReplyTicketId(null); return }
+    setAiReplyTicketId(ticket.id)
+    setAiReplyLoading(true)
+    setAiReplyError(null)
+    setAiReplyResult(null)
+    try {
+      const { data: histData } = await getTicketHistory(ticket.id)
+      const result = await generateTicketReply({
+        ticket,
+        history: histData || [],
+        knowledgeBase: KB_ITEMS,
+      })
+      setAiReplyResult(result)
+    } catch (err) {
+      setAiReplyError(err.message || 'AI 產生回覆失敗')
+    } finally {
+      setAiReplyLoading(false)
+    }
+  }
+
+  const copyAiReply = () => {
+    if (aiReplyResult?.reply) {
+      navigator.clipboard.writeText(aiReplyResult.reply)
+    }
   }
 
   /* ── agent config ───────────────────────────────── */
@@ -252,13 +406,49 @@ export default function Service() {
         </div>
       </div>
 
-      {/* ── SLA Policy Panel ──────────────────────── */}
+      {/* ── SLA Policy Panel (Custom + Default) ──── */}
       {showSLAPanel && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-header">
             <div className="card-title"><span className="card-title-icon"><Shield size={16} /></span> SLA 服務水準政策</div>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }} onClick={() => setShowSLAPanel(false)}>✕</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => { setSlaForm({ name: '', priority: '一般', response_hours: 24, resolution_hours: 72, is_default: false }); setEditingSLAId(null); setShowSLAForm(true) }}>
+                <Plus size={12} /> 新增政策
+              </button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }} onClick={() => setShowSLAPanel(false)}>✕</button>
+            </div>
           </div>
+          {/* Custom SLAs */}
+          {customSLAs.length > 0 && (
+            <>
+              <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>自訂政策</div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>名稱</th><th>優先度</th><th>回應時限</th><th>解決時限</th><th>操作</th></tr>
+                  </thead>
+                  <tbody>
+                    {customSLAs.map(p => (
+                      <tr key={p.id}>
+                        <td style={{ fontWeight: 600 }}>{p.name}</td>
+                        <td><span className={`badge ${p.priority === '緊急' ? 'badge-danger' : p.priority === '高' ? 'badge-warning' : 'badge-neutral'}`}><span className="badge-dot"></span>{p.priority}</span></td>
+                        <td style={{ fontWeight: 600 }}>{p.response_hours} 小時</td>
+                        <td style={{ fontWeight: 600 }}>{p.resolution_hours} 小時</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-sm" onClick={() => handleSLAEdit(p)}><Edit3 size={12} /></button>
+                            <button className="btn btn-sm" style={{ color: 'var(--accent-red)' }} onClick={() => handleSLADelete(p.id)}><Trash2 size={12} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {/* Default SLAs */}
+          <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>預設政策</div>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
@@ -365,12 +555,35 @@ export default function Service() {
               ))}
             </div>
           </div>
+
+          {/* Bulk Action Toolbar */}
+          {selected.size > 0 && (
+            <div style={{ padding: '8px 16px', background: 'var(--accent-cyan-dim, rgba(6,182,212,0.08))', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-cyan)' }}>已選 {selected.size} 筆</span>
+              <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => { setBulkAction('status'); setBulkValue(''); setShowBulkModal(true) }}>
+                批次更新狀態
+              </button>
+              <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => { setBulkAction('assignee'); setBulkValue(''); setShowBulkModal(true) }}>
+                批次指派
+              </button>
+              {selected.size >= 2 && (
+                <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px', color: 'var(--accent-purple)' }} onClick={() => { setBulkAction('merge'); setShowBulkModal(true) }}>
+                  合併工單
+                </button>
+              )}
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }} onClick={() => setSelected(new Set())}>
+                取消選取
+              </button>
+            </div>
+          )}
+
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 36 }}><input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length} onChange={toggleSelectAll} /></th>
                   <th>#</th><th>管道</th><th>客戶</th><th>分店</th><th>主旨</th>
-                  <th>類型</th><th>優先度</th><th>負責人</th><th>SLA</th><th>關聯商機</th><th>CSAT</th><th>狀態</th>
+                  <th>類型</th><th>優先度</th><th>負責人</th><th>SLA</th><th>關聯商機</th><th>CSAT</th><th>狀態</th><th style={{ width: 40 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -387,7 +600,10 @@ export default function Service() {
                   const dealName = deals.find(d => String(d.id) === String(t.deal_id))?.name
 
                   return (
+                    <>
                     <tr key={t.id}>
+                      {/* Checkbox */}
+                      <td><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} /></td>
                       {/* ID */}
                       <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         #{String(t.id).padStart(4, '0')}
@@ -467,7 +683,121 @@ export default function Service() {
                           {STATUSES.map(s => <option key={s}>{s}</option>)}
                         </select>
                       </td>
+                      {/* History + AI toggle */}
+                      <td>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          <button
+                            className="btn btn-sm"
+                            style={{ padding: '2px 6px', color: historyTicketId === t.id ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                            onClick={() => loadHistory(t.id)}
+                            title="異動紀錄"
+                          >
+                            <History size={13} />
+                          </button>
+                          {isAIConfigured() && (
+                            <button
+                              className="btn btn-sm"
+                              style={{ padding: '2px 6px', color: aiReplyTicketId === t.id ? 'var(--accent-purple)' : 'var(--text-muted)' }}
+                              onClick={() => handleAiReply(t)}
+                              title="AI 智慧回覆"
+                            >
+                              <Sparkles size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
+                    {/* AI Reply expansion row */}
+                    {aiReplyTicketId === t.id && (
+                      <tr key={`${t.id}-ai-reply`}>
+                        <td colSpan={14} style={{ padding: 0, background: 'linear-gradient(135deg, rgba(139,92,246,0.04), rgba(99,102,241,0.04))' }}>
+                          <div style={{ padding: '14px 20px' }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent-purple)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Sparkles size={14} /> AI 智慧回覆 — 工單 #{String(t.id).padStart(4, '0')}
+                            </div>
+                            {aiReplyLoading ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
+                                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> AI 正在分析工單並產生回覆...
+                              </div>
+                            ) : aiReplyError ? (
+                              <div style={{ fontSize: 12, color: 'var(--accent-red)', padding: '8px 12px', background: 'var(--accent-red-dim)', borderRadius: 8 }}>{aiReplyError}</div>
+                            ) : aiReplyResult ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                {/* Reply content */}
+                                <div style={{ padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', position: 'relative' }}>
+                                  <button onClick={copyAiReply} title="複製回覆" style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                                    <Copy size={14} />
+                                  </button>
+                                  <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', paddingRight: 24 }}>{aiReplyResult.reply}</div>
+                                </div>
+                                {/* Sentiment + Actions */}
+                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                  {aiReplyResult.sentiment && (
+                                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ color: 'var(--text-muted)' }}>客戶情緒：</span>
+                                      <span className={`badge ${aiReplyResult.sentiment === 'positive' ? 'badge-success' : aiReplyResult.sentiment === 'negative' ? 'badge-danger' : 'badge-neutral'}`}>
+                                        <span className="badge-dot"></span>
+                                        {aiReplyResult.sentiment === 'positive' ? '正面' : aiReplyResult.sentiment === 'negative' ? '負面' : '中性'}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {aiReplyResult.suggestedActions?.length > 0 && (
+                                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                      <span style={{ color: 'var(--text-muted)' }}>建議動作：</span>
+                                      {aiReplyResult.suggestedActions.map((a, i) => (
+                                        <span key={i} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim, rgba(139,92,246,0.1))', color: 'var(--accent-purple)', fontSize: 11, fontWeight: 600 }}>{a}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                {aiReplyResult.relevantKB?.length > 0 && (
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    參考知識庫：{aiReplyResult.relevantKB.join('、')}
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {/* History expansion row */}
+                    {historyTicketId === t.id && (
+                      <tr key={`${t.id}-history`}>
+                        <td colSpan={14} style={{ padding: 0, background: 'var(--glass-light)' }}>
+                          <div style={{ padding: '12px 20px' }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text-secondary)' }}>
+                              <History size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> 異動紀錄 — 工單 #{String(t.id).padStart(4, '0')}
+                            </div>
+                            {historyLoading ? <LoadingSpinner /> : ticketHistory.length === 0 ? (
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>尚無異動紀錄</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {ticketHistory.map(h => (
+                                  <div key={h.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
+                                    <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 130 }}>
+                                      {new Date(h.created_at).toLocaleString('zh-TW')}
+                                    </span>
+                                    <span style={{ fontWeight: 600, minWidth: 70 }}>
+                                      {h.action === 'status_changed' ? '狀態變更' : h.action === 'assigned' ? '指派變更' : h.action === 'created' ? '建立工單' : h.action === 'merged' ? '合併工單' : h.action}
+                                    </span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>
+                                      {h.old_value && h.new_value ? `${h.old_value} → ${h.new_value}` : h.new_value || h.comment || ''}
+                                    </span>
+                                    <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{h.actor}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Notes panel inline */}
+                            <div style={{ marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                              <NotesPanel entityType="service_ticket" entityId={t.id} />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   )
                 })}
               </tbody>
@@ -652,6 +982,73 @@ export default function Service() {
               <Users size={13} /> 未選擇負責人，將自動以 Round-Robin 分配給：<strong>{autoAssignTicket(agents, tickets) || '(無可用人員)'}</strong>
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* ════════════ MODAL: BULK ACTION ═══════════════ */}
+      {showBulkModal && (
+        <Modal
+          title={bulkAction === 'merge' ? `合併 ${selected.size} 筆工單` : `批次${bulkAction === 'status' ? '更新狀態' : '指派負責人'}`}
+          onClose={() => setShowBulkModal(false)}
+          onSubmit={executeBulkAction}
+          submitLabel={bulkAction === 'merge' ? '確定合併' : '套用'}
+        >
+          {bulkAction === 'status' && (
+            <Field label="新狀態">
+              <select className="form-input" style={{ width: '100%' }} value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+                <option value="">請選擇</option>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </Field>
+          )}
+          {bulkAction === 'assignee' && (
+            <Field label="負責客服">
+              <select className="form-input" style={{ width: '100%' }} value={bulkValue} onChange={e => setBulkValue(e.target.value)}>
+                <option value="">請選擇</option>
+                {agents.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </Field>
+          )}
+          {bulkAction === 'merge' && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <p>將以下工單合併為一張：</p>
+              <ul style={{ paddingLeft: 20, margin: '8px 0' }}>
+                {[...selected].map((id, i) => (
+                  <li key={id} style={{ fontWeight: i === 0 ? 700 : 400 }}>
+                    #{String(id).padStart(4, '0')} {tickets.find(t => t.id === id)?.subject}
+                    {i === 0 && <span style={{ color: 'var(--accent-cyan)', marginLeft: 4 }}>(主工單)</span>}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>第一張為主工單，其餘將被關閉。</p>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ════════════ MODAL: SLA FORM ═══════════════════ */}
+      {showSLAForm && (
+        <Modal
+          title={editingSLAId ? '編輯 SLA 政策' : '新增 SLA 政策'}
+          onClose={() => { setShowSLAForm(false); setEditingSLAId(null) }}
+          onSubmit={handleSLASave}
+        >
+          <Field label="政策名稱 *">
+            <input className="form-input" style={{ width: '100%' }} value={slaForm.name} onChange={e => setSlaForm(f => ({ ...f, name: e.target.value }))} placeholder="例：VIP 客戶 SLA" />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Field label="適用優先度">
+              <select className="form-input" style={{ width: '100%' }} value={slaForm.priority} onChange={e => setSlaForm(f => ({ ...f, priority: e.target.value }))}>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="回應時限 (小時)">
+              <input className="form-input" type="number" style={{ width: '100%' }} value={slaForm.response_hours} onChange={e => setSlaForm(f => ({ ...f, response_hours: Number(e.target.value) }))} />
+            </Field>
+            <Field label="解決時限 (小時)">
+              <input className="form-input" type="number" style={{ width: '100%' }} value={slaForm.resolution_hours} onChange={e => setSlaForm(f => ({ ...f, resolution_hours: Number(e.target.value) }))} />
+            </Field>
+          </div>
         </Modal>
       )}
 

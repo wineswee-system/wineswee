@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, GripVertical, Copy, Check, Eye, Code, Settings, ChevronUp, ChevronDown, FileText, BarChart3, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getCRMForms, createCRMForm, updateCRMForm, deleteCRMForm, getCRMFormSubmissions, createCRMFormSubmission } from '../../lib/db'
+import { getEventBus } from '../../lib/events/index.js'
 import { FORM_FIELD_TYPES, createFormDefinition, DEFAULT_PIPELINES } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -14,46 +16,25 @@ const STATUS_LABEL = { draft: '草稿', active: '啟用中', archived: '已封�
 
 const SALES_REPS = ['王經理', '李業務', '陳主任', '張專員', '林業務']
 
-// Demo data
-const DEMO_FORMS = [
-  createFormDefinition({ id: 'FORM-001', name: '官網聯繫表單', description: '嵌入官網的潛在客戶表單', status: 'active', submitButtonText: '立即諮詢', successMessage: '感謝您！我們會在 24 小時內回覆。', assignTo: '王經理', notifyEmail: 'sales@example.com' }),
-  createFormDefinition({ id: 'FORM-002', name: '產品試用申請', description: '產品試用專用表單', status: 'active', submitButtonText: '申請試用', createDeal: true, dealPipeline: 'default', fields: [
-    { id: 'f1', type: 'text', label: '姓名', required: true, placeholder: '請輸入姓名' },
-    { id: 'f2', type: 'email', label: 'Email', required: true, placeholder: '請輸入Email' },
-    { id: 'f3', type: 'text', label: '公司名稱', required: true, placeholder: '公司名稱' },
-    { id: 'f4', type: 'select', label: '公司規模', required: false, placeholder: '請選擇', options: ['1-10人', '11-50人', '51-200人', '200人以上'] },
-    { id: 'f5', type: 'textarea', label: '想試用的功能', required: false, placeholder: '請描述...' },
-  ] }),
-  createFormDefinition({ id: 'FORM-003', name: '展覽活動報名', description: '2026 春季展覽用', status: 'draft' }),
-  createFormDefinition({ id: 'FORM-004', name: '舊版問卷（已停用）', description: '去年的問卷表單', status: 'archived' }),
-]
-// Patch submission counts
-DEMO_FORMS[0].submissions = 142
-DEMO_FORMS[1].submissions = 67
-DEMO_FORMS[2].submissions = 0
-DEMO_FORMS[3].submissions = 213
-
-const DEMO_SUBMISSIONS = [
-  { id: 'SUB-001', form_id: 'FORM-001', data: { '姓名': '王小明', 'Email': 'wang@example.com', '電話': '0912-345-678', '需求說明': '想了解 ERP 系統方案' }, submitted_at: '2026-04-04T14:30:00Z' },
-  { id: 'SUB-002', form_id: 'FORM-001', data: { '姓名': '李大華', 'Email': 'lee@corp.com', '電話': '0923-456-789', '需求說明': '詢問批發價格' }, submitted_at: '2026-04-03T09:15:00Z' },
-  { id: 'SUB-003', form_id: 'FORM-002', data: { '姓名': '陳美麗', 'Email': 'chen@startup.io', '公司名稱': '新創科技', '公司規模': '11-50人', '想試用的功能': 'CRM 模組' }, submitted_at: '2026-04-02T16:45:00Z' },
-  { id: 'SUB-004', form_id: 'FORM-001', data: { '姓名': '張志偉', 'Email': 'zhang@mfg.com', '電話': '0945-678-901', '需求說明': '製造業 MRP 整合' }, submitted_at: '2026-04-01T11:20:00Z' },
-  { id: 'SUB-005', form_id: 'FORM-002', data: { '姓名': '林雅芳', 'Email': 'lin@trade.tw', '公司名稱': '宏達貿易', '公司規模': '51-200人', '想試用的功能': '進銷存 + 財務' }, submitted_at: '2026-03-31T08:55:00Z' },
-  { id: 'SUB-006', form_id: 'FORM-001', data: { '姓名': '黃建國', 'Email': 'huang@food.com', '電話': '0978-123-456', '需求說明': '食品業 POS 整合' }, submitted_at: '2026-03-30T15:10:00Z' },
-]
-
 function generateId() {
   return 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
+function generateCode() {
+  return 'FORM-' + Date.now().toString(36).toUpperCase().slice(-6)
+}
+
 export default function FormBuilder() {
   const [tab, setTab] = useState('list')
-  const [forms, setForms] = useState(DEMO_FORMS)
-  const [submissions] = useState(DEMO_SUBMISSIONS)
-  const [loading] = useState(false)
+  const [forms, setForms] = useState([])
+  const [submissions, setSubmissions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   // Builder state
   const [editingForm, setEditingForm] = useState(null)
+  const [editingId, setEditingId] = useState(null) // null = new, number = existing
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
   const [showEmbedModal, setShowEmbedModal] = useState(false)
@@ -63,6 +44,23 @@ export default function FormBuilder() {
   // Submissions filter
   const [subFormFilter, setSubFormFilter] = useState('')
 
+  // Load data
+  useEffect(() => {
+    Promise.all([
+      getCRMForms(),
+      getCRMFormSubmissions(),
+    ])
+      .then(([f, s]) => {
+        setForms(f.data || [])
+        setSubmissions(s.data || [])
+      })
+      .catch(err => {
+        console.error('Failed to load forms:', err)
+        setError('資料載入失敗，請重新整理頁面')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
   // New field defaults
   const newField = () => ({ id: generateId(), type: 'text', label: '', required: false, placeholder: '', options: [] })
 
@@ -70,42 +68,78 @@ export default function FormBuilder() {
   const startNewForm = () => {
     const f = createFormDefinition({ name: '', description: '' })
     setEditingForm(f)
+    setEditingId(null)
     setShowSettings(false)
     setTab('builder')
   }
 
   // Edit existing
   const editForm = (form) => {
-    setEditingForm(JSON.parse(JSON.stringify(form)))
+    setEditingForm({
+      name: form.name,
+      description: form.description || '',
+      fields: form.fields || [],
+      settings: form.settings || {},
+      style: form.style || {},
+      status: form.status,
+      submissions: form.submissions_count || 0,
+    })
+    setEditingId(form.id)
     setShowSettings(false)
     setTab('builder')
   }
 
   // Save form
-  const saveForm = () => {
-    if (!editingForm.name) return
-    setForms(prev => {
-      const idx = prev.findIndex(f => f.id === editingForm.id)
-      if (idx >= 0) {
-        const updated = [...prev]
-        updated[idx] = { ...editingForm }
-        return updated
+  const saveForm = async () => {
+    if (!editingForm.name || saving) return
+    setSaving(true)
+    try {
+      const payload = {
+        name: editingForm.name,
+        description: editingForm.description,
+        fields: editingForm.fields,
+        settings: editingForm.settings,
+        style: editingForm.style || {},
+        status: editingForm.status || 'draft',
       }
-      return [editingForm, ...prev]
-    })
-    setTab('list')
-    setEditingForm(null)
+
+      if (editingId) {
+        // Update existing
+        const { data, error: err } = await updateCRMForm(editingId, payload)
+        if (err) throw err
+        setForms(prev => prev.map(f => f.id === editingId ? data : f))
+      } else {
+        // Create new
+        payload.code = generateCode()
+        const { data, error: err } = await createCRMForm(payload)
+        if (err) throw err
+        setForms(prev => [data, ...prev])
+      }
+      setTab('list')
+      setEditingForm(null)
+      setEditingId(null)
+    } catch (err) {
+      console.error('Save form failed:', err)
+      alert('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Delete form
-  const deleteForm = (id) => {
-    if (!confirm('確定要刪除此表單？')) return
+  const deleteForm = async (id) => {
+    if (!confirm('確定要刪除此表單？相關提交紀錄也會一併刪除。')) return
+    const { error: err } = await deleteCRMForm(id)
+    if (err) { alert('刪除失敗'); return }
     setForms(prev => prev.filter(f => f.id !== id))
+    setSubmissions(prev => prev.filter(s => s.form_id !== id))
   }
 
   // Toggle form status
-  const toggleStatus = (id, newStatus) => {
-    setForms(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f))
+  const toggleStatus = async (id, newStatus) => {
+    const { data, error: err } = await updateCRMForm(id, { status: newStatus })
+    if (err) { alert('狀態更新失敗'); return }
+    setForms(prev => prev.map(f => f.id === id ? data : f))
   }
 
   // Field operations on editingForm
@@ -160,10 +194,11 @@ export default function FormBuilder() {
 
   // Filtered submissions
   const filteredSubs = subFormFilter
-    ? submissions.filter(s => s.form_id === subFormFilter)
+    ? submissions.filter(s => s.form_id === Number(subFormFilter))
     : submissions
 
   if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>{error}</div>
 
   const tabs = [
     { key: 'list', label: '📋 表單列表' },
@@ -174,7 +209,7 @@ export default function FormBuilder() {
   // Stats
   const totalForms = forms.length
   const activeForms = forms.filter(f => f.status === 'active').length
-  const totalSubmissions = forms.reduce((s, f) => s + f.submissions, 0)
+  const totalSubmissions = forms.reduce((s, f) => s + (f.submissions_count || 0), 0)
   const avgSubmissions = activeForms > 0 ? Math.round(totalSubmissions / activeForms) : 0
 
   return (
@@ -253,8 +288,8 @@ export default function FormBuilder() {
                   <td style={{ fontWeight: 600 }}>{f.name}</td>
                   <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.description || '-'}</td>
                   <td><span className={`badge ${STATUS_BADGE[f.status]}`}>{STATUS_LABEL[f.status]}</span></td>
-                  <td>{f.fields.length}</td>
-                  <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{f.submissions}</td>
+                  <td>{(f.fields || []).length}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{f.submissions_count || 0}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{new Date(f.created_at).toLocaleDateString('zh-TW')}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -393,36 +428,36 @@ export default function FormBuilder() {
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>送出按鈕文字</label>
-                    <input className="form-input" value={editingForm.settings.submitButtonText} onChange={e => updateSettings('submitButtonText', e.target.value)} />
+                    <input className="form-input" value={editingForm.settings.submitButtonText || ''} onChange={e => updateSettings('submitButtonText', e.target.value)} />
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>成功訊息</label>
-                    <textarea className="form-input" rows={2} value={editingForm.settings.successMessage} onChange={e => updateSettings('successMessage', e.target.value)} style={{ resize: 'vertical' }} />
+                    <textarea className="form-input" rows={2} value={editingForm.settings.successMessage || ''} onChange={e => updateSettings('successMessage', e.target.value)} style={{ resize: 'vertical' }} />
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>自動指派業務</label>
-                    <select className="form-input" value={editingForm.settings.assignTo} onChange={e => updateSettings('assignTo', e.target.value)}>
+                    <select className="form-input" value={editingForm.settings.assignTo || ''} onChange={e => updateSettings('assignTo', e.target.value)}>
                       <option value="">不指派</option>
                       {SALES_REPS.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={editingForm.settings.createDeal} onChange={e => updateSettings('createDeal', e.target.checked)} />
+                      <input type="checkbox" checked={editingForm.settings.createDeal || false} onChange={e => updateSettings('createDeal', e.target.checked)} />
                       自動建立商機
                     </label>
                   </div>
                   {editingForm.settings.createDeal && (
                     <div>
                       <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>商機漏斗</label>
-                      <select className="form-input" value={editingForm.settings.dealPipeline} onChange={e => updateSettings('dealPipeline', e.target.value)}>
+                      <select className="form-input" value={editingForm.settings.dealPipeline || ''} onChange={e => updateSettings('dealPipeline', e.target.value)}>
                         {DEFAULT_PIPELINES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
                   )}
                   <div>
                     <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>通知 Email</label>
-                    <input className="form-input" type="email" value={editingForm.settings.notifyEmail} onChange={e => updateSettings('notifyEmail', e.target.value)} placeholder="填寫後每次提交會寄通知" />
+                    <input className="form-input" type="email" value={editingForm.settings.notifyEmail || ''} onChange={e => updateSettings('notifyEmail', e.target.value)} placeholder="填寫後每次提交會寄通知" />
                   </div>
                 </div>
               )}
@@ -430,13 +465,13 @@ export default function FormBuilder() {
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <button className="btn btn-primary" onClick={saveForm} disabled={!editingForm.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Check size={16} /> 儲存表單
+              <button className="btn btn-primary" onClick={saveForm} disabled={!editingForm.name || saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Check size={16} /> {saving ? '儲存中...' : '儲存表單'}
               </button>
               <button className="btn" onClick={() => setShowPreview(!showPreview)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Eye size={16} /> {showPreview ? '隱藏預覽' : '顯示預覽'}
               </button>
-              <button className="btn" onClick={() => { setTab('list'); setEditingForm(null) }}>
+              <button className="btn" onClick={() => { setTab('list'); setEditingForm(null); setEditingId(null) }}>
                 取消
               </button>
             </div>
@@ -564,7 +599,7 @@ export default function FormBuilder() {
                     <th>#</th>
                     <th>表單</th>
                     {/* Gather all unique field keys */}
-                    {[...new Set(filteredSubs.flatMap(s => Object.keys(s.data)))].map(key => (
+                    {[...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))].map(key => (
                       <th key={key}>{key}</th>
                     ))}
                     <th>提交時間</th>
@@ -572,7 +607,7 @@ export default function FormBuilder() {
                 </thead>
                 <tbody>
                   {filteredSubs.map((sub, idx) => {
-                    const allKeys = [...new Set(filteredSubs.flatMap(s => Object.keys(s.data)))]
+                    const allKeys = [...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))]
                     const formName = forms.find(f => f.id === sub.form_id)?.name || sub.form_id
                     return (
                       <tr key={sub.id}>
@@ -580,7 +615,7 @@ export default function FormBuilder() {
                         <td><span className="badge badge-info">{formName}</span></td>
                         {allKeys.map(key => (
                           <td key={key} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {sub.data[key] || '-'}
+                            {(sub.data || {})[key] || '-'}
                           </td>
                         ))}
                         <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>

@@ -13,19 +13,29 @@ const helpCategories = [
   {
     icon: '🤝', title: 'CRM 客戶管理', articles: [
       { title: '客戶資料建立與管理', views: 178 },
-      { title: '客戶 360 視圖使用說明', views: 156 },
-      { title: '客戶分群與標籤管理', views: 134 },
-      { title: '銷售漏斗與機會管理', views: 121 },
+      { title: '客戶 360 視圖與互動時間軸', views: 215 },
+      { title: '客戶分群與智慧標籤', views: 168 },
+      { title: '銷售漏斗與機會管理', views: 145 },
       { title: '會員等級與積分制度', views: 98 },
+      { title: '線索管理與 Kanban 看板', views: 187 },
+      { title: '線索轉換為客戶/商機', views: 142 },
+      { title: '活動排程與行事曆', views: 163 },
+      { title: '客戶互動快速紀錄', views: 134 },
+      { title: '備註管理與釘選功能', views: 112 },
+      { title: '附件上傳與檔案管理', views: 95 },
+      { title: '客戶健康分數與流失預警', views: 176 },
     ]
   },
   {
     icon: '📣', title: '行銷管理', articles: [
       { title: '行銷自動化流程設定', views: 112 },
       { title: 'Drip Campaign 養成活動', views: 95 },
-      { title: '表單建立器使用教學', views: 88 },
-      { title: '發送紀錄與成效追蹤', views: 76 },
-      { title: '客服工單處理流程', views: 71 },
+      { title: '表單建立器使用教學', views: 128 },
+      { title: '發送紀錄與成效追蹤（多管道）', views: 105 },
+      { title: '客服工單處理與 SLA 管理', views: 143 },
+      { title: 'AI 行銷文案自動生成', views: 198 },
+      { title: 'AI 智慧客服回覆建議', views: 167 },
+      { title: '工作流程自動化執行引擎', views: 132 },
     ]
   },
   {
@@ -68,6 +78,14 @@ const helpCategories = [
       { title: '批號追蹤與效期管理', views: 85 },
       { title: '盤點作業說明', views: 78 },
       { title: '庫存估價方法（FIFO/加權平均）', views: 64 },
+      { title: '退貨管理（RMA）流程', views: 156 },
+      { title: '退貨品檢與重新入庫/報廢', views: 132 },
+      { title: '組合商品（Kitting）管理', views: 143 },
+      { title: '效期預警與即期品管理', views: 118 },
+      { title: '庫存周轉率分析', views: 105 },
+      { title: '呆滯庫存分析與處理', views: 98 },
+      { title: '需求預測與安全庫存計算', views: 134 },
+      { title: '自動補貨觸發說明', views: 112 },
     ]
   },
   {
@@ -111,6 +129,7 @@ const helpCategories = [
       { title: '員工資料建檔', views: 138 },
       { title: 'LINE 綁定與整合', views: 125 },
       { title: '模單範本設定', views: 89 },
+      { title: '即時員工人數統計說明', views: 108 },
     ]
   },
   {
@@ -145,6 +164,8 @@ const helpCategories = [
       { title: '跨系統分析操作', views: 105 },
       { title: '排程報表與自動寄送', views: 92 },
       { title: '嵌入式圖表分享', views: 78 },
+      { title: '需求預測演算法（SMA/WMA/季節性）', views: 124 },
+      { title: '營收預測與加權管線分析', views: 112 },
     ]
   },
   {

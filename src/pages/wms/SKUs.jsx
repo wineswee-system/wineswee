@@ -11,6 +11,16 @@ const COSTING_METHODS = [
   { value: 'MOVING_AVG', label: '移動平均' },
 ]
 
+// 分類對應的變體屬性模板
+const VARIANT_TEMPLATES = {
+  '服飾': ['顏色', '尺寸'],
+  '電子': ['容量', '顏色'],
+  '食品': ['口味', '規格'],
+  '飲料': ['口味', '容量'],
+  '家居': ['顏色', '材質'],
+  '美妝': ['色號', '容量'],
+}
+
 function generateBarcode() {
   // Generate EAN-13 style barcode
   const prefix = '471' // Taiwan prefix
@@ -42,6 +52,9 @@ export default function SKUs() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showVariantModal, setShowVariantModal] = useState(null)
+  const [variantForm, setVariantForm] = useState({ attributes: {}, variants: [] })
+  const [viewMode, setViewMode] = useState('all') // 'all', 'parents', 'variants'
   const [form, setForm] = useState({
     code: '', name: '', barcode: '', unit: '件', weight: '', length: '', width: '', height: '',
     category: CATEGORIES[0], costing_method: 'WEIGHTED_AVG', unit_cost: ''
@@ -72,7 +85,63 @@ export default function SKUs() {
     }
   }
 
-  const filtered = skus.filter(s => s.name?.includes(search) || s.code?.includes(search) || s.barcode?.includes(search))
+  // 變體管理
+  const openVariantManager = (sku) => {
+    const attrs = VARIANT_TEMPLATES[sku.category] || ['顏色', '尺寸']
+    const existing = skus.filter(s => s.parent_sku_id === sku.id)
+    setVariantForm({
+      attributes: Object.fromEntries(attrs.map(a => [a, ''])),
+      variants: existing,
+    })
+    setShowVariantModal(sku)
+  }
+
+  const handleCreateVariant = async () => {
+    if (!showVariantModal) return
+    const parent = showVariantModal
+    const attrs = variantForm.attributes
+    const filledAttrs = Object.fromEntries(Object.entries(attrs).filter(([_, v]) => v))
+    if (Object.keys(filledAttrs).length === 0) return
+
+    const suffix = Object.values(filledAttrs).join('-')
+    const variantCode = `${parent.code}-${suffix}`
+    const variantName = `${parent.name} (${Object.entries(filledAttrs).map(([k, v]) => `${k}:${v}`).join(', ')})`
+
+    const { data } = await supabase.from('skus').insert({
+      code: variantCode,
+      name: variantName,
+      barcode: generateBarcode(),
+      unit: parent.unit,
+      category: parent.category,
+      costing_method: parent.costing_method,
+      unit_cost: parent.unit_cost,
+      weight: parent.weight,
+      length: parent.length,
+      width: parent.width,
+      height: parent.height,
+      status: '啟用',
+      parent_sku_id: parent.id,
+      is_variant: true,
+      variant_attributes: filledAttrs,
+    }).select().single()
+
+    if (data) {
+      setSkus(prev => [...prev, data])
+      setVariantForm(f => ({
+        ...f,
+        variants: [...f.variants, data],
+        attributes: Object.fromEntries(Object.keys(f.attributes).map(k => [k, ''])),
+      }))
+    }
+  }
+
+  const filtered = skus
+    .filter(s => {
+      if (viewMode === 'parents') return !s.is_variant
+      if (viewMode === 'variants') return s.is_variant
+      return true
+    })
+    .filter(s => s.name?.includes(search) || s.code?.includes(search) || s.barcode?.includes(search))
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -106,40 +175,116 @@ export default function SKUs() {
       <div className="card">
         <div className="card-header">
           <div className="card-title"><span className="card-title-icon">📦</span> 商品列表</div>
-          <div className="search-bar">
-            <Search className="search-icon" />
-            <input type="text" placeholder="搜尋品號/品名/條碼..." className="form-input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 2 }}>
+              {[{ key: 'all', label: '全部' }, { key: 'parents', label: '主商品' }, { key: 'variants', label: '變體' }].map(v => (
+                <button key={v.key} className={`btn ${viewMode === v.key ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setViewMode(v.key)}>{v.label}</button>
+              ))}
+            </div>
+            <div className="search-bar">
+              <Search className="search-icon" />
+              <input type="text" placeholder="搜尋品號/品名/條碼..." className="form-input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
           </div>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>品號</th><th>品名</th><th>條碼</th><th>分類</th><th>單位</th><th>成本方法</th><th>單位成本</th><th>重量(kg)</th><th>材積(cm)</th><th>狀態</th></tr></thead>
+            <thead><tr><th>品號</th><th>品名</th><th>條碼</th><th>分類</th><th>單位</th><th>成本方法</th><th>單位成本</th><th>重量(kg)</th><th>材積(cm)</th><th>狀態</th><th>變體</th></tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無商品資料</td></tr>}
-              {filtered.map(s => (
-                <tr key={s.id}>
-                  <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>{s.code}</td>
-                  <td>{s.name}</td>
-                  <td><BarcodeVisual code={s.barcode} /></td>
-                  <td><span className="badge badge-cyan">{s.category}</span></td>
-                  <td>{s.unit}</td>
-                  <td>
-                    <span className="badge badge-info">
-                      {COSTING_METHODS.find(m => m.value === s.costing_method)?.label || s.costing_method || '加權平均'}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                    {s.unit_cost != null ? `$${Number(s.unit_cost).toLocaleString()}` : '-'}
-                  </td>
-                  <td>{s.weight}</td>
-                  <td style={{ fontSize: 12 }}>{s.length && `${s.length}x${s.width}x${s.height}`}</td>
-                  <td><span className={`badge ${s.status === '啟用' ? 'badge-success' : 'badge-neutral'}`}><span className="badge-dot"></span>{s.status}</span></td>
-                </tr>
-              ))}
+              {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無商品資料</td></tr>}
+              {filtered.map(s => {
+                const variantCount = skus.filter(v => v.parent_sku_id === s.id).length
+                const parentSku = s.parent_sku_id ? skus.find(p => p.id === s.parent_sku_id) : null
+                return (
+                  <tr key={s.id} style={s.is_variant ? { background: 'var(--glass-light)' } : undefined}>
+                    <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                      {s.is_variant && <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>↳</span>}
+                      {s.code}
+                    </td>
+                    <td>
+                      {s.name}
+                      {s.variant_attributes && (
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {Object.entries(s.variant_attributes).map(([k, v]) => (
+                            <span key={k} className="badge badge-neutral" style={{ marginRight: 4, fontSize: 10 }}>{k}: {v}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td><BarcodeVisual code={s.barcode} /></td>
+                    <td><span className="badge badge-cyan">{s.category}</span></td>
+                    <td>{s.unit}</td>
+                    <td>
+                      <span className="badge badge-info">
+                        {COSTING_METHODS.find(m => m.value === s.costing_method)?.label || s.costing_method || '加權平均'}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      {s.unit_cost != null ? `$${Number(s.unit_cost).toLocaleString()}` : '-'}
+                    </td>
+                    <td>{s.weight}</td>
+                    <td style={{ fontSize: 12 }}>{s.length && `${s.length}x${s.width}x${s.height}`}</td>
+                    <td><span className={`badge ${s.status === '啟用' ? 'badge-success' : 'badge-neutral'}`}><span className="badge-dot"></span>{s.status}</span></td>
+                    <td>
+                      {!s.is_variant ? (
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openVariantManager(s)}>
+                          {variantCount > 0 ? `${variantCount} 變體` : '+ 變體'}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {parentSku ? `← ${parentSku.code}` : '變體'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* 變體管理 Modal */}
+      {showVariantModal && (
+        <Modal title={`變體管理 — ${showVariantModal.code} ${showVariantModal.name}`} onClose={() => setShowVariantModal(null)}>
+          {/* 現有變體 */}
+          {variantForm.variants.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, display: 'block' }}>現有變體</span>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead><tr><th>品號</th><th>屬性</th><th>狀態</th></tr></thead>
+                  <tbody>
+                    {variantForm.variants.map(v => (
+                      <tr key={v.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{v.code}</td>
+                        <td>{v.variant_attributes && Object.entries(v.variant_attributes).map(([k, val]) => (
+                          <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}: {val}</span>
+                        ))}</td>
+                        <td><span className={`badge ${v.status === '啟用' ? 'badge-success' : 'badge-neutral'}`}>{v.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {/* 新增變體 */}
+          <div style={{ borderTop: '1px solid var(--glass-light)', paddingTop: 12 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, display: 'block' }}>新增變體</span>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Object.keys(variantForm.attributes).length}, 1fr)`, gap: 8, marginBottom: 8 }}>
+              {Object.entries(variantForm.attributes).map(([attr, val]) => (
+                <Field key={attr} label={attr}>
+                  <input className="form-input" style={{ width: '100%' }} placeholder={`如：紅/M/500ml`} value={val}
+                    onChange={e => setVariantForm(f => ({ ...f, attributes: { ...f.attributes, [attr]: e.target.value } }))} />
+                </Field>
+              ))}
+            </div>
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleCreateVariant}>建立變體</button>
+          </div>
+        </Modal>
+      )}
 
       {showModal && (
         <Modal title="新增商品" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>

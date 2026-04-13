@@ -56,6 +56,50 @@ export function registerCRMHandlers(bus) {
     }
   })
 
+  // ── Form submitted → optionally create customer + deal ──
+  bus.subscribe('crm.form.submitted', async function onFormSubmittedCreateLead(event) {
+    const { form_id, data } = event.payload
+
+    const { data: form } = await supabase
+      .from('crm_forms')
+      .select('settings')
+      .eq('id', form_id)
+      .maybeSingle()
+
+    if (!form) return
+    const settings = form.settings || {}
+
+    // Create customer from form data if name or email present
+    const name = data['姓名'] || data['name'] || ''
+    const email = data['Email'] || data['email'] || ''
+    const phone = data['電話'] || data['phone'] || ''
+    const company = data['公司名稱'] || data['company'] || ''
+
+    if (name) {
+      const { data: customer } = await supabase.from('customers').insert({
+        name,
+        email,
+        phone,
+        company,
+        source: '表單',
+        status: '潛在',
+        assigned_to: settings.assignTo || null,
+      }).select().single()
+
+      // Auto-create deal if configured
+      if (settings.createDeal && customer) {
+        await supabase.from('opportunities').insert({
+          customer_name: name,
+          title: `表單來源 - ${name}`,
+          stage: '初步接觸',
+          amount: 0,
+          pipeline_id: settings.dealPipeline || 'default',
+          assignee: settings.assignTo || null,
+        })
+      }
+    }
+  })
+
   // ── Finance payment recorded → update customer payment history ──
   bus.subscribe('finance.payment.recorded', async function onPaymentRecordedUpdateCustomer(event) {
     const { customer, amount, invoice_number } = event.payload

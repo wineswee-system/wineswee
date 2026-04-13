@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { getStores, createStore, updateStore, deleteStore } from '../../lib/db'
+import { getStores, createStore, updateStore, deleteStore, getEmployees } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -8,6 +8,7 @@ const EMPTY_FORM = { name: '', company: '', address: '', phone: '', manager: '',
 
 export default function Locations() {
   const [stores, setStores] = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -15,7 +16,10 @@ export default function Locations() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    getStores().then(({ data }) => { setStores(data || []) }).catch(err => {
+    Promise.all([getStores(), getEmployees()]).then(([s, e]) => {
+      setStores(s.data || [])
+      setEmployees(e.data || [])
+    }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
@@ -80,7 +84,6 @@ export default function Locations() {
         if (error) throw error
         if (data) setStores(prev => prev.map(s => s.id === data.id ? data : s))
       } else {
-        payload.employee_count = 0
         const { data, error } = await createStore(payload)
         if (error) throw error
         if (data) setStores(prev => [...prev, data])
@@ -120,7 +123,7 @@ export default function Locations() {
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
           <div className="stat-card-label">總員工數</div>
-          <div className="stat-card-value">{stores.reduce((s, store) => s + (store.employee_count || 0), 0)}</div>
+          <div className="stat-card-value">{employees.filter(e => e.status === '在職').length}</div>
         </div>
       </div>
 
@@ -138,7 +141,7 @@ export default function Locations() {
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.address}</td>
                   <td>{s.phone}</td>
                   <td>{s.manager}</td>
-                  <td>{s.employee_count ?? 0}</td>
+                  <td>{employees.filter(e => e.store === s.name && e.status === '在職').length}</td>
                   <td style={{ fontSize: 12 }}>
                     {s.lat && s.lng ? (
                       <span className="badge badge-success"><span className="badge-dot"></span>{s.clock_radius || 150}m</span>

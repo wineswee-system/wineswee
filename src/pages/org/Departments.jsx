@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
-import { getDepartments, createDepartment } from '../../lib/db'
+import { getDepartments, createDepartment, getEmployees } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Departments() {
   const [departments, setDepartments] = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', head: '', description: '' })
 
   useEffect(() => {
-    getDepartments().then(({ data }) => { setDepartments(data || []) }).catch(err => {
+    Promise.all([getDepartments(), getEmployees()]).then(([d, e]) => {
+      setDepartments(d.data || [])
+      setEmployees(e.data || [])
+    }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
@@ -23,7 +27,7 @@ export default function Departments() {
   const handleSubmit = async () => {
     if (!form.name) return
     try {
-      const { data, error } = await createDepartment({ ...form, member_count: 0 })
+      const { data, error } = await createDepartment(form)
       if (error) throw error
       if (data) {
         setDepartments(prev => [...prev, data])
@@ -35,6 +39,9 @@ export default function Departments() {
       alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
+
+  const deptCount = (deptName) => employees.filter(e => e.dept === deptName && e.status === '在職').length
+  const totalMembers = departments.reduce((s, d) => s + deptCount(d.name), 0)
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -58,12 +65,12 @@ export default function Departments() {
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">總人數</div>
-          <div className="stat-card-value">{departments.reduce((s, d) => s + (d.member_count || 0), 0)}</div>
+          <div className="stat-card-value">{totalMembers}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
           <div className="stat-card-label">平均人數</div>
           <div className="stat-card-value">
-            {departments.length ? Math.round(departments.reduce((s, d) => s + (d.member_count || 0), 0) / departments.length) : 0}
+            {departments.length ? Math.round(totalMembers / departments.length) : 0}
           </div>
         </div>
       </div>
@@ -79,7 +86,7 @@ export default function Departments() {
                 <tr key={d.id}>
                   <td style={{ fontWeight: 600 }}>{d.name}</td>
                   <td>{d.head}</td>
-                  <td>{d.member_count ?? 0}</td>
+                  <td>{deptCount(d.name)}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{d.description}</td>
                 </tr>
               ))}

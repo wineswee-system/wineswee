@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ModalOverlay } from '../../../components/Modal'
 import {
-  Mail, MessageSquare, Smartphone, Clock, GitBranch, X
+  Mail, MessageSquare, Smartphone, Clock, GitBranch, X, Sparkles, Loader
 } from 'lucide-react'
 import { STEP_TYPES } from '../../../lib/dripCampaign'
+import { generateCampaignCopy, isConfigured as isAIConfigured } from '../../../lib/ai/crmAI'
 
 const STEP_ICON_MAP = {
   email: <Mail size={16} />,
@@ -13,7 +15,32 @@ const STEP_ICON_MAP = {
   condition: <GitBranch size={16} />,
 }
 
-export default function DripStepEditor({ editingStep, stepForm, setSF, onClose, onSave }) {
+export default function DripStepEditor({ editingStep, stepForm, setSF, onClose, onSave, campaignName }) {
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiGoal, setAiGoal] = useState('')
+  const [aiError, setAiError] = useState(null)
+
+  const handleAiDripContent = async () => {
+    if (!aiGoal.trim()) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const result = await generateCampaignCopy({
+        channel: stepForm.type === 'email' ? 'email' : stepForm.type === 'line' ? 'line' : 'sms',
+        goal: aiGoal,
+        audience: campaignName || '客戶',
+        tone: '親切',
+      })
+      if (result.subject && stepForm.type === 'email') setSF('subject', result.subject)
+      if (result.body) setSF('content', result.body)
+      setAiGoal('')
+    } catch (err) {
+      setAiError(err.message || 'AI 產生失敗')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <ModalOverlay onClose={onClose}>
       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 16, width: '100%', maxWidth: 520, boxShadow: 'var(--shadow-xl)', animation: 'fadeIn 0.15s ease' }} onClick={e => e.stopPropagation()}>
@@ -58,7 +85,25 @@ export default function DripStepEditor({ editingStep, stepForm, setSF, onClose, 
 
           {(stepForm.type === 'email' || stepForm.type === 'line' || stepForm.type === 'sms') && (
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>內容</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>內容</label>
+                {isAIConfigured() && (
+                  <button type="button" onClick={() => setAiGoal(prev => prev ? '' : ' ')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={12} /> AI 產生
+                  </button>
+                )}
+              </div>
+              {aiGoal !== '' && isAIConfigured() && (
+                <div style={{ marginBottom: 8, display: 'flex', gap: 6 }}>
+                  <input value={aiGoal} onChange={e => setAiGoal(e.target.value)} placeholder="輸入這步驟的目標，例：歡迎新會員、提醒回購..."
+                    style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--accent-purple)', borderRadius: 6, fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+                  <button type="button" className="btn btn-primary" style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }} onClick={handleAiDripContent} disabled={aiLoading || !aiGoal.trim()}>
+                    {aiLoading ? <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />}
+                  </button>
+                </div>
+              )}
+              {aiError && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginBottom: 6 }}>{aiError}</div>}
               <textarea value={stepForm.content} onChange={e => setSF('content', e.target.value)} placeholder="輸入訊息內容..." rows={4}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-medium)', borderRadius: 6, fontSize: 12, background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical' }} />
             </div>

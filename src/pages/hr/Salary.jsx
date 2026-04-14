@@ -204,17 +204,22 @@ export default function Salary() {
       if (l.type === '事假') lvMap[l.employee].absence += (l.days || 0)
     }
 
-    // 查詢每位員工的獎金政策
+    // 批次查詢門市 ID + 獎金政策
+    const storeNames = [...new Set(employees.map(e => e.store).filter(Boolean))]
+    const storeIdMap = {}
+    for (const name of storeNames) {
+      storeIdMap[name] = await getStoreIdByName(name)
+    }
     const bonusMap = {}
-    for (const emp of employees) {
-      const storeId = await getStoreIdByName(emp.store)
+    await Promise.all(employees.map(async (emp) => {
+      const storeId = storeIdMap[emp.store] || null
       const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
       let totalBonus = 0
       for (const [, config] of Object.entries(bonusBenefits)) {
         totalBonus += calculateBonus(config, { sales: 0, attendance_rate: 1 })
       }
       bonusMap[emp.name] = totalBonus
-    }
+    }))
 
     const preview = employees.map(emp => {
       const baseSalary = emp.base_salary || 0

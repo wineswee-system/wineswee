@@ -100,35 +100,29 @@ export function runProgrammaticSchedule(data) {
     staffingMap[s.shift_name] = s.required_count || 0
   }
 
-  // Target hours per employee — 四週變形工時（月制）
-  // 月目標：正職 150-160h，兼職 80-160h
-  // 每週目標根據 monthlyContext 動態計算（剩餘時數 ÷ 剩餘週數）
+  // Target hours per employee — 純月制
+  // 月目標：正職 150-175h，兼職 80-175h
+  // 每週目標 = 月剩餘目標 ÷ 剩餘週數（平均分配）
   const MONTHLY_FT_MIN = 150
   const MONTHLY_PT_MIN = 80
   const MONTHLY_MAX = 175  // 所有人月工時上限
-  const monthlyCtx = data.monthlyContext || null  // { hoursAccumulated: {name: h}, weeksRemaining: n }
+  const monthlyCtx = data.monthlyContext || null
 
   const targetHoursMap = {}
   const hoursRange = {}
+  const monthTargetMap = {}  // 記錄每人月目標，供後續判斷
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
-    const monthMid = Math.round((monthMin + MONTHLY_MAX) / 2)  // FT: 155, PT: 120
+    monthTargetMap[emp.name] = { min: monthMin, max: MONTHLY_MAX, isPT }
 
-    if (monthlyCtx) {
-      // 四週變形：無每週上下限，只看月總量
-      const accumulated = monthlyCtx.hoursAccumulated?.[emp.name] || 0
-      const weeksLeft = (monthlyCtx.weeksRemaining || 0) + 1
-      const remainTarget = Math.max(0, monthMin - accumulated)
-      const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
-      // weekTarget 只是分配參考，不是硬限
-      targetHoursMap[emp.name] = Math.round(remainTarget / weeksLeft)
-      hoursRange[emp.name] = { min: 0, max: Math.round(remainMax) }  // 無週限，月底收斂
-    } else {
-      // Standalone weekly: 用月目標÷4.3 做參考
-      targetHoursMap[emp.name] = Math.round(monthMid / 4.3)
-      hoursRange[emp.name] = { min: 0, max: MONTHLY_MAX }
-    }
+    const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
+    const weeksLeft = Math.max((monthlyCtx?.weeksRemaining || 0) + 1, 1)
+    const remainTarget = Math.max(0, monthMin - accumulated)
+    const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
+    // 週目標 = 剩餘月目標均分到剩餘週，確保月底能達標
+    targetHoursMap[emp.name] = Math.round(remainTarget / weeksLeft)
+    hoursRange[emp.name] = { min: 0, max: Math.round(remainMax / weeksLeft) + 8 }  // 每週彈性上限
   }
 
   // ── Track consecutive weekends worked ──
@@ -499,11 +493,11 @@ export function runProgrammaticSchedule(data) {
 
         // 月工時上限到了 → 必須休
         if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-        // 兼職：週目標到了 + 所有時段 min 滿足 + 月時數已達下限 → 才可以休
-        // 如果月時數還沒到下限，即使週目標到了也繼續排
+        // 月時數已達月目標 + 所有時段 min 滿足 → 可以休
+        // 月時數還沒到月目標 → 繼續排，不管週目標
         const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
-        const monthMin = pt ? 80 : 150
-        if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet && monthHoursSoFar >= monthMin) { schedule[emp.name][date] = '休'; continue }
+        const empMonthMin = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
+        if (monthHoursSoFar >= empMonthMin && allMinMet) { schedule[emp.name][date] = '休'; continue }
 
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：根據月時數缺口動態調整班長（4-8h）

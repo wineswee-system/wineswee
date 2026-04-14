@@ -502,7 +502,7 @@ export function runProgrammaticSchedule(data) {
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：根據月時數缺口動態調整班長（4-8h）
         const ftIdeal = calcFTGross(emp.name)
-        const monthHoursDeficit = monthMin - monthHoursSoFar
+        const monthHoursDeficit = empMonthMin - monthHoursSoFar
         const ptIdeal = monthHoursDeficit > 30 ? 8 : monthHoursDeficit > 15 ? 7 : 6
         const grossDurations = pt
           ? [ptIdeal, ptIdeal - 1, ptIdeal - 2, ptIdeal - 3].filter(h => h >= 3 && h <= maxGrossH)

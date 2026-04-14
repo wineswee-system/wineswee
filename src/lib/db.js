@@ -624,10 +624,36 @@ export const getMembers = () =>
   supabase.from('members').select('*').order('id', { ascending: false })
 export const createMember = (data) =>
   supabase.from('members').insert(data).select().single()
+export const updateMember = (id, data) =>
+  supabase.from('members').update(data).eq('id', id).select().single()
 export const getPointTransactions = (memberId) =>
   supabase.from('point_transactions').select('*').eq('member_id', memberId).order('id', { ascending: false })
+export const getAllPointTransactions = () =>
+  supabase.from('point_transactions').select('*').order('id', { ascending: false })
 export const createPointTransaction = (data) =>
   supabase.from('point_transactions').insert(data).select().single()
+
+// ── Referral Codes ──
+export const getReferralCodes = () =>
+  supabase.from('referral_codes').select('*').order('id', { ascending: false })
+export const getReferralCodeByMember = (memberId) =>
+  supabase.from('referral_codes').select('*').eq('member_id', memberId).eq('status', '有效').maybeSingle()
+export const getReferralCodeByCode = (code) =>
+  supabase.from('referral_codes').select('*').eq('code', code).eq('status', '有效').maybeSingle()
+export const createReferralCode = (data) =>
+  supabase.from('referral_codes').insert(data).select().single()
+export const updateReferralCode = (id, data) =>
+  supabase.from('referral_codes').update(data).eq('id', id).select().single()
+
+// ── Referral Redemptions ──
+export const getReferralRedemptions = (referralCodeId) =>
+  supabase.from('referral_redemptions').select('*').eq('referral_code_id', referralCodeId).order('id', { ascending: false })
+export const getAllReferralRedemptions = () =>
+  supabase.from('referral_redemptions').select('*').order('id', { ascending: false })
+export const getReferralRedemptionsByReferee = (refereeId) =>
+  supabase.from('referral_redemptions').select('*').eq('referee_id', refereeId).maybeSingle()
+export const createReferralRedemption = (data) =>
+  supabase.from('referral_redemptions').insert(data).select().single()
 export const getInvoices = () =>
   supabase.from('invoices').select('*').order('id', { ascending: false })
 export const createInvoice = (data) =>

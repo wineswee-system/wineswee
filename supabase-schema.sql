@@ -794,6 +794,28 @@ create table point_transactions (
   created_at timestamptz default now()
 );
 
+-- 推薦碼 (Referral Codes)
+create table referral_codes (
+  id serial primary key,
+  member_id int references members(id) not null,
+  code text unique not null,
+  max_uses int default 10,
+  bonus_points int default 200,
+  status text default '有效',
+  created_at timestamptz default now()
+);
+
+-- 推薦碼使用紀錄 (Referral Redemptions)
+create table referral_redemptions (
+  id serial primary key,
+  referral_code_id int references referral_codes(id) not null,
+  referrer_id int references members(id) not null,
+  referee_id int references members(id) not null,
+  referrer_points int not null default 200,
+  referee_points int not null default 100,
+  created_at timestamptz default now()
+);
+
 -- 電子發票 (E-Invoice)
 create table invoices (
   id serial primary key,

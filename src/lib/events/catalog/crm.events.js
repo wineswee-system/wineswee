@@ -113,4 +113,71 @@ export const CRM_EVENTS = {
       data: { type: 'object', required: true },
     },
   },
+
+  // ── Membership & Loyalty Events ──
+
+  'crm.member.joined': {
+    domain: 'crm',
+    action: 'member.joined',
+    version: 1,
+    description: '新會員加入',
+    payload: {
+      member_id: { type: 'string', required: true },
+      member_name: { type: 'string', required: true },
+      member_number: { type: 'string', required: true },
+      level: { type: 'string', required: true },
+    },
+  },
+  'crm.member.tier_upgraded': {
+    domain: 'crm',
+    action: 'member.tier_upgraded',
+    version: 1,
+    description: '會員等級升級',
+    payload: {
+      member_id: { type: 'string', required: true },
+      member_name: { type: 'string', required: true },
+      old_tier: { type: 'string', required: true },
+      new_tier: { type: 'string', required: true },
+    },
+  },
+  'crm.points.earned': {
+    domain: 'crm',
+    action: 'points.earned',
+    version: 1,
+    description: '會員累積點數',
+    payload: {
+      member_id: { type: 'string', required: true },
+      member_name: { type: 'string', required: true },
+      points: { type: 'number', required: true },
+      balance: { type: 'number', required: true },
+      source: { type: 'string', required: true },
+    },
+  },
+  'crm.points.redeemed': {
+    domain: 'crm',
+    action: 'points.redeemed',
+    version: 1,
+    description: '會員兌換點數',
+    payload: {
+      member_id: { type: 'string', required: true },
+      member_name: { type: 'string', required: true },
+      points: { type: 'number', required: true },
+      balance: { type: 'number', required: true },
+      discount_amount: { type: 'number', required: true },
+    },
+  },
+  'crm.points.reversed': {
+    domain: 'crm',
+    action: 'points.reversed',
+    version: 1,
+    description: '退款扣回點數',
+    payload: {
+      member_id: { type: 'string', required: true },
+      member_name: { type: 'string', required: true },
+      points: { type: 'number', required: true },
+      balance: { type: 'number', required: true },
+      refund_id: { type: 'string', required: true },
+      reason: { type: 'string', required: false },
+    },
+  },
 }

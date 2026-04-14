@@ -1,4 +1,5 @@
 import { supabase } from '../../supabase.js'
+import { calculatePointsEarned, calculateTier, refundPoints } from '../../crmEngine.js'
 
 /**
  * CRM event handlers.
@@ -40,20 +41,108 @@ export function registerCRMHandlers(bus) {
     const { customer_id, total, store } = event.payload
     if (!customer_id) return
 
-    const pointsEarned = Math.floor(total / 100) // 1 point per NT$100
+    const { data: member } = await supabase
+      .from('members')
+      .select('*')
+      .eq('id', customer_id)
+      .maybeSingle()
+
+    if (!member) return
+
+    const pointsEarned = calculatePointsEarned(total, member.level)
+    const newTotalPoints = (member.total_points || 0) + pointsEarned
+    const newAvailablePoints = (member.available_points || 0) + pointsEarned
+    const newTotalSpent = (member.total_spent || 0) + total
+    const newTier = calculateTier(newTotalSpent, newTotalPoints)
+
+    await Promise.all([
+      supabase.from('members').update({
+        total_points: newTotalPoints,
+        available_points: newAvailablePoints,
+        total_spent: newTotalSpent,
+        level: newTier.level,
+        visit_count: (member.visit_count || 0) + 1,
+        last_visit: new Date().toISOString().slice(0, 10),
+      }).eq('id', member.id),
+
+      supabase.from('point_transactions').insert({
+        member_id: member.id,
+        type: 'earn',
+        points: pointsEarned,
+        balance: newAvailablePoints,
+        reference: `POS-${event.id || Date.now()}`,
+        description: `POS消費累點 ($${total.toLocaleString()})`,
+      }),
+    ])
+
+    if (newTier.level !== member.level) {
+      await bus.publish('crm.member.tier_upgraded', {
+        member_id: String(member.id),
+        member_name: member.name,
+        old_tier: member.level,
+        new_tier: newTier.level,
+      }, {
+        causation_id: event.id,
+        correlation_id: event.metadata?.correlation_id,
+      })
+    }
+
+    await bus.publish('crm.points.earned', {
+      member_id: String(member.id),
+      member_name: member.name,
+      points: pointsEarned,
+      balance: newAvailablePoints,
+      source: 'pos_transaction',
+    }, {
+      causation_id: event.id,
+      correlation_id: event.metadata?.correlation_id,
+    })
+  })
+
+  // ── POS transaction refunded → reverse loyalty points ──
+  bus.subscribe('pos.transaction.refunded', async function onPOSRefundReverseLoyalty(event) {
+    const { customer_id, refund_amount, original_total, refund_id, reason } = event.payload
+    if (!customer_id) return
 
     const { data: member } = await supabase
       .from('members')
       .select('*')
-      .eq('customer_id', customer_id)
+      .eq('id', customer_id)
       .maybeSingle()
 
-    if (member) {
-      await supabase
-        .from('members')
-        .update({ points: (member.points || 0) + pointsEarned })
-        .eq('id', member.id)
-    }
+    if (!member) return
+
+    const result = refundPoints(member, refund_amount, original_total, reason || '退款扣回')
+
+    await Promise.all([
+      supabase.from('members').update({
+        total_points: result.newTotalPoints,
+        available_points: result.newAvailablePoints,
+        total_spent: result.newTotalSpent,
+        level: result.newTier,
+      }).eq('id', member.id),
+
+      supabase.from('point_transactions').insert({
+        member_id: member.id,
+        type: 'refund',
+        points: -result.pointsReversed,
+        balance: result.newAvailablePoints,
+        reference: `REFUND-${refund_id || Date.now()}`,
+        description: result.transaction.description,
+      }),
+    ])
+
+    await bus.publish('crm.points.reversed', {
+      member_id: String(member.id),
+      member_name: member.name,
+      points: result.pointsReversed,
+      balance: result.newAvailablePoints,
+      refund_id: refund_id || '',
+      reason: reason || '退款扣回',
+    }, {
+      causation_id: event.id,
+      correlation_id: event.metadata?.correlation_id,
+    })
   })
 
   // ── Form submitted → optionally create customer + deal ──

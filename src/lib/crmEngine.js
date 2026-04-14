@@ -497,6 +497,36 @@ export function earnPoints(member, amount, description = '消費累點') {
 }
 
 /**
+ * Process a refund — reverse points earned from the original purchase.
+ * Deducts points from total and available (floored at 0), recalculates tier.
+ */
+export function refundPoints(member, refundAmount, originalTotal, reason = '退款扣回') {
+  // Reverse the points that would have been earned on the refunded amount
+  const pointsToReverse = calculatePointsEarned(refundAmount, member.level)
+  const newTotalPoints = Math.max(0, (member.total_points || 0) - pointsToReverse)
+  const newAvailablePoints = Math.max(0, (member.available_points || 0) - pointsToReverse)
+  const newTotalSpent = Math.max(0, (member.total_spent || 0) - refundAmount)
+  const newTier = calculateTier(newTotalSpent, newTotalPoints)
+
+  return {
+    transaction: {
+      id: `PT-${Date.now()}`,
+      member_id: member.id,
+      type: 'refund',
+      points: -pointsToReverse,
+      description: `${reason} (退款 $${refundAmount.toLocaleString()}，扣回 ${pointsToReverse} 點)`,
+      created_at: new Date().toISOString(),
+    },
+    pointsReversed: pointsToReverse,
+    newTotalPoints,
+    newAvailablePoints,
+    newTotalSpent,
+    tierChanged: newTier.level !== member.level,
+    newTier: newTier.level,
+  }
+}
+
+/**
  * Generate referral code
  */
 export function generateReferralCode(memberId) {

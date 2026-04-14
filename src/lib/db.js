@@ -1331,3 +1331,41 @@ export const updateDevelopmentPlan = (id, data) =>
 
 export const deleteDevelopmentPlan = (id) =>
   supabase.from('employee_development_plans').delete().eq('id', id)
+
+// ── Benefit Policies ──────────────────────────────────────
+export const getBenefitPolicies = (filters = {}) => {
+  let q = supabase.from('benefit_policies').select('*, stores(name), employees(name)').order('id', { ascending: false })
+  if (filters.storeId) q = q.eq('store_id', filters.storeId)
+  if (filters.storeId === null) q = q.is('store_id', null)
+  if (filters.category) q = q.eq('category', filters.category)
+  if (filters.isActive !== undefined) q = q.eq('is_active', filters.isActive)
+  return q
+}
+export const createBenefitPolicy = (data) =>
+  supabase.from('benefit_policies').insert(data).select().single()
+export const updateBenefitPolicy = (id, data) =>
+  supabase.from('benefit_policies').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id).select().single()
+export const deleteBenefitPolicy = (id) =>
+  supabase.from('benefit_policies').delete().eq('id', id)
+
+// ── Bonus Records ─────────────────────────────────────────
+export const getBonusRecords = (period) => {
+  let q = supabase.from('bonus_records').select('*').order('id', { ascending: false })
+  return period ? q.eq('period', period) : q
+}
+export const createBonusRecord = (data) =>
+  supabase.from('bonus_records').insert(data).select().single()
+export const updateBonusRecord = (id, data) =>
+  supabase.from('bonus_records').update(data).eq('id', id).select().single()
+
+// ── Bonus Settings ────────────────────────────────────────
+export const getBonusSettings = (storeId) => {
+  let q = supabase.from('bonus_settings').select('*').eq('is_active', true).order('id')
+  return storeId ? q.eq('store_id', storeId) : q
+}
+export const createBonusSetting = (data) =>
+  supabase.from('bonus_settings').insert(data).select().single()
+export const updateBonusSetting = (id, data) =>
+  supabase.from('bonus_settings').update(data).eq('id', id).select().single()
+export const deleteBonusSetting = (id) =>
+  supabase.from('bonus_settings').delete().eq('id', id)

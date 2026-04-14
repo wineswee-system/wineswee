@@ -4,6 +4,7 @@ import { getLeaveRequests, createLeaveRequest, updateLeaveStatus } from '../../l
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
 import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest } from '../../lib/leavePolicy'
+import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -69,11 +70,18 @@ export default function Leave() {
       .filter(l => l.employee === form.employee && (l.type === form.type || l.type === selectedPolicy?.shortName) && l.status !== '已拒絕')
       .reduce((s, l) => s + (l.days || 0), 0)
 
+    // 查詢門市/員工的假別加給政策
+    const emp = employees.find(e => e.name === form.employee)
+    const storeId = await getStoreIdByName(emp?.store)
+    const leaveBenefits = await getEffectiveBenefits(emp?.id || null, storeId, 'leave')
+    const customPolicy = leaveBenefits[form.type] || null
+
     const result = validateLeaveRequest({
       type: form.type,
       days,
       hours,
       usedDays: usedThisYear,
+      customPolicy,
     })
 
     if (!result.valid) {

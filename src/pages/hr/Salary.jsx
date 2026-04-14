@@ -3,6 +3,7 @@ import { Download, Plus, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary } from '../../lib/payroll'
 import { exportSalaryPdf } from '../../lib/exportPdf'
+import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SalaryTable from './components/SalaryTable'
 import SalaryFormModal from './components/SalaryFormModal'
@@ -203,11 +204,24 @@ export default function Salary() {
       if (l.type === '事假') lvMap[l.employee].absence += (l.days || 0)
     }
 
+    // 查詢每位員工的獎金政策
+    const bonusMap = {}
+    for (const emp of employees) {
+      const storeId = await getStoreIdByName(emp.store)
+      const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
+      let totalBonus = 0
+      for (const [, config] of Object.entries(bonusBenefits)) {
+        totalBonus += calculateBonus(config, { sales: 0, attendance_rate: 1 })
+      }
+      bonusMap[emp.name] = totalBonus
+    }
+
     const preview = employees.map(emp => {
       const baseSalary = emp.base_salary || 0
       const att = attMap[emp.name] || { hours: 0, late: 0, days: 0 }
       const otHours = otMap[emp.name] || 0
       const absenceDays = lvMap[emp.name]?.absence || 0
+      const policyBonus = bonusMap[emp.name] || 0
       // Tiered OT: first 2h = 1.34x, 3h+ = 1.67x (勞基法 §24)
       const hourlyRate = baseSalary / 30 / 8
       const overtimePay = otHours <= 2
@@ -218,13 +232,13 @@ export default function Salary() {
 
       const result = calculateNetSalary(baseSalary, {
         dependents: 0, voluntaryPensionRate: 0,
-        overtimePay, bonus: 0,
+        overtimePay, bonus: policyBonus,
         otherDeductions: absenceDeduction + lateDeduction,
       })
       return {
         employee: emp.name, dept: emp.dept, base_salary: baseSalary,
         workDays: att.days, workHours: att.hours, otHours, absenceDays, lateCount: att.late,
-        overtimePay, absenceDeduction, lateDeduction,
+        overtimePay, absenceDeduction, lateDeduction, policyBonus,
         ...result,
       }
     })
@@ -245,7 +259,7 @@ export default function Salary() {
         base_salary: p.base_salary,
         allowance: (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.housing_allowance || 0),
         overtime: p.overtimePay || 0,
-        bonus: 0,
+        bonus: p.policyBonus || 0,
         dependents: 0,
         voluntary_pension_rate: 0,
         labor_insurance: p.laborInsurance,

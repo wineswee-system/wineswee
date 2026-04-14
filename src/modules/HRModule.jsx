@@ -26,6 +26,7 @@ import SelfService from '../pages/hr/SelfService'
 import LeaveCalendar from '../pages/hr/LeaveCalendar'
 import ProbationTracker from '../pages/hr/ProbationTracker'
 import HRAssistant from '../pages/hr/HRAssistant'
+import BenefitSettings from '../pages/hr/BenefitSettings'
 
 export default function HRModule() {
   return (
@@ -57,6 +58,7 @@ export default function HRModule() {
       <Route path="leave-calendar" element={<LeaveCalendar />} />
       <Route path="probation" element={<ProbationTracker />} />
       <Route path="assistant" element={<HRAssistant />} />
+      <Route path="benefit-settings" element={<BenefitSettings />} />
     </Routes>
   )
 }

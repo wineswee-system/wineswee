@@ -490,9 +490,24 @@ export const createJournalEntry = (data, lines = null) =>
         p_source_id: data.source_id ?? null,
         p_created_by: data.created_by ?? null,
       })
-    : supabase.from('journal_entries').insert(data).select().single()
+    : supabase.rpc('secure_create_journal_entry', {
+        p_entry_date: data.entry_date,
+        p_description: data.description,
+        p_lines: [],
+        p_source: data.source ?? null,
+        p_source_id: data.source_id ?? null,
+        p_created_by: data.created_by ?? null,
+      })
 export const createJournalLine = (data) =>
-  supabase.from('journal_lines').insert(data).select().single()
+  supabase.rpc('secure_create_journal_line', {
+    p_entry_id: data.entry_id,
+    p_account_code: data.account_code,
+    p_account_name: data.account_name,
+    p_debit: data.debit ?? 0,
+    p_credit: data.credit ?? 0,
+    p_memo: data.memo ?? null,
+    p_cost_center: data.cost_center ?? null,
+  })
 export const getAccountsReceivable = () =>
   supabase.from('accounts_receivable').select('*').order('id', { ascending: false })
 export const createAccountReceivable = (data) =>
@@ -642,13 +657,12 @@ export const deleteCostCenter = (id) =>
 
 // ── Journal Entry Updates ──
 export const updateJournalEntry = (id, data) =>
-  supabase.from('journal_entries').update(data).eq('id', id).select().single()
+  supabase.rpc('secure_update_journal_entry', { p_id: id, p_data: data })
 export const getAllJournalLines = () =>
   supabase.from('journal_lines').select('*').order('id')
-// 注意：建議改用 createJournalEntry(data, lines) 一次建立分錄+明細（原子操作）
-// 此函數保留向後相容，但不經過 server 端驗證
+// 建議改用 createJournalEntry(data, lines) 一次建立分錄+明細（原子操作）
 export const batchCreateJournalLines = (lines) =>
-  supabase.from('journal_lines').insert(lines).select()
+  supabase.rpc('secure_batch_create_journal_lines', { p_lines: lines })
 
 // ── Inventory Costing ──
 export const getInventoryTransactions = (sku) => {
@@ -684,7 +698,7 @@ export const updatePOSShift = (id, data) =>
 
 // ── Salary Updates ──
 export const updateSalaryRecord = (id, data) =>
-  supabase.from('salary_records').update(data).eq('id', id).select().single()
+  supabase.rpc('secure_update_salary', { p_id: id, p_data: data })
 
 // ── SKU Updates ──
 export const updateSKU = (id, data) =>
@@ -761,7 +775,7 @@ export const bulkUpsertStockLevels = (rows) =>
   supabase.rpc('secure_bulk_upsert_stock_levels', { p_rows: rows })
 
 export const bulkInsertJournalEntries = (rows) =>
-  supabase.from('journal_entries').insert(rows).select()
+  supabase.rpc('secure_bulk_insert_journal_entries', { p_rows: rows })
 
 // ── Inventory Cost Layers ──
 export const getInventoryCostLayers = (skuId) => {
@@ -934,7 +948,13 @@ export const getApprovalRequests = (status) => {
   return status ? q.eq('status', status) : q
 }
 export const createApprovalRequest = (data) =>
-  supabase.from('approval_requests').insert(data).select().single()
+  supabase.rpc('secure_create_approval_request', {
+    p_module: data.module,
+    p_document_type: data.document_type,
+    p_document_id: data.document_id,
+    p_requester: data.requester,
+    p_rule_id: data.rule_id ?? null,
+  })
 export const updateApprovalRequest = (id, data) =>
   supabase.rpc('secure_update_approval', {
     p_id: id,

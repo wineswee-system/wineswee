@@ -207,8 +207,10 @@ export const DAILY_MAX_NORMAL_HOURS_FLEX = 10
 /** Min shift interval hours (勞基法 §34) */
 export const MIN_SHIFT_INTERVAL = 11
 
-/** Max consecutive work days (勞基法 §36) */
+/** Max consecutive work days — 兼職 (勞基法 §36 七休一) */
 export const MAX_CONSECUTIVE_WORK_DAYS = 6
+/** Max consecutive work days — 正職四週變形 (勞基法 §36 但書，2週集中工作) */
+export const MAX_CONSECUTIVE_WORK_DAYS_FT = 12
 
 /** Min rest days per week (勞基法 §36 一例一休) */
 export const MIN_WEEKLY_REST_DAYS = 2

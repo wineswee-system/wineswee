@@ -14,7 +14,7 @@
 import {
   parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
-  DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS,
+  DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS, MONTHLY_OVERTIME_CAP,
   MONTHLY_REST_DAYS_TARGET,
 } from './scheduleUtils'
@@ -1050,7 +1050,8 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
       else break
     }
   }
-  if (consec > MAX_CONSECUTIVE_WORK_DAYS) return false
+  const maxConsec = isPT ? MAX_CONSECUTIVE_WORK_DAYS : MAX_CONSECUTIVE_WORK_DAYS_FT
+  if (consec > maxConsec) return false
 
   // H4: Cross-day shift gap ≥ 11h
   if (dateIdx > 0) {
@@ -1147,14 +1148,16 @@ function validateResult(assignments, data) {
       }
     }
 
-    // H3: Consecutive work days
+    // H3: Consecutive work days（正職 12 天 / 兼職 6 天）
+    const empIsPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const empMaxConsec = empIsPT ? MAX_CONSECUTIVE_WORK_DAYS : MAX_CONSECUTIVE_WORK_DAYS_FT
     let consec = 0
     for (const date of weekDates) {
       const a = empAssignments.find(a => a.date === date)
       if (a && !isAbsence(a.shift)) {
         consec++
-        if (consec > MAX_CONSECUTIVE_WORK_DAYS) {
-          violations.push({ employee: emp.name, constraint: 'H3', law: '勞基法 §36', message: `${emp.name} 連續上班 ${consec} 天（上限 ${MAX_CONSECUTIVE_WORK_DAYS} 天）`, severity: 'error' })
+        if (consec > empMaxConsec) {
+          violations.push({ employee: emp.name, constraint: 'H3', law: '勞基法 §36', message: `${emp.name} 連續上班 ${consec} 天（上限 ${empMaxConsec} 天）`, severity: 'error' })
         }
       } else consec = 0
     }

@@ -1006,6 +1006,14 @@ function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, 
     if (!isPT && shiftDef.employee_type === 'pt') return false
   }
 
+  // H16: Day type match (平日/假日班)
+  if (shiftDef.day_type && shiftDef.day_type !== 'all') {
+    const dow = new Date(date).getDay()
+    const isWE = isWeekendDay(dow)
+    if (shiftDef.day_type === 'weekday' && isWE) return false
+    if (shiftDef.day_type === 'weekend' && !isWE) return false
+  }
+
   // H9: can_open / can_close — only block if EXPLICITLY set to false (not null/undefined)
   // null = not configured = allow; true = explicitly allowed; false = explicitly blocked
   const startH = parseTime(shiftDef.start_time)

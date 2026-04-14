@@ -85,9 +85,12 @@ export async function gatherSchedulingData({
     supabase.from('fatigue_scores').select('employee, total_score, month').eq('month', currentMonth),
     supabase.from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd),
     storeFilter
-      ? supabase.from('store_time_slots').select('*')
-          .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
-          .eq('year_month', currentMonth)
+      ? (async () => {
+          const sid = locations.find(l => l.name === storeFilter)?.id
+          const { data: monthData } = await supabase.from('store_time_slots').select('*').eq('store_id', sid).eq('year_month', currentMonth)
+          if (monthData?.length) return { data: monthData }
+          return supabase.from('store_time_slots').select('*').eq('store_id', sid).is('year_month', null)
+        })()
       : Promise.resolve({ data: [] }),
   ])
 

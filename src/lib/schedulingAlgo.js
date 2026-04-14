@@ -506,10 +506,12 @@ export function runProgrammaticSchedule(data) {
         if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet && monthHoursSoFar >= monthMin) { schedule[emp.name][date] = '休'; continue }
 
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
-        // 兼職：縮短為 3-6h，讓正職有足夠空間
+        // 兼職：根據月時數缺口動態調整班長（4-8h）
         const ftIdeal = calcFTGross(emp.name)
+        const monthHoursDeficit = monthMin - monthHoursSoFar
+        const ptIdeal = monthHoursDeficit > 30 ? 8 : monthHoursDeficit > 15 ? 7 : 6
         const grossDurations = pt
-          ? [6, 5, 4, 3].filter(h => h <= maxGrossH)
+          ? [ptIdeal, ptIdeal - 1, ptIdeal - 2, ptIdeal - 3].filter(h => h >= 3 && h <= maxGrossH)
           : (ftIdeal > 9
               ? [ftIdeal, ftIdeal - 1, 9].filter(h => h >= 9 && h <= maxGrossH)
               : [9].filter(h => h <= maxGrossH))

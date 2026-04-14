@@ -111,10 +111,15 @@ export function runProgrammaticSchedule(data) {
   const targetHoursMap = {}
   const hoursRange = {}
   const monthTargetMap = {}  // 記錄每人月目標，供後續判斷
+  const monthRestTarget = {}  // 每人月休天數目標（硬限制）
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
     monthTargetMap[emp.name] = { min: monthMin, max: MONTHLY_MAX, isPT }
+    // 月休天數：從門市設定讀取（正職/兼職分開）
+    monthRestTarget[emp.name] = isPT
+      ? (storeSettings?.pt_monthly_rest_days ?? 15)
+      : (storeSettings?.ft_monthly_rest_days ?? 10)
 
     const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
     const weeksLeft = Math.max((monthlyCtx?.weeksRemaining || 0) + 1, 1)
@@ -493,11 +498,21 @@ export function runProgrammaticSchedule(data) {
 
         // 月工時上限到了 → 必須休
         if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-        // 月時數已達月目標 + 所有時段 min 滿足 → 可以休
-        // 月時數還沒到月目標 → 繼續排，不管週目標
+
+        // 計算月累積
         const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
         const empMonthMin = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
-        if (monthHoursSoFar >= empMonthMin && allMinMet) { schedule[emp.name][date] = '休'; continue }
+
+        // 月休天數硬限制：累計已休天數（前幾週 + 本週）
+        const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
+        const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
+        const monthRestUsed = prevRestUsed + thisWeekRest
+        const monthRestLimit = monthRestTarget[emp.name] || (pt ? 15 : 10)
+
+        // 月休已用完 → 不能再休，強制排班
+        if (monthRestUsed >= monthRestLimit && !allMaxMet) { /* 繼續排 */ }
+        // 月時數達標 + 時段 min 滿足 + 月休還有額度 → 休
+        else if (monthHoursSoFar >= empMonthMin && allMinMet) { schedule[emp.name][date] = '休'; continue }
 
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：根據月時數缺口動態調整班長（4-8h）
@@ -887,7 +902,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
   // Running hours accumulation — 四週變形用月總時數分配每週目標
   const monthHours = {}
-  for (const emp of data.employees) monthHours[emp.name] = 0
+  const monthRestDays = {}  // 累積每人月休天數
+  for (const emp of data.employees) {
+    monthHours[emp.name] = 0
+    monthRestDays[emp.name] = 0
+  }
 
   for (let i = 0; i < weeks.length; i++) {
     const weekDates = weeks[i]
@@ -917,9 +936,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       offRequests: data.offRequests.filter(
         o => o.date >= weekDates[0] && o.date <= weekDates[weekDates.length - 1]
       ),
-      // 月制上下文：告訴每週排班器目前累積了多少時數、還剩幾週
+      // 月制上下文：告訴每週排班器目前累積了多少時數/休假、還剩幾週
       monthlyContext: {
         hoursAccumulated: { ...monthHours },
+        restDaysUsed: { ...monthRestDays },
         weeksRemaining: weeks.length - i - 1,
       },
     }
@@ -936,9 +956,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     allViolations.push(...result.violations)
     lastWeekContext = result.assignments
 
-    // Accumulate hours + fatigue from this week
+    // Accumulate hours, fatigue, rest days from this week
     for (const a of result.assignments) {
-      if (!isAbsence(a.shift)) {
+      if (isAbsence(a.shift)) {
+        monthRestDays[a.employee] = (monthRestDays[a.employee] || 0) + 1
+      } else {
         const hours = a.actual_hours || 8
         monthHours[a.employee] = (monthHours[a.employee] || 0) + hours
         const def = data.shiftDefs.find(d => d.name === a.shift)
@@ -1361,17 +1383,24 @@ function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // S7: Monthly rest day target（依門市設定，正職/兼職分開）
+    // H17: Monthly rest day limit（硬限制，依門市設定，正職/兼職分開）
     const totalDays = empAssignments.length
     const empIsPT_S7 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     const storeRestDays = empIsPT_S7
-      ? (data.storeSettings?.pt_monthly_rest_days ?? MONTHLY_REST_DAYS_TARGET)
-      : (data.storeSettings?.ft_monthly_rest_days ?? MONTHLY_REST_DAYS_TARGET)
+      ? (data.storeSettings?.pt_monthly_rest_days ?? 15)
+      : (data.storeSettings?.ft_monthly_rest_days ?? 10)
     const expectedRest = Math.round(totalDays * storeRestDays / 30)
-    if (restEntries.length < expectedRest - 2) {
+    if (restEntries.length > expectedRest + 2) {
       violations.push({
-        employee: emp.name, constraint: 'S7', law: '勞動權益',
-        message: `${emp.name}: 本月僅 ${restEntries.length} 天休假（建議 ${expectedRest} 天）`,
+        employee: emp.name, constraint: 'H17', law: '門市規定',
+        message: `${emp.name}: 本月 ${restEntries.length} 天休假，超過上限 ${storeRestDays} 天`,
+        severity: 'error',
+      })
+    }
+    if (restEntries.length < expectedRest - 2 && totalDays >= 7) {
+      violations.push({
+        employee: emp.name, constraint: 'H17', law: '門市規定',
+        message: `${emp.name}: 本月僅 ${restEntries.length} 天休假，不足 ${storeRestDays} 天`,
         severity: 'warning',
       })
     }

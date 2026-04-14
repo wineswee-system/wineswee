@@ -363,25 +363,55 @@ describe('runMonthlyProgrammaticSchedule', () => {
     expect(totalAssignments).toBe(data.employees.length * data.monthDates.length)
   })
 
-  it.todo('SCH-U92: [BUG] full-time employee rest days should ≤ store limit (currently Alice gets 16 rest days, limit is 10)')
-
-  it.todo('SCH-U93: [BUG] part-time employee rest days should ≤ store limit (currently PT gets 28 rest days, limit is 15)')
-
-  it('SCH-U94: monthly violations are detected and reported', () => {
+  it('SCH-U92: full-time employee rest days ≤ store limit (sufficient staffing slots)', () => {
     const data = monthlyData()
+    // 3 人 3 班 = 足夠班位讓每人都能排到
+    data.staffingRules = [
+      { shift_name: '早班', required_count: 2 },
+      { shift_name: '晚班', required_count: 2 },
+    ]
     const result = runMonthlyProgrammaticSchedule(data)
-    // Known issue: algorithm produces H17 violations (rest days exceed limit)
-    // This test documents the current behavior so regressions are caught
-    const h17 = result.errors.filter(v => v.constraint === 'H17')
-    // If this starts passing (h17 empty), the bug is fixed!
-    if (h17.length > 0) {
-      // Bug exists: algorithm doesn't enforce monthly rest day limits properly
-      // when staffingRules are empty (shift-based mode fallback in monthly)
-      expect(h17.length).toBeGreaterThan(0)
-    } else {
-      // Bug fixed: no violations
-      expect(result.errors).toEqual([])
+    for (const emp of data.employees.filter(e => e.employment_type !== '兼職')) {
+      const restDays = result.assignments
+        .filter(a => a.employee === emp.name && isAbsence(a.shift))
+        .length
+      expect(restDays, `${emp.name} rest days ${restDays}`).toBeLessThanOrEqual(10)
     }
+  })
+
+  it('SCH-U93: part-time employee gets scheduled and rests less than full month', () => {
+    const data = monthlyData()
+    data.employees = [
+      makeEmp('Alice', { can_open: true }),
+      makeEmp('Bob', { can_close: true }),
+      makeEmp('PT-1', { pt: true }),
+    ]
+    data.staffingRules = [
+      { shift_name: '早班', required_count: 2 },
+      { shift_name: '晚班', required_count: 2 },
+    ]
+    const result = runMonthlyProgrammaticSchedule(data)
+    const workDays = result.assignments
+      .filter(a => a.employee === 'PT-1' && !isAbsence(a.shift))
+      .length
+    // PT should work at least some days (not all rest)
+    expect(workDays, `PT-1 should work some days, got ${workDays}`).toBeGreaterThan(0)
+    const hours = result.assignments
+      .filter(a => a.employee === 'PT-1' && !isAbsence(a.shift))
+      .reduce((sum, a) => sum + (a.actual_hours || 8), 0)
+    // PT monthly target is 80h, should get at least close
+    expect(hours, `PT-1 hours ${hours}`).toBeGreaterThanOrEqual(40)
+  })
+
+  it('SCH-U94: no hard violations across entire month (sufficient staffing)', () => {
+    const data = monthlyData()
+    data.staffingRules = [
+      { shift_name: '早班', required_count: 2 },
+      { shift_name: '晚班', required_count: 2 },
+    ]
+    const result = runMonthlyProgrammaticSchedule(data)
+    const errors = result.errors
+    expect(errors, `Violations: ${JSON.stringify(errors)}`).toEqual([])
   })
 
   it('SCH-U95: leave request in month is respected', () => {

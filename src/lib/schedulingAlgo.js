@@ -629,11 +629,22 @@ export function runProgrammaticSchedule(data) {
     }
 
     // Get unassigned employees
+    // Helper: 計算員工月休累計天數
+    const getMonthRestUsed = (empName) => {
+      const prev = monthlyCtx?.restDaysUsed?.[empName] || 0
+      const thisWeek = Object.values(schedule[empName]).filter(s => s && isAbsence(s)).length
+      return prev + thisWeek
+    }
+
     const toAssign = employees.filter(emp => {
       if (schedule[emp.name][date]) return false
       if (restDayPlan[emp.name].has(date)) return false
-      // If already at target hours, auto-rest
+      // If already at target hours, auto-rest — 但月休用完就不能再休
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
+        const restLimit = monthRestTarget[emp.name] || 10
+        if (getMonthRestUsed(emp.name) >= restLimit) {
+          return true  // 月休用完，不自動休，繼續參與排班
+        }
         schedule[emp.name][date] = '休'
         return false
       }
@@ -697,10 +708,13 @@ export function runProgrammaticSchedule(data) {
     }
 
     // ── Pass 2: Assign remaining employees to "都可以" (neutral) or understaffed shifts ──
+    // Sort: 月休已接近上限的人優先排班（避免休假超標），再按疲勞
     const remaining = toAssign
       .filter(emp => !assigned.has(emp.name))
       .sort((a, b) => {
-        // Sort by fatigue (fairness-first for pass 2)
+        const restA = getMonthRestUsed(a.name)
+        const restB = getMonthRestUsed(b.name)
+        if (restA !== restB) return restB - restA  // 休越多排越前
         const fa = fatigueMap[a.name] || 0
         const fb = fatigueMap[b.name] || 0
         return fa - fb
@@ -712,6 +726,11 @@ export function runProgrammaticSchedule(data) {
       const pref = prefMap[emp.name]
       const currentWeekHours = weekHoursCache[emp.name]
       const targetH = targetHoursMap[emp.name]
+
+      // 月休天數檢查（與時段覆蓋制同步）
+      const empMonthRestLimit = monthRestTarget[emp.name] || 10
+      const monthRestExhausted = getMonthRestUsed(emp.name) >= empMonthRestLimit
+
       let bestShift = null
       let bestScore = -Infinity
 
@@ -726,15 +745,26 @@ export function runProgrammaticSchedule(data) {
         // Staffing needs — required_count is both minimum AND maximum
         const needed = staffingMap[shiftDef.name] || minStaff
         const current = shiftCounts[shiftDef.name] || 0
-        if (current >= needed) continue // Shift is full, don't over-staff
-        const deficit = needed - current
-        score += 40 + deficit * 10
+        if (current >= needed) {
+          // 班滿了，但月休已用完 → 允許超編（避免月休超標）
+          if (monthRestExhausted) {
+            score -= 30  // penalty for over-staffing, but still consider
+          } else {
+            continue  // 月休還有額度，正常跳過
+          }
+        } else {
+          const deficit = needed - current
+          score += 40 + deficit * 10
+        }
 
         // Shift balance: prefer the shift with fewer people assigned (break ties)
         score -= current * 3
 
         // Preference: "想上" still gets bonus even in pass 2 (they lost conflict but still prefer it)
         if (pref?.preferred.has(shiftDef.name)) score += 15
+
+        // 月休已用完加分：強烈傾向排班
+        if (monthRestExhausted) score += 60
 
         // Target hours
         const shiftHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
@@ -769,6 +799,23 @@ export function runProgrammaticSchedule(data) {
           hours: getShiftHours(bestShift) - (bestShift.break_minutes || 60) / 60,
         }
         shiftCounts[bestShift.name] = (shiftCounts[bestShift.name] || 0) + 1
+      } else if (monthRestExhausted) {
+        // 月休用完但找不到班 → 不標休，標待排（避免月休繼續累加）
+        // 退而求其次：排第一個合法的班，即使超編
+        const fallback = sortedShifts.find(sd =>
+          !(pref?.avoid.has(sd.name)) && isShiftAvailable(emp, sd, date)
+        )
+        if (fallback) {
+          schedule[emp.name][date] = fallback.name
+          actualTimes[`${emp.name}_${date}`] = {
+            start: fallback.start_time?.slice(0, 5),
+            end: fallback.end_time?.slice(0, 5),
+            hours: getShiftHours(fallback) - (fallback.break_minutes || 60) / 60,
+          }
+          shiftCounts[fallback.name] = (shiftCounts[fallback.name] || 0) + 1
+        } else {
+          schedule[emp.name][date] = '休'
+        }
       } else {
         schedule[emp.name][date] = '休'
       }

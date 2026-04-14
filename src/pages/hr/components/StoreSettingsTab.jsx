@@ -549,6 +549,32 @@ export default function StoreSettingsTab({
         </div>
       </div>
 
+      {/* Monthly Rest Days */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><span className="card-title-icon">🗓️</span> 每月休假天數</div>
+        </div>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>正職 (天/月)</label>
+            <input className="form-input" type="number" min="4" max="15" value={storeSettings?.ft_monthly_rest_days ?? 8} onChange={async e => {
+              if (!selectedStore) return
+              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, ft_monthly_rest_days: Number(e.target.value) || 8 }, { onConflict: 'store_id' }).select().single()
+              if (data) setStoreSettings(data)
+            }} style={{ width: 80 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>兼職 (天/月)</label>
+            <input className="form-input" type="number" min="4" max="25" value={storeSettings?.pt_monthly_rest_days ?? 14} onChange={async e => {
+              if (!selectedStore) return
+              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, pt_monthly_rest_days: Number(e.target.value) || 14 }, { onConflict: 'store_id' }).select().single()
+              if (data) setStoreSettings(data)
+            }} style={{ width: 80 }} />
+          </div>
+        </div>
+        <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text-muted)' }}>排班演算法會依此設定控制每月休假天數</div>
+      </div>
+
       {/* Labor Cost Budget */}
       <div className="card">
         <div className="card-header">

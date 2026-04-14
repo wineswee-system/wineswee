@@ -1361,9 +1361,13 @@ function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // S7: Monthly rest day target
+    // S7: Monthly rest day target（依門市設定，正職/兼職分開）
     const totalDays = empAssignments.length
-    const expectedRest = Math.round(totalDays * MONTHLY_REST_DAYS_TARGET / 30)
+    const empIsPT_S7 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const storeRestDays = empIsPT_S7
+      ? (data.storeSettings?.pt_monthly_rest_days ?? MONTHLY_REST_DAYS_TARGET)
+      : (data.storeSettings?.ft_monthly_rest_days ?? MONTHLY_REST_DAYS_TARGET)
+    const expectedRest = Math.round(totalDays * storeRestDays / 30)
     if (restEntries.length < expectedRest - 2) {
       violations.push({
         employee: emp.name, constraint: 'S7', law: '勞動權益',

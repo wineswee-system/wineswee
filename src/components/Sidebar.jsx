@@ -14,7 +14,7 @@ import {
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
   UserCheck, Shield, Send, Search, Activity, AlertOctagon, UserPlus, Layers,
-  Brain, ClipboardCheck, Heart, BarChart, Scale, MessageSquare, FileBarChart,
+  Brain, ClipboardCheck, Heart, BarChart, Scale, MessageSquare, FileBarChart, Gift,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
@@ -250,6 +250,7 @@ const groupNav = {
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
+        { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
         { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
       ]

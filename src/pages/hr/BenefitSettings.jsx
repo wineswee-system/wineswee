@@ -162,22 +162,17 @@ export default function BenefitSettings() {
       </div>
 
       {/* Store filter */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button
-          className={`btn ${selectedStoreId === null ? 'btn-primary' : ''}`}
-          onClick={() => setSelectedStoreId(null)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Building2 size={16} style={{ color: 'var(--text-secondary)' }} />
+        <select
+          className="input"
+          style={{ width: 240 }}
+          value={selectedStoreId ?? ''}
+          onChange={e => setSelectedStoreId(e.target.value ? Number(e.target.value) : null)}
         >
-          全部
-        </button>
-        {stores.map(s => (
-          <button
-            key={s.id}
-            className={`btn ${selectedStoreId === s.id ? 'btn-primary' : ''}`}
-            onClick={() => setSelectedStoreId(s.id)}
-          >
-            <Building2 size={14} /> {s.name}
-          </button>
-        ))}
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* Tabs */}

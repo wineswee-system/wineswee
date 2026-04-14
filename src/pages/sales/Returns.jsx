@@ -32,19 +32,17 @@ export default function Returns() {
 
       // 自動串接：折讓傳票（借：營業收入 / 貸：應收帳款）
       if (refund > 0) {
-        const entryNum = `JE-RET-${String(Date.now()).slice(-4)}`
-        const { data: entry } = await supabase.from('journal_entries').insert({
-          entry_number: entryNum,
-          entry_date: new Date().toISOString().slice(0, 10),
-          description: `退貨折讓 - ${form.customer} (${form.return_number})`,
-          source: '退貨', status: '已過帳', created_by: '系統',
-        }).select().single()
-        if (entry) {
-          await supabase.from('journal_lines').insert([
-            { entry_id: entry.id, account_code: '4100', account_name: '營業收入', debit: refund, credit: 0, memo: `退貨沖銷 ${form.return_number}` },
-            { entry_id: entry.id, account_code: '1300', account_name: '應收帳款', debit: 0, credit: refund, memo: `退貨沖銷 ${form.return_number}` },
-          ])
-        }
+        await supabase.rpc('secure_create_journal_entry', {
+          p_entry_date: new Date().toISOString().slice(0, 10),
+          p_description: `退貨折讓 - ${form.customer} (${form.return_number})`,
+          p_lines: [
+            { account_code: '4100', account_name: '營業收入', debit: refund, credit: 0, memo: `退貨沖銷 ${form.return_number}` },
+            { account_code: '1300', account_name: '應收帳款', debit: 0, credit: refund, memo: `退貨沖銷 ${form.return_number}` },
+          ],
+          p_source: '退貨',
+          p_source_id: null,
+          p_created_by: '系統',
+        })
       }
     }
   }

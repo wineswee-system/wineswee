@@ -84,42 +84,20 @@ export async function createARFromShipment(shipment) {
 
   if (arError) return { ok: false, error: arError.message }
 
-  // 同時產生傳票
+  // 同時產生傳票（透過 Postgres Function，原子操作）
   if (ar) {
-    const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: new Date().toISOString().slice(0, 10),
-      description: `出貨產生應收 - ${shipment.customer} (${invoiceNumber})`,
-      source: '出貨',
-      source_id: shipment.id,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
-
+    const { error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: new Date().toISOString().slice(0, 10),
+      p_description: `出貨產生應收 - ${shipment.customer} (${invoiceNumber})`,
+      p_lines: [
+        { account_code: '1300', account_name: '應收帳款', debit: shipment.total_amount, credit: 0, memo: `${shipment.customer} - ${invoiceNumber}` },
+        { account_code: '4100', account_name: '營業收入', debit: 0, credit: shipment.total_amount, memo: `${shipment.customer} - ${invoiceNumber}` },
+      ],
+      p_source: '出貨',
+      p_source_id: shipment.id,
+      p_created_by: '系統',
+    })
     if (entryError) return { ok: false, error: entryError.message }
-
-    if (entry) {
-      const { error: linesError } = await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: '1300',
-          account_name: '應收帳款',
-          debit: shipment.total_amount,
-          credit: 0,
-          memo: `${shipment.customer} - ${invoiceNumber}`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '4100',
-          account_name: '營業收入',
-          debit: 0,
-          credit: shipment.total_amount,
-          memo: `${shipment.customer} - ${invoiceNumber}`,
-        },
-      ])
-      if (linesError) return { ok: false, error: linesError.message }
-    }
   }
 
   return ar
@@ -144,42 +122,20 @@ export async function createAPFromReceipt(receipt, po) {
 
   if (apError) return { ok: false, error: apError.message }
 
-  // 產生傳票
+  // 產生傳票（透過 Postgres Function，原子操作）
   if (ap) {
-    const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}A`
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: new Date().toISOString().slice(0, 10),
-      description: `採購入庫 - ${po.supplier} (${po.po_number})`,
-      source: '採購',
-      source_id: po.id,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
-
+    const { error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: new Date().toISOString().slice(0, 10),
+      p_description: `採購入庫 - ${po.supplier} (${po.po_number})`,
+      p_lines: [
+        { account_code: '5100', account_name: '營業成本', debit: amount, credit: 0, memo: `${po.supplier} - ${po.po_number}` },
+        { account_code: '2100', account_name: '應付帳款', debit: 0, credit: amount, memo: `${po.supplier} - ${po.po_number}` },
+      ],
+      p_source: '採購',
+      p_source_id: po.id,
+      p_created_by: '系統',
+    })
     if (entryError) return { ok: false, error: entryError.message }
-
-    if (entry) {
-      const { error: linesError } = await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: '5100',
-          account_name: '營業成本',
-          debit: amount,
-          credit: 0,
-          memo: `${po.supplier} - ${po.po_number}`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '2100',
-          account_name: '應付帳款',
-          debit: 0,
-          credit: amount,
-          memo: `${po.supplier} - ${po.po_number}`,
-        },
-      ])
-      if (linesError) return { ok: false, error: linesError.message }
-    }
   }
 
   return ap
@@ -361,39 +317,19 @@ export async function createJEFromExpense(expense) {
   const account = categoryAccountMap[expense.category] || categoryAccountMap['其他']
   const amount = Number(expense.amount)
 
-  const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-    entry_number: entryNumber,
-    entry_date: expense.date || new Date().toISOString().slice(0, 10),
-    description: `費用核銷 - ${expense.employee} (${expense.category}: ${expense.description || ''})`,
-    source: '費用核銷',
-    source_id: expense.id,
-    status: '已過帳',
-    created_by: '系統',
-  }).select().single()
+  const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+    p_entry_date: expense.date || new Date().toISOString().slice(0, 10),
+    p_description: `費用核銷 - ${expense.employee} (${expense.category}: ${expense.description || ''})`,
+    p_lines: [
+      { account_code: account.code, account_name: account.name, debit: amount, credit: 0, memo: `${expense.employee} - ${expense.category}` },
+      { account_code: '1100', account_name: '現金', debit: 0, credit: amount, memo: `${expense.employee} - ${expense.category}` },
+    ],
+    p_source: '費用核銷',
+    p_source_id: expense.id,
+    p_created_by: '系統',
+  })
 
   if (entryError) return { ok: false, error: entryError.message }
-
-  if (entry) {
-    const { error: linesError } = await supabase.from('journal_lines').insert([
-      {
-        entry_id: entry.id,
-        account_code: account.code,
-        account_name: account.name,
-        debit: amount,
-        credit: 0,
-        memo: `${expense.employee} - ${expense.category}`,
-      },
-      {
-        entry_id: entry.id,
-        account_code: '1100',
-        account_name: '現金',
-        debit: 0,
-        credit: amount,
-        memo: `${expense.employee} - ${expense.category}`,
-      },
-    ])
-    if (linesError) return { ok: false, error: linesError.message }
-  }
 
   return { ok: true, entry }
 }

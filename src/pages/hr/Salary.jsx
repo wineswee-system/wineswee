@@ -133,12 +133,17 @@ export default function Salary() {
     }
 
     if (editingRecord) {
-      const { data } = await supabase.from('salary_records').update(payload).eq('id', editingRecord.id).select().single()
+      const { data } = await supabase.rpc('secure_update_salary', { p_id: editingRecord.id, p_data: payload })
       if (data) {
         setRecords(prev => prev.map(r => r.id === data.id ? data : r))
       }
     } else {
-      const { data } = await supabase.from('salary_records').insert(payload).select().single()
+      const { data } = await supabase.rpc('secure_upsert_salary', {
+        p_employee: payload.employee, p_month: payload.month,
+        p_base_salary: payload.base_salary, p_allowance: payload.allowance ?? 0,
+        p_overtime: payload.overtime ?? 0, p_deductions: payload.deductions ?? 0,
+        p_insurance: payload.insurance ?? 0, p_net_salary: payload.net_salary ?? null,
+      })
       if (data) {
         setRecords(prev => [...prev, data])
       }
@@ -255,7 +260,18 @@ export default function Salary() {
         deductions: p.totalDeductions,
         net_salary: p.netSalary,
       }))
-      const { data } = await supabase.from('salary_records').upsert(payloads, { onConflict: 'employee,month' }).select()
+      // 批次薪資：逐筆走 secure_upsert_salary
+      const results = []
+      for (const p of payloads) {
+        const { data: row } = await supabase.rpc('secure_upsert_salary', {
+          p_employee: p.employee, p_month: p.month,
+          p_base_salary: p.base_salary, p_allowance: p.allowance ?? 0,
+          p_overtime: p.overtime ?? 0, p_deductions: p.deductions ?? 0,
+          p_insurance: p.insurance ?? 0, p_net_salary: p.net_salary ?? null,
+        })
+        if (row) results.push(row)
+      }
+      const data = results
       if (data) {
         setRecords(prev => {
           const existing = new Map(prev.map(r => [`${r.employee}-${r.month}`, r]))

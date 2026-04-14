@@ -200,21 +200,19 @@ export default function POSTerminal() {
       })
 
       // 5. Create journal entry (debit: cash/bank, credit: revenue)
-      const entryNum = `JE-POS-${String(Date.now()).slice(-4)}`
-      const { data: entry } = await supabase.from('journal_entries').insert({
-        entry_number: entryNum,
-        entry_date: new Date().toISOString().slice(0, 10),
-        description: `POS 銷售 ${txnNum}（${currentPaymentLabel}）`,
-        source: 'POS', status: '已過帳', created_by: '系統',
-      }).select().single()
-      if (entry) {
-        const debitAccount = selectedPayment === 'cash' ? '1100' : '1200'
-        const debitName = selectedPayment === 'cash' ? '現金' : '銀行存款'
-        await supabase.from('journal_lines').insert([
-          { entry_id: entry.id, account_code: debitAccount, account_name: debitName, debit: total, credit: 0, memo: txnNum },
-          { entry_id: entry.id, account_code: '4100', account_name: '營業收入', debit: 0, credit: total, memo: txnNum },
-        ])
-      }
+      const debitAccount = selectedPayment === 'cash' ? '1100' : '1200'
+      const debitName = selectedPayment === 'cash' ? '現金' : '銀行存款'
+      await supabase.rpc('secure_create_journal_entry', {
+        p_entry_date: new Date().toISOString().slice(0, 10),
+        p_description: `POS 銷售 ${txnNum}（${currentPaymentLabel}）`,
+        p_lines: [
+          { account_code: debitAccount, account_name: debitName, debit: total, credit: 0, memo: txnNum },
+          { account_code: '4100', account_name: '營業收入', debit: 0, credit: total, memo: txnNum },
+        ],
+        p_source: 'POS',
+        p_source_id: null,
+        p_created_by: '系統',
+      })
 
       // Build receipt data
       const receipt = {

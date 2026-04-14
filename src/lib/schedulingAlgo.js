@@ -105,7 +105,7 @@ export function runProgrammaticSchedule(data) {
   // 每週目標根據 monthlyContext 動態計算（剩餘時數 ÷ 剩餘週數）
   const MONTHLY_FT_MIN = 150
   const MONTHLY_PT_MIN = 80
-  const MONTHLY_MAX = 160  // 所有人月工時上限
+  const MONTHLY_MAX = 175  // 所有人月工時上限
   const monthlyCtx = data.monthlyContext || null  // { hoursAccumulated: {name: h}, weeksRemaining: n }
 
   const targetHoursMap = {}
@@ -529,6 +529,10 @@ export function runProgrammaticSchedule(data) {
               const uncovStart = parseTime(firstUncovered.start_time)
               if (Math.abs(h - uncovStart) < 1) score += 25
             }
+
+            // 開關店加分：如果今天還沒有 opener/closer，優先排在營業頭尾
+            if (!hasOpener && Math.abs(h - storeOpenH) < 0.5) score += 50
+            if (!hasCloser && (h + grossH) >= effectiveCloseH - 0.5) score += 50
 
             // Weekly hours fit within range
             const afterHours = weekHours + window.netH
@@ -1362,14 +1366,14 @@ function validateMonthlyResult(assignments, data) {
     // S5: Monthly hours check — 四週變形：正職 150-160h/月, 兼職 80-160h/月
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
     const monthlyMin = isPT ? 80 : 150
-    const monthlyMax = 160
+    const monthlyMax = 175
     // 按天數比例：不足整月時按比例，整月直接用原值
     const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
     const proRatedMin = Math.round(monthlyMin * dayRatio)
     const proRatedMax = Math.round(monthlyMax * dayRatio)
     if (totalHours > proRatedMax) {
       violations.push({
-        employee: emp.name, constraint: 'S5', law: '四週變形 ≤160h',
+        employee: emp.name, constraint: 'S5', law: '四週變形 ≤175h',
         message: `${emp.name}: 月工時 ${totalHours.toFixed(1)}h 超過上限 ${proRatedMax}h`,
         severity: 'warning',
       })

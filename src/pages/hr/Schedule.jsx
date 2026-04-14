@@ -1,13 +1,12 @@
-import { useState, useEffect, useContext } from 'react'
-import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code, Calendar, CalendarOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, isAbsence, getAbsenceOptions, ABSENCE_TYPES, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import ScheduleTable from './components/ScheduleTable'
 import MonthScheduleTable from './components/MonthScheduleTable'
 import StoreSettingsTab from './components/StoreSettingsTab'
 import PreferencesTab from './components/PreferencesTab'
@@ -16,8 +15,6 @@ import AnalyticsTab from './components/AnalyticsTab'
 import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
-import StaffingGapPanel from './components/StaffingGapPanel'
-import EmergencyCoverPanel from './components/EmergencyCoverPanel'
 import { notifySchedulePublished } from '../../lib/lineNotify'
 import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
@@ -38,18 +35,6 @@ function buildShiftTypes(dbShifts) {
     end_time: s.end_time?.slice(0, 5),
   }))
   return [...fromDB, REST_SHIFT]
-}
-
-function getWeekDates(offset = 0) {
-  const now = new Date()
-  const dayOfWeek = now.getDay() || 7
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - dayOfWeek + 1 + offset * 7)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
-  })
 }
 
 export default function Schedule() {
@@ -78,6 +63,7 @@ export default function Schedule() {
   const [editCell, setEditCell] = useState(null)
   const [offRequests, setOffRequests] = useState([])
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
+  const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color }]
   const [shiftDefs, setShiftDefs] = useState([])
   const [SHIFT_TYPES, setShiftTypes] = useState([REST_SHIFT])
   const [autoScheduling, setAutoScheduling] = useState(false)
@@ -99,11 +85,13 @@ export default function Schedule() {
   const [coverModal, setCoverModal] = useState(null) // { employee, date, shift }
   const [coverCandidates, setCoverCandidates] = useState([])
   const [coverLoading, setCoverLoading] = useState(false)
+  // Comp-off modal
+  const [showCompOff, setShowCompOff] = useState(false)
   // AI Draft workflow
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // View mode: week or month
-  const [viewMode, setViewMode] = useState('week') // 'week' | 'month'
+  const [viewMode] = useState('month') // only month view
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return formatYearMonth(now.getFullYear(), now.getMonth() + 1)
@@ -566,90 +554,7 @@ export default function Schedule() {
     }
   }
 
-  // ── Import rest days (休) from current schedule as off_requests (希望休) ──
-  const handleImportRestAsOffRequests = async () => {
-    const empNames = filtered.map(e => e.name)
-    const isMonthly = viewMode === 'month'
-    const dateStart = isMonthly ? monthStart : weekStart
-    const dateEnd = isMonthly ? monthEnd : weekEnd
-    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
-
-    // Find all 休 days from current schedule
-    const restDays = schedules.filter(s =>
-      empNames.includes(s.employee) &&
-      s.date >= dateStart && s.date <= dateEnd &&
-      isAbsence(s.shift)
-    ).map(s => ({ employee: s.employee, date: s.date }))
-
-    if (restDays.length === 0) {
-      alert('目前排班沒有找到任何休假日')
-      return
-    }
-
-    if (!confirm(
-      `將 ${storeFilter || '所有門市'} ${rangeLabel} 的排班「休」匯入為希望休：\n\n` +
-      `共 ${restDays.length} 筆休假日\n\n` +
-      `此操作會先清除該期間現有的希望休，再匯入新的。確定嗎？`
-    )) return
-
-    try {
-      // Step 1: Delete existing off_requests for this store + period
-      await supabase.from('off_requests').delete()
-        .in('employee', empNames)
-        .gte('date', dateStart).lte('date', dateEnd)
-
-      // Step 2: Insert rest days as off_requests
-      const rows = restDays.map(r => ({ employee: r.employee, date: r.date }))
-      const { error } = await supabase.from('off_requests').upsert(rows, { onConflict: 'employee,date' })
-      if (error) throw error
-
-      // Step 3: Refresh off_requests state
-      const { data: refreshed } = await supabase.from('off_requests').select('*')
-        .gte('date', activeStart).lte('date', activeEnd)
-      setOffRequests(refreshed || [])
-
-      alert(`已匯入 ${restDays.length} 筆希望休`)
-    } catch (err) {
-      console.error('[ImportRest] Error:', err)
-      alert(`匯入失敗：${err.message}`)
-    }
-  }
-
-  // ── Clear all off_requests for current store + period ──
-  const handleClearOffRequests = async () => {
-    const empNames = filtered.map(e => e.name)
-    const isMonthly = viewMode === 'month'
-    const dateStart = isMonthly ? monthStart : weekStart
-    const dateEnd = isMonthly ? monthEnd : weekEnd
-    const rangeLabel = isMonthly ? `${selectedMonth}` : `${weekStart} ~ ${weekEnd}`
-
-    const currentCount = offRequests.filter(o =>
-      empNames.includes(o.employee) && o.date >= dateStart && o.date <= dateEnd
-    ).length
-
-    if (currentCount === 0) {
-      alert('目前沒有希望休資料')
-      return
-    }
-
-    if (!confirm(`確定要清除 ${storeFilter || '所有門市'} ${rangeLabel} 的 ${currentCount} 筆希望休嗎？`)) return
-
-    try {
-      await supabase.from('off_requests').delete()
-        .in('employee', empNames)
-        .gte('date', dateStart).lte('date', dateEnd)
-
-      setOffRequests(prev => prev.filter(o =>
-        !empNames.includes(o.employee) || o.date < dateStart || o.date > dateEnd
-      ))
-      alert(`已清除 ${currentCount} 筆希望休`)
-    } catch (err) {
-      console.error('[ClearOffReq] Error:', err)
-      alert(`清除失敗：${err.message}`)
-    }
-  }
-
-  // Load store settings whenever storeFilter changes (not just on tab switch)
+  // Load store settings + events whenever storeFilter changes
   useEffect(() => {
     if (storeFilter && locations.length > 0) {
       const store = locations.find(s => s.name === storeFilter)
@@ -658,9 +563,14 @@ export default function Schedule() {
           .then(({ data }) => { setStoreSettings(data); if (data?.operating_hours) setOperatingHours(data.operating_hours) })
         supabase.from('store_staffing').select('*').eq('store_id', store.id)
           .then(({ data }) => setStaffing(data || []))
+        // Load store events for current month
+        supabase.from('store_events').select('*').eq('store_id', store.id)
+          .gte('date', monthStart).lte('date', monthEnd)
+          .then(({ data }) => setStoreEvents(data || []))
+          .catch(() => setStoreEvents([]))  // table might not exist yet
       }
     }
-  }, [storeFilter, locations])
+  }, [storeFilter, locations, selectedMonth])
 
   // Load tab-specific data
   useEffect(() => {
@@ -722,36 +632,69 @@ export default function Schedule() {
               人/天
             </div>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              // Copy last week's schedule
-              const lastWeek = getWeekDates(weekOffset - 1)
-              const { data: lastSchedules } = await supabase.from('schedules').select('*').gte('date', lastWeek[0]).lte('date', lastWeek[6])
-              if (!lastSchedules?.length) { alert('上週無排班資料'); return }
-              const newSchedules = lastSchedules.map(s => {
-                const dayIdx = lastWeek.indexOf(s.date)
-                return dayIdx >= 0 ? { employee: s.employee, date: weekDates[dayIdx], shift: s.shift } : null
-              }).filter(Boolean)
+              // Copy last month's schedule
+              const prevMonth = new Date(monthYear, monthNum - 2, 1)
+              const prevDates = getMonthDates(prevMonth.getFullYear(), prevMonth.getMonth() + 1)
+              const empNames = filtered.map(e => e.name)
+              const { data: lastSchedules } = await supabase.from('schedules').select('*')
+                .in('employee', empNames)
+                .gte('date', prevDates[0]).lte('date', prevDates[prevDates.length - 1])
+              if (!lastSchedules?.length) { alert('上月無排班資料'); return }
+              if (!confirm(`將上月 ${lastSchedules.length} 筆排班複製到 ${selectedMonth}？\n\n會根據星期幾對應，已有的排班會被覆蓋。`)) return
+              // Map by day-of-week: group last month shifts by (employee, dow)
+              const byEmpDow = {}
+              for (const s of lastSchedules) {
+                const dow = new Date(s.date).getDay()
+                const key = `${s.employee}_${dow}`
+                if (!byEmpDow[key]) byEmpDow[key] = s
+              }
+              const newSchedules = []
+              for (const date of monthDates) {
+                const dow = new Date(date).getDay()
+                for (const emp of empNames) {
+                  const src = byEmpDow[`${emp}_${dow}`]
+                  if (src) newSchedules.push({ employee: emp, date, shift: src.shift, actual_start: src.actual_start, actual_end: src.actual_end })
+                }
+              }
               if (newSchedules.length > 0) {
                 const withTenant = tenantId ? newSchedules.map(s => ({ ...s, tenant_id: tenantId })) : newSchedules
                 const { data } = await supabase.from('schedules').upsert(withTenant, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
-                alert(`已複製 ${newSchedules.length} 筆排班`)
+                alert(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
               }
             }}>
-              📋 複製上週
+              📋 複製上月
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
-              if (!confirm(`確定要清除本週（${weekStart} ~ ${weekEnd}）${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
-              await supabase.from('schedules').delete().in('employee', empNames).gte('date', weekStart).lte('date', weekEnd)
-              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < weekStart || s.date > weekEnd))
+              if (!confirm(`確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
+              await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
+              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
             }}>
-              🗑️ 清除本週
+              🗑️ 清除本月
             </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleImportRestAsOffRequests}>
-              <CalendarOff size={14} /> 休→希望休
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }} onClick={() => setShowCompOff(true)}>
+              🔄 指派補休
             </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleClearOffRequests}>
-              🗑️ 清希望休
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
+              // Export schedule as CSV
+              const rows = [['員工', ...monthDates.map(d => d.slice(5))]]
+              for (const emp of filtered) {
+                const row = [emp.name]
+                for (const date of monthDates) {
+                  const s = schedules.find(x => x.employee === emp.name && x.date === date)
+                  row.push(s?.shift || '')
+                }
+                rows.push(row)
+              }
+              const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url; a.download = `排班表_${storeFilter || '全部'}_${selectedMonth}.csv`
+              a.click(); URL.revokeObjectURL(url)
+            }}>
+              📥 匯出 CSV
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件
@@ -784,25 +727,8 @@ export default function Schedule() {
 
       {/* View mode toggle + Store selector + Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* View mode: Week / Month */}
-        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
-          <button onClick={() => setViewMode('week')} style={{
-            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            background: viewMode === 'week' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-            color: viewMode === 'week' ? '#fff' : 'var(--text-muted)',
-          }}>
-            <Calendar size={12} style={{ marginRight: 4 }} />週
-          </button>
-          <button onClick={() => setViewMode('month')} style={{
-            padding: '6px 14px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            background: viewMode === 'month' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-            color: viewMode === 'month' ? '#fff' : 'var(--text-muted)',
-          }}>
-            <Calendar size={12} style={{ marginRight: 4 }} />月
-          </button>
-        </div>
-        {/* Month navigator (only in month mode) */}
-        {viewMode === 'month' && (
+        {/* Month navigator */}
+        {(
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
               onClick={() => {
@@ -959,45 +885,20 @@ export default function Schedule() {
         </div>
       )}
 
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <EmergencyCoverPanel
-          employees={filtered} schedules={schedules} shiftDefs={shiftDefs}
-          weekDates={weekDates} storeFilter={storeFilter} locations={locations}
-          offRequests={offRequests}
-          onUpdate={() => {
-            // Reload schedules after emergency cover
-            supabase.from('schedules').select('*').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1])
-              .then(({ data }) => { if (data) setSchedules(data) })
-          }}
+      {/* Calendar Events / Holiday + Custom Events */}
+      {mainTab === 'schedule' && (
+        <ScheduleCalendarEvents
+          selectedMonth={selectedMonth}
+          monthDates={monthDates}
+          holidays={holidays}
+          storeEvents={storeEvents}
+          setStoreEvents={setStoreEvents}
+          storeFilter={storeFilter}
+          locations={locations}
         />
       )}
 
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <StaffingGapPanel
-          weekDates={weekDates} schedules={schedules} employees={filtered}
-          shiftDefs={shiftDefs} staffingRules={staffing}
-          offRequests={offRequests} storeFilter={storeFilter} locations={locations}
-          onAssign={handleSetShift}
-        />
-      )}
-
-      {mainTab === 'schedule' && viewMode === 'week' && (
-        <ScheduleTable
-          weekDates={weekDates} weekStart={weekStart} weekEnd={weekEnd}
-          weekOffset={weekOffset} setWeekOffset={setWeekOffset}
-          filtered={filtered} deptFilter={deptFilter} setDeptFilter={setDeptFilter}
-          departments={departments} schedules={schedules}
-          getShift={getShift} getShiftStyle={getShiftStyle} getOffRequest={getOffRequest}
-          editCell={editCell} setEditCell={setEditCell} handleSetShift={handleSetShift}
-          handleDeleteShift={handleDeleteShift} canEditSchedule={canEditSchedule}
-          SHIFT_TYPES={SHIFT_TYPES} shiftDefs={shiftDefs}
-          getStoreShifts={getStoreShifts} storeFilter={storeFilter} storeSettings={storeSettings}
-          compliance={compliance} holidaySet={holidaySet}
-          setCoverModal={setCoverModal} findCoverCandidates={findCoverCandidates}
-        />
-      )}
-
-      {mainTab === 'schedule' && viewMode === 'month' && (
+      {mainTab === 'schedule' && (
         <MonthScheduleTable
           monthDates={monthDates}
           filtered={filtered}
@@ -1020,6 +921,7 @@ export default function Schedule() {
           deptFilter={deptFilter}
           setDeptFilter={setDeptFilter}
           departments={departments}
+          storeSettings={storeSettings}
         />
       )}
 
@@ -1062,11 +964,269 @@ export default function Schedule() {
 
       {showLawModal && <LawReferenceModal onClose={() => setShowLawModal(false)} />}
 
+      {/* Comp-off assignment modal */}
+      {showCompOff && (
+        <CompOffModal
+          employees={filtered}
+          activeDates={activeDates}
+          schedules={schedules}
+          onAssign={async (assignments) => {
+            // assignments = [{ employee, date }]
+            for (const { employee, date } of assignments) {
+              const existing = schedules.find(s => s.employee === employee && s.date === date)
+              if (existing) {
+                const { data } = await supabase.from('schedules')
+                  .update({ shift: '補休', actual_start: null, actual_end: null })
+                  .eq('id', existing.id).select().single()
+                if (data) setSchedules(prev => prev.map(s => s.id === existing.id ? data : s))
+              } else {
+                const { data } = await supabase.from('schedules')
+                  .insert({ employee, date, shift: '補休', ...(tenantId ? { tenant_id: tenantId } : {}) })
+                  .select().single()
+                if (data) setSchedules(prev => [...prev, data])
+              }
+            }
+            setShowCompOff(false)
+          }}
+          onClose={() => setShowCompOff(false)}
+        />
+      )}
+
       <CoverShiftModal
         coverModal={coverModal} setCoverModal={setCoverModal}
         coverLoading={coverLoading} coverCandidates={coverCandidates}
         handleAssignCover={handleAssignCover}
       />
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Comp-Off Assignment Modal (指派補休)
+// ══════════════════════════════════════════════════════════════
+function CompOffModal({ employees, activeDates, schedules, onAssign, onClose }) {
+  const [selected, setSelected] = useState({}) // { "empName_date": true }
+  const [saving, setSaving] = useState(false)
+
+  const toggle = (emp, date) => {
+    const key = `${emp}_${date}`
+    setSelected(prev => {
+      const next = { ...prev }
+      if (next[key]) delete next[key]
+      else next[key] = true
+      return next
+    })
+  }
+
+  const handleSave = async () => {
+    const assignments = Object.keys(selected).map(key => {
+      const [employee, date] = key.split('_')
+      return { employee, date }
+    })
+    if (assignments.length === 0) return
+    setSaving(true)
+    await onAssign(assignments)
+    setSaving(false)
+  }
+
+  const selectedCount = Object.keys(selected).length
+  const dows = ['日', '一', '二', '三', '四', '五', '六']
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, width: '90%', maxWidth: 800, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0 }}>🔄 指派補休</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+        </div>
+
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          點選格子指派補休，已有班的格子會被覆蓋為補休。
+          {selectedCount > 0 && <strong style={{ color: 'var(--accent-cyan)', marginLeft: 8 }}>已選 {selectedCount} 格</strong>}
+        </p>
+
+        {/* Grid: employees × dates */}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>員工</th>
+                {activeDates.map(d => {
+                  const dow = new Date(d).getDay()
+                  return (
+                    <th key={d} style={{ padding: '4px 2px', textAlign: 'center', minWidth: 36, color: dow === 0 || dow === 6 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                      <div>{parseInt(d.slice(8))}</div>
+                      <div style={{ fontSize: 10 }}>{dows[dow]}</div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map(emp => (
+                <tr key={emp.name}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>
+                    {emp.name}
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
+                      {emp.employment_type === '兼職' || emp.employment_type === 'PT' ? 'PT' : ''}
+                    </span>
+                  </td>
+                  {activeDates.map(date => {
+                    const key = `${emp.name}_${date}`
+                    const isSelected = selected[key]
+                    const existingShift = schedules.find(s => s.employee === emp.name && s.date === date)?.shift
+                    const isAlreadyCompOff = existingShift === '補休'
+
+                    return (
+                      <td key={date} style={{ padding: 1, textAlign: 'center' }}>
+                        <button
+                          onClick={() => !isAlreadyCompOff && toggle(emp.name, date)}
+                          style={{
+                            width: 34, height: 28, borderRadius: 6, fontSize: 10, fontWeight: 600,
+                            border: isSelected ? '2px solid #3b82f6' : '1px solid var(--border-subtle)',
+                            background: isAlreadyCompOff ? 'rgba(59,130,246,0.15)' : isSelected ? 'rgba(59,130,246,0.2)' : 'transparent',
+                            color: isAlreadyCompOff ? '#3b82f6' : isSelected ? '#3b82f6' : 'var(--text-muted)',
+                            cursor: isAlreadyCompOff ? 'default' : 'pointer',
+                            opacity: isAlreadyCompOff ? 0.6 : 1,
+                          }}
+                        >
+                          {isAlreadyCompOff ? '補' : isSelected ? '補' : existingShift ? existingShift.slice(0, 3) : '—'}
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-secondary" onClick={onClose} style={{ padding: '8px 20px' }}>取消</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={selectedCount === 0 || saving}
+            style={{ padding: '8px 20px', background: '#3b82f6' }}>
+            {saving ? '儲存中...' : `確認指派 ${selectedCount} 筆補休`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Schedule Calendar Events (holidays + custom events)
+// ══════════════════════════════════════════════════════════════
+function ScheduleCalendarEvents({ selectedMonth, monthDates, holidays, storeEvents, setStoreEvents, storeFilter, locations }) {
+  const [newEvent, setNewEvent] = useState({ date: '', title: '', color: '#f59e0b' })
+  const [showForm, setShowForm] = useState(false)
+
+  const store = locations.find(s => s.name === storeFilter)
+  const dows = ['日', '一', '二', '三', '四', '五', '六']
+
+  const handleAdd = async () => {
+    if (!newEvent.date || !newEvent.title || !store) return
+    const { data, error } = await supabase.from('store_events')
+      .insert({ store_id: store.id, date: newEvent.date, title: newEvent.title, color: newEvent.color })
+      .select().single()
+    if (data) setStoreEvents(prev => [...prev, data])
+    if (error) alert('新增失敗：' + error.message)
+    setNewEvent({ date: '', title: '', color: '#f59e0b' })
+    setShowForm(false)
+  }
+
+  const handleDelete = async (id) => {
+    await supabase.from('store_events').delete().eq('id', id)
+    setStoreEvents(prev => prev.filter(e => e.id !== id))
+  }
+
+  const holidayDates = monthDates.filter(d => holidays.includes(d))
+
+  return (
+    <div className="card" style={{ marginBottom: 12, padding: '12px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>📅 {selectedMonth} 行事曆</span>
+        {storeFilter && (
+          <button onClick={() => setShowForm(!showForm)} style={{
+            padding: '4px 12px', borderRadius: 6, border: '1px solid var(--border-medium)',
+            background: showForm ? 'rgba(34,211,238,0.1)' : 'var(--bg-card)',
+            color: showForm ? 'var(--accent-cyan)' : 'var(--text-muted)',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}>
+            {showForm ? '收起' : '+ 新增活動'}
+          </button>
+        )}
+      </div>
+
+      {/* Add event form */}
+      {showForm && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--glass-light)' }}>
+          <div>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>日期</label>
+            <select className="form-input" style={{ width: 100, padding: '5px 6px', fontSize: 12 }}
+              value={newEvent.date} onChange={e => setNewEvent(prev => ({ ...prev, date: e.target.value }))}>
+              <option value="">選日期</option>
+              {monthDates.map(d => {
+                const day = parseInt(d.slice(8))
+                const dow = dows[new Date(d).getDay()]
+                return <option key={d} value={d}>{day}({dow})</option>
+              })}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>活動名稱</label>
+            <input className="form-input" type="text" placeholder="例：包場、週年慶" style={{ width: '100%', padding: '5px 8px', fontSize: 12 }}
+              value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} />
+          </div>
+          <div>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>顏色</label>
+            <input type="color" value={newEvent.color} onChange={e => setNewEvent(prev => ({ ...prev, color: e.target.value }))}
+              style={{ width: 32, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+          </div>
+          <button onClick={handleAdd} disabled={!newEvent.date || !newEvent.title} className="btn btn-primary btn-sm" style={{ padding: '5px 12px', fontSize: 12 }}>
+            新增
+          </button>
+        </div>
+      )}
+
+      {/* Event list */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {/* National holidays */}
+        {holidayDates.map(d => {
+          const day = parseInt(d.slice(8))
+          const dow = dows[new Date(d).getDay()]
+          return (
+            <span key={`h_${d}`} style={{
+              padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              background: 'rgba(239,68,68,0.1)', color: 'var(--accent-red)',
+            }}>
+              🏷️ {day}({dow}) 國定假日
+            </span>
+          )
+        })}
+
+        {/* Custom store events */}
+        {storeEvents.map(ev => {
+          const day = parseInt(ev.date.slice(8))
+          const dow = dows[new Date(ev.date).getDay()]
+          return (
+            <span key={ev.id} style={{
+              padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              background: (ev.color || '#f59e0b') + '20', color: ev.color || '#f59e0b',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+              📌 {day}({dow}) {ev.title}
+              <button onClick={() => handleDelete(ev.id)} style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                color: 'inherit', fontSize: 10, opacity: 0.6, lineHeight: 1,
+              }}>✕</button>
+            </span>
+          )
+        })}
+
+        {holidayDates.length === 0 && storeEvents.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>本月無節慶或活動</span>
+        )}
+      </div>
     </div>
   )
 }

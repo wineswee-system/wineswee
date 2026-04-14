@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
 import { getShiftHours } from '../../../lib/scheduleUtils'
 
@@ -241,6 +241,25 @@ export default function ScheduleTable({
 // ── Shift Edit Popup with Time Pickers ──
 function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter, getStoreShifts, storeSettings, schedules, handleSetShift, handleDeleteShift, onClose }) {
   const existing = schedules.find(s => s.employee === emp.name && s.date === date)
+  const anchorRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  // Position: prefer above the cell, fallback to below
+  useEffect(() => {
+    if (anchorRef.current) {
+      const rect = anchorRef.current.getBoundingClientRect()
+      const popupH = 380  // approximate popup height
+      const spaceAbove = rect.top
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceAbove > popupH
+        ? rect.top - popupH - 4   // above
+        : spaceBelow > popupH
+          ? rect.bottom + 4       // below
+          : Math.max(8, (window.innerHeight - popupH) / 2)  // center
+      const left = Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230))
+      setPos({ top, left })
+    }
+  }, [])
 
   // Get operating hours for this day
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -285,12 +304,19 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
   }
 
   return (
+    <>
+    {/* Invisible anchor to measure position */}
+    <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
+    {/* Backdrop — uses onMouseDown to avoid same-click-close */}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
     <div style={{
-      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-      zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-      borderRadius: 12, padding: 12, boxShadow: 'var(--shadow-lg)',
+      position: 'fixed',
+      top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
+      ...(pos ? {} : { transform: 'translate(-50%, -50%)' }),
+      zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      borderRadius: 12, padding: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
       minWidth: 200,
-    }}>
+    }} onMouseDown={e => e.stopPropagation()}>
       {/* Time pickers */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
         <input type="time" className="form-input" value={startTime} onChange={e => setStartTime(e.target.value)}
@@ -353,5 +379,6 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
         }}>取消</button>
       </div>
     </div>
+    </>
   )
 }

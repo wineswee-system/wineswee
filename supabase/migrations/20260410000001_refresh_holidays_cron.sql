@@ -48,10 +48,12 @@ END $$;
 -- ── 3. RLS ──
 ALTER TABLE scheduling_rules_snapshot ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "scheduling_rules_read" ON scheduling_rules_snapshot;
 CREATE POLICY "scheduling_rules_read"
   ON scheduling_rules_snapshot FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "scheduling_rules_write" ON scheduling_rules_snapshot;
 CREATE POLICY "scheduling_rules_write"
   ON scheduling_rules_snapshot FOR ALL
   USING (auth.role() = 'service_role');

@@ -499,9 +499,11 @@ export function runProgrammaticSchedule(data) {
 
         // 月工時上限到了 → 必須休
         if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-        // 正職：能排就排（四週變形不提早休，月底收斂）
-        // 兼職：達到週目標且覆蓋足夠 → 休
-        if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet) { schedule[emp.name][date] = '休'; continue }
+        // 兼職：週目標到了 + 所有時段 min 滿足 + 月時數已達下限 → 才可以休
+        // 如果月時數還沒到下限，即使週目標到了也繼續排
+        const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
+        const monthMin = pt ? 80 : 150
+        if (pt && weekHours >= targetHoursMap[emp.name] && allMinMet && monthHoursSoFar >= monthMin) { schedule[emp.name][date] = '休'; continue }
 
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：縮短為 3-6h，讓正職有足夠空間

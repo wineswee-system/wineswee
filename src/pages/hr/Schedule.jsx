@@ -933,6 +933,7 @@ export default function Schedule() {
             storeSettings={storeSettings} setStoreSettings={setStoreSettings}
             staffing={staffing} setStaffing={setStaffing}
             operatingHours={operatingHours} setOperatingHours={setOperatingHours}
+            yearMonth={selectedMonth}
           />
         </div>
       )}

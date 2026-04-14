@@ -52,6 +52,7 @@ export default function StoreSettingsTab({
   storeSettings, setStoreSettings,
   staffing, setStaffing,
   operatingHours, setOperatingHours,
+  yearMonth,
 }) {
   // Shift CRUD state
   const [showShiftModal, setShowShiftModal] = useState(false)
@@ -110,17 +111,19 @@ export default function StoreSettingsTab({
   const [timeSlots, setTimeSlots] = useState([])
   const [newSlot, setNewSlot] = useState({ day_type: 'all', start_time: '', end_time: '', required_count: 1, max_count: null })
 
-  // Load time slots
+  // Load time slots (per month)
   useEffect(() => {
     if (!selectedStore) return
-    supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
-      .then(({ data }) => setTimeSlots(data || []))
-  }, [selectedStore?.id])
+    let q = supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
+    if (yearMonth) q = q.eq('year_month', yearMonth)
+    else q = q.is('year_month', null)
+    q.then(({ data }) => setTimeSlots(data || []))
+  }, [selectedStore?.id, yearMonth])
 
   const handleAddTimeSlot = async () => {
     if (!selectedStore || !newSlot.start_time || !newSlot.end_time) return
     const { data, error } = await supabase.from('store_time_slots')
-      .upsert({ store_id: selectedStore.id, ...newSlot }, { onConflict: 'store_id,day_type,start_time' })
+      .insert({ store_id: selectedStore.id, year_month: yearMonth || null, ...newSlot })
       .select().single()
     if (error) { alert('新增失敗：' + error.message); return }
     if (data) setTimeSlots(prev => [...prev.filter(s => s.id !== data.id), data].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
@@ -130,6 +133,32 @@ export default function StoreSettingsTab({
   const handleDeleteTimeSlot = async (id) => {
     await supabase.from('store_time_slots').delete().eq('id', id)
     setTimeSlots(prev => prev.filter(s => s.id !== id))
+  }
+
+  // 複製上月時段人力需求
+  const handleCopyLastMonth = async () => {
+    if (!selectedStore || !yearMonth) return
+    const [y, m] = yearMonth.split('-').map(Number)
+    const prevDate = new Date(y, m - 2, 1) // month is 0-indexed, so m-2
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
+
+    const { data: prev } = await supabase.from('store_time_slots').select('*')
+      .eq('store_id', selectedStore.id).eq('year_month', prevMonth)
+    if (!prev?.length) {
+      alert(`${prevMonth} 沒有時段人力設定可複製`)
+      return
+    }
+    if (!confirm(`確定要將 ${prevMonth} 的 ${prev.length} 筆時段人力需求複製到 ${yearMonth}？`)) return
+
+    // 先清除當月
+    await supabase.from('store_time_slots').delete()
+      .eq('store_id', selectedStore.id).eq('year_month', yearMonth)
+
+    // 複製
+    const rows = prev.map(({ id, created_at, ...rest }) => ({ ...rest, year_month: yearMonth }))
+    const { data: inserted } = await supabase.from('store_time_slots').insert(rows).select()
+    setTimeSlots(inserted || [])
+    alert(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
   }
 
   // New staffing form state
@@ -291,7 +320,15 @@ export default function StoreSettingsTab({
       {/* Time Slot Staffing — 時段覆蓋制 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title"><span className="card-title-icon">⏰</span> 時段人力需求</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="card-title"><span className="card-title-icon">⏰</span> 時段人力需求{yearMonth ? ` — ${yearMonth}` : ''}</div>
+            {yearMonth && (
+              <button onClick={handleCopyLastMonth} style={{
+                padding: '4px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
+                background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>📋 複製上月</button>
+            )}
+          </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>設定各時段需要幾人，演算法會自動計算每人上下班時間</div>
         </div>
 

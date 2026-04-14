@@ -87,6 +87,7 @@ export async function gatherSchedulingData({
     storeFilter
       ? supabase.from('store_time_slots').select('*')
           .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
+          .eq('year_month', currentMonth)
       : Promise.resolve({ data: [] }),
   ])
 

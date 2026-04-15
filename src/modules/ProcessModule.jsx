@@ -4,6 +4,7 @@ import Workflows from '../pages/process/Workflows'
 import Tasks from '../pages/process/Tasks'
 import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
+import ApprovalChains from '../pages/system/ApprovalChains'
 
 export default function ProcessModule() {
   return (
@@ -13,6 +14,7 @@ export default function ProcessModule() {
       <Route path="tasks" element={<Tasks />} />
       <Route path="checklists" element={<Checklists />} />
       <Route path="sop" element={<SOPTemplates />} />
+      <Route path="approval-chains" element={<ApprovalChains />} />
     </Routes>
   )
 }

@@ -85,8 +85,12 @@ export async function gatherSchedulingData({
     supabase.from('fatigue_scores').select('employee, total_score, month').eq('month', currentMonth),
     supabase.from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd),
     storeFilter
-      ? supabase.from('store_time_slots').select('*')
-          .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
+      ? (async () => {
+          const sid = locations.find(l => l.name === storeFilter)?.id
+          const { data: monthData } = await supabase.from('store_time_slots').select('*').eq('store_id', sid).eq('year_month', currentMonth)
+          if (monthData?.length) return { data: monthData }
+          return supabase.from('store_time_slots').select('*').eq('store_id', sid).is('year_month', null)
+        })()
       : Promise.resolve({ data: [] }),
   ])
 
@@ -95,6 +99,9 @@ export async function gatherSchedulingData({
     maxStaff: storeSettingsData?.max_staff || undefined,
     operatingHours: storeSettingsData?.operating_hours || undefined,
     peakDays: storeSettingsData?.peak_days || [5, 6], // Fri + Sat
+    workHourSystem: storeSettingsData?.work_hour_system || undefined,
+    ft_monthly_rest_days: storeSettingsData?.ft_monthly_rest_days ?? 10,
+    pt_monthly_rest_days: storeSettingsData?.pt_monthly_rest_days ?? 15,
   }
 
   // Cross-store eligible employees (for borrowing suggestions)

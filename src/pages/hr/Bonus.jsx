@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Settings } from 'lucide-react'
+import { Plus, Settings, Gift } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
 
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
@@ -20,6 +21,8 @@ export default function Bonus() {
   const [showRecordModal, setShowRecordModal] = useState(false)
   const [showSettingModal, setShowSettingModal] = useState(false)
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7))
+  const [employees, setEmployees] = useState([])
+  const [policyBonus, setPolicyBonus] = useState(0) // 從福利政策自動計算的獎金
 
   const [recordForm, setRecordForm] = useState({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' })
   const [settingForm, setSettingForm] = useState({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' })
@@ -33,7 +36,8 @@ export default function Bonus() {
       supabase.from('customer_contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false }),
       supabase.from('outbound_orders').select('*'),
-    ]).then(([r, s, o, t, ct, adj, ob]) => {
+      supabase.from('employees').select('id, name, store').order('name'),
+    ]).then(([r, s, o, t, ct, adj, ob, emp]) => {
       setRecords(r.data || [])
       setSettings(s.data || [])
       setOpportunities(o.data || [])
@@ -41,6 +45,7 @@ export default function Bonus() {
       setContacts(ct.data || [])
       setAdjustments(adj.data || [])
       setOutboundOrders(ob.data || [])
+      setEmployees(emp.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -48,6 +53,33 @@ export default function Bonus() {
       setLoading(false)
     })
   }, [])
+
+  // 選員工時自動查詢福利政策獎金
+  const handleEmployeeSelect = async (name) => {
+    setRecordForm(f => ({ ...f, employee_name: name }))
+    setPolicyBonus(0)
+    const emp = employees.find(e => e.name === name)
+    if (!emp) return
+    try {
+      const storeId = await getStoreIdByName(emp.store)
+      const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
+      let total = 0
+      const labels = []
+      for (const [code, config] of Object.entries(bonusBenefits)) {
+        const amount = calculateBonus(config, { sales: 0, attendance_rate: 1 })
+        if (amount > 0) {
+          total += amount
+          labels.push(`${code}: $${amount.toLocaleString()}`)
+        }
+      }
+      setPolicyBonus(total)
+      if (total > 0) {
+        setRecordForm(f => ({ ...f, base_bonus: String(total), notes: `福利政策自動帶入：${labels.join('、')}` }))
+      }
+    } catch (err) {
+      console.error('Failed to fetch benefit policies:', err)
+    }
+  }
 
   const setR = (k, v) => setRecordForm(f => ({ ...f, [k]: v }))
   const setS = (k, v) => setSettingForm(f => ({ ...f, [k]: v }))
@@ -427,15 +459,26 @@ export default function Bonus() {
       )}
 
       {showRecordModal && (
-        <Modal title="發放獎金紀錄" onClose={() => setShowRecordModal(false)} onSubmit={handleAddRecord} submitLabel="確認發放">
+        <Modal title="發放獎金紀錄" onClose={() => { setShowRecordModal(false); setPolicyBonus(0) }} onSubmit={handleAddRecord} submitLabel="確認發放">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工姓名 *"><input className="form-input" type="text" style={{ width: '100%' }} value={recordForm.employee_name} onChange={e => setR('employee_name', e.target.value)} /></Field>
+            <Field label="員工姓名 *">
+              <select className="form-input" style={{ width: '100%' }} value={recordForm.employee_name} onChange={e => handleEmployeeSelect(e.target.value)}>
+                <option value="">請選擇員工</option>
+                {employees.map(e => <option key={e.id} value={e.name}>{e.name}{e.store ? ` (${e.store})` : ''}</option>)}
+              </select>
+            </Field>
             <Field label="職類">
               <select className="form-input" style={{ width: '100%' }} value={recordForm.role_type} onChange={e => setR('role_type', e.target.value)}>
                 {ROLE_TYPES.map(r => <option key={r}>{r}</option>)}
               </select>
             </Field>
           </div>
+          {policyBonus > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', marginBottom: 8 }}>
+              <Gift size={16} style={{ color: 'var(--accent-green)' }} />
+              <span style={{ fontSize: 13 }}>福利政策自動帶入：<strong style={{ color: 'var(--accent-green)' }}>$ {policyBonus.toLocaleString()}</strong>（可手動調整）</span>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="期間"><input className="form-input" type="month" style={{ width: '100%' }} value={recordForm.period} onChange={e => setR('period', e.target.value)} /></Field>
             <Field label="基本績效獎"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={recordForm.base_bonus} onChange={e => setR('base_bonus', e.target.value)} /></Field>

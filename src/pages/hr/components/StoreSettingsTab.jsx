@@ -52,6 +52,7 @@ export default function StoreSettingsTab({
   storeSettings, setStoreSettings,
   staffing, setStaffing,
   operatingHours, setOperatingHours,
+  yearMonth,
 }) {
   // Shift CRUD state
   const [showShiftModal, setShowShiftModal] = useState(false)
@@ -84,7 +85,7 @@ export default function StoreSettingsTab({
 
   const handleShiftSubmit = async () => {
     if (!shiftForm.name) return
-    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all' }
+    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
@@ -110,17 +111,19 @@ export default function StoreSettingsTab({
   const [timeSlots, setTimeSlots] = useState([])
   const [newSlot, setNewSlot] = useState({ day_type: 'all', start_time: '', end_time: '', required_count: 1, max_count: null })
 
-  // Load time slots
+  // Load time slots (per month)
   useEffect(() => {
     if (!selectedStore) return
-    supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
-      .then(({ data }) => setTimeSlots(data || []))
-  }, [selectedStore?.id])
+    let q = supabase.from('store_time_slots').select('*').eq('store_id', selectedStore.id).order('start_time')
+    if (yearMonth) q = q.eq('year_month', yearMonth)
+    else q = q.is('year_month', null)
+    q.then(({ data }) => setTimeSlots(data || []))
+  }, [selectedStore?.id, yearMonth])
 
   const handleAddTimeSlot = async () => {
     if (!selectedStore || !newSlot.start_time || !newSlot.end_time) return
     const { data, error } = await supabase.from('store_time_slots')
-      .upsert({ store_id: selectedStore.id, ...newSlot }, { onConflict: 'store_id,day_type,start_time' })
+      .insert({ store_id: selectedStore.id, year_month: yearMonth || null, ...newSlot })
       .select().single()
     if (error) { alert('新增失敗：' + error.message); return }
     if (data) setTimeSlots(prev => [...prev.filter(s => s.id !== data.id), data].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
@@ -130,6 +133,32 @@ export default function StoreSettingsTab({
   const handleDeleteTimeSlot = async (id) => {
     await supabase.from('store_time_slots').delete().eq('id', id)
     setTimeSlots(prev => prev.filter(s => s.id !== id))
+  }
+
+  // 複製上月時段人力需求
+  const handleCopyLastMonth = async () => {
+    if (!selectedStore || !yearMonth) return
+    const [y, m] = yearMonth.split('-').map(Number)
+    const prevDate = new Date(y, m - 2, 1) // month is 0-indexed, so m-2
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
+
+    const { data: prev } = await supabase.from('store_time_slots').select('*')
+      .eq('store_id', selectedStore.id).eq('year_month', prevMonth)
+    if (!prev?.length) {
+      alert(`${prevMonth} 沒有時段人力設定可複製`)
+      return
+    }
+    if (!confirm(`確定要將 ${prevMonth} 的 ${prev.length} 筆時段人力需求複製到 ${yearMonth}？`)) return
+
+    // 先清除當月
+    await supabase.from('store_time_slots').delete()
+      .eq('store_id', selectedStore.id).eq('year_month', yearMonth)
+
+    // 複製
+    const rows = prev.map(({ id, created_at, ...rest }) => ({ ...rest, year_month: yearMonth }))
+    const { data: inserted } = await supabase.from('store_time_slots').insert(rows).select()
+    setTimeSlots(inserted || [])
+    alert(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
   }
 
   // New staffing form state
@@ -249,8 +278,8 @@ export default function StoreSettingsTab({
           <table className="data-table">
             <thead><tr><th>班別</th><th>類型</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th><th>適用</th><th style={{ width: 70 }}>操作</th></tr></thead>
             <tbody>
-              {shiftDefs.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
-              {shiftDefs.map(d => {
+              {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
+              {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).map(d => {
                 const sh = parseTime(d.start_time), eh = parseTime(d.end_time)
                 const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
                 return (
@@ -291,7 +320,15 @@ export default function StoreSettingsTab({
       {/* Time Slot Staffing — 時段覆蓋制 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title"><span className="card-title-icon">⏰</span> 時段人力需求</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="card-title"><span className="card-title-icon">⏰</span> 時段人力需求{yearMonth ? ` — ${yearMonth}` : ''}</div>
+            {yearMonth && (
+              <button onClick={handleCopyLastMonth} style={{
+                padding: '4px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
+                background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>📋 複製上月</button>
+            )}
+          </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>設定各時段需要幾人，演算法會自動計算每人上下班時間</div>
         </div>
 
@@ -510,6 +547,32 @@ export default function StoreSettingsTab({
           </select>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{WORK_SYSTEMS.find(w => w.value === (storeSettings?.work_hour_system || '標準工時'))?.desc}</div>
         </div>
+      </div>
+
+      {/* Monthly Rest Days */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><span className="card-title-icon">🗓️</span> 每月休假天數</div>
+        </div>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>正職 (天/月)</label>
+            <input className="form-input" type="number" min="4" max="15" value={storeSettings?.ft_monthly_rest_days ?? 8} onChange={async e => {
+              if (!selectedStore) return
+              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, ft_monthly_rest_days: Number(e.target.value) || 8 }, { onConflict: 'store_id' }).select().single()
+              if (data) setStoreSettings(data)
+            }} style={{ width: 80 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>兼職 (天/月)</label>
+            <input className="form-input" type="number" min="4" max="25" value={storeSettings?.pt_monthly_rest_days ?? 14} onChange={async e => {
+              if (!selectedStore) return
+              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, pt_monthly_rest_days: Number(e.target.value) || 14 }, { onConflict: 'store_id' }).select().single()
+              if (data) setStoreSettings(data)
+            }} style={{ width: 80 }} />
+          </div>
+        </div>
+        <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text-muted)' }}>排班演算法會依此設定控制每月休假天數</div>
       </div>
 
       {/* Labor Cost Budget */}

@@ -58,7 +58,12 @@ export const createLeaveRequest = (data) =>
   supabase.from('leave_requests').insert(data).select().single()
 
 export const updateLeaveStatus = (id, status, approver, rejectReason) =>
-  supabase.from('leave_requests').update({ status, approver, reject_reason: rejectReason || null }).eq('id', id).select().single()
+  supabase.rpc('secure_update_leave_status', {
+    p_id: id,
+    p_status: status,
+    p_approver: approver,
+    p_reject_reason: rejectReason || null,
+  })
 
 export const deleteLeaveRequest = (id) =>
   supabase.from('leave_requests').delete().eq('id', id)
@@ -71,7 +76,11 @@ export const createOvertimeRequest = (data) =>
   supabase.from('overtime_requests').insert(data).select().single()
 
 export const updateOvertimeStatus = (id, status, rejectReason) =>
-  supabase.from('overtime_requests').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
+  supabase.rpc('secure_update_overtime_status', {
+    p_id: id,
+    p_status: status,
+    p_reject_reason: rejectReason || null,
+  })
 
 // ── Salary ─────────────────────────────────────────────────
 export const getSalaryRecords = (month) => {
@@ -80,7 +89,16 @@ export const getSalaryRecords = (month) => {
 }
 
 export const upsertSalaryRecord = (data) =>
-  supabase.from('salary_records').upsert(data).select().single()
+  supabase.rpc('secure_upsert_salary', {
+    p_employee: data.employee,
+    p_month: data.month,
+    p_base_salary: data.base_salary,
+    p_allowance: data.allowance ?? 0,
+    p_overtime: data.overtime ?? 0,
+    p_deductions: data.deductions ?? 0,
+    p_insurance: data.insurance ?? 0,
+    p_net_salary: data.net_salary ?? null,
+  })
 
 // ── Schedule ───────────────────────────────────────────────
 export const getScheduleData = () =>
@@ -425,7 +443,17 @@ export const createPurchaseRequest = (data) =>
 export const getPurchaseOrders = () =>
   supabase.from('purchase_orders').select('*').order('id', { ascending: false })
 export const createPurchaseOrder = (data) =>
-  supabase.from('purchase_orders').insert(data).select().single()
+  supabase.rpc('secure_create_purchase_order', {
+    p_po_number: data.po_number,
+    p_supplier: data.supplier,
+    p_items: data.items,
+    p_total_amount: data.total_amount,
+    p_tax: data.tax ?? 0,
+    p_shipping: data.shipping ?? 0,
+    p_payment_terms: data.payment_terms ?? null,
+    p_expected_date: data.expected_date ?? null,
+    p_pr_id: data.pr_id ?? null,
+  })
 export const getGoodsReceipts = () =>
   supabase.from('goods_receipts').select('*').order('id', { ascending: false })
 export const createGoodsReceipt = (data) =>
@@ -452,10 +480,34 @@ export const getJournalEntries = () =>
   supabase.from('journal_entries').select('*').order('id', { ascending: false })
 export const getJournalLines = (entryId) =>
   supabase.from('journal_lines').select('*').eq('entry_id', entryId).order('id')
-export const createJournalEntry = (data) =>
-  supabase.from('journal_entries').insert(data).select().single()
+export const createJournalEntry = (data, lines = null) =>
+  lines
+    ? supabase.rpc('secure_create_journal_entry', {
+        p_entry_date: data.entry_date,
+        p_description: data.description,
+        p_lines: lines,
+        p_source: data.source ?? null,
+        p_source_id: data.source_id ?? null,
+        p_created_by: data.created_by ?? null,
+      })
+    : supabase.rpc('secure_create_journal_entry', {
+        p_entry_date: data.entry_date,
+        p_description: data.description,
+        p_lines: [],
+        p_source: data.source ?? null,
+        p_source_id: data.source_id ?? null,
+        p_created_by: data.created_by ?? null,
+      })
 export const createJournalLine = (data) =>
-  supabase.from('journal_lines').insert(data).select().single()
+  supabase.rpc('secure_create_journal_line', {
+    p_entry_id: data.entry_id,
+    p_account_code: data.account_code,
+    p_account_name: data.account_name,
+    p_debit: data.debit ?? 0,
+    p_credit: data.credit ?? 0,
+    p_memo: data.memo ?? null,
+    p_cost_center: data.cost_center ?? null,
+  })
 export const getAccountsReceivable = () =>
   supabase.from('accounts_receivable').select('*').order('id', { ascending: false })
 export const createAccountReceivable = (data) =>
@@ -517,7 +569,18 @@ export const updateQuotation = (id, data) =>
 export const getSalesOrders = () =>
   supabase.from('sales_orders').select('*').order('id', { ascending: false })
 export const createSalesOrder = (data) =>
-  supabase.from('sales_orders').insert(data).select().single()
+  supabase.rpc('secure_create_sales_order', {
+    p_order_number: data.order_number,
+    p_customer: data.customer,
+    p_items: data.items,
+    p_subtotal: data.subtotal,
+    p_discount: data.discount ?? 0,
+    p_tax: data.tax ?? 0,
+    p_total: data.total ?? null,
+    p_notes: data.notes ?? null,
+    p_created_by: data.created_by ?? null,
+    p_quote_id: data.quote_id ?? null,
+  })
 export const getPromotions = () =>
   supabase.from('promotions').select('*').order('id', { ascending: false })
 export const createPromotion = (data) =>
@@ -525,7 +588,22 @@ export const createPromotion = (data) =>
 export const getPOSTransactions = () =>
   supabase.from('pos_transactions').select('*').order('id', { ascending: false })
 export const createPOSTransaction = (data) =>
-  supabase.from('pos_transactions').insert(data).select().single()
+  supabase.rpc('secure_create_pos_transaction', {
+    p_store: data.store,
+    p_cashier: data.cashier,
+    p_items: data.items,
+    p_subtotal: data.subtotal,
+    p_discount: data.discount ?? 0,
+    p_tax: data.tax ?? 0,
+    p_total: data.total ?? null,
+    p_payment_method: data.payment_method ?? '現金',
+    p_payment_ref: data.payment_ref ?? null,
+    p_member_id: data.member_id ?? null,
+    p_points_earned: data.points_earned ?? 0,
+    p_points_used: data.points_used ?? 0,
+    p_invoice_number: data.invoice_number ?? null,
+    p_invoice_carrier: data.invoice_carrier ?? null,
+  })
 export const getPOSShifts = () =>
   supabase.from('pos_shifts').select('*').order('id', { ascending: false })
 export const createPOSShift = (data) =>
@@ -579,11 +657,12 @@ export const deleteCostCenter = (id) =>
 
 // ── Journal Entry Updates ──
 export const updateJournalEntry = (id, data) =>
-  supabase.from('journal_entries').update(data).eq('id', id).select().single()
+  supabase.rpc('secure_update_journal_entry', { p_id: id, p_data: data })
 export const getAllJournalLines = () =>
   supabase.from('journal_lines').select('*').order('id')
+// 建議改用 createJournalEntry(data, lines) 一次建立分錄+明細（原子操作）
 export const batchCreateJournalLines = (lines) =>
-  supabase.from('journal_lines').insert(lines).select()
+  supabase.rpc('secure_batch_create_journal_lines', { p_lines: lines })
 
 // ── Inventory Costing ──
 export const getInventoryTransactions = (sku) => {
@@ -619,7 +698,7 @@ export const updatePOSShift = (id, data) =>
 
 // ── Salary Updates ──
 export const updateSalaryRecord = (id, data) =>
-  supabase.from('salary_records').update(data).eq('id', id).select().single()
+  supabase.rpc('secure_update_salary', { p_id: id, p_data: data })
 
 // ── SKU Updates ──
 export const updateSKU = (id, data) =>
@@ -629,7 +708,15 @@ export const getSKUs = () =>
 
 // ── Inventory Adjustments ──
 export const createInventoryAdjustment = (data) =>
-  supabase.from('inventory_adjustments').insert(data).select().single()
+  supabase.rpc('secure_create_inventory_adjustment', {
+    p_sku_code: data.sku_code,
+    p_sku_name: data.sku_name ?? null,
+    p_bin_code: data.bin_code ?? null,
+    p_quantity: data.quantity,
+    p_reason: data.reason,
+    p_operator: data.operator,
+    p_unit_cost: data.unit_cost ?? 0,
+  })
 
 // ── Sales Order Updates ──
 export const updateSalesOrder = (id, data) =>
@@ -685,10 +772,10 @@ export const bulkInsertPOSTransactions = (rows) =>
   supabase.from('pos_transactions').insert(rows).select()
 
 export const bulkUpsertStockLevels = (rows) =>
-  supabase.from('stock_levels').upsert(rows, { onConflict: 'sku_code,warehouse' }).select()
+  supabase.rpc('secure_bulk_upsert_stock_levels', { p_rows: rows })
 
 export const bulkInsertJournalEntries = (rows) =>
-  supabase.from('journal_entries').insert(rows).select()
+  supabase.rpc('secure_bulk_insert_journal_entries', { p_rows: rows })
 
 // ── Inventory Cost Layers ──
 export const getInventoryCostLayers = (skuId) => {
@@ -861,9 +948,21 @@ export const getApprovalRequests = (status) => {
   return status ? q.eq('status', status) : q
 }
 export const createApprovalRequest = (data) =>
-  supabase.from('approval_requests').insert(data).select().single()
+  supabase.rpc('secure_create_approval_request', {
+    p_module: data.module,
+    p_document_type: data.document_type,
+    p_document_id: data.document_id,
+    p_requester: data.requester,
+    p_rule_id: data.rule_id ?? null,
+  })
 export const updateApprovalRequest = (id, data) =>
-  supabase.from('approval_requests').update(data).eq('id', id).select().single()
+  supabase.rpc('secure_update_approval', {
+    p_id: id,
+    p_status: data.status,
+    p_approver: data.approver,
+    p_comments: data.comments ?? null,
+    p_reject_reason: data.reject_reason ?? null,
+  })
 
 // ── Subcontracts ──
 export const getSubcontracts = () =>
@@ -966,12 +1065,11 @@ export const getPermissions = () =>
   supabase.from('permissions').select('*').order('module, code')
 export const getRolePermissions = (roleId) =>
   supabase.from('role_permissions').select('*, permissions(*)').eq('role_id', roleId)
-export const updateRolePermissions = async (roleId, permissionIds) => {
-  await supabase.from('role_permissions').delete().eq('role_id', roleId)
-  if (permissionIds.length === 0) return { data: [], error: null }
-  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
-  return supabase.from('role_permissions').insert(rows).select()
-}
+export const updateRolePermissions = (roleId, permissionIds) =>
+  supabase.rpc('secure_update_role_permissions', {
+    p_role_id: roleId,
+    p_permission_ids: permissionIds,
+  })
 
 // ── System Logs (Super Admin) ──
 export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {
@@ -1233,3 +1331,41 @@ export const updateDevelopmentPlan = (id, data) =>
 
 export const deleteDevelopmentPlan = (id) =>
   supabase.from('employee_development_plans').delete().eq('id', id)
+
+// ── Benefit Policies ──────────────────────────────────────
+export const getBenefitPolicies = (filters = {}) => {
+  let q = supabase.from('benefit_policies').select('*, stores(name), employees(name)').order('id', { ascending: false })
+  if (filters.storeId) q = q.eq('store_id', filters.storeId)
+  if (filters.storeId === null) q = q.is('store_id', null)
+  if (filters.category) q = q.eq('category', filters.category)
+  if (filters.isActive !== undefined) q = q.eq('is_active', filters.isActive)
+  return q
+}
+export const createBenefitPolicy = (data) =>
+  supabase.from('benefit_policies').insert(data).select().single()
+export const updateBenefitPolicy = (id, data) =>
+  supabase.from('benefit_policies').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id).select().single()
+export const deleteBenefitPolicy = (id) =>
+  supabase.from('benefit_policies').delete().eq('id', id)
+
+// ── Bonus Records ─────────────────────────────────────────
+export const getBonusRecords = (period) => {
+  let q = supabase.from('bonus_records').select('*').order('id', { ascending: false })
+  return period ? q.eq('period', period) : q
+}
+export const createBonusRecord = (data) =>
+  supabase.from('bonus_records').insert(data).select().single()
+export const updateBonusRecord = (id, data) =>
+  supabase.from('bonus_records').update(data).eq('id', id).select().single()
+
+// ── Bonus Settings ────────────────────────────────────────
+export const getBonusSettings = (storeId) => {
+  let q = supabase.from('bonus_settings').select('*').eq('is_active', true).order('id')
+  return storeId ? q.eq('store_id', storeId) : q
+}
+export const createBonusSetting = (data) =>
+  supabase.from('bonus_settings').insert(data).select().single()
+export const updateBonusSetting = (id, data) =>
+  supabase.from('bonus_settings').update(data).eq('id', id).select().single()
+export const deleteBonusSetting = (id) =>
+  supabase.from('bonus_settings').delete().eq('id', id)

@@ -41,38 +41,19 @@ export function registerFinanceHandlers(bus) {
     const { customer, amount, invoice_number, source, source_id } = event.payload
     const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
 
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: new Date().toISOString().slice(0, 10),
-      description: `${source === '出貨' ? '出貨' : '銷售'}產生應收 - ${customer} (${invoice_number})`,
-      source: source || '出貨',
-      source_id,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
+    const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: new Date().toISOString().slice(0, 10),
+      p_description: `${source === '出貨' ? '出貨' : '銷售'}產生應收 - ${customer} (${invoice_number})`,
+      p_lines: [
+        { account_code: '1300', account_name: '應收帳款', debit: amount, credit: 0, memo: `${customer} - ${invoice_number}` },
+        { account_code: '4100', account_name: '營業收入', debit: 0, credit: amount, memo: `${customer} - ${invoice_number}` },
+      ],
+      p_source: source || '出貨',
+      p_source_id: source_id,
+      p_created_by: '系統',
+    })
 
     if (entryError) throw new Error(`Journal entry failed: ${entryError.message}`)
-
-    if (entry) {
-      await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: '1300',
-          account_name: '應收帳款',
-          debit: amount,
-          credit: 0,
-          memo: `${customer} - ${invoice_number}`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '4100',
-          account_name: '營業收入',
-          debit: 0,
-          credit: amount,
-          memo: `${customer} - ${invoice_number}`,
-        },
-      ])
-    }
 
     await bus.publish('finance.journal.posted', {
       entry_id: entry.id,
@@ -116,39 +97,19 @@ export function registerFinanceHandlers(bus) {
     })
 
     // Create journal entry (Dr 營業成本 / Cr 應付帳款)
-    const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}A`
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: new Date().toISOString().slice(0, 10),
-      description: `採購入庫 - ${supplier} (${po_number})`,
-      source: '採購',
-      source_id: po_id,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
+    const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: new Date().toISOString().slice(0, 10),
+      p_description: `採購入庫 - ${supplier} (${po_number})`,
+      p_lines: [
+        { account_code: '5100', account_name: '營業成本', debit: amount, credit: 0, memo: `${supplier} - ${po_number}` },
+        { account_code: '2100', account_name: '應付帳款', debit: 0, credit: amount, memo: `${supplier} - ${po_number}` },
+      ],
+      p_source: '採購',
+      p_source_id: po_id,
+      p_created_by: '系統',
+    })
 
     if (entryError) throw new Error(`Journal entry failed: ${entryError.message}`)
-
-    if (entry) {
-      await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: '5100',
-          account_name: '營業成本',
-          debit: amount,
-          credit: 0,
-          memo: `${supplier} - ${po_number}`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '2100',
-          account_name: '應付帳款',
-          debit: 0,
-          credit: amount,
-          memo: `${supplier} - ${po_number}`,
-        },
-      ])
-    }
   })
 
   // ── Expense approved → create journal entry ──
@@ -167,38 +128,19 @@ export function registerFinanceHandlers(bus) {
 
     const account = categoryAccountMap[category] || categoryAccountMap['其他']
 
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: date || new Date().toISOString().slice(0, 10),
-      description: `費用核銷 - ${employee} (${category}: ${description || ''})`,
-      source: '費用核銷',
-      source_id: expense_id,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
+    const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: date || new Date().toISOString().slice(0, 10),
+      p_description: `費用核銷 - ${employee} (${category}: ${description || ''})`,
+      p_lines: [
+        { account_code: account.code, account_name: account.name, debit: amount, credit: 0, memo: `${employee} - ${category}` },
+        { account_code: '1100', account_name: '現金', debit: 0, credit: amount, memo: `${employee} - ${category}` },
+      ],
+      p_source: '費用核銷',
+      p_source_id: expense_id,
+      p_created_by: '系統',
+    })
 
     if (entryError) throw new Error(`Expense JE failed: ${entryError.message}`)
-
-    if (entry) {
-      await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: account.code,
-          account_name: account.name,
-          debit: amount,
-          credit: 0,
-          memo: `${employee} - ${category}`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '1100',
-          account_name: '現金',
-          debit: 0,
-          credit: amount,
-          memo: `${employee} - ${category}`,
-        },
-      ])
-    }
   })
 }
 

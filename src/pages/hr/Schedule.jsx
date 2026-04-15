@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -933,6 +933,7 @@ export default function Schedule() {
             storeSettings={storeSettings} setStoreSettings={setStoreSettings}
             staffing={staffing} setStaffing={setStaffing}
             operatingHours={operatingHours} setOperatingHours={setOperatingHours}
+            yearMonth={selectedMonth}
           />
         </div>
       )}

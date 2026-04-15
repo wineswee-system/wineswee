@@ -305,7 +305,7 @@ export function getLeaveTypeInfo(code) {
 //  驗證請假規則
 // ══════════════════════════════════════
 
-export function validateLeaveRequest({ type, days, hours, usedDays, gender }) {
+export function validateLeaveRequest({ type, days, hours, usedDays, gender, customPolicy }) {
   const policy = getLeaveTypeInfo(type)
   if (!policy) return { valid: false, error: '無效的假別' }
 
@@ -314,14 +314,17 @@ export function validateLeaveRequest({ type, days, hours, usedDays, gender }) {
     return { valid: false, error: `${policy.name}僅限女性員工申請` }
   }
 
-  // 天數上限
+  // 天數上限（法定 + 門市/員工加給）
   if (policy.maxDays && usedDays !== undefined) {
-    const remaining = policy.maxDays - usedDays
+    const extraDays = Math.max(0, customPolicy?.extra_days || 0)
+    const effectiveMax = policy.maxDays + extraDays
+    const remaining = effectiveMax - usedDays
     const requestDays = days || (hours ? hours / 8 : 0)
     if (requestDays > remaining) {
+      const suffix = extraDays > 0 ? `（含加給 ${extraDays} 天）` : ''
       return {
         valid: false,
-        error: `${policy.name}已使用 ${usedDays} 天，剩餘 ${remaining} 天，不足申請 ${requestDays} 天`,
+        error: `${policy.name}已使用 ${usedDays} 天，上限 ${effectiveMax} 天${suffix}，剩餘 ${remaining} 天，不足申請 ${requestDays} 天`,
       }
     }
   }

@@ -38,46 +38,23 @@ export function registerHRHandlers(bus) {
     const totalEmployerCost = (gross_salary || net_salary) + (employer_li || 0) + (employer_hi || 0) + (employer_pension || 0)
     const entryNumber = `JE-PAY-${month}-${String(Date.now()).slice(-4)}`
 
-    const { data: entry, error: entryError } = await supabase.from('journal_entries').insert({
-      entry_number: entryNumber,
-      entry_date: `${month}-28`,
-      description: `薪資費用 - ${month}`,
-      source: '薪資計算',
-      source_id: `payroll-${month}-${employee_id}`,
-      status: '已過帳',
-      created_by: '系統',
-    }).select().single()
+    const employerBurden = (employer_li || 0) + (employer_hi || 0) + (employer_pension || 0)
+    const lines = [
+      { account_code: '6100', account_name: '薪資費用', debit: totalEmployerCost, credit: 0, memo: `${month} 薪資` },
+      { account_code: '2200', account_name: '應付薪資', debit: 0, credit: net_salary, memo: `${month} 實發薪資` },
+      ...(employerBurden > 0 ? [{ account_code: '2300', account_name: '應付勞健保/勞退', debit: 0, credit: employerBurden, memo: `${month} 雇主負擔` }] : []),
+    ]
+
+    const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
+      p_entry_date: `${month}-28`,
+      p_description: `薪資費用 - ${month}`,
+      p_lines: lines,
+      p_source: '薪資計算',
+      p_source_id: null,
+      p_created_by: '系統',
+    })
 
     if (entryError) throw new Error(`Payroll JE failed: ${entryError.message}`)
-
-    if (entry) {
-      await supabase.from('journal_lines').insert([
-        {
-          entry_id: entry.id,
-          account_code: '6100',
-          account_name: '薪資費用',
-          debit: totalEmployerCost,
-          credit: 0,
-          memo: `${month} 薪資`,
-        },
-        {
-          entry_id: entry.id,
-          account_code: '2200',
-          account_name: '應付薪資',
-          debit: 0,
-          credit: net_salary,
-          memo: `${month} 實發薪資`,
-        },
-        ...((employer_li || 0) + (employer_hi || 0) + (employer_pension || 0) > 0 ? [{
-          entry_id: entry.id,
-          account_code: '2300',
-          account_name: '應付勞健保/勞退',
-          debit: 0,
-          credit: (employer_li || 0) + (employer_hi || 0) + (employer_pension || 0),
-          memo: `${month} 雇主負擔`,
-        }] : []),
-      ])
-    }
 
     await bus.publish('finance.journal.posted', {
       entry_id: entry.id,

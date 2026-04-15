@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -46,6 +47,7 @@ export default function Expenses() {
       setExpenses(prev => [...prev, data])
       setShowModal(false)
       setForm({ employee: employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      await createApprovalWorkflow('expense', data, form.employee)
     }
   }
 

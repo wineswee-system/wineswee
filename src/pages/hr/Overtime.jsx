@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -45,6 +46,7 @@ export default function Overtime() {
         setRecords(prev => [...prev, data])
         setShowModal(false)
         setForm({ employee: employees[0]?.name || '', date: '', hours: 1, reason: '' })
+        await createApprovalWorkflow('overtime', data, form.employee)
       }
     } catch (err) {
       console.error('Operation failed:', err)

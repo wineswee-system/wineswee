@@ -43,7 +43,7 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           border: '1px solid var(--border-medium)',
           borderRadius: 16,
           width: '100%', maxWidth: 640,
-          maxHeight: '85vh',
+          maxHeight: 'calc(100vh - 48px)',
           display: 'flex', flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           animation: 'fadeIn 0.15s ease',
@@ -54,7 +54,7 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
             <X size={18} />
           </button>
         </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1, minHeight: 0 }}>
           {children}
         </div>
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

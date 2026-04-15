@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'

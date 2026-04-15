@@ -79,3 +79,29 @@ export function Field({ label, children }) {
     </div>
   )
 }
+
+/**
+ * 通用 Modal Overlay — 給 inline modal 用的 Portal wrapper
+ * 用法：<ModalOverlay onClose={fn}><div>你的 modal 內容</div></ModalOverlay>
+ */
+export function ModalOverlay({ onClose, children, zIndex = 10000 }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    const handleKey = (e) => { if (e.key === 'Escape' && onClose) onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => { document.body.style.overflow = ''; document.removeEventListener('keydown', handleKey) }
+  }, [onClose])
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex,
+      background: 'var(--bg-modal-overlay)',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }} onMouseDown={e => { if (e.target === e.currentTarget && onClose) onClose() }}>
+      {children}
+    </div>,
+    document.body
+  )
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, DollarSign, Calculator } from 'lucide-react'
 import { getCommissionRules, createCommissionRule, updateCommissionRule, deleteCommissionRule, getCommissionRecords, createCommissionRecord, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -172,7 +173,7 @@ export default function Commission() {
       )}
 
       {showRuleModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowRuleModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowRuleModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 380, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>{editingId ? '編輯規則' : '新增佣金規則'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Building2, MapPin, Users, CheckCircle, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 

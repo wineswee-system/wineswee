@@ -4,7 +4,7 @@ export default function CoverShiftModal({ coverModal, setCoverModal, coverLoadin
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', width: '100vw', height: '100vh',
     }} onMouseDown={e => { if (e.target === e.currentTarget) setCoverModal(null) }}>
       <div style={{

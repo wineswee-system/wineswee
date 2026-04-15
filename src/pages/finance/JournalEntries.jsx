@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Send, Ban } from 'lucide-react'
 import { getJournalEntries, getJournalLines, createJournalEntry, createJournalLine } from '../../lib/db'
 import { validateJournalEntry, validateJournalBalance, postJournalEntry, CHART_OF_ACCOUNTS } from '../../lib/accounting'
@@ -439,7 +440,7 @@ export default function JournalEntries() {
       {/* ── Enhanced Create Modal ── */}
       {showModal && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
+          position: 'fixed', inset: 0, zIndex: 1000000,
           background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => setShowModal(false)}>

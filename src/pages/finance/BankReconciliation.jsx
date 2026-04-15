@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Search, Landmark, Zap, CheckCircle, Link2, FileText, X, ArrowRight } from 'lucide-react'
 import { getBankTransactions, getJournalEntries, createJournalEntry } from '../../lib/db'

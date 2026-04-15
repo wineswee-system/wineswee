@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'

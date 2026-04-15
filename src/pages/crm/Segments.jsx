@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Users, Filter, Play } from 'lucide-react'
 import { getCustomerSegments, createCustomerSegment, updateCustomerSegment, deleteCustomerSegment, getMembers } from '../../lib/db'
@@ -234,7 +235,7 @@ export default function Segments() {
 
       {/* Segment Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
+        <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 560, maxHeight: '90vh', overflow: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>{editingId ? '編輯分群' : '新增客戶分群'}</h3>
@@ -288,7 +289,7 @@ export default function Segments() {
               <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '儲存中...' : editingId ? '更新' : '新增'}</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

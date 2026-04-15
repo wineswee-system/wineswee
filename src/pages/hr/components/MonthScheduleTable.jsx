@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { parseTime } from '../../../lib/scheduleUtils'
 import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
@@ -331,15 +332,13 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
     handleSetShift(emp.name, date, `${s}-${e}`, startTime, endTime)
   }
 
-  return createPortal(
-    <>
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onMouseDown={onClose} />
-    <div style={{
-      position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-      zIndex: 10000, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-      borderRadius: 14, padding: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-      minWidth: 220,
-    }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+        borderRadius: 14, padding: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+        minWidth: 220,
+      }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 10 }}>
         {emp.name} · {date.slice(5)}({dow})
       </div>
@@ -415,8 +414,7 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
           background: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
         }}>取消</button>
       </div>
-    </div>
-    </>,
-    document.body
+      </div>
+    </ModalOverlay>
   )
 }

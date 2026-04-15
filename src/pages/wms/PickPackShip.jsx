@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, X, CheckCircle, Package, Truck, ClipboardList } from 'lucide-react'
 import { getPickLists, createPickList, updatePickList, getPackLists, createPackList, updatePackList, getSalesOrders, getWarehouses } from '../../lib/db'
@@ -228,7 +229,7 @@ export default function PickPackShip() {
 
       {/* Create Pick Modal */}
       {showCreatePick && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreatePick(false)}>
+        <ModalOverlay onClose={() => setShowCreatePick(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 420, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>建立揀貨單</h3>
@@ -261,7 +262,7 @@ export default function PickPackShip() {
               <button className="btn btn-primary" onClick={handleCreatePick}>建立</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

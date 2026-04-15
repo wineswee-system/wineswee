@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Sparkles, Shield, AlertTriangle, CheckCircle, RefreshCw, Save, Code } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -1035,7 +1036,7 @@ function CompOffModal({ employees, activeDates, schedules, onAssign, onClose }) 
   const dows = ['日', '一', '二', '三', '四', '五', '六']
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, width: '90%', maxWidth: 800, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ margin: 0 }}>🔄 指派補休</h3>
@@ -1111,7 +1112,7 @@ function CompOffModal({ employees, activeDates, schedules, onAssign, onClose }) 
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Send, Ban } from 'lucide-react'
 import { getJournalEntries, getJournalLines, createJournalEntry, createJournalLine } from '../../lib/db'

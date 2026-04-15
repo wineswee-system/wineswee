@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { X, Save, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'

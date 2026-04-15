@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { ModalOverlay } from '../../../components/Modal'
 import { Loader2, CheckCircle, XCircle, Receipt, Printer, RotateCcw } from 'lucide-react'
 
 export default function POSPaymentOverlay({

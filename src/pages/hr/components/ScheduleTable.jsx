@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
 import { getShiftHours } from '../../../lib/scheduleUtils'
@@ -309,7 +310,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
     {/* Invisible anchor to measure position */}
     <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
     {/* Backdrop — uses onMouseDown to avoid same-click-close */}
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }} onMouseDown={onClose} />
+    <ModalOverlay onClose={onClose}>
     <div style={{
       position: 'fixed',
       top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
@@ -379,7 +380,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
           background: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
         }}>取消</button>
       </div>
-    </div>
+    </ModalOverlay>
     </>
   )
 }

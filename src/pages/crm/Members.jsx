@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, ArrowUpCircle } from 'lucide-react'
 import { getMembers, createMember } from '../../lib/db'

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, BookOpen, Users, ChevronDown, ChevronRight, Award } from 'lucide-react'
 import { getTrainingCourses, createTrainingCourse, updateTrainingCourse, deleteTrainingCourse, getTrainingEnrollments, createTrainingEnrollment, updateTrainingEnrollment } from '../../lib/db'
@@ -191,7 +192,7 @@ export default function Training() {
 
       {/* Course Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
+        <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 460, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>{editingId ? '編輯課程' : '新增課程'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -213,12 +214,12 @@ export default function Training() {
               <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '儲存中...' : editingId ? '更新' : '新增'}</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Enroll Modal */}
       {showEnrollModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEnrollModal(false)}>
+        <ModalOverlay onClose={() => setShowEnrollModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 340, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>新增學員</h3>
             <input type="text" placeholder="員工姓名" value={enrollForm.employee} onChange={e => setEnrollForm(f => ({ ...f, employee: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
@@ -227,7 +228,7 @@ export default function Training() {
               <button className="btn btn-primary" onClick={handleEnroll}>報名</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

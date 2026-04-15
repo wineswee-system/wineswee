@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 export default function Modal({ title, onClose, children, onSubmit, submitLabel = '儲存' }) {
@@ -10,6 +11,8 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement
+    // 防止背景滾動
+    document.body.style.overflow = 'hidden'
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onCloseRef.current()
@@ -18,15 +21,16 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
       if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
         previousFocusRef.current.focus()
       }
     }
   }, [])
 
-  return (
+  return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
+      position: 'fixed', inset: 0, zIndex: 10000,
       background: 'var(--bg-modal-overlay)',
       backdropFilter: 'blur(4px)',
       WebkitBackdropFilter: 'blur(4px)',
@@ -57,12 +61,13 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1, minHeight: 0 }}>
           {children}
         </div>
-        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={onSubmit}>{submitLabel}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

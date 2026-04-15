@@ -28,7 +28,10 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       background: 'var(--bg-modal-overlay)',
+      backdropFilter: 'blur(4px)',
+      WebkitBackdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
     }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         ref={modalRef}
@@ -39,10 +42,10 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-medium)',
           borderRadius: 16,
-          width: '100%', maxWidth: 560,
-          maxHeight: '90vh',
+          width: '100%', maxWidth: 640,
+          maxHeight: '85vh',
           display: 'flex', flexDirection: 'column',
-          boxShadow: 'var(--shadow-xl)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           animation: 'fadeIn 0.15s ease',
         }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>

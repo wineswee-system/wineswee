@@ -602,7 +602,7 @@ export default function BankReconciliation() {
       {matching && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+          background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
         }}>
           <div style={{ background: 'var(--bg-card)', padding: 32, borderRadius: 16, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
             <LoadingSpinner />

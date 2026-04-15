@@ -38,7 +38,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'var(--bg-modal-overlay)',
+      background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div style={{

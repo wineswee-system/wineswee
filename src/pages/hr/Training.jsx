@@ -190,7 +190,7 @@ export default function Training() {
 
       {/* Course Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 460, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>{editingId ? '編輯課程' : '新增課程'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -217,7 +217,7 @@ export default function Training() {
 
       {/* Enroll Modal */}
       {showEnrollModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEnrollModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowEnrollModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 340, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>新增學員</h3>
             <input type="text" placeholder="員工姓名" value={enrollForm.employee} onChange={e => setEnrollForm(f => ({ ...f, employee: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />

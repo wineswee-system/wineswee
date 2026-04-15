@@ -173,7 +173,7 @@ export default function EmbeddableCharts() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateModal(false)}>
           <div className="card" style={{ width: 480, maxHeight: '85vh', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px' }}>建立分享圖表</h3>
 
@@ -222,7 +222,7 @@ export default function EmbeddableCharts() {
 
       {/* Preview Modal */}
       {showPreview && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPreview(null)}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPreview(null)}>
           <div className="card" style={{ width: 680, padding: 24 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{showPreview.title}</h3>

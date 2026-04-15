@@ -9,13 +9,19 @@ import { supabase } from './supabase'
 import { getSupervisor, getApprovalChain } from './approval'
 import { notifyTaskAssignee } from './lineNotify'
 
-// 預設簽核流程模板
-const WORKFLOW_TEMPLATES = {
+// 預設簽核流程模板（fallback，優先讀 approval_chains）
+const DEFAULT_TEMPLATES = {
   leave: { name: '請假簽核', steps: ['直屬主管審核', 'HR 確認'] },
   overtime: { name: '加班簽核', steps: ['直屬主管審核'] },
   expense: { name: '費用報帳簽核', steps: ['直屬主管審核', '財務確認'] },
   business_trip: { name: '出差申請簽核', steps: ['直屬主管審核', 'HR 確認'] },
   purchase: { name: '採購簽核', steps: ['部門主管審核', '採購確認'] },
+}
+
+// approval_chains 的 category → type 對照
+const CHAIN_CATEGORY_MAP = {
+  leave: 'HR', overtime: 'HR', expense: 'HR',
+  business_trip: 'HR', purchase: '採購',
 }
 
 /**
@@ -26,8 +32,22 @@ const WORKFLOW_TEMPLATES = {
  * @returns {{ instance, steps, error? }}
  */
 export async function createApprovalWorkflow(type, record, requesterName) {
-  const template = WORKFLOW_TEMPLATES[type]
-  if (!template) return { error: `未知的流程類型：${type}` }
+  const defaultTpl = DEFAULT_TEMPLATES[type]
+  if (!defaultTpl) return { error: `未知的流程類型：${type}` }
+
+  // 優先從 approval_chains 讀取設定
+  const category = CHAIN_CATEGORY_MAP[type] || 'HR'
+  const { data: chains } = await supabase
+    .from('approval_chains')
+    .select('*')
+    .eq('category', category)
+    .order('id')
+    .limit(1)
+
+  const chain = chains?.[0]
+  const template = chain
+    ? { name: chain.name, steps: (chain.steps || []).map(s => s.label || s.role || '審核') }
+    : defaultTpl
 
   // 找直屬主管
   const supervisor = await getSupervisor(requesterName)

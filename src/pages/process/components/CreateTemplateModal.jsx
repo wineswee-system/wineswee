@@ -1,10 +1,14 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, CheckSquare, Shield } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 
 export default function CreateTemplateModal({
   newTpl, setNewTpl, onClose, onSubmit,
+  checklists = [], approvalChains = [],
 }) {
-  const addTplStep = () => setNewTpl(t => ({ ...t, steps: [...t.steps, { title: '', role: '', priority: '中', description: '' }] }))
+  const addTplStep = () => setNewTpl(t => ({
+    ...t,
+    steps: [...t.steps, { title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }],
+  }))
   const updateTplStep = (i, k, v) => setNewTpl(t => ({ ...t, steps: t.steps.map((s, j) => j === i ? { ...s, [k]: v } : s) }))
   const removeTplStep = (i) => setNewTpl(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
 
@@ -26,28 +30,66 @@ export default function CreateTemplateModal({
           value={newTpl.description} onChange={e => setNewTpl(t => ({ ...t, description: e.target.value }))} />
       </Field>
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '12px 0 8px' }}>步驟</div>
+      {/* 簽核鏈（流程結束後的簽核） */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)' }}>
+        <Field label={<><Shield size={12} style={{ marginRight: 4, color: 'var(--accent-purple)' }} />流程完成後的簽核鏈（選填）</>}>
+          <select className="form-input" style={{ width: '100%' }}
+            value={newTpl.approval_chain_id || ''}
+            onChange={e => setNewTpl(t => ({ ...t, approval_chain_id: e.target.value ? Number(e.target.value) : '' }))}>
+            <option value="">不需要簽核</option>
+            {approvalChains.map(c => (
+              <option key={c.id} value={c.id}>{c.name} — {(c.steps || []).length} 關</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '16px 0 8px' }}>步驟</div>
       {newTpl.steps.map((step, i) => (
         <div key={i} style={{
-          display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end',
           marginBottom: 8, padding: '10px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
         }}>
-          <Field label={`Step ${i + 1} 名稱`}>
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="步驟名稱"
-              value={step.title} onChange={e => updateTplStep(i, 'title', e.target.value)} />
-          </Field>
-          <Field label="角色">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="主管"
-              value={step.role} onChange={e => updateTplStep(i, 'role', e.target.value)} />
-          </Field>
-          <Field label="優先度">
-            <select className="form-input" style={{ width: '100%' }} value={step.priority} onChange={e => updateTplStep(i, 'priority', e.target.value)}>
-              <option>高</option><option>中</option><option>低</option>
-            </select>
-          </Field>
-          <button onClick={() => removeTplStep(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: '8px' }}>
-            <Trash2 size={14} />
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+            <Field label={`Step ${i + 1} 名稱`}>
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="步驟名稱"
+                value={step.title} onChange={e => updateTplStep(i, 'title', e.target.value)} />
+            </Field>
+            <Field label="角色">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="主管"
+                value={step.role} onChange={e => updateTplStep(i, 'role', e.target.value)} />
+            </Field>
+            <Field label="優先度">
+              <select className="form-input" style={{ width: '100%' }} value={step.priority} onChange={e => updateTplStep(i, 'priority', e.target.value)}>
+                <option>高</option><option>中</option><option>低</option>
+              </select>
+            </Field>
+            <button onClick={() => removeTplStep(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: '8px' }}>
+              <Trash2 size={14} />
+            </button>
+          </div>
+          {/* 掛查核清單 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+            <Field label={<><CheckSquare size={11} style={{ marginRight: 4, color: 'var(--accent-green)' }} />掛查核清單</>}>
+              <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                value={step.checklist_id || ''}
+                onChange={e => updateTplStep(i, 'checklist_id', e.target.value ? Number(e.target.value) : '')}>
+                <option value="">無</option>
+                {checklists.map(cl => (
+                  <option key={cl.id} value={cl.id}>{cl.name} ({cl.items || 0} 項)</option>
+                ))}
+              </select>
+            </Field>
+            <Field label={<><Shield size={11} style={{ marginRight: 4, color: 'var(--accent-purple)' }} />需要簽核</>}>
+              <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                value={step.approval_chain_id || ''}
+                onChange={e => updateTplStep(i, 'approval_chain_id', e.target.value ? Number(e.target.value) : '')}>
+                <option value="">不需要</option>
+                {approvalChains.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
         </div>
       ))}
       <button onClick={addTplStep} style={{

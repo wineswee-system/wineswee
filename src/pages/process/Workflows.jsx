@@ -59,7 +59,8 @@ export default function Workflows() {
 
   // Create SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
-  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
+  const [approvalChains, setApprovalChains] = useState([])
 
   // AI assistant
   const [aiPrompt, setAiPrompt] = useState('')
@@ -84,7 +85,8 @@ export default function Workflows() {
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([w, inst, st, emp, loc, cl, tpl, dept]) => {
+      supabase.from('approval_chains').select('*').order('id'),
+    ]).then(([w, inst, st, emp, loc, cl, tpl, dept, ac]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
       setSteps(st.data || [])
@@ -93,6 +95,7 @@ export default function Workflows() {
       setChecklists(cl.data || [])
       setTemplates(tpl.data || [])
       setDepartments(dept.data || [])
+      setApprovalChains(ac.data || [])
     }).catch(err => {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
@@ -274,15 +277,20 @@ export default function Workflows() {
   // ── Create SOP Template ──
   const handleCreateTpl = async () => {
     if (!newTpl.name || !newTpl.steps.some(s => s.title)) return
-    const validSteps = newTpl.steps.filter(s => s.title)
+    const validSteps = newTpl.steps.filter(s => s.title).map(s => ({
+      ...s,
+      checklist_id: s.checklist_id || null,
+      approval_chain_id: s.approval_chain_id || null,
+    }))
     const { data } = await supabase.from('sop_templates').insert({
       name: newTpl.name, category: newTpl.category,
       description: newTpl.description, steps: validSteps,
+      approval_chain_id: newTpl.approval_chain_id || null,
     }).select().single()
     if (data) {
       setTemplates(prev => [...prev, data])
       setShowCreateTplModal(false)
-      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
     }
   }
 
@@ -305,7 +313,42 @@ export default function Workflows() {
           store: loc, status: '待處理',
         }))
         const { data: insertedSteps } = await supabase.from('workflow_steps').insert(stepRows).select()
-        if (insertedSteps) setSteps(prev => [...prev, ...insertedSteps])
+        if (insertedSteps) {
+          setSteps(prev => [...prev, ...insertedSteps])
+
+          // 掛查核清單到步驟
+          for (let i = 0; i < tplSteps.length; i++) {
+            if (tplSteps[i].checklist_id && insertedSteps[i]) {
+              await supabase.from('workflow_step_checklists').insert({
+                step_id: insertedSteps[i].id,
+                checklist_id: tplSteps[i].checklist_id,
+              })
+            }
+          }
+
+          // 建立流程結束簽核（如果範本有設定 approval_chain_id）
+          const chainId = deployTemplate.approval_chain_id
+          if (chainId) {
+            const chain = approvalChains.find(c => c.id === chainId)
+            if (chain) {
+              const { data: form } = await supabase.from('approval_forms').insert({
+                chain_id: chainId,
+                title: `${deployTemplate.name} — ${loc}`,
+                store: loc,
+                status: '待簽',
+                notes: `流程部署自動建立`,
+              }).select().single()
+              if (form && chain.steps) {
+                const formSteps = chain.steps.map((s, idx) => ({
+                  form_id: form.id, step_order: idx + 1,
+                  role: s.role, label: s.label, status: '待簽',
+                }))
+                await supabase.from('approval_form_steps').insert(formSteps)
+              }
+            }
+          }
+        }
+
         setInstances(prev => [instance, ...prev])
         setDeployResult({ location: loc, count: tplSteps.length })
       }
@@ -457,6 +500,8 @@ export default function Workflows() {
           newTpl={newTpl} setNewTpl={setNewTpl}
           onClose={() => setShowCreateTplModal(false)}
           onSubmit={handleCreateTpl}
+          checklists={checklists}
+          approvalChains={approvalChains}
         />
       )}
     </div>

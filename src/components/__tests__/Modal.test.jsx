@@ -26,9 +26,9 @@ describe('Modal', () => {
 
   it('SC-01: closes on backdrop click', () => {
     const onClose = vi.fn()
-    const { container } = render(<Modal {...defaultProps} onClose={onClose}><p>Test</p></Modal>)
-    // Modal uses onMouseDown on the overlay, not onClick
-    const overlay = container.firstChild
+    render(<Modal {...defaultProps} onClose={onClose}><p>Test</p></Modal>)
+    // Modal uses createPortal to body, so find overlay there
+    const overlay = document.body.lastChild
     fireEvent.mouseDown(overlay)
     expect(onClose).toHaveBeenCalled()
   })

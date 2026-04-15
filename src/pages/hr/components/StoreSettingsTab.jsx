@@ -85,7 +85,8 @@ export default function StoreSettingsTab({
 
   const handleShiftSubmit = async () => {
     if (!shiftForm.name) return
-    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
+    const bm = Number(shiftForm.break_minutes)
+    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: isNaN(bm) ? 60 : bm, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()

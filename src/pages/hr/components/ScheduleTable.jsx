@@ -309,12 +309,12 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
     {/* Invisible anchor to measure position */}
     <span ref={anchorRef} style={{ position: 'absolute', top: 0, left: '50%' }} />
     {/* Backdrop — uses onMouseDown to avoid same-click-close */}
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onMouseDown={onClose} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }} onMouseDown={onClose} />
     <div style={{
       position: 'fixed',
       top: pos ? pos.top : '50%', left: pos ? pos.left : '50%',
       ...(pos ? {} : { transform: 'translate(-50%, -50%)' }),
-      zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      zIndex: 10000, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
       borderRadius: 12, padding: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
       minWidth: 200,
     }} onMouseDown={e => e.stopPropagation()}>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, ArrowUpCircle } from 'lucide-react'
 import { getMembers, createMember } from '../../lib/db'
 import { earnPoints, redeemPoints, generateReferralCode } from '../../lib/crmEngine'
@@ -195,7 +196,7 @@ export default function Members() {
       {/* Tier upgrade notification */}
       {tierUpgrade && (
         <div style={{
-          position: 'fixed', top: 20, right: 20, zIndex: 2000,
+          position: 'fixed', top: 20, right: 20, zIndex: 10000,
           background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-pink))',
           color: '#fff', padding: '16px 24px', borderRadius: 12,
           boxShadow: 'var(--shadow-xl)', animation: 'fadeIn 0.3s ease',

@@ -440,7 +440,7 @@ export default function JournalEntries() {
       {/* ── Enhanced Create Modal ── */}
       {showModal && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000000,
+          position: 'fixed', inset: 0, zIndex: 10000,
           background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => setShowModal(false)}>

@@ -280,7 +280,7 @@ export default function GoodsReceipts() {
       {/* Auto-match alert after GR save */}
       {autoMatchAlert && (
         <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 1000000,
+          position: 'fixed', bottom: 24, right: 24, zIndex: 10000,
           maxWidth: 420, padding: 16, borderRadius: 12,
           background: autoMatchAlert.status === 'mismatch' ? 'var(--accent-red-dim)' : 'var(--accent-orange-dim)',
           border: `1px solid ${autoMatchAlert.status === 'mismatch' ? 'var(--accent-red)' : 'var(--accent-orange)'}40`,

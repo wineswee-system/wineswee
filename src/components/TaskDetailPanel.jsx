@@ -292,7 +292,7 @@ export default function TaskDetailPanel({
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 1000000,
+      zIndex: 10000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(0,0,0,0.4)',
       width: '100vw', height: '100vh',

@@ -123,7 +123,7 @@ export default function EmbeddableCharts() {
   return (
     <div className="fade-in" style={{ padding: 24 }}>
       {/* Toast */}
-      {toast && <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: 'rgba(15,23,55,0.95)', color: '#f1f5f9', padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: '1px solid rgba(34,211,238,0.3)' }}>{toast}</div>}
+      {toast && <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 10000, background: 'rgba(15,23,55,0.95)', color: '#f1f5f9', padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: '1px solid rgba(34,211,238,0.3)' }}>{toast}</div>}
 
       {/* Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -174,7 +174,7 @@ export default function EmbeddableCharts() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateModal(false)}>
           <div className="card" style={{ width: 480, maxHeight: '85vh', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px' }}>建立分享圖表</h3>
 
@@ -223,7 +223,7 @@ export default function EmbeddableCharts() {
 
       {/* Preview Modal */}
       {showPreview && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPreview(null)}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPreview(null)}>
           <div className="card" style={{ width: 680, padding: 24 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{showPreview.title}</h3>

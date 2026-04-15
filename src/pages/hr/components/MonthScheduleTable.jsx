@@ -333,10 +333,10 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
 
   return createPortal(
     <>
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onMouseDown={onClose} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onMouseDown={onClose} />
     <div style={{
       position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-      zIndex: 9999, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+      zIndex: 10000, background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
       borderRadius: 14, padding: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       minWidth: 220,
     }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>

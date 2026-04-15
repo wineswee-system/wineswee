@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Search, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, ArrowRightLeft, CheckCircle, XCircle } from 'lucide-react'
 import { getPurchaseOrders, createPurchaseOrder, getGoodsReceipts, getAccountsPayable } from '../../lib/db'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { performThreeWayMatch, calculatePriceVariance } from '../../lib/threeWayMatch'
 import { getCurrencies, getDbExchangeRate, formatCurrency, DEFAULT_RATES } from '../../lib/currency'
@@ -98,6 +99,7 @@ export default function PurchaseOrders() {
       setShowModal(false)
       setForm({ po_number: '', supplier: '', tax: '', shipping: '', payment_terms: 'NET30', expected_date: '', currency: 'NTD', exchange_rate: 1 })
       setLineItems([emptyLineItem()])
+      await createApprovalWorkflow('purchase', data, form.created_by || '系統')
     }
   }
 

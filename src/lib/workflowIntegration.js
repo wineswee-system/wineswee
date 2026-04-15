@@ -40,6 +40,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       status: '進行中',
       started_by: requesterName,
       assignee: supervisor?.name || null,
+      store: record?.store || null,
       started_at: new Date().toISOString(),
     })
     .select()
@@ -132,6 +133,9 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
       .update({ status: '已退回', completed_at: new Date().toISOString() })
       .eq('id', step.instance_id)
 
+    // 回寫原始紀錄狀態
+    await writeBackStatus(instance, '已拒絕')
+
     // 通知申請人
     if (instance?.started_by) {
       await supabase.from('notifications').insert({
@@ -181,6 +185,9 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
     .update({ status: '已完成', completed_at: new Date().toISOString() })
     .eq('id', step.instance_id)
 
+  // 回寫原始紀錄狀態
+  await writeBackStatus(instance, '已核准')
+
   // 通知申請人
   if (instance?.started_by) {
     await supabase.from('notifications').insert({
@@ -192,6 +199,43 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
   }
 
   return { action: 'completed', instance, step }
+}
+
+// ══════════════════════════════════════
+//  簽核結果回寫原始紀錄
+// ══════════════════════════════════════
+
+const TEMPLATE_TABLE_MAP = {
+  '請假簽核': { table: 'leave_requests', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
+  '加班簽核': { table: 'overtime_requests', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
+  '費用報帳簽核': { table: 'expenses', statusField: 'status', approved: '已核銷', rejected: '已拒絕' },
+  '出差申請簽核': { table: 'business_trips', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
+  '採購簽核': { table: 'purchase_orders', statusField: 'status', approved: '已確認', rejected: '已取消' },
+}
+
+async function writeBackStatus(instance, action) {
+  if (!instance?.template_name || !instance?.started_by) return
+
+  const mapping = TEMPLATE_TABLE_MAP[instance.template_name]
+  if (!mapping) return
+
+  const status = action === '已核准' ? mapping.approved : mapping.rejected
+
+  // 找到該申請人最近一筆待審核的紀錄
+  const { data: records } = await supabase
+    .from(mapping.table)
+    .select('id')
+    .eq('employee', instance.started_by)
+    .in('status', ['待審核', '待確認'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (records?.[0]) {
+    await supabase
+      .from(mapping.table)
+      .update({ [mapping.statusField]: status })
+      .eq('id', records[0].id)
+  }
 }
 
 /**

@@ -204,11 +204,12 @@ export default function Employees() {
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const filtered = employees.filter(e =>
+    !e.is_archived &&
     (statusFilter === '' || e.status === statusFilter) &&
     (typeFilter === '' || (e.employment_type || '全職') === typeFilter) &&
-    (storeFilter === '' || e.store === storeFilter) &&
-    (deptFilter === '' || e.dept === deptFilter) &&
-    (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search))
+    (storeFilter === '' || e.store === storeFilter || e.store_id === Number(storeFilter)) &&
+    (deptFilter === '' || e.dept === deptFilter || e.department_id === Number(deptFilter)) &&
+    (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search) || e.employee_number?.includes(search))
   )
 
 

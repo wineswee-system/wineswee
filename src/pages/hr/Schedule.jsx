@@ -116,13 +116,24 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position, store, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, store, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('holidays').select('date'),
-    ]).then(([e, d, l, sd, hd]) => {
-      setEmployees(e.data || [])
+      supabase.from('user_stores').select('employee_id, store_id, is_primary'),
+    ]).then(([e, d, l, sd, hd, us]) => {
+      // Enrich employees with user_stores data
+      const userStoresMap = {}
+      for (const row of (us.data || [])) {
+        if (!userStoresMap[row.employee_id]) userStoresMap[row.employee_id] = []
+        userStoresMap[row.employee_id].push(row.store_id)
+      }
+      const enriched = (e.data || []).map(emp => ({
+        ...emp,
+        assigned_store_ids: userStoresMap[emp.id] || (emp.store_id ? [emp.store_id] : []),
+      }))
+      setEmployees(enriched)
       setDepartments(d.data || [])
       setLocations(l.data || [])
       const defs = sd.data || []
@@ -268,7 +279,10 @@ export default function Schedule() {
       if (emp.status !== '在職') continue
 
       // Check if same store (or willing to cross-store)
-      const sameStore = emp.store === absentStore || (emp.additional_stores || []).includes(absentStore)
+      const targetStoreObj = locations.find(l => l.name === absentStore)
+      const sameStore = emp.store === absentStore || emp.store_id === targetStoreObj?.id
+        || (emp.assigned_store_ids || []).includes(targetStoreObj?.id)
+        || (emp.additional_stores || []).includes(absentStore)
       // Check if already working that day
       const daySchedule = allSchedules.find(s => s.employee === emp.name && s.date === date)
       if (daySchedule && daySchedule.shift !== '休') continue // already working

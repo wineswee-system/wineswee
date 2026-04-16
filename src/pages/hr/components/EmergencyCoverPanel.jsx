@@ -56,9 +56,10 @@ export default function EmergencyCoverPanel({
       if (offMap.has(`${emp.name}_${sickDate}`)) continue
 
       // Store eligibility
-      const isFromStore = emp.store === storeFilter
       const targetStore = locations?.find(l => l.name === storeFilter)
-      const canCross = (emp.additional_stores || []).some(s => s === targetStore?.id || s === targetStore?.name)
+      const isFromStore = emp.store === storeFilter || emp.store_id === targetStore?.id
+      const storeIds = emp.assigned_store_ids || []
+      const canCross = storeIds.includes(targetStore?.id) || (emp.additional_stores || []).some(s => s === targetStore?.id || s === targetStore?.name)
       if (!isFromStore && !canCross) continue
 
       // Week work count

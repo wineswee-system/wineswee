@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { getDepartments, createDepartment, updateDepartment, deleteDepartment, getEmployees } from '../../lib/db'
+import { Plus, Pencil, Trash2, History } from 'lucide-react'
+import { getDepartments, createDepartment, updateDepartment, deleteDepartment, getEmployees, getDeptManagerHistory } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -19,6 +19,8 @@ export default function Departments() {
   const [showModal, setShowModal] = useState(false)
   const [editingDept, setEditingDept] = useState(null)
   const [form, setForm] = useState({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '' })
+  const [historyDept, setHistoryDept] = useState(null)
+  const [mgrHistory, setMgrHistory] = useState([])
 
   useEffect(() => {
     Promise.all([getDepartments(), getEmployees()]).then(([d, e]) => {
@@ -143,6 +145,11 @@ export default function Departments() {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-sm btn-secondary" onClick={() => openEdit(d)}><Pencil size={12} /></button>
+                      <button className="btn btn-sm btn-secondary" onClick={async () => {
+                        setHistoryDept(d)
+                        const { data } = await getDeptManagerHistory(d.id)
+                        setMgrHistory(data || [])
+                      }}><History size={12} /></button>
                       <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(d)} style={{ color: 'var(--accent-red)' }}><Trash2 size={12} /></button>
                     </div>
                   </td>
@@ -183,6 +190,34 @@ export default function Departments() {
           <Field label="部門描述">
             <textarea className="form-input" style={{ width: '100%', height: 80, resize: 'vertical' }} placeholder="部門職責說明" value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
+        </Modal>
+      )}
+
+      {historyDept && (
+        <Modal title={`${historyDept.name} — 主管異動紀錄`} onClose={() => setHistoryDept(null)} onSubmit={() => setHistoryDept(null)} submitLabel="關閉">
+          {mgrHistory.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>尚無異動紀錄</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {mgrHistory.map(h => (
+                <div key={h.id} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontWeight: 700 }}>{h.manager_name}</span>
+                      {h.manager_employee_number && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{h.manager_employee_number}</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: h.end_date ? 'var(--text-muted)' : 'var(--accent-green)', fontWeight: 600 }}>
+                      {h.end_date ? '已卸任' : '現任'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {h.effective_date}{h.end_date ? ` ~ ${h.end_date}` : ' ~ 至今'}
+                    {h.notes && <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>({h.notes})</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
     </div>

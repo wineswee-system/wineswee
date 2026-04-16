@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Plus, Star, Trash2, Link2 } from 'lucide-react'
+import { RefreshCw, Plus, Star, Trash2, Link2, Users, MessageCircle, Terminal } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getLineGroups, getLineMessages } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -8,6 +9,9 @@ export default function LineIntegration() {
   const [channels, setChannels] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
+  const [lineGroups, setLineGroups] = useState([])
+  const [lineMessages, setLineMessages] = useState([])
+  const [commandLogs, setCommandLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('channels')
@@ -25,14 +29,20 @@ export default function LineIntegration() {
   async function loadData() {
     setLoading(true)
     try {
-      const [ch, acc, emp] = await Promise.all([
+      const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
         supabase.from('employee_line_accounts').select('*, employees(name, dept, position), line_channels(code, name)').order('linked_at', { ascending: false }),
         supabase.from('employees').select('id, name, dept, position, status, line_user_id').eq('status', '在職').order('name'),
+        getLineGroups(),
+        getLineMessages(),
+        supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),
       ])
       setChannels(ch.data || [])
       setAccounts(acc.data || [])
       setEmployees(emp.data || [])
+      setLineGroups(grp.data || [])
+      setLineMessages(msg.data || [])
+      setCommandLogs(cmd.data || [])
     } catch (err) {
       setError('資料載入失敗')
     }
@@ -143,6 +153,15 @@ export default function LineIntegration() {
         </button>
         <button style={tabStyle(tab === 'accounts')} onClick={() => setTab('accounts')}>
           👤 員工綁定 ({accounts.length})
+        </button>
+        <button style={tabStyle(tab === 'groups')} onClick={() => setTab('groups')}>
+          <Users size={14} /> 群組 ({lineGroups.length})
+        </button>
+        <button style={tabStyle(tab === 'messages')} onClick={() => setTab('messages')}>
+          <MessageCircle size={14} /> 訊息 ({lineMessages.length})
+        </button>
+        <button style={tabStyle(tab === 'commands')} onClick={() => setTab('commands')}>
+          <Terminal size={14} /> 指令 ({commandLogs.length})
         </button>
         <button style={tabStyle(tab === 'webhook')} onClick={() => setTab('webhook')}>
           🔗 Webhook 設定
@@ -271,6 +290,91 @@ export default function LineIntegration() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ══ Groups Tab ══ */}
+      {tab === 'groups' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon"><Users size={16} /></span> LINE 群組</div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr><th>群組名稱</th><th>LINE Group ID</th><th>類型</th><th>狀態</th><th>加入時間</th></tr>
+              </thead>
+              <tbody>
+                {lineGroups.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無群組資料（群組由 LINE Webhook 自動建立）</td></tr>}
+                {lineGroups.map(g => (
+                  <tr key={g.id}>
+                    <td style={{ fontWeight: 600 }}>{g.group_name}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{g.line_group_id}</td>
+                    <td><span className={`badge ${g.group_type === 'store' ? 'badge-green' : g.group_type === 'department' ? 'badge-purple' : 'badge-cyan'}`}>{g.group_type}</span></td>
+                    <td><span className={`badge ${g.is_active ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{g.is_active ? '使用中' : '已離開'}</span></td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{g.joined_at ? new Date(g.joined_at).toLocaleDateString('zh-TW') : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Messages Tab ══ */}
+      {tab === 'messages' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon"><MessageCircle size={16} /></span> 訊息紀錄（最近 100 則）</div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr><th>時間</th><th>方向</th><th>使用者</th><th>訊息</th><th>群組</th></tr>
+              </thead>
+              <tbody>
+                {lineMessages.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無訊息紀錄</td></tr>}
+                {lineMessages.map(m => (
+                  <tr key={m.id}>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{m.created_at ? new Date(m.created_at).toLocaleString('zh-TW') : '-'}</td>
+                    <td><span className={`badge ${m.direction === 'incoming' ? 'badge-cyan' : 'badge-green'}`}>{m.direction === 'incoming' ? '收' : '發'}</span></td>
+                    <td style={{ fontSize: 13 }}>{m.display_name || m.line_user_id?.slice(0, 8)}</td>
+                    <td style={{ fontSize: 13, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.message_text}</td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.group_id || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Commands Tab ══ */}
+      {tab === 'commands' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon"><Terminal size={16} /></span> 指令紀錄（最近 100 則）</div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr><th>時間</th><th>使用者</th><th>指令</th><th>原始輸入</th><th>成功</th><th>耗時</th></tr>
+              </thead>
+              <tbody>
+                {commandLogs.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無指令紀錄</td></tr>}
+                {commandLogs.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{c.created_at ? new Date(c.created_at).toLocaleString('zh-TW') : '-'}</td>
+                    <td style={{ fontSize: 13 }}>{c.display_name || c.line_user_id?.slice(0, 8)}</td>
+                    <td><span className="badge badge-purple">{c.command_matched}</span></td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.raw_input}</td>
+                    <td><span className={`badge ${c.success ? 'badge-success' : 'badge-danger'}`}>{c.success ? 'OK' : 'FAIL'}</span></td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.execution_ms ? `${c.execution_ms}ms` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* ══ Webhook Tab ══ */}

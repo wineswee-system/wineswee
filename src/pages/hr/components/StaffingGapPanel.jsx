@@ -106,11 +106,11 @@ export default function StaffingGapPanel({
       if (!isPT) score += 10
 
       // Check cross-store eligibility
-      const isFromThisStore = emp.store === storeFilter
       const targetStore = locations?.find(l => l.name === storeFilter)
-      const canCrossStore = (emp.additional_stores || []).some(s =>
-        s === targetStore?.id || s === targetStore?.name
-      )
+      const isFromThisStore = emp.store === storeFilter || emp.store_id === targetStore?.id
+      const storeIds = emp.assigned_store_ids || []
+      const canCrossStore = storeIds.includes(targetStore?.id)
+        || (emp.additional_stores || []).some(s => s === targetStore?.id || s === targetStore?.name)
       if (!isFromThisStore && !canCrossStore) continue
       if (!isFromThisStore) score -= 5 // Slight penalty for cross-store
 

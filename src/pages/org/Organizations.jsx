@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
-import { getOrganizations, createOrganization, updateOrganization, deleteOrganization, getCompanies, getStores, getEmployees, getOrgSubscription } from '../../lib/db'
+import { getOrganizations, createOrganization, updateOrganization, deleteOrganization, getCompanies, getStores, getEmployees } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -22,6 +23,7 @@ export default function Organizations() {
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
+  const [subscriptions, setSubscriptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -29,11 +31,15 @@ export default function Organizations() {
   const [form, setForm] = useState({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free' })
 
   useEffect(() => {
-    Promise.all([getOrganizations(), getCompanies(), getStores(), getEmployees()]).then(([o, c, s, e]) => {
+    Promise.all([
+      getOrganizations(), getCompanies(), getStores(), getEmployees(),
+      supabase.from('org_subscriptions').select('*').order('created_at', { ascending: false }),
+    ]).then(([o, c, s, e, sub]) => {
       setOrgs(o.data || [])
       setCompanies(c.data || [])
       setStores(s.data || [])
       setEmployees(e.data || [])
+      setSubscriptions(sub.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -135,7 +141,8 @@ export default function Organizations() {
               {orgs.map(o => {
                 const orgCompanies = companies.filter(c => c.organization_id === o.id)
                 const orgStores = stores.filter(s => s.organization_id === o.id)
-                const planInfo = PLANS.find(p => p.value === o.plan) || PLANS[0]
+                const sub = subscriptions.find(s => s.organization_id === o.id)
+                const planInfo = PLANS.find(p => p.value === (sub?.plan || o.plan)) || PLANS[0]
                 const statusInfo = STATUSES.find(s => s.value === o.status) || STATUSES[0]
                 return (
                 <tr key={o.id}>

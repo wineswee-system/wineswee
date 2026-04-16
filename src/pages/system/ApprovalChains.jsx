@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { notifyApproval } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -24,7 +25,7 @@ export default function ApprovalChains() {
       supabase.from('approval_chains').select('*').order('id'),
       supabase.from('approval_forms').select('*').order('created_at', { ascending: false }),
       supabase.from('approval_form_steps').select('*').order('form_id,step_order'),
-      supabase.from('employees').select('id, name, dept, position, role').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, role, line_user_id').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([c, f, fs, e, s]) => {
       setChains(c.data || [])
@@ -71,6 +72,8 @@ export default function ApprovalChains() {
       const rows = chain.steps.map((s, i) => ({ form_id: form.id, step_order: i, role: s.role, status: i === 0 ? '待簽' : '等待中' }))
       const { data: ns } = await supabase.from('approval_form_steps').insert(rows).select()
       if (ns) setFormSteps(prev => [...prev, ...ns])
+      const first = chain.steps[0]
+      if (first?.role) notifyApproval(first.role, applyForm.title, `第 1 關：${first.label || first.role}`)
     }
     if (form) setForms(prev => [form, ...prev])
     setShowFormModal(false); setApplyForm({ chain_id: '', title: '', store: '', notes: '' })
@@ -92,6 +95,10 @@ export default function ApprovalChains() {
         const { data: ns } = await supabase.from('approval_form_steps').update({ status: '待簽' }).eq('id', next.id).select().single()
         if (ns) setFormSteps(prev => prev.map(s => s.id === ns.id ? ns : s))
         await supabase.from('approval_forms').update({ current_step: next.step_order }).eq('id', formId)
+        const form = forms.find(x => x.id === formId)
+        const chain = chains.find(c => c.id === form?.chain_id)
+        const stepDef = chain?.steps?.[next.step_order]
+        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order + 1} 關：${stepDef?.label || next.role}`)
       } else {
         const { data: f } = await supabase.from('approval_forms').update({ status: '已通過', completed_at: new Date().toISOString() }).eq('id', formId).select().single()
         if (f) setForms(prev => prev.map(x => x.id === formId ? f : x))
@@ -233,8 +240,15 @@ export default function ApprovalChains() {
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 8 }}>簽核步驟（申請人 → ...）</div>
           {chainForm.steps.map((s, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-              <input className="form-input" placeholder="角色（例：店長）" value={s.role} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], role: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
-              <input className="form-input" placeholder="標籤（例：主管審核）" value={s.label} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], label: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
+              <select className="form-input" value={s.role} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], role: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }}>
+                <option value="">選擇簽核人</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.name} disabled={!emp.line_user_id && false}>
+                    {emp.name}（{emp.position || emp.dept || '—'}）{emp.line_user_id ? '' : ' · 未綁LINE'}
+                  </option>
+                ))}
+              </select>
+              <input className="form-input" placeholder="步驟標籤（例：主管審核）" value={s.label} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], label: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
               <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => setChainForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
             </div>
           ))}

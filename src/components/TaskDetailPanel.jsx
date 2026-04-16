@@ -171,14 +171,10 @@ export default function TaskDetailPanel({
     }))
     const { data: steps } = await createApprovalFormSteps(stepRows)
     setApprovalSteps(steps || [])
-    // Notify: look up employee with matching position/role for the first step
-    const firstRole = chain.steps?.[0]?.role
-    if (firstRole) {
-      const { data: roleEmp } = await supabase.from('employees')
-        .select('name').eq('position', firstRole).limit(1).maybeSingle()
-      if (roleEmp?.name) {
-        notifyApproval(roleEmp.name, task.title, `第 1 關：${firstRole}`)
-      }
+    // Notify: step.role now stores the employee name directly
+    const firstStep = chain.steps?.[0]
+    if (firstStep?.role) {
+      notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`)
     }
   }
 

@@ -131,7 +131,7 @@ serve(async (req) => {
             type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
             contents: [{
               type: 'button',
-              action: { type: 'uri', label: '前往補卡', uri: `https://liff.line.me/${Deno.env.get('LIFF_ID') || ''}/punch-correction` },
+              action: { type: 'uri', label: '前往補卡', uri: `https://liff.line.me/${Deno.env.get('LIFF_ID') || ''}/hr/punch-correction` },
               style: 'primary', color: '#f59e0b', height: 'sm',
             }],
           },

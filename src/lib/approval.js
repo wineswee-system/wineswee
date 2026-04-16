@@ -5,21 +5,52 @@ import { supabase } from './supabase'
  * 根據組織架構自動找到直屬主管進行審核
  */
 
-// 找到員工的直屬主管
-export async function getSupervisor(employeeName) {
+// 找到員工的直屬主管 (by ID)
+export async function getSupervisorById(employeeId) {
   const { data: emp } = await supabase
     .from('employees')
-    .select('supervisor')
-    .eq('name', employeeName)
+    .select('supervisor_id')
+    .eq('id', employeeId)
     .eq('status', '在職')
     .maybeSingle()
 
-  if (!emp?.supervisor) return null
+  if (!emp?.supervisor_id) return null
 
   const { data: supervisor } = await supabase
     .from('employees')
     .select('id, name, line_user_id, email, role_id')
-    .eq('name', emp.supervisor)
+    .eq('id', emp.supervisor_id)
+    .eq('status', '在職')
+    .maybeSingle()
+
+  return supervisor
+}
+
+// Legacy: find supervisor by name (falls back to ID-based)
+export async function getSupervisor(employeeName) {
+  const { data: emp } = await supabase
+    .from('employees')
+    .select('id, supervisor_id')
+    .eq('name', employeeName)
+    .eq('status', '在職')
+    .maybeSingle()
+
+  if (!emp) return null
+  if (emp.supervisor_id) return getSupervisorById(emp.id)
+
+  // Fallback: TEXT-based supervisor (for unlinked data)
+  const { data: empFull } = await supabase
+    .from('employees')
+    .select('supervisor')
+    .eq('id', emp.id)
+    .maybeSingle()
+
+  if (!empFull?.supervisor) return null
+
+  const { data: supervisor } = await supabase
+    .from('employees')
+    .select('id, name, line_user_id, email, role_id')
+    .eq('name', empFull.supervisor)
     .eq('status', '在職')
     .maybeSingle()
 
@@ -27,14 +58,22 @@ export async function getSupervisor(employeeName) {
 }
 
 // 找到審核鏈（往上找到有特定權限的人）
-export async function getApprovalChain(employeeName, permissionCode) {
+export async function getApprovalChain(employeeNameOrId, permissionCode) {
   const chain = []
-  let current = employeeName
   const visited = new Set()
 
-  while (current && !visited.has(current)) {
-    visited.add(current)
-    const supervisor = await getSupervisor(current)
+  // Resolve to ID if name was passed
+  let currentId = typeof employeeNameOrId === 'number' ? employeeNameOrId : null
+  if (!currentId) {
+    const { data: emp } = await supabase
+      .from('employees').select('id').eq('name', employeeNameOrId).eq('status', '在職').maybeSingle()
+    currentId = emp?.id
+  }
+  if (!currentId) return chain
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    const supervisor = await getSupervisorById(currentId)
     if (!supervisor) break
 
     // Check if supervisor has the required permission
@@ -49,14 +88,14 @@ export async function getApprovalChain(employeeName, permissionCode) {
       if (hasPerm) break // Found the right approver
     }
 
-    current = supervisor.name
+    currentId = supervisor.id
   }
 
   return chain
 }
 
 // 提交簽核請求（自動找到審核人）
-export async function submitForApproval(type, record, requesterName) {
+export async function submitForApproval(type, record, requesterNameOrId) {
   let permissionCode
   switch (type) {
     case 'leave': permissionCode = 'leave.approve'; break
@@ -64,16 +103,24 @@ export async function submitForApproval(type, record, requesterName) {
     default: permissionCode = 'leave.approve'
   }
 
-  const chain = await getApprovalChain(requesterName, permissionCode)
+  const chain = await getApprovalChain(requesterNameOrId, permissionCode)
 
   if (chain.length === 0) {
     return { approver: null, chain, record, error: 'No approval chain found — no supervisors configured' }
   }
 
-  // Find a valid approver: must have the permission and must not be the requester (self-approval)
+  // Resolve requester name for self-approval check
+  let requesterName = typeof requesterNameOrId === 'string' ? requesterNameOrId : null
+  if (!requesterName) {
+    const { data: emp } = await supabase
+      .from('employees').select('name').eq('id', requesterNameOrId).maybeSingle()
+    requesterName = emp?.name
+  }
+
+  // Find a valid approver: must have the permission and must not be the requester
   let approver = chain.find(c => c.hasPermission && c.name !== requesterName)
 
-  // Fallback: if no one with permission found (excluding self), try last in chain if not self
+  // Fallback: if no one with permission found (excluding self), try last in chain
   if (!approver) {
     const fallback = chain[chain.length - 1]
     if (fallback && fallback.name !== requesterName) {
@@ -85,9 +132,5 @@ export async function submitForApproval(type, record, requesterName) {
     return { approver: null, chain, record, error: 'No valid approver found' }
   }
 
-  return {
-    approver,
-    chain,
-    record,
-  }
+  return { approver, chain, record }
 }

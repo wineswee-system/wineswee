@@ -40,9 +40,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_transfers').select('*').eq('employee_id', employee.id).order('transfer_date', { ascending: false }),
       supabase.from('employee_reviews').select('*').eq('employee_id', employee.id).order('review_date', { ascending: false }),
       supabase.from('employee_schedule_prefs').select('*').eq('employee_id', employee.id).order('id'),
-      supabase.from('leave_requests').select('*').eq('employee', employee.name).order('id', { ascending: false }).limit(10),
+      supabase.from('leave_requests').select('*').eq('employee_id', employee.id).order('id', { ascending: false }).limit(10),
       supabase.from('employee_availability').select('*').eq('employee_id', employee.id).order('day_of_week'),
-      supabase.from('workflow_steps').select('*, workflow_instances!inner(template_name)').eq('assignee', employee.name).order('step_order'),
+      supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待處理']).order('created_at', { ascending: false }),
     ]).then(([sk, dep, tr, rev, sp, lv, av, ob]) => {
       setSkills(sk.data || [])
       setDependents(dep.data || [])
@@ -75,7 +75,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       // If store changed, remove future schedules (shifts may not exist at new store)
       if (storeChanged) {
         const today = new Date().toISOString().slice(0, 10)
-        await supabase.from('schedules').delete().eq('employee', data.name).gt('date', today)
+        await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
         alert(`已調至${form.store}，未來排班已清除，請重新排班`)
       }
     }

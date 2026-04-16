@@ -245,7 +245,7 @@ async function writeBackStatus(instance, action) {
   const { data: records } = await supabase
     .from(mapping.table)
     .select('id')
-    .eq('employee', instance.started_by)
+    .eq('employee', instance.started_by) // TEXT-based; will use employee_id when available
     .in('status', ['待審核', '待確認'])
     .order('created_at', { ascending: false })
     .limit(1)

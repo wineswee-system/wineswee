@@ -89,13 +89,12 @@ function makeRow(label, value, color) {
  * Send a payslip notification to a single employee.
  * Requires the employee to have a LINE user_id linked.
  */
-export async function sendPayslipNotification(employeeName, payslipData) {
+export async function sendPayslipNotification(employeeNameOrId, payslipData) {
   // Look up the employee's LINE user ID
-  const { data: emp } = await supabase
-    .from('employees')
-    .select('id, name, line_user_id')
-    .eq('name', employeeName)
-    .single()
+  const isId = typeof employeeNameOrId === 'number'
+  let empQuery = supabase.from('employees').select('id, name, line_user_id')
+  empQuery = isId ? empQuery.eq('id', employeeNameOrId) : empQuery.eq('name', employeeNameOrId)
+  const { data: emp } = await empQuery.single()
 
   if (!emp?.line_user_id) {
     console.warn(`[Payslip] No LINE user_id for ${employeeName}, skipping notification`)

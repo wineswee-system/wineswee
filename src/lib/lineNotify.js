@@ -11,13 +11,20 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID
  * @param {string} [channelCode] - e.g. 'sme-ops', 'wines'. If omitted, uses primary or default.
  * @returns {{ lineUserId: string|null, channelCode: string|null, liffId: string|null }}
  */
-async function resolveLineAccount(employeeName, channelCode) {
-  if (!employeeName) return { lineUserId: null, channelCode: null, liffId: null }
+async function resolveLineAccount(employeeNameOrId, channelCode) {
+  if (!employeeNameOrId) return { lineUserId: null, channelCode: null, liffId: null }
+
+  const isId = typeof employeeNameOrId === 'number'
 
   // Try multi-OA mapping first
   let query = supabase.from('v_employee_line_resolved')
     .select('*')
-    .eq('employee_name', employeeName)
+
+  if (isId) {
+    query = query.eq('employee_id', employeeNameOrId)
+  } else {
+    query = query.eq('employee_name', employeeNameOrId)
+  }
 
   if (channelCode) {
     query = query.eq('channel_code', channelCode)
@@ -36,8 +43,13 @@ async function resolveLineAccount(employeeName, channelCode) {
   }
 
   // Fallback: legacy employees.line_user_id
-  const { data: emp } = await supabase.from('employees')
-    .select('line_user_id').eq('name', employeeName).maybeSingle()
+  let empQuery = supabase.from('employees').select('line_user_id')
+  if (isId) {
+    empQuery = empQuery.eq('id', employeeNameOrId)
+  } else {
+    empQuery = empQuery.eq('name', employeeNameOrId)
+  }
+  const { data: emp } = await empQuery.maybeSingle()
 
   return {
     lineUserId: emp?.line_user_id || null,
@@ -266,11 +278,17 @@ export async function sendDirectPush(lineUserId, messages, channelCode) {
 /**
  * Get all LINE accounts for an employee.
  */
-export async function getEmployeeLineAccounts(employeeName) {
-  const { data } = await supabase.from('v_employee_line_resolved')
+export async function getEmployeeLineAccounts(employeeNameOrId) {
+  let query = supabase.from('v_employee_line_resolved')
     .select('*')
-    .eq('employee_name', employeeName)
     .order('is_primary', { ascending: false })
+
+  if (typeof employeeNameOrId === 'number') {
+    query = query.eq('employee_id', employeeNameOrId)
+  } else {
+    query = query.eq('employee_name', employeeNameOrId)
+  }
+  const { data } = await query
   return data || []
 }
 

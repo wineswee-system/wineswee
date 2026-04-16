@@ -139,9 +139,9 @@ export default function Employees() {
         setShowResignModal(false)
         // Cleanup: remove future schedules, cancel pending leaves/tasks
         const today = new Date().toISOString().slice(0, 10)
-        await supabase.from('schedules').delete().eq('employee', data.name).gt('date', today)
-        await supabase.from('leave_requests').update({ status: '已取消' }).eq('employee', data.name).eq('status', '待審核')
-        await supabase.from('workflow_steps').update({ status: '已擱置' }).eq('assignee', data.name).in('status', ['待處理', '進行中'])
+        await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
+        await supabase.from('leave_requests').update({ status: '已取消' }).eq('employee_id', data.id).eq('status', '待審核')
+        await supabase.from('tasks').update({ status: '已擱置' }).eq('assignee_id', data.id).in('status', ['未開始', '進行中'])
       }
     } catch (err) {
       console.error('Operation failed:', err)

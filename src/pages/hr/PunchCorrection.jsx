@@ -53,7 +53,9 @@ export default function PunchCorrection() {
       // Write correction back to attendance_records
       if (correction) {
         const { data: existing } = await supabase.from('attendance_records')
-          .select('*').eq('employee', correction.employee).eq('date', correction.date).maybeSingle()
+          .select('*')
+          .eq(correction.employee_id ? 'employee_id' : 'employee', correction.employee_id || correction.employee)
+          .eq('date', correction.date).maybeSingle()
 
         if (existing) {
           // Update existing record

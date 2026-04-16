@@ -227,7 +227,7 @@ export async function calculateAnnualLeaveSettlement() {
     const { data: existing } = await supabase
       .from('leave_settlements')
       .select('id')
-      .eq('employee', emp.name)
+      .eq('employee_id', emp.id)
       .eq('settlement_month', currentMonth)
       .maybeSingle()
 
@@ -246,7 +246,7 @@ export async function calculateAnnualLeaveSettlement() {
     const { data: leaves } = await supabase
       .from('leave_requests')
       .select('days')
-      .eq('employee', emp.name)
+      .eq('employee_id', emp.id)
       .eq('type', '特休')
       .eq('status', '已核准')
       .gte('start_date', yearStart.toISOString().slice(0, 10))
@@ -259,7 +259,7 @@ export async function calculateAnnualLeaveSettlement() {
       const { data: salary } = await supabase
         .from('salary_records')
         .select('base_salary')
-        .eq('employee', emp.name)
+        .eq('employee_id', emp.id)
         .order('month', { ascending: false })
         .limit(1)
         .maybeSingle()

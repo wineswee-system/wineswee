@@ -39,9 +39,9 @@ export default function SelfService() {
     last30.setDate(last30.getDate() - 30)
 
     Promise.all([
-      supabase.from('attendance_records').select('*').eq('employee', selectedEmpName).gte('date', last30.toISOString().slice(0, 10)).order('date', { ascending: false }),
-      supabase.from('leave_requests').select('*').eq('employee', selectedEmpName).order('created_at', { ascending: false }).limit(20),
-      supabase.from('salary_records').select('*').eq('employee', selectedEmpName).order('month', { ascending: false }).limit(12),
+      supabase.from('attendance_records').select('*').eq('employee_id', emp?.id).gte('date', last30.toISOString().slice(0, 10)).order('date', { ascending: false }),
+      supabase.from('leave_requests').select('*').eq('employee_id', emp?.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('salary_records').select('*').eq('employee_id', emp?.id).order('month', { ascending: false }).limit(12),
       supabase.from('leave_entitlements').select('*').eq('employee_id', emp?.id).eq('year', thisYear),
     ]).then(([a, l, s, le]) => {
       setAttendance(a.data || [])

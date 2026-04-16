@@ -19,6 +19,7 @@ import CashFlow from '../pages/finance/CashFlow'
 import PeriodClose from '../pages/finance/PeriodClose'
 import ChartOfAccounts from '../pages/finance/ChartOfAccounts'
 import ExpenseRequests from '../pages/finance/ExpenseRequests'
+import ExpenseApprovalSettings from '../pages/finance/ExpenseApprovalSettings'
 
 export default function FinanceModule() {
   return (
@@ -26,6 +27,7 @@ export default function FinanceModule() {
       <Route path="overview" element={<Overview />} />
       <Route path="chart-of-accounts" element={<ChartOfAccounts />} />
       <Route path="expense-requests" element={<ExpenseRequests />} />
+      <Route path="expense-approval" element={<ExpenseApprovalSettings />} />
       <Route path="journal" element={<JournalEntries />} />
       <Route path="ar" element={<AccountsReceivable />} />
       <Route path="ap" element={<AccountsPayable />} />

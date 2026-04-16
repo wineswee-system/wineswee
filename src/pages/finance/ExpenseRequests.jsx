@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Trash2, Eye, Send } from 'lucide-react'
+import { Plus, X, Check, Upload, FileText, Image, Trash2, Eye, Send, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
+import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -18,8 +19,10 @@ const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = {
   employee: '', account_code: '', title: '', description: '',
-  estimated_amount: '', store: '',
+  estimated_amount: '', store: '', supplier: '',
 }
+
+const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
   const [requests, setRequests] = useState([])
@@ -38,10 +41,18 @@ export default function ExpenseRequests() {
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
+  const [lineItems, setLineItems] = useState([emptyItem()])
   const fileRef = useRef(null)
   const settleFileRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const updateItem = (i, k, v) => setLineItems(items => {
+    const n = [...items]
+    n[i] = { ...n[i], [k]: v }
+    if (k === 'qty' || k === 'unit_price') n[i].subtotal = (Number(n[i].qty) || 0) * (Number(n[i].unit_price) || 0)
+    return n
+  })
+  const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
 
   const load = async () => {
     setLoading(true)
@@ -88,7 +99,9 @@ export default function ExpenseRequests() {
 
   // Submit new request
   const handleSubmit = async () => {
-    if (!form.employee || !form.account_code || !form.title || !form.estimated_amount) return
+    const validItems = lineItems.filter(li => li.name && li.qty > 0)
+    const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
+    if (!form.employee || !form.account_code || !form.title || !total) return
     setSaving(true)
     const emp = employees.find(e => e.name === form.employee)
     const acc = accounts.find(a => a.code === form.account_code)
@@ -100,7 +113,9 @@ export default function ExpenseRequests() {
       account_name: acc?.name || '',
       title: form.title,
       description: form.description || null,
-      estimated_amount: Number(form.estimated_amount),
+      estimated_amount: total,
+      supplier: form.supplier || null,
+      items: validItems,
       store: form.store || null,
       status: '申請中',
       organization_id: 1,
@@ -121,6 +136,7 @@ export default function ExpenseRequests() {
     setSaving(false)
     setShowModal(false)
     setForm(emptyForm)
+    setLineItems([emptyItem()])
     setFiles([])
     load()
   }
@@ -407,8 +423,8 @@ export default function ExpenseRequests() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>預估金額 *</label>
-                  <input type="number" value={form.estimated_amount} onChange={e => set('estimated_amount', e.target.value)} placeholder="0"
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
+                  <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>
@@ -417,10 +433,51 @@ export default function ExpenseRequests() {
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
               </div>
+
+              {/* Line items */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 *</label>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-main)' }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600 }}>品名</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 70 }}>數量</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>單價</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>小計</th>
+                        <th style={{ width: 32 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((li, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={{ padding: 4 }}><input type="text" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="品名" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12 }} /></td>
+                          <td style={{ padding: 4 }}><input type="number" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} placeholder="0" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} /></td>
+                          <td style={{ padding: 4 }}><input type="number" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} placeholder="0" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} /></td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{li.subtotal ? fmt(li.subtotal) : '-'}</td>
+                          <td style={{ padding: 4 }}>
+                            {lineItems.length > 1 && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }} onClick={() => setLineItems(items => items.filter((_, j) => j !== i))}><X size={14} /></button>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: '2px solid var(--border)' }}>
+                        <td colSpan={3} style={{ padding: '6px 8px' }}>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setLineItems(items => [...items, emptyItem()])}><Plus size={11} /> 新增品項</button>
+                        </td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', fontSize: 14, color: 'var(--accent-blue)' }}>{fmt(lineTotal)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>說明</label>
-                <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="用途、規格、供應商..."
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 60, resize: 'vertical' }} />
+                <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="用途、規格..."
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 50, resize: 'vertical' }} />
               </div>
               {/* File upload */}
               <div>
@@ -520,9 +577,42 @@ export default function ExpenseRequests() {
                 <div><span style={{ color: 'var(--text-muted)' }}>部門：</span>{showDetail.department || '-'}</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>科目：</span>{showDetail.account_code} {showDetail.account_name}</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>門市：</span>{showDetail.store || '-'}</div>
+                {showDetail.supplier && <div><span style={{ color: 'var(--text-muted)' }}>供應商：</span><strong>{showDetail.supplier}</strong></div>}
               </div>
               <div><span style={{ color: 'var(--text-muted)' }}>項目：</span><strong>{showDetail.title}</strong></div>
               {showDetail.description && <div><span style={{ color: 'var(--text-muted)' }}>說明：</span>{showDetail.description}</div>}
+
+              {/* Line items table */}
+              {showDetail.items?.length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-main)' }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {showDetail.items.map((li, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={{ padding: '4px 8px' }}>{li.name}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: '2px solid var(--border)' }}>
+                        <td colSpan={3} style={{ padding: '6px 8px', fontWeight: 700 }}>合計</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent-blue)' }}>{fmt(showDetail.estimated_amount)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-main)', padding: 12, borderRadius: 8 }}>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估金額</div><div style={{ fontWeight: 700 }}>{fmt(showDetail.estimated_amount)}</div></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmt(showDetail.actual_amount) : '-'}</div></div>
@@ -547,7 +637,10 @@ export default function ExpenseRequests() {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => exportExpenseRequestPdf(showDetail)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Download size={13} /> 下載 PDF
+              </button>
               <button className="btn btn-secondary" onClick={() => setShowDetail(null)}>關閉</button>
             </div>
           </div>

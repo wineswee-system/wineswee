@@ -204,3 +204,93 @@ export function exportTaxReportPdf(reportData) {
 
   doc.save(`401-tax-report-${startDate}-${endDate}.pdf`)
 }
+
+// Export expense request as PDF (費用申請單)
+export function exportExpenseRequestPdf(req) {
+  if (!req) return
+  const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+  const doc = createPdf('Expense Request', `#${req.id} | ${req.created_at?.slice(0, 10) || ''}`)
+
+  let y = 38
+
+  // Meta info
+  autoTable(doc, {
+    startY: y,
+    body: [
+      ['Applicant', req.employee || '-', 'Department', req.department || '-'],
+      ['Account', `${req.account_code || ''} ${req.account_name || ''}`, 'Store', req.store || '-'],
+      ['Supplier', req.supplier || '-', 'Status', req.status || '-'],
+      ['Title', { content: req.title || '-', colSpan: 3 }],
+    ],
+    theme: 'grid',
+    bodyStyles: { fontSize: 9 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 2: { fontStyle: 'bold', cellWidth: 30 } },
+  })
+
+  // Line items
+  const items = req.items || []
+  if (items.length > 0) {
+    const y2 = doc.lastAutoTable.finalY + 8
+    doc.setFontSize(11)
+    doc.setTextColor(14, 116, 144)
+    doc.text('Items', 14, y2)
+
+    autoTable(doc, {
+      startY: y2 + 4,
+      head: [['#', 'Item Name', 'Qty', 'Unit Price', 'Subtotal']],
+      body: items.map((li, i) => [
+        i + 1,
+        li.name || '-',
+        li.qty || 0,
+        fmt(li.unit_price),
+        fmt(li.subtotal),
+      ]),
+      foot: [['', 'Total', '', '', fmt(req.estimated_amount)]],
+      theme: 'grid',
+      headStyles: { fillColor: [14, 116, 144], fontSize: 9 },
+      bodyStyles: { fontSize: 9 },
+      footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 12 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    })
+  }
+
+  // Amount summary
+  const y3 = doc.lastAutoTable.finalY + 8
+  doc.setFontSize(11)
+  doc.setTextColor(14, 116, 144)
+  doc.text('Amount Summary', 14, y3)
+
+  autoTable(doc, {
+    startY: y3 + 4,
+    body: [
+      ['Estimated Amount', fmt(req.estimated_amount)],
+      ['Actual Amount', fmt(req.actual_amount)],
+      ['Difference', req.difference != null ? fmt(req.difference) : '-'],
+    ],
+    theme: 'grid',
+    bodyStyles: { fontSize: 9 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 1: { halign: 'right' } },
+  })
+
+  // Description
+  if (req.description) {
+    const y4 = doc.lastAutoTable.finalY + 8
+    doc.setFontSize(9)
+    doc.setTextColor(100)
+    doc.text(`Notes: ${req.description}`, 14, y4, { maxWidth: 180 })
+  }
+
+  // Signature block
+  const ySign = doc.lastAutoTable.finalY + 25
+  doc.setDrawColor(150)
+  doc.setFontSize(9)
+  doc.setTextColor(80)
+  const cols = [14, 75, 136]
+  const labels = ['Applicant', 'Manager', 'Finance']
+  cols.forEach((x, i) => {
+    doc.line(x, ySign, x + 50, ySign)
+    doc.text(labels[i], x + 15, ySign + 6)
+  })
+
+  doc.save(`expense-request-${req.id}.pdf`)
+}

@@ -228,7 +228,8 @@ export function exportExpenseRequestPdf(req) {
   })
 
   // Line items
-  const items = req.items || []
+  const rawItems = req.items
+  const items = Array.isArray(rawItems) ? rawItems : (typeof rawItems === 'string' ? JSON.parse(rawItems) : [])
   if (items.length > 0) {
     const y2 = doc.lastAutoTable.finalY + 8
     doc.setFontSize(11)

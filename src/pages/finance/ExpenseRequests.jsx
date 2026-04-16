@@ -264,7 +264,7 @@ export default function ExpenseRequests() {
             <h2><span className="header-icon">📝</span> 費用申請</h2>
             <p>先申請核准，購買後核銷入帳</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setFiles([]); setShowModal(true) }}>
+          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
             <Plus size={14} /> 新增申請
           </button>
         </div>

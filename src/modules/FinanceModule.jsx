@@ -17,11 +17,13 @@ import ExchangeRates from '../pages/finance/ExchangeRates'
 import CostCenters from '../pages/finance/CostCenters'
 import CashFlow from '../pages/finance/CashFlow'
 import PeriodClose from '../pages/finance/PeriodClose'
+import ChartOfAccounts from '../pages/finance/ChartOfAccounts'
 
 export default function FinanceModule() {
   return (
     <Routes>
       <Route path="overview" element={<Overview />} />
+      <Route path="chart-of-accounts" element={<ChartOfAccounts />} />
       <Route path="journal" element={<JournalEntries />} />
       <Route path="ar" element={<AccountsReceivable />} />
       <Route path="ap" element={<AccountsPayable />} />

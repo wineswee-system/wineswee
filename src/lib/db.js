@@ -630,6 +630,12 @@ export const getProcurementWorkflowInstances = () =>
 // ── Finance & Accounting ──
 export const getAccounts = () =>
   supabase.from('accounts').select('*').order('code')
+export const createAccount = (data) =>
+  supabase.from('accounts').insert(data).select().single()
+export const updateAccount = (id, data) =>
+  supabase.from('accounts').update(data).eq('id', id).select().single()
+export const deleteAccount = (id) =>
+  supabase.from('accounts').delete().eq('id', id)
 export const getJournalEntries = () =>
   supabase.from('journal_entries').select('*').order('id', { ascending: false })
 export const getJournalLines = (entryId) =>

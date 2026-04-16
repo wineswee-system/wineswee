@@ -177,6 +177,7 @@ const groupNav = {
         { icon: BookText, label: '傳票管理', path: '/finance/journal' },
         { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
+        { icon: FileEdit, label: '費用申請', path: '/finance/expense-requests' },
         { icon: FileText, label: '電子發票', path: '/finance/invoices' },
         { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
       ]

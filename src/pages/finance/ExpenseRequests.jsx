@@ -34,6 +34,7 @@ export default function ExpenseRequests() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('all')
+  const [isExpense, setIsExpense] = useState(true)
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
@@ -50,7 +51,7 @@ export default function ExpenseRequests() {
       getEmployees(),
     ])
     setRequests(reqRes.data || [])
-    setAccounts((accRes.data || []).filter(a => a.type === '費用'))
+    setAccounts(accRes.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setLoading(false)
   }
@@ -337,23 +338,39 @@ export default function ExpenseRequests() {
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
-                  <select value={form.employee} onChange={e => set('employee', e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                    <option value="">請選擇</option>
-                    {employees.map(e => <option key={e.id} value={e.name}>{e.name} ({e.dept})</option>)}
-                  </select>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
+                <select value={form.employee} onChange={e => set('employee', e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                  <option value="">請選擇</option>
+                  {employees.map(e => <option key={e.id} value={e.name}>{e.name} ({e.dept}) {e.store ? `- ${e.store}` : ''}</option>)}
+                </select>
+              </div>
+              {/* Expense / Non-expense toggle */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請類型</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[{ val: true, label: '費用' }, { val: false, label: '非費用' }].map(opt => (
+                    <button key={String(opt.val)} type="button"
+                      onClick={() => { setIsExpense(opt.val); set('account_code', '') }}
+                      style={{
+                        flex: 1, padding: '7px 0', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        background: isExpense === opt.val ? 'var(--accent-blue)' : 'var(--bg-main)',
+                        color: isExpense === opt.val ? '#fff' : 'var(--text-secondary)',
+                        border: isExpense === opt.val ? 'none' : '1px solid var(--border)',
+                      }}>
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 *</label>
-                  <select value={form.account_code} onChange={e => set('account_code', e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                    <option value="">請選擇科目</option>
-                    {accounts.map(a => <option key={a.id} value={a.code}>{a.code} — {a.name}</option>)}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 *</label>
+                <select value={form.account_code} onChange={e => set('account_code', e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                  <option value="">請選擇科目</option>
+                  {accounts.filter(a => isExpense ? a.type === '費用' : a.type !== '費用').map(a => <option key={a.id} value={a.code}>{a.code} — {a.name} ({a.type})</option>)}
+                </select>
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>項目名稱 *</label>

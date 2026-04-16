@@ -309,7 +309,8 @@ export const updateApprovalFormStep = (id, data) =>
 export const getTasks = (filters = {}) => {
   let q = supabase.from('tasks').select('*').order('created_at', { ascending: false })
   if (filters.instanceId) q = q.eq('workflow_instance_id', filters.instanceId)
-  if (filters.assignee) q = q.eq('assignee', filters.assignee)
+  if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
+  else if (filters.assignee) q = q.eq('assignee', filters.assignee)
   if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
   if (filters.bucket) q = q.eq('bucket', filters.bucket)
   return q
@@ -1346,7 +1347,8 @@ export const getCRMActivities = (filters = {}) => {
   if (filters.entity_type && filters.entity_id) {
     q = q.eq('entity_type', filters.entity_type).eq('entity_id', filters.entity_id)
   }
-  if (filters.assignee) q = q.eq('assignee', filters.assignee)
+  if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
+  else if (filters.assignee) q = q.eq('assignee', filters.assignee)
   if (filters.status) q = q.eq('status', filters.status)
   if (filters.from) q = q.gte('due_date', filters.from)
   if (filters.to) q = q.lte('due_date', filters.to)

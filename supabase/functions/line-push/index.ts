@@ -5,23 +5,42 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/**
+ * Resolve the LINE channel access token for a given channel code.
+ * Convention: LINE_CHANNEL_TOKEN_{CODE} (uppercase, hyphens → underscores)
+ * Falls back to LINE_CHANNEL_TOKEN if no channel-specific token found.
+ */
+function resolveToken(channelCode?: string): string | null {
+  if (channelCode) {
+    const envKey = `LINE_CHANNEL_TOKEN_${channelCode.toUpperCase().replace(/-/g, '_')}`
+    const token = Deno.env.get(envKey)
+    if (token) return token
+  }
+  // Fallback to default token
+  return Deno.env.get('LINE_CHANNEL_TOKEN') || null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const LINE_CHANNEL_TOKEN = Deno.env.get('LINE_CHANNEL_TOKEN')
-    if (!LINE_CHANNEL_TOKEN) {
-      return new Response(JSON.stringify({ error: 'LINE_CHANNEL_TOKEN not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    const { to, messages, channelCode } = await req.json()
 
-    const { to, messages } = await req.json()
     if (!to || !messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Missing "to" or "messages"' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const token = resolveToken(channelCode)
+    if (!token) {
+      const hint = channelCode
+        ? `No token for channel "${channelCode}". Set LINE_CHANNEL_TOKEN_${channelCode.toUpperCase().replace(/-/g, '_')} or LINE_CHANNEL_TOKEN.`
+        : 'LINE_CHANNEL_TOKEN not configured'
+      return new Response(JSON.stringify({ error: hint }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -29,13 +48,13 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LINE_CHANNEL_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ to, messages }),
     })
 
     const status = res.status
-    let body: Record<string, unknown> = { ok: res.ok, status }
+    let body: Record<string, unknown> = { ok: res.ok, status, channelCode: channelCode || 'default' }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       body = { ...body, error: err }

@@ -7,8 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 
 export default function Tasks() {
   const [tab, setTab] = useState('all')
-  const [tasks, setTasks] = useState([])         // legacy tasks
-  const [wfSteps, setWfSteps] = useState([])      // workflow_steps
+  const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,19 +16,16 @@ export default function Tasks() {
   const [search, setSearch] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
   const [filterStore, setFilterStore] = useState('')
-  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中' })
+  const [filterBucket, setFilterBucket] = useState('')
+  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
 
   useEffect(() => {
     Promise.all([
       getTasks(),
-      supabase.from('workflow_steps')
-        .select('*, workflow_instances(template_name, store)')
-        .order('step_order'),
       supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([t, wf, e, s]) => {
+    ]).then(([t, e, s]) => {
       setTasks(t.data || [])
-      setWfSteps(wf.data || [])
       setEmployees(e.data || [])
       setStores(s.data || [])
     }).catch(err => {
@@ -41,65 +37,42 @@ export default function Tasks() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleStatusChange = async (id, status) => {
-    const { data } = await updateTask(id, { status })
-    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
-  }
-
-  const handleWfStatusChange = async (id, status) => {
     const completedAt = status === '已完成' ? new Date().toISOString() : null
-    const { data } = await supabase.from('workflow_steps')
-      .update({ status, completed_at: completedAt }).eq('id', id).select().single()
-    if (data) {
-      setWfSteps(prev => prev.map(s => s.id === id ? data : s))
-      // Check if entire instance is now complete
-      if (status === '已完成' && data.instance_id) {
-        const { data: siblings } = await supabase.from('workflow_steps')
-          .select('status').eq('instance_id', data.instance_id)
-        if (siblings && siblings.length > 0 && siblings.every(s => s.status === '已完成')) {
-          await supabase.from('workflow_instances')
-            .update({ status: '已完成', completed_at: new Date().toISOString() })
-            .eq('id', data.instance_id)
-        }
-      }
-    }
+    const { data } = await updateTask(id, { status, completed_at: completedAt })
+    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
   }
 
   const handleSubmit = async () => {
     if (!form.title) return
     const { data } = await createTask({ ...form, status: '未開始' })
     if (data) {
-      setTasks(prev => [...prev, data])
+      setTasks(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ title: '', workflow: '', assignee: '', due_date: '', priority: '中' })
+      setForm({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
     }
   }
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
-  // Combine all items for unified view
-  const allItems = [
-    ...wfSteps.map(s => ({
-      id: `wf-${s.id}`, _type: 'wf', _id: s.id,
-      title: s.title, assignee: s.assignee,
-      workflow: s.workflow_instances?.store || s.workflow_instances?.template_name || '',
-      store: s.store || s.workflow_instances?.store || '',
-      due_date: s.due_date, priority: s.priority || '中',
-      status: s.status === '待處理' ? '未開始' : s.status,
-    })),
-    ...tasks.map(t => ({
-      id: `t-${t.id}`, _type: 'task', _id: t.id,
-      title: t.title, assignee: t.assignee,
-      workflow: t.workflow || '', store: '',
-      due_date: t.due_date, priority: t.priority || '中',
-      status: t.status,
-    })),
-  ]
+  // Unified items — all from tasks table
+  const allItems = tasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    assignee: t.assignee,
+    workflow: t.workflow || '',
+    store: t.store || '',
+    due_date: t.due_date,
+    priority: t.priority || '中',
+    status: t.status === '待處理' ? '未開始' : t.status,
+    bucket: t.bucket || (t.workflow_instance_id ? 'Workflow' : 'General'),
+  }))
 
   // Filter
   const filtered = allItems.filter(t => {
     if (filterAssignee && t.assignee !== filterAssignee) return false
     if (filterStore && t.store !== filterStore) return false
+    if (filterBucket && t.bucket !== filterBucket) return false
     if (search && !t.title?.toLowerCase().includes(search.toLowerCase()) && !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false
     if (tab === 'pending') return t.status === '未開始' || t.status === '待處理'
     if (tab === 'active') return t.status === '進行中'
@@ -112,6 +85,7 @@ export default function Tasks() {
   const doneCount = allItems.filter(t => t.status === '已完成').length
 
   const statusOpts = ['未開始', '進行中', '已完成', '已擱置']
+  const buckets = [...new Set(allItems.map(t => t.bucket).filter(Boolean))]
 
   return (
     <div className="fade-in">
@@ -154,6 +128,12 @@ export default function Tasks() {
           <option value="">全部門市</option>
           {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
         </select>
+        {buckets.length > 1 && (
+          <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterBucket} onChange={e => setFilterBucket(e.target.value)}>
+            <option value="">全部分類</option>
+            {buckets.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Table */}
@@ -161,10 +141,10 @@ export default function Tasks() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>任務名稱</th><th>所屬流程</th><th>負責人</th><th>門市</th><th>截止日期</th><th>優先度</th><th>狀態</th></tr>
+              <tr><th>任務名稱</th><th>所屬流程</th><th>負責人</th><th>門市</th><th>截止日期</th><th>優先度</th><th>分類</th><th>狀態</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
               {filtered.map(t => (
                 <tr key={t.id}>
                   <td style={{ fontWeight: 600 }}>{t.title}</td>
@@ -177,12 +157,10 @@ export default function Tasks() {
                       {t.priority}
                     </span>
                   </td>
+                  <td><span className="badge badge-neutral" style={{ fontSize: 11 }}>{t.bucket}</span></td>
                   <td>
                     <select className="form-input" style={{ padding: '2px 8px', fontSize: 12 }} value={t.status}
-                      onChange={e => {
-                        if (t._type === 'wf') handleWfStatusChange(t._id, e.target.value === '未開始' ? '待處理' : e.target.value)
-                        else handleStatusChange(t._id, e.target.value)
-                      }}>
+                      onChange={e => handleStatusChange(t.id, e.target.value === '未開始' ? '待處理' : e.target.value)}>
                       {statusOpts.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </td>
@@ -205,11 +183,16 @@ export default function Tasks() {
               </select>
             </Field>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="截止日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date} onChange={e => set('due_date', e.target.value)} /></Field>
             <Field label="優先度">
               <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
                 <option>高</option><option>中</option><option>低</option>
+              </select>
+            </Field>
+            <Field label="分類">
+              <select className="form-input" style={{ width: '100%' }} value={form.bucket} onChange={e => set('bucket', e.target.value)}>
+                <option>General</option><option>Personal</option><option>Workflow</option>
               </select>
             </Field>
           </div>

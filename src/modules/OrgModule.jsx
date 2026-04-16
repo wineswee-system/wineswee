@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Overview from '../pages/org/Overview'
+import Organizations from '../pages/org/Organizations'
 import OrgChart from '../pages/org/OrgChart'
 import Companies from '../pages/org/Companies'
 import Locations from '../pages/org/Locations'
@@ -12,6 +13,7 @@ export default function OrgModule() {
   return (
     <Routes>
       <Route path="overview" element={<Overview />} />
+      <Route path="organizations" element={<Organizations />} />
       <Route path="chart" element={<OrgChart />} />
       <Route path="companies" element={<Companies />} />
       <Route path="locations" element={<Locations />} />

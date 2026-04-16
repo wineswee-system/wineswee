@@ -5,9 +5,52 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
 
 /**
- * Send a LINE push message via Supabase Edge Function (server-side, no CORS issue).
+ * Resolve a LINE user ID + channel for an employee.
+ * Tries: specific channelCode → primary account → any active account → legacy employees.line_user_id
+ * @param {string} employeeName
+ * @param {string} [channelCode] - e.g. 'sme-ops', 'wines'. If omitted, uses primary or default.
+ * @returns {{ lineUserId: string|null, channelCode: string|null, liffId: string|null }}
  */
-async function sendLinePush(lineUserId, messages) {
+async function resolveLineAccount(employeeName, channelCode) {
+  if (!employeeName) return { lineUserId: null, channelCode: null, liffId: null }
+
+  // Try multi-OA mapping first
+  let query = supabase.from('v_employee_line_resolved')
+    .select('*')
+    .eq('employee_name', employeeName)
+
+  if (channelCode) {
+    query = query.eq('channel_code', channelCode)
+  } else {
+    query = query.order('is_primary', { ascending: false })
+  }
+
+  const { data: accounts } = await query.limit(1).maybeSingle()
+
+  if (accounts?.line_user_id) {
+    return {
+      lineUserId: accounts.line_user_id,
+      channelCode: accounts.channel_code,
+      liffId: accounts.liff_id || LIFF_ID,
+    }
+  }
+
+  // Fallback: legacy employees.line_user_id
+  const { data: emp } = await supabase.from('employees')
+    .select('line_user_id').eq('name', employeeName).maybeSingle()
+
+  return {
+    lineUserId: emp?.line_user_id || null,
+    channelCode: null,
+    liffId: LIFF_ID,
+  }
+}
+
+/**
+ * Send a LINE push message via Supabase Edge Function.
+ * If channelCode is provided, the Edge Function routes to the correct channel token.
+ */
+async function sendLinePush(lineUserId, messages, channelCode) {
   if (!lineUserId) return { ok: false, reason: 'no_user_id' }
 
   try {
@@ -18,38 +61,42 @@ async function sendLinePush(lineUserId, messages) {
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'apikey': SUPABASE_KEY,
       },
-      body: JSON.stringify({ to: lineUserId, messages }),
+      body: JSON.stringify({ to: lineUserId, messages, channelCode }),
     })
     const data = await res.json()
-    await logMessage(lineUserId, messages, data.ok ? 'sent' : 'failed')
+    await logMessage(lineUserId, messages, data.ok ? 'sent' : 'failed', channelCode)
     return data
   } catch (err) {
     console.error('[LINE] Push error:', err)
-    await logMessage(lineUserId, messages, 'failed')
+    await logMessage(lineUserId, messages, 'failed', channelCode)
     return { ok: false, error: err.message }
   }
 }
 
 /**
- * LIFF task page URL
+ * LIFF task page URL — uses the channel's LIFF ID if available.
  */
-export function getLiffTaskUrl(stepId) {
-  const base = LIFF_ID ? `https://liff.line.me/${LIFF_ID}/task` : `${window.location.origin}/liff/task`
-  return stepId ? `${base}?step=${stepId}` : base
+export function getLiffTaskUrl(taskId, liffId) {
+  const lid = liffId || LIFF_ID
+  const base = lid ? `https://liff.line.me/${lid}/task` : `${window.location.origin}/liff/task`
+  return taskId ? `${base}?task=${taskId}` : base
 }
 
 /**
  * Notify a task assignee via LINE.
+ * @param {string} assigneeName
+ * @param {string} taskTitle
+ * @param {string} instanceName
+ * @param {number} taskId
+ * @param {string} [channelCode] - specific OA to use, or auto-resolve
  */
-export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, stepId) {
+export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, channelCode) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
 
-  const { data: emp } = await supabase.from('employees')
-    .select('line_user_id').eq('name', assigneeName).maybeSingle()
+  const account = await resolveLineAccount(assigneeName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  if (!emp?.line_user_id) return { ok: false, reason: 'no_line_user_id' }
-
-  const liffUrl = getLiffTaskUrl(stepId)
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
 
   const messages = [{
     type: 'flex',
@@ -89,21 +136,19 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
     },
   }]
 
-  return sendLinePush(emp.line_user_id, messages)
+  return sendLinePush(account.lineUserId, messages, account.channelCode)
 }
 
 /**
- * Notify for approval request — looks up employee by name (not role).
+ * Notify for approval request.
  */
-export async function notifyApproval(approverName, taskTitle, stepLabel) {
+export async function notifyApproval(approverName, taskTitle, stepLabel, channelCode) {
   if (!approverName) return { ok: false }
 
-  const { data: emp } = await supabase.from('employees')
-    .select('line_user_id').eq('name', approverName).maybeSingle()
+  const account = await resolveLineAccount(approverName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  if (!emp?.line_user_id) return { ok: false, reason: 'no_line_user_id' }
-
-  const liffUrl = getLiffTaskUrl()
+  const liffUrl = getLiffTaskUrl(null, account.liffId)
 
   const messages = [{
     type: 'flex',
@@ -135,39 +180,32 @@ export async function notifyApproval(approverName, taskTitle, stepLabel) {
     },
   }]
 
-  return sendLinePush(emp.line_user_id, messages)
+  return sendLinePush(account.lineUserId, messages, account.channelCode)
 }
 
 /**
- * Notify task due reminder
+ * Notify task due reminder.
  */
-export async function notifyTaskDue(assigneeName, taskTitle, dueDate) {
+export async function notifyTaskDue(assigneeName, taskTitle, dueDate, channelCode) {
   if (!assigneeName) return { ok: false }
 
-  const { data: emp } = await supabase.from('employees')
-    .select('line_user_id').eq('name', assigneeName).maybeSingle()
+  const account = await resolveLineAccount(assigneeName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  if (!emp?.line_user_id) return { ok: false, reason: 'no_line_user_id' }
-
-  return sendLinePush(emp.line_user_id, [{
+  return sendLinePush(account.lineUserId, [{
     type: 'text',
     text: `⏰ 提醒：「${taskTitle}」即將到期\n截止日期：${dueDate}\n\n請儘速處理！`,
-  }])
+  }], account.channelCode)
 }
 
 /**
  * Notify employee about published schedule via LINE.
- * @param {string} employeeName
- * @param {string} dateRange - e.g. "2026-04-13 ~ 2026-04-19"
- * @param {Array} assignments - [{ date, shift, actual_start, actual_end }]
  */
-export async function notifySchedulePublished(employeeName, dateRange, assignments) {
+export async function notifySchedulePublished(employeeName, dateRange, assignments, channelCode) {
   if (!employeeName) return { ok: false, reason: 'no_employee' }
 
-  const { data: emp } = await supabase.from('employees')
-    .select('line_user_id').eq('name', employeeName).maybeSingle()
-
-  if (!emp?.line_user_id) return { ok: false, reason: 'no_line_user_id' }
+  const account = await resolveLineAccount(employeeName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六']
   const lines = assignments.slice(0, 7).map(a => {
@@ -178,8 +216,9 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
     return `${a.date.slice(5)} (${dow}) ${a.shift}${time ? ' ' + time : ''}`
   })
 
-  const liffUrl = LIFF_ID
-    ? `https://liff.line.me/${LIFF_ID}/my-schedule`
+  const lid = account.liffId || LIFF_ID
+  const liffUrl = lid
+    ? `https://liff.line.me/${lid}/my-schedule`
     : `${window.location.origin}/hr/my-schedule`
 
   const messages = [{
@@ -214,10 +253,28 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
     },
   }]
 
-  return sendLinePush(emp.line_user_id, messages)
+  return sendLinePush(account.lineUserId, messages, account.channelCode)
 }
 
-async function logMessage(recipient, messages, status = 'logged') {
+/**
+ * Send to a specific LINE user ID on a specific channel (bypass employee lookup).
+ */
+export async function sendDirectPush(lineUserId, messages, channelCode) {
+  return sendLinePush(lineUserId, messages, channelCode)
+}
+
+/**
+ * Get all LINE accounts for an employee.
+ */
+export async function getEmployeeLineAccounts(employeeName) {
+  const { data } = await supabase.from('v_employee_line_resolved')
+    .select('*')
+    .eq('employee_name', employeeName)
+    .order('is_primary', { ascending: false })
+  return data || []
+}
+
+async function logMessage(recipient, messages, status = 'logged', channelCode) {
   try {
     await supabase.from('message_logs').insert({
       channel: 'LINE',
@@ -225,6 +282,7 @@ async function logMessage(recipient, messages, status = 'logged') {
       subject: messages?.[0]?.altText || messages?.[0]?.text || 'LINE push',
       body: JSON.stringify(messages),
       status,
+      metadata: channelCode ? { line_channel: channelCode } : undefined,
     })
   } catch (e) { /* silent */ }
 }

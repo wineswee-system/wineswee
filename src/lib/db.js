@@ -305,18 +305,97 @@ export const createApprovalFormSteps = (rows) =>
 export const updateApprovalFormStep = (id, data) =>
   supabase.from('approval_form_steps').update(data).eq('id', id).select().single()
 
-// ── Tasks ──────────────────────────────────────────────────
-export const getTasks = () =>
-  supabase.from('tasks').select('*').order('id')
+// ── Tasks (unified: standalone + workflow-linked) ─────────
+export const getTasks = (filters = {}) => {
+  let q = supabase.from('tasks').select('*').order('created_at', { ascending: false })
+  if (filters.instanceId) q = q.eq('workflow_instance_id', filters.instanceId)
+  if (filters.assignee) q = q.eq('assignee', filters.assignee)
+  if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
+  if (filters.bucket) q = q.eq('bucket', filters.bucket)
+  return q
+}
+
+export const getTasksByInstance = (instanceId) =>
+  supabase.from('tasks').select('*').eq('workflow_instance_id', instanceId).order('step_order')
 
 export const createTask = (data) =>
   supabase.from('tasks').insert(data).select().single()
+
+export const createTasksBatch = (rows) =>
+  supabase.from('tasks').insert(rows).select()
 
 export const updateTask = (id, data) =>
   supabase.from('tasks').update(data).eq('id', id).select().single()
 
 export const deleteTask = (id) =>
   supabase.from('tasks').delete().eq('id', id)
+
+// ── Task Dependencies (前置條件 & 觸發動作) ───────────────
+export const getTaskDependencies = (taskId) =>
+  supabase.from('task_dependencies').select('*').or(`task_id.eq.${taskId},depends_on_task_id.eq.${taskId}`)
+
+export const getTaskDependenciesByInstance = (taskIds) =>
+  supabase.from('task_dependencies').select('*').in('task_id', taskIds)
+
+export const createTaskDependency = (data) =>
+  supabase.from('task_dependencies').insert(data).select().single()
+
+export const deleteTaskDependency = (id) =>
+  supabase.from('task_dependencies').delete().eq('id', id)
+
+// ── Task Comments (備註留言) ──────────────────────────────
+export const getTaskComments = (taskId) =>
+  supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at', { ascending: true })
+
+export const createTaskComment = (data) =>
+  supabase.from('task_comments').insert(data).select().single()
+
+// ── Task Attachments (附件) ──────────────────────────────
+export const getTaskAttachments = (taskId) =>
+  supabase.from('task_attachments').select('*').eq('task_id', taskId).order('created_at')
+
+export const createTaskAttachment = (data) =>
+  supabase.from('task_attachments').insert(data).select().single()
+
+export const deleteTaskAttachment = (id) =>
+  supabase.from('task_attachments').delete().eq('id', id)
+
+// ── Task-Checklist Link (關聯查核清單) ───────────────────
+export const getTaskChecklists = (taskId) =>
+  supabase.from('task_checklists').select('*, checklists(*)').eq('task_id', taskId)
+
+export const linkTaskChecklist = (taskId, checklistId) =>
+  supabase.from('task_checklists').insert({ task_id: taskId, checklist_id: checklistId }).select().single()
+
+export const unlinkTaskChecklist = (id) =>
+  supabase.from('task_checklists').delete().eq('id', id)
+
+// ── Task Checklist Items (任務內建清單) ──────────────────
+export const getTaskChecklistItems = (taskId) =>
+  supabase.from('task_checklist_items').select('*').eq('task_id', taskId).order('sort_order')
+
+export const createTaskChecklistItem = (data) =>
+  supabase.from('task_checklist_items').insert(data).select().single()
+
+export const updateTaskChecklistItem = (id, data) =>
+  supabase.from('task_checklist_items').update(data).eq('id', id).select().single()
+
+export const deleteTaskChecklistItem = (id) =>
+  supabase.from('task_checklist_items').delete().eq('id', id)
+
+// ── Task Confirmations (多人確認) ────────────────────────
+export const getTaskConfirmations = (taskId) =>
+  supabase.from('task_confirmations').select('*').eq('task_id', taskId).order('created_at')
+
+export const createTaskConfirmation = (data) =>
+  supabase.from('task_confirmations').insert(data).select().single()
+
+export const updateTaskConfirmation = (id, data) =>
+  supabase.from('task_confirmations').update(data).eq('id', id).select().single()
+
+// ── Approval Forms — task reference ─────────────────────
+export const getApprovalFormByTask = (taskId) =>
+  supabase.from('approval_forms').select('*').eq('ref_task_id', taskId).maybeSingle()
 
 // ── Checklists ─────────────────────────────────────────────
 export const getChecklists = () =>
@@ -345,14 +424,37 @@ export const deleteChecklistItem = (id) =>
   supabase.from('checklist_items').delete().eq('id', id)
 
 // ── Organizations ──────────────────────────────────────────
+export const getOrganizations = () =>
+  supabase.from('organizations').select('*').order('id')
+
+export const createOrganization = (data) =>
+  supabase.from('organizations').insert(data).select().single()
+
+export const updateOrganization = (id, data) =>
+  supabase.from('organizations').update(data).eq('id', id).select().single()
+
+export const deleteOrganization = (id) =>
+  supabase.from('organizations').delete().eq('id', id)
+
+// ── Companies ─────────────────────────────────────────────
 export const getCompanies = () =>
   supabase.from('companies').select('*').order('id')
 
 export const createCompany = (data) =>
   supabase.from('companies').insert(data).select().single()
 
+export const updateCompany = (id, data) =>
+  supabase.from('companies').update(data).eq('id', id).select().single()
+
+export const deleteCompany = (id) =>
+  supabase.from('companies').delete().eq('id', id)
+
+// ── Stores ────────────────────────────────────────────────
 export const getStores = () =>
   supabase.from('stores').select('*').order('id')
+
+export const getStoresWithRefs = () =>
+  supabase.from('stores').select('*, company_ref:companies!company_id(id,name), manager_ref:employees!manager_id(id,name)').order('id')
 
 export const createStore = (data) =>
   supabase.from('stores').insert(data).select().single()
@@ -363,11 +465,62 @@ export const updateStore = (id, data) =>
 export const deleteStore = (id) =>
   supabase.from('stores').delete().eq('id', id)
 
+// ── Departments ───────────────────────────────────────────
 export const getDepartments = () =>
   supabase.from('departments').select('*').order('id')
 
+export const getDepartmentsWithRefs = () =>
+  supabase.from('departments').select('*, manager_ref:employees!manager_id(id,name), parent:departments!parent_department_id(id,name)').order('id')
+
 export const createDepartment = (data) =>
   supabase.from('departments').insert(data).select().single()
+
+export const updateDepartment = (id, data) =>
+  supabase.from('departments').update(data).eq('id', id).select().single()
+
+export const deleteDepartment = (id) =>
+  supabase.from('departments').delete().eq('id', id)
+
+// ── Employee FK-aware queries ─────────────────────────────
+export const getEmployeesWithRefs = () =>
+  supabase.from('employees').select('*, dept_ref:departments!department_id(id,name), store_ref:stores!store_id(id,name), supervisor_ref:employees!supervisor_id(id,name)').order('id')
+
+// ── User Stores (multi-store assignment) ──────────────────
+export const getEmployeeStores = (employeeId) =>
+  supabase.from('user_stores').select('*, store:stores(*)').eq('employee_id', employeeId)
+
+export const setEmployeeStores = async (employeeId, storeIds, primaryStoreId) => {
+  await supabase.from('user_stores').delete().eq('employee_id', employeeId)
+  if (!storeIds?.length) return
+  const rows = storeIds.map(sid => ({
+    employee_id: employeeId,
+    store_id: sid,
+    is_primary: sid === primaryStoreId,
+  }))
+  return supabase.from('user_stores').insert(rows)
+}
+
+// ── Department Manager History ────────────────────────────
+export const getDeptManagerHistory = (deptId) =>
+  supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })
+
+// ── LINE Groups ───────────────────────────────────────────
+export const getLineGroups = () =>
+  supabase.from('line_groups').select('*').order('id')
+
+export const getLineMessages = (filters = {}) => {
+  let q = supabase.from('line_messages').select('*').order('created_at', { ascending: false }).limit(100)
+  if (filters.line_user_id) q = q.eq('line_user_id', filters.line_user_id)
+  if (filters.group_id) q = q.eq('group_id', filters.group_id)
+  return q
+}
+
+// ── Org Subscriptions ─────────────────────────────────────
+export const getOrgSubscription = (orgId) =>
+  supabase.from('org_subscriptions').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+
+export const getOrgPayments = (orgId) =>
+  supabase.from('org_payments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false })
 
 // ── System ─────────────────────────────────────────────────
 export const getTriggers = () =>

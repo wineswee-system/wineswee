@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { getStores, createStore, updateStore, deleteStore, getEmployees } from '../../lib/db'
+import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
-const EMPTY_FORM = { name: '', company: '', address: '', phone: '', manager: '', status: '營運中', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30 }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30 }
 
 export default function Locations() {
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
+  const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -16,9 +17,10 @@ export default function Locations() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    Promise.all([getStores(), getEmployees()]).then(([s, e]) => {
+    Promise.all([getStores(), getEmployees(), getCompanies()]).then(([s, e, c]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])
+      setCompanies(c.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -38,10 +40,15 @@ export default function Locations() {
     setForm({
       name: s.name || '',
       company: s.company || '',
+      company_id: s.company_id || '',
       address: s.address || '',
       phone: s.phone || '',
       manager: s.manager || '',
+      manager_id: s.manager_id || '',
       status: s.status || '營運中',
+      store_code: s.store_code || '',
+      store_type: s.store_type || 'retail',
+      city: s.city || '',
       lat: s.lat || '',
       lng: s.lng || '',
       clock_radius: s.clock_radius || 150,
@@ -66,11 +73,14 @@ export default function Locations() {
     if (!form.name) return
     const payload = {
       name: form.name,
-      company: form.company,
+      company_id: form.company_id ? parseInt(form.company_id) : null,
+      manager_id: form.manager_id ? parseInt(form.manager_id) : null,
       address: form.address,
       phone: form.phone,
-      manager: form.manager,
       status: form.status,
+      store_code: form.store_code || null,
+      store_type: form.store_type || 'retail',
+      city: form.city || null,
       lat: form.lat ? parseFloat(form.lat) : null,
       lng: form.lng ? parseFloat(form.lng) : null,
       clock_radius: parseInt(form.clock_radius) || 150,
@@ -131,17 +141,19 @@ export default function Locations() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>門市名稱</th><th>所屬公司</th><th>地址</th><th>電話</th><th>負責人</th><th>員工數</th><th>打卡範圍</th><th>狀態</th><th>操作</th></tr>
+              <tr><th>代碼</th><th>門市名稱</th><th>類型</th><th>所屬公司</th><th>地址</th><th>電話</th><th>負責人</th><th>員工數</th><th>打卡範圍</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
               {stores.map(s => (
                 <tr key={s.id}>
+                  <td><span style={{ fontFamily: 'monospace', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>{s.store_code || '-'}</span></td>
                   <td style={{ fontWeight: 600 }}>{s.name}</td>
-                  <td>{s.company}</td>
+                  <td><span className={`badge ${s.store_type === 'headquarters' ? 'badge-purple' : 'badge-cyan'}`}>{s.store_type === 'headquarters' ? '總部' : '門市'}</span></td>
+                  <td>{companies.find(c => c.id === s.company_id)?.name || s.company || '-'}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.address}</td>
                   <td>{s.phone}</td>
-                  <td>{s.manager}</td>
-                  <td>{employees.filter(e => e.store === s.name && e.status === '在職').length}</td>
+                  <td>{employees.find(e => e.id === s.manager_id)?.name || s.manager || '-'}</td>
+                  <td>{employees.filter(e => (e.store_id === s.id || e.store === s.name) && e.status === '在職').length}</td>
                   <td style={{ fontSize: 12 }}>
                     {s.lat && s.lng ? (
                       <span className="badge badge-success"><span className="badge-dot"></span>{s.clock_radius || 150}m</span>
@@ -172,12 +184,29 @@ export default function Locations() {
 
       {showModal && (
         <Modal title={editingStore ? `編輯門市 — ${editingStore.name}` : '新增門市'} onClose={() => { setShowModal(false); setEditingStore(null) }} onSubmit={handleSubmit} submitLabel={editingStore ? '儲存變更' : '新增'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="門市名稱 *">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北忠孝店" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
+            <Field label="門市代碼">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="S-001" value={form.store_code} onChange={e => set('store_code', e.target.value)} />
+            </Field>
+            <Field label="類型">
+              <select className="form-input" style={{ width: '100%' }} value={form.store_type} onChange={e => set('store_type', e.target.value)}>
+                <option value="retail">門市</option>
+                <option value="headquarters">總部</option>
+              </select>
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="所屬公司">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="公司名稱" value={form.company} onChange={e => set('company', e.target.value)} />
+              <select className="form-input" style={{ width: '100%' }} value={form.company_id} onChange={e => set('company_id', e.target.value)}>
+                <option value="">請選擇</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="城市">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北市" value={form.city} onChange={e => set('city', e.target.value)} />
             </Field>
           </div>
           <Field label="地址">
@@ -188,7 +217,10 @@ export default function Locations() {
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="02-1234-5678" value={form.phone} onChange={e => set('phone', e.target.value)} />
             </Field>
             <Field label="負責人">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="店長姓名" value={form.manager} onChange={e => set('manager', e.target.value)} />
+              <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
+                <option value="">請選擇</option>
+                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.position ? ` (${emp.position})` : ''}</option>)}
+              </select>
             </Field>
           </div>
           <Field label="狀態">

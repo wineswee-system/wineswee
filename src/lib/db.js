@@ -50,6 +50,25 @@ export async function serverClockIn(payload) {
   return data
 }
 
+/**
+ * Trigger missed clock-out check via Edge Function.
+ * @param {string} [date] - optional date override (YYYY-MM-DD), defaults to yesterday
+ */
+export async function checkMissedClockout(date) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/check-missed-clockout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
+      'apikey': key,
+    },
+    body: JSON.stringify(date ? { date } : {}),
+  })
+  return res.json()
+}
+
 // ── Leave Requests ─────────────────────────────────────────
 export const getLeaveRequests = () =>
   supabase.from('leave_requests').select('*').order('id')

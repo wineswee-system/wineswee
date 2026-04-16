@@ -369,7 +369,23 @@ export default function ExpenseRequests() {
                 <select value={form.account_code} onChange={e => set('account_code', e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇科目</option>
-                  {accounts.filter(a => isExpense ? a.type === '費用' : a.type !== '費用').map(a => <option key={a.id} value={a.code}>{a.code} — {a.name} ({a.type})</option>)}
+                  {Object.entries(
+                    accounts.filter(a => isExpense ? a.type === '費用' : a.type !== '費用')
+                      .reduce((groups, a) => {
+                        const group = a.parent_code ? `${a.type} ─ 子科目` : a.type || '其他'
+                        if (!groups[group]) groups[group] = []
+                        groups[group].push(a)
+                        return groups
+                      }, {})
+                  ).map(([group, items]) => (
+                    <optgroup key={group} label={`── ${group} ──`}>
+                      {items.map(a => (
+                        <option key={a.id} value={a.code}>
+                          {a.parent_code ? '  └ ' : ''}{a.code}  {a.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               <div>

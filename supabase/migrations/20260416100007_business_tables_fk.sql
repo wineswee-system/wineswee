@@ -57,20 +57,14 @@ FROM employees e WHERE pr.approved_by = e.name AND pr.approved_by_id IS NULL;
 
 -- ─── Finance ───
 
-ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS created_by_id INT REFERENCES employees(id);
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'budgets') THEN
-    ALTER TABLE budgets ADD COLUMN IF NOT EXISTS department_id INT REFERENCES departments(id);
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'journal_entries') THEN
+    EXECUTE 'ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS created_by_id INT REFERENCES employees(id)';
+    EXECUTE 'UPDATE journal_entries je SET created_by_id = e.id FROM employees e WHERE je.created_by = e.name AND je.created_by_id IS NULL';
   END IF;
-END $$;
-
-UPDATE journal_entries je SET created_by_id = e.id
-FROM employees e WHERE je.created_by = e.name AND je.created_by_id IS NULL;
-
-DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'budgets') THEN
-    UPDATE budgets b SET department_id = d.id
-    FROM departments d WHERE b.department = d.name AND b.department_id IS NULL;
+    EXECUTE 'ALTER TABLE budgets ADD COLUMN IF NOT EXISTS department_id INT REFERENCES departments(id)';
+    EXECUTE 'UPDATE budgets b SET department_id = d.id FROM departments d WHERE b.department = d.name AND b.department_id IS NULL';
   END IF;
 END $$;
 

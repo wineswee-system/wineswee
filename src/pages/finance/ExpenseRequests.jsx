@@ -125,13 +125,19 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // Approve request
+  // Approve request (update expense_requests + sync workflow if exists)
   const handleApprove = async (req) => {
     const { error } = await supabase.from('expense_requests')
       .update({ status: '已核准', approved_by: '管理員', approved_at: new Date().toISOString() })
       .eq('id', req.id)
-    if (error) setError(error.message)
-    else load()
+    if (error) { setError(error.message); return }
+    // Also complete any linked workflow_instance
+    await supabase.from('workflow_instances')
+      .update({ status: '已完成', completed_at: new Date().toISOString() })
+      .eq('template_name', '費用申請簽核')
+      .eq('started_by', req.employee)
+      .eq('status', '進行中')
+    load()
   }
 
   // Reject request
@@ -141,8 +147,14 @@ export default function ExpenseRequests() {
     const { error } = await supabase.from('expense_requests')
       .update({ status: '已駁回', reject_reason: reason })
       .eq('id', req.id)
-    if (error) setError(error.message)
-    else load()
+    if (error) { setError(error.message); return }
+    // Also reject linked workflow_instance
+    await supabase.from('workflow_instances')
+      .update({ status: '已退回', completed_at: new Date().toISOString() })
+      .eq('template_name', '費用申請簽核')
+      .eq('started_by', req.employee)
+      .eq('status', '進行中')
+    load()
   }
 
   // Open settle modal

@@ -45,7 +45,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
     .from('approval_chains')
     .select('*')
     .eq('category', category)
-    .eq('is_active', true)
+    .not('is_active', 'is', false)
     .lte('min_amount', amount)
     .order('min_amount', { ascending: false }) // 取最精確匹配（金額最高的下限）
     .limit(10)
@@ -242,6 +242,7 @@ const TEMPLATE_TABLE_MAP = {
   '費用報帳簽核': { table: 'expenses', statusField: 'status', approved: '已核銷', rejected: '已拒絕' },
   '出差申請簽核': { table: 'business_trips', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
   '採購簽核': { table: 'purchase_orders', statusField: 'status', approved: '已確認', rejected: '已取消' },
+  '費用申請簽核': { table: 'expense_requests', statusField: 'status', approved: '已核准', rejected: '已駁回' },
 }
 
 async function writeBackStatus(instance, action) {

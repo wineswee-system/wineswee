@@ -1,7 +1,8 @@
-import React from 'react'
-import { FlaskConical } from 'lucide-react'
+import React, { useState } from 'react'
+import { FlaskConical, Sparkles, Loader } from 'lucide-react'
 import { MESSAGE_TEMPLATES } from '../../../lib/messaging'
 import { isUnsubscribed, filterUnsubscribed } from '../../../lib/crmEngine'
+import { generateCampaignCopy, isConfigured as isAIConfigured } from '../../../lib/ai/crmAI'
 import Modal, { Field } from '../../../components/Modal'
 
 const CAMPAIGN_TYPES = ['Email', 'LINE 訊息', 'SMS 簡訊']
@@ -12,6 +13,43 @@ export default function MarketingCampaignModal({
   handleTemplateChange, handleTypeChange, handleSubmit, onClose,
   segmentPreviewCount, getSegmentRecipients, unsubscribeList,
 }) {
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState(null)
+  const [showAiPanel, setShowAiPanel] = useState(false)
+  const [aiGoal, setAiGoal] = useState('')
+  const [aiTone, setAiTone] = useState('專業')
+  const [aiProductInfo, setAiProductInfo] = useState('')
+
+  const handleAiGenerate = async () => {
+    if (!aiGoal.trim()) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const channelMap = { 'Email': 'email', 'LINE 訊息': 'line', 'SMS 簡訊': 'sms' }
+      const channel = channelMap[form.type] || 'email'
+      const segLabel = allSegments.find(s => s.key === form.segment)?.label || '全部客戶'
+      const result = await generateCampaignCopy({
+        channel,
+        goal: aiGoal,
+        audience: segLabel,
+        tone: aiTone,
+        productInfo: aiProductInfo,
+        abVariant: form.abTest,
+      })
+      if (result.subject) set('subject', result.subject)
+      if (result.body) set('message', result.body)
+      if (form.abTest && result.variantB) {
+        if (result.variantB.subject) set('subjectB', result.variantB.subject)
+        if (result.variantB.body) set('messageB', result.variantB.body)
+      }
+      setShowAiPanel(false)
+    } catch (err) {
+      setAiError(err.message || 'AI 產生文案失敗')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <Modal title="新增行銷活動" onClose={onClose} onSubmit={handleSubmit}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -85,6 +123,47 @@ export default function MarketingCampaignModal({
         <Field label="Email 主旨">
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="輸入 Email 主旨..." value={form.subject} onChange={e => set('subject', e.target.value)} />
         </Field>
+      )}
+
+      {/* AI Copy Generator */}
+      {isAIConfigured() && (
+        <div style={{ marginBottom: 4 }}>
+          <button
+            type="button"
+            className="btn"
+            style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff', fontSize: 12, padding: '6px 14px', width: '100%' }}
+            onClick={() => setShowAiPanel(p => !p)}
+          >
+            <Sparkles size={14} /> AI 產生文案
+          </button>
+          {showAiPanel && (
+            <div style={{ marginTop: 8, padding: 14, borderRadius: 10, background: 'var(--glass-light)', border: '1px solid var(--accent-purple)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Field label="行銷目標 *">
+                <input className="form-input" style={{ width: '100%' }} placeholder="例：推廣夏季新品、母親節促銷、會員回購..." value={aiGoal} onChange={e => setAiGoal(e.target.value)} />
+              </Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="語氣風格">
+                  <select className="form-input" style={{ width: '100%' }} value={aiTone} onChange={e => setAiTone(e.target.value)}>
+                    {['專業', '親切', '活潑', '急迫', '溫馨', '幽默'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+                <Field label="產品/服務資訊">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="選填：產品名稱、特色..." value={aiProductInfo} onChange={e => setAiProductInfo(e.target.value)} />
+                </Field>
+              </div>
+              {aiError && <div style={{ fontSize: 12, color: 'var(--accent-red)', padding: '6px 10px', background: 'var(--accent-red-dim)', borderRadius: 6 }}>{aiError}</div>}
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: 12, padding: '8px 16px', alignSelf: 'flex-end' }}
+                onClick={handleAiGenerate}
+                disabled={aiLoading || !aiGoal.trim()}
+              >
+                {aiLoading ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> 產生中...</> : <><Sparkles size={13} /> 產生文案</>}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <Field label="訊息內容 *">

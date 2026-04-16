@@ -101,11 +101,12 @@ export function runProgrammaticSchedule(data) {
   }
 
   // Target hours per employee — 純月制
-  // 月目標：正職 150-175h，兼職 80-175h
+  // 月目標：正職/兼職從門市設定讀取，無設定時用預設值
   // 每週目標 = 月剩餘目標 ÷ 剩餘週數（平均分配）
-  const MONTHLY_FT_MIN = 150
-  const MONTHLY_PT_MIN = 80
-  const MONTHLY_MAX = 175  // 所有人月工時上限
+  const MONTHLY_FT_MIN = storeSettings?.ft_monthly_hours_min ?? 150
+  const MONTHLY_PT_MIN = storeSettings?.pt_monthly_hours_min ?? 80
+  const MONTHLY_FT_MAX = storeSettings?.ft_monthly_hours_max ?? 175
+  const MONTHLY_PT_MAX = storeSettings?.pt_monthly_hours_max ?? 175
   const monthlyCtx = data.monthlyContext || null
 
   const targetHoursMap = {}
@@ -115,7 +116,8 @@ export function runProgrammaticSchedule(data) {
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
-    monthTargetMap[emp.name] = { min: monthMin, max: MONTHLY_MAX, isPT }
+    const monthMax = isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX
+    monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT }
     // 月休天數：從門市設定讀取（正職/兼職分開）
     monthRestTarget[emp.name] = isPT
       ? (storeSettings?.pt_monthly_rest_days ?? 15)
@@ -124,7 +126,7 @@ export function runProgrammaticSchedule(data) {
     const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
     const weeksLeft = Math.max((monthlyCtx?.weeksRemaining || 0) + 1, 1)
     const remainTarget = Math.max(0, monthMin - accumulated)
-    const remainMax = Math.max(0, MONTHLY_MAX - accumulated)
+    const remainMax = Math.max(0, monthMax - accumulated)
     // 週目標 = 剩餘月目標均分到剩餘週，確保月底能達標
     targetHoursMap[emp.name] = Math.round(remainTarget / weeksLeft)
     hoursRange[emp.name] = { min: 0, max: Math.round(remainMax / weeksLeft) + 8 }  // 每週彈性上限

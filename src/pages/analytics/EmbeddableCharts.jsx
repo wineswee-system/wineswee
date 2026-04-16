@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ModalOverlay } from '../../components/Modal'
+import { createPortal } from 'react-dom'
 import { Share2, Copy, ExternalLink, Code, Eye, Plus, Trash2 } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
@@ -122,7 +124,7 @@ export default function EmbeddableCharts() {
   return (
     <div className="fade-in" style={{ padding: 24 }}>
       {/* Toast */}
-      {toast && <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: 'rgba(15,23,55,0.95)', color: '#f1f5f9', padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: '1px solid rgba(34,211,238,0.3)' }}>{toast}</div>}
+      {toast && <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 10000, background: 'rgba(15,23,55,0.95)', color: '#f1f5f9', padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: '1px solid rgba(34,211,238,0.3)' }}>{toast}</div>}
 
       {/* Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -173,7 +175,7 @@ export default function EmbeddableCharts() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowCreateModal(false)}>
+        <ModalOverlay onClose={() => setShowCreateModal(false)}>
           <div className="card" style={{ width: 480, maxHeight: '85vh', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px' }}>建立分享圖表</h3>
 
@@ -217,12 +219,12 @@ export default function EmbeddableCharts() {
               <button className="btn btn-primary" onClick={handleCreate}>建立</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Preview Modal */}
       {showPreview && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPreview(null)}>
+        <ModalOverlay onClose={() => setShowPreview(null)}>
           <div className="card" style={{ width: 680, padding: 24 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{showPreview.title}</h3>
@@ -238,7 +240,7 @@ export default function EmbeddableCharts() {
               <button className="btn" onClick={() => setShowPreview(null)}>關閉</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

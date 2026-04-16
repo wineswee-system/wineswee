@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, DollarSign, Calculator } from 'lucide-react'
 import { getCommissionRules, createCommissionRule, updateCommissionRule, deleteCommissionRule, getCommissionRecords, createCommissionRecord, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -172,7 +174,7 @@ export default function Commission() {
       )}
 
       {showRuleModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowRuleModal(false)}>
+        <ModalOverlay onClose={() => setShowRuleModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 380, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px' }}>{editingId ? '編輯規則' : '新增佣金規則'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -185,7 +187,7 @@ export default function Commission() {
               <button className="btn btn-primary" onClick={handleRuleSubmit}>{editingId ? '更新' : '新增'}</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

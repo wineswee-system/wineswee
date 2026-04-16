@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createPOSTransaction, createInvoice } from '../../lib/db'
+import { getEventBus } from '../../lib/events/index.js'
 import { createPaymentRequest, processRefund } from '../../lib/payment'
 import { processPayment, confirmPayment, refundPayment, getPaymentMethods } from '../../lib/paymentGateway'
 import { calculateInvoiceTax, generateInvoiceNumber } from '../../lib/einvoice'
@@ -302,6 +303,20 @@ export default function POSTerminal() {
       if (result.success) {
         setRefundResult(result)
         setShowRefund(true)
+
+        // Publish refund event so loyalty points get reversed
+        try {
+          const bus = getEventBus()
+          await bus.publish('pos.transaction.refunded', {
+            refund_id: result.refundId || `QREF-${Date.now()}`,
+            original_transaction_id: paymentResult.gatewayTransactionId,
+            store: '門市',
+            refund_amount: receiptData.total,
+            reason: '櫃台退款',
+          })
+        } catch (evtErr) {
+          console.error('Failed to publish refund event:', evtErr)
+        }
       }
     } catch (err) {
       console.error('Refund failed:', err)
@@ -344,12 +359,29 @@ export default function POSTerminal() {
     setRefundItems(prev => prev.map((item, i) => i === idx ? { ...item, selected: !item.selected } : item))
   }
 
-  const processRefundSubmit = () => {
+  const processRefundSubmit = async () => {
     const selectedItems = refundItems.filter(i => i.selected)
     if (selectedItems.length === 0) return
     const refundTotal = selectedItems.reduce((sum, i) => sum + i.price * i.qty, 0)
     const result = processRefund(refundTxnId, refundTotal, '顧客退貨')
     setRefundResult(result)
+
+    // Publish refund event so loyalty points get reversed
+    if (result.success) {
+      try {
+        const bus = getEventBus()
+        await bus.publish('pos.transaction.refunded', {
+          refund_id: result.refundId,
+          original_transaction_id: refundTxnId,
+          store: '門市',
+          refund_amount: refundTotal,
+          reason: result.reason || '顧客退貨',
+          items: selectedItems,
+        })
+      } catch (err) {
+        console.error('Failed to publish refund event:', err)
+      }
+    }
   }
 
   const closeRefundModal = () => {

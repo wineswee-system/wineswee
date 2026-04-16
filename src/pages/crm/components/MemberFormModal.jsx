@@ -34,6 +34,19 @@ export default function MemberFormModal({ form, set, onClose, onSubmit }) {
           <input className="form-input" type="number" style={{ width: '100%' }} value={form.total_spent} onChange={e => set('total_spent', Number(e.target.value))} />
         </Field>
       </div>
+      <Field label="推薦碼（選填）">
+        <input
+          className="form-input"
+          type="text"
+          style={{ width: '100%' }}
+          placeholder="REF-XXXXXX"
+          value={form.referral_code || ''}
+          onChange={e => set('referral_code', e.target.value.toUpperCase())}
+        />
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          輸入推薦碼，新會員與推薦人皆可獲得獎勵點數
+        </div>
+      </Field>
     </Modal>
   )
 }

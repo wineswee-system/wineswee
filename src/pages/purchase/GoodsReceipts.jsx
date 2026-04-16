@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
+import { createPortal } from 'react-dom'
 import { Plus, Search, CheckCircle, XCircle, AlertTriangle, ArrowRightLeft } from 'lucide-react'
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders, getAccountsPayable } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -279,7 +281,7 @@ export default function GoodsReceipts() {
       {/* Auto-match alert after GR save */}
       {autoMatchAlert && (
         <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
+          position: 'fixed', bottom: 24, right: 24, zIndex: 10000,
           maxWidth: 420, padding: 16, borderRadius: 12,
           background: autoMatchAlert.status === 'mismatch' ? 'var(--accent-red-dim)' : 'var(--accent-orange-dim)',
           border: `1px solid ${autoMatchAlert.status === 'mismatch' ? 'var(--accent-red)' : 'var(--accent-orange)'}40`,

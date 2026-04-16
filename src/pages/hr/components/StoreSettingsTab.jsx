@@ -85,7 +85,8 @@ export default function StoreSettingsTab({
 
   const handleShiftSubmit = async () => {
     if (!shiftForm.name) return
-    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: Number(shiftForm.break_minutes) || 60, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
+    const bm = Number(shiftForm.break_minutes)
+    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: isNaN(bm) ? 60 : bm, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
@@ -573,6 +574,56 @@ export default function StoreSettingsTab({
           </div>
         </div>
         <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text-muted)' }}>排班演算法會依此設定控制每月休假天數</div>
+      </div>
+
+      {/* Monthly Work Hours */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title"><span className="card-title-icon">⏱️</span> 每月上班時數上下限</div>
+        </div>
+        <div style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>正職</div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最低 (h/月)</label>
+              <input className="form-input" type="number" min="100" max="200" value={storeSettings?.ft_monthly_hours_min ?? 150} onChange={async e => {
+                if (!selectedStore) return
+                const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, ft_monthly_hours_min: Number(e.target.value) || 150 }, { onConflict: 'store_id' }).select().single()
+                if (data) setStoreSettings(data)
+              }} style={{ width: 80 }} />
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontSize: 14, paddingTop: 18 }}>~</span>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最高 (h/月)</label>
+              <input className="form-input" type="number" min="100" max="220" value={storeSettings?.ft_monthly_hours_max ?? 175} onChange={async e => {
+                if (!selectedStore) return
+                const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, ft_monthly_hours_max: Number(e.target.value) || 175 }, { onConflict: 'store_id' }).select().single()
+                if (data) setStoreSettings(data)
+              }} style={{ width: 80 }} />
+            </div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>兼職</div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最低 (h/月)</label>
+              <input className="form-input" type="number" min="20" max="175" value={storeSettings?.pt_monthly_hours_min ?? 80} onChange={async e => {
+                if (!selectedStore) return
+                const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, pt_monthly_hours_min: Number(e.target.value) || 80 }, { onConflict: 'store_id' }).select().single()
+                if (data) setStoreSettings(data)
+              }} style={{ width: 80 }} />
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontSize: 14, paddingTop: 18 }}>~</span>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最高 (h/月)</label>
+              <input className="form-input" type="number" min="40" max="220" value={storeSettings?.pt_monthly_hours_max ?? 175} onChange={async e => {
+                if (!selectedStore) return
+                const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, pt_monthly_hours_max: Number(e.target.value) || 175 }, { onConflict: 'store_id' }).select().single()
+                if (data) setStoreSettings(data)
+              }} style={{ width: 80 }} />
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text-muted)' }}>排班演算法會依此設定控制每月排班時數（正職預設 150-175h、兼職 80-175h）</div>
       </div>
 
       {/* Labor Cost Budget */}

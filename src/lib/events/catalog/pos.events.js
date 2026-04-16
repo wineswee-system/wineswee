@@ -14,6 +14,23 @@ export const POS_EVENTS = {
       items: { type: 'array', required: false },
     },
   },
+  'pos.transaction.refunded': {
+    domain: 'pos',
+    action: 'transaction.refunded',
+    version: 1,
+    description: 'POS 交易退款',
+    payload: {
+      refund_id: { type: 'string', required: true },
+      original_transaction_id: { type: 'string', required: true },
+      store: { type: 'string', required: true },
+      cashier: { type: 'string', required: false },
+      customer_id: { type: 'number', required: false },
+      refund_amount: { type: 'number', required: true },
+      original_total: { type: 'number', required: false },
+      reason: { type: 'string', required: false },
+      items: { type: 'array', required: false },
+    },
+  },
   'pos.shift.opened': {
     domain: 'pos',
     action: 'shift.opened',

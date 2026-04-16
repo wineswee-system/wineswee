@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from './Modal'
+import { createPortal } from 'react-dom'
 import { X, Save, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
@@ -226,7 +228,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', justifyContent: 'flex-end' }}
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       {/* Backdrop */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}

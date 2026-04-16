@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
+import { ModalOverlay } from './Modal'
+import { createPortal } from 'react-dom'
 import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check } from 'lucide-react'
 import {
-  updateWorkflowStep, deleteWorkflowStep,
-  getStepComments, createStepComment,
-  getStepAttachments, createStepAttachment, deleteStepAttachment,
-  getStepChecklists, linkStepChecklist, unlinkStepChecklist,
-  getStepDependencies, createStepDependency, deleteStepDependency,
+  updateTask, deleteTask,
+  getTaskComments, createTaskComment,
+  getTaskAttachments, createTaskAttachment, deleteTaskAttachment,
+  getTaskChecklists, linkTaskChecklist, unlinkTaskChecklist,
+  getTaskDependencies, createTaskDependency, deleteTaskDependency,
   getChecklistItems, updateChecklistItem,
   getApprovalChains,
-  getApprovalFormByStep, createApprovalForm, updateApprovalForm,
+  getApprovalFormByTask, createApprovalForm, updateApprovalForm,
   getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
@@ -18,7 +20,7 @@ const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
 export default function TaskDetailPanel({
-  step, instance, allSteps, employees, stores, checklists,
+  step: task, instance, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onClose,
 }) {
   const [form, setForm] = useState({})
@@ -40,31 +42,31 @@ export default function TaskDetailPanel({
   const commentsEndRef = useRef(null)
 
   useEffect(() => {
-    if (!step) return
+    if (!task) return
     setForm({
-      status: step.status || '待處理',
-      priority: step.priority || '中',
-      assignee: step.assignee || '',
-      store: step.store || '',
-      category: step.category || 'Workflow',
-      planned_start: step.planned_start || '',
-      due_date: step.due_date || '',
-      due_time: step.due_time || '',
-      reminder_at: step.reminder_at || '',
-      approval_chain_id: step.approval_chain_id || '',
-      notes: step.notes || '',
+      status: task.status || '待處理',
+      priority: task.priority || '中',
+      assignee: task.assignee || '',
+      store: task.store || '',
+      category: task.category || 'Workflow',
+      planned_start: task.planned_start || '',
+      due_date: task.due_date || '',
+      due_time: task.due_time || '',
+      reminder_at: task.reminder_at || '',
+      approval_chain_id: task.approval_chain_id || '',
+      notes: task.notes || '',
     })
-    setTitleDraft(step.title)
-    setShowTime(!!step.due_time)
+    setTitleDraft(task.title)
+    setShowTime(!!task.due_time)
     setEditingTitle(false)
 
     Promise.all([
-      getStepComments(step.id),
-      getStepAttachments(step.id),
-      getStepChecklists(step.id),
-      getStepDependencies(step.id),
+      getTaskComments(task.id),
+      getTaskAttachments(task.id),
+      getTaskChecklists(task.id),
+      getTaskDependencies(task.id),
       getApprovalChains(),
-      getApprovalFormByStep(step.id),
+      getApprovalFormByTask(task.id),
     ]).then(([c, a, cl, d, ac, af]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
@@ -92,7 +94,7 @@ export default function TaskDetailPanel({
         setChecklistItemsMap({})
       }
     })
-  }, [step?.id])
+  }, [task?.id])
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function TaskDetailPanel({
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [comments.length])
 
-  if (!step) return null
+  if (!task) return null
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -132,17 +134,17 @@ export default function TaskDetailPanel({
       due_time: form.due_time || null,
       reminder_at: form.reminder_at || null,
       approval_chain_id: form.approval_chain_id ? Number(form.approval_chain_id) : null,
-      completed_at: form.status === '已完成' ? (step.completed_at || new Date().toISOString()) : null,
+      completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
     }
-    const { data } = await updateWorkflowStep(step.id, payload)
+    const { data } = await updateTask(task.id, payload)
     if (data) { onUpdate(data); setIsDirty(false) }
     setSaving(false)
   }
 
   const handleDelete = async () => {
     if (!confirm('確定刪除此任務？')) return
-    await deleteWorkflowStep(step.id)
-    onDelete(step.id)
+    await deleteTask(task.id)
+    onDelete(task.id)
   }
 
   // ── Approval (簽核) ──
@@ -151,10 +153,10 @@ export default function TaskDetailPanel({
     const chain = approvalChains.find(c => c.id === Number(chainId))
     if (!chain) return
     const { data: form } = await createApprovalForm({
-      title: `${step.title} — 簽核`,
-      applicant: step.assignee || '系統',
+      title: `${task.title} — 簽核`,
+      applicant: task.assignee || '系統',
       chain_id: chain.id,
-      ref_step_id: step.id,
+      ref_task_id: task.id,
       status: '簽核中',
       current_step: 0,
     })
@@ -175,14 +177,14 @@ export default function TaskDetailPanel({
       const { data: roleEmp } = await supabase.from('employees')
         .select('name').eq('position', firstRole).limit(1).maybeSingle()
       if (roleEmp?.name) {
-        notifyApproval(roleEmp.name, step.title, `第 1 關：${firstRole}`)
+        notifyApproval(roleEmp.name, task.title, `第 1 關：${firstRole}`)
       }
     }
   }
 
   const handleApprovalAction = async (formStepId, action, comment) => {
     const newStatus = action === 'approve' ? '已核准' : '已退回'
-    const currentUser = step.assignee || instance?.assignee || '系統'
+    const currentUser = task.assignee || instance?.assignee || '系統'
     const { data } = await updateApprovalFormStep(formStepId, {
       status: newStatus,
       approver: currentUser,
@@ -217,7 +219,7 @@ export default function TaskDetailPanel({
   // Comments
   const handleSendComment = async () => {
     if (!commentText.trim()) return
-    const { data } = await createStepComment({ step_id: step.id, author: '使用者', content: commentText.trim() })
+    const { data } = await createTaskComment({ task_id: task.id, author: '使用者', content: commentText.trim() })
     if (data) setComments(prev => [...prev, data])
     setCommentText('')
   }
@@ -237,7 +239,7 @@ export default function TaskDetailPanel({
   // Checklists link
   const handleLinkChecklist = async (checklistId) => {
     if (!checklistId) return
-    const { data } = await linkStepChecklist(step.id, Number(checklistId))
+    const { data } = await linkTaskChecklist(task.id, Number(checklistId))
     if (data) {
       const cl = checklists.find(c => c.id === Number(checklistId))
       setLinkedChecklists(prev => [...prev, { ...data, checklists: cl }])
@@ -245,23 +247,23 @@ export default function TaskDetailPanel({
   }
 
   const handleUnlinkChecklist = async (linkId) => {
-    await unlinkStepChecklist(linkId)
+    await unlinkTaskChecklist(linkId)
     setLinkedChecklists(prev => prev.filter(l => l.id !== linkId))
   }
 
   // Dependencies
-  const otherSteps = allSteps.filter(s => s.id !== step.id)
-  const prerequisites = dependencies.filter(d => d.step_id === step.id && d.dep_type === 'prerequisite')
-  const triggers = dependencies.filter(d => d.step_id === step.id && d.dep_type === 'trigger')
+  const otherSteps = allSteps.filter(s => s.id !== task.id)
+  const prerequisites = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'prerequisite')
+  const triggers = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
 
-  const handleAddDep = async (depStepId, type) => {
-    if (!depStepId) return
-    const { data } = await createStepDependency({ step_id: step.id, depends_on_step_id: Number(depStepId), dep_type: type })
+  const handleAddDep = async (depTaskId, type) => {
+    if (!depTaskId) return
+    const { data } = await createTaskDependency({ task_id: task.id, depends_on_task_id: Number(depTaskId), dep_type: type })
     if (data) setDependencies(prev => [...prev, data])
   }
 
   const handleRemoveDep = async (depId) => {
-    await deleteStepDependency(depId)
+    await deleteTaskDependency(depId)
     setDependencies(prev => prev.filter(d => d.id !== depId))
   }
 
@@ -291,7 +293,7 @@ export default function TaskDetailPanel({
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 1000,
+      zIndex: 10000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(0,0,0,0.4)',
       width: '100vw', height: '100vh',
@@ -569,8 +571,8 @@ export default function TaskDetailPanel({
 
           {/* ID & Created */}
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-            ID: {step.id} &nbsp;&nbsp; 建立: {step.created_at?.slice(0, 10)}
-            {step.confirmed && <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>✅ {step.confirmed_at?.slice(0, 10)}</span>}
+            ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}
+            {task.confirmation_status === 'approved' && <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>✅ {task.confirmation_responded_at?.slice(0, 10)}</span>}
           </div>
 
           {/* ═══ Section: Prerequisites ═══ */}
@@ -582,7 +584,7 @@ export default function TaskDetailPanel({
                 background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
                 border: '1px solid var(--border-subtle)', fontSize: 13,
               }}>
-                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_task_id)}</span>
                 <button onClick={() => handleRemoveDep(d.id)} style={{
                   background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
                 }}><X size={14} /></button>
@@ -591,7 +593,7 @@ export default function TaskDetailPanel({
             <select className="form-input" style={{ width: '100%', fontSize: 12 }}
               value="" onChange={e => handleAddDep(e.target.value, 'prerequisite')}>
               <option value="">＋ 新增前置條件...</option>
-              {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_step_id === s.id))
+              {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_task_id === s.id))
                 .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
             </select>
           </div>
@@ -605,7 +607,7 @@ export default function TaskDetailPanel({
                 background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
                 border: '1px solid var(--border-subtle)', fontSize: 13,
               }}>
-                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_step_id)}</span>
+                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_task_id)}</span>
                 <button onClick={() => handleRemoveDep(d.id)} style={{
                   background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
                 }}><X size={14} /></button>
@@ -614,7 +616,7 @@ export default function TaskDetailPanel({
             <select className="form-input" style={{ width: '100%', fontSize: 12 }}
               value="" onChange={e => handleAddDep(e.target.value, 'trigger')}>
               <option value="">＋ 新增觸發任務...</option>
-              {otherSteps.filter(s => !triggers.some(t => t.depends_on_step_id === s.id))
+              {otherSteps.filter(s => !triggers.some(t => t.depends_on_task_id === s.id))
                 .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
             </select>
           </div>
@@ -628,7 +630,7 @@ export default function TaskDetailPanel({
                   const url = prompt('輸入檔案 URL:')
                   const name = prompt('檔案名稱:')
                   if (url && name) {
-                    createStepAttachment({ step_id: step.id, file_name: name, file_url: url, uploaded_by: '使用者' })
+                    createTaskAttachment({ task_id: task.id, file_name: name, file_url: url, uploaded_by: '使用者' })
                       .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
                   }
                 }}>
@@ -647,7 +649,7 @@ export default function TaskDetailPanel({
                   📄 {a.file_name}
                 </a>
                 <button onClick={async () => {
-                  await deleteStepAttachment(a.id)
+                  await deleteTaskAttachment(a.id)
                   setAttachments(prev => prev.filter(x => x.id !== a.id))
                 }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                   <X size={13} />

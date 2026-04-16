@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ModalOverlay } from './Modal'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Building2, MapPin, Users, CheckCircle, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 
@@ -50,7 +52,7 @@ export default function OnboardingWizard({ onComplete }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
+      position: 'fixed', inset: 0, zIndex: 10000,
       background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20,

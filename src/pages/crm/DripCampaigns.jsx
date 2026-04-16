@@ -428,6 +428,7 @@ export default function DripCampaigns() {
           setSF={setSF}
           onClose={() => setShowStepEditor(false)}
           onSave={saveStep}
+          campaignName={form.name}
         />
       )}
 

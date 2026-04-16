@@ -219,6 +219,7 @@ const groupNav = {
       icon: Building2,
       children: [
         { icon: Eye, label: '總覽', path: '/org/overview' },
+        { icon: Building2, label: '組織', path: '/org/organizations' },
         { icon: Network, label: '組織圖', path: '/org/chart' },
         { icon: Building, label: '公司', path: '/org/companies' },
         { icon: MapPin, label: '門市', path: '/org/locations' },
@@ -294,6 +295,7 @@ const groupNav = {
         { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
+        { icon: Shield, label: '簽核設定', path: '/process/approval-chains' },
       ]
     },
   ],

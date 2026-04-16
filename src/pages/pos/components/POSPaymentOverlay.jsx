@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { ModalOverlay } from '../../../components/Modal'
 import { Loader2, CheckCircle, XCircle, Receipt, Printer, RotateCcw } from 'lucide-react'
 
 export default function POSPaymentOverlay({
@@ -19,7 +21,7 @@ export default function POSPaymentOverlay({
 }) {
   if (paymentStage === 'paying') {
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 48, textAlign: 'center', minWidth: 320, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
           <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-cyan)', marginBottom: 16 }} />
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>付款處理中</div>
@@ -32,7 +34,7 @@ export default function POSPaymentOverlay({
 
   if (paymentStage === 'success') {
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 40, textAlign: 'center', minWidth: 380, maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
           <CheckCircle size={56} style={{ color: 'var(--accent-green)', marginBottom: 12 }} />
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--accent-green)' }}>
@@ -169,7 +171,7 @@ export default function POSPaymentOverlay({
 
   if (paymentStage === 'failed') {
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 40, textAlign: 'center', minWidth: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
           <XCircle size={56} style={{ color: 'var(--accent-red)', marginBottom: 12 }} />
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--accent-red)' }}>付款失敗</div>

@@ -1,10 +1,12 @@
+import { createPortal } from 'react-dom'
+import { ModalOverlay } from '../../../components/Modal'
 import { X } from 'lucide-react'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function DripCampaignAnalytics({ campaign, metrics, onClose }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg-modal-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+    <ModalOverlay onClose={onClose}>
       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 16, width: '100%', maxWidth: 800, maxHeight: '90vh', overflow: 'auto', boxShadow: 'var(--shadow-xl)', animation: 'fadeIn 0.15s ease', padding: 24 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
@@ -113,6 +115,6 @@ export default function DripCampaignAnalytics({ campaign, metrics, onClose }) {
           <button className="btn btn-secondary" onClick={onClose}>關閉</button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

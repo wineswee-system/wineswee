@@ -218,6 +218,21 @@ export function calculateLeadScore(customer) {
   return { score: Math.max(0, Math.min(100, score)), breakdown }
 }
 
+/**
+ * Enhanced lead scoring with AI — wraps aiLeadScore with fallback
+ * Call from UI when you want AI-enhanced scores; falls back to rule-based.
+ */
+export async function calculateLeadScoreAI(customer, context = {}) {
+  try {
+    const { aiLeadScore } = await import('./ai/crmAI')
+    return await aiLeadScore(customer, context)
+  } catch {
+    // Fallback to rule-based scoring
+    const { score, breakdown } = calculateLeadScore(customer)
+    return { score, breakdown: breakdown.map(b => ({ ...b, maxPoints: 30 })), explanation: '（規則式評分，AI 不可用）', nextAction: '' }
+  }
+}
+
 // ============================================================
 // 5. SLA Engine
 // ============================================================
@@ -295,6 +310,38 @@ const STAGE_ORDER = ['初步接觸', '需求分析', '報價', '議價', '贏單
 /**
  * Calculate funnel conversion rates
  */
+/**
+ * Forecast revenue from pipeline opportunities by month.
+ * Uses weighted pipeline: stage probability × deal amount.
+ * @param {Array} opportunities - list of opportunity records
+ * @param {number} months - how many months ahead to forecast (default 6)
+ * @returns {Array<{month, label, weighted, bestCase, dealCount}>}
+ */
+export function forecastRevenue(opportunities, months = 6) {
+  const now = new Date()
+  const result = []
+
+  for (let i = 0; i < months; i++) {
+    const m = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const monthKey = m.toISOString().slice(0, 7) // YYYY-MM
+    const label = m.toLocaleDateString('zh-TW', { year: 'numeric', month: 'short' })
+
+    // Deals expected to close this month
+    const monthDeals = opportunities.filter(o => {
+      if (!o.expected_close) return false
+      if (o.stage === '贏單' || o.stage === '輸單') return false
+      return o.expected_close.slice(0, 7) === monthKey
+    })
+
+    const weighted = Math.round(monthDeals.reduce((s, o) => s + (o.amount || 0) * ((o.probability || 0) / 100), 0))
+    const bestCase = Math.round(monthDeals.reduce((s, o) => s + (o.amount || 0), 0))
+
+    result.push({ month: monthKey, label, weighted, bestCase, dealCount: monthDeals.length })
+  }
+
+  return result
+}
+
 export function calculateFunnelConversion(opportunities) {
   const stages = STAGE_ORDER.filter(s => s !== '輸單')
   const result = []
@@ -444,6 +491,36 @@ export function earnPoints(member, amount, description = '消費累點') {
     newTotalPoints: newTotal,
     newAvailablePoints: newAvailable,
     newTotalSpent: newSpent,
+    tierChanged: newTier.level !== member.level,
+    newTier: newTier.level,
+  }
+}
+
+/**
+ * Process a refund — reverse points earned from the original purchase.
+ * Deducts points from total and available (floored at 0), recalculates tier.
+ */
+export function refundPoints(member, refundAmount, originalTotal, reason = '退款扣回') {
+  // Reverse the points that would have been earned on the refunded amount
+  const pointsToReverse = calculatePointsEarned(refundAmount, member.level)
+  const newTotalPoints = Math.max(0, (member.total_points || 0) - pointsToReverse)
+  const newAvailablePoints = Math.max(0, (member.available_points || 0) - pointsToReverse)
+  const newTotalSpent = Math.max(0, (member.total_spent || 0) - refundAmount)
+  const newTier = calculateTier(newTotalSpent, newTotalPoints)
+
+  return {
+    transaction: {
+      id: `PT-${Date.now()}`,
+      member_id: member.id,
+      type: 'refund',
+      points: -pointsToReverse,
+      description: `${reason} (退款 $${refundAmount.toLocaleString()}，扣回 ${pointsToReverse} 點)`,
+      created_at: new Date().toISOString(),
+    },
+    pointsReversed: pointsToReverse,
+    newTotalPoints,
+    newAvailablePoints,
+    newTotalSpent,
     tierChanged: newTier.level !== member.level,
     newTier: newTier.level,
   }
@@ -899,4 +976,96 @@ export function hasPermission(roleId, module, action) {
   const role = CRM_ROLES.find(r => r.id === roleId)
   if (!role) return false
   return role.permissions[module]?.includes(action) || false
+}
+
+// ============================================================
+// 16. Customer Health Score
+// ============================================================
+
+/**
+ * Calculate health score for an existing customer (0-100).
+ * Higher = healthier relationship, lower = churn risk.
+ *
+ * Factors:
+ * - Recency: days since last purchase (max 30 pts)
+ * - Frequency: purchase count in last 6 months (max 25 pts)
+ * - Monetary: total spent relative to avg (max 20 pts)
+ * - Engagement: contact/activity count (max 15 pts)
+ * - Support: open ticket penalty (max -10 pts)
+ */
+export function calculateHealthScore(customer, { orders = [], activities = [], tickets = [], avgSpent = 50000 } = {}) {
+  let score = 0
+  const breakdown = []
+
+  // 1. Recency (max 30)
+  const lastPurchase = customer.last_purchase || customer.last_order_date
+  if (lastPurchase) {
+    const daysSince = Math.floor((Date.now() - new Date(lastPurchase).getTime()) / (1000 * 60 * 60 * 24))
+    let recencyPts = 0
+    if (daysSince <= 30) recencyPts = 30
+    else if (daysSince <= 60) recencyPts = 25
+    else if (daysSince <= 90) recencyPts = 20
+    else if (daysSince <= 180) recencyPts = 10
+    else recencyPts = 0
+    score += recencyPts
+    breakdown.push({ factor: '購買新近度', points: recencyPts, detail: `${daysSince} 天前` })
+  } else {
+    breakdown.push({ factor: '購買新近度', points: 0, detail: '無購買紀錄' })
+  }
+
+  // 2. Frequency (max 25)
+  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+  const recentOrders = orders.filter(o => new Date(o.created_at) >= sixMonthsAgo)
+  const freqPts = Math.min(25, recentOrders.length * 5)
+  score += freqPts
+  breakdown.push({ factor: '購買頻率', points: freqPts, detail: `近半年 ${recentOrders.length} 筆` })
+
+  // 3. Monetary (max 20)
+  const totalSpent = customer.total_spent || orders.reduce((s, o) => s + (o.total_amount || 0), 0)
+  const monetaryRatio = avgSpent > 0 ? totalSpent / avgSpent : 0
+  const monetaryPts = Math.min(20, Math.round(monetaryRatio * 10))
+  score += monetaryPts
+  breakdown.push({ factor: '消費金額', points: monetaryPts, detail: `NT$ ${totalSpent.toLocaleString()}` })
+
+  // 4. Engagement (max 15)
+  const recentActivities = activities.filter(a => new Date(a.created_at) >= sixMonthsAgo)
+  const engagePts = Math.min(15, recentActivities.length * 3)
+  score += engagePts
+  breakdown.push({ factor: '互動程度', points: engagePts, detail: `近半年 ${recentActivities.length} 次互動` })
+
+  // 5. Support penalty (max -10)
+  const openTickets = tickets.filter(t => !['已解決', '已關閉'].includes(t.status))
+  const supportPenalty = Math.min(10, openTickets.length * 5)
+  score -= supportPenalty
+  if (supportPenalty > 0) {
+    breakdown.push({ factor: '未解工單', points: -supportPenalty, detail: `${openTickets.length} 張未結` })
+  }
+
+  score = Math.max(0, Math.min(100, score))
+
+  // Risk level
+  let risk = '低風險'
+  let riskColor = 'var(--accent-green)'
+  if (score < 30) { risk = '高風險'; riskColor = 'var(--accent-red)' }
+  else if (score < 60) { risk = '中風險'; riskColor = 'var(--accent-orange)' }
+
+  return { score, breakdown, risk, riskColor }
+}
+
+/**
+ * Batch calculate health scores and identify at-risk customers
+ */
+export function identifyAtRiskCustomers(customers, context = {}) {
+  return customers
+    .map(c => ({
+      ...c,
+      health: calculateHealthScore(c, {
+        orders: (context.orders || []).filter(o => o.customer_id === c.id || o.customer_name === c.name),
+        activities: (context.activities || []).filter(a => a.entity_id === c.id),
+        tickets: (context.tickets || []).filter(t => t.customer_name === c.name),
+        avgSpent: context.avgSpent || 50000,
+      }),
+    }))
+    .filter(c => c.health.score < 60)
+    .sort((a, b) => a.health.score - b.health.score)
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check } from 'lucide-react'
@@ -192,11 +193,11 @@ export default function NotificationCenter() {
         <>
           <div
             onClick={() => setOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.3)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.3)' }}
           />
           <div style={{
             position: 'fixed', top: 8, left: 268, width: 380,
-            maxHeight: 'calc(100vh - 16px)', zIndex: 999,
+            maxHeight: 'calc(100vh - 16px)', zIndex: 10000,
             background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
             borderRadius: 'var(--radius-lg)', backdropFilter: 'blur(20px)',
             boxShadow: 'var(--shadow-xl)', display: 'flex', flexDirection: 'column',

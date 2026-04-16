@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronRight, Send, Loader } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import {
-  updateWorkflowStep,
+  updateTask,
   getChecklistItems, updateChecklistItem, updateChecklist,
-  createStepComment,
+  createTaskComment,
+  getTaskChecklists,
 } from '../../lib/db'
 
 const STATUS_COLORS = {
@@ -59,8 +61,8 @@ export default function LiffTask() {
   }
 
   async function loadTasks(assigneeName) {
-    const { data } = await supabase.from('workflow_steps')
-      .select('*, workflow_instances(template_name, store)')
+    const { data } = await supabase.from('tasks')
+      .select('*')
       .eq('assignee', assigneeName)
       .in('status', ['待處理', '進行中'])
       .order('due_date', { ascending: true, nullsFirst: false })
@@ -73,8 +75,7 @@ export default function LiffTask() {
     setExpandedId(task.id)
     setCommentText('')
     // Load linked checklists and their items
-    const { data: links } = await supabase.from('workflow_step_checklists')
-      .select('*, checklists(*)').eq('step_id', task.id)
+    const { data: links } = await getTaskChecklists(task.id)
     setLinkedChecklists(links || [])
     if (links && links.length > 0) {
       const allItems = []
@@ -90,7 +91,7 @@ export default function LiffTask() {
 
   // ── Actions ──
   async function handleComplete(task) {
-    const { data } = await updateWorkflowStep(task.id, {
+    const { data } = await updateTask(task.id, {
       status: '已完成', completed_at: new Date().toISOString(),
     })
     if (data) setTasks(prev => prev.filter(t => t.id !== task.id))
@@ -110,10 +111,11 @@ export default function LiffTask() {
   async function handleSendComment(taskId) {
     if (!commentText.trim() || sending) return
     setSending(true)
-    await createStepComment({
-      step_id: taskId,
+    await createTaskComment({
+      task_id: taskId,
       author: employee?.name || '使用者',
       content: commentText.trim(),
+      source: 'line',
     })
     setCommentText('')
     setSending(false)
@@ -154,7 +156,6 @@ export default function LiffTask() {
       ) : tasks.map(task => {
         const isOpen = expandedId === task.id
         const sc = STATUS_COLORS[task.status] || '#94a3b8'
-        const inst = task.workflow_instances
         return (
           <div key={task.id} style={styles.card}>
             {/* Task header */}
@@ -165,7 +166,7 @@ export default function LiffTask() {
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{task.title}</span>
                 </div>
                 <div style={{ fontSize: 12, color: '#94a3b8', paddingLeft: 24 }}>
-                  {inst?.store || inst?.template_name || ''}
+                  {task.store || task.workflow || ''}
                   {task.due_date && <span> · 截止 {task.due_date}</span>}
                 </div>
               </div>

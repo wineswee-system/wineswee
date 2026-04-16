@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { ModalOverlay } from '../components/Modal'
+import { createPortal } from 'react-dom'
 import { Download, Printer, ArrowLeftRight, Filter, X } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
@@ -380,7 +382,7 @@ export default function Analytics() {
 
       {/* Drill-down Modal */}
       {drillDown && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setDrillDown(null)}>
+        <ModalOverlay onClose={() => setDrillDown(null)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, maxWidth: 800, width: '90%', maxHeight: '80vh', overflow: 'auto', boxShadow: 'var(--shadow-xl)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 16 }}>{drillDown.title}</h3>
@@ -406,7 +408,7 @@ export default function Analytics() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

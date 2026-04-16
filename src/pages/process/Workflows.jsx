@@ -7,7 +7,7 @@ import {
 import {
   getWorkflows, createWorkflow, updateWorkflow,
   getWorkflowInstances, updateWorkflowInstance,
-  getWorkflowSteps, createWorkflowStep, updateWorkflowStep
+  getTasks, getTasksByInstance, createTask, createTasksBatch, updateTask,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -31,7 +31,7 @@ export default function Workflows() {
   const [tab, setTab] = useState('active')
   const [workflows, setWorkflows] = useState([])
   const [instances, setInstances] = useState([])
-  const [steps, setSteps] = useState([])
+  const [tasks, setAllTasks] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [checklists, setChecklists] = useState([])
@@ -59,7 +59,8 @@ export default function Workflows() {
 
   // Create SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
-  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
+  const [approvalChains, setApprovalChains] = useState([])
 
   // AI assistant
   const [aiPrompt, setAiPrompt] = useState('')
@@ -78,21 +79,23 @@ export default function Workflows() {
     Promise.all([
       getWorkflows(),
       getWorkflowInstances(),
-      getWorkflowSteps(),
+      getTasks(),
       supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([w, inst, st, emp, loc, cl, tpl, dept]) => {
+      supabase.from('approval_chains').select('*').order('id'),
+    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
-      setSteps(st.data || [])
+      setAllTasks(t.data || [])
       setEmployees(emp.data || [])
       setStores(loc.data || [])
       setChecklists(cl.data || [])
       setTemplates(tpl.data || [])
       setDepartments(dept.data || [])
+      setApprovalChains(ac.data || [])
     }).catch(err => {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
@@ -100,9 +103,9 @@ export default function Workflows() {
   }, [])
 
   // ── Helpers ──
-  const getInstanceSteps = (instId) => steps.filter(s => s.instance_id === instId).sort((a, b) => a.step_order - b.step_order)
+  const getInstanceTasks = (instId) => tasks.filter(t => t.workflow_instance_id === instId).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
   const getStats = (instId) => {
-    const s = getInstanceSteps(instId)
+    const s = getInstanceTasks(instId)
     const total = s.length
     const pending = s.filter(x => x.status === '待處理').length
     const inProgress = s.filter(x => x.status === '進行中').length
@@ -113,56 +116,57 @@ export default function Workflows() {
   }
 
   // ── Handlers ──
-  const handleStatusChange = async (stepId, newStatus) => {
+  const handleStatusChange = async (taskId, newStatus) => {
     const completedAt = newStatus === '已完成' ? new Date().toISOString() : null
-    const { data } = await updateWorkflowStep(stepId, { status: newStatus, completed_at: completedAt })
+    const { data } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
     if (data) {
-      const updatedSteps = steps.map(s => s.id === stepId ? data : s)
-      setSteps(updatedSteps)
+      const updatedTasks = tasks.map(t => t.id === taskId ? data : t)
+      setAllTasks(updatedTasks)
 
-      // Auto-progression: when a step completes, check if dependent steps can start
-      let latestSteps = updatedSteps
+      // Auto-progression: when a task completes, check if dependent tasks can start
+      let latestTasks = updatedTasks
       if (newStatus === '已完成') {
-        latestSteps = await autoProgressDependents(data.id, data.instance_id, updatedSteps)
+        latestTasks = await autoProgressDependents(data.id, data.workflow_instance_id, updatedTasks)
       }
 
-      // Check if entire instance is done (use latestSteps to include auto-progressed)
-      const instId = data.instance_id
-      const instSteps = latestSteps.filter(s => s.instance_id === instId)
-      if (instSteps.length > 0 && instSteps.every(s => s.status === '已完成')) {
-        const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
-        if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
+      // Check if entire instance is done
+      const instId = data.workflow_instance_id
+      if (instId) {
+        const instTasks = latestTasks.filter(t => t.workflow_instance_id === instId)
+        if (instTasks.length > 0 && instTasks.every(t => t.status === '已完成')) {
+          const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
+          if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
+        }
       }
     }
   }
 
-  // Auto-progress: find steps that depend on the completed step, start them if all prerequisites met
-  // Returns the latest steps array after any auto-progressions
-  const autoProgressDependents = async (completedStepId, instanceId, currentSteps) => {
-    let result = [...currentSteps]
-    const { data: deps } = await supabase.from('workflow_step_dependencies')
-      .select('*').eq('depends_on_step_id', completedStepId).eq('dep_type', 'prerequisite')
+  // Auto-progress: find tasks that depend on the completed task, start them if all prerequisites met
+  const autoProgressDependents = async (completedTaskId, instanceId, currentTasks) => {
+    let result = [...currentTasks]
+    const { data: deps } = await supabase.from('task_dependencies')
+      .select('*').eq('depends_on_task_id', completedTaskId).eq('dep_type', 'prerequisite')
     if (!deps?.length) return result
 
-    const instSteps = result.filter(s => s.instance_id === instanceId)
+    const instTasks = result.filter(t => t.workflow_instance_id === instanceId)
 
     for (const dep of deps) {
-      const targetStep = instSteps.find(s => s.id === dep.step_id)
-      if (!targetStep || targetStep.status !== '待處理') continue
+      const targetTask = instTasks.find(t => t.id === dep.task_id)
+      if (!targetTask || targetTask.status !== '待處理') continue
 
-      const { data: allPrereqs } = await supabase.from('workflow_step_dependencies')
-        .select('depends_on_step_id').eq('step_id', dep.step_id).eq('dep_type', 'prerequisite')
+      const { data: allPrereqs } = await supabase.from('task_dependencies')
+        .select('depends_on_task_id').eq('task_id', dep.task_id).eq('dep_type', 'prerequisite')
 
       const allMet = (allPrereqs || []).every(p => {
-        const prereqStep = result.find(s => s.id === p.depends_on_step_id)
-        return prereqStep?.status === '已完成'
+        const prereqTask = result.find(t => t.id === p.depends_on_task_id)
+        return prereqTask?.status === '已完成'
       })
 
       if (allMet) {
-        const { data: started } = await updateWorkflowStep(dep.step_id, { status: '進行中' })
+        const { data: started } = await updateTask(dep.task_id, { status: '進行中' })
         if (started) {
-          result = result.map(s => s.id === started.id ? started : s)
-          setSteps(prev => prev.map(s => s.id === started.id ? started : s))
+          result = result.map(t => t.id === started.id ? started : t)
+          setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
           if (started.assignee) {
             const inst = instances.find(i => i.id === instanceId)
             notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id)
@@ -173,32 +177,36 @@ export default function Workflows() {
     return result
   }
 
-  const handleConfirmTask = async (stepId) => {
-    const { data } = await updateWorkflowStep(stepId, { confirmed: true, confirmed_at: new Date().toISOString() })
-    if (data) setSteps(prev => prev.map(s => s.id === stepId ? data : s))
+  const handleConfirmTask = async (taskId) => {
+    const { data } = await updateTask(taskId, {
+      confirmation_required: true,
+      confirmation_status: 'approved',
+      confirmation_responded_at: new Date().toISOString(),
+    })
+    if (data) setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
   }
 
   const handleSaveNotes = async () => {
     if (!notesStep) return
-    const { data } = await updateWorkflowStep(notesStep.id, { notes: notesText })
-    if (data) setSteps(prev => prev.map(s => s.id === notesStep.id ? data : s))
+    const { data } = await updateTask(notesStep.id, { notes: notesText })
+    if (data) setAllTasks(prev => prev.map(t => t.id === notesStep.id ? data : t))
     setShowNotesModal(false)
   }
 
   const handleAddTask = async () => {
     if (!taskForm.title || !selectedInstance) return
-    const instSteps = getInstanceSteps(selectedInstance.id)
-    const maxOrder = instSteps.length > 0 ? Math.max(...instSteps.map(s => s.step_order)) : 0
-    const { data } = await createWorkflowStep({
-      instance_id: selectedInstance.id, step_order: maxOrder + 1,
+    const instTasks = getInstanceTasks(selectedInstance.id)
+    const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
+    const { data } = await createTask({
+      workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,
       title: taskForm.title, assignee: taskForm.assignee,
       store: taskForm.store || selectedInstance.store,
       planned_start: taskForm.planned_start || null,
       due_date: taskForm.due_date || null, due_time: taskForm.due_time || '17:00',
-      status: '待處理',
+      status: '待處理', bucket: 'Workflow', category: 'Workflow',
     })
     if (data) {
-      setSteps(prev => [...prev, data])
+      setAllTasks(prev => [...prev, data])
       setShowAddTaskModal(false)
       setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
       if (taskForm.assignee) notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id)
@@ -274,15 +282,20 @@ export default function Workflows() {
   // ── Create SOP Template ──
   const handleCreateTpl = async () => {
     if (!newTpl.name || !newTpl.steps.some(s => s.title)) return
-    const validSteps = newTpl.steps.filter(s => s.title)
+    const validSteps = newTpl.steps.filter(s => s.title).map(s => ({
+      ...s,
+      checklist_id: s.checklist_id || null,
+      approval_chain_id: s.approval_chain_id || null,
+    }))
     const { data } = await supabase.from('sop_templates').insert({
       name: newTpl.name, category: newTpl.category,
       description: newTpl.description, steps: validSteps,
+      approval_chain_id: newTpl.approval_chain_id || null,
     }).select().single()
     if (data) {
       setTemplates(prev => [...prev, data])
       setShowCreateTplModal(false)
-      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
     }
   }
 
@@ -298,14 +311,50 @@ export default function Workflows() {
         status: '進行中', started_by: employees[0]?.name || '系統',
       }).select().single()
       if (instance) {
-        const stepRows = tplSteps.map((step, i) => ({
-          instance_id: instance.id, step_order: i + 1,
+        const taskRows = tplSteps.map((step, i) => ({
+          workflow_instance_id: instance.id, step_order: i + 1,
           title: step.title, description: step.description,
           role: step.role, assignee: deployForm.assignees[i] || '',
           store: loc, status: '待處理',
+          bucket: 'Workflow', category: 'Workflow',
+          priority: step.priority || '中',
         }))
-        const { data: insertedSteps } = await supabase.from('workflow_steps').insert(stepRows).select()
-        if (insertedSteps) setSteps(prev => [...prev, ...insertedSteps])
+        const { data: insertedTasks } = await createTasksBatch(taskRows)
+        if (insertedTasks) {
+          setAllTasks(prev => [...prev, ...insertedTasks])
+
+          // 掛查核清單到任務
+          for (let i = 0; i < tplSteps.length; i++) {
+            if (tplSteps[i].checklist_id && insertedTasks[i]) {
+              await supabase.from('task_checklists').insert({
+                task_id: insertedTasks[i].id,
+                checklist_id: tplSteps[i].checklist_id,
+              })
+            }
+          }
+
+          // 建立流程結束簽核（如果範本有設定 approval_chain_id）
+          const chainId = deployTemplate.approval_chain_id
+          if (chainId) {
+            const chain = approvalChains.find(c => c.id === chainId)
+            if (chain) {
+              const { data: form } = await supabase.from('approval_forms').insert({
+                chain_id: chainId,
+                title: `${deployTemplate.name} — ${loc}`,
+                store: loc,
+                status: '待簽',
+                notes: `流程部署自動建立`,
+              }).select().single()
+              if (form && chain.steps) {
+                const formSteps = chain.steps.map((s, idx) => ({
+                  form_id: form.id, step_order: idx + 1,
+                  role: s.role, label: s.label, status: '待簽',
+                }))
+                await supabase.from('approval_form_steps').insert(formSteps)
+              }
+            }
+          }
+        }
         setInstances(prev => [instance, ...prev])
         setDeployResult({ location: loc, count: tplSteps.length })
       }
@@ -332,12 +381,12 @@ export default function Workflows() {
   // ════════════════════════════════════════════════════════════
   if (selectedInstance) {
     const inst = instances.find(i => i.id === selectedInstance.id) || selectedInstance
-    const instSteps = getInstanceSteps(inst.id)
+    const instTasks = getInstanceTasks(inst.id)
     const stats = getStats(inst.id)
 
     return (
       <InstanceDetailView
-        inst={inst} instSteps={instSteps} stats={stats}
+        inst={inst} instSteps={instTasks} stats={stats}
         employees={employees} stores={stores} checklists={checklists}
         showNotesModal={showNotesModal} notesStep={notesStep} notesText={notesText}
         setNotesText={setNotesText} setShowNotesModal={setShowNotesModal} setNotesStep={setNotesStep}
@@ -350,8 +399,8 @@ export default function Workflows() {
         onSaveNotes={handleSaveNotes}
         onAddTask={handleAddTask}
         onEditInstance={handleEditInstance}
-        onStepUpdate={d => { setSteps(prev => prev.map(s => s.id === d.id ? d : s)); setSelectedStep(d) }}
-        onStepDelete={id => { setSteps(prev => prev.filter(s => s.id !== id)); setSelectedStep(null) }}
+        onStepUpdate={d => { setAllTasks(prev => prev.map(t => t.id === d.id ? d : t)); setSelectedStep(d) }}
+        onStepDelete={id => { setAllTasks(prev => prev.filter(t => t.id !== id)); setSelectedStep(null) }}
       />
     )
   }
@@ -457,6 +506,8 @@ export default function Workflows() {
           newTpl={newTpl} setNewTpl={setNewTpl}
           onClose={() => setShowCreateTplModal(false)}
           onSubmit={handleCreateTpl}
+          checklists={checklists}
+          approvalChains={approvalChains}
         />
       )}
     </div>

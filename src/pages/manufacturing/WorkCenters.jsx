@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { ModalOverlay } from '../../components/Modal'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Factory, Gauge } from 'lucide-react'
 import { getWorkCenters, createWorkCenter, updateWorkCenter, deleteWorkCenter, getManufacturingOrders } from '../../lib/db'
 import { calculateCapacityRequirements } from '../../lib/mrpEngine'
@@ -236,7 +238,7 @@ export default function WorkCenters() {
 
       {/* Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowModal(false)}>
+        <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 480, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>{editingId ? '編輯工作中心' : '新增工作中心'}</h3>
@@ -291,7 +293,7 @@ export default function WorkCenters() {
               <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '儲存中...' : editingId ? '更新' : '新增'}</button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

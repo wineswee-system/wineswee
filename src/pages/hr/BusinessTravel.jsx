@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -43,6 +44,7 @@ export default function BusinessTravel() {
       setTrips(prev => [...prev, data])
       setShowModal(false)
       setForm({ employee: employees[0]?.name || '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+      await createApprovalWorkflow('business_trip', data, form.employee)
     }
   }
 

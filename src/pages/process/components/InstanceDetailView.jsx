@@ -121,7 +121,7 @@ export default function InstanceDetailView({
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
                           onClick={e => { e.stopPropagation(); setNotesStep(step); setNotesText(step.notes || ''); setShowNotesModal(true) }}>📝 備註</button>
-                        {!step.confirmed ? (
+                        {step.confirmation_status !== 'approved' ? (
                           <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
                             onClick={e => { e.stopPropagation(); onConfirmTask(step.id) }}>🔐 確認任務</button>
                         ) : <span style={{ fontSize: 11, color: 'var(--accent-green)', fontWeight: 600 }}>✅ 完成</span>}

@@ -814,6 +814,196 @@ export function calculateEOQ(annualDemand, orderCost, holdingCost) {
 }
 
 // ══════════════════════════════════════
+//  10. 自動補貨（Auto-Reorder → PO）
+// ══════════════════════════════════════
+
+/**
+ * 產生自動補貨採購單（依供應商合併）
+ *
+ * 流程：
+ * 1. 檢查再訂購點警示
+ * 2. 依偏好供應商分組
+ * 3. 計算建議訂購量
+ * 4. 產生草稿 PO
+ *
+ * @param {Array} alerts - 再訂購點警示（checkReorderPoints 的輸出）
+ * @param {Array} supplierMappings - 供應商對應 [{sku, supplier, supplierSkuCode, leadTimeDays, minOrderQty, unitCost, isPreferred}]
+ * @param {Object} [options] - 選項
+ * @param {boolean} [options.autoApprove=false] - 是否自動核准
+ * @param {string} [options.requester='系統自動'] - 申請人
+ * @returns {Object} { purchaseOrders: [...], skippedItems: [...] }
+ */
+export function generateAutoReorderPOs(alerts, supplierMappings, options = {}) {
+  const { autoApprove = false, requester = '系統自動' } = options
+
+  if (!alerts || alerts.length === 0) {
+    return { purchaseOrders: [], skippedItems: [] }
+  }
+
+  // 依偏好供應商分組
+  const supplierGroups = {}
+  const skippedItems = []
+
+  for (const alert of alerts) {
+    const mappings = (supplierMappings || []).filter(m => m.sku === alert.sku)
+    const preferred = mappings.find(m => m.isPreferred) || mappings[0]
+
+    if (!preferred) {
+      skippedItems.push({
+        sku: alert.sku,
+        reason: '未設定供應商',
+        currentStock: alert.currentStock,
+        reorderQty: alert.reorderQty,
+      })
+      continue
+    }
+
+    const supplier = preferred.supplier
+    if (!supplierGroups[supplier]) {
+      supplierGroups[supplier] = {
+        supplier,
+        items: [],
+      }
+    }
+
+    const orderQty = round2(Math.max(alert.reorderQty || 0, preferred.minOrderQty || 0))
+
+    supplierGroups[supplier].items.push({
+      sku: alert.sku,
+      supplierSkuCode: preferred.supplierSkuCode || alert.sku,
+      qty: orderQty,
+      unitCost: preferred.unitCost || 0,
+      amount: round2(orderQty * (preferred.unitCost || 0)),
+      urgency: alert.urgency,
+      currentStock: alert.currentStock,
+      reorderPoint: alert.reorderPoint,
+      leadTimeDays: preferred.leadTimeDays || 7,
+    })
+  }
+
+  // 產生草稿 PO
+  const purchaseOrders = Object.values(supplierGroups).map(group => {
+    const totalAmount = round2(group.items.reduce((sum, i) => sum + i.amount, 0))
+    const maxLeadTime = Math.max(...group.items.map(i => i.leadTimeDays))
+    const expectedDate = new Date()
+    expectedDate.setDate(expectedDate.getDate() + maxLeadTime)
+
+    return {
+      id: `AUTO-PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      poNumber: `APO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      supplier: group.supplier,
+      items: group.items,
+      totalAmount,
+      expectedDate: expectedDate.toISOString().slice(0, 10),
+      status: autoApprove ? '待確認' : '草稿',
+      source: 'auto_reorder',
+      requester,
+      hasCriticalItems: group.items.some(i => i.urgency === 'critical'),
+      createdAt: new Date().toISOString(),
+    }
+  })
+
+  return { purchaseOrders, skippedItems }
+}
+
+/**
+ * 計算庫存周轉率
+ *
+ * @param {number} cogs - 銷貨成本（期間）
+ * @param {number} avgInventoryValue - 平均庫存價值
+ * @returns {Object} { turnoverRate, daysOfStock }
+ */
+export function calculateInventoryTurnover(cogs, avgInventoryValue) {
+  if (avgInventoryValue <= 0) return { turnoverRate: 0, daysOfStock: Infinity }
+
+  const turnoverRate = round2(cogs / avgInventoryValue)
+  const daysOfStock = turnoverRate > 0 ? round2(365 / turnoverRate) : Infinity
+
+  return { turnoverRate, daysOfStock }
+}
+
+/**
+ * 識別呆滯庫存
+ *
+ * @param {Array} skuTransactions - [{sku, lastMovementDate, currentStock, unitCost}]
+ * @param {number} thresholdDays - 閾值天數（預設 90 天無異動視為呆滯）
+ * @param {string} asOfDate - 基準日期
+ * @returns {Array} 呆滯品項清單 [{sku, daysSinceMovement, currentStock, value, classification}]
+ */
+export function identifyDeadStock(skuTransactions, thresholdDays = 90, asOfDate = new Date().toISOString()) {
+  const asOf = new Date(asOfDate)
+
+  return (skuTransactions || [])
+    .map(item => {
+      const lastMove = item.lastMovementDate ? new Date(item.lastMovementDate) : null
+      const daysSince = lastMove ? Math.floor((asOf - lastMove) / 86400000) : Infinity
+
+      let classification
+      if (daysSince === Infinity || daysSince >= thresholdDays * 3) {
+        classification = 'dead'        // 完全呆滯
+      } else if (daysSince >= thresholdDays * 2) {
+        classification = 'very_slow'   // 極慢動
+      } else if (daysSince >= thresholdDays) {
+        classification = 'slow'        // 慢動
+      } else {
+        classification = 'active'      // 正常
+      }
+
+      return {
+        sku: item.sku,
+        daysSinceMovement: daysSince === Infinity ? '從未異動' : daysSince,
+        currentStock: item.currentStock || 0,
+        value: round2((item.currentStock || 0) * (item.unitCost || 0)),
+        unitCost: item.unitCost || 0,
+        lastMovementDate: item.lastMovementDate || null,
+        classification,
+      }
+    })
+    .filter(item => item.classification !== 'active')
+    .sort((a, b) => {
+      const order = { dead: 0, very_slow: 1, slow: 2 }
+      return (order[a.classification] || 3) - (order[b.classification] || 3) || b.value - a.value
+    })
+}
+
+/**
+ * 組合商品庫存計算（依組件最小可用量）
+ *
+ * @param {Array} kitComponents - [{componentSku, requiredQty}]
+ * @param {Array} stockLevels - [{sku, on_hand}]
+ * @returns {Object} { availableKits, limitingComponent }
+ */
+export function calculateKitAvailability(kitComponents, stockLevels) {
+  if (!kitComponents || kitComponents.length === 0) {
+    return { availableKits: 0, limitingComponent: null }
+  }
+
+  let minKits = Infinity
+  let limitingComponent = null
+
+  for (const comp of kitComponents) {
+    const stock = (stockLevels || []).find(s => s.sku === comp.componentSku)
+    const onHand = stock ? stock.on_hand : 0
+    const possibleKits = comp.requiredQty > 0 ? Math.floor(onHand / comp.requiredQty) : 0
+
+    if (possibleKits < minKits) {
+      minKits = possibleKits
+      limitingComponent = {
+        sku: comp.componentSku,
+        onHand,
+        requiredPerKit: comp.requiredQty,
+        possibleKits,
+      }
+    }
+  }
+
+  return {
+    availableKits: minKits === Infinity ? 0 : minKits,
+    limitingComponent,
+  }
+}
+
+// ══════════════════════════════════════
 //  9. 單位換算（Unit of Measure Conversions）
 // ══════════════════════════════════════
 

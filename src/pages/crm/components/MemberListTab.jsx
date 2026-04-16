@@ -1,4 +1,4 @@
-import { Search, ShoppingCart, Gift } from 'lucide-react'
+import { Search, ShoppingCart, Gift, RotateCcw } from 'lucide-react'
 
 export default function MemberListTab({
   filtered,
@@ -8,6 +8,7 @@ export default function MemberListTab({
   formatTime,
   openPurchase,
   openRedeem,
+  openRefund,
   posTransactions,
 }) {
   return (
@@ -49,6 +50,9 @@ export default function MemberListTab({
                       </button>
                       <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => openRedeem(m)} title="兌換點數">
                         <Gift size={12} /> 兌換
+                      </button>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 8px', color: 'var(--accent-red)' }} onClick={() => openRefund(m)} title="退款扣點">
+                        <RotateCcw size={12} /> 退款
                       </button>
                     </div>
                   </td>

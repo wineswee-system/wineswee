@@ -5,6 +5,7 @@ import { registerCRMHandlers } from './crmHandlers.js'
 import { registerPOSHandlers } from './posHandlers.js'
 import { registerHRHandlers } from './hrHandlers.js'
 import { registerManufacturingHandlers } from './manufacturingHandlers.js'
+import { registerWorkflowExecutors } from '../../workflowExecutor.js'
 
 /**
  * Wire up all event handlers on the bus.
@@ -24,4 +25,7 @@ export function registerAllHandlers(bus) {
   registerPOSHandlers(bus)
   registerHRHandlers(bus)
   registerManufacturingHandlers(bus)
+
+  // CRM Workflow Automation — register active workflows as event subscribers
+  registerWorkflowExecutors(bus)
 }

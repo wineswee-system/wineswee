@@ -47,12 +47,6 @@ export function AuthProvider({ children }) {
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password })
 
-  const signInWithProvider = (provider) =>
-    supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: window.location.origin },
-    })
-
   const signOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
@@ -66,7 +60,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       isAdmin: profile?.role === 'admin' || profile?.role === 'super_admin',
       isSuperAdmin: profile?.role === 'super_admin',
-      signIn, signInWithProvider, signOut,
+      signIn, signOut,
     }}>
       {children}
     </AuthContext.Provider>

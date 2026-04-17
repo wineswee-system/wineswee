@@ -482,7 +482,14 @@ export default function Sidebar() {
   const matchChild = (child) => !q || child.label.toLowerCase().includes(q)
   const matchSection = (section) => !q || section.label.toLowerCase().includes(q) || section.children?.some(matchChild)
 
-  const currentSections = groupNav[activeGroup] || []
+  // Filter sections by role-allowed paths
+  const filterSections = (sections) => {
+    if (!pathFilter) return sections
+    return sections
+      .map(s => ({ ...s, children: s.children?.filter(c => pathFilter.includes(c.path)) }))
+      .filter(s => s.children?.length > 0)
+  }
+  const currentSections = filterSections(groupNav[activeGroup] || [])
   const isSystemGroup = activeGroup === 'system'
   const isSuperAdminGroup = activeGroup === 'super-admin'
 
@@ -500,17 +507,35 @@ export default function Sidebar() {
 
   // Role-based module access control
   // people group includes: HR + 組織 + 流程
-  const userRole = profile?.role || 'staff'
+  const userRole = profile?.role || 'store_staff'
   const ROLE_GROUPS = {
-    staff:       ['dashboard'],
-    manager:     ['dashboard', 'people'],
-    admin:       ['dashboard', 'people', 'finance'],
-    super_admin: null, // null = all
+    store_staff:  ['dashboard', 'people'],
+    office_staff: ['dashboard', 'people'],
+    manager:      ['dashboard', 'people'],
+    admin:        ['dashboard', 'people', 'analytics'],
+    super_admin:  null, // null = all
   }
-  const allowedGroups = ROLE_GROUPS[userRole]
+  const allowedGroups = ROLE_GROUPS[userRole] || ROLE_GROUPS['store_staff']
   const roleFiltered = allowedGroups === null
     ? majorGroups
     : majorGroups.filter(g => allowedGroups.includes(g.key))
+
+  // Sub-menu filtering for store_staff / office_staff
+  // They can only see specific pages within the 'people' group
+  const ROLE_ALLOWED_PATHS = {
+    store_staff: [
+      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar',
+    ],
+    office_staff: [
+      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar',
+      '/hr/schedule', '/hr/holidays',
+      '/org/employees', '/org/locations', '/org/departments',
+      '/process/overview', '/process/tasks', '/process/workflows',
+    ],
+  }
+  const pathFilter = ROLE_ALLOWED_PATHS[userRole]
 
   // Build all dropdown groups including super-admin
   const showSuperAdmin = isSuperAdmin
@@ -606,7 +631,7 @@ export default function Sidebar() {
                 </div>
               </div>
             ) : (
-              (groupNav[openDropdown] || []).map((section, si) => {
+              filterSections(groupNav[openDropdown] || []).map((section, si) => {
                 const SIcon = section.icon
                 const groupColor = allGroups.find(g => g.key === openDropdown)?.color
                 return (

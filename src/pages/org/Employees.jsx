@@ -16,8 +16,8 @@ const EMPLOYMENT_TYPES = [
 
 // 標準化職稱（manager = 有審核權限）
 const POSITIONS = [
-  { label: '總經理', level: 'manager' },
-  { label: '副總經理', level: 'manager' },
+  { label: '總經理', level: 'admin' },
+  { label: '副總經理', level: 'admin' },
   { label: '總監', level: 'manager' },
   { label: '經理', level: 'manager' },
   { label: '副理', level: 'manager' },
@@ -25,12 +25,17 @@ const POSITIONS = [
   { label: '店長', level: 'manager' },
   { label: '副店長', level: 'manager' },
   { label: '組長', level: 'manager' },
-  { label: '資深工程師', level: 'staff' },
-  { label: '工程師', level: 'staff' },
-  { label: '專員', level: 'staff' },
-  { label: '業務代表', level: 'staff' },
-  { label: '助理', level: 'staff' },
-  { label: '實習生', level: 'staff' },
+  { label: '資深工程師', level: 'office_staff' },
+  { label: '工程師', level: 'office_staff' },
+  { label: '專員', level: 'office_staff' },
+  { label: '行政助理', level: 'office_staff' },
+  { label: '會計', level: 'office_staff' },
+  { label: '業務代表', level: 'store_staff' },
+  { label: '門市人員', level: 'store_staff' },
+  { label: '收銀員', level: 'store_staff' },
+  { label: '倉管人員', level: 'store_staff' },
+  { label: '助理', level: 'store_staff' },
+  { label: '實習生', level: 'store_staff' },
 ]
 
 export default function Employees() {
@@ -566,7 +571,8 @@ export default function Employees() {
           </div>
           <Field label="系統權限">
             <select className="form-input" style={{ width: '100%' }} value={editForm.system_role} onChange={e => setE('system_role', e.target.value)}>
-              <option value="staff">一般員工</option>
+              <option value="store_staff">門市員工</option>
+              <option value="office_staff">行政員工</option>
               <option value="manager">主管</option>
               <option value="admin">管理員</option>
               <option value="super_admin">超級管理員</option>

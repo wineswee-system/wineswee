@@ -37,8 +37,8 @@ const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
 function AdminApp({ role = 'staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
-  const allowed = ROLE_ROUTES[role]
-  const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r))
+  const allowed = ROLE_ROUTES[role] || ROLE_ROUTES['store_staff']
+  const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r) || r.startsWith(prefix))
   const blocked = <Navigate to="/" replace />
 
   return (
@@ -86,12 +86,13 @@ function ProtectedApp() {
   return <AdminApp role={profile?.role || 'staff'} />
 }
 
-// Route-level access control
+// Route-level access control — 5 roles
 const ROLE_ROUTES = {
-  staff:       ['/'],
-  manager:     ['/', '/hr', '/org', '/process'],
-  admin:       ['/', '/hr', '/org', '/process', '/finance'],
-  super_admin: null, // all
+  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service'],
+  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/schedule', '/hr/leave-calendar', '/process', '/org'],
+  manager:      ['/', '/hr', '/org', '/process'],
+  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
+  super_admin:  null, // all
 }
 
 export default function App() {

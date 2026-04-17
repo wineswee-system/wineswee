@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { TenantProvider } from './contexts/TenantContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
@@ -13,6 +13,7 @@ const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
 const LiffTask = lazy(() => import('./pages/liff/LiffTask'))
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
+const Login = lazy(() => import('./pages/Login'))
 
 // ── Module-level lazy loading ──
 // Each module bundles ALL its pages into a single chunk.
@@ -74,6 +75,15 @@ function AdminApp() {
   )
 }
 
+function ProtectedApp() {
+  const { loading, isAuthenticated } = useAuth()
+
+  if (loading) return <LoadingSpinner />
+  if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
+
+  return <AdminApp />
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -81,12 +91,13 @@ export default function App() {
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/demo" element={<DemoLanding />} />
+          <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           <Route path="/liff/clock" element={<LiffClockIn />} />
           <Route path="/liff/task" element={<LiffTask />} />
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>
-          <Route path="/*" element={<AdminApp />} />
+          <Route path="/*" element={<ProtectedApp />} />
         </Routes>
         </Suspense>
       </TenantProvider>

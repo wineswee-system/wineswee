@@ -3,10 +3,12 @@ import { Plus } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Overtime() {
+  const { profile } = useAuth()
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -45,7 +47,7 @@ export default function Overtime() {
       if (data) {
         setRecords(prev => [...prev, data])
         setShowModal(false)
-        setForm({ employee: employees[0]?.name || '', date: '', hours: 1, reason: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '' })
         await createApprovalWorkflow('overtime', data, form.employee)
       }
     } catch (err) {

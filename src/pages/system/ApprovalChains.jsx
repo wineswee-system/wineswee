@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { notifyApproval } from '../../lib/lineNotify'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function ApprovalChains() {
+  const { profile } = useAuth()
+  const currentUser = profile?.name || '管理員'
   const [tab, setTab] = useState('forms')
   const [chains, setChains] = useState([])
   const [forms, setForms] = useState([])
@@ -69,13 +72,13 @@ export default function ApprovalChains() {
     if (!chain) return
     const { data: form, error } = await supabase.from('approval_forms').insert({
       chain_id: chain.id, title: applyForm.title, category: chain.category,
-      applicant: employees[0]?.name || '系統', store: applyForm.store,
+      applicant: currentUser, store: applyForm.store,
       form_data: { notes: applyForm.notes }, current_step: 0,
       status: chain.steps.length === 0 ? '已通過' : '簽核中',
     }).select().single()
     if (error) { alert('失敗：' + error.message); return }
     if (chain.steps.length > 0 && form) {
-      const rows = chain.steps.map((s, i) => ({ form_id: form.id, step_order: i, role: s.role, status: i === 0 ? '待簽' : '等待中' }))
+      const rows = chain.steps.map((s, i) => ({ form_id: form.id, step_order: i + 1, role: s.role, status: i === 0 ? '待簽' : '等待中' }))
       const { data: ns } = await supabase.from('approval_form_steps').insert(rows).select()
       if (ns) setFormSteps(prev => [...prev, ...ns])
       const first = chain.steps[0]
@@ -89,7 +92,7 @@ export default function ApprovalChains() {
     let comment = ''
     if (action === '退回') { comment = prompt('退回原因：'); if (!comment?.trim()) return }
     const { data: step } = await supabase.from('approval_form_steps').update({
-      status: action === '核准' ? '已核准' : '已退回', approver: employees[0]?.name || '簽核人',
+      status: action === '核准' ? '已核准' : '已退回', approver: currentUser,
       comment: comment || null, acted_at: new Date().toISOString(),
     }).eq('id', stepId).select().single()
     if (!step) return
@@ -103,8 +106,8 @@ export default function ApprovalChains() {
         await supabase.from('approval_forms').update({ current_step: next.step_order }).eq('id', formId)
         const form = forms.find(x => x.id === formId)
         const chain = chains.find(c => c.id === form?.chain_id)
-        const stepDef = chain?.steps?.[next.step_order]
-        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order + 1} 關：${stepDef?.label || next.role}`)
+        const stepDef = chain?.steps?.[next.step_order - 1]
+        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order} 關：${stepDef?.label || next.role}`)
       } else {
         const { data: f } = await supabase.from('approval_forms').update({ status: '已通過', completed_at: new Date().toISOString() }).eq('id', formId).select().single()
         if (f) setForms(prev => prev.map(x => x.id === formId ? f : x))
@@ -172,7 +175,7 @@ export default function ApprovalChains() {
                         <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <ArrowRight size={12} style={{ color: 'var(--text-muted)' }} />
                           <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, fontWeight: 600, background: s.status === '已核准' ? 'var(--accent-green-dim)' : s.status === '已退回' ? 'var(--accent-red-dim)' : s.status === '待簽' ? 'var(--accent-orange-dim)' : 'var(--glass-light)', color: s.status === '已核准' ? 'var(--accent-green)' : s.status === '已退回' ? 'var(--accent-red)' : s.status === '待簽' ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
-                            {chain?.steps?.[i]?.label || s.role}{s.approver ? `: ${s.approver}` : ''}
+                            {chain?.steps?.[s.step_order - 1]?.label || s.role}{s.approver ? `: ${s.approver}` : ''}
                           </span>
                         </span>
                       ))}
@@ -183,7 +186,7 @@ export default function ApprovalChains() {
                           {s.status === '已核准' ? <Check size={14} /> : s.status === '已退回' ? <X size={14} /> : i + 1}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{chain?.steps?.[i]?.label || `第 ${i + 1} 關`}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{chain?.steps?.[s.step_order - 1]?.label || `第 ${s.step_order} 關`}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>角色：{s.role}{s.approver ? ` · 簽核人：${s.approver}` : ''}{s.acted_at ? ` · ${s.acted_at.slice(0, 10)}` : ''}</div>
                           {s.comment && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>退回原因：{s.comment}</div>}
                         </div>

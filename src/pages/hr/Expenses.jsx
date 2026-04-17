@@ -4,12 +4,14 @@ import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
+  const { profile } = useAuth()
   const [expenses, setExpenses] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -46,7 +48,7 @@ export default function Expenses() {
     if (data) {
       setExpenses(prev => [...prev, data])
       setShowModal(false)
-      setForm({ employee: employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
       await createApprovalWorkflow('expense', data, form.employee)
     }
   }

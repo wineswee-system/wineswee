@@ -15,6 +15,7 @@ import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { useAuth } from '../../contexts/AuthContext'
 
 import InstanceDetailView from './components/InstanceDetailView'
 import AiAssistantTab from './components/AiAssistantTab'
@@ -28,6 +29,8 @@ import { generateFlowByRules } from './components/flowTemplates'
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
 export default function Workflows() {
+  const { profile } = useAuth()
+  const currentUser = profile?.name || '管理員'
   const [tab, setTab] = useState('active')
   const [workflows, setWorkflows] = useState([])
   const [instances, setInstances] = useState([])
@@ -308,7 +311,7 @@ export default function Workflows() {
       const loc = deployForm.location
       const { data: instance } = await supabase.from('workflow_instances').insert({
         template_name: deployTemplate.name, store: loc,
-        status: '進行中', started_by: employees[0]?.name || '系統',
+        status: '進行中', started_by: currentUser,
       }).select().single()
       if (instance) {
         const taskRows = tplSteps.map((step, i) => ({

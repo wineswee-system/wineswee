@@ -11,17 +11,13 @@ export function AuthProvider({ children }) {
   const loadProfile = async (authUser) => {
     if (!authUser?.email) { setProfile(null); return }
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 5000)
-
-      let { data } = await supabase
+      const { data, error } = await supabase
         .from('employees')
         .select('*')
         .eq('email', authUser.email)
         .maybeSingle()
-        .abortSignal(controller.signal)
 
-      clearTimeout(timeout)
+      if (error) console.error('Profile query error:', error)
       setProfile(data || null)
     } catch (err) {
       console.error('Failed to load employee profile:', err)

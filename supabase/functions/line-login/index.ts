@@ -48,8 +48,9 @@ serve(async (req) => {
   if (action === 'callback') {
     const code = url.searchParams.get('code')
     if (!code) {
-      return new Response(redirectHtml(SITE_URL, 'LINE 登入失敗：無授權碼'), {
-        headers: { 'Content-Type': 'text/html', ...corsHeaders },
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('LINE 登入失敗：無授權碼')}`, ...corsHeaders },
       })
     }
 
@@ -69,8 +70,9 @@ serve(async (req) => {
 
       if (!tokenRes.ok) {
         const err = await tokenRes.text()
-        return new Response(redirectHtml(SITE_URL, `LINE token 交換失敗：${err}`), {
-          headers: { 'Content-Type': 'text/html', ...corsHeaders },
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent(`LINE token 交換失敗：${err}`)}`, ...corsHeaders },
         })
       }
 
@@ -181,12 +183,3 @@ serve(async (req) => {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })
-
-function redirectHtml(siteUrl: string, message: string) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<script>
-  alert("${message.replace(/"/g, '\\"')}");
-  window.location.href = "${siteUrl}";
-</script>
-</head><body></body></html>`
-}

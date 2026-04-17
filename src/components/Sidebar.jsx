@@ -295,6 +295,7 @@ const groupNav = {
       icon: GitBranch,
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
+        { icon: FolderOpen, label: '專案', path: '/process/projects' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },

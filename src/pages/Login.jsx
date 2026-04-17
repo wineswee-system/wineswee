@@ -12,13 +12,12 @@ export default function Login() {
 
   // Auto-login from LINE redirect
   useEffect(() => {
-    const hash = window.location.hash.slice(1)
-    if (!hash) return
-    const params = new URLSearchParams(hash)
+    const params = new URLSearchParams(window.location.search)
     const lineEmail = params.get('line_email')
     const linePass = params.get('line_pass')
     if (lineEmail && linePass) {
-      window.location.hash = ''
+      // Clean URL
+      window.history.replaceState({}, '', '/login')
       setLoading(true)
       signIn(lineEmail, linePass).then(({ error: err }) => {
         if (err) setError('LINE 登入失敗：' + err.message)

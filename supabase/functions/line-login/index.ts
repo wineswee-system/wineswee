@@ -160,14 +160,10 @@ serve(async (req) => {
       }
 
       // Redirect to frontend with credentials for auto-login
-      const params = new URLSearchParams({
-        line_email: authEmail,
-        line_pass: linePassword,
-        line_name: employee.name,
-      })
+      const redirectUrl = `${SITE_URL}/login?line_email=${encodeURIComponent(authEmail)}&line_pass=${encodeURIComponent(linePassword)}`
       return new Response(null, {
         status: 302,
-        headers: { Location: `${SITE_URL}/login#${params.toString()}`, ...corsHeaders },
+        headers: { Location: redirectUrl, ...corsHeaders },
       })
 
     } catch (err) {

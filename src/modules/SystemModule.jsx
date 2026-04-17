@@ -10,9 +10,11 @@ import DatabaseAdmin from '../pages/system/DatabaseAdmin'
 import TenantAdmin from '../pages/system/TenantAdmin'
 import ApprovalRules from '../pages/system/ApprovalRules'
 import ApprovalChains from '../pages/system/ApprovalChains'
+import TrainingGuide from '../pages/system/TrainingGuide'
 export default function SystemModule() {
   return (
     <Routes>
+      <Route path="training" element={<TrainingGuide />} />
       <Route path="triggers" element={<Triggers />} />
       <Route path="notifications" element={<Notifications />} />
       <Route path="users" element={<Users />} />

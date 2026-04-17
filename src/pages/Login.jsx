@@ -10,6 +10,23 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Auto-login from LINE redirect
+  useState(() => {
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    const params = new URLSearchParams(hash)
+    const lineEmail = params.get('line_email')
+    const linePass = params.get('line_pass')
+    if (lineEmail && linePass) {
+      window.location.hash = ''
+      setLoading(true)
+      signIn(lineEmail, linePass).then(({ error: err }) => {
+        if (err) setError('LINE 登入失敗：' + err.message)
+        setLoading(false)
+      })
+    }
+  })
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')

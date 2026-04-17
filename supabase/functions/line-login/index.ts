@@ -137,52 +137,37 @@ serve(async (req) => {
 
       // ── Create or sign in Supabase auth user ──
       const authEmail = employee.email || `line_${lineUserId}@sme-ops.local`
+      const linePassword = `LINE_${lineUserId}_${LINE_CHANNEL_SECRET.slice(0, 8)}`
 
       // Try to find existing auth user
       const { data: { users } } = await supabase.auth.admin.listUsers()
       const existingUser = users?.find(u => u.email === authEmail)
 
-      let session
-      if (existingUser) {
-        // Generate magic link (auto-login)
-        const { data, error } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
+      if (!existingUser) {
+        // Create new user with deterministic password
+        const { error } = await supabase.auth.admin.createUser({
           email: authEmail,
-        })
-        if (error) throw error
-        session = data
-      } else {
-        // Create new user with random password
-        const tempPassword = crypto.randomUUID()
-        const { data, error } = await supabase.auth.admin.createUser({
-          email: authEmail,
-          password: tempPassword,
+          password: linePassword,
           email_confirm: true,
           user_metadata: { full_name: employee.name, line_user_id: lineUserId },
         })
-        if (error) throw error
-
-        // Generate magic link for auto-login
-        const { data: linkData } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
-          email: authEmail,
-        })
-        session = linkData
-      }
-
-      // Redirect with the magic link token
-      const token = session?.properties?.hashed_token
-      if (token) {
-        const redirectUrl = `${SITE_URL}#access_token=${token}&type=magiclink`
-        return new Response(null, {
-          status: 302,
-          headers: { Location: redirectUrl, ...corsHeaders },
+        if (error && !error.message.includes('already')) throw error
+      } else {
+        // Update password to ensure it matches
+        await supabase.auth.admin.updateUserById(existingUser.id, {
+          password: linePassword,
         })
       }
 
-      // Fallback: redirect with error
-      return new Response(redirectHtml(SITE_URL, 'LINE 登入成功但無法建立 session，請用 Email 登入'), {
-        headers: { 'Content-Type': 'text/html', ...corsHeaders },
+      // Redirect to frontend with credentials for auto-login
+      const params = new URLSearchParams({
+        line_email: authEmail,
+        line_pass: linePassword,
+        line_name: employee.name,
+      })
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${SITE_URL}/login#${params.toString()}`, ...corsHeaders },
       })
 
     } catch (err) {

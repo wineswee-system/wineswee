@@ -125,8 +125,9 @@ serve(async (req) => {
       }
 
       if (!employee) {
-        return new Response(redirectHtml(SITE_URL, `找不到員工帳號。LINE名稱：${displayName}，請聯繫HR設定。`), {
-          headers: { 'Content-Type': 'text/html', ...corsHeaders },
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent(`找不到員工帳號（${displayName}），請聯繫HR`)}`, ...corsHeaders },
         })
       }
 
@@ -167,8 +168,10 @@ serve(async (req) => {
       })
 
     } catch (err) {
-      return new Response(redirectHtml(SITE_URL, `LINE 登入錯誤：${(err as Error).message}`), {
-        headers: { 'Content-Type': 'text/html', ...corsHeaders },
+      const errMsg = encodeURIComponent((err as Error).message || 'unknown')
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${SITE_URL}/login?line_error=${errMsg}`, ...corsHeaders },
       })
     }
   }

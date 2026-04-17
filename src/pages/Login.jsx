@@ -13,10 +13,17 @@ export default function Login() {
   // Auto-login from LINE redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    // Show LINE error if any
+    const lineError = params.get('line_error')
+    if (lineError) {
+      setError(lineError)
+      window.history.replaceState({}, '', '/login')
+      return
+    }
+    // Auto sign in with LINE credentials
     const lineEmail = params.get('line_email')
     const linePass = params.get('line_pass')
     if (lineEmail && linePass) {
-      // Clean URL
       window.history.replaceState({}, '', '/login')
       setLoading(true)
       signIn(lineEmail, linePass).then(({ error: err }) => {

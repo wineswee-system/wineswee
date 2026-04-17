@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil } from 'lucide-react'
-import { getEmployees, createEmployee, updateEmployee } from '../../lib/db'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail } from 'lucide-react'
+import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
@@ -115,6 +115,22 @@ export default function Employees() {
     } catch (err) {
       console.error('Operation failed:', err)
       alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  // 發送邀請信
+  const handleInvite = async (emp) => {
+    if (!emp.email) { alert('此員工沒有設定 Email，請先編輯填入 Email'); return }
+    if (!confirm(`確定要發送帳號邀請信給 ${emp.name}（${emp.email}）？`)) return
+    try {
+      const result = await inviteEmployee(emp.email, emp.name)
+      if (result.ok) {
+        alert(result.message)
+      } else {
+        alert('發送失敗：' + (result.error || '未知錯誤'))
+      }
+    } catch (err) {
+      alert('發送失敗：' + err.message)
     }
   }
 
@@ -352,6 +368,12 @@ export default function Employees() {
                         onClick={ev => { ev.stopPropagation(); openEdit(e) }}>
                         <Pencil size={12} /> 編輯
                       </button>
+                      {e.email && e.status === '在職' && (
+                        <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-cyan)' }}
+                          onClick={ev => { ev.stopPropagation(); handleInvite(e) }}>
+                          <Mail size={12} /> 邀請
+                        </button>
+                      )}
                       {e.status === '在職' ? (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }}
                           onClick={ev => { ev.stopPropagation(); openResign(e) }}>

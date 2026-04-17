@@ -13,6 +13,17 @@ export const updateEmployee = (id, data) =>
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)
 
+export async function inviteEmployee(email, name) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/invite-employee`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'apikey': key },
+    body: JSON.stringify({ email, name }),
+  })
+  return res.json()
+}
+
 // ── Attendance ─────────────────────────────────────────────
 export const getAttendance = (date) => {
   const q = supabase.from('attendance_records').select('*').order('id')

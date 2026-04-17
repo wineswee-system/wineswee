@@ -166,8 +166,9 @@ export default function Employees() {
   const handleEdit = async () => {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
-      const { dept, store, system_role, ...rest } = editForm
+      const { dept, store, system_role, join_date, ...rest } = editForm
       const role = system_role || selectedEmp.role || 'staff'
+      if (join_date) rest.join_date = join_date
       const payload = { ...rest, role }
       // Only include dept/store if changed (avoid trigger conflicts)
       if (dept) payload.dept = dept

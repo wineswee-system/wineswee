@@ -358,20 +358,20 @@ export default function Projects() {
         <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
           <MessageSquare size={15} /> 備註（{pComments.length}）
         </div>
-        <div className="card">
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <div className="card" style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, maxWidth: 500 }}>
             <input type="text" value={commentText} onChange={e => setCommentText(e.target.value)}
               placeholder="新增備註..." onKeyDown={e => e.key === 'Enter' && addComment(p.id)}
-              style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13 }} />
-            <button className="btn btn-primary" onClick={() => addComment(p.id)}>送出</button>
+              style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13 }} />
+            <button className="btn btn-primary" style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => addComment(p.id)}>送出</button>
           </div>
           {pComments.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>尚無備註</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>尚無備註</div>
           ) : pComments.map(c => (
-            <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 13 }}>
-              <strong style={{ color: 'var(--accent-cyan)' }}>{c.author}</strong>
-              <span style={{ marginLeft: 8 }}>{c.content}</span>
-              <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--text-muted)' }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
+            <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 13 }}>
+              <strong style={{ color: 'var(--accent-cyan)', fontSize: 12, flexShrink: 0 }}>{c.author}</strong>
+              <span style={{ flex: 1 }}>{c.content}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
             </div>
           ))}
         </div>

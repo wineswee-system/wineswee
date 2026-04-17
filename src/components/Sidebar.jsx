@@ -497,12 +497,19 @@ export default function Sidebar() {
     }
   }
 
-  // Role-based filtering: only explicitly 'staff' role is restricted
-  const userRole = profile?.role || 'manager'
-  const STAFF_GROUPS = ['dashboard', 'people']
-  const roleFiltered = userRole === 'staff'
-    ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))
-    : majorGroups
+  // Role-based module access control
+  // people group includes: HR + 組織 + 流程
+  const userRole = profile?.role || 'staff'
+  const ROLE_GROUPS = {
+    staff:       ['dashboard'],
+    manager:     ['dashboard', 'people'],
+    admin:       ['dashboard', 'people', 'finance'],
+    super_admin: null, // null = all
+  }
+  const allowedGroups = ROLE_GROUPS[userRole]
+  const roleFiltered = allowedGroups === null
+    ? majorGroups
+    : majorGroups.filter(g => allowedGroups.includes(g.key))
 
   // Build all dropdown groups including super-admin
   const showSuperAdmin = isSuperAdmin

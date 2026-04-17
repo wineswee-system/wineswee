@@ -35,8 +35,11 @@ const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
-function AdminApp() {
+function AdminApp({ role = 'staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
+  const allowed = ROLE_ROUTES[role]
+  const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r))
+  const blocked = <Navigate to="/" replace />
 
   return (
     <div className="app-layout">
@@ -47,25 +50,24 @@ function AdminApp() {
           <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            {/* Module routes — each module handles its own sub-routes */}
-            <Route path="/hr/*" element={<HRModule />} />
-            <Route path="/crm/*" element={<CRMModule />} />
-            <Route path="/finance/*" element={<FinanceModule />} />
-            <Route path="/analytics" element={<AnalyticsModule />} />
-            <Route path="/analytics/*" element={<AnalyticsModule />} />
-            <Route path="/purchase/*" element={<PurchaseModule />} />
-            <Route path="/wms/*" element={<WMSModule />} />
-            <Route path="/manufacturing/*" element={<ManufacturingModule />} />
-            <Route path="/sales" element={<SalesModule />} />
-            <Route path="/sales/*" element={<SalesModule />} />
-            <Route path="/pos" element={<POSModule />} />
-            <Route path="/pos/*" element={<POSModule />} />
-            <Route path="/org/*" element={<OrgModule />} />
-            <Route path="/process/*" element={<ProcessModule />} />
-            <Route path="/system/*" element={<SystemModule />} />
-            <Route path="/ai/*" element={<AIModule />} />
-            <Route path="/integration/*" element={<IntegrationModule />} />
-            <Route path="/super-admin/*" element={<SuperAdminModule />} />
+            <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
+            <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
+            <Route path="/finance/*" element={canAccess('/finance') ? <FinanceModule /> : blocked} />
+            <Route path="/analytics" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics/*" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
+            <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
+            <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
+            <Route path="/sales" element={canAccess('/sales') ? <SalesModule /> : blocked} />
+            <Route path="/sales/*" element={canAccess('/sales') ? <SalesModule /> : blocked} />
+            <Route path="/pos" element={canAccess('/pos') ? <POSModule /> : blocked} />
+            <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
+            <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
+            <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
+            <Route path="/system/*" element={canAccess('/system') ? <SystemModule /> : blocked} />
+            <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
+            <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
+            <Route path="/super-admin/*" element={canAccess('/super-admin') ? <SuperAdminModule /> : blocked} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
@@ -76,12 +78,20 @@ function AdminApp() {
 }
 
 function ProtectedApp() {
-  const { loading, isAuthenticated } = useAuth()
+  const { loading, isAuthenticated, profile } = useAuth()
 
   if (loading) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
 
-  return <AdminApp />
+  return <AdminApp role={profile?.role || 'staff'} />
+}
+
+// Route-level access control
+const ROLE_ROUTES = {
+  staff:       ['/'],
+  manager:     ['/', '/hr', '/org', '/process'],
+  admin:       ['/', '/hr', '/org', '/process', '/finance'],
+  super_admin: null, // all
 }
 
 export default function App() {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -11,7 +11,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
 
   // Auto-login from LINE redirect
-  useState(() => {
+  useEffect(() => {
     const hash = window.location.hash.slice(1)
     if (!hash) return
     const params = new URLSearchParams(hash)
@@ -25,7 +25,7 @@ export default function Login() {
         setLoading(false)
       })
     }
-  })
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

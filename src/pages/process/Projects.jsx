@@ -3,7 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import Modal, { Field } from '../../components/Modal'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
-  MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter
+  MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees } from '../../lib/db'
@@ -30,9 +30,14 @@ export default function Projects() {
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
+  const [templates, setTemplates] = useState([])
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showDeployModal, setShowDeployModal] = useState(false)
+  const [deployTpl, setDeployTpl] = useState(null)
+  const [deployForm, setDeployForm] = useState({ name: '', store: '', owner: '' })
+  const [deploying, setDeploying] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -45,13 +50,14 @@ export default function Projects() {
 
   const load = async () => {
     setLoading(true)
-    const [pRes, wRes, tRes, eRes, sRes, cRes] = await Promise.all([
+    const [pRes, wRes, tRes, eRes, sRes, cRes, tplRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
       supabase.from('tasks').select('*').order('step_order'),
       getEmployees(),
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
+      supabase.from('project_templates').select('*').order('id'),
     ])
     setProjects(pRes.data || [])
     setWorkflows(wRes.data || [])
@@ -59,6 +65,7 @@ export default function Projects() {
     setEmployees((eRes.data || []).filter(e => e.status === '在職'))
     setStores(sRes.data || [])
     setComments(cRes.data || [])
+    setTemplates(tplRes.data || [])
     setLoading(false)
   }
 
@@ -119,6 +126,74 @@ export default function Projects() {
     }).select().single()
     if (data) setComments(prev => [data, ...prev])
     setCommentText('')
+  }
+
+  // Deploy template → create project + workflows + tasks
+  const handleDeploy = async () => {
+    if (!deployTpl || !deployForm.name) return
+    setDeploying(true)
+    try {
+      const tpl = deployTpl
+      const today = new Date().toISOString().slice(0, 10)
+      const endDate = tpl.estimated_days ? new Date(Date.now() + tpl.estimated_days * 86400000).toISOString().slice(0, 10) : null
+
+      // 1. Create project
+      const { data: project } = await supabase.from('projects').insert({
+        name: deployForm.name,
+        description: tpl.description,
+        status: '進行中',
+        priority: tpl.default_priority || '中',
+        owner: deployForm.owner || profile?.name || '',
+        store: deployForm.store || null,
+        start_date: today,
+        end_date: endDate,
+        budget: tpl.estimated_budget,
+        organization_id: 1,
+      }).select().single()
+
+      if (!project) throw new Error('建立專案失敗')
+
+      // 2. Create workflows + tasks
+      const tplWorkflows = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
+      for (let i = 0; i < tplWorkflows.length; i++) {
+        const wf = tplWorkflows[i]
+        const { data: instance } = await supabase.from('workflow_instances').insert({
+          template_name: wf.name,
+          status: '進行中',
+          started_by: deployForm.owner || profile?.name || '',
+          store: deployForm.store || null,
+          project_id: project.id,
+          sort_order: i + 1,
+          started_at: new Date().toISOString(),
+        }).select().single()
+
+        if (instance && wf.tasks?.length > 0) {
+          const taskRows = wf.tasks.map((t, j) => ({
+            title: t.title,
+            workflow_instance_id: instance.id,
+            status: '未開始',
+            assignee: t.role || null,
+            step_order: j + 1,
+            priority: t.priority || '中',
+            due_date: endDate,
+          }))
+          await supabase.from('tasks').insert(taskRows)
+        }
+      }
+
+      setShowDeployModal(false)
+      setDeployTpl(null)
+      load()
+    } catch (err) {
+      alert('部署失敗：' + err.message)
+    }
+    setDeploying(false)
+  }
+
+  const openDeploy = (tpl) => {
+    setDeployTpl(tpl)
+    setDeployForm({ name: tpl.name, store: '', owner: profile?.name || '' })
+    setShowDeployModal(true)
   }
 
   // Filter
@@ -326,6 +401,7 @@ export default function Projects() {
       <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
         {[
           { key: 'active', label: `進行中專案 (${activeCount})`, color: 'var(--accent-cyan)' },
+          { key: 'templates', label: `專案模板 (${templates.length})`, color: 'var(--accent-purple)' },
           { key: 'completed', label: `已完成 (${completedCount})`, color: 'var(--accent-green)' },
           { key: 'archived', label: `封存 (${archivedCount})`, color: 'var(--accent-red)' },
         ].map(t => (
@@ -340,12 +416,91 @@ export default function Projects() {
         ))}
       </div>
 
-      {/* Project list */}
-      {filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-          {tab === 'active' ? '目前沒有進行中的專案。點「新增專案」開始。' : '無資料'}
+      {/* Templates tab */}
+      {tab === 'templates' && (
+        <div>
+          {templates.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無專案模板</div>
+          ) : templates.map(tpl => {
+            const tplWorkflows = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
+            const totalTasks = tplWorkflows.reduce((s, w) => s + (w.tasks?.length || 0), 0)
+            return (
+              <div key={tpl.id} className="card" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📋</div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{tpl.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {tpl.category} · {tplWorkflows.length} 流程 · {totalTasks} 任務
+                        {tpl.estimated_days && ` · 預估 ${tpl.estimated_days} 天`}
+                        {tpl.estimated_budget && ` · 預算 NT$ ${Number(tpl.estimated_budget).toLocaleString()}`}
+                      </div>
+                    </div>
+                  </div>
+                  <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openDeploy(tpl)}>
+                    <Rocket size={14} /> 部署
+                  </button>
+                </div>
+                {tpl.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{tpl.description}</div>}
+                {/* Workflow preview */}
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {tplWorkflows.map((w, i) => (
+                    <div key={i} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', fontSize: 12 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>{w.name}</div>
+                      {(w.tasks || []).map((t, j) => (
+                        <div key={j} style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <CheckSquare size={10} /> {t.title}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      ) : filtered.map(p => {
+      )}
+
+      {/* Deploy Modal */}
+      {showDeployModal && deployTpl && (
+        <Modal title={`部署專案 — ${deployTpl.name}`} onClose={() => setShowDeployModal(false)} onSubmit={handleDeploy} submitLabel={deploying ? '部署中...' : '🚀 部署'}>
+          <Field label="專案名稱 *">
+            <input className="form-input" style={{ width: '100%' }} value={deployForm.name} onChange={e => setDeployForm(f => ({ ...f, name: e.target.value }))} />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="負責人">
+              <select className="form-input" style={{ width: '100%' }} value={deployForm.owner} onChange={e => setDeployForm(f => ({ ...f, owner: e.target.value }))}>
+                <option value="">請選擇</option>
+                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+              </select>
+            </Field>
+            <Field label="門市">
+              <select className="form-input" style={{ width: '100%' }} value={deployForm.store} onChange={e => setDeployForm(f => ({ ...f, store: e.target.value }))}>
+                <option value="">不指定</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ background: 'var(--glass-light)', borderRadius: 8, padding: 12, fontSize: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>將自動建立：</div>
+            {(Array.isArray(deployTpl.workflows) ? deployTpl.workflows : JSON.parse(deployTpl.workflows || '[]')).map((w, i) => (
+              <div key={i} style={{ marginBottom: 4 }}>
+                <span style={{ color: 'var(--accent-cyan)' }}>📂 {w.name}</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>({w.tasks?.length || 0} 任務)</span>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Project list */}
+      {tab !== 'templates' && filtered.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+          {tab === 'active' ? '目前沒有進行中的專案。點「新增專案」或從「專案模板」部署。' : '無資料'}
+        </div>
+      )}
+      {tab !== 'templates' && filtered.map(p => {
         const stats = getStats(p.id)
         const sc = STATUS_MAP[p.status] || {}
 

@@ -158,6 +158,7 @@ export default function Employees() {
       store: emp.store || '', email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
+      system_role: emp.role || 'staff',
     })
     setShowEditModal(true)
   }
@@ -165,11 +166,8 @@ export default function Employees() {
   const handleEdit = async () => {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
-      const posInfo = POSITIONS.find(p => p.label === editForm.position)
-      // Don't overwrite super_admin/admin roles
-      const currentRole = selectedEmp.role
-      const role = (currentRole === 'super_admin' || currentRole === 'admin') ? currentRole : (posInfo?.level || 'staff')
-      const { dept, store, ...rest } = editForm
+      const { dept, store, system_role, ...rest } = editForm
+      const role = system_role || selectedEmp.role || 'staff'
       const payload = { ...rest, role }
       // Only include dept/store if changed (avoid trigger conflicts)
       if (dept) payload.dept = dept
@@ -543,6 +541,14 @@ export default function Employees() {
               <input className="form-input" type="date" style={{ width: '100%' }} value={editForm.join_date} onChange={e => setE('join_date', e.target.value)} />
             </Field>
           </div>
+          <Field label="系統權限">
+            <select className="form-input" style={{ width: '100%' }} value={editForm.system_role} onChange={e => setE('system_role', e.target.value)}>
+              <option value="staff">一般員工</option>
+              <option value="manager">主管</option>
+              <option value="admin">管理員</option>
+              <option value="super_admin">超級管理員</option>
+            </select>
+          </Field>
         </Modal>
       )}
 

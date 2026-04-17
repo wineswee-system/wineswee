@@ -16,9 +16,6 @@ const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
 const Login = lazy(() => import('./pages/Login'))
 
 // ── Module-level lazy loading ──
-// Each module bundles ALL its pages into a single chunk.
-// When a user enters a module (e.g. HR), the entire module loads once
-// and subsequent navigation within that module is instant.
 const HRModule = lazy(() => import('./modules/HRModule'))
 const CRMModule = lazy(() => import('./modules/CRMModule'))
 const FinanceModule = lazy(() => import('./modules/FinanceModule'))
@@ -35,6 +32,16 @@ const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
+// ── Route-level access control — 5 roles (MUST be before AdminApp) ──
+const ROLE_ROUTES = {
+  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service'],
+  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/schedule', '/hr/leave-calendar', '/process', '/org'],
+  manager:      ['/', '/hr', '/org', '/process'],
+  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
+  super_admin:  null, // all
+}
+
+// ── Error Boundary ──
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
@@ -53,6 +60,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── AdminApp (uses ROLE_ROUTES) ──
 function AdminApp({ role = 'store_staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
   const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
@@ -95,6 +103,7 @@ function AdminApp({ role = 'store_staff' }) {
   )
 }
 
+// ── Protected wrapper ──
 function ProtectedApp() {
   const { loading, isAuthenticated, profile } = useAuth()
 
@@ -104,15 +113,7 @@ function ProtectedApp() {
   return <AdminApp role={profile?.role || 'store_staff'} />
 }
 
-// Route-level access control — 5 roles
-const ROLE_ROUTES = {
-  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service'],
-  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/schedule', '/hr/leave-calendar', '/process', '/org'],
-  manager:      ['/', '/hr', '/org', '/process'],
-  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
-  super_admin:  null, // all
-}
-
+// ── Root App ──
 export default function App() {
   return (
     <ErrorBoundary>

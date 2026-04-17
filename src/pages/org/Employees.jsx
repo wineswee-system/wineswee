@@ -163,14 +163,25 @@ export default function Employees() {
   }
   const setE = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
   const handleEdit = async () => {
-    if (!selectedEmp) return
+    if (!selectedEmp) { alert('未選擇員工'); return }
     try {
       const posInfo = POSITIONS.find(p => p.label === editForm.position)
       const role = posInfo?.level || 'staff'
-      const { data, error } = await updateEmployee(selectedEmp.id, { ...editForm, role })
+      const { dept, store, ...rest } = editForm
+      const payload = { ...rest, role }
+      // Only include dept/store if changed (avoid trigger conflicts)
+      if (dept) payload.dept = dept
+      if (store) payload.store = store
+      const { data, error } = await updateEmployee(selectedEmp.id, payload)
       if (error) throw error
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
+        setShowEditModal(false)
+      } else {
+        // .single() returned no rows — try without .single()
+        const { error: e2 } = await supabase.from('employees').update(payload).eq('id', selectedEmp.id)
+        if (e2) throw e2
+        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? { ...e, ...payload } : e))
         setShowEditModal(false)
       }
     } catch (err) {

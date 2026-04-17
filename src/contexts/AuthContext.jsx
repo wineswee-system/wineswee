@@ -9,25 +9,19 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const loadProfile = async (authUser) => {
-    if (!authUser) { setProfile(null); return }
+    if (!authUser?.email) { setProfile(null); return }
     try {
-      // Try matching by email
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 5000)
+
       let { data } = await supabase
         .from('employees')
         .select('*')
         .eq('email', authUser.email)
         .maybeSingle()
+        .abortSignal(controller.signal)
 
-      // Fallback: match by name from OAuth metadata
-      if (!data && authUser.user_metadata?.full_name) {
-        const res = await supabase
-          .from('employees')
-          .select('*')
-          .eq('name', authUser.user_metadata.full_name)
-          .maybeSingle()
-        data = res.data
-      }
-
+      clearTimeout(timeout)
       setProfile(data || null)
     } catch (err) {
       console.error('Failed to load employee profile:', err)

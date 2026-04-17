@@ -515,7 +515,7 @@ export default function Sidebar() {
     admin:        ['dashboard', 'people', 'analytics'],
     super_admin:  null, // null = all
   }
-  const allowedGroups = ROLE_GROUPS[userRole] || ROLE_GROUPS['store_staff']
+  const allowedGroups = userRole in ROLE_GROUPS ? ROLE_GROUPS[userRole] : ROLE_GROUPS['store_staff']
   const roleFiltered = allowedGroups === null
     ? majorGroups
     : majorGroups.filter(g => allowedGroups.includes(g.key))

@@ -37,7 +37,7 @@ const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
 function AdminApp({ role = 'store_staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
-  const allowed = ROLE_ROUTES[role] || ROLE_ROUTES['store_staff']
+  const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
   const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r) || r.startsWith(prefix))
   const blocked = <Navigate to="/" replace />
 

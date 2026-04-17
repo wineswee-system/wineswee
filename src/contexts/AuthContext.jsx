@@ -32,11 +32,8 @@ export function AuthProvider({ children }) {
       if (!mounted) return
       const u = session?.user ?? null
       setUser(u)
-      if (u) {
-        loadProfile(u).finally(() => { if (mounted) setLoading(false) })
-      } else {
-        setLoading(false)
-      }
+      setLoading(false)
+      if (u) loadProfile(u)
     }).catch(() => {
       if (mounted) setLoading(false)
     })

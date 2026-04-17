@@ -35,7 +35,7 @@ const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
-function AdminApp({ role = 'staff' }) {
+function AdminApp({ role = 'store_staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
   const allowed = ROLE_ROUTES[role] || ROLE_ROUTES['store_staff']
   const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r) || r.startsWith(prefix))
@@ -83,7 +83,7 @@ function ProtectedApp() {
   if (loading) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
 
-  return <AdminApp role={profile?.role || 'staff'} />
+  return <AdminApp role={profile?.role || 'store_staff'} />
 }
 
 // Route-level access control — 5 roles

@@ -245,37 +245,45 @@ export default function Projects() {
           </div>
         </div>
 
-        {/* Stats cards */}
-        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-          <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-            <div className="stat-card-label">流程</div><div className="stat-card-value">{stats.workflows}</div>
-          </div>
-          <div className="stat-card" style={{ '--card-accent': 'var(--accent-blue)', '--card-accent-dim': 'var(--accent-blue-dim)' }}>
-            <div className="stat-card-label">總任務</div><div className="stat-card-value">{stats.total}</div>
-          </div>
-          <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
-            <div className="stat-card-label">已完成</div><div className="stat-card-value">{stats.completed}</div>
-          </div>
-          <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
-            <div className="stat-card-label">進行中</div><div className="stat-card-value">{stats.inProgress}</div>
-          </div>
-          <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
-            <div className="stat-card-label">進度</div><div className="stat-card-value">{stats.pct}%</div>
+        {/* Stats + Progress */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 1.5fr', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: '流程', value: stats.workflows, color: 'var(--accent-cyan)' },
+            { label: '總任務', value: stats.total, color: 'var(--accent-blue)' },
+            { label: '已完成', value: stats.completed, color: 'var(--accent-green)' },
+            { label: '進行中', value: stats.inProgress, color: 'var(--accent-orange)' },
+          ].map(s => (
+            <div key={s.label} className="card" style={{ padding: '12px 14px', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+            </div>
+          ))}
+          <div className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>{stats.pct}%</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>整體進度</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-cyan)' }}>{stats.pct}%</div>
+              <div style={{ height: 3, borderRadius: 2, background: 'var(--border-medium)', marginTop: 4, width: 80 }}>
+                <div style={{ height: '100%', borderRadius: 2, width: `${stats.pct}%`, background: 'var(--accent-cyan)' }} />
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Meta info */}
-        <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 13 }}>
-          {p.owner && <div><span style={{ color: 'var(--text-muted)' }}>負責人：</span><strong>{p.owner}</strong></div>}
-          {p.department && <div><span style={{ color: 'var(--text-muted)' }}>部門：</span>{p.department}</div>}
-          {p.store && <div><span style={{ color: 'var(--text-muted)' }}>門市：</span>{p.store}</div>}
-          {p.start_date && <div><span style={{ color: 'var(--text-muted)' }}>期間：</span>{p.start_date} ~ {p.end_date || '未定'}</div>}
-          {p.budget && <div><span style={{ color: 'var(--text-muted)' }}>預算：</span>{fmt(p.budget)}</div>}
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, padding: '10px 14px', background: 'var(--glass-light)', borderRadius: 10 }}>
+          {p.owner && <div><span style={{ color: 'var(--text-muted)' }}>負責人</span> <strong style={{ color: 'var(--text-primary)' }}>{p.owner}</strong></div>}
+          {p.department && <div><span style={{ color: 'var(--text-muted)' }}>部門</span> {p.department}</div>}
+          {p.store && <div><span style={{ color: 'var(--text-muted)' }}>門市</span> {p.store}</div>}
+          {p.start_date && <div><span style={{ color: 'var(--text-muted)' }}>期間</span> {p.start_date} ~ {p.end_date || '未定'}</div>}
+          {p.budget && <div><span style={{ color: 'var(--text-muted)' }}>預算</span> {fmt(p.budget)}</div>}
         </div>
 
-        {/* Workflows list (same style as ActiveInstancesList) */}
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Workflow size={16} /> 流程（{pWorkflows.length}）
+        {/* Workflows */}
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+          <Workflow size={15} /> 流程（{pWorkflows.length}）
         </div>
 
         {pWorkflows.length === 0 ? (
@@ -292,49 +300,49 @@ export default function Projects() {
           const wColor = w.status === '已完成' ? 'var(--accent-green)' : w.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-cyan)'
 
           return (
-            <div key={w.id} className="card" style={{ marginBottom: 12 }}>
+            <div key={w.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{w.template_name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{w.template_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {w.started_by && `${w.started_by} · `}{w.started_at?.slice(0, 10)}
-                      <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: wColor, background: `color-mix(in srgb, ${wColor} 15%, transparent)` }}>{w.status}</span>
+                      <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: wColor, background: `color-mix(in srgb, ${wColor} 15%, transparent)` }}>{w.status}</span>
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-                  <div style={{ display: 'flex', gap: 14, fontSize: 13 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ display: 'flex', gap: 10, fontSize: 12, whiteSpace: 'nowrap' }}>
                     <span>⬜ {wPending}</span>
                     <span style={{ color: 'var(--accent-cyan)' }}>🔄 {wInProgress}</span>
                     <span style={{ color: 'var(--accent-green)' }}>✅ {wDone}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent-cyan)' }}>{wPct}%</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wDone}/{wTotal}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)', lineHeight: 1 }}>{wPct}%</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{wDone}/{wTotal}</div>
                     </div>
-                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${wPct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{wPct}%</div>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(${wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)'} ${wPct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{wPct}%</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Tasks under workflow */}
+              {/* Tasks */}
               {wTasks.length > 0 && (
-                <div style={{ marginTop: 10, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 6 }}>
                   {wTasks.map(t => (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0 5px 28px', fontSize: 13 }}>
-                      <CheckSquare size={14} color={t.status === '已完成' ? 'var(--accent-green)' : t.status === '進行中' ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
-                      <span style={{ flex: 1, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'inherit' }}>
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0 6px 24px', fontSize: 13 }}>
+                      <CheckSquare size={13} style={{ flexShrink: 0 }} color={t.status === '已完成' ? 'var(--accent-green)' : t.status === '進行中' ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
+                      <span style={{ flex: 1, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'inherit', lineHeight: 1.4 }}>
                         {t.title}
                       </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.assignee || t.assigned_to || ''}</span>
-                      {t.due_date && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.due_date}</span>}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{t.assignee || t.assigned_to || ''}</span>
+                      {t.due_date && <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{t.due_date}</span>}
                       <span style={{
-                        padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                        padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
                         color: t.status === '已完成' ? 'var(--accent-green)' : t.status === '進行中' ? 'var(--accent-cyan)' : 'var(--text-muted)',
                         background: t.status === '已完成' ? 'var(--accent-green-dim)' : t.status === '進行中' ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
                       }}>{t.status}</span>
@@ -347,8 +355,8 @@ export default function Projects() {
         })}
 
         {/* Comments */}
-        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <MessageSquare size={16} /> 備註（{pComments.length}）
+        <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+          <MessageSquare size={15} /> 備註（{pComments.length}）
         </div>
         <div className="card">
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -559,43 +567,43 @@ export default function Projects() {
         const sc = STATUS_MAP[p.status] || {}
 
         return (
-          <div key={p.id} className="card" style={{ marginBottom: 12, cursor: 'pointer', transition: 'border-color 0.2s' }}
+          <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.2s' }}
             onClick={() => setSelected(p)}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = ''}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700 }}>{p.name}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</span>
+                    <span style={{ padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {p.owner || '未指派'} · {p.start_date || '未定'}{p.end_date && ` ~ ${p.end_date}`}
                     {stats.workflows > 0 && ` · ${stats.workflows} 流程`}
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-                <div style={{ display: 'flex', gap: 14, fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 10, fontSize: 12, whiteSpace: 'nowrap' }}>
                   <span>⬜ {stats.pending}</span>
                   <span style={{ color: 'var(--accent-cyan)' }}>🔄 {stats.inProgress}</span>
                   <span style={{ color: 'var(--accent-green)' }}>✅ {stats.completed}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent-cyan)' }}>{stats.pct}%</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{stats.completed}/{stats.total}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent-cyan)', lineHeight: 1 }}>{stats.pct}%</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{stats.completed}/{stats.total}</div>
                   </div>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{stats.pct}%</div>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{stats.pct}%</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                  <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={(e) => openEdit(p, e)}><Edit3 size={13} /></button>
-                  <button className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }} onClick={(e) => handleDelete(p.id, e)}><Trash2 size={13} /></button>
+                  <button className="btn btn-secondary" style={{ padding: '3px 7px' }} onClick={(e) => openEdit(p, e)}><Edit3 size={12} /></button>
+                  <button className="btn btn-secondary" style={{ padding: '3px 7px', color: 'var(--accent-red)' }} onClick={(e) => handleDelete(p.id, e)}><Trash2 size={12} /></button>
                 </div>
               </div>
             </div>

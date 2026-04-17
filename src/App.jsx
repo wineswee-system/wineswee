@@ -76,8 +76,11 @@ function AdminApp() {
 }
 
 function ProtectedApp() {
-  const { loading } = useAuth()
+  const { loading, isAuthenticated } = useAuth()
+
   if (loading) return <LoadingSpinner />
+  if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
+
   return <AdminApp />
 }
 

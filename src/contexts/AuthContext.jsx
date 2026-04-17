@@ -11,20 +11,20 @@ export function AuthProvider({ children }) {
   const loadProfile = async (authUser) => {
     if (!authUser) { setProfile(null); return }
     try {
-      // Try matching by email first
+      // Try matching by email
       let { data } = await supabase
         .from('employees')
         .select('*')
         .eq('email', authUser.email)
-        .single()
+        .maybeSingle()
 
-      // If no match by email, try by auth user metadata (for OAuth users)
+      // Fallback: match by name from OAuth metadata
       if (!data && authUser.user_metadata?.full_name) {
         const res = await supabase
           .from('employees')
           .select('*')
           .eq('name', authUser.user_metadata.full_name)
-          .single()
+          .maybeSingle()
         data = res.data
       }
 
@@ -36,30 +36,34 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // Timeout to prevent infinite loading
-    const timeout = setTimeout(() => setLoading(false), 5000)
+    let mounted = true
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
       const u = session?.user ?? null
       setUser(u)
-      loadProfile(u).finally(() => { clearTimeout(timeout); setLoading(false) })
-    }).catch((err) => {
-      console.error('Failed to retrieve session:', err)
-      clearTimeout(timeout)
-      setLoading(false)
+      if (u) {
+        loadProfile(u).finally(() => { if (mounted) setLoading(false) })
+      } else {
+        setLoading(false)
+      }
+    }).catch(() => {
+      if (mounted) setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        const u = session?.user ?? null
-        setUser(u)
+      if (!mounted) return
+      const u = session?.user ?? null
+      setUser(u)
+      if (u) {
         await loadProfile(u)
-      } catch (err) {
-        console.error('Auth state change error:', err)
+      } else {
+        setProfile(null)
       }
+      setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
   const signIn = (email, password) =>
@@ -68,9 +72,7 @@ export function AuthProvider({ children }) {
   const signInWithProvider = (provider) =>
     supabase.auth.signInWithOAuth({
       provider,
-      options: {
-        redirectTo: window.location.origin,
-      },
+      options: { redirectTo: window.location.origin },
     })
 
   const signOut = async () => {

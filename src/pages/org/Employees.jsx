@@ -166,7 +166,9 @@ export default function Employees() {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
       const posInfo = POSITIONS.find(p => p.label === editForm.position)
-      const role = posInfo?.level || 'staff'
+      // Don't overwrite super_admin/admin roles
+      const currentRole = selectedEmp.role
+      const role = (currentRole === 'super_admin' || currentRole === 'admin') ? currentRole : (posInfo?.level || 'staff')
       const { dept, store, ...rest } = editForm
       const payload = { ...rest, role }
       // Only include dept/store if changed (avoid trigger conflicts)

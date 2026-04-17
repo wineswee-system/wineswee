@@ -188,7 +188,10 @@ export default function Employees() {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
       const { dept, store, system_role, join_date, ...rest } = editForm
-      const role = system_role || selectedEmp.role || 'staff'
+      const role = system_role || selectedEmp.role || 'store_staff'
+      // Convert empty strings to null for unique-constrained fields
+      if (rest.email !== undefined) rest.email = rest.email?.trim() || null
+      if (rest.phone !== undefined) rest.phone = rest.phone?.trim() || null
       if (join_date) rest.join_date = join_date
       const payload = { ...rest, role }
       // Only include dept/store if changed (avoid trigger conflicts)

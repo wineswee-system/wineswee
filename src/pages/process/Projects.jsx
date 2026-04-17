@@ -8,6 +8,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { getEmployees } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
+import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const STATUS_MAP = {
@@ -89,7 +90,10 @@ export default function Projects() {
     const payload = { ...form, budget: form.budget ? Number(form.budget) : null, organization_id: 1 }
     if (editingId) {
       const { data } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
-      if (data) setProjects(prev => prev.map(p => p.id === editingId ? data : p))
+      if (data) {
+        setProjects(prev => prev.map(p => p.id === editingId ? data : p))
+        if (selected?.id === editingId) setSelected(data)
+      }
     } else {
       payload.owner = payload.owner || profile?.name || ''
       const { data } = await supabase.from('projects').insert(payload).select().single()
@@ -179,6 +183,11 @@ export default function Projects() {
           }))
           await supabase.from('tasks').insert(taskRows)
         }
+      }
+
+      // LINE notify project owner
+      if (deployForm.owner) {
+        notifyTaskAssignee(deployForm.owner, `專案「${deployForm.name}」已建立`, '專案部署', null).catch(() => {})
       }
 
       setShowDeployModal(false)
@@ -358,6 +367,51 @@ export default function Projects() {
             </div>
           ))}
         </div>
+
+        {/* Modal in detail view */}
+        {showModal && (
+          <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
+            <Field label="專案名稱 *">
+              <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="狀態">
+                <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
+                  {Object.keys(STATUS_MAP).map(s => <option key={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="優先級">
+                <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
+                  <option>高</option><option>中</option><option>低</option>
+                </select>
+              </Field>
+              <Field label="預算">
+                <input className="form-input" type="number" style={{ width: '100%' }} value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="選填" />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="負責人">
+                <select className="form-input" style={{ width: '100%' }} value={form.owner} onChange={e => set('owner', e.target.value)}>
+                  <option value="">請選擇</option>
+                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}（{e.dept || e.position}）</option>)}
+                </select>
+              </Field>
+              <Field label="門市">
+                <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
+                  <option value="">不指定</option>
+                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="開始日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} /></Field>
+              <Field label="結束日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} /></Field>
+            </div>
+            <Field label="說明">
+              <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} />
+            </Field>
+          </Modal>
+        )}
       </div>
     )
   }

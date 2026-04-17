@@ -36,12 +36,16 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // Timeout to prevent infinite loading
+    const timeout = setTimeout(() => setLoading(false), 5000)
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setUser(u)
-      loadProfile(u).finally(() => setLoading(false))
+      loadProfile(u).finally(() => { clearTimeout(timeout); setLoading(false) })
     }).catch((err) => {
       console.error('Failed to retrieve session:', err)
+      clearTimeout(timeout)
       setLoading(false)
     })
 

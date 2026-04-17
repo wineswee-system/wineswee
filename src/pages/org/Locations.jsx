@@ -4,7 +4,7 @@ import { getStores, createStore, updateStore, deleteStore, getEmployees, getComp
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
-const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30 }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', working_hour_type: 'standard', variable_period_start: '' }
 
 export default function Locations() {
   const [stores, setStores] = useState([])
@@ -55,6 +55,9 @@ export default function Locations() {
       allowed_wifi: s.allowed_wifi ? s.allowed_wifi.join(', ') : '',
       late_tolerance_minutes: s.late_tolerance_minutes ?? 5,
       early_clock_minutes: s.early_clock_minutes ?? 30,
+      clock_in_method: s.clock_in_method || 'any',
+      working_hour_type: s.working_hour_type || 'standard',
+      variable_period_start: s.variable_period_start || '',
     })
     setShowModal(true)
   }
@@ -87,6 +90,9 @@ export default function Locations() {
       allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
       late_tolerance_minutes: parseInt(form.late_tolerance_minutes) || 5,
       early_clock_minutes: parseInt(form.early_clock_minutes) || 30,
+      clock_in_method: form.clock_in_method || 'any',
+      working_hour_type: form.working_hour_type || 'standard',
+      variable_period_start: form.variable_period_start || null,
     }
     try {
       if (editingStore) {
@@ -230,6 +236,31 @@ export default function Locations() {
               <option>已停業</option>
             </select>
           </Field>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>⏰ 工時制度</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="打卡驗證方式">
+                <select className="form-input" style={{ width: '100%' }} value={form.clock_in_method} onChange={e => set('clock_in_method', e.target.value)}>
+                  <option value="any">任一通過（GPS 或 WiFi）</option>
+                  <option value="gps_required">僅限 GPS</option>
+                  <option value="gps_or_wifi">GPS 或 WiFi 擇一</option>
+                </select>
+              </Field>
+              <Field label="工時類型">
+                <select className="form-input" style={{ width: '100%' }} value={form.working_hour_type} onChange={e => set('working_hour_type', e.target.value)}>
+                  <option value="standard">固定工時</option>
+                  <option value="2week">2 週變形</option>
+                  <option value="4week">4 週變形</option>
+                  <option value="8week">8 週變形</option>
+                </select>
+              </Field>
+              {form.working_hour_type !== 'standard' && (
+                <Field label="變形工時起算日">
+                  <input className="form-input" type="date" style={{ width: '100%' }} value={form.variable_period_start} onChange={e => set('variable_period_start', e.target.value)} />
+                </Field>
+              )}
+            </div>
+          </div>
           <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📍 GPS 打卡範圍設定</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

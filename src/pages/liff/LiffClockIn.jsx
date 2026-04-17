@@ -63,8 +63,9 @@ export default function LiffClockIn() {
   async function loadEmployeeData(emp) {
     setEmployee(emp)
     const [{ data: storeData }, { data: attendance }] = await Promise.all([
-      emp.store ? supabase.from('stores').select('*').eq('name', emp.store).maybeSingle() : { data: null },
-      supabase.from('attendance_records').select('*').eq('employee', emp.name).eq('date', today).maybeSingle(),
+      emp.store_id ? supabase.from('stores').select('*').eq('id', emp.store_id).maybeSingle()
+        : emp.store ? supabase.from('stores').select('*').eq('name', emp.store).maybeSingle() : { data: null },
+      supabase.from('attendance_records').select('*').eq('employee_id', emp.id).eq('date', today).maybeSingle(),
     ])
     setStore(storeData)
     setTodayRecord(attendance)

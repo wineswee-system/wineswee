@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { notifyApproval } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -16,7 +17,7 @@ export default function ApprovalChains() {
   const [showChainModal, setShowChainModal] = useState(false)
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingChain, setEditingChain] = useState(null)
-  const [chainForm, setChainForm] = useState({ name: '', description: '', category: 'HR', steps: [{ role: '', label: '' }] })
+  const [chainForm, setChainForm] = useState({ name: '', description: '', category: 'HR', min_amount: '', max_amount: '', is_active: true, steps: [{ role: '', label: '' }] })
   const [applyForm, setApplyForm] = useState({ chain_id: '', title: '', store: '', notes: '' })
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export default function ApprovalChains() {
       supabase.from('approval_chains').select('*').order('id'),
       supabase.from('approval_forms').select('*').order('created_at', { ascending: false }),
       supabase.from('approval_form_steps').select('*').order('form_id,step_order'),
-      supabase.from('employees').select('id, name, dept, position, role').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, role, line_user_id').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([c, f, fs, e, s]) => {
       setChains(c.data || [])
@@ -37,13 +38,19 @@ export default function ApprovalChains() {
 
   const openEditChain = (c) => {
     setEditingChain(c)
-    setChainForm({ name: c.name, description: c.description || '', category: c.category || 'HR', steps: c.steps || [{ role: '', label: '' }] })
+    setChainForm({ name: c.name, description: c.description || '', category: c.category || 'HR', min_amount: c.min_amount ?? '', max_amount: c.max_amount ?? '', is_active: c.is_active !== false, steps: c.steps || [{ role: '', label: '' }] })
     setShowChainModal(true)
   }
 
   const handleChainSubmit = async () => {
     if (!chainForm.name) return
-    const payload = { name: chainForm.name, description: chainForm.description, category: chainForm.category, steps: chainForm.steps.filter(s => s.role || s.label) }
+    const payload = {
+      name: chainForm.name, description: chainForm.description, category: chainForm.category,
+      min_amount: chainForm.min_amount !== '' ? Number(chainForm.min_amount) : 0,
+      max_amount: chainForm.max_amount !== '' ? Number(chainForm.max_amount) : null,
+      is_active: chainForm.is_active,
+      steps: chainForm.steps.filter(s => s.role || s.label),
+    }
     if (editingChain) {
       const { data } = await supabase.from('approval_chains').update(payload).eq('id', editingChain.id).select().single()
       if (data) setChains(prev => prev.map(c => c.id === data.id ? data : c))
@@ -53,7 +60,7 @@ export default function ApprovalChains() {
       if (data) setChains(prev => [...prev, data])
     }
     setShowChainModal(false); setEditingChain(null)
-    setChainForm({ name: '', description: '', category: 'HR', steps: [{ role: '', label: '' }] })
+    setChainForm({ name: '', description: '', category: 'HR', min_amount: '', max_amount: '', is_active: true, steps: [{ role: '', label: '' }] })
   }
 
   const handleApplySubmit = async () => {
@@ -71,6 +78,8 @@ export default function ApprovalChains() {
       const rows = chain.steps.map((s, i) => ({ form_id: form.id, step_order: i, role: s.role, status: i === 0 ? '待簽' : '等待中' }))
       const { data: ns } = await supabase.from('approval_form_steps').insert(rows).select()
       if (ns) setFormSteps(prev => [...prev, ...ns])
+      const first = chain.steps[0]
+      if (first?.role) notifyApproval(first.role, applyForm.title, `第 1 關：${first.label || first.role}`)
     }
     if (form) setForms(prev => [form, ...prev])
     setShowFormModal(false); setApplyForm({ chain_id: '', title: '', store: '', notes: '' })
@@ -92,6 +101,10 @@ export default function ApprovalChains() {
         const { data: ns } = await supabase.from('approval_form_steps').update({ status: '待簽' }).eq('id', next.id).select().single()
         if (ns) setFormSteps(prev => prev.map(s => s.id === ns.id ? ns : s))
         await supabase.from('approval_forms').update({ current_step: next.step_order }).eq('id', formId)
+        const form = forms.find(x => x.id === formId)
+        const chain = chains.find(c => c.id === form?.chain_id)
+        const stepDef = chain?.steps?.[next.step_order]
+        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order + 1} 關：${stepDef?.label || next.role}`)
       } else {
         const { data: f } = await supabase.from('approval_forms').update({ status: '已通過', completed_at: new Date().toISOString() }).eq('id', formId).select().single()
         if (f) setForms(prev => prev.map(x => x.id === formId ? f : x))
@@ -195,12 +208,17 @@ export default function ApprovalChains() {
         <div className="card">
           <div className="data-table-wrapper">
             <table className="data-table">
-              <thead><tr><th>簽核鏈</th><th>分類</th><th>步驟</th><th>流程</th><th>操作</th></tr></thead>
+              <thead><tr><th>簽核鏈</th><th>分類</th><th>金額範圍</th><th>步驟</th><th>流程</th><th>狀態</th><th>操作</th></tr></thead>
               <tbody>
                 {chains.map(c => (
                   <tr key={c.id}>
                     <td><div style={{ fontWeight: 600 }}>{c.name}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.description}</div></td>
                     <td><span className="badge badge-cyan">{c.category}</span></td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                      {c.min_amount != null ? `$${Number(c.min_amount).toLocaleString()}` : '$0'}
+                      {' ~ '}
+                      {c.max_amount != null ? `$${Number(c.max_amount).toLocaleString()}` : '無上限'}
+                    </td>
                     <td>{c.steps?.length || 0} 關</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
@@ -208,6 +226,11 @@ export default function ApprovalChains() {
                         {(c.steps || []).map((s, i) => (<span key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}><ArrowRight size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)' }}>{s.label || s.role}</span></span>))}
                         <ArrowRight size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ fontSize: 11, color: 'var(--accent-green)' }}>✓</span>
                       </div>
+                    </td>
+                    <td>
+                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: c.is_active !== false ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)', color: c.is_active !== false ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {c.is_active !== false ? '啟用' : '停用'}
+                      </span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
@@ -227,14 +250,35 @@ export default function ApprovalChains() {
         <Modal title={editingChain ? `編輯 — ${editingChain.name}` : '新增簽核鏈'} onClose={() => { setShowChainModal(false); setEditingChain(null) }} onSubmit={handleChainSubmit} submitLabel={editingChain ? '儲存' : '新增'}>
           <Field label="名稱 *"><input className="form-input" style={{ width: '100%' }} value={chainForm.name} onChange={e => setChainForm(f => ({ ...f, name: e.target.value }))} placeholder="例：員工請假簽核" /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="分類"><select className="form-input" style={{ width: '100%' }} value={chainForm.category} onChange={e => setChainForm(f => ({ ...f, category: e.target.value }))}>{['HR', '營運', '採購', '管理', '財務'].map(c => <option key={c}>{c}</option>)}</select></Field>
+            <Field label="分類"><select className="form-input" style={{ width: '100%' }} value={chainForm.category} onChange={e => setChainForm(f => ({ ...f, category: e.target.value }))}>{['HR', '營運', '採購', '管理', '財務', '費用申請'].map(c => <option key={c}>{c}</option>)}</select></Field>
             <Field label="說明"><input className="form-input" style={{ width: '100%' }} value={chainForm.description} onChange={e => setChainForm(f => ({ ...f, description: e.target.value }))} /></Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Field label="最低金額">
+              <input className="form-input" type="number" style={{ width: '100%' }} value={chainForm.min_amount} onChange={e => setChainForm(f => ({ ...f, min_amount: e.target.value }))} placeholder="0（無下限）" />
+            </Field>
+            <Field label="最高金額">
+              <input className="form-input" type="number" style={{ width: '100%' }} value={chainForm.max_amount} onChange={e => setChainForm(f => ({ ...f, max_amount: e.target.value }))} placeholder="不填=無上限" />
+            </Field>
+            <Field label="狀態">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', height: 36 }}>
+                <input type="checkbox" checked={chainForm.is_active} onChange={e => setChainForm(f => ({ ...f, is_active: e.target.checked }))} />
+                <span style={{ fontSize: 13 }}>{chainForm.is_active ? '啟用' : '停用'}</span>
+              </label>
+            </Field>
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 8 }}>簽核步驟（申請人 → ...）</div>
           {chainForm.steps.map((s, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-              <input className="form-input" placeholder="角色（例：店長）" value={s.role} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], role: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
-              <input className="form-input" placeholder="標籤（例：主管審核）" value={s.label} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], label: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
+              <select className="form-input" value={s.role} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], role: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }}>
+                <option value="">選擇簽核人</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.name} disabled={!emp.line_user_id && false}>
+                    {emp.name}（{emp.position || emp.dept || '—'}）{emp.line_user_id ? '' : ' · 未綁LINE'}
+                  </option>
+                ))}
+              </select>
+              <input className="form-input" placeholder="步驟標籤（例：主管審核）" value={s.label} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], label: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
               <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => setChainForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
             </div>
           ))}

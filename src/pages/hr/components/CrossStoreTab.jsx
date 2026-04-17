@@ -12,7 +12,7 @@ export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekD
     if (!weekDates?.length) return
     setLoading(true)
     Promise.all([
-      supabase.from('employees').select('id, name, store, additional_stores, employment_type, position').eq('status', '在職'),
+      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position').eq('status', '在職'),
       supabase.from('store_staffing').select('*'),
       supabase.from('schedules').select('employee, date, shift').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1]),
     ]).then(([e, s, sc]) => {
@@ -70,9 +70,10 @@ export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekD
 
     // Find employees who can support this store from other stores
     const supporters = allEmployees.filter(e => {
-      if (e.store === loc.name) return false
+      if (e.store === loc.name || e.store_id === loc.id) return false
       const additional = e.additional_stores || []
-      return additional.includes(loc.id) || additional.includes(loc.name)
+      const storeIds = e.assigned_store_ids || []
+      return storeIds.includes(loc.id) || additional.includes(loc.id) || additional.includes(loc.name)
     })
 
     return { store: loc, storeEmps, dailyStatus, totalDeficit, supporters }

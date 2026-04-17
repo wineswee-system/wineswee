@@ -177,6 +177,7 @@ const groupNav = {
         { icon: BookText, label: '傳票管理', path: '/finance/journal' },
         { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
+        { icon: FileEdit, label: '費用申請', path: '/finance/expense-requests' },
         { icon: FileText, label: '電子發票', path: '/finance/invoices' },
         { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
       ]
@@ -204,6 +205,8 @@ const groupNav = {
       label: '管理會計',
       icon: DollarSign,
       children: [
+        { icon: BookText, label: '會計科目', path: '/finance/chart-of-accounts' },
+        { icon: Shield, label: '費用簽核設定', path: '/finance/expense-approval' },
         { icon: BarChart3, label: '預算管理', path: '/finance/budgets' },
         { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
         { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },

@@ -16,12 +16,14 @@ const DEFAULT_TEMPLATES = {
   expense: { name: '費用報帳簽核', steps: ['直屬主管審核', '財務確認'] },
   business_trip: { name: '出差申請簽核', steps: ['直屬主管審核', 'HR 確認'] },
   purchase: { name: '採購簽核', steps: ['部門主管審核', '採購確認'] },
+  expense_request: { name: '費用申請簽核', steps: ['直屬主管審核', '財務確認'] },
 }
 
 // approval_chains 的 category → type 對照
 const CHAIN_CATEGORY_MAP = {
   leave: 'HR', overtime: 'HR', expense: 'HR',
   business_trip: 'HR', purchase: '採購',
+  expense_request: '費用申請',
 }
 
 /**
@@ -35,16 +37,25 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   const defaultTpl = DEFAULT_TEMPLATES[type]
   if (!defaultTpl) return { error: `未知的流程類型：${type}` }
 
-  // 優先從 approval_chains 讀取設定
+  // 優先從 approval_chains 讀取設定（依金額匹配）
   const category = CHAIN_CATEGORY_MAP[type] || 'HR'
-  const { data: chains } = await supabase
+  const amount = record?.estimated_amount || record?.amount || 0
+
+  let query = supabase
     .from('approval_chains')
     .select('*')
     .eq('category', category)
-    .order('id')
-    .limit(1)
+    .not('is_active', 'is', false)
+    .lte('min_amount', amount)
+    .order('min_amount', { ascending: false }) // 取最精確匹配（金額最高的下限）
+    .limit(10)
 
-  const chain = chains?.[0]
+  const { data: allChains } = await query
+
+  // Filter max_amount in JS (Supabase doesn't support OR NULL easily)
+  const chain = (allChains || []).find(c =>
+    c.max_amount == null || Number(c.max_amount) >= amount
+  )
   const template = chain
     ? { name: chain.name, steps: (chain.steps || []).map(s => s.label || s.role || '審核') }
     : defaultTpl
@@ -231,6 +242,7 @@ const TEMPLATE_TABLE_MAP = {
   '費用報帳簽核': { table: 'expenses', statusField: 'status', approved: '已核銷', rejected: '已拒絕' },
   '出差申請簽核': { table: 'business_trips', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
   '採購簽核': { table: 'purchase_orders', statusField: 'status', approved: '已確認', rejected: '已取消' },
+  '費用申請簽核': { table: 'expense_requests', statusField: 'status', approved: '已核准', rejected: '已駁回' },
 }
 
 async function writeBackStatus(instance, action) {
@@ -245,7 +257,7 @@ async function writeBackStatus(instance, action) {
   const { data: records } = await supabase
     .from(mapping.table)
     .select('id')
-    .eq('employee', instance.started_by)
+    .eq('employee', instance.started_by) // TEXT-based; will use employee_id when available
     .in('status', ['待審核', '待確認'])
     .order('created_at', { ascending: false })
     .limit(1)

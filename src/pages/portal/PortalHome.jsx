@@ -30,22 +30,22 @@ export default function PortalHome() {
     if (!profile?.name) return
 
     supabase.from('attendance_records').select('*')
-      .eq('employee', profile.name).eq('date', today).maybeSingle()
+      .eq('employee_id', profile.id).eq('date', today).maybeSingle()
       .then(({ data }) => setTodayAttendance(data))
 
     supabase.from('tasks').select('id', { count: 'exact', head: true })
-      .eq('assignee', profile.name).in('status', ['未開始', '進行中'])
+      .eq('assignee_id', profile.id).in('status', ['未開始', '進行中'])
       .then(({ count }) => setPendingTasks(count || 0))
 
     supabase.from('leave_requests').select('*')
-      .eq('employee', profile.name).order('id', { ascending: false }).limit(5)
+      .eq('employee_id', profile.id).order('id', { ascending: false }).limit(5)
       .then(({ data }) => setRecentLeaves(data || []))
 
     // Load employee's store for clock-in validation
-    supabase.from('employees').select('store').eq('name', profile.name).maybeSingle()
+    supabase.from('employees').select('store_id').eq('id', profile.id).maybeSingle()
       .then(({ data }) => {
-        if (data?.store) {
-          supabase.from('stores').select('*').eq('name', data.store).maybeSingle()
+        if (data?.store_id) {
+          supabase.from('stores').select('*').eq('id', data.store_id).maybeSingle()
             .then(({ data: s }) => setStore(s))
         }
       })

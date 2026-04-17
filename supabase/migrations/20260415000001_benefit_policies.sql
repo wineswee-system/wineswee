@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- ─── 1. benefit_policies：彈性福利政策表 ───
-CREATE TABLE benefit_policies (
+CREATE TABLE IF NOT EXISTS benefit_policies (
   id SERIAL PRIMARY KEY,
   tenant_id INT REFERENCES tenants(id),
   store_id INT REFERENCES stores(id) ON DELETE SET NULL,      -- NULL = 全公司
@@ -27,12 +27,12 @@ CREATE TABLE benefit_policies (
 
 -- 解析優先序：employee_id + store_id > store_id only > global (NULL/NULL)
 -- 同一範圍同一 code 只能有一筆生效中的政策
-CREATE UNIQUE INDEX uq_benefit_policy
+CREATE UNIQUE INDEX IF NOT EXISTS uq_benefit_policy
   ON benefit_policies (tenant_id, COALESCE(store_id, 0), COALESCE(employee_id, 0), category, code)
   WHERE is_active = TRUE AND effective_to IS NULL;
 
-CREATE INDEX idx_benefit_store ON benefit_policies (store_id, category, is_active);
-CREATE INDEX idx_benefit_employee ON benefit_policies (employee_id, category, is_active);
+CREATE INDEX IF NOT EXISTS idx_benefit_store ON benefit_policies (store_id, category, is_active);
+CREATE INDEX IF NOT EXISTS idx_benefit_employee ON benefit_policies (employee_id, category, is_active);
 
 -- RLS
 ALTER TABLE benefit_policies ENABLE ROW LEVEL SECURITY;
@@ -40,7 +40,7 @@ CREATE POLICY tenant_isolation_bp ON benefit_policies
   FOR ALL USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
 
 -- ─── 2. bonus_records：獎金發放紀錄（修復 Bonus.jsx 缺表） ───
-CREATE TABLE bonus_records (
+CREATE TABLE IF NOT EXISTS bonus_records (
   id SERIAL PRIMARY KEY,
   tenant_id INT REFERENCES tenants(id),
   employee_id INT REFERENCES employees(id) ON DELETE SET NULL,
@@ -63,7 +63,7 @@ CREATE POLICY tenant_isolation_br ON bonus_records
   FOR ALL USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
 
 -- ─── 3. bonus_settings：獎金指標設定（修復 Bonus.jsx 缺表） ───
-CREATE TABLE bonus_settings (
+CREATE TABLE IF NOT EXISTS bonus_settings (
   id SERIAL PRIMARY KEY,
   tenant_id INT REFERENCES tenants(id),
   store_id INT REFERENCES stores(id) ON DELETE SET NULL,  -- NULL = 全公司
@@ -82,4 +82,5 @@ CREATE POLICY tenant_isolation_bs ON bonus_settings
   FOR ALL USING (tenant_id::text = coalesce(current_setting('app.tenant_id', true), ''));
 
 -- CHECK: 獎金金額不可為負
+ALTER TABLE bonus_records DROP CONSTRAINT IF EXISTS chk_bonus_positive;
 ALTER TABLE bonus_records ADD CONSTRAINT chk_bonus_positive CHECK (total_bonus >= 0);

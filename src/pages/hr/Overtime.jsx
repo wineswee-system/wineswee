@@ -63,7 +63,9 @@ export default function Overtime() {
         // Update attendance: add overtime hours
         if (data.employee && data.date && data.hours) {
           const { data: att } = await supabase.from('attendance_records')
-            .select('id, hours').eq('employee', data.employee).eq('date', data.date).maybeSingle()
+            .select('id, hours')
+            .eq(data.employee_id ? 'employee_id' : 'employee', data.employee_id || data.employee)
+            .eq('date', data.date).maybeSingle()
           if (att) {
             await supabase.from('attendance_records').update({
               hours: (Number(att.hours) || 0) + Number(data.hours),

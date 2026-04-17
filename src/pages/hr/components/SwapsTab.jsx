@@ -32,9 +32,11 @@ export default function SwapsTab({ swaps, setSwaps }) {
                         const { data } = await supabase.from('shift_swaps').update({ status: '已核准', approver: '主管' }).eq('id', s.id).select().single()
                         if (data) {
                           setSwaps(prev => prev.map(x => x.id === s.id ? data : x))
-                          // Execute swap in schedules
-                          await supabase.from('schedules').update({ shift: s.target_shift }).eq('employee', s.requester).eq('date', s.swap_date)
-                          await supabase.from('schedules').update({ shift: s.requester_shift }).eq('employee', s.target).eq('date', s.swap_date)
+                          // Execute swap in schedules (use employee_id if available, fallback to name)
+                          await supabase.from('schedules').update({ shift: s.target_shift })
+                            .eq(s.requester_id ? 'employee_id' : 'employee', s.requester_id || s.requester).eq('date', s.swap_date)
+                          await supabase.from('schedules').update({ shift: s.requester_shift })
+                            .eq(s.target_id ? 'employee_id' : 'employee', s.target_id || s.target).eq('date', s.swap_date)
                         }
                       }}>核准</button>
                       <button className="btn btn-sm btn-secondary" onClick={async () => {

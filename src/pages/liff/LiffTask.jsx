@@ -40,7 +40,7 @@ export default function LiffTask() {
           const profile = await window.liff.getProfile()
           const { data: emp } = await supabase.from('employees')
             .select('*').eq('line_user_id', profile.userId).maybeSingle()
-          if (emp) { setEmployee(emp); await loadTasks(emp.name); return }
+          if (emp) { setEmployee(emp); await loadTasks(emp.id); return }
         }
       }
       // Fallback: URL param
@@ -49,7 +49,7 @@ export default function LiffTask() {
       if (empName) {
         const { data: emp } = await supabase.from('employees')
           .select('*').eq('name', empName).maybeSingle()
-        if (emp) { setEmployee(emp); await loadTasks(emp.name); return }
+        if (emp) { setEmployee(emp); await loadTasks(emp.id); return }
       }
       setError('無法識別身份，請從 LINE 開啟此頁面')
     } catch (err) {
@@ -60,11 +60,11 @@ export default function LiffTask() {
     }
   }
 
-  async function loadTasks(assigneeName) {
+  async function loadTasks(assigneeId) {
     const { data } = await supabase.from('tasks')
       .select('*')
-      .eq('assignee', assigneeName)
-      .in('status', ['待處理', '進行中'])
+      .eq('assignee_id', assigneeId)
+      .in('status', ['未開始', '進行中', '待處理'])
       .order('due_date', { ascending: true, nullsFirst: false })
     setTasks(data || [])
   }

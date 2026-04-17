@@ -50,6 +50,25 @@ export async function serverClockIn(payload) {
   return data
 }
 
+/**
+ * Trigger missed clock-out check via Edge Function.
+ * @param {string} [date] - optional date override (YYYY-MM-DD), defaults to yesterday
+ */
+export async function checkMissedClockout(date) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/check-missed-clockout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
+      'apikey': key,
+    },
+    body: JSON.stringify(date ? { date } : {}),
+  })
+  return res.json()
+}
+
 // ── Leave Requests ─────────────────────────────────────────
 export const getLeaveRequests = () =>
   supabase.from('leave_requests').select('*').order('id')
@@ -309,7 +328,8 @@ export const updateApprovalFormStep = (id, data) =>
 export const getTasks = (filters = {}) => {
   let q = supabase.from('tasks').select('*').order('created_at', { ascending: false })
   if (filters.instanceId) q = q.eq('workflow_instance_id', filters.instanceId)
-  if (filters.assignee) q = q.eq('assignee', filters.assignee)
+  if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
+  else if (filters.assignee) q = q.eq('assignee', filters.assignee)
   if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
   if (filters.bucket) q = q.eq('bucket', filters.bucket)
   return q
@@ -629,6 +649,12 @@ export const getProcurementWorkflowInstances = () =>
 // ── Finance & Accounting ──
 export const getAccounts = () =>
   supabase.from('accounts').select('*').order('code')
+export const createAccount = (data) =>
+  supabase.from('accounts').insert(data).select().single()
+export const updateAccount = (id, data) =>
+  supabase.from('accounts').update(data).eq('id', id).select().single()
+export const deleteAccount = (id) =>
+  supabase.from('accounts').delete().eq('id', id)
 export const getJournalEntries = () =>
   supabase.from('journal_entries').select('*').order('id', { ascending: false })
 export const getJournalLines = (entryId) =>
@@ -1346,7 +1372,8 @@ export const getCRMActivities = (filters = {}) => {
   if (filters.entity_type && filters.entity_id) {
     q = q.eq('entity_type', filters.entity_type).eq('entity_id', filters.entity_id)
   }
-  if (filters.assignee) q = q.eq('assignee', filters.assignee)
+  if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
+  else if (filters.assignee) q = q.eq('assignee', filters.assignee)
   if (filters.status) q = q.eq('status', filters.status)
   if (filters.from) q = q.gte('due_date', filters.from)
   if (filters.to) q = q.lte('due_date', filters.to)

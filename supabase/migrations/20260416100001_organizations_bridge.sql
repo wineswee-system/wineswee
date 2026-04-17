@@ -26,6 +26,12 @@ CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
 CREATE INDEX IF NOT EXISTS idx_organizations_status ON organizations(status);
 
 -- ─── 2. Bridge tenants → organizations ───
+CREATE TABLE IF NOT EXISTS tenants (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT 'Default Tenant',
+  slug TEXT UNIQUE,
+  organization_id INT REFERENCES organizations(id)
+);
 
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS organization_id INT REFERENCES organizations(id);
 

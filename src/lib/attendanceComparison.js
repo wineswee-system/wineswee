@@ -20,7 +20,7 @@ import { parseTime, isAbsence } from './scheduleUtils'
  * @param {string} [storeName] - Optional store filter
  * @returns {Array<{ employee, date, scheduled_start, scheduled_end, clock_in, clock_out, late_minutes, early_leave_minutes, status }>}
  */
-export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeName) {
+export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNameOrId) {
   // Build queries
   const schedQ = supabase.from('schedules').select('employee, date, shift, actual_start, actual_end')
     .gte('date', dateStart).lte('date', dateEnd)
@@ -30,9 +30,14 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
 
   // Load late tolerance from stores table
   let lateTolerance = 5  // default: 5 minutes
-  if (storeName) {
-    const { data: store } = await supabase.from('stores').select('late_tolerance_minutes')
-      .eq('name', storeName).maybeSingle()
+  if (storeNameOrId) {
+    let storeQuery = supabase.from('stores').select('late_tolerance_minutes')
+    if (typeof storeNameOrId === 'number') {
+      storeQuery = storeQuery.eq('id', storeNameOrId)
+    } else {
+      storeQuery = storeQuery.eq('name', storeNameOrId)
+    }
+    const { data: store } = await storeQuery.maybeSingle()
     if (store?.late_tolerance_minutes != null) lateTolerance = store.late_tolerance_minutes
   }
 

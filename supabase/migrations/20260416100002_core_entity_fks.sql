@@ -9,11 +9,15 @@
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS organization_id INT REFERENCES organizations(id);
 
 -- Backfill from tenant bridge
-UPDATE companies c
-SET organization_id = t.organization_id
-FROM tenants t
-WHERE c.tenant_id = t.id
-  AND c.organization_id IS NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'companies' AND column_name = 'tenant_id') THEN
+    EXECUTE 'UPDATE companies c
+    SET organization_id = t.organization_id
+    FROM tenants t
+    WHERE c.tenant_id = t.id
+      AND c.organization_id IS NULL';
+  END IF;
+END $$;
 
 -- ─── 2b. Stores — add FK columns ───
 
@@ -80,11 +84,15 @@ WHERE d.head = e.name
   AND d.manager_id IS NULL;
 
 -- Backfill organization_id from tenant
-UPDATE departments d
-SET organization_id = t.organization_id
-FROM tenants t
-WHERE d.tenant_id = t.id
-  AND d.organization_id IS NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'departments' AND column_name = 'tenant_id') THEN
+    EXECUTE 'UPDATE departments d
+    SET organization_id = t.organization_id
+    FROM tenants t
+    WHERE d.tenant_id = t.id
+      AND d.organization_id IS NULL';
+  END IF;
+END $$;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_departments_organization_id ON departments(organization_id);
@@ -132,11 +140,15 @@ WHERE supervisor_id IS NOT NULL
   AND reporting_to IS NULL;
 
 -- Backfill organization_id from tenant
-UPDATE employees e
-SET organization_id = t.organization_id
-FROM tenants t
-WHERE e.tenant_id = t.id
-  AND e.organization_id IS NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'tenant_id') THEN
+    EXECUTE 'UPDATE employees e
+    SET organization_id = t.organization_id
+    FROM tenants t
+    WHERE e.tenant_id = t.id
+      AND e.organization_id IS NULL';
+  END IF;
+END $$;
 
 -- Auto-generate employee_number for existing rows
 WITH numbered AS (

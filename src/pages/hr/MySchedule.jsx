@@ -39,35 +39,32 @@ export default function MySchedule() {
     const loadData = async () => {
       // Get employee info (store + employment_type)
       const { data: empData } = await supabase.from('employees')
-        .select('store, employment_type').eq('name', profile.name).maybeSingle()
-      const storeName = empData?.store
+        .select('id, store, store_id, employment_type').eq('id', profile.id).maybeSingle()
+      const empId = empData?.id
+      const storeId = empData?.store_id
       setEmpInfo(empData)
 
       // Check next month off_request count (for reminder)
       const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1)
       const nextDates = getMonthDates(nextM.getFullYear(), nextM.getMonth() + 1)
       const { data: nextReqs } = await supabase.from('off_requests').select('date')
-        .eq('employee', profile.name)
+        .eq('employee_id', empId)
         .gte('date', nextDates[0]).lte('date', nextDates[nextDates.length - 1])
       setNextMonthRequests(nextReqs?.length || 0)
 
       // Check publish status
       let isPublished = false
-      if (storeName) {
-        const { data: store } = await supabase.from('stores')
-          .select('id').eq('name', storeName).maybeSingle()
-        if (store) {
-          const { data: pubStatus } = await supabase.from('schedule_publish_status')
-            .select('status').eq('store_id', store.id).eq('month', selectedMonth).maybeSingle()
-          isPublished = pubStatus?.status === 'published'
-        }
+      if (storeId) {
+        const { data: pubStatus } = await supabase.from('schedule_publish_status')
+          .select('status').eq('store_id', storeId).eq('month', selectedMonth).maybeSingle()
+        isPublished = pubStatus?.status === 'published'
       }
       setPublished(isPublished)
 
       // Only load schedules if published
       if (isPublished) {
         const { data } = await supabase.from('schedules').select('*')
-          .eq('employee', profile.name)
+          .eq('employee_id', empId)
           .gte('date', monthDates[0])
           .lte('date', monthDates[monthDates.length - 1])
         setSchedules(data || [])
@@ -266,7 +263,7 @@ export default function MySchedule() {
           <div className="card-header">
             <div className="card-title"><CalendarOff size={16} /> 希望休申請</div>
           </div>
-          <OffRequestForm empName={profile.name} employmentType={empInfo?.employment_type} />
+          <OffRequestForm empName={profile.name} empId={profile.id} employmentType={empInfo?.employment_type} />
         </div>
 
       {published && (
@@ -284,7 +281,7 @@ export default function MySchedule() {
 
 // ── Off Request Sub-component ──
 // 每月 16 號前選下個月希望休，正職限 10 天，兼職限 13 天
-function OffRequestForm({ empName, employmentType }) {
+function OffRequestForm({ empName, empId, employmentType }) {
   const [myRequests, setMyRequests] = useState([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -309,23 +306,23 @@ function OffRequestForm({ empName, employmentType }) {
 
   useEffect(() => {
     supabase.from('off_requests').select('*')
-      .eq('employee', empName)
+      .eq('employee_id', empId)
       .gte('date', targetDates[0])
       .lte('date', targetDates[targetDates.length - 1])
       .then(({ data }) => setMyRequests(data || []))
-  }, [empName, targetYear, targetMonth])
+  }, [empId, targetYear, targetMonth])
 
   const handleToggle = async (date) => {
     if (isLocked) return
     setSubmitting(true)
     const exists = myRequests.find(r => r.date === date)
     if (exists) {
-      await supabase.from('off_requests').delete().eq('employee', empName).eq('date', date)
+      await supabase.from('off_requests').delete().eq('employee_id', empId).eq('date', date)
       setMyRequests(prev => prev.filter(r => r.date !== date))
     } else {
       if (isAtLimit) { setSubmitting(false); return }
       const { data, error } = await supabase.from('off_requests')
-        .upsert({ employee: empName, date }, { onConflict: 'employee,date' })
+        .upsert({ employee: empName, employee_id: empId, date }, { onConflict: 'employee,date' })
         .select().single()
       if (data) setMyRequests(prev => [...prev, data])
       if (error) alert('申請失敗：' + error.message)

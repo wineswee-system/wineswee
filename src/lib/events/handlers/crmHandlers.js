@@ -194,6 +194,7 @@ export function registerCRMHandlers(bus) {
     const { customer, amount, invoice_number } = event.payload
     if (!customer) return
 
+    // TODO: migrate to customer_id FK when customers table gets proper IDs
     const { data: cust } = await supabase
       .from('customers')
       .select('*')

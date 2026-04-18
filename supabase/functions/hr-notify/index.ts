@@ -441,13 +441,29 @@ serve(async (req) => {
         approverIds = managers?.map((a: any) => a.id) || [];
       }
 
-      let sent = 0;
-      for (const appId of approverIds) {
-        const lineId = await resolveLineId(db, appId);
-        if (lineId && await pushLine(lineId, [message], accessToken)) sent++;
+      if (approverIds.length === 0) {
+        console.error(`[hr-notify] leave_submitted: 找不到審核人 (employee_id=${employee_id})`);
+        return new Response(JSON.stringify({ ok: false, error: "找不到審核人，請確認員工有設定主管或系統有管理員" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      return new Response(JSON.stringify({ ok: true, sent }), {
+      let sent = 0;
+      const noLineIds: number[] = [];
+      for (const appId of approverIds) {
+        const lineId = await resolveLineId(db, appId);
+        if (lineId) {
+          if (await pushLine(lineId, [message], accessToken)) sent++;
+        } else {
+          noLineIds.push(appId);
+        }
+      }
+
+      if (noLineIds.length > 0) {
+        console.warn(`[hr-notify] 審核人 ${noLineIds.join(',')} 沒有綁定 LINE，通知未送達`);
+      }
+
+      return new Response(JSON.stringify({ ok: true, sent, no_line_ids: noLineIds }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -256,7 +256,9 @@ serve(async (req: Request) => {
 
       if (schedule?.start_time) {
         const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
-        const lateMinutes = (hours24 * 60 + minutes) - (startH * 60 + startM)
+        let lateMinutes = (hours24 * 60 + minutes) - (startH * 60 + startM)
+        // Fix night shift: if negative, it's a next-day shift (e.g. 22:00 start, 06:00 clock-in)
+        if (lateMinutes < -720) lateMinutes += 1440 // +24h if off by more than 12h
         if (lateMinutes > 5) { // 5 分鐘寬限
           return { status: '遲到', isLate: true, lateMinutes }
         }

@@ -64,7 +64,12 @@ class ErrorBoundary extends React.Component {
 function AdminApp({ role = 'store_staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
   const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
-  const canAccess = (prefix) => allowed === null || allowed.some(r => prefix.startsWith(r) || r.startsWith(prefix))
+  // Module-level access check: '/hr/leave' in allowed → can enter '/hr' module
+  // Page-level filtering is handled by Sidebar's ROLE_ALLOWED_PATHS
+  const canAccess = (modulePrefix) => {
+    if (allowed === null) return true
+    return allowed.some(r => r === modulePrefix || r.startsWith(modulePrefix + '/') || modulePrefix.startsWith(r))
+  }
   const blocked = <Navigate to="/" replace />
 
   return (

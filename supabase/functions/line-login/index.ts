@@ -159,7 +159,7 @@ serve(async (req) => {
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: authEmail,
-        options: { redirectTo: `${SITE_URL}/dashboard` },
+        options: { redirectTo: `${SITE_URL}/` },
       })
 
       if (linkError || !linkData) {
@@ -177,7 +177,7 @@ serve(async (req) => {
       }
 
       // Fallback: redirect with token_hash and type for Supabase auth verification
-      const verificationUrl = `${SUPABASE_URL}/auth/v1/verify?token=${linkData.properties?.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${SITE_URL}/dashboard`)}`
+      const verificationUrl = `${SUPABASE_URL}/auth/v1/verify?token=${linkData.properties?.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${SITE_URL}/`)}`
       return new Response(null, {
         status: 302,
         headers: { Location: verificationUrl, ...corsHeaders },

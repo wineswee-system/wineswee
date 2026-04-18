@@ -76,18 +76,22 @@ export default function Payroll() {
     }
   }
 
-  // Create new payroll run
+  // Create new payroll run — calls generate_payroll() to auto-calculate
   const handleCreateRun = async () => {
     if (!newPeriod) return
     const exists = runs.find(r => r.pay_period === newPeriod)
     if (exists) return alert('該月份的薪資作業已存在')
     try {
-      const { data, error } = await supabase.from('payroll_runs').insert({
-        pay_period: newPeriod,
-        status: 'draft',
-      }).select().single()
+      // Call Postgres function to generate payroll run + records
+      const { data, error } = await supabase.rpc('generate_payroll', {
+        p_pay_period: newPeriod,
+      })
       if (error) throw error
-      setRuns(prev => [data, ...prev])
+      const result = data?.[0] || data
+      alert(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
+      // Reload runs
+      const { data: freshRuns } = await supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false })
+      setRuns(freshRuns || [])
       setShowCreateModal(false)
     } catch (err) {
       console.error('Create failed:', err)

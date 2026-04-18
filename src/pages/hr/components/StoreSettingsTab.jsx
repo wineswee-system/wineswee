@@ -279,8 +279,8 @@ export default function StoreSettingsTab({
           <table className="data-table">
             <thead><tr><th>班別</th><th>類型</th><th>上班</th><th>下班</th><th>休息</th><th>工時</th><th>適用</th><th style={{ width: 70 }}>操作</th></tr></thead>
             <tbody>
-              {shiftDefs.filter(d => d.store_id === selectedStore?.id).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
-              {shiftDefs.filter(d => d.store_id === selectedStore?.id).map(d => {
+              {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
+              {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).map(d => {
                 const sh = parseTime(d.start_time), eh = parseTime(d.end_time)
                 const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
                 return (

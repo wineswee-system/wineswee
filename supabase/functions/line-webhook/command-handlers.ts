@@ -80,7 +80,7 @@ export async function checkWorkflowCompletion(
       .maybeSingle();
     ownerLineId = lu?.line_user_id ?? null;
     if (!ownerLineId) {
-      const { data: mapping } = await db.from("line_employee_mapping")
+      const { data: mapping } = await db.from("line_users")
         .select("line_user_id")
         .eq("employee_id", instance.assigned_user_id)
         .eq("is_verified", true)
@@ -568,7 +568,7 @@ export async function cmdTaskRequestConfirm(rawId: string, userId: string, db: S
       lineId = lu?.line_user_id ?? null;
 
       if (!lineId) {
-        const { data: mapping } = await db.from("line_employee_mapping")
+        const { data: mapping } = await db.from("line_users")
           .select("line_user_id")
           .eq("employee_id", approverId)
           .eq("is_verified", true)
@@ -709,7 +709,7 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
         .maybeSingle();
       ownerLineId = lu?.line_user_id ?? null;
       if (!ownerLineId) {
-        const { data: mapping } = await db.from("line_employee_mapping")
+        const { data: mapping } = await db.from("line_users")
           .select("line_user_id")
           .eq("employee_id", approvedTask.assigned_to)
           .eq("is_verified", true)
@@ -788,7 +788,7 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
       ownerLineId = lu?.line_user_id ?? null;
 
       if (!ownerLineId) {
-        const { data: mapping } = await db.from("line_employee_mapping")
+        const { data: mapping } = await db.from("line_users")
           .select("line_user_id")
           .eq("employee_id", fullTask.assigned_to)
           .eq("is_verified", true)

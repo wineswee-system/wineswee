@@ -123,12 +123,7 @@ serve(async (req: Request) => {
     // Try employee's location_id first, then fall back to store name lookup
     let location: any = null
 
-    if (emp.location_id) {
-      const { data } = await supabase
-        .from('locations').select('*').eq('id', emp.location_id).maybeSingle()
-      location = data
-    } else if (emp.store) {
-      // Legacy fallback: match by name
+    if (emp.store) {
       const { data } = await supabase
         .from('locations').select('*').eq('name', emp.store).maybeSingle()
       location = data
@@ -215,45 +210,43 @@ serve(async (req: Request) => {
     }
 
     // ── Determine late status from schedules table ──────
-    // schedules has: employee (TEXT), date, shift, start_time, end_time
-    const determineLateStatus = async (): Promise<string> => {
-      // Look up today's schedule — try by employee name (schedules.employee is TEXT)
-      const { data: schedule } = await supabase
+    // schedules has: employee_id (INT), employee (TEXT), date, shift_type, start_time, end_time
+    const determineLateStatus = async (): Promise<{ status: string; isLate: boolean; lateMinutes: number }> => {
+      // Look up today's schedule — try by employee_id first, then name
+      let schedule: any = null
+      const { data: s1 } = await supabase
         .from('schedules')
-        .select('shift, start_time')
-        .eq('employee', emp.name)
+        .select('shift_type, start_time')
+        .eq('employee_id', emp.id)
         .eq('date', dateStr)
         .maybeSingle()
+      schedule = s1
 
-      if (schedule?.start_time) {
-        // schedules table has start_time directly
-        const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
-        if (hours24 > startH || (hours24 === startH && minutes > startM)) {
-          return '遲到'
-        }
-        return '正常'
+      if (!schedule) {
+        const { data: s2 } = await supabase
+          .from('schedules')
+          .select('shift_type, start_time')
+          .eq('employee', emp.name)
+          .eq('date', dateStr)
+          .maybeSingle()
+        schedule = s2
       }
 
-      if (schedule?.shift) {
-        // Fallback: look up shift_definitions for the start_time
-        const { data: shiftDef } = await supabase
-          .from('shift_definitions')
-          .select('start_time')
-          .eq('name', schedule.shift)
-          .maybeSingle()
-
-        if (shiftDef?.start_time) {
-          const [startH, startM] = (shiftDef.start_time as string).split(':').map(Number)
-          if (hours24 > startH || (hours24 === startH && minutes > startM)) {
-            return '遲到'
-          }
-          return '正常'
+      if (schedule?.start_time) {
+        const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
+        const lateMinutes = (hours24 * 60 + minutes) - (startH * 60 + startM)
+        if (lateMinutes > 5) { // 5 分鐘寬限
+          return { status: '遲到', isLate: true, lateMinutes }
         }
+        return { status: '正常', isLate: false, lateMinutes: 0 }
       }
 
       // Fallback: default 09:00 threshold
-      const isLate = hours24 >= 9 && (hours24 > 9 || minutes > 0)
-      return isLate ? '遲到' : '正常'
+      const lateMinutes = (hours24 * 60 + minutes) - (9 * 60)
+      if (lateMinutes > 5) {
+        return { status: '遲到', isLate: true, lateMinutes }
+      }
+      return { status: '正常', isLate: false, lateMinutes: 0 }
     }
 
     let record
@@ -264,7 +257,7 @@ serve(async (req: Request) => {
         })
       }
 
-      const status = await determineLateStatus()
+      const { status, isLate, lateMinutes } = await determineLateStatus()
 
       const { data, error } = await supabase.from('attendance_records').upsert({
         employee: emp.name,
@@ -272,12 +265,13 @@ serve(async (req: Request) => {
         date: dateStr,
         clock_in: timeStr,
         status,
-        hours: 0,
+        total_hours: 0,
+        is_late: isLate,
+        late_minutes: lateMinutes,
         clock_in_lat: lat || null,
         clock_in_lng: lng || null,
-        clock_in_ip: resolvedIP,
-        clock_in_location: location?.name || '未知',
-        location_id: location?.id || null,
+        clock_in_distance_m: method === 'gps' && lat && lng && location?.gps_lat ? Math.round(haversineMetres(lat, lng, Number(location.gps_lat), Number(location.gps_lng))) : null,
+        clock_in_method: method,
       }).select().single()
       if (error) throw error
       record = data
@@ -295,14 +289,14 @@ serve(async (req: Request) => {
       // Calculate hours using Taiwan time (minutes-based, no timezone issues)
       const [inH, inM] = (existingRecord.clock_in as string).split(':').map(Number)
       const workedHours = ((hours24 * 60 + minutes) - (inH * 60 + inM)) / 60
-      const { data, error } = await supabase.from('attendance_records').upsert({
-        ...existingRecord,
-        clock_out: timeStr,
-        hours: parseFloat(workedHours.toFixed(2)),
-        clock_out_lat: lat || null,
-        clock_out_lng: lng || null,
-        clock_out_ip: resolvedIP,
-      }).select().single()
+      const { data, error } = await supabase.from('attendance_records')
+        .update({
+          clock_out: timeStr,
+          clock_out_time: now.toISOString(),
+          total_hours: parseFloat(workedHours.toFixed(2)),
+        })
+        .eq('id', existingRecord.id)
+        .select().single()
       if (error) throw error
       record = data
     } else {

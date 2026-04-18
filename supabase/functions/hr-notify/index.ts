@@ -411,14 +411,8 @@ serve(async (req: Request) => {
       })
     }
 
-    // Log to message_logs
-    await supabase.from('message_logs').insert({
-      channel: 'LINE',
-      recipient: 'hr-notify',
-      subject: `HR 通知 [${type}]`,
-      body: JSON.stringify({ type, results }),
-      status: results.some(r => r.success) ? 'sent' : 'failed',
-    }).catch(() => {})
+    // Log notification result
+    console.log(`[hr-notify] type=${type}, results=${JSON.stringify(results)}`)
 
     return new Response(JSON.stringify({ ok: true, type, results }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -174,10 +174,10 @@ serve(async (req: Request) => {
       })
     }
 
-    // Fetch payroll records with employee name via join
+    // Fetch payroll records (join employee name separately to avoid FK issues)
     let query = supabase
       .from('payroll_records')
-      .select('*, employee:employees(name)')
+      .select('*')
 
     if (payroll_run_id) {
       query = query.eq('payroll_run_id', payroll_run_id)
@@ -198,7 +198,9 @@ serve(async (req: Request) => {
 
     for (const record of records) {
       const employeeId = record.employee_id
-      const employeeName = record.employee?.name || `員工 #${employeeId}`
+      // Lookup employee name separately
+      const { data: empData } = await supabase.from('employees').select('name').eq('id', employeeId).maybeSingle()
+      const employeeName = empData?.name || `員工 #${employeeId}`
       const period = record.pay_period
 
       if (!employeeId) {

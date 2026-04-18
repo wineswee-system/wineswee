@@ -59,29 +59,79 @@ serve(async (req: Request) => {
     )
 
     const body = await req.json()
-    const { employee, action, lat, lng, accuracy, ip: clientIP } = body
+    const {
+      employee_id,     // employee id (INT) — primary lookup
+      line_user_id,    // LINE user ID — lookup via line_users table
+      employee,        // employee name (string) — legacy fallback
+      action,
+      lat, lng, accuracy,
+      ip: clientIP,
+    } = body
 
-    if (!employee || !action) {
-      return new Response(JSON.stringify({ error: '缺少必要參數 (employee, action)' }), {
+    if (!action) {
+      return new Response(JSON.stringify({ error: '缺少必要參數 (action)' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    if (!employee_id && !line_user_id && !employee) {
+      return new Response(JSON.stringify({ error: '缺少必要參數 (employee_id, line_user_id, 或 employee)' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Get employee → store
-    const { data: emp } = await supabase
-      .from('employees').select('*').eq('name', employee).maybeSingle()
+    // ── Resolve employee (id is INT) ─────────────────────
+    let emp: any = null
+
+    if (employee_id) {
+      const { data } = await supabase
+        .from('employees').select('*').eq('id', employee_id).maybeSingle()
+      emp = data
+    } else if (line_user_id) {
+      // Lookup via line_users table → employee_id
+      const { data: lineUser } = await supabase
+        .from('line_users')
+        .select('employee_id')
+        .eq('line_user_id', line_user_id)
+        .eq('is_verified', true)
+        .maybeSingle()
+
+      if (lineUser?.employee_id) {
+        const { data } = await supabase
+          .from('employees').select('*').eq('id', lineUser.employee_id).maybeSingle()
+        emp = data
+      }
+
+      // Fallback: check employees.line_user_id directly
+      if (!emp) {
+        const { data } = await supabase
+          .from('employees').select('*').eq('line_user_id', line_user_id).maybeSingle()
+        emp = data
+      }
+    } else if (employee) {
+      const { data } = await supabase
+        .from('employees').select('*').eq('name', employee).maybeSingle()
+      emp = data
+    }
+
     if (!emp) {
       return new Response(JSON.stringify({ error: '找不到員工資料' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Get store config
-    let store = null
-    if (emp.store) {
+    // ── Get location config (locations table with GPS columns) ──
+    // Try employee's location_id first, then fall back to store name lookup
+    let location: any = null
+
+    if (emp.location_id) {
       const { data } = await supabase
-        .from('stores').select('*').eq('name', emp.store).maybeSingle()
-      store = data
+        .from('locations').select('*').eq('id', emp.location_id).maybeSingle()
+      location = data
+    } else if (emp.store) {
+      // Legacy fallback: match by name
+      const { data } = await supabase
+        .from('locations').select('*').eq('name', emp.store).maybeSingle()
+      location = data
     }
 
     // Resolve IP: prefer server-detected IP, fallback to client-reported
@@ -90,9 +140,10 @@ serve(async (req: Request) => {
       || clientIP
     const resolvedIP = serverIP || clientIP || null
 
-    // ── Validation ───────────────────────────────────────
-    const hasGPSConfig = !!(store?.lat && store?.lng)
-    const hasWifiConfig = !!(store?.allowed_wifi && store.allowed_wifi.length > 0)
+    // ── GPS / WiFi Validation ────────────────────────────
+    // locations table uses: gps_lat, gps_lng, gps_radius_m, wifi_allowed_ips
+    const hasGPSConfig = !!(location?.gps_lat && location?.gps_lng)
+    const hasWifiConfig = !!(location?.wifi_allowed_ips && location.wifi_allowed_ips.length > 0)
     const GPS_ACCURACY_THRESHOLD = 200
 
     let gpsPass = false
@@ -100,12 +151,12 @@ serve(async (req: Request) => {
     let method = 'none'
     const reasons: string[] = []
 
-    if (store && (hasGPSConfig || hasWifiConfig)) {
+    if (location && (hasGPSConfig || hasWifiConfig)) {
       // GPS check
       if (hasGPSConfig) {
         if (lat != null && lng != null && accuracy != null && accuracy <= GPS_ACCURACY_THRESHOLD) {
-          const dist = haversineMetres(lat, lng, store.lat, store.lng)
-          const radius = store.clock_radius || 150
+          const dist = haversineMetres(lat, lng, Number(location.gps_lat), Number(location.gps_lng))
+          const radius = location.gps_radius_m || 200
           gpsPass = dist <= radius
           if (!gpsPass) {
             reasons.push(`GPS 距離超出範圍（${Math.round(dist)}m / 限 ${radius}m）`)
@@ -120,7 +171,7 @@ serve(async (req: Request) => {
       // WiFi check
       if (hasWifiConfig) {
         if (resolvedIP) {
-          wifiPass = store.allowed_wifi.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
+          wifiPass = location.wifi_allowed_ips.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
           if (!wifiPass) {
             reasons.push(`IP（${resolvedIP}）不在 WiFi 白名單`)
           }
@@ -141,7 +192,7 @@ serve(async (req: Request) => {
       method = gpsPass ? 'gps' : 'wifi'
     }
 
-    // ── Write attendance record (Taiwan time UTC+8) ────
+    // ── Write attendance record (Taiwan time UTC+8) ─────
     const now = new Date()
     const taiwanNow = new Date(now.getTime() + 8 * 60 * 60 * 1000)
     const dateStr = taiwanNow.toISOString().slice(0, 10)
@@ -152,47 +203,102 @@ serve(async (req: Request) => {
     // Check existing record for today
     const { data: existing } = await supabase
       .from('attendance_records').select('*')
-      .eq('employee', emp.name).eq('date', dateStr).maybeSingle()
+      .eq('employee_id', emp.id).eq('date', dateStr).maybeSingle()
+
+    // Also try by name for legacy records without employee_id
+    let existingRecord = existing
+    if (!existingRecord) {
+      const { data: legacyExisting } = await supabase
+        .from('attendance_records').select('*')
+        .eq('employee', emp.name).eq('date', dateStr).maybeSingle()
+      existingRecord = legacyExisting
+    }
+
+    // ── Determine late status from schedules table ──────
+    // schedules has: employee (TEXT), date, shift, start_time, end_time
+    const determineLateStatus = async (): Promise<string> => {
+      // Look up today's schedule — try by employee name (schedules.employee is TEXT)
+      const { data: schedule } = await supabase
+        .from('schedules')
+        .select('shift, start_time')
+        .eq('employee', emp.name)
+        .eq('date', dateStr)
+        .maybeSingle()
+
+      if (schedule?.start_time) {
+        // schedules table has start_time directly
+        const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
+        if (hours24 > startH || (hours24 === startH && minutes > startM)) {
+          return '遲到'
+        }
+        return '正常'
+      }
+
+      if (schedule?.shift) {
+        // Fallback: look up shift_definitions for the start_time
+        const { data: shiftDef } = await supabase
+          .from('shift_definitions')
+          .select('start_time')
+          .eq('name', schedule.shift)
+          .maybeSingle()
+
+        if (shiftDef?.start_time) {
+          const [startH, startM] = (shiftDef.start_time as string).split(':').map(Number)
+          if (hours24 > startH || (hours24 === startH && minutes > startM)) {
+            return '遲到'
+          }
+          return '正常'
+        }
+      }
+
+      // Fallback: default 09:00 threshold
+      const isLate = hours24 >= 9 && (hours24 > 9 || minutes > 0)
+      return isLate ? '遲到' : '正常'
+    }
 
     let record
     if (action === 'clock_in') {
-      if (existing?.clock_in) {
+      if (existingRecord?.clock_in) {
         return new Response(JSON.stringify({ error: '今日已打過上班卡' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const isLate = hours24 >= 9 && (hours24 > 9 || minutes > 0)
+
+      const status = await determineLateStatus()
+
       const { data, error } = await supabase.from('attendance_records').upsert({
         employee: emp.name,
+        employee_id: emp.id,
         date: dateStr,
         clock_in: timeStr,
-        status: isLate ? '遲到' : '正常',
+        status,
         hours: 0,
         clock_in_lat: lat || null,
         clock_in_lng: lng || null,
         clock_in_ip: resolvedIP,
-        clock_in_location: store?.name || '未知',
+        clock_in_location: location?.name || '未知',
+        location_id: location?.id || null,
       }).select().single()
       if (error) throw error
       record = data
     } else if (action === 'clock_out') {
-      if (!existing?.clock_in) {
+      if (!existingRecord?.clock_in) {
         return new Response(JSON.stringify({ error: '尚未打上班卡' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      if (existing.clock_out) {
+      if (existingRecord.clock_out) {
         return new Response(JSON.stringify({ error: '今日已打過下班卡' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
       // Calculate hours using Taiwan time (minutes-based, no timezone issues)
-      const [inH, inM] = (existing.clock_in as string).split(':').map(Number)
-      const hours = ((hours24 * 60 + minutes) - (inH * 60 + inM)) / 60
+      const [inH, inM] = (existingRecord.clock_in as string).split(':').map(Number)
+      const workedHours = ((hours24 * 60 + minutes) - (inH * 60 + inM)) / 60
       const { data, error } = await supabase.from('attendance_records').upsert({
-        ...existing,
+        ...existingRecord,
         clock_out: timeStr,
-        hours: parseFloat(hours.toFixed(2)),
+        hours: parseFloat(workedHours.toFixed(2)),
         clock_out_lat: lat || null,
         clock_out_lng: lng || null,
         clock_out_ip: resolvedIP,
@@ -209,13 +315,13 @@ serve(async (req: Request) => {
       success: true,
       record,
       method,
-      locationName: store?.name || '未知',
+      locationName: location?.name || '未知',
       ip: resolvedIP,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || '伺服器錯誤' }), {
+    return new Response(JSON.stringify({ error: (err as Error).message || '伺服器錯誤' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

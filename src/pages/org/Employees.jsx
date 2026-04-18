@@ -91,7 +91,7 @@ export default function Employees() {
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
       const posInfo = POSITIONS.find(p => p.label === form.position)
-      const role = posInfo?.level || 'staff'
+      const role = posInfo?.level || 'store_staff'
       const { data, error } = await createEmployee({ ...form, avatar, role })
       if (error) throw error
       if (data) {
@@ -179,7 +179,7 @@ export default function Employees() {
       store: emp.store || '', email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
-      system_role: emp.role || 'staff',
+      system_role: emp.role || 'store_staff',
     })
     setShowEditModal(true)
   }
@@ -434,11 +434,14 @@ export default function Employees() {
             <Field label="職稱">
               <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => set('position', e.target.value)}>
                 <option value="">請選擇</option>
-                <optgroup label="主管級">
-                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="管理職">
+                  {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
-                <optgroup label="員工級">
-                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="行政職">
+                  {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="門市職">
+                  {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
             </Field>
@@ -546,11 +549,14 @@ export default function Employees() {
             <Field label="職稱">
               <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => setE('position', e.target.value)}>
                 <option value="">請選擇</option>
-                <optgroup label="主管級">
-                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="管理職">
+                  {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
-                <optgroup label="員工級">
-                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="行政職">
+                  {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="門市職">
+                  {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
             </Field>

@@ -232,14 +232,7 @@ serve(async (req: Request) => {
 
     const sentCount = results.filter(r => r.success).length
 
-    // Log to message_logs
-    await supabase.from('message_logs').insert({
-      channel: 'LINE',
-      recipient: 'send-payslips',
-      subject: `薪資單發送 ${pay_period || payroll_run_id}`,
-      body: JSON.stringify({ total: records.length, sent: sentCount, results }),
-      status: sentCount > 0 ? 'sent' : 'failed',
-    }).catch(() => {})
+    console.log(`[send-payslips] total=${records.length}, sent=${sentCount}`)
 
     return new Response(JSON.stringify({
       ok: true,

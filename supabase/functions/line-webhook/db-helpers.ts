@@ -11,7 +11,7 @@ export async function upsertLineUser(lineUserId: string, displayName: string, db
     .maybeSingle();
 
   if (existing) {
-    const updates: Record<string, unknown> = { last_active_at: now };
+    const updates: Record<string, unknown> = { updated_at: now };
     // Update display_name if we got a real name and stored value is the fallback
     if (displayName && displayName !== "使用者" && existing.display_name !== displayName) {
       updates.display_name = displayName;
@@ -22,7 +22,7 @@ export async function upsertLineUser(lineUserId: string, displayName: string, db
 
   const { data: inserted } = await db
     .from("line_users")
-    .insert({ line_user_id: lineUserId, display_name: displayName, is_verified: false, last_active_at: now })
+    .insert({ line_user_id: lineUserId, display_name: displayName, is_verified: false })
     .select("id, line_user_id, display_name, is_verified, employee_id, pending_action")
     .single();
 
@@ -36,13 +36,12 @@ export async function upsertLineGroupMember(lineUserId: string, lineGroupId: str
       .from("line_group_members")
       .select("id")
       .eq("line_user_id", lineUserId)
-      .eq("line_group_id", lineGroupId)
+      .eq("group_id", lineGroupId)
       .maybeSingle();
     if (existing) return;
     await db.from("line_group_members").insert({
       line_user_id: lineUserId,
-      line_group_id: lineGroupId,
-      role: "member",
+      group_id: lineGroupId,
       joined_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -135,9 +134,6 @@ export async function logCommand(
       group_id: opts.groupId ?? null,
       success: opts.success ?? true,
       error_message: opts.errorMessage ?? null,
-      created_entity_type: opts.createdEntityType ?? null,
-      created_entity_id: opts.createdEntityId ?? null,
-      metadata: opts.metadata ?? null,
       execution_ms: opts.executionMs ?? null,
     });
   } catch (err) {

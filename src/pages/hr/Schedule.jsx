@@ -240,16 +240,16 @@ export default function Schedule() {
 
   const getOffRequest = (empName, date) => offRequests.find(o => o.employee === empName && o.date === date)
 
-  // Get available shifts for a specific store (store-specific + global)
+  // Get available shifts for a specific store (only store-specific, exclude global)
   const getStoreShifts = (storeName, empType = 'all') => {
     const store = locations.find(l => l.name === storeName)
     const storeId = store?.id
     return shiftDefs.filter(d => {
-      // Match store: store-specific OR global (no store_id)
-      const storeMatch = !d.store_id || d.store_id === storeId
+      // Only show this store's shifts (not global ones without store_id)
+      if (!d.store_id || d.store_id !== storeId) return false
       // Match employee type
       const typeMatch = !d.employee_type || d.employee_type === 'all' || d.employee_type === empType
-      return storeMatch && typeMatch
+      return typeMatch
     })
   }
 

@@ -20,6 +20,8 @@ import {
   MIN_SHIFT_INTERVAL, MAX_CONSECUTIVE_WORK_DAYS, MIN_WEEKLY_REST_DAYS,
   DAILY_MAX_HOURS, canWorkAtStore, getCrossStoreEligible,
 } from './scheduleUtils'
+import { runProgrammaticSchedule } from './schedulingAlgo'
+import { chat as geminiChat, isConfigured as geminiIsConfigured } from './gemini'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
@@ -727,6 +729,343 @@ function validateMonthly(assignments, data) {
   }
 
   return violations
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Fix Violations (re-run with context)
+// ══════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════
+//  LLM Retry: Programmatic → AI-assisted violation fixing
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Run the programmatic scheduler first, then use Gemini AI to fix
+ * any remaining violations. Conservative: only accepts AI changes
+ * that strictly reduce the violation count.
+ *
+ * @param {object} data - Scheduling data (same shape as gatherSchedulingData output)
+ * @param {object} options
+ * @param {number} options.maxRetries - Max AI retry attempts (default 2)
+ * @param {boolean} options.useAi - Whether to attempt AI fixes (default true)
+ * @returns {object} Schedule result with retryAttempts and reasoning
+ */
+export async function runScheduleWithRetry(data, { maxRetries = 2, useAi = true } = {}) {
+  // Step 1: Run programmatic algorithm
+  console.log('[runScheduleWithRetry] Running programmatic schedule...')
+  const programmaticResult = runProgrammaticSchedule(data)
+
+  const allViolations = programmaticResult.violations || []
+  const errorCount = allViolations.filter(v => v.severity === 'error').length
+  const warningCount = allViolations.filter(v => v.severity === 'warning').length
+
+  console.log(`[runScheduleWithRetry] Programmatic result: ${errorCount} errors, ${warningCount} warnings`)
+
+  // Step 2: If no violations, or AI not requested/configured, return as-is
+  if (allViolations.length === 0) {
+    return {
+      ...programmaticResult,
+      retryAttempts: 0,
+      reasoning: `${programmaticResult.reasoning}。無違規，無需 AI 修正。`,
+    }
+  }
+
+  if (!useAi || !geminiIsConfigured()) {
+    const reason = !useAi ? 'AI 修正已停用' : 'Gemini API 未設定'
+    console.log(`[runScheduleWithRetry] Skipping AI retry: ${reason}`)
+    return {
+      ...programmaticResult,
+      retryAttempts: 0,
+      reasoning: `${programmaticResult.reasoning}。${reason}，跳過 AI 修正。`,
+    }
+  }
+
+  // Step 3: AI retry loop
+  let bestResult = programmaticResult
+  let bestViolationCount = allViolations.length
+  let bestErrorCount = errorCount
+  const reasoningParts = [programmaticResult.reasoning]
+  let retryAttempts = 0
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    retryAttempts = attempt
+    console.log(`[runScheduleWithRetry] AI retry attempt ${attempt}/${maxRetries}...`)
+
+    try {
+      const currentViolations = bestResult.violations || []
+      const currentAssignments = bestResult.assignments || []
+
+      // Build the AI prompt
+      const prompt = buildRetryPrompt(currentViolations, currentAssignments, data)
+
+      // Ask Gemini for fix suggestions
+      const aiResponse = await geminiChat(prompt, `schedule-retry-${Date.now()}`)
+
+      // Parse AI suggestions
+      const suggestions = parseAiSuggestions(aiResponse)
+
+      if (!suggestions || suggestions.length === 0) {
+        reasoningParts.push(`第 ${attempt} 次 AI 修正：無可用建議。`)
+        continue
+      }
+
+      // Apply suggestions to a copy of current assignments
+      const fixedAssignments = applyAiSuggestions(
+        JSON.parse(JSON.stringify(currentAssignments)),
+        suggestions,
+        data
+      )
+
+      // Re-validate the fixed result
+      const fixedViolations = validateClientSide(fixedAssignments, data)
+      const fixedErrors = fixedViolations.filter(v => v.severity === 'error').length
+      const fixedTotal = fixedViolations.length
+
+      console.log(`[runScheduleWithRetry] Attempt ${attempt}: ${fixedErrors} errors, ${fixedTotal} total violations (was ${bestErrorCount} errors, ${bestViolationCount} total)`)
+
+      // Conservative: only accept if strictly fewer violations
+      // Priority: fewer errors first, then fewer total violations
+      const improved = fixedErrors < bestErrorCount ||
+        (fixedErrors === bestErrorCount && fixedTotal < bestViolationCount)
+
+      if (improved) {
+        const changesApplied = suggestions.filter(s => s.applied).length
+        reasoningParts.push(
+          `第 ${attempt} 次 AI 修正：套用 ${changesApplied} 項變更，` +
+          `違規 ${bestViolationCount} → ${fixedTotal}（錯誤 ${bestErrorCount} → ${fixedErrors}）。`
+        )
+
+        bestResult = {
+          ...bestResult,
+          assignments: fixedAssignments,
+          violations: fixedViolations,
+          errors: fixedViolations.filter(v => v.severity === 'error'),
+          warnings: fixedViolations.filter(v => v.severity === 'warning'),
+        }
+        bestViolationCount = fixedTotal
+        bestErrorCount = fixedErrors
+
+        // If no more errors, stop retrying
+        if (fixedErrors === 0) {
+          reasoningParts.push('所有錯誤已修正，停止重試。')
+          break
+        }
+      } else {
+        reasoningParts.push(
+          `第 ${attempt} 次 AI 修正：未改善（${fixedErrors} errors / ${fixedTotal} total），保留原排班。`
+        )
+      }
+    } catch (err) {
+      console.error(`[runScheduleWithRetry] AI retry attempt ${attempt} failed:`, err.message)
+      reasoningParts.push(`第 ${attempt} 次 AI 修正失敗：${err.message}`)
+      // Continue to next attempt or return best so far
+    }
+  }
+
+  return {
+    ...bestResult,
+    retryAttempts,
+    reasoning: reasoningParts.join(' '),
+    meta: {
+      ...bestResult.meta,
+      aiRetryAttempts: retryAttempts,
+      aiImproved: bestViolationCount < allViolations.length,
+    },
+  }
+}
+
+/**
+ * Build a prompt asking Gemini to suggest fixes for scheduling violations.
+ */
+function buildRetryPrompt(violations, assignments, data) {
+  const { employees, shiftDefs } = data
+
+  const violationSummary = violations.map(v =>
+    `- [${v.severity}][${v.constraint}] ${v.message}`
+  ).join('\n')
+
+  // Summarize current assignments (group by employee)
+  const assignmentsByEmp = {}
+  for (const a of assignments) {
+    if (!assignmentsByEmp[a.employee]) assignmentsByEmp[a.employee] = []
+    assignmentsByEmp[a.employee].push(`${a.date}:${a.shift}`)
+  }
+  const assignmentSummary = Object.entries(assignmentsByEmp).map(
+    ([emp, shifts]) => `  ${emp}: ${shifts.join(', ')}`
+  ).join('\n')
+
+  // Employee constraints summary
+  const constraintSummary = employees.map(emp => {
+    const parts = [`${emp.name} (${emp.employment_type || 'full_time'})`]
+    if (emp.can_open === false) parts.push('不可開店')
+    if (emp.can_close === false) parts.push('不可關店')
+    if (emp.is_pregnant) parts.push('孕婦')
+    if (emp.is_nursing) parts.push('哺乳')
+    return `  - ${parts.join(' | ')}`
+  }).join('\n')
+
+  // Available shifts
+  const shiftList = shiftDefs.map(d =>
+    `  - "${d.name}" ${d.start_time?.slice(0, 5)}~${d.end_time?.slice(0, 5)} (${getShiftHours(d).toFixed(1)}h)`
+  ).join('\n')
+
+  return `你是排班修正 AI。以下排班結果有違規，請建議具體修正。
+
+## 違規項目（${violations.length} 項）
+${violationSummary}
+
+## 目前排班
+${assignmentSummary}
+
+## 員工限制
+${constraintSummary}
+
+## 可用班別
+${shiftList}
+
+## 修正規則
+- 只修正有違規的部分，不要大幅改動
+- 優先修正 error，再修 warning
+- 可用操作：swap（兩人換班）、reassign（改班別）、rest（改為休假）
+- 休假代碼："休"
+- 換班時確保雙方都合法
+
+請用 JSON 回覆修正建議：
+{
+  "suggestions": [
+    {
+      "action": "swap|reassign|rest",
+      "employee": "員工姓名",
+      "date": "YYYY-MM-DD",
+      "from_shift": "原班別",
+      "to_shift": "新班別",
+      "swap_with": "換班對象（僅 swap 時）",
+      "reason": "修正原因"
+    }
+  ]
+}
+只輸出 JSON，不要加說明文字。`
+}
+
+/**
+ * Parse AI response into structured suggestions.
+ */
+function parseAiSuggestions(response) {
+  try {
+    let cleaned = response.trim()
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    }
+
+    // Try direct parse
+    let parsed
+    try {
+      parsed = JSON.parse(cleaned)
+    } catch {
+      // Extract JSON object
+      const firstBrace = cleaned.indexOf('{')
+      const lastBrace = cleaned.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonStr = cleaned.slice(firstBrace, lastBrace + 1)
+          .replace(/,\s*([\]}])/g, '$1')
+        parsed = JSON.parse(jsonStr)
+      }
+    }
+
+    return parsed?.suggestions || []
+  } catch (err) {
+    console.warn('[runScheduleWithRetry] Failed to parse AI suggestions:', err.message)
+    return []
+  }
+}
+
+/**
+ * Apply AI-suggested fixes to the assignments array.
+ * Validates each suggestion before applying.
+ */
+function applyAiSuggestions(assignments, suggestions, data) {
+  const { employees, shiftDefs } = data
+  const empNames = new Set(employees.map(e => e.name))
+  const validShifts = new Set([
+    ...shiftDefs.map(d => d.name),
+    '休', '補休', '病', '特休', '會議', '產',
+  ])
+
+  for (const suggestion of suggestions) {
+    suggestion.applied = false
+
+    // Validate employee exists
+    if (!empNames.has(suggestion.employee)) continue
+
+    // Find the assignment to modify
+    const idx = assignments.findIndex(
+      a => a.employee === suggestion.employee && a.date === suggestion.date
+    )
+    if (idx === -1) continue
+
+    switch (suggestion.action) {
+      case 'reassign': {
+        // Validate target shift
+        if (!validShifts.has(suggestion.to_shift)) break
+        assignments[idx].shift = suggestion.to_shift
+        // Update actual times if we have shift def info
+        const def = shiftDefs.find(d => d.name === suggestion.to_shift)
+        if (def) {
+          assignments[idx].actual_start = def.start_time?.slice(0, 5) || null
+          assignments[idx].actual_end = def.end_time?.slice(0, 5) || null
+          assignments[idx].actual_hours = getShiftHours(def) - (def.break_minutes || 60) / 60
+        } else if (isAbsence(suggestion.to_shift)) {
+          assignments[idx].actual_start = null
+          assignments[idx].actual_end = null
+          assignments[idx].actual_hours = null
+        }
+        suggestion.applied = true
+        break
+      }
+
+      case 'rest': {
+        assignments[idx].shift = '休'
+        assignments[idx].actual_start = null
+        assignments[idx].actual_end = null
+        assignments[idx].actual_hours = null
+        suggestion.applied = true
+        break
+      }
+
+      case 'swap': {
+        if (!suggestion.swap_with || !empNames.has(suggestion.swap_with)) break
+        const swapIdx = assignments.findIndex(
+          a => a.employee === suggestion.swap_with && a.date === suggestion.date
+        )
+        if (swapIdx === -1) break
+
+        // Swap shifts between the two employees
+        const tempShift = assignments[idx].shift
+        const tempStart = assignments[idx].actual_start
+        const tempEnd = assignments[idx].actual_end
+        const tempHours = assignments[idx].actual_hours
+
+        assignments[idx].shift = assignments[swapIdx].shift
+        assignments[idx].actual_start = assignments[swapIdx].actual_start
+        assignments[idx].actual_end = assignments[swapIdx].actual_end
+        assignments[idx].actual_hours = assignments[swapIdx].actual_hours
+
+        assignments[swapIdx].shift = tempShift
+        assignments[swapIdx].actual_start = tempStart
+        assignments[swapIdx].actual_end = tempEnd
+        assignments[swapIdx].actual_hours = tempHours
+
+        suggestion.applied = true
+        break
+      }
+
+      default:
+        // Unknown action, skip
+        break
+    }
+  }
+
+  return assignments
 }
 
 // ══════════════════════════════════════════════════════════════

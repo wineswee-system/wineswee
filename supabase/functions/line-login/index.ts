@@ -140,33 +140,47 @@ serve(async (req) => {
 
       // ── Create or sign in Supabase auth user ──
       const authEmail = employee.email || `line_${lineUserId}@sme-ops.local`
-      const linePassword = `LINE_${lineUserId}_${LINE_CHANNEL_SECRET.slice(0, 8)}`
 
       // Try to find existing auth user
       const { data: { users } } = await supabase.auth.admin.listUsers()
       const existingUser = users?.find(u => u.email === authEmail)
 
       if (!existingUser) {
-        // Create new user with deterministic password
+        // Create new user (no password needed — we use magic link)
         const { error } = await supabase.auth.admin.createUser({
           email: authEmail,
-          password: linePassword,
           email_confirm: true,
           user_metadata: { full_name: employee.name, line_user_id: lineUserId },
         })
         if (error && !error.message.includes('already')) throw error
-      } else {
-        // Update password to ensure it matches
-        await supabase.auth.admin.updateUserById(existingUser.id, {
-          password: linePassword,
+      }
+
+      // Generate a magic link for secure auto-login (no password in URL)
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: authEmail,
+        options: { redirectTo: `${SITE_URL}/dashboard` },
+      })
+
+      if (linkError || !linkData) {
+        throw new Error(linkError?.message || '無法產生登入連結')
+      }
+
+      // Extract the token hash from the generated link and redirect
+      // The generated link contains the full verification URL
+      const magicLink = linkData.properties?.action_link
+      if (magicLink) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: magicLink, ...corsHeaders },
         })
       }
 
-      // Redirect to frontend with credentials for auto-login
-      const redirectUrl = `${SITE_URL}/login?line_email=${encodeURIComponent(authEmail)}&line_pass=${encodeURIComponent(linePassword)}`
+      // Fallback: redirect with token_hash and type for Supabase auth verification
+      const verificationUrl = `${SUPABASE_URL}/auth/v1/verify?token=${linkData.properties?.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${SITE_URL}/dashboard`)}`
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl, ...corsHeaders },
+        headers: { Location: verificationUrl, ...corsHeaders },
       })
 
     } catch (err) {

@@ -165,6 +165,27 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
+    // ── Auth check: require service_role key or admin JWT ──
+    const authHeader = req.headers.get('Authorization')
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+      if (token !== serviceKey) {
+        const { data: { user } } = await supabase.auth.getUser(token)
+        if (!user) {
+          return new Response(JSON.stringify({ error: '未授權' }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const { data: emp } = await supabase.from('employees').select('role').eq('email', user.email).single()
+        if (!emp || !['admin', 'super_admin', 'manager'].includes(emp.role)) {
+          return new Response(JSON.stringify({ error: '權限不足' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+    }
+
     const body = await req.json()
     const { payroll_run_id, pay_period } = body
 

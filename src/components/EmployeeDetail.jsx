@@ -4,12 +4,18 @@ import { createPortal } from 'react-dom'
 import { X, Save, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
+import { useAuth } from '../contexts/AuthContext'
 import PersonalityTab from './employee/PersonalityTab'
 import DevelopmentTab from './employee/DevelopmentTab'
+
+// Mask sensitive fields for non-admin users
+const maskId = (v) => v ? v.slice(0, 3) + '****' + v.slice(-2) : ''
+const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
 const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '中高齡者 (45+)', '長期失業者', '更生人', '獨力負擔家計者', '家庭暴力被害人', '二度就業婦女']
 
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, lineUsers, onUpdate, onClose }) {
+  const { isAdmin } = useAuth()
   const [tab, setTab] = useState('personal')
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -336,7 +342,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><div style={L}>國籍</div><input className="form-input" style={{ width: '100%' }} value={form.nationality || 'TW'} onChange={e => set('nationality', e.target.value)} /></div>
-                <div><div style={L}>身分證字號</div><input className="form-input" style={{ width: '100%' }} value={form.id_number || ''} onChange={e => set('id_number', e.target.value)} /></div>
+                <div><div style={L}>身分證字號</div><input className="form-input" style={{ width: '100%' }} value={isAdmin ? (form.id_number || '') : maskId(form.id_number)} onChange={e => set('id_number', e.target.value)} readOnly={!isAdmin} /></div>
               </div>
               <div><div style={L}>地址</div><input className="form-input" style={{ width: '100%' }} value={form.address || ''} onChange={e => set('address', e.target.value)} /></div>
 
@@ -348,8 +354,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
               <SectionTitle icon="🏦" text="銀行帳戶" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                <div><div style={L}>銀行代碼</div><input className="form-input" style={{ width: '100%' }} value={form.bank_code || '004'} onChange={e => set('bank_code', e.target.value)} /></div>
-                <div><div style={L}>帳號</div><input className="form-input" style={{ width: '100%' }} value={form.bank_account || ''} onChange={e => set('bank_account', e.target.value)} /></div>
+                <div><div style={L}>銀行代碼</div><input className="form-input" style={{ width: '100%' }} value={form.bank_code || '004'} onChange={e => set('bank_code', e.target.value)} readOnly={!isAdmin} /></div>
+                <div><div style={L}>帳號</div><input className="form-input" style={{ width: '100%' }} value={isAdmin ? (form.bank_account || '') : maskBank(form.bank_account)} onChange={e => set('bank_account', e.target.value)} readOnly={!isAdmin} /></div>
               </div>
 
               <SectionTitle icon="🏷️" text="特殊身分類別" />

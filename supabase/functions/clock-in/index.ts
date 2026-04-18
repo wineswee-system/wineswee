@@ -79,6 +79,28 @@ serve(async (req: Request) => {
       })
     }
 
+    // ── If employee_id is provided directly (not via line_user_id), validate JWT ──
+    if (employee_id && !line_user_id) {
+      const authHeader = req.headers.get('Authorization')
+      if (authHeader) {
+        const token = authHeader.replace('Bearer ', '')
+        const { data: { user } } = await supabase.auth.getUser(token)
+        if (user) {
+          // Verify the JWT user matches the requested employee_id
+          const { data: authEmp } = await supabase.from('employees').select('id').eq('email', user.email).maybeSingle()
+          if (authEmp && authEmp.id !== employee_id) {
+            // Only admin/super_admin can clock in for others
+            const { data: roleCheck } = await supabase.from('employees').select('role').eq('id', authEmp.id).single()
+            if (!roleCheck || !['admin', 'super_admin'].includes(roleCheck.role)) {
+              return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
+                status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              })
+            }
+          }
+        }
+      }
+    }
+
     // ── Resolve employee (id is INT) ─────────────────────
     let emp: any = null
 

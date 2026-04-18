@@ -4,7 +4,7 @@ import { getStores, createStore, updateStore, deleteStore, getEmployees, getComp
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
-const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', working_hour_type: 'standard', variable_period_start: '' }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', gps_lat: '', gps_lng: '', gps_radius_m: 150, wifi_allowed_ips: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', working_hour_type: 'standard', variable_period_start: '' }
 
 export default function Locations() {
   const [stores, setStores] = useState([])
@@ -49,10 +49,10 @@ export default function Locations() {
       store_code: s.store_code || '',
       store_type: s.store_type || 'retail',
       city: s.city || '',
-      lat: s.lat || '',
-      lng: s.lng || '',
-      clock_radius: s.clock_radius || 150,
-      allowed_wifi: s.allowed_wifi ? s.allowed_wifi.join(', ') : '',
+      gps_lat: s.gps_lat || '',
+      gps_lng: s.gps_lng || '',
+      gps_radius_m: s.gps_radius_m || 150,
+      wifi_allowed_ips: s.wifi_allowed_ips ? s.wifi_allowed_ips.join(', ') : '',
       late_tolerance_minutes: s.late_tolerance_minutes ?? 5,
       early_clock_minutes: s.early_clock_minutes ?? 30,
       clock_in_method: s.clock_in_method || 'any',
@@ -84,10 +84,10 @@ export default function Locations() {
       store_code: form.store_code || null,
       store_type: form.store_type || 'retail',
       city: form.city || null,
-      lat: form.lat ? parseFloat(form.lat) : null,
-      lng: form.lng ? parseFloat(form.lng) : null,
-      clock_radius: parseInt(form.clock_radius) || 150,
-      allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
+      gps_lat: form.gps_lat ? parseFloat(form.gps_lat) : null,
+      gps_lng: form.gps_lng ? parseFloat(form.gps_lng) : null,
+      gps_radius_m: parseInt(form.gps_radius_m) || 150,
+      wifi_allowed_ips: form.wifi_allowed_ips ? form.wifi_allowed_ips.split(',').map(s => s.trim()).filter(Boolean) : null,
       late_tolerance_minutes: parseInt(form.late_tolerance_minutes) || 5,
       early_clock_minutes: parseInt(form.early_clock_minutes) || 30,
       clock_in_method: form.clock_in_method || 'any',
@@ -161,13 +161,13 @@ export default function Locations() {
                   <td>{employees.find(e => e.id === s.manager_id)?.name || s.manager || '-'}</td>
                   <td>{employees.filter(e => (e.store_id === s.id || e.store === s.name) && e.status === '在職').length}</td>
                   <td style={{ fontSize: 12 }}>
-                    {s.lat && s.lng ? (
-                      <span className="badge badge-success"><span className="badge-dot"></span>{s.clock_radius || 150}m</span>
+                    {s.gps_lat && s.gps_lng ? (
+                      <span className="badge badge-success"><span className="badge-dot"></span>{s.gps_radius_m || 150}m</span>
                     ) : (
                       <span style={{ color: 'var(--text-muted)' }}>未設定</span>
                     )}
-                    {s.allowed_wifi?.length > 0 && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>WiFi: {s.allowed_wifi.length} 組</div>
+                    {s.wifi_allowed_ips?.length > 0 && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>WiFi: {s.wifi_allowed_ips.length} 組</div>
                     )}
                   </td>
                   <td>
@@ -265,13 +265,13 @@ export default function Locations() {
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📍 GPS 打卡範圍設定</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="緯度 (Lat)">
-                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="25.0330" value={form.lat} onChange={e => set('lat', e.target.value)} />
+                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="25.0330" value={form.gps_lat} onChange={e => set('gps_lat', e.target.value)} />
               </Field>
               <Field label="經度 (Lng)">
-                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="121.5654" value={form.lng} onChange={e => set('lng', e.target.value)} />
+                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="121.5654" value={form.gps_lng} onChange={e => set('gps_lng', e.target.value)} />
               </Field>
               <Field label="範圍 (公尺)">
-                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="150" value={form.clock_radius} onChange={e => set('clock_radius', e.target.value)} />
+                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="150" value={form.gps_radius_m} onChange={e => set('gps_radius_m', e.target.value)} />
               </Field>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
@@ -281,7 +281,7 @@ export default function Locations() {
           <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📶 WiFi IP 白名單</div>
             <Field label="允許的 IP 位址（逗號分隔）">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="203.69.180.0/24, 61.220.45.0/24" value={form.allowed_wifi} onChange={e => set('allowed_wifi', e.target.value)} />
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="203.69.180.0/24, 61.220.45.0/24" value={form.wifi_allowed_ips} onChange={e => set('wifi_allowed_ips', e.target.value)} />
             </Field>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               填入門市 WiFi 的公共 IP 或網段。員工連上門市 WiFi 時，IP 符合即可打卡（與 GPS 擇一通過即可）。

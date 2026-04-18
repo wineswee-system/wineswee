@@ -239,6 +239,7 @@ const groupNav = {
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
+        { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
@@ -251,6 +252,8 @@ const groupNav = {
       icon: DollarSign,
       children: [
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
+        { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
+        { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
@@ -500,12 +503,12 @@ export default function Sidebar() {
   const ROLE_ALLOWED_PATHS = {
     store_staff: [
       '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
-      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
     ],
     office_staff: [
       '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
-      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar',
-      '/hr/schedule', '/hr/holidays',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
+      '/hr/schedule', '/hr/holidays', '/hr/salary', '/hr/salary-structures', '/hr/payroll',
       '/org/employees', '/org/locations', '/org/departments',
       '/process/overview', '/process/tasks', '/process/workflows',
     ],

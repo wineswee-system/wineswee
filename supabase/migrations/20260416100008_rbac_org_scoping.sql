@@ -116,13 +116,16 @@ CREATE POLICY org_pay_isolation ON org_payments
 CREATE POLICY anon_org_pay_dev ON org_payments
   FOR ALL TO anon USING (true) WITH CHECK (true);
 
--- user_stores: tenant-scoped via employee's tenant
+-- user_stores: org-scoped via employee's organization
 DROP POLICY IF EXISTS anon_user_stores ON user_stores;
 CREATE POLICY user_stores_isolation ON user_stores
   FOR ALL USING (
     employee_id IN (
       SELECT id FROM employees
-      WHERE tenant_id::text = coalesce(current_setting('app.tenant_id', true), '')
+      WHERE organization_id IN (
+        SELECT organization_id FROM tenants
+        WHERE id::text = coalesce(current_setting('app.tenant_id', true), '')
+      )
     )
   );
 CREATE POLICY anon_user_stores_dev ON user_stores

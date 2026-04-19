@@ -535,6 +535,33 @@ export const setEmployeeStores = async (employeeId, storeIds, primaryStoreId) =>
 export const getDeptManagerHistory = (deptId) =>
   supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })
 
+// ── RBAC ──────────────────────────────────────────────────
+export const getRoles = (orgId) => {
+  let q = supabase.from('roles').select('*').order('level', { ascending: false })
+  if (orgId) q = q.or(`organization_id.eq.${orgId},is_system.eq.true`)
+  return q
+}
+
+export const getPermissions = () =>
+  supabase.from('permissions').select('*').order('module').order('code')
+
+export const getRolePermissions = (roleId) =>
+  supabase.from('role_permissions').select('*, permissions(code, name, module)').eq('role_id', roleId)
+
+export const setRolePermissions = async (roleId, permissionIds) => {
+  await supabase.from('role_permissions').delete().eq('role_id', roleId)
+  if (!permissionIds?.length) return
+  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
+  return supabase.from('role_permissions').insert(rows)
+}
+
+export const getEmployeePermissions = async (employeeId) => {
+  const { data: emp } = await supabase.from('employees').select('role_id').eq('id', employeeId).single()
+  if (!emp?.role_id) return []
+  const { data } = await supabase.from('role_permissions').select('permissions(code)').eq('role_id', emp.role_id)
+  return (data || []).map(p => p.permissions?.code).filter(Boolean)
+}
+
 // ── LINE Groups ───────────────────────────────────────────
 export const getLineGroups = () =>
   supabase.from('line_groups').select('*').order('id')
@@ -1275,17 +1302,9 @@ export const updateTenantModules = (id, features) =>
   supabase.from('tenants').update({ features }).eq('id', id).select().single()
 export const getTenantEmployees = (tenantId) =>
   supabase.from('employees').select('*').eq('tenant_id', tenantId).order('id')
-export const getRoles = () =>
-  supabase.from('roles').select('*').order('level')
-export const getPermissions = () =>
-  supabase.from('permissions').select('*').order('module, code')
-export const getRolePermissions = (roleId) =>
-  supabase.from('role_permissions').select('*, permissions(*)').eq('role_id', roleId)
+// getRoles, getPermissions, getRolePermissions — defined above in RBAC section
 export const updateRolePermissions = (roleId, permissionIds) =>
-  supabase.rpc('secure_update_role_permissions', {
-    p_role_id: roleId,
-    p_permission_ids: permissionIds,
-  })
+  setRolePermissions(roleId, permissionIds)
 
 // ── System Logs (Super Admin) ──
 export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {

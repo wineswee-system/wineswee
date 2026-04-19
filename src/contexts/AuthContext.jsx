@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -6,37 +6,66 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [organization, setOrganization] = useState(null)
+  const [role, setRole] = useState(null)
+  const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
   const profileLoaded = useRef(false)
 
+  const loadProfile = async (authUser) => {
+    if (!authUser?.email) {
+      setProfile(null); setOrganization(null); setRole(null); setPermissions([])
+      profileLoaded.current = false
+      return
+    }
+    if (profileLoaded.current) return
+    profileLoaded.current = true
+
+    try {
+      const { data: emp } = await supabase
+        .from('employees').select('*').eq('email', authUser.email).maybeSingle()
+      setProfile(emp || null)
+      if (!emp) return
+
+      // Load organization
+      if (emp.organization_id) {
+        const { data: org } = await supabase
+          .from('organizations').select('*').eq('id', emp.organization_id).maybeSingle()
+        setOrganization(org || null)
+      }
+
+      // Load role + permissions
+      if (emp.role_id) {
+        const { data: roleData } = await supabase
+          .from('roles').select('*').eq('id', emp.role_id).maybeSingle()
+        setRole(roleData || null)
+
+        const { data: perms } = await supabase
+          .from('role_permissions').select('permissions(code)').eq('role_id', emp.role_id)
+        setPermissions((perms || []).map(p => p.permissions?.code).filter(Boolean))
+      }
+    } catch (err) {
+      console.error('Failed to load employee profile:', err)
+      setProfile(null)
+    }
+  }
+
   useEffect(() => {
-    // 1. Check session immediately
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setUser(u)
-      setLoading(false) // Always stop loading here, never wait for profile
-
-      // Load profile in background (non-blocking)
-      if (u?.email && !profileLoaded.current) {
-        profileLoaded.current = true
-        supabase.from('employees').select('*').eq('email', u.email).maybeSingle()
-          .then(({ data }) => setProfile(data || null))
-          .catch(() => setProfile(null))
-      }
+      setLoading(false)
+      loadProfile(u)
     }).catch(() => setLoading(false))
 
-    // 2. Listen for auth changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUser(u)
       setLoading(false)
-
-      if (u?.email) {
-        supabase.from('employees').select('*').eq('email', u.email).maybeSingle()
-          .then(({ data }) => setProfile(data || null))
-          .catch(() => setProfile(null))
+      if (u) {
+        loadProfile(u)
       } else {
-        setProfile(null)
+        setProfile(null); setOrganization(null); setRole(null); setPermissions([])
         profileLoaded.current = false
       }
     })
@@ -49,17 +78,26 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
+    setUser(null); setProfile(null); setOrganization(null); setRole(null); setPermissions([])
     profileLoaded.current = false
   }
 
+  const hasPermission = useCallback((code) => {
+    if (!user) return true // Demo mode
+    if (permissions.includes('admin.system')) return true
+    return permissions.includes(code)
+  }, [user, permissions])
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+    || role?.name === 'admin' || role?.name === 'super_admin'
+    || !user
+  const isSuperAdmin = profile?.role === 'super_admin' || role?.name === 'super_admin' || !user
+
   return (
     <AuthContext.Provider value={{
-      user, profile, loading,
+      user, profile, organization, role, permissions, loading,
       isAuthenticated: !!user,
-      isAdmin: profile?.role === 'admin' || profile?.role === 'super_admin',
-      isSuperAdmin: profile?.role === 'super_admin',
+      isAdmin, isSuperAdmin, hasPermission,
       signIn, signOut,
     }}>
       {children}

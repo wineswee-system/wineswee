@@ -609,9 +609,13 @@ export default function Schedule() {
   )
 
   const getShiftStyle = (shift) => {
-    const type = SHIFT_TYPES.find(t => t.label === shift)
-    if (!type) return {}
-    return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
+    if (isAbsence(shift)) {
+      const type = SHIFT_TYPES.find(t => t.label === shift)
+      if (!type) return {}
+      return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
+    }
+    // All work shifts use a single unified color for cleaner visuals
+    return { background: 'rgba(34,211,238,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }
   }
 
   const selectedStore = locations.find(s => s.name === storeFilter)

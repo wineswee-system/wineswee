@@ -63,25 +63,26 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
     <div>
       {/* Shift Preferences + Target Hours */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
+        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="card-title"><span className="card-title-icon">👤</span> 班別偏好 & 目標工時</div>
+          <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> 想上</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} /> 不可</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--border-medium)', display: 'inline-block' }} /> 都可以</span>
+          </div>
         </div>
         <div className="data-table-wrapper">
-          <table className="data-table">
+          <table className="data-table" style={{ fontSize: 13 }}>
             <thead>
               <tr>
-                <th>員工</th>
-                <th>類型</th>
-                <th>目標週工時</th>
+                <th style={{ minWidth: 80 }}>員工</th>
+                <th style={{ textAlign: 'center', width: 80 }}>週工時</th>
                 {shiftDefs.map(d => (
-                  <th key={d.id} style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color }} />
-                      {d.name}
-                    </div>
+                  <th key={d.id} style={{ textAlign: 'center', padding: '8px 4px', fontSize: 11 }}>
+                    {d.name}
                   </th>
                 ))}
-                <th>備註</th>
+                <th style={{ width: 60 }}>備註</th>
               </tr>
             </thead>
             <tbody>
@@ -90,25 +91,18 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
                 const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
                 return (
                   <tr key={emp.id}>
-                    <td style={{ fontWeight: 600 }}>{emp.name}</td>
                     <td>
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        background: isPT ? 'rgba(251,191,36,0.12)' : 'rgba(34,211,238,0.12)',
-                        color: isPT ? '#f59e0b' : 'var(--accent-cyan)',
-                      }}>
-                        {isPT ? '兼職' : '全職'}
-                      </span>
+                      <span style={{ fontWeight: 600 }}>{emp.name}</span>
+                      {isPT && <span style={{ fontSize: 10, color: '#f59e0b', marginLeft: 4, fontWeight: 600 }}>PT</span>}
                     </td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       <input
                         className="form-input"
                         type="number" min={4} max={48} step={1}
-                        style={{ width: 70, textAlign: 'center', fontWeight: 700, fontSize: 14 }}
+                        style={{ width: 52, textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '4px' }}
                         defaultValue={emp.weekly_target_hours || (isPT ? 20 : 40)}
                         onBlur={e => handleTargetHoursChange(emp, e.target.value)}
                       />
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>h/週</span>
                     </td>
                     {shiftDefs.map(d => {
                       const isPreferred = pref?.preferred_shifts?.includes(d.name)
@@ -116,20 +110,16 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
                       const level = isPreferred ? 'want' : isBlocked ? 'block' : 'ok'
 
                       const handleCycle = async () => {
-                        // Cycle: 都可以 → 想上 → 不可上 → 都可以
                         let nextPreferred = [...(pref?.preferred_shifts || [])]
                         let nextAvoid = [...(pref?.avoid_shifts || [])]
 
                         if (level === 'ok') {
-                          // → 想上
                           nextPreferred.push(d.name)
                           nextAvoid = nextAvoid.filter(s => s !== d.name)
                         } else if (level === 'want') {
-                          // → 不可上
                           nextPreferred = nextPreferred.filter(s => s !== d.name)
                           nextAvoid.push(d.name)
                         } else {
-                          // → 都可以
                           nextPreferred = nextPreferred.filter(s => s !== d.name)
                           nextAvoid = nextAvoid.filter(s => s !== d.name)
                         }
@@ -141,27 +131,25 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
                       }
 
                       return (
-                        <td key={d.id} style={{ textAlign: 'center' }}>
-                          <button onClick={handleCycle} style={{
-                            padding: '4px 12px', borderRadius: 8, border: '2px solid',
-                            fontSize: 12, fontWeight: 700, cursor: 'pointer', minWidth: 60,
-                            background: level === 'want' ? 'rgba(52,211,153,0.15)' : level === 'block' ? 'rgba(239,68,68,0.1)' : 'var(--glass-light)',
-                            color: level === 'want' ? '#10b981' : level === 'block' ? '#ef4444' : 'var(--text-muted)',
-                            borderColor: level === 'want' ? '#10b981' : level === 'block' ? '#ef4444' : 'var(--border-medium)',
-                          }}>
-                            {level === 'want' ? '🟢 想上' : level === 'block' ? '🔴 不可' : '🟡 可以'}
-                          </button>
+                        <td key={d.id} style={{ textAlign: 'center', padding: '6px 4px' }}>
+                          <button onClick={handleCycle} title={level === 'want' ? '想上' : level === 'block' ? '不可' : '都可以'} style={{
+                            width: 26, height: 26, borderRadius: '50%', border: 'none',
+                            cursor: 'pointer', transition: 'transform 0.15s',
+                            background: level === 'want' ? '#10b981' : level === 'block' ? '#ef4444' : 'var(--border-medium)',
+                            opacity: level === 'ok' ? 0.35 : 1,
+                          }} onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
+                             onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
                         </td>
                       )
                     })}
                     <td>
-                      <button className="btn btn-sm btn-secondary" onClick={async () => {
+                      <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={async () => {
                         const notes = prompt('備註（例如：只能上早班、週三不行）', pref?.notes || '')
                         if (notes === null) return
                         const { data } = await supabase.from('employee_shift_preferences').upsert({ employee: emp.name, notes }, { onConflict: 'employee' }).select().single()
                         if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
-                      }}>備註</button>
-                      {pref?.notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pref.notes}</div>}
+                      }}>{pref?.notes ? '📝' : '+'}</button>
+                      {pref?.notes && <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pref.notes}>{pref.notes}</div>}
                     </td>
                   </tr>
                 )

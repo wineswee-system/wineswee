@@ -33,7 +33,7 @@ export default function LeaveCalendar() {
     const endDate = `${viewYear}-${String(viewMonth).padStart(2, '0')}-${getDaysInMonth(viewYear, viewMonth)}`
 
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('dept').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('department_id').order('name'),
       supabase.from('leave_requests').select('*').eq('status', '已核准').lte('start_date', endDate).gte('end_date', startDate),
       supabase.from('holidays').select('*').gte('date', startDate).lte('date', endDate),
       supabase.from('departments').select('*').order('name'),

@@ -39,11 +39,9 @@ export default function Locations() {
     setEditingStore(s)
     setForm({
       name: s.name || '',
-      company: s.company || '',
       company_id: s.company_id || '',
       address: s.address || '',
       phone: s.phone || '',
-      manager: s.manager || '',
       manager_id: s.manager_id || '',
       status: s.status || '營運中',
       store_code: s.store_code || '',

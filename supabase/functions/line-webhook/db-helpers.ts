@@ -2,28 +2,43 @@ import type { SupabaseClient } from './types.ts';
 
 // ── DB helpers ───────────────────────────────────────────────────────────────
 
-export async function upsertLineUser(lineUserId: string, displayName: string, db: SupabaseClient) {
+export async function upsertLineUser(
+  lineUserId: string,
+  displayName: string,
+  db: SupabaseClient,
+  channelId: number,
+) {
   const now = new Date().toISOString();
   const { data: existing } = await db
     .from("line_users")
-    .select("id, line_user_id, display_name, is_verified, employee_id, pending_action")
+    .select("id, line_user_id, display_name, is_verified, employee_id, pending_action, channel_id")
+    .eq("channel_id", channelId)
     .eq("line_user_id", lineUserId)
     .maybeSingle();
 
   if (existing) {
     const updates: Record<string, unknown> = { updated_at: now };
-    // Update display_name if we got a real name and stored value is the fallback
     if (displayName && displayName !== "使用者" && existing.display_name !== displayName) {
       updates.display_name = displayName;
     }
+    if (existing.channel_id == null) {
+      updates.channel_id = channelId;
+    }
     await db.from("line_users").update(updates).eq("id", existing.id);
-    return { row: { ...existing, display_name: updates.display_name as string ?? existing.display_name }, isNew: false };
+    return {
+      row: {
+        ...existing,
+        display_name: (updates.display_name as string) ?? existing.display_name,
+        channel_id: channelId,
+      },
+      isNew: false,
+    };
   }
 
   const { data: inserted } = await db
     .from("line_users")
-    .insert({ line_user_id: lineUserId, display_name: displayName, is_verified: false })
-    .select("id, line_user_id, display_name, is_verified, employee_id, pending_action")
+    .insert({ line_user_id: lineUserId, display_name: displayName, is_verified: false, channel_id: channelId })
+    .select("id, line_user_id, display_name, is_verified, employee_id, pending_action, channel_id")
     .single();
 
   return { row: inserted, isNew: true };
@@ -49,23 +64,42 @@ export async function upsertLineGroupMember(lineUserId: string, lineGroupId: str
   }
 }
 
-export async function upsertLineGroup(groupId: string, groupName: string, db: SupabaseClient) {
+export async function upsertLineGroup(
+  groupId: string,
+  groupName: string,
+  db: SupabaseClient,
+  channelId: number,
+) {
   const { data: existing } = await db
     .from("line_groups")
-    .select("id, group_name")
+    .select("id, group_name, channel_id")
+    .eq("channel_id", channelId)
     .eq("line_group_id", groupId)
     .maybeSingle();
 
   if (existing) {
+    const updates: Record<string, unknown> = {};
     if (groupName && groupName !== existing.group_name) {
-      await db.from("line_groups").update({ group_name: groupName, is_active: true }).eq("id", existing.id);
+      updates.group_name = groupName;
+      updates.is_active = true;
+    }
+    if (existing.channel_id == null) updates.channel_id = channelId;
+    if (Object.keys(updates).length > 0) {
+      await db.from("line_groups").update(updates).eq("id", existing.id);
     }
     return existing;
   }
 
   const { data: inserted } = await db
     .from("line_groups")
-    .insert({ line_group_id: groupId, group_name: groupName || groupId, group_type: "general", is_active: true, joined_at: new Date().toISOString() })
+    .insert({
+      line_group_id: groupId,
+      group_name: groupName || groupId,
+      group_type: "general",
+      is_active: true,
+      joined_at: new Date().toISOString(),
+      channel_id: channelId,
+    })
     .select("id")
     .single();
 
@@ -77,6 +111,7 @@ export async function upsertLineGroup(groupId: string, groupName: string, db: Su
 export async function logMessage(
   db: SupabaseClient,
   opts: {
+    channelId?: number | null;
     lineUserId: string;
     displayName?: string;
     messageText: string;
@@ -88,6 +123,7 @@ export async function logMessage(
 ): Promise<string | null> {
   try {
     const { data, error } = await db.from("line_messages").insert({
+      channel_id: opts.channelId,
       line_user_id: opts.lineUserId,
       display_name: opts.displayName ?? null,
       message_text: opts.messageText,
@@ -110,6 +146,7 @@ export async function logMessage(
 export async function logCommand(
   db: SupabaseClient,
   opts: {
+    channelId?: number | null;
     lineUserId: string;
     displayName?: string;
     commandMatched: string;
@@ -126,6 +163,7 @@ export async function logCommand(
 ): Promise<void> {
   try {
     await db.from("line_command_logs").insert({
+      channel_id: opts.channelId,
       line_user_id: opts.lineUserId,
       display_name: opts.displayName ?? null,
       command_matched: opts.commandMatched,
@@ -144,6 +182,7 @@ export async function logCommand(
 export async function logError(
   db: SupabaseClient,
   opts: {
+    channelId?: number | null;
     lineUserId?: string | null;
     sourceType?: string;
     groupId?: string | null;
@@ -155,6 +194,7 @@ export async function logError(
 ): Promise<void> {
   try {
     await db.from("line_error_logs").insert({
+      channel_id: opts.channelId ?? null,
       line_user_id: opts.lineUserId ?? null,
       source_type: opts.sourceType ?? "system",
       group_id: opts.groupId ?? null,
@@ -166,4 +206,32 @@ export async function logError(
   } catch (err) {
     console.error("[logError] insert failed (last resort):", err);
   }
+}
+
+/**
+ * Resolve a LINE user ID to an employees.id (INT) via the multi-OA mapping
+ * (employee_line_accounts) with line_users as fallback. Returns null if unlinked.
+ */
+export async function resolveLineUserToEmployeeId(
+  db: SupabaseClient,
+  lineUserId: string,
+): Promise<number | null> {
+  const { data: ela } = await db
+    .from("employee_line_accounts")
+    .select("employee_id")
+    .eq("line_user_id", lineUserId)
+    .eq("is_verified", true)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (ela?.employee_id) return ela.employee_id as number;
+
+  const { data: lu } = await db
+    .from("line_users")
+    .select("employee_id")
+    .eq("line_user_id", lineUserId)
+    .not("employee_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  return (lu?.employee_id as number | undefined) ?? null;
 }

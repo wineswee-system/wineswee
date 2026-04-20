@@ -31,7 +31,7 @@ export default function ProbationTracker() {
   useEffect(() => {
     Promise.all([
       getProbationRecords(),
-      supabase.from('employees').select('id, name, dept, position, join_date').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, join_date, departments(name)').eq('status', '在職').order('name'),
     ]).then(([r, e]) => {
       setRecords(r.data || [])
       setEmployees(e.data || [])

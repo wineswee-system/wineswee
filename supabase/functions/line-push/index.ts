@@ -7,17 +7,20 @@ const corsHeaders = {
 
 /**
  * Resolve the LINE channel access token for a given channel code.
- * Convention: LINE_CHANNEL_TOKEN_{CODE} (uppercase, hyphens → underscores)
- * Falls back to LINE_CHANNEL_TOKEN if no channel-specific token found.
+ * Convention (preferred): LINE_CHANNEL_ACCESS_TOKEN_{CODE}
+ * Also accepts (legacy): LINE_CHANNEL_TOKEN_{CODE}
+ * Suffix: uppercase, hyphens → underscores (e.g. "sme-ops" → SME_OPS)
+ * Fallback: unsuffixed LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_TOKEN.
  */
 function resolveToken(channelCode?: string): string | null {
   if (channelCode) {
-    const envKey = `LINE_CHANNEL_TOKEN_${channelCode.toUpperCase().replace(/-/g, '_')}`
-    const token = Deno.env.get(envKey)
-    if (token) return token
+    const suffix = channelCode.toUpperCase().replace(/-/g, '_')
+    const primary = Deno.env.get(`LINE_CHANNEL_ACCESS_TOKEN_${suffix}`)
+    if (primary) return primary
+    const legacy = Deno.env.get(`LINE_CHANNEL_TOKEN_${suffix}`)
+    if (legacy) return legacy
   }
-  // Fallback to default token
-  return Deno.env.get('LINE_CHANNEL_TOKEN') || null
+  return Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') || Deno.env.get('LINE_CHANNEL_TOKEN') || null
 }
 
 serve(async (req) => {

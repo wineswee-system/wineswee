@@ -23,7 +23,7 @@ export default function Attendance() {
   useEffect(() => {
     Promise.all([
       getAttendance(),
-      supabase.from('employees').select('id, name, dept, position, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, store_id, departments(name), stores(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*'),
     ]).then(([r, e, d, s]) => {

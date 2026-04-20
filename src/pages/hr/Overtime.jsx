@@ -21,7 +21,7 @@ export default function Overtime() {
   useEffect(() => {
     Promise.all([
       getOvertimeRequests(),
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, e, d]) => {
       const emps = e.data || []

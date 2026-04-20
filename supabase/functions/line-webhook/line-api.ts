@@ -64,11 +64,12 @@ export async function replyAndLog(
   messages: object[],
   accessToken: string,
   db: SupabaseClient,
-  opts: { lineUserId: string; displayName?: string; sourceType: string; groupId?: string | null }
+  opts: { channelId?: number | null; lineUserId: string; displayName?: string; sourceType: string; groupId?: string | null }
 ) {
   const result = await reply(replyToken, messages, accessToken);
   if (!result.ok) {
     await logError(db, {
+      channelId: opts.channelId,
       lineUserId: opts.lineUserId,
       sourceType: opts.sourceType,
       groupId: opts.groupId,
@@ -79,6 +80,7 @@ export async function replyAndLog(
   for (const msg of messages) {
     const msgText = (msg as any).altText ?? (msg as any).text ?? "[flex message]";
     await logMessage(db, {
+      channelId: opts.channelId,
       lineUserId: "BOT",
       displayName: "營運管理助理",
       messageText: msgText,
@@ -95,11 +97,12 @@ export async function pushAndLog(
   messages: object[],
   accessToken: string,
   db: SupabaseClient,
-  opts: { sourceType?: string; groupId?: string | null }
+  opts: { channelId?: number | null; sourceType?: string; groupId?: string | null }
 ) {
   const result = await push(to, messages, accessToken);
   if (!result.ok) {
     await logError(db, {
+      channelId: opts.channelId,
       sourceType: opts.sourceType,
       groupId: opts.groupId,
       errorType: "line_api_error",
@@ -109,6 +112,7 @@ export async function pushAndLog(
   for (const msg of messages) {
     const msgText = (msg as any).altText ?? (msg as any).text ?? "[flex message]";
     await logMessage(db, {
+      channelId: opts.channelId,
       lineUserId: "BOT",
       displayName: "營運管理助理",
       messageText: msgText,

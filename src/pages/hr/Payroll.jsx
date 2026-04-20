@@ -28,7 +28,7 @@ export default function Payroll() {
     setLoading(true)
     Promise.all([
       supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false }),
-      supabase.from('employees').select('id, name, dept, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, store_id, departments(name), stores(name)').eq('status', '在職').order('name'),
     ]).then(([r, e]) => {
       setRuns(r.data || [])
       setEmployees(e.data || [])

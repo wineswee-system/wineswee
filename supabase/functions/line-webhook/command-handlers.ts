@@ -1,6 +1,7 @@
 import type { SupabaseClient } from './types.ts';
 import { priorityLabel, statusLabel, PRIORITY_COLOR, STATUS_COLOR } from './constants.ts';
 import { text, pushAndLog } from './line-api.ts';
+import { resolveLineUserToEmployeeId } from './db-helpers.ts';
 import {
   mkBtn, infoRow, withQuickReplies,
   flexTaskList, flexGroupTaskList, flexSuccess, flexWorkflowStatus,
@@ -111,7 +112,8 @@ export async function checkWorkflowCompletion(
 
 export async function cmdTaskList(userId: string, db: SupabaseClient, displayName?: string, isGroup = false, lineGroupId?: string | null, liffNewTaskId = "", showAll = false) {
   let tasks: any[] | null = null;
-  console.log("[cmdTaskList] userId=", userId, "isGroup=", isGroup, "lineGroupId=", lineGroupId);
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  console.log("[cmdTaskList] userId=", userId, "employeeId=", employeeId, "isGroup=", isGroup, "lineGroupId=", lineGroupId);
 
   if (isGroup && lineGroupId) {
     // Group chat: show all tasks from workflows assigned to this group, with assignee name
@@ -133,7 +135,7 @@ export async function cmdTaskList(userId: string, db: SupabaseClient, displayNam
         const instanceIds = instanceAssignments.map((a: any) => a.workflow_instance_id);
         const { data: allTasks } = await db
           .from("tasks")
-          .select("id, title, status, priority, due_date, notes, confirmation_required, assignee:employees!tasks_assigned_to_fkey(name), workflow_instance:workflow_instances(name)")
+          .select("id, title, status, priority, due_date, notes, confirmation_required, assignee:employees!tasks_assignee_id_fkey(name), workflow_instance:workflow_instances(name)")
           .in("workflow_instance_id", instanceIds)
           .in("status", showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"])
           .order("priority", { ascending: false })
@@ -144,16 +146,18 @@ export async function cmdTaskList(userId: string, db: SupabaseClient, displayNam
     // Fall back to tasks directly assigned to this user if no workflow tasks found
     console.log("[cmdTaskList] group workflow tasks count=", tasks?.length ?? 0);
     if (!tasks || tasks.length === 0) {
-      console.log("[cmdTaskList] falling back to user tasks for userId=", userId);
-      const { data: fallback, error: fallbackErr } = await db
-        .from("tasks")
-        .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
-        .eq("assigned_to", userId)
-        .in("status", showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"])
-        .order("priority", { ascending: false })
-        .limit(10);
-      console.log("[cmdTaskList] fallback tasks=", JSON.stringify(fallback), "err=", fallbackErr);
-      tasks = fallback;
+      console.log("[cmdTaskList] falling back to user tasks for employeeId=", employeeId);
+      if (employeeId) {
+        const { data: fallback, error: fallbackErr } = await db
+          .from("tasks")
+          .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
+          .eq("assignee_id", employeeId)
+          .in("status", showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"])
+          .order("priority", { ascending: false })
+          .limit(10);
+        console.log("[cmdTaskList] fallback tasks=", JSON.stringify(fallback), "err=", fallbackErr);
+        tasks = fallback;
+      }
     }
     console.log("[cmdTaskList] returning flexGroupTaskList with", tasks?.length ?? 0, "tasks");
     return flexGroupTaskList(tasks ?? []);
@@ -178,11 +182,11 @@ export async function cmdTaskList(userId: string, db: SupabaseClient, displayNam
       tasks = wfTasks;
     }
     // Fall back to tasks directly assigned to this user
-    if (!tasks || tasks.length === 0) {
+    if ((!tasks || tasks.length === 0) && employeeId) {
       const { data: fallback } = await db
         .from("tasks")
         .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
-        .eq("assigned_to", userId)
+        .eq("assignee_id", employeeId)
         .in("status", statusFilter)
         .order("priority", { ascending: false })
         .limit(10);
@@ -238,9 +242,12 @@ export async function cmdTaskCreate(userId: string, title: string, db: SupabaseC
     );
   }
 
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+
   const { error } = await db.from("tasks").insert({
     title,
-    assigned_to: userId,
+    assignee_id: employeeId,
     status: "pending",
     priority: "medium",
   });
@@ -255,11 +262,14 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
   const shortId = rawId.replace(/[[\]#\s]/g, "").toLowerCase();
   if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 完成");
 
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+
   // Fetch only tasks assigned to this user (not completed)
   const { data: allTasks } = await db
     .from("tasks")
     .select("id, title, metadata, workflow_instance_id, sort_order")
-    .eq("assigned_to", userId)
+    .eq("assignee_id", employeeId)
     .neq("status", "completed")
     .limit(300);
 
@@ -278,7 +288,7 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
     // Fetch the triggered task with its assignee
     const { data: triggered } = await db
       .from("tasks")
-      .select("id, title, priority, due_date, assigned_to")
+      .select("id, title, priority, due_date, assignee_id")
       .eq("id", triggeredId)
       .eq("status", "pending")
       .maybeSingle();
@@ -290,11 +300,11 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
     triggeredCount++;
 
     // Look up the assignee's LINE user ID
-    if (!triggered.assigned_to) continue;
+    if (!triggered.assignee_id) continue;
     const { data: lineUser } = await db
       .from("line_users")
       .select("line_user_id")
-      .eq("employee_id", triggered.assigned_to)
+      .eq("employee_id", triggered.assignee_id)
       .eq("is_verified", true)
       .maybeSingle();
 
@@ -370,7 +380,7 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
   if (task.workflow_instance_id) {
     const { data: nextTasks } = await db
       .from("tasks")
-      .select("id, title, sort_order, assignee:employees!tasks_assigned_to_fkey(name)")
+      .select("id, title, sort_order, assignee:employees!tasks_assignee_id_fkey(name)")
       .eq("workflow_instance_id", task.workflow_instance_id)
       .in("status", ["pending", "in_progress"])
       .neq("id", task.id)
@@ -437,7 +447,11 @@ export async function cmdTaskUpdate(rawId: string, note: string, db: SupabaseCli
     .from("tasks")
     .select("id, title, notes")
     .neq("status", "completed");
-  if (userId) query = query.eq("assigned_to", userId);
+  if (userId) {
+    const employeeId = await resolveLineUserToEmployeeId(db, userId);
+    if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+    query = query.eq("assignee_id", employeeId);
+  }
   const { data: allTasks2 } = await query.limit(300);
 
   const tasks = allTasks2?.filter((t: any) => t.id.startsWith(shortId));
@@ -468,10 +482,13 @@ export async function cmdTaskRequestConfirm(rawId: string, userId: string, db: S
   const shortId = rawId.replace(/[[\]#\s]/g, "").toLowerCase();
   if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 請求確認");
 
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+
   const { data: allTasks } = await db
     .from("tasks")
     .select("id, title, confirmation_required, confirmation_status, workflow_instance:workflow_instances(name)")
-    .eq("assigned_to", userId)
+    .eq("assignee_id", employeeId)
     .neq("status", "completed")
     .limit(300);
 
@@ -696,26 +713,18 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
 
     // Notify task owner that approval passed and task is completed
     const { data: approvedTask } = await db.from("tasks")
-      .select("assigned_to, workflow_instance_id")
+      .select("assignee_id, workflow_instance_id")
       .eq("id", task.id)
       .maybeSingle();
 
-    if (approvedTask?.assigned_to) {
+    if (approvedTask?.assignee_id) {
       let ownerLineId: string | null = null;
       const { data: lu } = await db.from("line_users")
         .select("line_user_id")
-        .eq("employee_id", approvedTask.assigned_to)
+        .eq("employee_id", approvedTask.assignee_id)
         .eq("is_verified", true)
         .maybeSingle();
       ownerLineId = lu?.line_user_id ?? null;
-      if (!ownerLineId) {
-        const { data: mapping } = await db.from("line_users")
-          .select("line_user_id")
-          .eq("employee_id", approvedTask.assigned_to)
-          .eq("is_verified", true)
-          .maybeSingle();
-        ownerLineId = mapping?.line_user_id ?? null;
-      }
       if (ownerLineId) {
         await pushAndLog(ownerLineId, [{
           type: "flex",
@@ -773,28 +782,19 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
 
     // Notify task owner to review and re-request
     const { data: fullTask } = await db.from("tasks")
-      .select("assigned_to")
+      .select("assignee_id")
       .eq("id", task.id)
       .maybeSingle();
 
-    if (fullTask?.assigned_to) {
+    if (fullTask?.assignee_id) {
       // Resolve owner's LINE ID
       let ownerLineId: string | null = null;
       const { data: lu } = await db.from("line_users")
         .select("line_user_id")
-        .eq("employee_id", fullTask.assigned_to)
+        .eq("employee_id", fullTask.assignee_id)
         .eq("is_verified", true)
         .maybeSingle();
       ownerLineId = lu?.line_user_id ?? null;
-
-      if (!ownerLineId) {
-        const { data: mapping } = await db.from("line_users")
-          .select("line_user_id")
-          .eq("employee_id", fullTask.assigned_to)
-          .eq("is_verified", true)
-          .maybeSingle();
-        ownerLineId = mapping?.line_user_id ?? null;
-      }
 
       if (ownerLineId) {
         const sid = shortId.slice(0, 8);
@@ -847,10 +847,13 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
 // ── Notes Command ────────────────────────────────────────────────────────────
 
 export async function cmdNotes(userId: string, db: SupabaseClient) {
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+
   const { data: tasks } = await db
     .from("tasks")
     .select("id, title, notes, status")
-    .eq("assigned_to", userId)
+    .eq("assignee_id", employeeId)
     .not("notes", "is", null)
     .neq("notes", "")
     .order("updated_at", { ascending: false })

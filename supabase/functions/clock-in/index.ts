@@ -109,24 +109,18 @@ serve(async (req: Request) => {
         .from('employees').select('*').eq('id', employee_id).maybeSingle()
       emp = data
     } else if (line_user_id) {
-      // Lookup via line_users table → employee_id
-      const { data: lineUser } = await supabase
-        .from('line_users')
+      // Lookup via multi-OA mapping: employee_line_accounts → employees
+      const { data: ela } = await supabase
+        .from('employee_line_accounts')
         .select('employee_id')
         .eq('line_user_id', line_user_id)
         .eq('is_verified', true)
+        .limit(1)
         .maybeSingle()
 
-      if (lineUser?.employee_id) {
+      if (ela?.employee_id) {
         const { data } = await supabase
-          .from('employees').select('*').eq('id', lineUser.employee_id).maybeSingle()
-        emp = data
-      }
-
-      // Fallback: check employees.line_user_id directly
-      if (!emp) {
-        const { data } = await supabase
-          .from('employees').select('*').eq('line_user_id', line_user_id).maybeSingle()
+          .from('employees').select('*').eq('id', ela.employee_id).maybeSingle()
         emp = data
       }
     } else if (employee) {
@@ -142,13 +136,19 @@ serve(async (req: Request) => {
     }
 
     // ── Get location config (locations table with GPS columns) ──
-    // Try employee's location_id first, then fall back to store name lookup
+    // Resolve store name from FK (employees.store_id → stores.name), then look up location by name.
     let location: any = null
+    let empStoreName: string | null = null
 
-    if (emp.store) {
-      const { data } = await supabase
-        .from('locations').select('*').eq('name', emp.store).maybeSingle()
-      location = data
+    if (emp.store_id) {
+      const { data: store } = await supabase
+        .from('stores').select('name').eq('id', emp.store_id).maybeSingle()
+      empStoreName = store?.name ?? null
+      if (empStoreName) {
+        const { data } = await supabase
+          .from('locations').select('*').eq('name', empStoreName).maybeSingle()
+        location = data
+      }
     }
 
     // Resolve IP: prefer server-detected IP, fallback to client-reported
@@ -217,42 +217,19 @@ serve(async (req: Request) => {
     const minutes = taiwanNow.getUTCMinutes()
     const timeStr = `${String(hours24).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 
-    // Check existing record for today
-    const { data: existing } = await supabase
+    // Check existing record for today (FK only; TEXT employee column dropped)
+    const { data: existingRecord } = await supabase
       .from('attendance_records').select('*')
       .eq('employee_id', emp.id).eq('date', dateStr).maybeSingle()
 
-    // Also try by name for legacy records without employee_id
-    let existingRecord = existing
-    if (!existingRecord) {
-      const { data: legacyExisting } = await supabase
-        .from('attendance_records').select('*')
-        .eq('employee', emp.name).eq('date', dateStr).maybeSingle()
-      existingRecord = legacyExisting
-    }
-
-    // ── Determine late status from schedules table ──────
-    // schedules has: employee_id (INT), employee (TEXT), date, shift_type, start_time, end_time
+    // ── Determine late status from schedules table (FK only) ──
     const determineLateStatus = async (): Promise<{ status: string; isLate: boolean; lateMinutes: number }> => {
-      // Look up today's schedule — try by employee_id first, then name
-      let schedule: any = null
-      const { data: s1 } = await supabase
+      const { data: schedule } = await supabase
         .from('schedules')
         .select('shift_type, start_time')
         .eq('employee_id', emp.id)
         .eq('date', dateStr)
         .maybeSingle()
-      schedule = s1
-
-      if (!schedule) {
-        const { data: s2 } = await supabase
-          .from('schedules')
-          .select('shift_type, start_time')
-          .eq('employee', emp.name)
-          .eq('date', dateStr)
-          .maybeSingle()
-        schedule = s2
-      }
 
       if (schedule?.start_time) {
         const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
@@ -284,7 +261,6 @@ serve(async (req: Request) => {
       const { status, isLate, lateMinutes } = await determineLateStatus()
 
       const { data, error } = await supabase.from('attendance_records').upsert({
-        employee: emp.name,
         employee_id: emp.id,
         date: dateStr,
         clock_in: timeStr,

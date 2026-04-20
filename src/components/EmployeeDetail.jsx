@@ -14,7 +14,7 @@ const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
 const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '中高齡者 (45+)', '長期失業者', '更生人', '獨力負擔家計者', '家庭暴力被害人', '二度就業婦女']
 
-export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, lineUsers, onUpdate, onClose }) {
+export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose }) {
   const { isAdmin } = useAuth()
   const [tab, setTab] = useState('personal')
   const [form, setForm] = useState({})
@@ -541,15 +541,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
 
               <SectionTitle icon="💬" text="LINE 整合" />
-              <div><div style={L}>綁定個人 LINE 帳號</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.line_user_id || ''} onChange={e => set('line_user_id', e.target.value)}>
-                  <option value="">未綁定</option>
-                  {(lineUsers || []).map(u => (
-                    <option key={u.line_user_id} value={u.line_user_id}>
-                      {u.display_name} {form.line_user_id === u.line_user_id ? '(目前綁定)' : ''}
-                    </option>
-                  ))}
-                </select>
+              <div style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+                LINE 帳號綁定請至「組織管理 → LINE 整合」管理，或由員工在 LINE 輸入 <code>/註冊 姓名</code> 自助綁定。
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginTop: 10, border: '1px solid var(--border-subtle)' }}>
                 <div>

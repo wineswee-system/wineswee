@@ -36,7 +36,7 @@ export default function SalaryStructures() {
     setLoading(true)
     Promise.all([
       supabase.from('salary_structures').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, dept, store').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, store_id, departments(name), stores(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([s, e, d]) => {
       setStructures(s.data || [])

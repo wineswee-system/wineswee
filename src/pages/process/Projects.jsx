@@ -3,13 +3,16 @@ import { ModalOverlay } from '../../components/Modal'
 import Modal, { Field } from '../../components/Modal'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
-  MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy
+  MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
+  Users, Settings, Columns
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getEmployees } from '../../lib/db'
+import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import ProjectMembers from '../../components/tasks/ProjectMembers'
+import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
 
 const STATUS_MAP = {
   '規劃中': { color: 'var(--accent-blue)', icon: Clock },
@@ -44,8 +47,11 @@ export default function Projects() {
   const [selected, setSelected] = useState(null)
   const [commentText, setCommentText] = useState('')
   const [tab, setTab] = useState('active')
+  const [detailTab, setDetailTab] = useState('overview')
   const [filterOwner, setFilterOwner] = useState('')
   const [filterStore, setFilterStore] = useState('')
+  const [sections, setSections] = useState([])
+  const [newSection, setNewSection] = useState('')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -71,6 +77,34 @@ export default function Projects() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (!selected) return
+    getProjectSections(selected.id).then(({ data }) => setSections(data || []))
+    setDetailTab('overview')
+  }, [selected?.id])
+
+  const addSection = async () => {
+    if (!newSection.trim()) return
+    const maxOrder = sections.reduce((m, s) => Math.max(m, s.sort_order || 0), 0)
+    const { data } = await createProjectSection({
+      project_id: selected.id, name: newSection.trim(),
+      sort_order: maxOrder + 1, color: '#64748b',
+    })
+    if (data) setSections(prev => [...prev, data])
+    setNewSection('')
+  }
+
+  const removeSection = async (id) => {
+    if (!confirm('刪除此欄位？任務不會刪除但會脫離欄位。')) return
+    await deleteProjectSection(id)
+    setSections(prev => prev.filter(s => s.id !== id))
+  }
+
+  const renameSection = async (id, name) => {
+    await updateProjectSection(id, { name })
+    setSections(prev => prev.map(s => s.id === id ? { ...s, name } : s))
+  }
 
   // Stats
   const getStats = (projectId) => {
@@ -176,7 +210,7 @@ export default function Projects() {
             title: t.title,
             workflow_instance_id: instance.id,
             status: '未開始',
-            assignee: t.role || null,
+            role: t.role || null,
             step_order: j + 1,
             priority: t.priority || '中',
             due_date: endDate,
@@ -281,6 +315,78 @@ export default function Projects() {
           {p.budget && <div><span style={{ color: 'var(--text-muted)' }}>預算</span> {fmt(p.budget)}</div>}
         </div>
 
+        {/* Detail tabs */}
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+          {[
+            { k: 'overview', label: '總覽',      icon: FolderOpen },
+            { k: 'members',  label: '成員',      icon: Users },
+            { k: 'sections', label: '欄位',      icon: Columns },
+            { k: 'fields',   label: '自訂欄位',  icon: Settings },
+          ].map(t => {
+            const Icon = t.icon
+            const active = detailTab === t.k
+            return (
+              <button key={t.k} onClick={() => setDetailTab(t.k)} style={{
+                padding: '8px 14px', border: 'none', background: 'transparent',
+                borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <Icon size={13} />{t.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {detailTab === 'members' && (
+          <ProjectMembers projectId={p.id} employees={employees} currentUser={profile} />
+        )}
+
+        {detailTab === 'fields' && (
+          <ProjectCustomFieldsAdmin projectId={p.id} />
+        )}
+
+        {detailTab === 'sections' && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <Columns size={14} /> 看板欄位 ({sections.length})
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <input
+                className="form-input" style={{ flex: 1, fontSize: 13 }}
+                placeholder="新欄位名稱，例：審核中"
+                value={newSection} onChange={e => setNewSection(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addSection()}
+              />
+              <button className="btn btn-primary" onClick={addSection} disabled={!newSection.trim()}>
+                <Plus size={13} /> 新增
+              </button>
+            </div>
+            {sections.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
+                尚無自訂欄位。看板會使用預設狀態欄位。
+              </div>
+            ) : sections.map(s => (
+              <div key={s.id} className="card" style={{ padding: '8px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: s.color }} />
+                <input
+                  defaultValue={s.name}
+                  onBlur={e => e.target.value !== s.name && renameSection(s.id, e.target.value)}
+                  style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600, outline: 'none' }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '3px 7px', color: 'var(--accent-red)' }}
+                  onClick={() => removeSection(s.id)}
+                ><Trash2 size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {detailTab === 'overview' && <>
+
         {/* Workflows */}
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
           <Workflow size={15} /> 流程（{pWorkflows.length}）
@@ -375,6 +481,8 @@ export default function Projects() {
             </div>
           ))}
         </div>
+
+        </>}
 
         {/* Modal in detail view */}
         {showModal && (

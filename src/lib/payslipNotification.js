@@ -7,13 +7,16 @@
  *   await sendBulkPayslipNotifications(month)  // sends to all employees for that month
  */
 import { supabase } from './supabase'
+import { resolveLineAccount } from './lineNotify'
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 /**
  * Build a LINE Flex Message for a payslip.
  */
-function buildPayslipFlexMessage(employee, payslip) {
+function buildPayslipFlexMessage(employee, payslip, liffId) {
   const month = payslip.month || ''
   const net = (payslip.net_salary || 0).toLocaleString()
   const base = (payslip.base_salary || 0).toLocaleString()
@@ -21,6 +24,7 @@ function buildPayslipFlexMessage(employee, payslip) {
   const overtime = (payslip.overtime || 0).toLocaleString()
   const deductions = (payslip.deductions || 0).toLocaleString()
   const insurance = (payslip.insurance || 0).toLocaleString()
+  const lid = liffId || LIFF_ID
 
   return {
     type: 'flex',
@@ -64,7 +68,7 @@ function buildPayslipFlexMessage(employee, payslip) {
         contents: [
           {
             type: 'button',
-            action: { type: 'uri', label: '查看詳細薪資單', uri: `https://liff.line.me/${LIFF_ID}/hr/self-service` },
+            action: { type: 'uri', label: '查看詳細薪資單', uri: `https://liff.line.me/${lid}/hr/self-service` },
             style: 'primary',
             color: '#1DB446',
           },
@@ -89,34 +93,39 @@ function makeRow(label, value, color) {
  * Send a payslip notification to a single employee.
  * Requires the employee to have a LINE user_id linked.
  */
-export async function sendPayslipNotification(employeeNameOrId, payslipData) {
-  // Look up the employee's LINE user ID
+export async function sendPayslipNotification(employeeNameOrId, payslipData, channelCode) {
   const isId = typeof employeeNameOrId === 'number'
-  let empQuery = supabase.from('employees').select('id, name, line_user_id')
-  empQuery = isId ? empQuery.eq('id', employeeNameOrId) : empQuery.eq('name', employeeNameOrId)
-  const { data: emp } = await empQuery.single()
+  let { data: emp } = await (isId
+    ? supabase.from('employees').select('id, name').eq('id', employeeNameOrId).maybeSingle()
+    : supabase.from('employees').select('id, name').eq('name', employeeNameOrId).maybeSingle())
 
-  if (!emp?.line_user_id) {
-    console.warn(`[Payslip] No LINE user_id for ${employeeName}, skipping notification`)
+  if (!emp) return { sent: false, reason: 'no_employee' }
+
+  const account = await resolveLineAccount(emp.id, channelCode)
+  if (!account.lineUserId) {
+    console.warn(`[Payslip] No LINE account for ${emp.name}, skipping notification`)
     return { sent: false, reason: 'no_line_id' }
   }
 
-  const message = buildPayslipFlexMessage(employeeName, payslipData)
+  const message = buildPayslipFlexMessage(emp.name, payslipData, account.liffId)
 
-  // Call Supabase Edge Function to send via LINE Messaging API
-  const { data, error } = await supabase.functions.invoke('send-line-message', {
-    body: {
-      to: emp.line_user_id,
-      messages: [message],
-    },
-  })
-
-  if (error) {
-    console.error(`[Payslip] Failed to send to ${employeeName}:`, error)
-    return { sent: false, reason: error.message }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/line-push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({ to: account.lineUserId, messages: [message], channelCode: account.channelCode }),
+    })
+    const data = await res.json()
+    if (!data.ok) return { sent: false, reason: data.error || 'push_failed' }
+    return { sent: true, data }
+  } catch (err) {
+    console.error(`[Payslip] Failed to send to ${emp.name}:`, err)
+    return { sent: false, reason: err.message }
   }
-
-  return { sent: true, data }
 }
 
 /**

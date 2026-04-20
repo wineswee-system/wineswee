@@ -59,21 +59,18 @@ export default function Employees() {
   const [editForm, setEditForm] = useState({})
   const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
-  const [lineUsers, setLineUsers] = useState([])
 
   useEffect(() => {
     Promise.all([
       getEmployees(),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
-      supabase.from('line_users').select('line_user_id, display_name').order('display_name'),
-    ]).then(([e, d, l, lu]) => {
+    ]).then(([e, d, l]) => {
       const depts = d.data || []
       const locs = l.data || []
       setEmployees(e.data || [])
       setDepartments(depts)
       setLocations(locs)
-      setLineUsers(lu.data || [])
       setForm(f => ({ ...f, dept: depts[0]?.name || '', store: locs[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -187,16 +184,15 @@ export default function Employees() {
   const handleEdit = async () => {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
-      const { dept, store, system_role, join_date, ...rest } = editForm
+      const { dept, store, supervisor, system_role, join_date, ...rest } = editForm
       const role = system_role || selectedEmp.role || 'store_staff'
       // Convert empty strings to null for unique-constrained fields
       if (rest.email !== undefined) rest.email = rest.email?.trim() || null
       if (rest.phone !== undefined) rest.phone = rest.phone?.trim() || null
       if (join_date) rest.join_date = join_date
       const payload = { ...rest, role }
-      // Only include dept/store if changed (avoid trigger conflicts)
-      if (dept) payload.dept = dept
-      if (store) payload.store = store
+      // dept/store/supervisor TEXT columns dropped \u2014 use FK ids if provided in form
+      void dept; void store; void supervisor
       const { data, error } = await updateEmployee(selectedEmp.id, payload)
       if (error) throw error
       if (data) {
@@ -597,7 +593,6 @@ export default function Employees() {
           employees={employees}
           stores={locations}
           departments={departments}
-          lineUsers={lineUsers}
           onUpdate={(updated) => {
             setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e))
             setDetailEmp(updated)

@@ -20,21 +20,15 @@ async function pushLine(to: string, messages: object[], accessToken: string) {
   return res.ok;
 }
 
-// ── Resolve LINE ID ────────────────────────────────────────────
+// ── Resolve LINE ID via multi-OA mapping ────────────────────────
 async function resolveLineId(db: any, employeeId: number): Promise<string | null> {
-  const { data } = await db.from("line_users")
+  const { data } = await db.from("v_employee_line_resolved")
     .select("line_user_id")
     .eq("employee_id", employeeId)
-    .eq("is_verified", true)
+    .order("is_primary", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (data?.line_user_id) return data.line_user_id;
-
-  // Fallback: check employees.line_user_id directly
-  const { data: emp } = await db.from("employees")
-    .select("line_user_id")
-    .eq("id", employeeId)
-    .maybeSingle();
-  return emp?.line_user_id || null;
+  return data?.line_user_id || null;
 }
 
 // ── Label helpers ──────────────────────────────────────────────

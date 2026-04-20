@@ -6,6 +6,7 @@ import { upsertLineUser, upsertLineGroup, upsertLineGroupMember, logMessage, log
 import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex } from './flex-builders.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
+import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,28 +15,49 @@ serve(async (req) => {
     });
   }
 
-  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET");
-  const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+  const url = new URL(req.url);
+  const queryCode = url.searchParams.get("channel");
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const liffTaskId = Deno.env.get("LIFF_TASK_ID") ?? "";
-  const liffNewTaskId = Deno.env.get("LIFF_NEW_TASK_ID") ?? "";
+
+  const rawBody = await req.text();
+  const body = JSON.parse(rawBody);
+  const destinationId: string | null = body?.destination ?? null;
+
+  const db = createClient(supabaseUrl, supabaseKey);
+
+  const channelRow = await resolveChannel(db, { queryCode, destinationId });
+  if (!channelRow) {
+    console.error("[webhook] No LINE channel could be resolved", { queryCode, destinationId });
+    return new Response("Unknown channel", { status: 400 });
+  }
+  const channelCode = channelRow.code;
+  const channelId = channelRow.id;
+
+  const channelSecret = resolveEnv("LINE_CHANNEL_SECRET", channelCode);
+  const accessToken =
+    resolveEnv("LINE_CHANNEL_ACCESS_TOKEN", channelCode) ??
+    resolveEnv("LINE_CHANNEL_TOKEN", channelCode);
+  const liffTaskId =
+    resolveEnv("LIFF_TASK_ID", channelCode) ??
+    channelRow.liff_id ??
+    "";
+  const liffNewTaskId =
+    resolveEnv("LIFF_NEW_TASK_ID", channelCode) ??
+    channelRow.liff_id ??
+    "";
 
   if (!channelSecret || !accessToken) {
-    console.error("Missing LINE_CHANNEL_SECRET or LINE_CHANNEL_ACCESS_TOKEN");
+    console.error(`[webhook] Missing credentials for channel=${channelCode}`);
     return new Response("Missing LINE credentials", { status: 500 });
   }
 
-  const rawBody = await req.text();
   const signature = req.headers.get("x-line-signature") ?? "";
   const valid = await verifySignature(rawBody, signature, channelSecret);
   if (!valid) {
     console.error("Invalid LINE signature");
     return new Response("Invalid signature", { status: 401 });
   }
-
-  const body = JSON.parse(rawBody);
-  const db = createClient(supabaseUrl, supabaseKey);
 
   for (const event of body.events ?? []) {
    try {
@@ -45,7 +67,7 @@ serve(async (req) => {
     // ── Join / Leave ─────────────────────────────────────────────────────────
     if (event.type === "join" && groupId) {
       const summary = await getGroupSummary(groupId, accessToken);
-      await upsertLineGroup(groupId, summary.groupName, db);
+      await upsertLineGroup(groupId, summary.groupName, db, channelId);
       await replyAndLog(event.replyToken, [
         withQuickReplies(
           {
@@ -89,14 +111,14 @@ serve(async (req) => {
           },
           [{ label: "📋 任務列表", text: "/任務 列表" }, { label: "⚙️ 流程狀態", text: "/流程 狀態" }],
         ),
-      ], accessToken, db, { lineUserId: "BOT", sourceType: "group", groupId });
-      await logCommand(db, { lineUserId: "BOT", commandMatched: "join", rawInput: "[join event]", sourceType: "group", groupId, success: true });
+      ], accessToken, db, { channelId, lineUserId: "BOT", sourceType: "group", groupId });
+      await logCommand(db, { channelId, lineUserId: "BOT", commandMatched: "join", rawInput: "[join event]", sourceType: "group", groupId, success: true });
       continue;
     }
 
     if (event.type === "leave" && groupId) {
-      await db.from("line_groups").update({ is_active: false }).eq("line_group_id", groupId);
-      await logCommand(db, { lineUserId: "BOT", commandMatched: "leave", rawInput: "[leave event]", sourceType: "group", groupId, success: true });
+      await db.from("line_groups").update({ is_active: false }).eq("channel_id", channelId).eq("line_group_id", groupId);
+      await logCommand(db, { channelId, lineUserId: "BOT", commandMatched: "leave", rawInput: "[leave event]", sourceType: "group", groupId, success: true });
       continue;
     }
 
@@ -115,7 +137,7 @@ serve(async (req) => {
 
     if (isGroup && groupId) {
       const summary = await getGroupSummary(groupId, accessToken);
-      await upsertLineGroup(groupId, summary.groupName, db);
+      await upsertLineGroup(groupId, summary.groupName, db, channelId);
       if (lineUserId) await upsertLineGroupMember(lineUserId, groupId, db);
     }
 
@@ -123,6 +145,7 @@ serve(async (req) => {
 
     // ── Log ALL incoming messages FIRST (before user lookup or filtering) ─────
     await logMessage(db, {
+      channelId,
       lineUserId,
       displayName: profile.displayName,
       messageText: rawText,
@@ -132,7 +155,7 @@ serve(async (req) => {
       eventType: "message",
     });
 
-    const { row: lineUser, isNew } = await upsertLineUser(lineUserId, profile.displayName, db);
+    const { row: lineUser, isNew } = await upsertLineUser(lineUserId, profile.displayName, db, channelId);
 
     if (!lineUser) {
       console.error("Failed to upsert line_user for", lineUserId);
@@ -163,11 +186,11 @@ serve(async (req) => {
           const responseMsg = noteErr
             ? text(`❌ 備註儲存失敗：${noteErr.message}`)
             : flexSuccess("📝", "備註已儲存", `「${task.title}」\n${rawText}`);
-          await logCommand(db, { lineUserId, displayName: profile.displayName, commandMatched: "pending_add_note", rawInput: rawText, sourceType, groupId, success: !noteErr, errorMessage: noteErr?.message, executionMs: Date.now() - cmdStart });
-          await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { lineUserId, displayName: profile.displayName, sourceType, groupId });
+          await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_add_note", rawInput: rawText, sourceType, groupId, success: !noteErr, errorMessage: noteErr?.message, executionMs: Date.now() - cmdStart });
+          await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         } else {
-          await logCommand(db, { lineUserId, displayName: profile.displayName, commandMatched: "pending_add_note", rawInput: rawText, sourceType, groupId, success: false, errorMessage: "Task not found", executionMs: Date.now() - cmdStart });
-          await replyAndLog(event.replyToken, [text("❌ 找不到對應任務，備註未儲存。")], accessToken, db, { lineUserId, displayName: profile.displayName, sourceType, groupId });
+          await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_add_note", rawInput: rawText, sourceType, groupId, success: false, errorMessage: "Task not found", executionMs: Date.now() - cmdStart });
+          await replyAndLog(event.replyToken, [text("❌ 找不到對應任務，備註未儲存。")], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         }
         continue;
       } else if (pending.action === "reject_reason") {
@@ -175,15 +198,15 @@ serve(async (req) => {
         await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
         const reason = rawText.trim();
         const responseMsg = await cmdTaskConfirmRespond(pending.short_id, "拒絕", lineUser.employee_id!, db, accessToken, reason);
-        await logCommand(db, { lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
-        await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { lineUserId, displayName: profile.displayName, sourceType, groupId });
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
       } else if (pending.action === "create_task") {
         const cmdStart = Date.now();
         const stepResult = await handleCreateTaskStep(lineUser, rawText, db, accessToken);
         if (stepResult) {
-          await logCommand(db, { lineUserId, displayName: profile.displayName, commandMatched: `pending_create_task_${pending.step}`, rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
-          await replyAndLog(event.replyToken, [stepResult], accessToken, db, { lineUserId, displayName: profile.displayName, sourceType, groupId });
+          await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: `pending_create_task_${pending.step}`, rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+          await replyAndLog(event.replyToken, [stepResult], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         }
         continue;
       }
@@ -208,7 +231,7 @@ serve(async (req) => {
         responseMsg = text(`帳號連結請私訊機器人：\n/註冊 您的姓名\n\n例如：/註冊 張小明`);
       } else {
         const namePart = rawText.replace(/^\/?(註冊)\s*/i, "").trim();
-        responseMsg = await cmdRegister(lineUser.id, namePart, db);
+        responseMsg = await cmdRegister(lineUser.id, namePart, db, channelId, lineUserId, profile.displayName);
       }
 
     // ── Project task commands (/專案) ──────────────────────────────────────
@@ -332,7 +355,7 @@ serve(async (req) => {
           const { data: instances } = await db
             .from("workflow_instances").select("id, name")
             .in("status", ["running", "paused"]).order("started_at", { ascending: false }).limit(10);
-          await pushAndLog(lineUserId, [buildWorkflowSelectionFlex(instances ?? [], title, isManager)], accessToken, db, { sourceType: "user" });
+          await pushAndLog(lineUserId, [buildWorkflowSelectionFlex(instances ?? [], title, isManager)], accessToken, db, { channelId, sourceType: "user" });
         }
       }
 
@@ -804,6 +827,7 @@ serve(async (req) => {
     const cmdSuccess = !((responseMsg as any)?.text?.startsWith("❌") || (responseMsg as any)?.text?.startsWith("❗"));
     const cmdErrorMsg = !cmdSuccess ? ((responseMsg as any)?.text ?? null) : null;
     await logCommand(db, {
+      channelId,
       lineUserId,
       displayName: profile.displayName,
       commandMatched: commandName,
@@ -816,11 +840,12 @@ serve(async (req) => {
     });
 
     console.log("[REPLY] about to reply, responseMsg type=", (responseMsg as any)?.type, "replyToken exists=", !!event.replyToken);
-    await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { lineUserId, displayName: profile.displayName, sourceType, groupId });
+    await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
   } catch (eventErr) {
     // ── Log unhandled errors ──────────────────────────────────────────────
     console.error("[EVENT] unhandled error:", eventErr);
     await logError(db, {
+      channelId,
       lineUserId: event.source?.userId ?? null,
       sourceType: event.source?.type ?? "system",
       groupId: event.source?.groupId ?? event.source?.roomId ?? null,

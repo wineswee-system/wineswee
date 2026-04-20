@@ -85,7 +85,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').order('id'),
       supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, dept, position, store, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, departments(name), stores(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([s, b, e, d, st]) => {
@@ -241,7 +241,7 @@ export default function Salary() {
         otherDeductions: absenceDeduction + lateDeduction,
       })
       return {
-        employee: emp.name, dept: emp.dept, base_salary: baseSalary,
+        employee_id: emp.id, employee_name: emp.name, department_id: emp.department_id, base_salary: baseSalary,
         workDays: att.days, workHours: att.hours, otHours, absenceDays, lateCount: att.late,
         overtimePay, absenceDeduction, lateDeduction, policyBonus,
         ...result,

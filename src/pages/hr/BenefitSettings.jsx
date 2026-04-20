@@ -33,7 +33,7 @@ export default function BenefitSettings() {
   useEffect(() => {
     Promise.all([
       supabase.from('stores').select('id, name').order('name'),
-      supabase.from('employees').select('id, name, store').order('name'),
+      supabase.from('employees').select('id, name, store_id, stores(name)').order('name'),
     ]).then(([s, e]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])

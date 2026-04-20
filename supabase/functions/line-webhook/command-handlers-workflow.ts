@@ -39,7 +39,7 @@ export async function cmdWorkflowTasks(shortId: string, db: SupabaseClient, show
 
   const baseQuery = db
     .from("tasks")
-    .select("id, title, status, priority, due_date, notes, assignee:employees!tasks_assigned_to_fkey(name)")
+    .select("id, title, status, priority, due_date, notes, assignee:employees!tasks_assignee_id_fkey(name)")
     .eq("workflow_instance_id", instance.id);
 
   const { data: tasks } = await (showAll
@@ -186,7 +186,7 @@ export async function checkManager(userId: string, db: SupabaseClient): Promise<
 export async function cmdManagerOverview(db: SupabaseClient) {
   const { data: tasks } = await db
     .from("tasks")
-    .select("id, title, priority, due_date, assignee:employees!tasks_assigned_to_fkey(name)")
+    .select("id, title, priority, due_date, assignee:employees!tasks_assignee_id_fkey(name)")
     .eq("status", "in_progress")
     .order("priority", { ascending: false })
     .limit(10);
@@ -254,7 +254,7 @@ export async function cmdManagerAssign(nameQuery: string, title: string, db: Sup
   const assignee = users[0];
   const { error } = await db.from("tasks").insert({
     title,
-    assigned_to: assignee.id,
+    assignee_id: assignee.id,
     status: "in_progress",
     priority: "medium",
   });
@@ -510,7 +510,7 @@ async function finalizeTaskCreation(
 
   const insertPayload: Record<string, any> = {
     title: data.title,
-    assigned_to: assignedTo,
+    assignee_id: assignedTo,
     status: "pending",
     priority: "medium",
   };
@@ -547,7 +547,7 @@ async function finalizeTaskCreation(
     success: true,
     createdEntityType: "task",
     createdEntityId: newTask?.id,
-    metadata: { workflow_instance_id: data.workflow_instance_id, due_date: data.due_date, assigned_to: assignedTo },
+    metadata: { workflow_instance_id: data.workflow_instance_id, due_date: data.due_date, assignee_id: assignedTo },
   });
 
   // Notify the originating group if initiated from a group
@@ -584,7 +584,15 @@ async function finalizeTaskCreation(
 
 // ── Registration Command ─────────────────────────────────────────────────────
 
-export async function cmdRegister(lineUserRowId: string, namePart: string, db: SupabaseClient) {
+export async function cmdRegister(
+  lineUserRowId: string,
+  namePart: string,
+  db: SupabaseClient,
+  channelId: number,
+  lineUserId: string,
+  displayName: string,
+  pictureUrl: string | null = null,
+) {
   if (!namePart) return text("請提供姓名。例如：/註冊 張小明 或 /註冊 John");
 
   const { data: users } = await db
@@ -606,12 +614,39 @@ export async function cmdRegister(lineUserRowId: string, namePart: string, db: S
   }
 
   const user = users[0];
+
+  // First binding for this employee (across all OAs) becomes primary.
+  const { data: existing } = await db
+    .from("employee_line_accounts")
+    .select("id")
+    .eq("employee_id", user.id)
+    .limit(1);
+  const isPrimary = !existing || existing.length === 0;
+
+  const now = new Date().toISOString();
+  await db.from("employee_line_accounts")
+    .upsert(
+      {
+        employee_id: user.id,
+        channel_id: channelId,
+        line_user_id: lineUserId,
+        display_name: displayName,
+        picture_url: pictureUrl,
+        is_primary: isPrimary,
+        is_verified: true,
+        linked_at: now,
+        last_active_at: now,
+      },
+      { onConflict: "channel_id,line_user_id" },
+    );
+
   await db.from("line_users")
     .update({ employee_id: user.id, is_verified: true })
     .eq("id", lineUserRowId);
 
+  const primaryNote = isPrimary ? "" : "\n（已綁定於其他 OA，此 OA 作為次要接收者）";
   return withQuickReplies(
-    flexSuccess("🎉", `歡迎，${user.name}！`, "帳號連結成功！您現在可以使用所有功能。"),
+    flexSuccess("🎉", `歡迎，${user.name}！`, `帳號連結成功！您現在可以使用所有功能。${primaryNote}`),
     [
       { label: "📋 任務列表", text: "/任務 列表" },
       { label: "📖 所有指令", text: "/說明" },

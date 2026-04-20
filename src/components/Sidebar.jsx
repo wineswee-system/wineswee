@@ -31,6 +31,7 @@ const majorGroups = [
   { key: 'supply', icon: Warehouse, label: '供應鏈', color: '#34d399' },
   { key: 'finance', icon: CreditCard, label: '財務會計', color: '#fbbf24' },
   { key: 'people', icon: Users, label: '人員組織', color: '#a78bfa' },
+  { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' },
   { key: 'analytics', icon: BarChart3, label: '數據分析', color: '#f472b6' },
 ]
 
@@ -292,17 +293,44 @@ const groupNav = {
         { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },
       ]
     },
+  ],
+
+  project: [
     {
-      label: '流程管理',
-      icon: GitBranch,
+      label: '工作管理',
+      icon: ListChecks,
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: FolderOpen, label: '專案', path: '/process/projects' },
-        { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
-        { icon: Shield, label: '簽核設定', path: '/process/approval-chains' },
+      ]
+    },
+    {
+      label: '流程設計',
+      icon: Workflow,
+      divider: true,
+      children: [
+        { icon: Workflow, label: '流程', path: '/process/workflows' },
+        { icon: BookOpen, label: 'SOP 範本', path: '/process/sop' },
+      ]
+    },
+    {
+      label: '簽核管理',
+      icon: Shield,
+      divider: true,
+      children: [
+        { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
         { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
+        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
+      ]
+    },
+    {
+      label: '流程分析',
+      icon: BarChart3,
+      divider: true,
+      children: [
+        { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
       ]
     },
   ],
@@ -372,6 +400,7 @@ const superAdminItems = [
   { icon: Monitor, label: '系統日誌', path: '/super-admin/system-logs' },
   { icon: AlertOctagon, label: '錯誤日誌', path: '/super-admin/error-logs' },
   { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
+  { icon: Sparkles, label: 'AI 使用量', path: '/super-admin/ai-usage' },
 ]
 
 // ── Route prefix → group key mapping ──
@@ -380,7 +409,8 @@ const routeToGroup = (pathname) => {
   if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos')) return 'commerce'
   if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
   if (pathname.startsWith('/finance')) return 'finance'
-  if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/process')) return 'people'
+  if (pathname.startsWith('/process')) return 'project'
+  if (pathname.startsWith('/hr') || pathname.startsWith('/org')) return 'people'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'
   if (pathname.startsWith('/system') || pathname.startsWith('/ai') || pathname.startsWith('/integration')) return 'system'
@@ -489,9 +519,9 @@ export default function Sidebar() {
   const userRole = profile?.role || 'store_staff'
   const ROLE_GROUPS = {
     store_staff:  ['dashboard', 'people'],
-    office_staff: ['dashboard', 'people'],
-    manager:      ['dashboard', 'people'],
-    admin:        ['dashboard', 'people', 'analytics'],
+    office_staff: ['dashboard', 'people', 'project'],
+    manager:      ['dashboard', 'people', 'project'],
+    admin:        ['dashboard', 'people', 'project', 'analytics'],
     super_admin:  null, // null = all
   }
   const allowedGroups = userRole in ROLE_GROUPS ? ROLE_GROUPS[userRole] : ROLE_GROUPS['store_staff']

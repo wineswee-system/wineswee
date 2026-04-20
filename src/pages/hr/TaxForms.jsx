@@ -17,7 +17,7 @@ export default function TaxForms() {
   useEffect(() => {
     Promise.all([
       getTaxWithholdingRecords(year),
-      supabase.from('employees').select('id, name, dept, position, status, join_date').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, status, join_date, departments(name)').order('name'),
       supabase.from('salary_records').select('*').like('month', `${year}-%`).order('month'),
     ]).then(([r, e, s]) => {
       setRecords(r.data || [])

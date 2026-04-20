@@ -123,7 +123,7 @@ export default function NotificationCenter() {
 
       // Pending overtime
       const { data: otReqs } = await supabase
-        .from('overtime_requests').select('id, employee, date').eq('status', '待審核').limit(5)
+        .from('overtime_requests').select('id, employee_id, date, employees(name)').eq('status', '待審核').limit(5)
       if (otReqs) {
         otReqs.forEach(o => items.push({
           id: `ot-${o.id}`, type: 'late', icon: Clock,

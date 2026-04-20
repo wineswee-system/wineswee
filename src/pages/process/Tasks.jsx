@@ -1,37 +1,56 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search } from 'lucide-react'
-import { getTasks, createTask, updateTask } from '../../lib/db'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
+import { getTasks, createTask, updateTask, getTaskDependenciesByInstance } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import TaskKanban from '../../components/tasks/TaskKanban'
+import TaskCalendar from '../../components/tasks/TaskCalendar'
+import TaskTimeline from '../../components/tasks/TaskTimeline'
+import TaskDrawer from '../../components/tasks/TaskDrawer'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function Tasks() {
+  const { profile } = useAuth()
   const [tab, setTab] = useState('all')
+  const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
+  const [dependencies, setDependencies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
   const [search, setSearch] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [filterBucket, setFilterBucket] = useState('')
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
 
-  useEffect(() => {
-    Promise.all([
+  const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
+
+  const refresh = () => {
+    return Promise.all([
       getTasks(),
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([t, e, s]) => {
-      setTasks(t.data || [])
+      const rows = t.data || []
+      setTasks(rows)
       setEmployees(e.data || [])
       setStores(s.data || [])
-    }).catch(err => {
-      console.error('Failed to load:', err)
-      setError('資料載入失敗')
-    }).finally(() => setLoading(false))
+      const ids = rows.map(r => r.id)
+      if (ids.length) {
+        getTaskDependenciesByInstance(ids).then(({ data }) => setDependencies(data || []))
+      }
+    })
+  }
+
+  useEffect(() => {
+    refresh()
+      .catch(err => { console.error('Failed to load:', err); setError('資料載入失敗') })
+      .finally(() => setLoading(false))
   }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -134,9 +153,54 @@ export default function Tasks() {
             {buckets.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         )}
+        <div style={{ display: 'flex', border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+          {[
+            { k: 'list',     icon: List,    label: '列表' },
+            { k: 'kanban',   icon: Columns, label: '看板' },
+            { k: 'calendar', icon: CalIcon, label: '月曆' },
+            { k: 'timeline', icon: GitBranch, label: '時程' },
+          ].map(v => {
+            const Icon = v.icon
+            const active = view === v.k
+            return (
+              <button key={v.k} onClick={() => switchView(v.k)} title={v.label} style={{
+                padding: '6px 10px', border: 'none',
+                background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                color: active ? '#fff' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
+                <Icon size={13} />{v.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Table */}
+      {view === 'kanban' && (
+        <TaskKanban
+          tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
+          sections={[]}
+          onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+          onTaskMoved={t => setTasks(prev => prev.map(x => x.id === t.id ? t : x))}
+        />
+      )}
+
+      {view === 'calendar' && (
+        <TaskCalendar
+          tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
+          onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+        />
+      )}
+
+      {view === 'timeline' && (
+        <TaskTimeline
+          tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
+          dependencies={dependencies}
+          onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+        />
+      )}
+
+      {view === 'list' && (
       <div className="card">
         <div className="data-table-wrapper">
           <table className="data-table">
@@ -146,7 +210,7 @@ export default function Tasks() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
               {filtered.map(t => (
-                <tr key={t.id}>
+                <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}>
                   <td style={{ fontWeight: 600 }}>{t.title}</td>
                   <td>{t.workflow ? <span className="badge badge-neutral">{t.workflow}</span> : '—'}</td>
                   <td style={{ fontWeight: 600, fontSize: 13 }}>{t.assignee || '—'}</td>
@@ -158,7 +222,7 @@ export default function Tasks() {
                     </span>
                   </td>
                   <td><span className="badge badge-neutral" style={{ fontSize: 11 }}>{t.bucket}</span></td>
-                  <td>
+                  <td onClick={e => e.stopPropagation()}>
                     <select className="form-input" style={{ padding: '2px 8px', fontSize: 12 }} value={t.status}
                       onChange={e => handleStatusChange(t.id, e.target.value === '未開始' ? '待處理' : e.target.value)}>
                       {statusOpts.map(s => <option key={s}>{s}</option>)}
@@ -170,6 +234,21 @@ export default function Tasks() {
           </table>
         </div>
       </div>
+      )}
+
+      {selectedTask && (
+        <TaskDrawer
+          task={selectedTask}
+          employees={employees}
+          currentUser={profile}
+          onClose={() => setSelectedTask(null)}
+          onChange={(updated) => {
+            setTasks(prev => prev.map(x => x.id === updated.id ? updated : x))
+            setSelectedTask(updated)
+          }}
+          onDelete={(id) => setTasks(prev => prev.filter(x => x.id !== id))}
+        />
+      )}
 
       {showModal && (
         <Modal title="新增任務" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>

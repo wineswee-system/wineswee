@@ -31,8 +31,8 @@ export default function LineIntegration() {
     try {
       const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
-        supabase.from('employee_line_accounts').select('*, employees(name, dept, position), line_channels(code, name)').order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, dept, position, status, line_user_id').eq('status', '在職').order('name'),
+        supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
+        supabase.from('employees').select('id, name, department_id, position, status, departments(name)').eq('status', '在職').order('name'),
         getLineGroups(),
         getLineMessages(),
         supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),
@@ -404,18 +404,33 @@ export default function LineIntegration() {
                   ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>未設定</span>}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Edge Function Token 環境變數</span>
-                  <code style={{ fontSize: 12, color: 'var(--accent-orange)' }}>
-                    LINE_CHANNEL_TOKEN_{ch.code.toUpperCase().replace(/-/g, '_')}
+                  <span style={{ color: 'var(--text-muted)' }}>Webhook 建議 URL 後綴</span>
+                  <code style={{ fontSize: 12, color: 'var(--accent-cyan)' }}>
+                    ?channel={ch.code}
+                  </code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid var(--border-subtle)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>必要環境變數</span>
+                  <code style={{ fontSize: 11, color: 'var(--accent-orange)', textAlign: 'right' }}>
+                    LINE_CHANNEL_SECRET_{ch.code.toUpperCase().replace(/-/g, '_')}<br />
+                    LINE_CHANNEL_ACCESS_TOKEN_{ch.code.toUpperCase().replace(/-/g, '_')}
                   </code>
                 </div>
               </div>
             ))}
 
             <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--accent-cyan-dim)', borderRadius: 10, fontSize: 12 }}>
-              <strong>Edge Function 環境變數設定：</strong>
+              <strong>Edge Function 環境變數清單（supabase secrets set ...）：</strong>
               <pre style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
-{channels.map(ch => `LINE_CHANNEL_TOKEN_${ch.code.toUpperCase().replace(/-/g, '_')}=your_token_here`).join('\n')}
+{channels.flatMap(ch => {
+  const s = ch.code.toUpperCase().replace(/-/g, '_')
+  return [
+    `LINE_CHANNEL_SECRET_${s}=...`,
+    `LINE_CHANNEL_ACCESS_TOKEN_${s}=...`,
+    `# LINE_LOGIN_CHANNEL_ID_${s}=...  (選用)`,
+    `# LINE_LOGIN_CHANNEL_SECRET_${s}=...  (選用)`,
+  ]
+}).join('\n')}
               </pre>
             </div>
           </div>

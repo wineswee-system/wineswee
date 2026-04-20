@@ -8,9 +8,20 @@ const corsHeaders = {
 
 // ── LINE Push Helper ────────────────────────────────────────
 
-async function pushLineMessage(lineUserId: string, messages: unknown[]) {
-  const token = Deno.env.get('LINE_CHANNEL_TOKEN')
-  if (!token) throw new Error('LINE_CHANNEL_TOKEN not configured')
+function resolveToken(channelCode?: string | null): string | null {
+  if (channelCode) {
+    const suffix = channelCode.toUpperCase().replace(/-/g, '_')
+    const primary = Deno.env.get(`LINE_CHANNEL_ACCESS_TOKEN_${suffix}`)
+    if (primary) return primary
+    const legacy = Deno.env.get(`LINE_CHANNEL_TOKEN_${suffix}`)
+    if (legacy) return legacy
+  }
+  return Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') || Deno.env.get('LINE_CHANNEL_TOKEN') || null
+}
+
+async function pushLineMessage(lineUserId: string, messages: unknown[], channelCode?: string | null) {
+  const token = resolveToken(channelCode)
+  if (!token) throw new Error(`No LINE token for channel=${channelCode || 'default'}`)
 
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -229,22 +240,24 @@ serve(async (req: Request) => {
         continue
       }
 
-      // Look up LINE user ID
-      const { data: lineUser } = await supabase
-        .from('line_users')
-        .select('line_user_id')
+      // Resolve primary LINE account across all OAs
+      const { data: lineAcc } = await supabase
+        .from('v_employee_line_resolved')
+        .select('line_user_id, channel_code')
         .eq('employee_id', employeeId)
+        .order('is_primary', { ascending: false })
+        .limit(1)
         .maybeSingle()
 
-      if (!lineUser?.line_user_id) {
+      if (!lineAcc?.line_user_id) {
         results.push({ employee_id: employeeId, name: employeeName, success: false, error: 'No LINE account linked' })
         continue
       }
 
       try {
-        await pushLineMessage(lineUser.line_user_id, [
+        await pushLineMessage(lineAcc.line_user_id, [
           buildPayslipFlex(employeeName, period, record),
-        ])
+        ], lineAcc.channel_code)
         results.push({ employee_id: employeeId, name: employeeName, success: true })
       } catch (e) {
         results.push({ employee_id: employeeId, name: employeeName, success: false, error: (e as Error).message })

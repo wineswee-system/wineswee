@@ -21,21 +21,15 @@ async function pushLine(to: string, messages: object[], accessToken: string): Pr
   return true;
 }
 
-// ── Resolve LINE ID ────────────────────────────────────────────
+// ── Resolve LINE ID via multi-OA mapping ────────────────────────
 async function resolveLineId(sb: SupabaseClient, employeeId: number): Promise<string | null> {
-  const { data: lu } = await sb.from("line_users")
+  const { data } = await sb.from("v_employee_line_resolved")
     .select("line_user_id")
     .eq("employee_id", employeeId)
-    .eq("is_verified", true)
+    .order("is_primary", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (lu?.line_user_id) return lu.line_user_id;
-
-  // Fallback: employees.line_user_id
-  const { data: emp } = await sb.from("employees")
-    .select("line_user_id")
-    .eq("id", employeeId)
-    .maybeSingle();
-  return emp?.line_user_id || null;
+  return data?.line_user_id || null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────

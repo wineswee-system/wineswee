@@ -257,8 +257,36 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // 四週變形：不再按週補休，休假完全由 off_requests（希望休）決定
-  // 正職月休上限 10 天，兼職彈性
+  // ── Step 1c: 主動分配休假 — 根據月休目標預排 ──
+  // 每週應休天數 = 月休目標 ÷ 4.3 週（取整）
+  // 已有 off_request 或 availability 排休的天數先扣除
+  for (const emp of employees) {
+    const monthRest = monthRestTarget[emp.name] || 10
+    const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
+    const weeksTotal = (monthlyCtx?.weeksRemaining ?? 3) + 1
+    const restNeededThisMonth = Math.max(0, monthRest - prevRestUsed)
+    const restPerWeek = Math.ceil(restNeededThisMonth / weeksTotal)
+    const alreadyResting = weekDates.filter(d => restDayPlan[emp.name].has(d)).length
+
+    if (alreadyResting < restPerWeek) {
+      // Need more rest days — pick days with lowest staffing demand
+      const candidates = weekDates
+        .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
+        .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
+        .sort((a, b) => a.demand - b.demand) // pick low-demand days first
+
+      let needed = restPerWeek - alreadyResting
+      for (const c of candidates) {
+        if (needed <= 0) break
+        // Don't rest if it would leave below minimum workers
+        const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
+        const workingAfter = employees.length - restingOnDay - 1
+        if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
+        restDayPlan[emp.name].add(c.date)
+        needed--
+      }
+    }
+  }
 
   // Fill rest into schedule
   for (const emp of employees) {

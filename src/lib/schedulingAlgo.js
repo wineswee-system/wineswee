@@ -133,10 +133,19 @@ export function runProgrammaticSchedule(data) {
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
     const monthMax = isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX
     monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT }
-    // 月休天數：直接從門市設定讀取（正職/兼職分開）
-    monthRestTarget[emp.name] = isPT
-      ? (storeSettings?.pt_monthly_rest_days ?? 15)
-      : (storeSettings?.ft_monthly_rest_days ?? 10)
+    // 月休天數：正職 = 硬性最低（一定要排滿），兼職 = 上限（彈性，不強制排滿）
+    // monthRestTarget 存的是「預排休假的目標天數」
+    // 正職：必須達標，所以目標 = 門市設定值
+    // 兼職：根據週工時算出合理的排班天數，休假 = 30 - 排班天數，但不超過上限
+    if (isPT) {
+      const ptRestLimit = storeSettings?.pt_monthly_rest_days ?? 20
+      const weeklyH = emp.weekly_target_hours || 20
+      const avgShiftH = 6
+      const workDaysPerMonth = Math.round(Math.ceil(weeklyH / avgShiftH) * 4.3)
+      monthRestTarget[emp.name] = Math.min(ptRestLimit, Math.max(8, 30 - workDaysPerMonth))
+    } else {
+      monthRestTarget[emp.name] = storeSettings?.ft_monthly_rest_days ?? 10
+    }
 
     const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
     const weeksLeft = Math.max((monthlyCtx?.weeksRemaining || 0) + 1, 1)
@@ -1687,26 +1696,38 @@ function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // H17: Monthly rest day limit（硬限制，直接從門市設定讀取）
+    // H17: Monthly rest day check
+    // 正職：硬性最低（不足 = error）  兼職：上限（超過 = error，不足 = OK）
     const totalDays = empAssignments.length
-    const empIsPT_S7 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    const storeRestDays = empIsPT_S7
-      ? (data.storeSettings?.pt_monthly_rest_days ?? 15)
-      : (data.storeSettings?.ft_monthly_rest_days ?? 10)
-    const expectedRest = Math.round(totalDays * storeRestDays / 30)
-    if (restEntries.length > expectedRest + 2) {
-      violations.push({
-        employee: emp.name, constraint: 'H17', law: '門市規定',
-        message: `${emp.name}: 本月 ${restEntries.length} 天休假，超過上限 ${storeRestDays} 天`,
-        severity: 'error',
-      })
-    }
-    if (restEntries.length < expectedRest - 2 && totalDays >= 7) {
-      violations.push({
-        employee: emp.name, constraint: 'H17', law: '門市規定',
-        message: `${emp.name}: 本月僅 ${restEntries.length} 天休假，不足 ${storeRestDays} 天`,
-        severity: 'warning',
-      })
+    const empIsPT_H17 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const ftRestMin = data.storeSettings?.ft_monthly_rest_days ?? 10
+    const ptRestMax = data.storeSettings?.pt_monthly_rest_days ?? 20
+    const expectedDays = Math.round(totalDays / 30 * (empIsPT_H17 ? ptRestMax : ftRestMin))
+
+    if (empIsPT_H17) {
+      // 兼職：只檢查上限，超過才報錯
+      if (restEntries.length > expectedDays + 2) {
+        violations.push({
+          employee: emp.name, constraint: 'H17', law: '門市規定',
+          message: `${emp.name}: 本月 ${restEntries.length} 天休假，超過上限 ${ptRestMax} 天`,
+          severity: 'error',
+        })
+      }
+    } else {
+      // 正職：不足 = error，超過 = warning
+      if (restEntries.length < expectedDays - 1 && totalDays >= 7) {
+        violations.push({
+          employee: emp.name, constraint: 'H17', law: '門市規定',
+          message: `${emp.name}: 本月僅 ${restEntries.length} 天休假，不足 ${ftRestMin} 天`,
+          severity: 'error',
+        })
+      } else if (restEntries.length > expectedDays + 2) {
+        violations.push({
+          employee: emp.name, constraint: 'H17', law: '門市規定',
+          message: `${emp.name}: 本月 ${restEntries.length} 天休假，超過 ${ftRestMin} 天`,
+          severity: 'warning',
+        })
+      }
     }
 
     // S5: Monthly hours check — 四週變形：正職 150-160h/月, 兼職 80-160h/月

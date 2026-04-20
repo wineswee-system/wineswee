@@ -102,8 +102,13 @@ export async function gatherSchedulingData({
     operatingHours: storeSettingsData?.operating_hours || undefined,
     peakDays: storeSettingsData?.peak_days || [5, 6], // Fri + Sat
     workHourSystem: storeSettingsData?.work_hour_system || undefined,
+    work_hour_system: storeSettingsData?.work_hour_system || undefined,
     ft_monthly_rest_days: storeSettingsData?.ft_monthly_rest_days ?? 10,
     pt_monthly_rest_days: storeSettingsData?.pt_monthly_rest_days ?? 15,
+    ft_monthly_hours_min: storeSettingsData?.ft_monthly_hours_min ?? 150,
+    ft_monthly_hours_max: storeSettingsData?.ft_monthly_hours_max ?? 175,
+    pt_monthly_hours_min: storeSettingsData?.pt_monthly_hours_min ?? 80,
+    pt_monthly_hours_max: storeSettingsData?.pt_monthly_hours_max ?? 175,
   }
 
   // Cross-store eligible employees (for borrowing suggestions)

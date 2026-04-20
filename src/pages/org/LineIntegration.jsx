@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Plus, Star, Trash2, Link2, Users, MessageCircle, Terminal } from 'lucide-react'
+import { RefreshCw, Plus, Star, Trash2, Link2, Users, MessageCircle, Terminal, Search, Wand2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getLineGroups, getLineMessages } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -24,19 +24,39 @@ export default function LineIntegration() {
   const [linkForm, setLinkForm] = useState({ employee_id: '', channel_id: '', line_user_id: '', is_primary: true })
   const [filterChannel, setFilterChannel] = useState('')
 
+  // Backtrack (smart rebind from line_users / line_messages)
+  const [showBacktrack, setShowBacktrack] = useState(false)
+  const [candidates, setCandidates] = useState([])
+  const [scanning, setScanning] = useState(false)
+  const [candidateOverrides, setCandidateOverrides] = useState({}) // key → employee_id
+
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
+    setError(null)
     try {
       const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
-        supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, department_id, position, status, departments(name)').eq('status', '在職').order('name'),
+        supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
+        supabase.from('employees').select('id, name, dept, department_id, position, status, departments!department_id(name)').eq('status', '在職').order('name'),
         getLineGroups(),
         getLineMessages(),
         supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),
       ])
+      const results = [
+        ['line_channels', ch],
+        ['employee_line_accounts', acc],
+        ['employees', emp],
+        ['line_groups', grp],
+        ['line_messages', msg],
+        ['line_command_logs', cmd],
+      ]
+      const errs = results.filter(([, r]) => r?.error).map(([t, r]) => `${t}: ${r.error.message}`)
+      if (errs.length) {
+        console.error('[LineIntegration] Supabase errors:', results.filter(([, r]) => r?.error))
+        setError(errs.join(' | '))
+      }
       setChannels(ch.data || [])
       setAccounts(acc.data || [])
       setEmployees(emp.data || [])
@@ -44,7 +64,8 @@ export default function LineIntegration() {
       setLineMessages(msg.data || [])
       setCommandLogs(cmd.data || [])
     } catch (err) {
-      setError('資料載入失敗')
+      console.error('[LineIntegration] Unexpected load error:', err)
+      setError('資料載入失敗：' + (err?.message || 'unknown'))
     }
     setLoading(false)
   }
@@ -119,8 +140,119 @@ export default function LineIntegration() {
     }
   }
 
+  // ── Backtrack: discover unbound LINE users from line_users + line_messages ──
+  const candidateKey = (c) => `${c.channel_id}:${c.line_user_id}`
+
+  async function scanBacktrackCandidates() {
+    setScanning(true)
+    setShowBacktrack(true)
+    try {
+      const [boundRes, usersRes, msgsRes, cmdsRes] = await Promise.all([
+        supabase.from('employee_line_accounts').select('channel_id, line_user_id'),
+        supabase.from('line_users').select('channel_id, line_user_id, display_name, employee_id'),
+        supabase.from('line_messages').select('channel_id, line_user_id, display_name, created_at').not('line_user_id', 'is', null),
+        supabase.from('line_command_logs').select('channel_id, line_user_id, display_name').not('line_user_id', 'is', null),
+      ])
+      const bound = new Set((boundRes.data || []).map(b => `${b.channel_id}:${b.line_user_id}`))
+      const seen = new Map()
+      const ingest = (row, source) => {
+        if (!row?.channel_id || !row?.line_user_id) return
+        const key = `${row.channel_id}:${row.line_user_id}`
+        if (bound.has(key)) return
+        const prev = seen.get(key) || { sources: [], last_seen_at: null, message_count: 0 }
+        seen.set(key, {
+          channel_id: row.channel_id,
+          line_user_id: row.line_user_id,
+          display_name: row.display_name || prev.display_name,
+          existing_employee_id: row.employee_id ?? prev.existing_employee_id,
+          sources: prev.sources.includes(source) ? prev.sources : [...prev.sources, source],
+          last_seen_at: row.created_at && (!prev.last_seen_at || row.created_at > prev.last_seen_at) ? row.created_at : prev.last_seen_at,
+          message_count: prev.message_count + (source === 'line_messages' ? 1 : 0),
+        })
+      }
+      for (const u of usersRes.data || []) ingest(u, 'line_users')
+      for (const m of msgsRes.data || []) ingest(m, 'line_messages')
+      for (const c of cmdsRes.data || []) ingest(c, 'line_command_logs')
+
+      const empByName = new Map(employees.map(e => [e.name, e]))
+      const list = [...seen.values()].map(c => {
+        if (c.existing_employee_id) {
+          const emp = employees.find(e => e.id === c.existing_employee_id)
+          return { ...c, matched_employee_id: c.existing_employee_id, matched_name: emp?.name || `#${c.existing_employee_id}`, confidence: 'exact' }
+        }
+        if (c.display_name) {
+          const exact = empByName.get(c.display_name)
+          if (exact) return { ...c, matched_employee_id: exact.id, matched_name: exact.name, confidence: 'exact' }
+          const partial = employees.find(e =>
+            e.name && (c.display_name.includes(e.name) || e.name.includes(c.display_name))
+          )
+          if (partial) return { ...c, matched_employee_id: partial.id, matched_name: partial.name, confidence: 'partial' }
+        }
+        return { ...c, matched_employee_id: null, matched_name: null, confidence: 'none' }
+      })
+      list.sort((a, b) => {
+        const rank = { exact: 0, partial: 1, none: 2 }
+        if (rank[a.confidence] !== rank[b.confidence]) return rank[a.confidence] - rank[b.confidence]
+        return (b.message_count || 0) - (a.message_count || 0)
+      })
+      setCandidates(list)
+      setCandidateOverrides({})
+    } catch (err) {
+      console.error('[LineIntegration] scan error:', err)
+      alert('掃描失敗：' + (err?.message || 'unknown'))
+    }
+    setScanning(false)
+  }
+
+  async function bindCandidate(c) {
+    const empId = candidateOverrides[candidateKey(c)] ?? c.matched_employee_id
+    if (!empId) { alert('請先選擇員工'); return }
+    const { error: err } = await supabase.from('employee_line_accounts').upsert({
+      employee_id: Number(empId),
+      channel_id: c.channel_id,
+      line_user_id: c.line_user_id,
+      display_name: c.display_name || null,
+      is_primary: true,
+      is_verified: false,
+    }, { onConflict: 'channel_id,line_user_id' })
+    if (err) { alert('綁定失敗：' + err.message); return }
+    // Also set employee_id on line_users so the webhook recognises this user going forward
+    await supabase.from('line_users').update({ employee_id: Number(empId) })
+      .eq('channel_id', c.channel_id).eq('line_user_id', c.line_user_id)
+    setCandidates(prev => prev.filter(x => candidateKey(x) !== candidateKey(c)))
+    await loadData()
+  }
+
+  async function bindAllExact() {
+    const exacts = candidates.filter(c => c.confidence === 'exact' && (candidateOverrides[candidateKey(c)] ?? c.matched_employee_id))
+    if (!exacts.length) { alert('沒有完全對應的候選'); return }
+    if (!confirm(`將 ${exacts.length} 筆完全對應的候選一次綁定？`)) return
+    setScanning(true)
+    const rows = exacts.map(c => ({
+      employee_id: Number(candidateOverrides[candidateKey(c)] ?? c.matched_employee_id),
+      channel_id: c.channel_id,
+      line_user_id: c.line_user_id,
+      display_name: c.display_name || null,
+      is_primary: true,
+      is_verified: false,
+    }))
+    const { error: err } = await supabase.from('employee_line_accounts')
+      .upsert(rows, { onConflict: 'channel_id,line_user_id' })
+    if (err) {
+      alert('批次綁定失敗：' + err.message)
+    } else {
+      for (const r of rows) {
+        await supabase.from('line_users').update({ employee_id: r.employee_id })
+          .eq('channel_id', r.channel_id).eq('line_user_id', r.line_user_id)
+      }
+      const boundKeys = new Set(rows.map(r => `${r.channel_id}:${r.line_user_id}`))
+      setCandidates(prev => prev.filter(c => !boundKeys.has(candidateKey(c))))
+      await loadData()
+    }
+    setScanning(false)
+  }
+
   if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
   const filteredAccounts = filterChannel
     ? accounts.filter(a => a.channel_id === Number(filterChannel))
@@ -145,6 +277,16 @@ export default function LineIntegration() {
           <button className="btn btn-secondary" onClick={loadData}><RefreshCw size={14} /> 重新整理</button>
         </div>
       </div>
+
+      {error && (
+        <div style={{
+          padding: '10px 14px', marginBottom: 16, borderRadius: 8,
+          background: 'var(--accent-red-dim, #fee)', color: 'var(--accent-red, #c00)',
+          border: '1px solid var(--accent-red, #c00)', fontSize: 13,
+        }}>
+          <strong>⚠ 部分資料載入失敗：</strong> {error}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -223,9 +365,12 @@ export default function LineIntegration() {
       {/* ══ Employee Accounts Tab ══ */}
       {tab === 'accounts' && (
         <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => setShowLinkModal(true)}>
               <Link2 size={14} /> 新增綁定
+            </button>
+            <button className="btn btn-secondary" onClick={scanBacktrackCandidates} disabled={scanning}>
+              <Search size={14} /> {scanning ? '掃描中…' : '掃描未綁定使用者'}
             </button>
             <select className="form-input" style={{ fontSize: 13, minWidth: 180 }}
               value={filterChannel} onChange={e => setFilterChannel(e.target.value)}>
@@ -422,15 +567,18 @@ export default function LineIntegration() {
             <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--accent-cyan-dim)', borderRadius: 10, fontSize: 12 }}>
               <strong>Edge Function 環境變數清單（supabase secrets set ...）：</strong>
               <pre style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
-{channels.flatMap(ch => {
-  const s = ch.code.toUpperCase().replace(/-/g, '_')
-  return [
-    `LINE_CHANNEL_SECRET_${s}=...`,
-    `LINE_CHANNEL_ACCESS_TOKEN_${s}=...`,
-    `# LINE_LOGIN_CHANNEL_ID_${s}=...  (選用)`,
-    `# LINE_LOGIN_CHANNEL_SECRET_${s}=...  (選用)`,
-  ]
-}).join('\n')}
+{[
+  ...channels.flatMap(ch => {
+    const s = ch.code.toUpperCase().replace(/-/g, '_')
+    return [
+      `LINE_CHANNEL_SECRET_${s}=...`,
+      `LINE_CHANNEL_ACCESS_TOKEN_${s}=...`,
+    ]
+  }),
+  '# LINE Login（單一 OA）',
+  'LINE_LOGIN_CHANNEL_ID=...',
+  'LINE_LOGIN_CHANNEL_SECRET=...',
+].join('\n')}
               </pre>
             </div>
           </div>
@@ -463,6 +611,110 @@ export default function LineIntegration() {
               value={channelForm.webhook_url} onChange={e => setChannelForm(f => ({ ...f, webhook_url: e.target.value }))} />
           </Field>
         </Modal>
+      )}
+
+      {/* ══ Backtrack Scan Modal ══ */}
+      {showBacktrack && (
+        <div className="modal-backdrop" onClick={() => setShowBacktrack(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" onClick={e => e.stopPropagation()}
+            style={{ width: 'min(960px, 92vw)', maxHeight: '88vh', overflow: 'auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}><Wand2 size={18} style={{ verticalAlign: -3 }} /> 回填員工綁定</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                  從 <code>line_users</code>、<code>line_messages</code>、<code>line_command_logs</code> 偵測尚未綁定的 LINE 使用者，並以顯示名稱對應到員工。
+                </p>
+              </div>
+              <button className="btn btn-sm" onClick={() => setShowBacktrack(false)}>關閉</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <button className="btn btn-sm btn-secondary" onClick={scanBacktrackCandidates} disabled={scanning}>
+                <RefreshCw size={12} /> 重新掃描
+              </button>
+              <button className="btn btn-sm btn-primary" onClick={bindAllExact} disabled={scanning || !candidates.some(c => c.confidence === 'exact')}>
+                一鍵綁定所有完全對應 ({candidates.filter(c => c.confidence === 'exact').length})
+              </button>
+              <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                共 {candidates.length} 筆候選
+              </div>
+            </div>
+
+            {scanning && <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>掃描中…</div>}
+
+            {!scanning && candidates.length === 0 && (
+              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+                沒有可回填的候選 — 所有在 LINE 側有紀錄的使用者都已完成綁定。
+              </div>
+            )}
+
+            {!scanning && candidates.length > 0 && (
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>LINE 顯示名稱</th>
+                      <th>User ID</th>
+                      <th>OA</th>
+                      <th>訊息 / 來源</th>
+                      <th>最後活動</th>
+                      <th>對應員工</th>
+                      <th>綁定</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidates.map(c => {
+                      const key = candidateKey(c)
+                      const override = candidateOverrides[key]
+                      const selected = override ?? c.matched_employee_id ?? ''
+                      const badge = c.confidence === 'exact' ? 'badge-success' : c.confidence === 'partial' ? 'badge-warning' : 'badge-neutral'
+                      const badgeLabel = c.confidence === 'exact' ? '完全對應' : c.confidence === 'partial' ? '部分對應' : '未對應'
+                      const channelName = channels.find(ch => ch.id === c.channel_id)?.name || `#${c.channel_id}`
+                      return (
+                        <tr key={key}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{c.display_name || '—'}</div>
+                            <div><span className={`badge ${badge}`} style={{ fontSize: 10 }}>{badgeLabel}</span></div>
+                          </td>
+                          <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
+                            {c.line_user_id?.slice(0, 14)}…
+                          </td>
+                          <td style={{ fontSize: 12 }}>{channelName}</td>
+                          <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {c.message_count > 0 && <>{c.message_count} 則訊息 · </>}
+                            {c.sources.join(', ')}
+                          </td>
+                          <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('zh-TW') : '—'}
+                          </td>
+                          <td>
+                            <select className="form-input" style={{ fontSize: 12, minWidth: 160 }}
+                              value={selected}
+                              onChange={e => setCandidateOverrides(prev => ({ ...prev, [key]: e.target.value ? Number(e.target.value) : null }))}>
+                              <option value="">— 請選擇 —</option>
+                              {employees.map(emp => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.name}{emp.id === c.matched_employee_id ? ' ★' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <button className="btn btn-sm btn-primary" onClick={() => bindCandidate(c)}
+                              disabled={!selected}>
+                              <Link2 size={11} /> 綁定
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ══ Link Employee Modal ══ */}

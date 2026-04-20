@@ -12,7 +12,7 @@ export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekD
     if (!weekDates?.length) return
     setLoading(true)
     Promise.all([
-      supabase.from('employees').select('id, name, store_id, additional_stores, employment_type, position, stores(name)').eq('status', '在職'),
+      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position, stores!store_id(name)').eq('status', '在職'),
       supabase.from('store_staffing').select('*'),
       supabase.from('schedules').select('employee, date, shift').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1]),
     ]).then(([e, s, sc]) => {

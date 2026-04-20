@@ -30,6 +30,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [leaveRecords, setLeaveRecords] = useState([])
   const [availability, setAvailability] = useState([])
   const [onboardingTasks, setOnboardingTasks] = useState([])
+  const [assignments, setAssignments] = useState([])
 
   // Inline add
   const [newSkill, setNewSkill] = useState('')
@@ -49,7 +50,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('leave_requests').select('*').eq('employee_id', employee.id).order('id', { ascending: false }).limit(10),
       supabase.from('employee_availability').select('*').eq('employee_id', employee.id).order('day_of_week'),
       supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待處理']).order('created_at', { ascending: false }),
-    ]).then(([sk, dep, tr, rev, sp, lv, av, ob]) => {
+      supabase.from('employee_assignments').select('*, departments(name), stores(name), updated_by_emp:updated_by(name)').eq('employee_id', employee.id).order('start_date', { ascending: false }),
+    ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn]) => {
       setSkills(sk.data || [])
       setDependents(dep.data || [])
       setTransfers(tr.data || [])
@@ -58,6 +60,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setLeaveRecords(lv.data || [])
       setAvailability(av.data || [])
       setOnboardingTasks(ob.data || [])
+      setAssignments(asgn.data || [])
     })
   }, [employee?.id])
 
@@ -216,6 +219,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const TABS = [
     { key: 'personal', label: '個人資訊', icon: '👤' },
     { key: 'org', label: '組織', icon: '🏢' },
+    { key: 'assignments', label: '指派歷史', icon: '📜' },
     { key: 'skills', label: '技能', icon: '🏷️' },
     { key: 'personality', label: '性格分析', icon: '🧬' },
     { key: 'development', label: '能力發展', icon: '📚' },
@@ -619,6 +623,54 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           )}
 
           {/* ═══ 性格分析 ═══ */}
+          {tab === 'assignments' && (
+            <>
+              <SectionTitle icon="📜" text={`指派歷史 (${assignments.length})`} />
+              {assignments.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無指派紀錄</div>
+              ) : (
+                <div className="data-table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>主/次</th>
+                        <th>部門</th>
+                        <th>門市</th>
+                        <th>職稱</th>
+                        <th>職等</th>
+                        <th>類型</th>
+                        <th>部分工時</th>
+                        <th>週時數</th>
+                        <th>起始</th>
+                        <th>結束</th>
+                        <th>生效</th>
+                        <th>修改人</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignments.map(a => (
+                        <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.7 }}>
+                          <td><span className={`badge ${a.department_type === '主要' ? 'badge-cyan' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.department_type}</span></td>
+                          <td style={{ fontSize: 12 }}>{a.departments?.name || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.stores?.name || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.position || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.job_grade || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.employment_type || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.is_part_time ? '是' : '否'}</td>
+                          <td style={{ fontSize: 12 }}>{a.avg_weekly_hours || 0}</td>
+                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.start_date}</td>
+                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.end_date || '—'}</td>
+                          <td><span className={`badge ${a.is_active ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.is_active ? '是' : '否'}</span></td>
+                          <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.updated_by_emp?.name || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
           {tab === 'personality' && <PersonalityTab employee={employee} />}
 
           {/* ═══ 能力發展 ═══ */}

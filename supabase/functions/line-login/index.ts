@@ -1,6 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { resolveChannel, resolveEnv } from '../_shared/channel.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,15 +7,18 @@ const corsHeaders = {
 }
 
 /**
- * LINE Login OAuth for backend system
+ * LINE Login OAuth — single OA.
  *
  * Endpoints:
- * 1. GET ?action=authorize[&channel=code] → redirect to LINE Login
- * 2. GET ?action=callback&code=xxx[&state=<channel>] → exchange, create/login Supabase user
+ *   GET ?action=authorize → redirect to LINE Login
+ *   GET ?action=callback&code=xxx → exchange, create/login Supabase user
  *
- * Multi-channel:
- *   LINE_LOGIN_CHANNEL_ID_{CODE} / LINE_LOGIN_CHANNEL_SECRET_{CODE}
- *   Fallback: LINE_LOGIN_CHANNEL_ID / LINE_LOGIN_CHANNEL_SECRET
+ * Required env vars:
+ *   LINE_LOGIN_CHANNEL_ID
+ *   LINE_LOGIN_CHANNEL_SECRET
+ *
+ * The channel row used for linking `employee_line_accounts` is the single
+ * row in `line_channels` with `is_default = true` (or first active).
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -25,34 +27,36 @@ serve(async (req) => {
 
   const url = new URL(req.url)
   const action = url.searchParams.get('action')
-  const queryChannel = url.searchParams.get('channel')
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
   const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-  // Resolve the channel for this request. For authorize, use ?channel query;
-  // for callback, the channel is round-tripped via `state`.
-  const stateParam = url.searchParams.get('state') || ''
-  const [stateNonce, stateChannel] = stateParam.split(':')
-  const channelHint = queryChannel || stateChannel || null
-
-  const channelRow = await resolveChannel(supabase, { queryCode: channelHint })
-  if (!channelRow) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('未設定任何 LINE 登入頻道')}`, ...corsHeaders },
-    })
-  }
-  const channelCode = channelRow.code
-  const LINE_CHANNEL_ID = resolveEnv('LINE_LOGIN_CHANNEL_ID', channelCode) || ''
-  const LINE_CHANNEL_SECRET = resolveEnv('LINE_LOGIN_CHANNEL_SECRET', channelCode) || ''
+  const LINE_CHANNEL_ID = Deno.env.get('LINE_LOGIN_CHANNEL_ID') || ''
+  const LINE_CHANNEL_SECRET = Deno.env.get('LINE_LOGIN_CHANNEL_SECRET') || ''
 
   if (!LINE_CHANNEL_ID || !LINE_CHANNEL_SECRET) {
     return new Response(null, {
       status: 302,
-      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent(`頻道 ${channelCode} 尚未設定 LINE Login 憑證`)}`, ...corsHeaders },
+      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('LINE Login 憑證未設定 (LINE_LOGIN_CHANNEL_ID / LINE_LOGIN_CHANNEL_SECRET)')}`, ...corsHeaders },
+    })
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+  // Single login channel — default flagged row, else first active.
+  const { data: channelRow } = await supabase
+    .from('line_channels')
+    .select('*')
+    .eq('status', 'active')
+    .order('is_default', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!channelRow) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('未設定 LINE 官方帳號')}`, ...corsHeaders },
     })
   }
 
@@ -60,8 +64,7 @@ serve(async (req) => {
 
   // ── Step 1: Redirect to LINE Login ──
   if (action === 'authorize') {
-    const nonce = crypto.randomUUID()
-    const state = `${nonce}:${channelCode}`
+    const state = crypto.randomUUID()
     const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
       `response_type=code` +
       `&client_id=${LINE_CHANNEL_ID}` +
@@ -125,34 +128,21 @@ serve(async (req) => {
       const displayName = profile.displayName || ''
       const pictureUrl = profile.pictureUrl || null
 
-      // ── Find matching employee ──
-      // 1. employee_line_accounts (this channel)
+      // ── Find matching employee: prior link → email → display name ──
       let employee: any = null
       const { data: ela } = await supabase
         .from('employee_line_accounts')
-        .select('employee_id, employees:employee_id (*)')
-        .eq('channel_id', channelRow.id)
+        .select('employees:employee_id (*)')
         .eq('line_user_id', lineUserId)
         .maybeSingle()
-      if (ela?.employees) employee = ela.employees
+      employee = ela?.employees || null
 
-      // 2. email
       if (!employee && email) {
-        const { data } = await supabase
-          .from('employees')
-          .select('*')
-          .eq('email', email)
-          .maybeSingle()
+        const { data } = await supabase.from('employees').select('*').eq('email', email).maybeSingle()
         employee = data
       }
-
-      // 3. name
       if (!employee) {
-        const { data } = await supabase
-          .from('employees')
-          .select('*')
-          .eq('name', displayName)
-          .maybeSingle()
+        const { data } = await supabase.from('employees').select('*').eq('name', displayName).maybeSingle()
         employee = data
       }
 
@@ -163,13 +153,7 @@ serve(async (req) => {
         })
       }
 
-      // ── Upsert employee_line_accounts for this channel ──
-      const { data: existingAny } = await supabase
-        .from('employee_line_accounts')
-        .select('id')
-        .eq('employee_id', employee.id)
-        .limit(1)
-      const isPrimary = !existingAny || existingAny.length === 0
+      // ── Link LINE identity to employee ──
       const now = new Date().toISOString()
       await supabase.from('employee_line_accounts').upsert(
         {
@@ -178,7 +162,7 @@ serve(async (req) => {
           line_user_id: lineUserId,
           display_name: displayName,
           picture_url: pictureUrl,
-          is_primary: isPrimary,
+          is_primary: true,
           is_verified: true,
           linked_at: now,
           last_active_at: now,
@@ -186,65 +170,39 @@ serve(async (req) => {
         { onConflict: 'channel_id,line_user_id' },
       )
 
-      // Also upsert line_users so webhook state (pending_action) works post-login.
-      const { data: existingLu } = await supabase
-        .from('line_users')
-        .select('id')
-        .eq('channel_id', channelRow.id)
-        .eq('line_user_id', lineUserId)
-        .maybeSingle()
-      if (existingLu) {
-        await supabase.from('line_users').update({
-          employee_id: employee.id,
-          is_verified: true,
-          display_name: displayName,
-        }).eq('id', existingLu.id)
-      } else {
-        await supabase.from('line_users').insert({
+      await supabase.from('line_users').upsert(
+        {
           channel_id: channelRow.id,
           line_user_id: lineUserId,
-          display_name: displayName,
           employee_id: employee.id,
+          display_name: displayName,
           is_verified: true,
-        })
-      }
+        },
+        { onConflict: 'channel_id,line_user_id' },
+      )
 
-      // ── Create or sign in Supabase auth user ──
+      // ── Create Supabase auth user (idempotent) then issue magic link ──
       const authEmail = employee.email || `line_${lineUserId}@sme-ops.local`
-      const { data: { users } } = await supabase.auth.admin.listUsers()
-      const existingUser = users?.find((u) => u.email === authEmail)
 
-      if (!existingUser) {
-        const { error } = await supabase.auth.admin.createUser({
-          email: authEmail,
-          email_confirm: true,
-          user_metadata: { full_name: employee.name, line_user_id: lineUserId, line_channel: channelCode },
-        })
-        if (error && !error.message.includes('already')) throw error
-      }
+      const { error: createErr } = await supabase.auth.admin.createUser({
+        email: authEmail,
+        email_confirm: true,
+        user_metadata: { full_name: employee.name, line_user_id: lineUserId },
+      })
+      if (createErr && !/already|registered|exists/i.test(createErr.message)) throw createErr
 
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: authEmail,
         options: { redirectTo: `${SITE_URL}/` },
       })
-
-      if (linkError || !linkData) {
+      if (linkError || !linkData?.properties?.action_link) {
         throw new Error(linkError?.message || '無法產生登入連結')
       }
 
-      const magicLink = linkData.properties?.action_link
-      if (magicLink) {
-        return new Response(null, {
-          status: 302,
-          headers: { Location: magicLink, ...corsHeaders },
-        })
-      }
-
-      const verificationUrl = `${SUPABASE_URL}/auth/v1/verify?token=${linkData.properties?.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${SITE_URL}/`)}`
       return new Response(null, {
         status: 302,
-        headers: { Location: verificationUrl, ...corsHeaders },
+        headers: { Location: linkData.properties.action_link, ...corsHeaders },
       })
 
     } catch (err) {

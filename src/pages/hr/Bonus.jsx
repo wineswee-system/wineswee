@@ -36,7 +36,7 @@ export default function Bonus() {
       supabase.from('customer_contacts').select('*').order('created_at', { ascending: false }),
       supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false }),
       supabase.from('outbound_orders').select('*'),
-      supabase.from('employees').select('id, name, store_id, stores(name)').order('name'),
+      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').order('name'),
     ]).then(([r, s, o, t, ct, adj, ob, emp]) => {
       setRecords(r.data || [])
       setSettings(s.data || [])

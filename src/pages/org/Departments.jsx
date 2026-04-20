@@ -90,7 +90,7 @@ export default function Departments() {
   }
 
   const deptCount = (dept) => employees.filter(e => (e.department_id === dept.id || e.dept === dept.name) && e.status === '在職').length
-  const totalMembers = departments.reduce((s, d) => s + deptCount(d.name), 0)
+  const totalMembers = departments.reduce((s, d) => s + deptCount(d), 0)
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

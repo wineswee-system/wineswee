@@ -24,7 +24,7 @@ export default function Expenses() {
   useEffect(() => {
     Promise.all([
       getExpenses(),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([ex, e, d]) => {
       const emps = e.data || []

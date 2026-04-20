@@ -61,7 +61,7 @@ export default function EngagementSurveys() {
   useEffect(() => {
     Promise.all([
       getEngagementSurveys(),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
     ]).then(([s, e]) => {
       setSurveys(s.data || [])
       setEmployees(e.data || [])

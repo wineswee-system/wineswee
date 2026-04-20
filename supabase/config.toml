@@ -375,6 +375,15 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# ── Per-function overrides ──
+# line-login and line-webhook are public endpoints (OAuth redirect + LINE callback).
+# They must NOT require a Supabase JWT — callers are LINE / unauthenticated browsers.
+[functions.line-login]
+verify_jwt = false
+
+[functions.line-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

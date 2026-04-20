@@ -21,7 +21,7 @@ export default function BusinessTravel() {
   useEffect(() => {
     Promise.all([
       getBusinessTrips(),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([t, e, d]) => {
       const emps = e.data || []

@@ -324,6 +324,9 @@ export function runProgrammaticSchedule(data) {
     return h
   }
 
+  // Helper: check if employee is part-time
+  const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+
   // ── Step 2: Sort shifts by start time ──
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
 
@@ -369,8 +372,6 @@ export function runProgrammaticSchedule(data) {
       const dow = new Date(date).getDay()
       return storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
     }
-
-    const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
     // Sort: 正職先排，兼職後排，同類別按時數缺口排
     const sortByNeed = (list) => [...list].sort((a, b) => {

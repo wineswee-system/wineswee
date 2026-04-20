@@ -422,15 +422,18 @@ export default function LineIntegration() {
             <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--accent-cyan-dim)', borderRadius: 10, fontSize: 12 }}>
               <strong>Edge Function 環境變數清單（supabase secrets set ...）：</strong>
               <pre style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
-{channels.flatMap(ch => {
-  const s = ch.code.toUpperCase().replace(/-/g, '_')
-  return [
-    `LINE_CHANNEL_SECRET_${s}=...`,
-    `LINE_CHANNEL_ACCESS_TOKEN_${s}=...`,
-    `# LINE_LOGIN_CHANNEL_ID_${s}=...  (選用)`,
-    `# LINE_LOGIN_CHANNEL_SECRET_${s}=...  (選用)`,
-  ]
-}).join('\n')}
+{[
+  ...channels.flatMap(ch => {
+    const s = ch.code.toUpperCase().replace(/-/g, '_')
+    return [
+      `LINE_CHANNEL_SECRET_${s}=...`,
+      `LINE_CHANNEL_ACCESS_TOKEN_${s}=...`,
+    ]
+  }),
+  '# LINE Login（單一 OA）',
+  'LINE_LOGIN_CHANNEL_ID=...',
+  'LINE_LOGIN_CHANNEL_SECRET=...',
+].join('\n')}
               </pre>
             </div>
           </div>

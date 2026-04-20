@@ -65,10 +65,10 @@ export default function MonthScheduleTable({
       {/* Shift Legend — simplified when viewing all stores */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {storeFilter ? (
-          // Single store: show that store's shift definitions
-          SHIFT_TYPES.filter(t => t.label !== '休').map(t => (
-            <span key={t.label} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(t.label) }}>
-              {t.label}
+          // Single store: show only that store's shifts (deduplicated)
+          getStoreShifts(storeFilter).map(d => (
+            <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(d.name) }}>
+              {d.name}
             </span>
           ))
         ) : (

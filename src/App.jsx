@@ -13,6 +13,7 @@ const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
 const LiffTask = lazy(() => import('./pages/liff/LiffTask'))
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
+const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
 const Login = lazy(() => import('./pages/Login'))
 
 // ── Module-level lazy loading ──
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>
+          <Route path="/employee-portal" element={<Suspense fallback={<LoadingSpinner />}><EmployeePortal /></Suspense>} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
         </Suspense>

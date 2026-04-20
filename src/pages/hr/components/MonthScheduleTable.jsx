@@ -224,7 +224,7 @@ function EmployeeRow({
     else if (isAbsence(s)) restDays++
   }
 
-  const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
+  const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
   return (
     <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -233,8 +233,7 @@ function EmployeeRow({
         padding: '4px 8px', borderRight: '1px solid var(--border-light)',
       }}>
         <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap' }}>
-          {emp.name}
-          {isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 4 }}>PT</span>}
+          {emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}
         </div>
       </td>
       {monthDates.map(date => {

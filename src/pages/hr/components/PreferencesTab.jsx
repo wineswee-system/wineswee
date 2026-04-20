@@ -3,11 +3,25 @@ import { supabase } from '../../../lib/supabase'
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 
-export default function PreferencesTab({ filtered, shiftDefs, preferences, setPreferences }) {
-  const [availability, setAvailability] = useState({}) // employee → { dow: { start, end } }
-  const [editingAvail, setEditingAvail] = useState(null) // employee name
+export default function PreferencesTab({
+  filtered, shiftDefs, preferences, setPreferences,
+  storeFilter, locations, getStoreShifts,
+}) {
+  const [availability, setAvailability] = useState({})
+  const [editingAvail, setEditingAvail] = useState(null)
 
-  // Load availability data
+  // Get shifts for current store only (or deduplicated if all stores)
+  const visibleShifts = storeFilter
+    ? getStoreShifts(storeFilter)
+    : (() => {
+        const seen = new Set()
+        return shiftDefs.filter(d => {
+          if (seen.has(d.name)) return false
+          seen.add(d.name)
+          return true
+        })
+      })()
+
   useEffect(() => {
     supabase.from('employee_availability').select('*').then(({ data }) => {
       const map = {}
@@ -26,6 +40,31 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
   const handleTargetHoursChange = async (emp, value) => {
     const hours = Math.max(0, Math.min(48, Number(value) || 0))
     await supabase.from('employees').update({ weekly_target_hours: hours }).eq('id', emp.id)
+  }
+
+  const handleCyclePref = async (emp, shiftName, pref) => {
+    const isPreferred = pref?.preferred_shifts?.includes(shiftName)
+    const isBlocked = pref?.avoid_shifts?.includes(shiftName)
+    const level = isPreferred ? 'want' : isBlocked ? 'block' : 'ok'
+
+    let nextPreferred = [...(pref?.preferred_shifts || [])]
+    let nextAvoid = [...(pref?.avoid_shifts || [])]
+
+    if (level === 'ok') {
+      nextPreferred.push(shiftName)
+      nextAvoid = nextAvoid.filter(s => s !== shiftName)
+    } else if (level === 'want') {
+      nextPreferred = nextPreferred.filter(s => s !== shiftName)
+      nextAvoid.push(shiftName)
+    } else {
+      nextPreferred = nextPreferred.filter(s => s !== shiftName)
+      nextAvoid = nextAvoid.filter(s => s !== shiftName)
+    }
+
+    const { data } = await supabase.from('employee_shift_preferences')
+      .upsert({ employee: emp.name, preferred_shifts: nextPreferred, avoid_shifts: nextAvoid }, { onConflict: 'employee' })
+      .select().single()
+    if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
   }
 
   const handleAvailSave = async (empName, dow, start, end) => {
@@ -61,101 +100,93 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
 
   return (
     <div>
-      {/* Shift Preferences + Target Hours */}
+      {/* Shift Preferences — card layout per employee */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="card-title"><span className="card-title-icon">👤</span> 班別偏好 & 目標工時</div>
-          <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> 想上</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} /> 不可</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--border-medium)', display: 'inline-block' }} /> 都可以</span>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            點擊班別標籤切換：預設 → <span style={{ color: '#10b981', fontWeight: 600 }}>想上</span> → <span style={{ color: '#ef4444', fontWeight: 600 }}>不可</span> → 預設
           </div>
         </div>
-        <div className="data-table-wrapper">
-          <table className="data-table" style={{ fontSize: 13 }}>
-            <thead>
-              <tr>
-                <th style={{ minWidth: 80 }}>員工</th>
-                <th style={{ textAlign: 'center', width: 80 }}>週工時</th>
-                {shiftDefs.map(d => (
-                  <th key={d.id} style={{ textAlign: 'center', padding: '8px 4px', fontSize: 11 }}>
-                    {d.name}
-                  </th>
-                ))}
-                <th style={{ width: 60 }}>備註</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(emp => {
-                const pref = preferences.find(p => p.employee === emp.name)
-                const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-                return (
-                  <tr key={emp.id}>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>{emp.name}</span>
-                      {isPT && <span style={{ fontSize: 10, color: '#f59e0b', marginLeft: 4, fontWeight: 600 }}>PT</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        className="form-input"
-                        type="number" min={4} max={48} step={1}
-                        style={{ width: 52, textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '4px' }}
-                        defaultValue={emp.weekly_target_hours || (isPT ? 20 : 40)}
-                        onBlur={e => handleTargetHoursChange(emp, e.target.value)}
-                      />
-                    </td>
-                    {shiftDefs.map(d => {
-                      const isPreferred = pref?.preferred_shifts?.includes(d.name)
-                      const isBlocked = pref?.avoid_shifts?.includes(d.name)
-                      const level = isPreferred ? 'want' : isBlocked ? 'block' : 'ok'
 
-                      const handleCycle = async () => {
-                        let nextPreferred = [...(pref?.preferred_shifts || [])]
-                        let nextAvoid = [...(pref?.avoid_shifts || [])]
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12, padding: '4px 0' }}>
+          {filtered.map(emp => {
+            const pref = preferences.find(p => p.employee === emp.name)
+            const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
-                        if (level === 'ok') {
-                          nextPreferred.push(d.name)
-                          nextAvoid = nextAvoid.filter(s => s !== d.name)
-                        } else if (level === 'want') {
-                          nextPreferred = nextPreferred.filter(s => s !== d.name)
-                          nextAvoid.push(d.name)
-                        } else {
-                          nextPreferred = nextPreferred.filter(s => s !== d.name)
-                          nextAvoid = nextAvoid.filter(s => s !== d.name)
-                        }
+            return (
+              <div key={emp.id} style={{
+                border: '1px solid var(--border-light)', borderRadius: 10, padding: '12px 14px',
+                background: 'var(--bg-card)',
+              }}>
+                {/* Employee header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{emp.name}</span>
+                    {isPT && <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                      background: 'rgba(251,191,36,0.12)', padding: '1px 6px', borderRadius: 4,
+                    }}>PT</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      className="form-input"
+                      type="number" min={4} max={48} step={1}
+                      style={{ width: 48, textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 4px' }}
+                      defaultValue={emp.weekly_target_hours || (isPT ? 20 : 40)}
+                      onBlur={e => handleTargetHoursChange(emp, e.target.value)}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h/週</span>
+                  </div>
+                </div>
 
-                        const { data } = await supabase.from('employee_shift_preferences')
-                          .upsert({ employee: emp.name, preferred_shifts: nextPreferred, avoid_shifts: nextAvoid }, { onConflict: 'employee' })
-                          .select().single()
-                        if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
-                      }
+                {/* Shift preference tags */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {visibleShifts.map(d => {
+                    const isPreferred = pref?.preferred_shifts?.includes(d.name)
+                    const isBlocked = pref?.avoid_shifts?.includes(d.name)
+                    const level = isPreferred ? 'want' : isBlocked ? 'block' : 'ok'
 
-                      return (
-                        <td key={d.id} style={{ textAlign: 'center', padding: '6px 4px' }}>
-                          <button onClick={handleCycle} title={level === 'want' ? '想上' : level === 'block' ? '不可' : '都可以'} style={{
-                            width: 26, height: 26, borderRadius: '50%', border: 'none',
-                            cursor: 'pointer', transition: 'transform 0.15s',
-                            background: level === 'want' ? '#10b981' : level === 'block' ? '#ef4444' : 'var(--border-medium)',
-                            opacity: level === 'ok' ? 0.35 : 1,
-                          }} onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
-                             onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
-                        </td>
-                      )
-                    })}
-                    <td>
-                      <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={async () => {
-                        const notes = prompt('備註（例如：只能上早班、週三不行）', pref?.notes || '')
-                        if (notes === null) return
-                        const { data } = await supabase.from('employee_shift_preferences').upsert({ employee: emp.name, notes }, { onConflict: 'employee' }).select().single()
-                        if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
-                      }}>{pref?.notes ? '📝' : '+'}</button>
-                      {pref?.notes && <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pref.notes}>{pref.notes}</div>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    const styles = {
+                      want: { background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' },
+                      block: { background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' },
+                      ok: { background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px solid var(--border-light)' },
+                    }
+
+                    return (
+                      <button key={d.id} onClick={() => handleCyclePref(emp, d.name, pref)} style={{
+                        padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        cursor: 'pointer', transition: 'all 0.15s', lineHeight: 1.3,
+                        ...styles[level],
+                      }}>
+                        {level === 'want' && '+ '}{level === 'block' && '✕ '}{d.name}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Notes */}
+                {pref?.notes && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>
+                    📝 {pref.notes}
+                  </div>
+                )}
+                {!pref?.notes && (
+                  <button onClick={async () => {
+                    const notes = prompt('備註（例如：只能上早班、週三不行）', '')
+                    if (!notes) return
+                    const { data } = await supabase.from('employee_shift_preferences').upsert({ employee: emp.name, notes }, { onConflict: 'employee' }).select().single()
+                    if (data) setPreferences(prev => [...prev.filter(p => p.employee !== emp.name), data])
+                  }} style={{
+                    marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'none',
+                    border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline',
+                  }}>
+                    + 加備註
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -171,7 +202,7 @@ export default function PreferencesTab({ filtered, shiftDefs, preferences, setPr
               <tr>
                 <th>員工</th>
                 {DAY_LABELS.map((label, i) => (
-                  <th key={i} style={{ textAlign: 'center', color: i === 5 || i === 6 ? 'var(--accent-red)' : undefined }}>{label}</th>
+                  <th key={i} style={{ textAlign: 'center', color: i === 0 || i === 6 ? 'var(--accent-red)' : undefined }}>{label}</th>
                 ))}
                 <th style={{ width: 50 }}></th>
               </tr>

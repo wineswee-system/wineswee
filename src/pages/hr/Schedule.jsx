@@ -962,6 +962,8 @@ export default function Schedule() {
         <PreferencesTab
           filtered={filtered} shiftDefs={shiftDefs}
           preferences={preferences} setPreferences={setPreferences}
+          storeFilter={storeFilter} locations={locations}
+          getStoreShifts={getStoreShifts}
         />
       )}
 

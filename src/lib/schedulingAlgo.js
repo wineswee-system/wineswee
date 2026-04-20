@@ -133,18 +133,10 @@ export function runProgrammaticSchedule(data) {
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
     const monthMax = isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX
     monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT }
-    // 月休天數：從門市設定讀取（正職/兼職分開）
-    // 月休天數：正職從門市設定讀（預設10天），兼職根據週工時自動算
-    // PT 計算邏輯：週目標工時 ÷ 每班平均時數 = 每週上班天數 → 月上班天數 → 30 - 上班天數 = 休假天數
-    if (isPT) {
-      const weeklyH = emp.weekly_target_hours || 20
-      const avgShiftH = 6 // PT 平均每班 6 小時
-      const workDaysPerWeek = Math.ceil(weeklyH / avgShiftH)
-      const workDaysPerMonth = Math.round(workDaysPerWeek * 4.3)
-      monthRestTarget[emp.name] = Math.max(10, 30 - workDaysPerMonth)
-    } else {
-      monthRestTarget[emp.name] = storeSettings?.ft_monthly_rest_days ?? 10
-    }
+    // 月休天數：直接從門市設定讀取（正職/兼職分開）
+    monthRestTarget[emp.name] = isPT
+      ? (storeSettings?.pt_monthly_rest_days ?? 15)
+      : (storeSettings?.ft_monthly_rest_days ?? 10)
 
     const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
     const weeksLeft = Math.max((monthlyCtx?.weeksRemaining || 0) + 1, 1)
@@ -1695,20 +1687,12 @@ function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // H17: Monthly rest day limit（硬限制）
-    // 正職：從門市設定讀取（預設10天）
-    // 兼職：根據週工時動態算（20h/週 ≈ 月排16天，休14天）
+    // H17: Monthly rest day limit（硬限制，直接從門市設定讀取）
     const totalDays = empAssignments.length
     const empIsPT_S7 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    let storeRestDays
-    if (empIsPT_S7) {
-      const weeklyH = emp.weekly_target_hours || 20
-      const avgShiftH = 6
-      const workDaysPerMonth = Math.round(Math.ceil(weeklyH / avgShiftH) * 4.3)
-      storeRestDays = Math.max(10, 30 - workDaysPerMonth)
-    } else {
-      storeRestDays = data.storeSettings?.ft_monthly_rest_days ?? 10
-    }
+    const storeRestDays = empIsPT_S7
+      ? (data.storeSettings?.pt_monthly_rest_days ?? 15)
+      : (data.storeSettings?.ft_monthly_rest_days ?? 10)
     const expectedRest = Math.round(totalDays * storeRestDays / 30)
     if (restEntries.length > expectedRest + 2) {
       violations.push({

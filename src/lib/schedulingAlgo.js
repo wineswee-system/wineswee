@@ -550,51 +550,43 @@ export function runProgrammaticSchedule(data) {
       )
 
       for (const emp of unassigned) {
-        // All slots at max capacity → rest (but check if FT already used up rest quota)
+        const pt = isPTEmp(emp)
         const allMaxMet = slotCoverage.every(s => s.covered >= (s.max_count || s.required_count + 2))
-        if (allMaxMet) {
-          const pt0 = isPTEmp(emp)
-          const prevRest0 = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-          const weekRest0 = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
-          const restLimit0 = monthRestTarget[emp.name] || (pt0 ? 15 : 10)
-          // 正職休滿了就不休，排空班（不排 = 最後會被填空或保持未排）
-          if (!pt0 && prevRest0 + weekRest0 >= restLimit0) { /* skip, don't auto-rest */ }
-          else { schedule[emp.name][date] = '休'; continue }
-        }
-
         const weekHours = getEmpWeekHours(emp.name)
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
-        const pt = isPTEmp(emp)
 
-        // 月工時上限到了 → 必須休
-        if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
+        // 正職：休假完全由 Step 1c 決定，這裡只在月工時硬上限到了才強制休
+        // 兼職：彈性自動休（時段滿/工時達標/月休未到上限）
+        if (!pt) {
+          // 正職：只有月工時硬上限才強制休
+          if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
+          // 其他情況繼續排班
+        } else {
+          // 兼職
+          const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
+          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
+          const monthRestUsed = prevRestUsed + thisWeekRest
+          const monthRestLimit = monthRestTarget[emp.name] || 15
 
-        // 計算月累積
-        const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
-        const empMonthMin = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
+          if (allMaxMet && monthRestUsed < monthRestLimit) { schedule[emp.name][date] = '休'; continue }
+          if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
 
-        // 月休天數：累計已休天數（前幾週 + 本週）
-        const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-        const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
-        const monthRestUsed = prevRestUsed + thisWeekRest
-        const monthRestLimit = monthRestTarget[emp.name] || (pt ? 15 : 10)
-
-        // 正職：休滿目標天數就不再休，繼續排班
-        // 兼職：月休是上限，只要沒超過就可以休
-        if (!pt && monthRestUsed >= monthRestLimit && !allMaxMet) {
-          // 正職月休已滿 → 強制排班
-        } else if (pt && monthRestUsed >= monthRestLimit && !allMaxMet) {
-          // 兼職月休已到上限 → 強制排班
-        } else if (monthHoursSoFar >= empMonthMin && allMinMet) {
-          // 月工時達標 + 時段人力夠 → 可以休（但正職已在上面擋住）
-          schedule[emp.name][date] = '休'; continue
+          const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
+          const empMonthMin = monthTargetMap[emp.name]?.min || 80
+          if (monthHoursSoFar >= empMonthMin && allMinMet && monthRestUsed < monthRestLimit) {
+            schedule[emp.name][date] = '休'; continue
+          }
         }
+
+        // 計算月累積工時和缺口
+        const monthHrsSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
+        const empMonthTarget = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
 
         // 正職：動態計算需要的班時（9-11h gross），確保能達到月 150h
         // 兼職：根據月時數缺口動態調整班長（4-8h）
         const ftIdeal = calcFTGross(emp.name)
-        const monthHoursDeficit = empMonthMin - monthHoursSoFar
+        const monthHoursDeficit = empMonthTarget - monthHrsSoFar
         const ptIdeal = monthHoursDeficit > 30 ? 8 : monthHoursDeficit > 15 ? 7 : 6
         const grossDurations = pt
           ? [ptIdeal, ptIdeal - 1, ptIdeal - 2, ptIdeal - 3].filter(h => h >= 3 && h <= maxGrossH)
@@ -716,17 +708,13 @@ export function runProgrammaticSchedule(data) {
     const toAssign = employees.filter(emp => {
       if (schedule[emp.name][date]) return false
       if (restDayPlan[emp.name].has(date)) return false
-      // If already at target hours, auto-rest — 但月休用完就不能再休
+      // 正職：休假完全由 Step 1c 控制，不自動加休
+      // 兼職：週工時達標且月休未滿上限 → 可以自動休
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
-        const restLimit = monthRestTarget[emp.name] || 10
-        if (getMonthRestUsed(emp.name) >= restLimit) {
-          return true  // 月休已滿，繼續排班
-        }
-        // 正職：月休目標是硬性的，休滿就不再自動休
         const pt = isPTEmp(emp)
-        if (!pt && getMonthRestUsed(emp.name) >= restLimit) {
-          return true
-        }
+        if (!pt) return true  // 正職繼續排班，不自動休
+        const restLimit = monthRestTarget[emp.name] || 15
+        if (getMonthRestUsed(emp.name) >= restLimit) return true  // PT 月休到上限
         schedule[emp.name][date] = '休'
         return false
       }

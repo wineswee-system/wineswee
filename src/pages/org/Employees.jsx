@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { createAssignment, rotatePrimary, closeActivePrimary } from '../../lib/assignments'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
 import EmployeeDetail from '../../components/EmployeeDetail'
+import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
@@ -59,6 +61,7 @@ export default function Employees() {
   const [editForm, setEditForm] = useState({})
   const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
+  const [showCsvImport, setShowCsvImport] = useState(false)
 
   const deptName = (id) => departments.find(d => d.id === id)?.name || ''
   const storeName = (id) => locations.find(l => l.id === id)?.name || ''
@@ -104,6 +107,16 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => [...prev, data])
         setShowModal(false)
+        // Create 主要 assignment for the new hire
+        await createAssignment({
+          employee_id: data.id,
+          department_id: data.department_id ?? null,
+          store_id: data.store_id ?? null,
+          position: data.position || null,
+          employment_type: data.employment_type || '全職',
+          start_date: data.join_date || new Date().toISOString().slice(0, 10),
+          is_active: data.status === '在職',
+        })
         setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
@@ -166,6 +179,8 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
         setShowResignModal(false)
+        // Close active 主要 assignment with the resignation date
+        await closeActivePrimary(data.id, resignDate)
         // Cleanup: remove future schedules, cancel pending leaves/tasks
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
@@ -212,6 +227,13 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
         setShowEditModal(false)
+        // Rotate 主要 assignment if dept/store/position/employment_type changed
+        await rotatePrimary(data.id, {
+          department_id: data.department_id ?? null,
+          store_id: data.store_id ?? null,
+          position: data.position || null,
+          employment_type: data.employment_type || '全職',
+        })
       } else {
         // .single() returned no rows — try without .single()
         const { error: e2 } = await supabase.from('employees').update(payload).eq('id', selectedEmp.id)
@@ -239,6 +261,16 @@ export default function Employees() {
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
         setShowRehireModal(false)
+        // Open a fresh 主要 assignment on rehire
+        await createAssignment({
+          employee_id: data.id,
+          department_id: data.department_id ?? null,
+          store_id: data.store_id ?? null,
+          position: data.position || null,
+          employment_type: data.employment_type || '全職',
+          start_date: new Date().toISOString().slice(0, 10),
+          is_active: true,
+        })
       }
     } catch (err) {
       console.error('Operation failed:', err)
@@ -268,7 +300,10 @@ export default function Employees() {
             <h2><span className="header-icon">👤</span> 員工</h2>
             <p>員工基本資料管理（到職 / 離職）</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>
+          </div>
         </div>
       </div>
 
@@ -442,7 +477,17 @@ export default function Employees() {
               </select>
             </Field>
             <Field label="職稱">
-              <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => set('position', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => {
+                const pos = e.target.value
+                setForm(f => {
+                  const next = { ...f, position: pos }
+                  if (pos && (pos.includes('門市') || pos.includes('店長'))) {
+                    const ops = departments.find(d => d.name === '營運部')
+                    if (ops) next.department_id = ops.id
+                  }
+                  return next
+                })
+              }}>
                 <option value="">請選擇</option>
                 <optgroup label="管理職">
                   {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
@@ -457,7 +502,18 @@ export default function Employees() {
             </Field>
           </div>
           <Field label="門市 / 分店">
-            <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''} onChange={e => set('store_id', e.target.value ? Number(e.target.value) : null)}>
+            <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''} onChange={e => {
+              const sid = e.target.value ? Number(e.target.value) : null
+              setForm(f => {
+                const next = { ...f, store_id: sid }
+                // 門市人員一律歸屬營運部
+                if (sid) {
+                  const ops = departments.find(d => d.name === '營運部')
+                  if (ops) next.department_id = ops.id
+                }
+                return next
+              })
+            }}>
               <option value="">請選擇</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -557,7 +613,17 @@ export default function Employees() {
               </select>
             </Field>
             <Field label="職稱">
-              <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => setE('position', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => {
+                const pos = e.target.value
+                setEditForm(f => {
+                  const next = { ...f, position: pos }
+                  if (pos && (pos.includes('門市') || pos.includes('店長'))) {
+                    const ops = departments.find(d => d.name === '營運部')
+                    if (ops) next.department_id = ops.id
+                  }
+                  return next
+                })
+              }}>
                 <option value="">請選擇</option>
                 <optgroup label="管理職">
                   {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
@@ -572,7 +638,18 @@ export default function Employees() {
             </Field>
           </div>
           <Field label="門市 / 分店">
-            <select className="form-input" style={{ width: '100%' }} value={editForm.store_id ?? ''} onChange={e => setE('store_id', e.target.value ? Number(e.target.value) : null)}>
+            <select className="form-input" style={{ width: '100%' }} value={editForm.store_id ?? ''} onChange={e => {
+              const sid = e.target.value ? Number(e.target.value) : null
+              setEditForm(f => {
+                const next = { ...f, store_id: sid }
+                // 門市人員一律歸屬營運部
+                if (sid) {
+                  const ops = departments.find(d => d.name === '營運部')
+                  if (ops) next.department_id = ops.id
+                }
+                return next
+              })
+            }}>
               <option value="">請選擇</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -598,6 +675,19 @@ export default function Employees() {
             </select>
           </Field>
         </Modal>
+      )}
+
+      {showCsvImport && (
+        <AssignmentCsvImport
+          employees={employees}
+          departments={departments}
+          stores={locations}
+          onClose={() => setShowCsvImport(false)}
+          onDone={() => {
+            // refresh employee list so counts/stat cards update
+            getEmployees().then(r => setEmployees(r.data || []))
+          }}
+        />
       )}
 
       {/* Employee Detail Modal */}

@@ -641,7 +641,9 @@ export function runProgrammaticSchedule(data) {
         if (bestWindow && bestScore > -50) {
           doAssign(emp, bestWindow)
         } else {
-          schedule[emp.name][date] = '休'
+          // 正職：找不到班也不自動休，留空讓後續補班處理
+          if (!isPTEmp(emp)) { /* 不休，留空 */ }
+          else { schedule[emp.name][date] = '休' }
         }
       }
     }
@@ -886,10 +888,12 @@ export function runProgrammaticSchedule(data) {
           }
           shiftCounts[fallback.name] = (shiftCounts[fallback.name] || 0) + 1
         } else {
-          schedule[emp.name][date] = '休'
+          // 正職不自動休
+          if (isPTEmp(emp)) schedule[emp.name][date] = '休'
         }
       } else {
-        schedule[emp.name][date] = '休'
+        // 正職不自動休
+        if (isPTEmp(emp)) schedule[emp.name][date] = '休'
       }
     }
   }
@@ -1149,6 +1153,35 @@ export function runProgrammaticSchedule(data) {
     }
   }
   } // end else (shift-based mode)
+
+  // ── Step 3b: Fill unassigned FT cells ──
+  // 正職留空的格子（非 Step 1c 排休的）需要補班，不能變成休
+  for (const emp of employees) {
+    if (isPTEmp(emp)) continue
+    for (const date of weekDates) {
+      if (schedule[emp.name][date]) continue // 已排班或已排休
+      if (restDayPlan[emp.name].has(date)) continue // Step 1c 規劃的休假
+
+      // 正職空格 → 排第一個合法班別
+      const dow = new Date(date).getDay()
+      const isWeekend = isWeekendDay(dow)
+      const eligible = sortedShifts.filter(sd => {
+        if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
+        if (sd.day_type === 'weekday' && isWeekend) return false
+        if (sd.day_type === 'weekend' && !isWeekend) return false
+        return true
+      })
+      if (eligible.length > 0) {
+        const sd = eligible[0]
+        schedule[emp.name][date] = sd.name
+        actualTimes[`${emp.name}_${date}`] = {
+          start: sd.start_time?.slice(0, 5),
+          end: sd.end_time?.slice(0, 5),
+          hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60,
+        }
+      }
+    }
+  }
 
   // ── Step 4: Build assignments ──
   const assignments = []

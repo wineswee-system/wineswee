@@ -62,6 +62,18 @@ export function runProgrammaticSchedule(data) {
   const minStaff = storeSettings?.minStaff || 1
   const useTimeSlotMode = timeSlots.length > 0  // 時段覆蓋制 or 班別制
 
+  // Guard: abort early if no shift definitions and no time slots
+  if (shiftDefs.length === 0 && !useTimeSlotMode) {
+    return {
+      assignments: [],
+      errors: [{ employee: '-', constraint: 'SYSTEM', severity: 'error', message: '班別定義為空，請先到「門市設定」新增班別' }],
+      warnings: [],
+      violations: [],
+      reasoning: '無法排班：缺少班別定義',
+      meta: { mode: 'shift', algorithm: 'programmatic-v2' },
+    }
+  }
+
   // Work system constraints (標準工時 / 4週變形 etc.)
   const workSystem = storeSettings?.workHourSystem || storeSettings?.work_hour_system || '標準工時'
   const wsConstraints = getWorkSystemConstraints(workSystem)

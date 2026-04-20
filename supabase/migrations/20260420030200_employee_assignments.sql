@@ -111,8 +111,13 @@ WHERE NOT EXISTS (
 
 -- ────────────────────────────────────────────────────────────
 -- 5. Current-state convenience view (joins master + active 主要)
+--
+--    DROP + CREATE (not CREATE OR REPLACE) because phase3_1_restore added
+--    columns to employees; CREATE OR REPLACE VIEW cannot change the column
+--    shape of an existing view.
 -- ────────────────────────────────────────────────────────────
-CREATE OR REPLACE VIEW public.v_employees_current AS
+DROP VIEW IF EXISTS public.v_employees_current CASCADE;
+CREATE VIEW public.v_employees_current AS
 SELECT
   e.*,
   ea.id               AS assignment_id,

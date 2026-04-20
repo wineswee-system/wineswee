@@ -57,8 +57,11 @@ export default function Employees() {
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
   const [editForm, setEditForm] = useState({})
-  const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
+
+  const deptName = (id) => departments.find(d => d.id === id)?.name || ''
+  const storeName = (id) => locations.find(l => l.id === id)?.name || ''
 
   useEffect(() => {
     Promise.all([
@@ -71,7 +74,7 @@ export default function Employees() {
       setEmployees(e.data || [])
       setDepartments(depts)
       setLocations(locs)
-      setForm(f => ({ ...f, dept: depts[0]?.name || '', store: locs[0]?.name || '' }))
+      setForm(f => ({ ...f, department_id: depts[0]?.id || null, store_id: locs[0]?.id || null }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -89,18 +92,26 @@ export default function Employees() {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
       const posInfo = POSITIONS.find(p => p.label === form.position)
       const role = posInfo?.level || 'store_staff'
-      const { data, error } = await createEmployee({ ...form, avatar, role })
+      const payload = {
+        ...form,
+        department_id: form.department_id ? Number(form.department_id) : null,
+        store_id: form.store_id ? Number(form.store_id) : null,
+        avatar,
+        role,
+      }
+      const { data, error } = await createEmployee(payload)
       if (error) throw error
       if (data) {
         setEmployees(prev => [...prev, data])
         setShowModal(false)
-        setForm({ name: '', name_en: '', dept: departments[0]?.name || '', position: '', store: locations[0]?.name || '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
         if (tpl) {
+          const storeLabel = storeName(data.store_id)
           const { data: inst } = await supabase.from('workflow_instances').insert({
-            template_name: tpl.name, store: data.store || '',
+            template_name: tpl.name, store: storeLabel,
             status: '進行中', started_by: '系統',
           }).select().single()
           if (inst && tpl.steps?.length) {
@@ -108,7 +119,7 @@ export default function Employees() {
               instance_id: inst.id, step_order: i + 1,
               title: s.title, description: s.description,
               role: s.role, assignee: data.name,
-              store: data.store || '', status: '待處理',
+              store: storeLabel, status: '待處理',
             }))
             await supabase.from('workflow_steps').insert(stepRows)
           }
@@ -172,8 +183,8 @@ export default function Employees() {
     setSelectedEmp(emp)
     setEditForm({
       name: emp.name || '', name_en: emp.name_en || '',
-      dept: emp.dept || '', position: emp.position || '',
-      store: emp.store || '', email: emp.email || '',
+      department_id: emp.department_id ?? null, position: emp.position || '',
+      store_id: emp.store_id ?? null, email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
       system_role: emp.role || 'store_staff',
@@ -184,15 +195,18 @@ export default function Employees() {
   const handleEdit = async () => {
     if (!selectedEmp) { alert('未選擇員工'); return }
     try {
-      const { dept, store, supervisor, system_role, join_date, ...rest } = editForm
+      const { system_role, join_date, department_id, store_id, ...rest } = editForm
       const role = system_role || selectedEmp.role || 'store_staff'
       // Convert empty strings to null for unique-constrained fields
       if (rest.email !== undefined) rest.email = rest.email?.trim() || null
       if (rest.phone !== undefined) rest.phone = rest.phone?.trim() || null
       if (join_date) rest.join_date = join_date
-      const payload = { ...rest, role }
-      // dept/store/supervisor TEXT columns dropped \u2014 use FK ids if provided in form
-      void dept; void store; void supervisor
+      const payload = {
+        ...rest,
+        role,
+        department_id: department_id ? Number(department_id) : null,
+        store_id: store_id ? Number(store_id) : null,
+      }
       const { data, error } = await updateEmployee(selectedEmp.id, payload)
       if (error) throw error
       if (data) {
@@ -239,8 +253,8 @@ export default function Employees() {
     !e.is_archived &&
     (statusFilter === '' || e.status === statusFilter) &&
     (typeFilter === '' || (e.employment_type || '全職') === typeFilter) &&
-    (storeFilter === '' || e.store === storeFilter || e.store_id === Number(storeFilter)) &&
-    (deptFilter === '' || e.dept === deptFilter || e.department_id === Number(deptFilter)) &&
+    (storeFilter === '' || e.store_id === Number(storeFilter)) &&
+    (deptFilter === '' || e.department_id === Number(deptFilter)) &&
     (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search) || e.employee_number?.includes(search))
   )
 
@@ -305,14 +319,14 @@ export default function Employees() {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
             <option value="">全部門市</option>
-            {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏢 部門</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
             <option value="">全部部門</option>
-            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
       </div>
@@ -350,9 +364,9 @@ export default function Employees() {
                     </div>
                   </td>
                   <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: (empType?.color || '#22c55e') + '22', color: empType?.color || '#22c55e' }}>{empType?.label || '全職'}</span></td>
-                  <td>{e.dept}</td>
+                  <td>{deptName(e.department_id)}</td>
                   <td>{e.position}</td>
-                  <td>{e.store}</td>
+                  <td>{storeName(e.store_id)}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}><MaskedText value={e.email} type="email" canReveal={true} /></td>
                   <td style={{ fontSize: 12 }}><MaskedText value={e.phone} type="phone" canReveal={true} /></td>
                   <td style={{ fontSize: 12 }}>
@@ -422,9 +436,9 @@ export default function Employees() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="部門">
-              <select className="form-input" style={{ width: '100%' }} value={form.dept} onChange={e => set('dept', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.department_id ?? ''} onChange={e => set('department_id', e.target.value ? Number(e.target.value) : null)}>
                 <option value="">請選擇</option>
-                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
             <Field label="職稱">
@@ -443,9 +457,9 @@ export default function Employees() {
             </Field>
           </div>
           <Field label="門市 / 分店">
-            <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
+            <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''} onChange={e => set('store_id', e.target.value ? Number(e.target.value) : null)}>
               <option value="">請選擇</option>
-              {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </Field>
           <Field label="Email *">
@@ -488,7 +502,7 @@ export default function Employees() {
       {showResignModal && selectedEmp && (
         <Modal title={`員工離職 — ${selectedEmp.name}`} onClose={() => setShowResignModal(false)} onSubmit={handleResign} submitText="確認離職">
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)', fontSize: 13, color: 'var(--accent-red)', marginBottom: 12 }}>
-            將 <b>{selectedEmp.name}</b>（{selectedEmp.dept} · {selectedEmp.position}）設為離職狀態
+            將 <b>{selectedEmp.name}</b>（{deptName(selectedEmp.department_id)} · {selectedEmp.position}）設為離職狀態
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="離職日期">
@@ -537,9 +551,9 @@ export default function Employees() {
               </select>
             </Field>
             <Field label="部門">
-              <select className="form-input" style={{ width: '100%' }} value={editForm.dept} onChange={e => setE('dept', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={editForm.department_id ?? ''} onChange={e => setE('department_id', e.target.value ? Number(e.target.value) : null)}>
                 <option value="">請選擇</option>
-                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
             <Field label="職稱">
@@ -558,9 +572,9 @@ export default function Employees() {
             </Field>
           </div>
           <Field label="門市 / 分店">
-            <select className="form-input" style={{ width: '100%' }} value={editForm.store} onChange={e => setE('store', e.target.value)}>
+            <select className="form-input" style={{ width: '100%' }} value={editForm.store_id ?? ''} onChange={e => setE('store_id', e.target.value ? Number(e.target.value) : null)}>
               <option value="">請選擇</option>
-              {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </Field>
           <Field label="Email">

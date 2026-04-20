@@ -964,6 +964,7 @@ export default function Schedule() {
           preferences={preferences} setPreferences={setPreferences}
           storeFilter={storeFilter} locations={locations}
           getStoreShifts={getStoreShifts}
+          schedules={schedules}
         />
       )}
 

@@ -5,22 +5,39 @@ const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 
 export default function PreferencesTab({
   filtered, shiftDefs, preferences, setPreferences,
-  storeFilter, locations, getStoreShifts,
+  storeFilter, locations, getStoreShifts, schedules,
 }) {
   const [availability, setAvailability] = useState({})
   const [editingAvail, setEditingAvail] = useState(null)
 
-  // Get shifts for current store only (or deduplicated if all stores)
-  const visibleShifts = storeFilter
-    ? getStoreShifts(storeFilter)
-    : (() => {
-        const seen = new Set()
-        return shiftDefs.filter(d => {
-          if (seen.has(d.name)) return false
-          seen.add(d.name)
-          return true
-        })
-      })()
+  // Get shifts for current store, with fallback to extracting from actual schedules
+  const visibleShifts = (() => {
+    // 1. Try shift_definitions (filtered by store or deduplicated)
+    let defs = storeFilter && getStoreShifts
+      ? getStoreShifts(storeFilter)
+      : (() => {
+          const seen = new Set()
+          return shiftDefs.filter(d => {
+            if (seen.has(d.name)) return false
+            seen.add(d.name)
+            return true
+          })
+        })()
+
+    if (defs.length > 0) return defs
+
+    // 2. Fallback: extract unique shift names from actual schedule data
+    const seen = new Set()
+    const fromSchedules = []
+    for (const s of (schedules || [])) {
+      if (!s.shift || seen.has(s.shift)) continue
+      // Skip absence types
+      if (['休', '補休', '特休', '病', '會議', '產', '事'].includes(s.shift)) continue
+      seen.add(s.shift)
+      fromSchedules.push({ id: `sched-${s.shift}`, name: s.shift })
+    }
+    return fromSchedules
+  })()
 
   useEffect(() => {
     supabase.from('employee_availability').select('*').then(({ data }) => {
@@ -142,6 +159,11 @@ export default function PreferencesTab({
 
                 {/* Shift preference tags */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {visibleShifts.length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      尚無班別定義，請先到「門市設定」新增班別
+                    </span>
+                  )}
                   {visibleShifts.map(d => {
                     const isPreferred = pref?.preferred_shifts?.includes(d.name)
                     const isBlocked = pref?.avoid_shifts?.includes(d.name)

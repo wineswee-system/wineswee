@@ -97,7 +97,10 @@ SELECT
   e.position,
   COALESCE(e.employment_type, '全職'),
   '主要',
-  COALESCE(e.join_date, CURRENT_DATE),
+  -- Guarantee start_date <= end_date even when join_date is missing or
+  -- after resign_date (dirty legacy data): fall back to the earliest
+  -- known date.
+  COALESCE(e.join_date, e.resign_date, CURRENT_DATE),
   e.resign_date,
   (e.status = '在職')
 FROM public.employees e

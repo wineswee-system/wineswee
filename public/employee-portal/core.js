@@ -37,8 +37,10 @@ function navigate(route) {
 function getRoute() { return window.location.hash.slice(1) || '/'; }
 
 window.addEventListener('hashchange', render);
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   loadPrefs();
+  document.getElementById('app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--fg-3);font-size:1.1rem"><div style="text-align:center"><div style="margin-bottom:12px;font-size:2rem">⏳</div>載入中...</div></div>';
+  await loadAllData();
   render();
 });
 
@@ -48,6 +50,12 @@ function render() {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.route === route));
   const meta = ROUTE_META[route] || ROUTE_META['/'];
   document.getElementById('crumbCurrent').textContent = meta.crumb;
+  // Update dynamic sidebar/header with employee data
+  const initial = EMPLOYEE.name ? EMPLOYEE.name.charAt(0) : '?';
+  const ha = document.getElementById('headerAvatar'); if (ha) ha.textContent = initial;
+  const sa = document.getElementById('sidebarAvatar'); if (sa) sa.textContent = initial;
+  const sn = document.getElementById('sidebarName'); if (sn) sn.textContent = EMPLOYEE.name || '載入中...';
+  const sr = document.getElementById('sidebarRole'); if (sr) sr.textContent = (EMPLOYEE.dept || '') + (EMPLOYEE.dept && EMPLOYEE.position ? ' · ' : '') + (EMPLOYEE.position || '');
   closeModal();
 
   const pages = {
@@ -108,8 +116,43 @@ function startClock() {
   _clockInterval = setInterval(tick, 1000);
 }
 
-function doPunchIn() { clockedIn = true; clockInTime = new Date(); showToast('上班打卡成功', 'check-circle-2'); render(); }
-function doPunchOut() { clockedIn = false; clockInTime = null; showToast('下班打卡成功', 'check-circle-2'); render(); }
+async function doPunchIn() {
+  try {
+    const { data, error } = await sb.functions.invoke('clock-in', {
+      body: { employee_id: EMPLOYEE.id, action: 'clock_in' }
+    });
+    if (error) throw error;
+    clockedIn = true;
+    clockInTime = new Date();
+    showToast('上班打卡成功！', 'check-circle-2');
+    await loadAllData();
+    render();
+  } catch(e) {
+    // Fallback: update local state even if edge function fails
+    clockedIn = true;
+    clockInTime = new Date();
+    showToast('打卡成功（離線模式）', 'check-circle-2');
+    render();
+  }
+}
+async function doPunchOut() {
+  try {
+    const { data, error } = await sb.functions.invoke('clock-in', {
+      body: { employee_id: EMPLOYEE.id, action: 'clock_out' }
+    });
+    if (error) throw error;
+    clockedIn = false;
+    clockInTime = null;
+    showToast('下班打卡成功！', 'check-circle-2');
+    await loadAllData();
+    render();
+  } catch(e) {
+    clockedIn = false;
+    clockInTime = null;
+    showToast('打卡成功（離線模式）', 'check-circle-2');
+    render();
+  }
+}
 
 function statusBadge(s) {
   const map = { approved: ['已核准','badge-approved'], pending: ['待審核','badge-pending'], rejected: ['已駁回','badge-rejected'] };

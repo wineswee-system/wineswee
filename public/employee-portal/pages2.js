@@ -24,16 +24,37 @@ function renderExpense() {
 function openExpenseModal() {
   openModal(`
     <div class="modal-title">新增費用申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
-    <div class="form-group"><label>費用類別</label><select><option>交通</option><option>住宿</option><option>餐飲</option><option>設備</option><option>其他</option></select></div>
-    <div class="form-group"><label>金額</label><input type="number" placeholder="請輸入金額"></div>
-    <div class="form-group"><label>日期</label><input type="date" value="2026-04-17"></div>
-    <div class="form-group"><label>說明</label><textarea rows="3" placeholder="請輸入費用說明..."></textarea></div>
+    <div class="form-group"><label>費用類別</label><select id="expCategory"><option>交通</option><option>住宿</option><option>餐飲</option><option>設備</option><option>其他</option></select></div>
+    <div class="form-group"><label>金額</label><input id="expAmount" type="number" placeholder="請輸入金額"></div>
+    <div class="form-group"><label>日期</label><input id="expDate" type="date" value="2026-04-17"></div>
+    <div class="form-group"><label>說明</label><textarea id="expDesc" rows="3" placeholder="請輸入費用說明..."></textarea></div>
     <div class="form-group"><label>收據附件</label><input type="file" accept=".pdf,.jpg,.jpeg,.png" style="padding:6px"><div style="font-size:.75rem;color:var(--fg-4);margin-top:4px">上傳收據照片或 PDF</div></div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="closeModal();showToast('費用申請已送出！','check-circle-2')">送出申請</button>
+      <button class="btn btn-primary" onclick="submitExpense()">送出申請</button>
     </div>
   `);
+}
+
+async function submitExpense() {
+  const category = document.querySelector('#expCategory').value;
+  const amount = parseInt(document.querySelector('#expAmount').value);
+  const date = document.querySelector('#expDate').value;
+  const desc = document.querySelector('#expDesc').value;
+  if (!amount || amount <= 0) { showToast('請輸入有效金額', 'alert-circle'); return; }
+  const { error } = await sb.from('expenses').insert({
+    employee: EMPLOYEE.name,
+    category: category,
+    amount: amount,
+    date: date,
+    description: desc,
+    status: '待審核'
+  });
+  if (error) { showToast('送出失敗：' + error.message, 'alert-circle'); return; }
+  closeModal();
+  showToast('費用申請已送出！', 'check-circle-2');
+  await loadAllData();
+  render();
 }
 
 function openBizTripModal() {

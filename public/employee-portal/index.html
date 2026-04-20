@@ -433,7 +433,7 @@ tbody tr:hover { background: var(--bg-2); }
     <button class="header-btn" onclick="toggleTheme()" title="切換主題"><i data-lucide="sun-moon" style="width:18px;height:18px"></i></button>
     <button class="header-btn" onclick="toggleTweaks()" title="設定"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
     <button class="header-btn" onclick="showToast('尚無新通知','bell')" title="通知"><i data-lucide="bell" style="width:18px;height:18px"></i><div class="dot"></div></button>
-    <div class="header-avatar" onclick="navigate('/profile')">洪</div>
+    <div class="header-avatar" id="headerAvatar" onclick="navigate('/profile')">...</div>
   </div>
 </header>
 
@@ -441,10 +441,10 @@ tbody tr:hover { background: var(--bg-2); }
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <nav class="sidebar" id="sidebar">
   <div class="me-card" style="cursor:pointer" onclick="navigate('/profile')">
-    <div class="me-card-avatar">洪</div>
+    <div class="me-card-avatar" id="sidebarAvatar">...</div>
     <div class="me-card-info">
-      <div class="me-card-name">洪伯嘉</div>
-      <div class="me-card-role">資訊部 · 資深工程師</div>
+      <div class="me-card-name" id="sidebarName">載入中...</div>
+      <div class="me-card-role" id="sidebarRole">...</div>
     </div>
   </div>
 
@@ -557,6 +557,7 @@ tbody tr:hover { background: var(--bg-2); }
 </div>
 
 <!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="data.js"></script>
 <script src="core.js"></script>
 <script src="pages1a.js"></script>

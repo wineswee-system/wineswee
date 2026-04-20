@@ -309,17 +309,40 @@ function renderLeave() {
 function openLeaveModal() {
   openModal(`
     <div class="modal-title">新增請假<span class="modal-close" onclick="closeModal()">&times;</span></div>
-    <div class="form-group"><label>假別</label><select><option>特休</option><option>事假</option><option>病假</option><option>家庭照顧假</option><option>喪假</option><option>婚假</option></select></div>
-    <div class="form-group"><label>起始日</label><input type="date" value="2026-04-21"></div>
-    <div class="form-group"><label>結束日</label><input type="date" value="2026-04-21"></div>
-    <div class="form-group"><label>事由</label><textarea rows="3" placeholder="請輸入請假事由..."></textarea></div>
-    <div class="form-group"><label>職務代理人</label><select><option value="">請選擇代理人</option><option>Vicky</option><option>SNOW</option><option>Ken</option><option>Dave</option><option>Alicia</option><option>Zoey</option><option>學文</option></select></div>
+    <div class="form-group"><label>假別</label><select id="leaveType"><option>特休</option><option>事假</option><option>病假</option><option>家庭照顧假</option><option>喪假</option><option>婚假</option></select></div>
+    <div class="form-group"><label>起始日</label><input id="leaveStart" type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>結束日</label><input id="leaveEnd" type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>事由</label><textarea id="leaveReason" rows="3" placeholder="請輸入請假事由..."></textarea></div>
+    <div class="form-group"><label>職務代理人</label><select id="leaveProxy"><option value="">請選擇代理人</option>${CONTACTS_FULL.filter(c=>c.name!==EMPLOYEE.name).map(c=>'<option>'+c.name+'</option>').join('')}</select></div>
     <div class="form-group"><label>附件</label><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="padding:6px"><div style="font-size:.75rem;color:var(--fg-4);margin-top:4px">上傳附檔（診斷證明等）</div></div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="closeModal();showToast('請假單已送出！','check-circle-2')">送出申請</button>
+      <button class="btn btn-primary" onclick="submitLeave()">送出申請</button>
     </div>
   `);
+}
+
+async function submitLeave() {
+  const type = document.querySelector('#leaveType').value;
+  const start = document.querySelector('#leaveStart').value;
+  const end = document.querySelector('#leaveEnd').value;
+  const reason = document.querySelector('#leaveReason').value;
+  if (!start || !end) { showToast('請填寫起迄日期', 'alert-circle'); return; }
+  const days = Math.ceil((new Date(end) - new Date(start)) / 86400000) + 1;
+  const { error } = await sb.from('leave_requests').insert({
+    employee: EMPLOYEE.name,
+    type: type,
+    start_date: start,
+    end_date: end,
+    days: days,
+    reason: reason,
+    status: '待審核'
+  });
+  if (error) { showToast('送出失敗：' + error.message, 'alert-circle'); return; }
+  closeModal();
+  showToast('請假單已送出！', 'check-circle-2');
+  await loadAllData();
+  render();
 }
 
 // ========== OVERTIME PAGE ==========
@@ -346,10 +369,10 @@ function renderOvertime() {
 function openOTModal() {
   openModal(`
     <div class="modal-title">新增加班申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
-    <div class="form-group"><label>加班日期</label><input type="date" value="2026-04-18"></div>
-    <div class="form-group"><label>開始時間</label><input type="time" value="18:00"></div>
-    <div class="form-group"><label>結束時間</label><input type="time" value="21:00"></div>
-    <div class="form-group"><label>加班事由</label><textarea rows="3" placeholder="請輸入加班事由..."></textarea></div>
+    <div class="form-group"><label>加班日期</label><input id="otDate" type="date" value="2026-04-18"></div>
+    <div class="form-group"><label>開始時間</label><input id="otStart" type="time" value="18:00"></div>
+    <div class="form-group"><label>結束時間</label><input id="otEnd" type="time" value="21:00"></div>
+    <div class="form-group"><label>加班事由</label><textarea id="otReason" rows="3" placeholder="請輸入加班事由..."></textarea></div>
     <div class="form-group"><label>補償方式</label>
       <div style="display:flex;gap:20px;padding:6px 0">
         <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:400;cursor:pointer"><input type="radio" name="otComp" value="pay" checked style="width:auto"> 加班費</label>
@@ -358,9 +381,34 @@ function openOTModal() {
     </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="closeModal();showToast('加班單已送出！','check-circle-2')">送出申請</button>
+      <button class="btn btn-primary" onclick="submitOT()">送出申請</button>
     </div>
   `);
+}
+
+async function submitOT() {
+  const date = document.querySelector('#otDate').value;
+  const startTime = document.querySelector('#otStart').value;
+  const endTime = document.querySelector('#otEnd').value;
+  const reason = document.querySelector('#otReason').value;
+  if (!date) { showToast('請填寫加班日期', 'alert-circle'); return; }
+  // Calculate hours
+  const s = startTime.split(':').map(Number);
+  const e = endTime.split(':').map(Number);
+  let hours = (e[0] * 60 + e[1] - s[0] * 60 - s[1]) / 60;
+  if (hours <= 0) hours = 1;
+  const { error } = await sb.from('overtime_requests').insert({
+    employee: EMPLOYEE.name,
+    date: date,
+    hours: Math.round(hours * 10) / 10,
+    reason: reason,
+    status: '待審核'
+  });
+  if (error) { showToast('送出失敗：' + error.message, 'alert-circle'); return; }
+  closeModal();
+  showToast('加班單已送出！', 'check-circle-2');
+  await loadAllData();
+  render();
 }
 
 // ========== PUNCH CORRECTION PAGE ==========
@@ -387,13 +435,36 @@ function renderPunch() {
 function openPunchModal() {
   openModal(`
     <div class="modal-title">新增補打卡<span class="modal-close" onclick="closeModal()">&times;</span></div>
-    <div class="form-group"><label>補卡日期</label><input type="date" value="2026-04-17"></div>
-    <div class="form-group"><label>補卡時間</label><input type="time" value="09:00"></div>
-    <div class="form-group"><label>類型</label><select><option>上班</option><option>下班</option></select></div>
-    <div class="form-group"><label>原因</label><textarea rows="3" placeholder="請輸入補打卡原因..."></textarea></div>
+    <div class="form-group"><label>補卡日期</label><input id="punchDate" type="date" value="2026-04-17"></div>
+    <div class="form-group"><label>補卡時間</label><input id="punchTime" type="time" value="09:00"></div>
+    <div class="form-group"><label>類型</label><select id="punchType"><option>上班</option><option>下班</option></select></div>
+    <div class="form-group"><label>原因</label><textarea id="punchReason" rows="3" placeholder="請輸入補打卡原因..."></textarea></div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="closeModal();showToast('補打卡單已送出！','check-circle-2')">送出申請</button>
+      <button class="btn btn-primary" onclick="submitPunch()">送出申請</button>
     </div>
   `);
+}
+
+async function submitPunch() {
+  const date = document.querySelector('#punchDate').value;
+  const time = document.querySelector('#punchTime').value;
+  const type = document.querySelector('#punchType').value;
+  const reason = document.querySelector('#punchReason').value;
+  if (!date || !time) { showToast('請填寫日期和時間', 'alert-circle'); return; }
+  // Insert as attendance_records correction (no dedicated table)
+  const isClockIn = type === '上班';
+  const updateData = isClockIn
+    ? { employee: EMPLOYEE.name, date: date, clock_in: time, status: '補卡' }
+    : { employee: EMPLOYEE.name, date: date, clock_out: time, status: '補卡' };
+  const { error } = await sb.from('attendance_records').upsert(updateData, { onConflict: 'employee,date', ignoreDuplicates: false });
+  if (error) {
+    // If upsert fails, try insert
+    const { error: insertErr } = await sb.from('attendance_records').insert(updateData);
+    if (insertErr) { showToast('送出失敗：' + insertErr.message, 'alert-circle'); return; }
+  }
+  closeModal();
+  showToast('補打卡單已送出！', 'check-circle-2');
+  await loadAllData();
+  render();
 }

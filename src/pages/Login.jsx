@@ -37,7 +37,7 @@ export default function Login() {
   }
 
   const handleLineLogin = () => {
-    window.location.href = `${SUPABASE_URL}/functions/v1/line-login?action=authorize`
+    window.location.href = `${SUPABASE_URL}/functions/v1/line-login?action=authorize&channel=workflow`
   }
 
   return (

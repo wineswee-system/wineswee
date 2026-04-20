@@ -259,28 +259,36 @@ export function runProgrammaticSchedule(data) {
   }
 
   // ── Step 1c: 主動分配休假 — 根據月休目標預排 ──
-  // 每週應休天數 = 月休目標 ÷ 4.3 週（取整）
-  // 已有 off_request 或 availability 排休的天數先扣除
+  // 四週變形：每 4 週至少 8 天休 → 每週至少 2 天
+  // 正職：確保月底達到 ft_monthly_rest_days（硬性最低）
+  // 兼職：彈性分配，不強制但不超過上限
+  const is4WeekFlex = wsConstraints.periodWeeks === 4
+  const minRestPerWeek = is4WeekFlex ? 2 : wsConstraints.weeklyRestMin || 2
+
   for (const emp of employees) {
+    const isPT = monthTargetMap[emp.name]?.isPT
     const monthRest = monthRestTarget[emp.name] || 10
     const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
     const weeksTotal = (monthlyCtx?.weeksRemaining ?? 3) + 1
     const restNeededThisMonth = Math.max(0, monthRest - prevRestUsed)
-    // 用 floor 取整：寧可少休一天留到後面的週，避免累積超標
-    const restPerWeek = Math.max(1, Math.floor(restNeededThisMonth / weeksTotal))
+
+    // 每週休假天數 = max(法定最低, 月目標均分)
+    // 正職用 ceil 確保達標，兼職用 floor 保持彈性
+    const avgPerWeek = isPT
+      ? Math.floor(restNeededThisMonth / weeksTotal)
+      : Math.ceil(restNeededThisMonth / weeksTotal)
+    const restPerWeek = Math.max(minRestPerWeek, avgPerWeek)
     const alreadyResting = weekDates.filter(d => restDayPlan[emp.name].has(d)).length
 
     if (alreadyResting < restPerWeek) {
-      // Need more rest days — pick days with lowest staffing demand
       const candidates = weekDates
         .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
         .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
-        .sort((a, b) => a.demand - b.demand) // pick low-demand days first
+        .sort((a, b) => a.demand - b.demand)
 
       let needed = restPerWeek - alreadyResting
       for (const c of candidates) {
         if (needed <= 0) break
-        // Don't rest if it would leave below minimum workers
         const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
         const workingAfter = employees.length - restingOnDay - 1
         if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue

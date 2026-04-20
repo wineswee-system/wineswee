@@ -5,24 +5,23 @@ import { useAuth } from '../contexts/AuthContext'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
 export default function Login() {
-  const { signIn, isAuthenticated, isAdmin, role } = useAuth()
+  const { signIn, isAuthenticated, isAdmin, role, profileReady } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Redirect if already authenticated — 一般員工進員工入口，管理層進主系統
+  // Redirect after profile is loaded — 一般員工進員工入口，管理層進主系統
   useEffect(() => {
-    if (isAuthenticated) {
-      const isStoreStaff = role?.name === 'store_staff' || (!isAdmin && role?.name !== 'manager' && role?.name !== 'office_staff')
-      if (isStoreStaff && role) {
-        window.location.href = '/employee-portal/'
-      } else {
-        navigate('/', { replace: true })
-      }
+    if (!isAuthenticated || !profileReady) return
+    const isStoreStaff = role?.name === 'store_staff'
+    if (isStoreStaff) {
+      window.location.href = '/employee-portal/'
+    } else {
+      navigate('/', { replace: true })
     }
-  }, [isAuthenticated, isAdmin, role])
+  }, [isAuthenticated, profileReady, role])
 
   // Show LINE login error if any (from redirect)
   useEffect(() => {

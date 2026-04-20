@@ -18,7 +18,7 @@ export async function getSupervisorById(employeeId) {
 
   const { data: supervisor } = await supabase
     .from('employees')
-    .select('id, name, line_user_id, email, role_id')
+    .select('id, name, email, role_id')
     .eq('id', emp.supervisor_id)
     .eq('status', '在職')
     .maybeSingle()
@@ -37,24 +37,7 @@ export async function getSupervisor(employeeName) {
 
   if (!emp) return null
   if (emp.supervisor_id) return getSupervisorById(emp.id)
-
-  // Fallback: TEXT-based supervisor (for unlinked data)
-  const { data: empFull } = await supabase
-    .from('employees')
-    .select('supervisor')
-    .eq('id', emp.id)
-    .maybeSingle()
-
-  if (!empFull?.supervisor) return null
-
-  const { data: supervisor } = await supabase
-    .from('employees')
-    .select('id, name, line_user_id, email, role_id')
-    .eq('name', empFull.supervisor)
-    .eq('status', '在職')
-    .maybeSingle()
-
-  return supervisor
+  return null
 }
 
 // 找到審核鏈（往上找到有特定權限的人）

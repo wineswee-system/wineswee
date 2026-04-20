@@ -886,13 +886,13 @@ create table inquiries (
 --  Seed Data（初始測試資料）
 -- ============================================================
 
--- RBAC seed data
+-- RBAC seed data — 5 roles
 insert into roles (name, description, level) values
-('admin', '系統管理員 — 最高權限', 100),
-('manager', '主管 — 可審核、查看完整資料', 80),
-('team_lead', '組長 — 可審核組內、有限查看', 60),
-('employee', '一般員工 — 基本操作', 20),
-('viewer', '訪客 — 唯讀', 10);
+('super_admin', '超級管理員 — 全系統全權限', 200),
+('admin', '管理員 — 全公司人資與系統管理', 100),
+('manager', '主管 — 管理所屬部門/分店', 80),
+('office_staff', '行政員工 — 後勤行政操作', 40),
+('store_staff', '門市員工 — 門市基本操作', 20);
 
 insert into permissions (code, name, module) values
 ('employee.view', '查看員工資料', '人資'),
@@ -912,16 +912,16 @@ insert into permissions (code, name, module) values
 ('audit.view', '查看稽核日誌', '系統');
 
 insert into role_permissions (role_id, permission_id) values
--- admin gets all
+-- super_admin gets all
 (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(1,9),(1,10),(1,11),(1,12),(1,13),(1,14),(1,15),
--- manager
-(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),(2,7),(2,8),(2,9),(2,10),(2,11),(2,12),(2,13),(2,15),
--- team_lead
-(3,1),(3,2),(3,4),(3,5),(3,9),(3,10),
--- employee
+-- admin: all HR + system
+(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),(2,14),(2,15),
+-- manager: view employees, view full, approve leave, view salary
+(3,1),(3,2),(3,4),(3,5),
+-- office_staff: view employees, view own salary
 (4,1),(4,5),
--- viewer
-(5,1);
+-- store_staff: view own data only
+(5,1),(5,5);
 
 insert into employees (name, name_en, dept, position, store, status, email, phone, join_date, avatar, role_id, supervisor) values
 ('王小明', 'Xiaoming Wang', '研發部', '資深工程師', '台北總部', '在職', 'xiaoming@company.com', '0912-345-678', '2022-03-15', '#3b82f6', 3, '劉佳玲'),

@@ -27,6 +27,9 @@ import LeaveCalendar from '../pages/hr/LeaveCalendar'
 import ProbationTracker from '../pages/hr/ProbationTracker'
 import HRAssistant from '../pages/hr/HRAssistant'
 import BenefitSettings from '../pages/hr/BenefitSettings'
+import LeaveBalances from '../pages/hr/LeaveBalances'
+import SalaryStructures from '../pages/hr/SalaryStructures'
+import Payroll from '../pages/hr/Payroll'
 
 export default function HRModule() {
   return (
@@ -59,6 +62,9 @@ export default function HRModule() {
       <Route path="probation" element={<ProbationTracker />} />
       <Route path="assistant" element={<HRAssistant />} />
       <Route path="benefit-settings" element={<BenefitSettings />} />
+      <Route path="leave-balances" element={<LeaveBalances />} />
+      <Route path="salary-structures" element={<SalaryStructures />} />
+      <Route path="payroll" element={<Payroll />} />
     </Routes>
   )
 }

@@ -72,11 +72,14 @@ export function runProgrammaticSchedule(data) {
   const offMap = new Set()
   for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
 
+  // 三級偏好制: ⭐ preferred（想上）/ ✅ neutral（可以）/ ❌ avoid（不行）
+  // 沒出現在任何清單的班別 = neutral（可以）
   const prefMap = {}
   for (const p of preferences) {
     prefMap[p.employee] = {
-      preferred: new Set(p.preferred_shifts || []),
-      avoid: new Set(p.avoid_shifts || []),
+      preferred: new Set(p.preferred_shifts || []),  // ⭐ 最想上
+      neutral: new Set(p.neutral_shifts || []),      // ✅ 可以上（明確表示）
+      avoid: new Set(p.avoid_shifts || []),           // ❌ 不行
     }
   }
 
@@ -762,8 +765,10 @@ export function runProgrammaticSchedule(data) {
         // Shift balance: prefer the shift with fewer people assigned (break ties)
         score -= current * 3
 
-        // Preference: "想上" still gets bonus even in pass 2 (they lost conflict but still prefer it)
-        if (pref?.preferred.has(shiftDef.name)) score += 15
+        // 三級偏好: ⭐ preferred +20, ✅ neutral +8, ❌ avoid = blocked (上面已 continue)
+        if (pref?.preferred.has(shiftDef.name)) score += 20
+        else if (pref?.neutral.has(shiftDef.name)) score += 8
+        // 沒在任何清單 = 隱性 neutral，不加不減
 
         // 月休已用完加分：強烈傾向排班
         if (monthRestExhausted) score += 60
@@ -820,6 +825,200 @@ export function runProgrammaticSchedule(data) {
         }
       } else {
         schedule[emp.name][date] = '休'
+      }
+    }
+  }
+
+  // ── Step 3a: Hybrid Mode — 彈性補班 ──────────────────────────
+  // 班別制排完後，檢查每日覆蓋率。如果有時段沒人顧，
+  // 動態產生非標準班次填補（不限定義好的班別）
+  if (storeSettings?.operating_hours || timeSlots.length > 0) {
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+    for (const date of weekDates) {
+      const dow = new Date(date).getDay()
+      const dayKey = dayNames[dow]
+
+      // Determine operating window
+      let opOpen = 9, opClose = 22 // defaults
+      if (storeSettings?.operating_hours?.[dayKey]) {
+        const oh = storeSettings.operating_hours[dayKey]
+        if (oh.open) opOpen = parseTime(oh.open)
+        if (oh.close) opClose = parseTime(oh.close)
+        if (opClose <= opOpen) opClose += 24 // cross midnight
+      }
+
+      // Build hourly coverage map from already-assigned shifts
+      const hourlyCoverage = {}
+      for (let h = Math.floor(opOpen); h < Math.ceil(opClose); h++) {
+        hourlyCoverage[h % 24] = 0
+      }
+
+      for (const emp of employees) {
+        const s = schedule[emp.name][date]
+        if (!s || isAbsence(s)) continue
+        const times = actualTimes[`${emp.name}_${date}`]
+        if (!times?.start || !times?.end) continue
+        let sh = parseTime(times.start)
+        let eh = parseTime(times.end)
+        if (eh <= sh) eh += 24
+        for (let h = Math.ceil(sh); h < Math.floor(eh); h++) {
+          if (hourlyCoverage[h % 24] !== undefined) hourlyCoverage[h % 24]++
+        }
+      }
+
+      // Find gaps (hours with 0 coverage during operating hours)
+      const gaps = Object.entries(hourlyCoverage)
+        .filter(([, count]) => count < (storeSettings?.minStaff || 1))
+        .map(([h]) => parseInt(h))
+        .sort((a, b) => a - b)
+
+      if (gaps.length === 0) continue
+
+      // Group consecutive gap hours into windows
+      const windows = []
+      let winStart = gaps[0], winEnd = gaps[0]
+      for (let i = 1; i < gaps.length; i++) {
+        if (gaps[i] === winEnd + 1) {
+          winEnd = gaps[i]
+        } else {
+          windows.push({ start: winStart, end: winEnd + 1 })
+          winStart = gaps[i]
+          winEnd = gaps[i]
+        }
+      }
+      windows.push({ start: winStart, end: winEnd + 1 })
+
+      // Try to fill gaps with resting employees using dynamic shifts
+      for (const win of windows) {
+        const shiftStart = `${String(win.start).padStart(2, '0')}:00`
+        const shiftEnd = `${String(win.end).padStart(2, '0')}:00`
+        const shiftHours = win.end - win.start
+        if (shiftHours < 3 || shiftHours > 12) continue // too short or too long
+
+        // Find available resting employees
+        const candidates = employees.filter(emp => {
+          if (schedule[emp.name][date] && schedule[emp.name][date] !== '休') return false
+          if (offMap.has(`${emp.name}_${date}`)) return false
+          // Check legal: 11h gap, daily max, etc.
+          const fakeShiftDef = { name: `flex_${shiftStart}-${shiftEnd}`, start_time: shiftStart, end_time: shiftEnd }
+          if (!isLegallyValid(emp, fakeShiftDef, date, data)) return false
+          // Check availability window
+          if (availMap[emp.name]) {
+            const dayAvail = availMap[emp.name][dow]
+            if (dayAvail && !(win.start >= dayAvail.start && win.end <= dayAvail.end)) return false
+          }
+          return true
+        })
+
+        if (candidates.length === 0) continue
+
+        // Score and pick best candidate
+        let bestEmp = null, bestScore = -Infinity
+        for (const emp of candidates) {
+          let score = 0
+          const wh = getEmpWeekHours(emp.name)
+          const target = targetHoursMap[emp.name]
+          if (wh + shiftHours <= target) score += 20
+          else if (wh + shiftHours <= target + 4) score += 5
+          else score -= 15
+          const fatigue = fatigueMap[emp.name] || 0
+          score -= fatigue * 0.5
+          // Prefer full-time for longer shifts
+          const isPT = emp.employment_type === '兼職'
+          if (!isPT && shiftHours >= 6) score += 10
+          if (isPT && shiftHours <= 6) score += 10
+          if (score > bestScore) { bestScore = score; bestEmp = emp }
+        }
+
+        if (bestEmp) {
+          const flexName = `${shiftStart.slice(0,5)}-${shiftEnd.slice(0,5)}`
+          schedule[bestEmp.name][date] = flexName
+          actualTimes[`${bestEmp.name}_${date}`] = {
+            start: shiftStart.slice(0, 5),
+            end: shiftEnd.slice(0, 5),
+            hours: shiftHours,
+          }
+        }
+      }
+    }
+  }
+
+  // ── Step 3c: Cross-store borrowing ──────────────────────────
+  // After local staff fill, check for understaffed shifts and borrow
+  // employees from other stores who list this store in additional_stores.
+  if (data.allStoreEmployees && data.allStoreEmployees.length > 0) {
+    const localEmpNames = new Set(employees.map(e => e.name))
+    const currentStoreId = data.storeSettings?.store_id || data.storeSettings?.id || null
+
+    for (const date of weekDates) {
+      // Identify understaffed shifts on this date
+      const understaffedShifts = []
+      for (const sd of sortedShifts) {
+        const needed = staffingRules.find(r => r.shift_name === sd.name)?.required_count || minStaff
+        const current = employees.filter(e => schedule[e.name]?.[date] === sd.name).length
+        if (current < needed) {
+          understaffedShifts.push({ shiftDef: sd, deficit: needed - current })
+        }
+      }
+      if (understaffedShifts.length === 0) continue
+
+      for (const { shiftDef: sd, deficit } of understaffedShifts) {
+        let filled = 0
+        // Find borrowable employees from other stores
+        const borrowable = data.allStoreEmployees.filter(emp => {
+          if (localEmpNames.has(emp.name)) return false  // skip local staff
+          const additional = emp.additional_stores || []
+          if (!currentStoreId || !additional.includes(currentStoreId)) return false
+          // Check not already scheduled on this date (in their own store)
+          if (emp._scheduledDates?.includes(date)) return false
+          return true
+        })
+
+        for (const emp of borrowable) {
+          if (filled >= deficit) break
+
+          // Check legal validity
+          const fakeSchedule = { [emp.name]: {} }
+          for (const d of weekDates) fakeSchedule[emp.name][d] = null
+          if (!isLegallyValid(emp, sd, date, fakeSchedule, shiftDefs, weekDates, data)) continue
+
+          // Check weekly/monthly hour limits
+          const empHoursThisWeek = (emp._weeklyHours || 0)
+          const shiftHours = getShiftHours(sd) - (sd.break_minutes || 60) / 60
+          const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+          const weeklyMax = isPT ? 40 : 48
+          if (empHoursThisWeek + shiftHours > weeklyMax) continue
+
+          const monthlyHours = emp._monthlyHours || 0
+          if (monthlyHours + shiftHours > MONTHLY_OVERTIME_CAP + 160) continue
+
+          // Score with -20 penalty (prefer local staff)
+          let score = -20
+          const fatigue = fatigueMap[emp.name] || 0
+          score -= fatigue * 0.3
+
+          // Assign the borrowed employee
+          schedule[emp.name] = schedule[emp.name] || {}
+          schedule[emp.name][date] = sd.name
+          actualTimes[`${emp.name}_${date}`] = {
+            start: sd.start_time?.slice(0, 5),
+            end: sd.end_time?.slice(0, 5),
+            hours: shiftHours,
+          }
+          // Add to assignments with cross-store marker
+          assignments.push({
+            employee: emp.name,
+            date,
+            shift: sd.name,
+            actual_start: sd.start_time?.slice(0, 5),
+            actual_end: sd.end_time?.slice(0, 5),
+            actual_hours: shiftHours,
+            is_cross_store: true,
+            home_store: emp.store,
+          })
+          filled++
+        }
       }
     }
   }
@@ -909,14 +1108,29 @@ export function runProgrammaticSchedule(data) {
   // ── Step 6: Compute stats ──
   const stats = computeStats(assignments, employees, shiftDefs, weekDates, holidays, targetHoursMap)
 
+  // ── Build publish checklist ──
+  const errors = violations.filter(v => v.severity === 'error')
+  const warnings = violations.filter(v => v.severity === 'warning')
+
+  const hasUncoveredSlots = warnings.some(v => v.constraint === 'S1' || v.constraint === 'S10')
+  const hasOpenerCloserGap = warnings.some(v => v.constraint === 'S8')
+
+  const publishChecklist = [
+    { check: '無違規', passed: errors.length === 0 },
+    { check: '所有班次有覆蓋', passed: !hasUncoveredSlots },
+    { check: '開店/關店人員到位', passed: !hasOpenerCloserGap },
+  ]
+
   return {
     success: true,
+    status: 'draft',
     assignments,
     reasoning: buildReasoning(employees, weekDates, stats),
     aiWarnings: [],
     violations,
-    errors: violations.filter(v => v.severity === 'error'),
-    warnings: violations.filter(v => v.severity === 'warning'),
+    errors,
+    warnings,
+    publishChecklist,
     stats,
     meta: {
       model: 'programmatic-v2',
@@ -1574,4 +1788,176 @@ function buildReasoning(employees, dates, stats) {
   }
 
   return lines.join('。')
+}
+
+// ══════════════════════════════════════════════════════════════
+//  History Pattern Analysis
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Analyze past 4-8 weeks of schedule data to extract per-employee and store-level insights.
+ *
+ * @param {Array<{ employee: string, date: string, shift: string, actual_hours: number }>} pastSchedules
+ * @param {Array<{ name: string, employment_type?: string }>} employees
+ * @returns {{ employeeInsights: Record<string, object>, storeInsights: object }}
+ */
+export function analyzeHistoricalPatterns(pastSchedules, employees) {
+  if (!pastSchedules || pastSchedules.length === 0) {
+    return { employeeInsights: {}, storeInsights: {} }
+  }
+
+  // ── Group by employee ──
+  const byEmployee = {}
+  for (const entry of pastSchedules) {
+    if (!byEmployee[entry.employee]) byEmployee[entry.employee] = []
+    byEmployee[entry.employee].push(entry)
+  }
+
+  // ── Determine date range and weeks ──
+  const allDates = [...new Set(pastSchedules.map(s => s.date))].sort()
+  const weeks = splitIntoWeeks(allDates)
+  const totalWeeks = Math.max(weeks.length, 1)
+
+  // ── Per-employee insights ──
+  const employeeInsights = {}
+  for (const emp of employees) {
+    const entries = byEmployee[emp.name] || []
+    const workEntries = entries.filter(e => e.shift && !isAbsence(e.shift))
+
+    // avgWeeklyHours
+    const totalHours = workEntries.reduce((sum, e) => sum + (e.actual_hours || 0), 0)
+    const avgWeeklyHours = Math.round((totalHours / totalWeeks) * 10) / 10
+
+    // preferredDays: count by day of week, return sorted by frequency
+    const dayCounts = [0, 0, 0, 0, 0, 0, 0] // Sun-Sat
+    for (const e of workEntries) {
+      const dow = new Date(e.date).getDay()
+      dayCounts[dow]++
+    }
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+    const preferredDays = dayNames
+      .map((name, i) => ({ day: name, count: dayCounts[i] }))
+      .filter(d => d.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .map(d => d.day)
+
+    // preferredShifts: count by shift name, return sorted by frequency
+    const shiftCounts = {}
+    for (const e of workEntries) {
+      shiftCounts[e.shift] = (shiftCounts[e.shift] || 0) + 1
+    }
+    const preferredShifts = Object.entries(shiftCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([shift]) => shift)
+
+    // weekendRate: % of weeks where they worked at least one weekend day
+    let weekendsWorked = 0
+    for (const week of weeks) {
+      const workedWeekend = week.some(date => {
+        const dow = new Date(date).getDay()
+        if (!isWeekendDay(dow)) return false
+        return workEntries.some(e => e.date === date)
+      })
+      if (workedWeekend) weekendsWorked++
+    }
+    const weekendRate = Math.round((weekendsWorked / totalWeeks) * 100)
+
+    // avgFatigue: average fatigue per week (simplified — using hours as proxy)
+    // Higher hours + more weekend/evening work = higher fatigue
+    const weeklyFatigue = weeks.map(week => {
+      let fatigue = 0
+      for (const date of week) {
+        const entry = workEntries.find(e => e.date === date)
+        if (!entry) continue
+        const dow = new Date(date).getDay()
+        const isWE = isWeekendDay(dow)
+        fatigue += isWE ? 3 : 1
+        fatigue += (entry.actual_hours || 0) > 8 ? 2 : 0
+      }
+      return fatigue
+    })
+    const avgFatigue = weeklyFatigue.length > 0
+      ? Math.round((weeklyFatigue.reduce((s, f) => s + f, 0) / weeklyFatigue.length) * 10) / 10
+      : 0
+
+    employeeInsights[emp.name] = {
+      avgWeeklyHours,
+      preferredDays,
+      preferredShifts,
+      weekendRate,
+      avgFatigue,
+    }
+  }
+
+  // ── Store-level insights ──
+  const dayNamesStore = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+  // busiestDay: day of week with most staff scheduled
+  const dailyStaffCounts = {} // date → count
+  const dowTotals = [0, 0, 0, 0, 0, 0, 0]
+  const dowDays = [0, 0, 0, 0, 0, 0, 0]
+  for (const date of allDates) {
+    const dow = new Date(date).getDay()
+    const staffCount = pastSchedules.filter(s => s.date === date && s.shift && !isAbsence(s.shift)).length
+    dailyStaffCounts[date] = staffCount
+    dowTotals[dow] += staffCount
+    dowDays[dow]++
+  }
+  const dowAvg = dayNamesStore.map((name, i) => ({
+    day: name,
+    avg: dowDays[i] > 0 ? dowTotals[i] / dowDays[i] : 0,
+  }))
+  const busiestDay = dowAvg.sort((a, b) => b.avg - a.avg)[0]?.day || 'unknown'
+
+  // avgDailyStaff
+  const totalStaffDays = Object.values(dailyStaffCounts).reduce((s, c) => s + c, 0)
+  const avgDailyStaff = allDates.length > 0
+    ? Math.round((totalStaffDays / allDates.length) * 10) / 10
+    : 0
+
+  // coverageGaps: find hours that are historically understaffed
+  // Group by hour-of-day, count average staff present
+  const hourlyPresence = {}
+  for (let h = 0; h < 24; h++) hourlyPresence[h] = { total: 0, days: 0 }
+
+  for (const date of allDates) {
+    const dateEntries = pastSchedules.filter(s => s.date === date && s.shift && !isAbsence(s.shift))
+    // Track which hours are "active" for this date
+    const hoursActive = new Set()
+    for (const entry of dateEntries) {
+      // Estimate shift hours from actual_hours and shift name patterns
+      const hours = entry.actual_hours || 8
+      // Simple heuristic: assume shifts are spread across working hours
+      // Without exact start/end times we mark presence
+      for (let h = 9; h < 9 + Math.min(hours, 15); h++) {
+        hoursActive.add(h % 24)
+      }
+    }
+    for (const h of hoursActive) {
+      hourlyPresence[h].total += dateEntries.length
+      hourlyPresence[h].days++
+    }
+  }
+
+  const coverageGaps = []
+  for (let h = 8; h <= 23; h++) {
+    const p = hourlyPresence[h]
+    if (p.days > 0) {
+      const avgStaff = p.total / p.days
+      if (avgStaff < 1.5) {
+        coverageGaps.push({
+          hour: `${String(h).padStart(2, '0')}:00`,
+          avgStaff: Math.round(avgStaff * 10) / 10,
+        })
+      }
+    }
+  }
+
+  const storeInsights = {
+    busiestDay,
+    avgDailyStaff,
+    coverageGaps,
+  }
+
+  return { employeeInsights, storeInsights }
 }

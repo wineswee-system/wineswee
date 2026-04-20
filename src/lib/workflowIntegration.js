@@ -107,12 +107,10 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       read: false,
     })
 
-    // LINE 推播
-    if (supervisor.line_user_id) {
-      try {
-        await notifyTaskAssignee(supervisor.name, `${requesterName} 提交${template.name}，請審核`)
-      } catch (e) { /* LINE 推播失敗不阻擋流程 */ }
-    }
+    // LINE 推播（notifyTaskAssignee 內部會解析 employee_line_accounts）
+    try {
+      await notifyTaskAssignee(supervisor.name, `${requesterName} 提交${template.name}，請審核`)
+    } catch (e) { /* LINE 推播失敗不阻擋流程 */ }
   }
 
   return { instance, steps }
@@ -187,13 +185,23 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
     // 還有下一關 → 指派審核人
     let nextAssignee = nextStep.assignee
     if (!nextAssignee && nextStep.role) {
-      // 根據角色找人
+      // 根據角色找人 — resolve via department FK lookup
+      const lookupDeptId = async (deptName) => {
+        const { data } = await supabase.from('departments').select('id').eq('name', deptName).maybeSingle()
+        return data?.id
+      }
       if (nextStep.role === 'hr') {
-        const { data: hr } = await supabase.from('employees').select('name').eq('dept', '人資部').eq('status', '在職').limit(1).single()
-        nextAssignee = hr?.name
+        const deptId = await lookupDeptId('人資部')
+        if (deptId) {
+          const { data: hr } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('status', '在職').limit(1).maybeSingle()
+          nextAssignee = hr?.name
+        }
       } else if (nextStep.role === 'finance') {
-        const { data: fin } = await supabase.from('employees').select('name').eq('dept', '管理部').eq('position', '財務').eq('status', '在職').limit(1).single()
-        nextAssignee = fin?.name
+        const deptId = await lookupDeptId('管理部')
+        if (deptId) {
+          const { data: fin } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('position', '財務').eq('status', '在職').limit(1).maybeSingle()
+          nextAssignee = fin?.name
+        }
       }
     }
 
@@ -253,14 +261,21 @@ async function writeBackStatus(instance, action) {
 
   const status = action === '已核准' ? mapping.approved : mapping.rejected
 
-  // 找到該申請人最近一筆待審核的紀錄
-  const { data: records } = await supabase
+  // 找到該申請人最近一筆待審核的紀錄 — use FK if available, else resolve name → employee_id
+  let query = supabase
     .from(mapping.table)
     .select('id')
-    .eq('employee', instance.started_by) // TEXT-based; will use employee_id when available
     .in('status', ['待審核', '待確認'])
     .order('created_at', { ascending: false })
     .limit(1)
+  if (instance.started_by_id) {
+    query = query.eq('employee_id', instance.started_by_id)
+  } else {
+    const { data: emp } = await supabase.from('employees').select('id').eq('name', instance.started_by).maybeSingle()
+    if (!emp?.id) return
+    query = query.eq('employee_id', emp.id)
+  }
+  const { data: records } = await query
 
   if (records?.[0]) {
     await supabase

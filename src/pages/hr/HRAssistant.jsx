@@ -33,10 +33,10 @@ export default function HRAssistant() {
     const thisMonth = now.toISOString().slice(0, 7)
 
     Promise.all([
-      supabase.from('employees').select('id, name, dept, position, store, join_date, status').eq('status', '在職').order('name'),
-      supabase.from('attendance_records').select('employee, date, status, hours').gte('date', since),
-      supabase.from('leave_requests').select('employee, type, start_date, end_date, days, status').gte('created_at', d30.toISOString()),
-      supabase.from('salary_records').select('employee, month, base_salary, net_salary').like('month', `${thisMonth}%`),
+      supabase.from('employees').select('id, name, department_id, position, store_id, join_date, status, departments(name), stores(name)').eq('status', '在職').order('name'),
+      supabase.from('attendance_records').select('employee_id, date, status, hours, employees(name)').gte('date', since),
+      supabase.from('leave_requests').select('employee_id, type, start_date, end_date, days, status, employees(name)').gte('created_at', d30.toISOString()),
+      supabase.from('salary_records').select('employee_id, month, base_salary, net_salary, employees(name)').like('month', `${thisMonth}%`),
       supabase.from('performance_reviews').select('employee, period, overall_score, rating').order('period', { ascending: false }),
       supabase.from('departments').select('*').order('name'),
     ]).then(([e, a, l, s, p, d]) => {

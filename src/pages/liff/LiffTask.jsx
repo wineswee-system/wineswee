@@ -38,8 +38,13 @@ export default function LiffTask() {
           await window.liff.init({ liffId })
           if (!window.liff.isLoggedIn()) { window.liff.login(); return }
           const profile = await window.liff.getProfile()
-          const { data: emp } = await supabase.from('employees')
-            .select('*').eq('line_user_id', profile.userId).maybeSingle()
+          const { data: ela } = await supabase
+            .from('employee_line_accounts')
+            .select('employee_id, employees:employee_id(*)')
+            .eq('line_user_id', profile.userId)
+            .limit(1)
+            .maybeSingle()
+          const emp = ela?.employees
           if (emp) { setEmployee(emp); await loadTasks(emp.id); return }
         }
       }

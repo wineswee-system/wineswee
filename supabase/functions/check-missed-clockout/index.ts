@@ -42,7 +42,7 @@ serve(async (req) => {
     // 1. Find attendance records with clock_in but no clock_out
     const { data: missed, error: missedErr } = await supabase
       .from('attendance_records')
-      .select('id, employee, employee_id, date, clock_in')
+      .select('id, employee_id, date, clock_in, employees(id, name)')
       .eq('date', targetDate)
       .not('clock_in', 'is', null)
       .is('clock_out', null)
@@ -50,59 +50,59 @@ serve(async (req) => {
     if (missedErr) {
       throw new Error(`Query error: ${missedErr.message}`)
     }
+    type MissedRow = { id: number; employee_id: number; date: string; clock_in: string; employees: { id: number; name: string } | null }
+    const missedRows = (missed || []) as unknown as MissedRow[]
+    const employeeName = (m: MissedRow): string => m.employees?.name ?? `#${m.employee_id}`
 
-    if (!missed || missed.length === 0) {
+    if (!missedRows.length) {
       return new Response(JSON.stringify({
         ok: true, date: targetDate, missed_count: 0, notified: [],
         message: '無未打下班卡的員工',
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // 2. Get LINE user IDs for these employees
-    const employeeNames = missed.map(m => m.employee).filter(Boolean)
-    const employeeIds = missed.map(m => m.employee_id).filter(Boolean)
-
-    // Try v_employee_line_resolved view first, fallback to employees table
-    let lineMap: Record<string, string> = {} // employee name → line_user_id
+    // 2. Resolve LINE user IDs via multi-OA mapping (keyed by employee_id)
+    const employeeIds = missedRows.map(m => m.employee_id).filter(Boolean)
+    type LineRec = { line_user_id: string; channel_code: string }
+    const lineMapById: Record<number, LineRec> = {}
 
     if (employeeIds.length > 0) {
       const { data: lineAccounts } = await supabase
         .from('v_employee_line_resolved')
-        .select('employee_name, line_user_id')
+        .select('employee_id, line_user_id, channel_code, is_primary')
         .in('employee_id', employeeIds)
+        .order('is_primary', { ascending: false })
 
       if (lineAccounts) {
-        for (const acc of lineAccounts) {
-          if (acc.line_user_id) lineMap[acc.employee_name] = acc.line_user_id
-        }
-      }
-    }
-
-    // Fallback for those not found
-    const missingNames = employeeNames.filter(n => !lineMap[n])
-    if (missingNames.length > 0) {
-      const { data: emps } = await supabase
-        .from('employees')
-        .select('name, line_user_id')
-        .in('name', missingNames)
-        .not('line_user_id', 'is', null)
-
-      if (emps) {
-        for (const e of emps) {
-          if (e.line_user_id && !lineMap[e.name]) lineMap[e.name] = e.line_user_id
+        for (const acc of lineAccounts as Array<{ employee_id: number; line_user_id: string; channel_code: string }>) {
+          if (acc.line_user_id && !lineMapById[acc.employee_id]) {
+            lineMapById[acc.employee_id] = { line_user_id: acc.line_user_id, channel_code: acc.channel_code }
+          }
         }
       }
     }
 
     // 3. Send LINE notifications
-    const lineToken = Deno.env.get('LINE_CHANNEL_TOKEN')
+    function resolveToken(channelCode: string | null): string | null {
+      if (channelCode) {
+        const suffix = channelCode.toUpperCase().replace(/-/g, '_')
+        const primary = Deno.env.get(`LINE_CHANNEL_ACCESS_TOKEN_${suffix}`)
+        if (primary) return primary
+        const legacy = Deno.env.get(`LINE_CHANNEL_TOKEN_${suffix}`)
+        if (legacy) return legacy
+      }
+      return Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') || Deno.env.get('LINE_CHANNEL_TOKEN') || null
+    }
     const notified: string[] = []
     const failed: string[] = []
 
-    for (const record of missed) {
-      const lineUserId = lineMap[record.employee]
+    for (const record of missedRows) {
+      const name = employeeName(record)
+      const rec = lineMapById[record.employee_id]
+      const lineUserId = rec?.line_user_id
+      const lineToken = resolveToken(rec?.channel_code || null)
       if (!lineUserId || !lineToken) {
-        failed.push(record.employee)
+        failed.push(name)
         continue
       }
 
@@ -121,7 +121,7 @@ serve(async (req) => {
           body: {
             type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
             contents: [
-              { type: 'text', text: `${record.employee} 您好`, weight: 'bold', size: 'md' },
+              { type: 'text', text: `${name} 您好`, weight: 'bold', size: 'md' },
               { type: 'text', text: `系統偵測到您 ${targetDate} 有上班打卡（${record.clock_in}），但尚未打下班卡。`, size: 'sm', color: '#555555', wrap: true },
               { type: 'separator', margin: 'md' },
               { type: 'text', text: '請至系統提交補卡申請', size: 'sm', color: '#8c8c8c', margin: 'md' },
@@ -149,12 +149,12 @@ serve(async (req) => {
         })
 
         if (res.ok) {
-          notified.push(record.employee)
+          notified.push(name)
         } else {
-          failed.push(record.employee)
+          failed.push(name)
         }
       } catch {
-        failed.push(record.employee)
+        failed.push(name)
       }
     }
 
@@ -163,14 +163,14 @@ serve(async (req) => {
       channel: 'LINE',
       recipient: 'system',
       subject: `未打卡偵測 ${targetDate}`,
-      body: JSON.stringify({ missed: missed.length, notified, failed }),
+      body: JSON.stringify({ missed: missedRows.length, notified, failed }),
       status: 'sent',
     }).catch(() => {})
 
     return new Response(JSON.stringify({
       ok: true,
       date: targetDate,
-      missed_count: missed.length,
+      missed_count: missedRows.length,
       notified,
       failed,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

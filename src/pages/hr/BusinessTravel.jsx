@@ -3,10 +3,12 @@ import { Plus } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function BusinessTravel() {
+  const { profile } = useAuth()
   const [trips, setTrips] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -19,7 +21,7 @@ export default function BusinessTravel() {
   useEffect(() => {
     Promise.all([
       getBusinessTrips(),
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([t, e, d]) => {
       const emps = e.data || []
@@ -43,7 +45,7 @@ export default function BusinessTravel() {
     if (data) {
       setTrips(prev => [...prev, data])
       setShowModal(false)
-      setForm({ employee: employees[0]?.name || '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+      setForm({ employee: profile?.name || employees[0]?.name || '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
       await createApprovalWorkflow('business_trip', data, form.employee)
     }
   }

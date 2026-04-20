@@ -31,6 +31,7 @@ const majorGroups = [
   { key: 'supply', icon: Warehouse, label: '供應鏈', color: '#34d399' },
   { key: 'finance', icon: CreditCard, label: '財務會計', color: '#fbbf24' },
   { key: 'people', icon: Users, label: '人員組織', color: '#a78bfa' },
+  { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' },
   { key: 'analytics', icon: BarChart3, label: '數據分析', color: '#f472b6' },
 ]
 
@@ -206,7 +207,6 @@ const groupNav = {
       icon: DollarSign,
       children: [
         { icon: BookText, label: '會計科目', path: '/finance/chart-of-accounts' },
-        { icon: Shield, label: '費用簽核設定', path: '/finance/expense-approval' },
         { icon: BarChart3, label: '預算管理', path: '/finance/budgets' },
         { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
         { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },
@@ -240,6 +240,7 @@ const groupNav = {
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
+        { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
@@ -252,6 +253,8 @@ const groupNav = {
       icon: DollarSign,
       children: [
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
+        { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
+        { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
@@ -265,7 +268,7 @@ const groupNav = {
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
         { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
-        { icon: ArrowRightLeft, label: '轉調紀��', path: '/hr/transfer' },
+        { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
         { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
       ]
     },
@@ -290,15 +293,44 @@ const groupNav = {
         { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },
       ]
     },
+  ],
+
+  project: [
     {
-      label: '流程管理',
-      icon: GitBranch,
+      label: '工作管理',
+      icon: ListChecks,
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
-        { icon: Workflow, label: '流程', path: '/process/workflows' },
+        { icon: FolderOpen, label: '專案', path: '/process/projects' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
-        { icon: Shield, label: '簽核設定', path: '/process/approval-chains' },
+      ]
+    },
+    {
+      label: '流程設計',
+      icon: Workflow,
+      divider: true,
+      children: [
+        { icon: Workflow, label: '流程', path: '/process/workflows' },
+        { icon: BookOpen, label: 'SOP 範本', path: '/process/sop' },
+      ]
+    },
+    {
+      label: '簽核管理',
+      icon: Shield,
+      divider: true,
+      children: [
+        { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
+        { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
+        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
+      ]
+    },
+    {
+      label: '流程分析',
+      icon: BarChart3,
+      divider: true,
+      children: [
+        { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
       ]
     },
   ],
@@ -368,6 +400,7 @@ const superAdminItems = [
   { icon: Monitor, label: '系統日誌', path: '/super-admin/system-logs' },
   { icon: AlertOctagon, label: '錯誤日誌', path: '/super-admin/error-logs' },
   { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
+  { icon: Sparkles, label: 'AI 使用量', path: '/super-admin/ai-usage' },
 ]
 
 // ── Route prefix → group key mapping ──
@@ -376,7 +409,8 @@ const routeToGroup = (pathname) => {
   if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos')) return 'commerce'
   if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
   if (pathname.startsWith('/finance')) return 'finance'
-  if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/process')) return 'people'
+  if (pathname.startsWith('/process')) return 'project'
+  if (pathname.startsWith('/hr') || pathname.startsWith('/org')) return 'people'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'
   if (pathname.startsWith('/system') || pathname.startsWith('/ai') || pathname.startsWith('/integration')) return 'system'
@@ -481,7 +515,44 @@ export default function Sidebar() {
   const matchChild = (child) => !q || child.label.toLowerCase().includes(q)
   const matchSection = (section) => !q || section.label.toLowerCase().includes(q) || section.children?.some(matchChild)
 
-  const currentSections = groupNav[activeGroup] || []
+  // Role-based module access control
+  const userRole = profile?.role || 'store_staff'
+  const ROLE_GROUPS = {
+    store_staff:  ['dashboard', 'people'],
+    office_staff: ['dashboard', 'people', 'project'],
+    manager:      ['dashboard', 'people', 'project'],
+    admin:        ['dashboard', 'people', 'project', 'analytics'],
+    super_admin:  null, // null = all
+  }
+  const allowedGroups = userRole in ROLE_GROUPS ? ROLE_GROUPS[userRole] : ROLE_GROUPS['store_staff']
+  const roleFiltered = allowedGroups === null
+    ? majorGroups
+    : majorGroups.filter(g => allowedGroups.includes(g.key))
+
+  // Sub-menu filtering for store_staff / office_staff
+  const ROLE_ALLOWED_PATHS = {
+    store_staff: [
+      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
+    ],
+    office_staff: [
+      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
+      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
+      '/hr/schedule', '/hr/holidays', '/hr/salary', '/hr/salary-structures', '/hr/payroll',
+      '/org/employees', '/org/locations', '/org/departments',
+      '/process/overview', '/process/tasks', '/process/workflows',
+    ],
+  }
+  const pathFilter = ROLE_ALLOWED_PATHS[userRole]
+
+  // Filter sections by role-allowed paths (pathFilter must be defined above)
+  const filterSections = (sections) => {
+    if (!pathFilter) return sections
+    return sections
+      .map(s => ({ ...s, children: s.children?.filter(c => pathFilter.includes(c.path)) }))
+      .filter(s => s.children?.length > 0)
+  }
+  const currentSections = filterSections(groupNav[activeGroup] || [])
   const isSystemGroup = activeGroup === 'system'
   const isSuperAdminGroup = activeGroup === 'super-admin'
 
@@ -497,15 +568,8 @@ export default function Sidebar() {
     }
   }
 
-  // Role-based filtering: only explicitly 'staff' role is restricted
-  const userRole = profile?.role || 'manager'
-  const STAFF_GROUPS = ['dashboard', 'people']
-  const roleFiltered = userRole === 'staff'
-    ? majorGroups.filter(g => STAFF_GROUPS.includes(g.key))
-    : majorGroups
-
-  // Build all dropdown groups including super-admin (Demo mode: always show)
-  const showSuperAdmin = isSuperAdmin || !profile
+  // Build all dropdown groups including super-admin
+  const showSuperAdmin = isSuperAdmin
   const allGroups = showSuperAdmin
     ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
     : roleFiltered
@@ -598,7 +662,7 @@ export default function Sidebar() {
                 </div>
               </div>
             ) : (
-              (groupNav[openDropdown] || []).map((section, si) => {
+              filterSections(groupNav[openDropdown] || []).map((section, si) => {
                 const SIcon = section.icon
                 const groupColor = allGroups.find(g => g.key === openDropdown)?.color
                 return (

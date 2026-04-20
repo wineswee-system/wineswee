@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil } from 'lucide-react'
-import { getEmployees, createEmployee, updateEmployee } from '../../lib/db'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail } from 'lucide-react'
+import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
@@ -16,8 +16,8 @@ const EMPLOYMENT_TYPES = [
 
 // 標準化職稱（manager = 有審核權限）
 const POSITIONS = [
-  { label: '總經理', level: 'manager' },
-  { label: '副總經理', level: 'manager' },
+  { label: '總經理', level: 'admin' },
+  { label: '副總經理', level: 'admin' },
   { label: '總監', level: 'manager' },
   { label: '經理', level: 'manager' },
   { label: '副理', level: 'manager' },
@@ -25,12 +25,17 @@ const POSITIONS = [
   { label: '店長', level: 'manager' },
   { label: '副店長', level: 'manager' },
   { label: '組長', level: 'manager' },
-  { label: '資深工程師', level: 'staff' },
-  { label: '工程師', level: 'staff' },
-  { label: '專員', level: 'staff' },
-  { label: '業務代表', level: 'staff' },
-  { label: '助理', level: 'staff' },
-  { label: '實習生', level: 'staff' },
+  { label: '資深工程師', level: 'office_staff' },
+  { label: '工程師', level: 'office_staff' },
+  { label: '專員', level: 'office_staff' },
+  { label: '行政助理', level: 'office_staff' },
+  { label: '會計', level: 'office_staff' },
+  { label: '業務代表', level: 'store_staff' },
+  { label: '門市人員', level: 'store_staff' },
+  { label: '收銀員', level: 'store_staff' },
+  { label: '倉管人員', level: 'store_staff' },
+  { label: '助理', level: 'store_staff' },
+  { label: '實習生', level: 'store_staff' },
 ]
 
 export default function Employees() {
@@ -54,21 +59,18 @@ export default function Employees() {
   const [editForm, setEditForm] = useState({})
   const [form, setForm] = useState({ name: '', name_en: '', dept: '', position: '', store: '', email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
-  const [lineUsers, setLineUsers] = useState([])
 
   useEffect(() => {
     Promise.all([
       getEmployees(),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
-      supabase.from('line_users').select('line_user_id, display_name').order('display_name'),
-    ]).then(([e, d, l, lu]) => {
+    ]).then(([e, d, l]) => {
       const depts = d.data || []
       const locs = l.data || []
       setEmployees(e.data || [])
       setDepartments(depts)
       setLocations(locs)
-      setLineUsers(lu.data || [])
       setForm(f => ({ ...f, dept: depts[0]?.name || '', store: locs[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -86,7 +88,7 @@ export default function Employees() {
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
       const posInfo = POSITIONS.find(p => p.label === form.position)
-      const role = posInfo?.level || 'staff'
+      const role = posInfo?.level || 'store_staff'
       const { data, error } = await createEmployee({ ...form, avatar, role })
       if (error) throw error
       if (data) {
@@ -115,6 +117,22 @@ export default function Employees() {
     } catch (err) {
       console.error('Operation failed:', err)
       alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  // 發送邀請信
+  const handleInvite = async (emp) => {
+    if (!emp.email) { alert('此員工沒有設定 Email，請先編輯填入 Email'); return }
+    if (!confirm(`確定要發送帳號邀請信給 ${emp.name}（${emp.email}）？`)) return
+    try {
+      const result = await inviteEmployee(emp.email, emp.name)
+      if (result.ok) {
+        alert(result.message)
+      } else {
+        alert('發送失敗：' + (result.error || '未知錯誤'))
+      }
+    } catch (err) {
+      alert('發送失敗：' + err.message)
     }
   }
 
@@ -158,19 +176,33 @@ export default function Employees() {
       store: emp.store || '', email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
+      system_role: emp.role || 'store_staff',
     })
     setShowEditModal(true)
   }
   const setE = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
   const handleEdit = async () => {
-    if (!selectedEmp) return
+    if (!selectedEmp) { alert('未選擇員工'); return }
     try {
-      const posInfo = POSITIONS.find(p => p.label === editForm.position)
-      const role = posInfo?.level || 'staff'
-      const { data, error } = await updateEmployee(selectedEmp.id, { ...editForm, role })
+      const { dept, store, supervisor, system_role, join_date, ...rest } = editForm
+      const role = system_role || selectedEmp.role || 'store_staff'
+      // Convert empty strings to null for unique-constrained fields
+      if (rest.email !== undefined) rest.email = rest.email?.trim() || null
+      if (rest.phone !== undefined) rest.phone = rest.phone?.trim() || null
+      if (join_date) rest.join_date = join_date
+      const payload = { ...rest, role }
+      // dept/store/supervisor TEXT columns dropped \u2014 use FK ids if provided in form
+      void dept; void store; void supervisor
+      const { data, error } = await updateEmployee(selectedEmp.id, payload)
       if (error) throw error
       if (data) {
         setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
+        setShowEditModal(false)
+      } else {
+        // .single() returned no rows — try without .single()
+        const { error: e2 } = await supabase.from('employees').update(payload).eq('id', selectedEmp.id)
+        if (e2) throw e2
+        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? { ...e, ...payload } : e))
         setShowEditModal(false)
       }
     } catch (err) {
@@ -340,6 +372,12 @@ export default function Employees() {
                         onClick={ev => { ev.stopPropagation(); openEdit(e) }}>
                         <Pencil size={12} /> 編輯
                       </button>
+                      {e.email && e.status === '在職' && (
+                        <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-cyan)' }}
+                          onClick={ev => { ev.stopPropagation(); handleInvite(e) }}>
+                          <Mail size={12} /> 邀請
+                        </button>
+                      )}
                       {e.status === '在職' ? (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }}
                           onClick={ev => { ev.stopPropagation(); openResign(e) }}>
@@ -392,11 +430,14 @@ export default function Employees() {
             <Field label="職稱">
               <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => set('position', e.target.value)}>
                 <option value="">請選擇</option>
-                <optgroup label="主管級">
-                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="管理職">
+                  {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
-                <optgroup label="員工級">
-                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="行政職">
+                  {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="門市職">
+                  {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
             </Field>
@@ -504,11 +545,14 @@ export default function Employees() {
             <Field label="職稱">
               <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => setE('position', e.target.value)}>
                 <option value="">請選擇</option>
-                <optgroup label="主管級">
-                  {POSITIONS.filter(p => p.level === 'manager').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="管理職">
+                  {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
-                <optgroup label="員工級">
-                  {POSITIONS.filter(p => p.level === 'staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                <optgroup label="行政職">
+                  {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="門市職">
+                  {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
             </Field>
@@ -530,6 +574,15 @@ export default function Employees() {
               <input className="form-input" type="date" style={{ width: '100%' }} value={editForm.join_date} onChange={e => setE('join_date', e.target.value)} />
             </Field>
           </div>
+          <Field label="系統權限">
+            <select className="form-input" style={{ width: '100%' }} value={editForm.system_role} onChange={e => setE('system_role', e.target.value)}>
+              <option value="store_staff">門市員工</option>
+              <option value="office_staff">行政員工</option>
+              <option value="manager">主管</option>
+              <option value="admin">管理員</option>
+              <option value="super_admin">超級管理員</option>
+            </select>
+          </Field>
         </Modal>
       )}
 
@@ -540,7 +593,6 @@ export default function Employees() {
           employees={employees}
           stores={locations}
           departments={departments}
-          lineUsers={lineUsers}
           onUpdate={(updated) => {
             setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e))
             setDetailEmp(updated)

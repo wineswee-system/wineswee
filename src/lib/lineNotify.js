@@ -5,57 +5,34 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
 
 /**
- * Resolve a LINE user ID + channel for an employee.
- * Tries: specific channelCode → primary account → any active account → legacy employees.line_user_id
- * @param {string} employeeName
- * @param {string} [channelCode] - e.g. 'sme-ops', 'wines'. If omitted, uses primary or default.
+ * Resolve a LINE user ID + channel for an employee via employee_line_accounts.
+ * @param {string|number} employeeNameOrId
+ * @param {string} [channelCode] - e.g. 'workflow'. If omitted, picks primary.
  * @returns {{ lineUserId: string|null, channelCode: string|null, liffId: string|null }}
  */
-async function resolveLineAccount(employeeNameOrId, channelCode) {
+export async function resolveLineAccount(employeeNameOrId, channelCode) {
   if (!employeeNameOrId) return { lineUserId: null, channelCode: null, liffId: null }
 
   const isId = typeof employeeNameOrId === 'number'
+  let query = supabase.from('v_employee_line_resolved').select('*')
 
-  // Try multi-OA mapping first
-  let query = supabase.from('v_employee_line_resolved')
-    .select('*')
+  if (isId) query = query.eq('employee_id', employeeNameOrId)
+  else query = query.eq('employee_name', employeeNameOrId)
 
-  if (isId) {
-    query = query.eq('employee_id', employeeNameOrId)
-  } else {
-    query = query.eq('employee_name', employeeNameOrId)
-  }
+  if (channelCode) query = query.eq('channel_code', channelCode)
+  else query = query.order('is_primary', { ascending: false })
 
-  if (channelCode) {
-    query = query.eq('channel_code', channelCode)
-  } else {
-    query = query.order('is_primary', { ascending: false })
-  }
+  const { data: account } = await query.limit(1).maybeSingle()
 
-  const { data: accounts } = await query.limit(1).maybeSingle()
-
-  if (accounts?.line_user_id) {
+  if (account?.line_user_id) {
     return {
-      lineUserId: accounts.line_user_id,
-      channelCode: accounts.channel_code,
-      liffId: accounts.liff_id || LIFF_ID,
+      lineUserId: account.line_user_id,
+      channelCode: account.channel_code,
+      liffId: account.liff_id || LIFF_ID,
     }
   }
 
-  // Fallback: legacy employees.line_user_id
-  let empQuery = supabase.from('employees').select('line_user_id')
-  if (isId) {
-    empQuery = empQuery.eq('id', employeeNameOrId)
-  } else {
-    empQuery = empQuery.eq('name', employeeNameOrId)
-  }
-  const { data: emp } = await empQuery.maybeSingle()
-
-  return {
-    lineUserId: emp?.line_user_id || null,
-    channelCode: null,
-    liffId: LIFF_ID,
-  }
+  return { lineUserId: null, channelCode: null, liffId: LIFF_ID }
 }
 
 /**

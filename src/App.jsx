@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { TenantProvider } from './contexts/TenantContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
@@ -13,11 +13,9 @@ const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
 const LiffTask = lazy(() => import('./pages/liff/LiffTask'))
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
+const Login = lazy(() => import('./pages/Login'))
 
 // ── Module-level lazy loading ──
-// Each module bundles ALL its pages into a single chunk.
-// When a user enters a module (e.g. HR), the entire module loads once
-// and subsequent navigation within that module is instant.
 const HRModule = lazy(() => import('./modules/HRModule'))
 const CRMModule = lazy(() => import('./modules/CRMModule'))
 const FinanceModule = lazy(() => import('./modules/FinanceModule'))
@@ -34,8 +32,45 @@ const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
-function AdminApp() {
+// ── Route-level access control — 5 roles (MUST be before AdminApp) ──
+const ROLE_ROUTES = {
+  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances'],
+  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/process', '/org'],
+  manager:      ['/', '/hr', '/org', '/process'],
+  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
+  super_admin:  null, // all
+}
+
+// ── Error Boundary ──
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { console.error('App crash:', error, info) }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: 48, textAlign: 'center', color: '#ef4444' }}>
+        <h2>系統發生錯誤</h2>
+        <pre style={{ textAlign: 'left', maxWidth: 600, margin: '16px auto', fontSize: 13, whiteSpace: 'pre-wrap', background: '#1e293b', color: '#f1f5f9', padding: 16, borderRadius: 8 }}>
+          {this.state.error.message}{'\n'}{this.state.error.stack}
+        </pre>
+        <button onClick={() => window.location.reload()} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer' }}>重新載入</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
+
+// ── AdminApp (uses ROLE_ROUTES) ──
+function AdminApp({ role = 'store_staff' }) {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
+  const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
+  // Module-level access check: '/hr/leave' in allowed → can enter '/hr' module
+  // Page-level filtering is handled by Sidebar's ROLE_ALLOWED_PATHS
+  const canAccess = (modulePrefix) => {
+    if (allowed === null) return true
+    return allowed.some(r => r === modulePrefix || r.startsWith(modulePrefix + '/') || modulePrefix.startsWith(r))
+  }
+  const blocked = <Navigate to="/" replace />
 
   return (
     <div className="app-layout">
@@ -46,25 +81,24 @@ function AdminApp() {
           <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            {/* Module routes — each module handles its own sub-routes */}
-            <Route path="/hr/*" element={<HRModule />} />
-            <Route path="/crm/*" element={<CRMModule />} />
-            <Route path="/finance/*" element={<FinanceModule />} />
-            <Route path="/analytics" element={<AnalyticsModule />} />
-            <Route path="/analytics/*" element={<AnalyticsModule />} />
-            <Route path="/purchase/*" element={<PurchaseModule />} />
-            <Route path="/wms/*" element={<WMSModule />} />
-            <Route path="/manufacturing/*" element={<ManufacturingModule />} />
-            <Route path="/sales" element={<SalesModule />} />
-            <Route path="/sales/*" element={<SalesModule />} />
-            <Route path="/pos" element={<POSModule />} />
-            <Route path="/pos/*" element={<POSModule />} />
-            <Route path="/org/*" element={<OrgModule />} />
-            <Route path="/process/*" element={<ProcessModule />} />
-            <Route path="/system/*" element={<SystemModule />} />
-            <Route path="/ai/*" element={<AIModule />} />
-            <Route path="/integration/*" element={<IntegrationModule />} />
-            <Route path="/super-admin/*" element={<SuperAdminModule />} />
+            <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
+            <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
+            <Route path="/finance/*" element={canAccess('/finance') ? <FinanceModule /> : blocked} />
+            <Route path="/analytics" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics/*" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
+            <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
+            <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
+            <Route path="/sales" element={canAccess('/sales') ? <SalesModule /> : blocked} />
+            <Route path="/sales/*" element={canAccess('/sales') ? <SalesModule /> : blocked} />
+            <Route path="/pos" element={canAccess('/pos') ? <POSModule /> : blocked} />
+            <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
+            <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
+            <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
+            <Route path="/system/*" element={canAccess('/system') ? <SystemModule /> : blocked} />
+            <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
+            <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
+            <Route path="/super-admin/*" element={canAccess('/super-admin') ? <SuperAdminModule /> : blocked} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
@@ -74,22 +108,36 @@ function AdminApp() {
   )
 }
 
+// ── Protected wrapper ──
+function ProtectedApp() {
+  const { loading, isAuthenticated, profile } = useAuth()
+
+  if (loading) return <LoadingSpinner />
+  if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
+
+  return <AdminApp role={profile?.role || 'store_staff'} />
+}
+
+// ── Root App ──
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <TenantProvider>
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/demo" element={<DemoLanding />} />
+          <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           <Route path="/liff/clock" element={<LiffClockIn />} />
           <Route path="/liff/task" element={<LiffTask />} />
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>
-          <Route path="/*" element={<AdminApp />} />
+          <Route path="/*" element={<ProtectedApp />} />
         </Routes>
         </Suspense>
       </TenantProvider>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }

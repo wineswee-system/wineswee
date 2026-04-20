@@ -13,6 +13,17 @@ export const updateEmployee = (id, data) =>
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)
 
+export async function inviteEmployee(email, name) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const res = await fetch(`${url}/functions/v1/invite-employee`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'apikey': key },
+    body: JSON.stringify({ email, name }),
+  })
+  return res.json()
+}
+
 // ── Attendance ─────────────────────────────────────────────
 export const getAttendance = (date) => {
   const q = supabase.from('attendance_records').select('*').order('id')
@@ -329,7 +340,6 @@ export const getTasks = (filters = {}) => {
   let q = supabase.from('tasks').select('*').order('created_at', { ascending: false })
   if (filters.instanceId) q = q.eq('workflow_instance_id', filters.instanceId)
   if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
-  else if (filters.assignee) q = q.eq('assignee', filters.assignee)
   if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
   if (filters.bucket) q = q.eq('bucket', filters.bucket)
   return q
@@ -416,6 +426,121 @@ export const updateTaskConfirmation = (id, data) =>
 // ── Approval Forms — task reference ─────────────────────
 export const getApprovalFormByTask = (taskId) =>
   supabase.from('approval_forms').select('*').eq('ref_task_id', taskId).maybeSingle()
+
+// ── Task Watchers (followers / collaborators) ─────────────
+export const getTaskWatchers = (taskId) =>
+  supabase.from('task_watchers')
+    .select('*, employees:employee_id(id, name, email, dept)')
+    .eq('task_id', taskId)
+    .order('added_at')
+
+export const addTaskWatcher = (data) =>
+  supabase.from('task_watchers').insert(data).select().single()
+
+export const removeTaskWatcher = (id) =>
+  supabase.from('task_watchers').delete().eq('id', id)
+
+export const getWatchedTasksForEmployee = (employeeId) =>
+  supabase.from('task_watchers')
+    .select('*, tasks:task_id(*)')
+    .eq('employee_id', employeeId)
+
+// ── Task Mentions (@mentions inside comments) ─────────────
+export const getTaskMentions = (taskId) =>
+  supabase.from('task_mentions')
+    .select('*, employees:mentioned_employee_id(id, name)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+
+export const createTaskMentions = (rows) =>
+  supabase.from('task_mentions').insert(rows).select()
+
+export const markMentionNotified = (id) =>
+  supabase.from('task_mentions').update({ notified: true, notified_at: new Date().toISOString() }).eq('id', id)
+
+// ── Projects ──────────────────────────────────────────────
+export const getProjects = () =>
+  supabase.from('projects').select('*').order('created_at', { ascending: false })
+
+export const getProject = (id) =>
+  supabase.from('projects').select('*').eq('id', id).maybeSingle()
+
+export const createProject = (data) =>
+  supabase.from('projects').insert(data).select().single()
+
+export const updateProject = (id, data) =>
+  supabase.from('projects').update(data).eq('id', id).select().single()
+
+// ── Project Members ───────────────────────────────────────
+export const getProjectMembers = (projectId) =>
+  supabase.from('v_project_members_full').select('*').eq('project_id', projectId).order('added_at')
+
+export const addProjectMember = (data) =>
+  supabase.from('project_members').insert(data).select().single()
+
+export const updateProjectMember = (id, data) =>
+  supabase.from('project_members').update(data).eq('id', id).select().single()
+
+export const removeProjectMember = (id) =>
+  supabase.from('project_members').delete().eq('id', id)
+
+// ── Project Sections (kanban columns) ─────────────────────
+export const getProjectSections = (projectId) =>
+  supabase.from('project_sections').select('*').eq('project_id', projectId).order('sort_order')
+
+export const createProjectSection = (data) =>
+  supabase.from('project_sections').insert(data).select().single()
+
+export const updateProjectSection = (id, data) =>
+  supabase.from('project_sections').update(data).eq('id', id).select().single()
+
+export const deleteProjectSection = (id) =>
+  supabase.from('project_sections').delete().eq('id', id)
+
+// ── Project Custom Fields ─────────────────────────────────
+export const getProjectCustomFields = (projectId) =>
+  supabase.from('project_custom_fields').select('*').eq('project_id', projectId).order('sort_order')
+
+export const createProjectCustomField = (data) =>
+  supabase.from('project_custom_fields').insert(data).select().single()
+
+export const updateProjectCustomField = (id, data) =>
+  supabase.from('project_custom_fields').update(data).eq('id', id).select().single()
+
+export const deleteProjectCustomField = (id) =>
+  supabase.from('project_custom_fields').delete().eq('id', id)
+
+// ── Task Custom Field Values ─────────────────────────────
+export const getTaskCustomFieldValues = (taskId) =>
+  supabase.from('task_custom_field_values')
+    .select('*, field:field_id(*)')
+    .eq('task_id', taskId)
+
+export const upsertTaskCustomFieldValue = (data) =>
+  supabase.from('task_custom_field_values')
+    .upsert(data, { onConflict: 'task_id,field_id' })
+    .select().single()
+
+// ── Task Activity (per-task audit timeline) ──────────────
+export const getTaskActivity = (taskId, limit = 50) =>
+  supabase.from('task_activity')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+export const logTaskActivity = (data) =>
+  supabase.from('task_activity').insert(data).select().single()
+
+// ── Tasks — expanded view (with counts + project/section) ─
+export const getTasksExpanded = (filters = {}) => {
+  let q = supabase.from('v_tasks_expanded').select('*').order('created_at', { ascending: false })
+  if (filters.project_id) q = q.eq('project_id', filters.project_id)
+  if (filters.section_id) q = q.eq('section_id', filters.section_id)
+  if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
+  if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
+  return q
+}
 
 // ── Checklists ─────────────────────────────────────────────
 export const getChecklists = () =>
@@ -523,6 +648,33 @@ export const setEmployeeStores = async (employeeId, storeIds, primaryStoreId) =>
 // ── Department Manager History ────────────────────────────
 export const getDeptManagerHistory = (deptId) =>
   supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })
+
+// ── RBAC ──────────────────────────────────────────────────
+export const getRoles = (orgId) => {
+  let q = supabase.from('roles').select('*').order('level', { ascending: false })
+  if (orgId) q = q.or(`organization_id.eq.${orgId},is_system.eq.true`)
+  return q
+}
+
+export const getPermissions = () =>
+  supabase.from('permissions').select('*').order('module').order('code')
+
+export const getRolePermissions = (roleId) =>
+  supabase.from('role_permissions').select('*, permissions(code, name, module)').eq('role_id', roleId)
+
+export const setRolePermissions = async (roleId, permissionIds) => {
+  await supabase.from('role_permissions').delete().eq('role_id', roleId)
+  if (!permissionIds?.length) return
+  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
+  return supabase.from('role_permissions').insert(rows)
+}
+
+export const getEmployeePermissions = async (employeeId) => {
+  const { data: emp } = await supabase.from('employees').select('role_id').eq('id', employeeId).single()
+  if (!emp?.role_id) return []
+  const { data } = await supabase.from('role_permissions').select('permissions(code)').eq('role_id', emp.role_id)
+  return (data || []).map(p => p.permissions?.code).filter(Boolean)
+}
 
 // ── LINE Groups ───────────────────────────────────────────
 export const getLineGroups = () =>
@@ -1264,17 +1416,9 @@ export const updateTenantModules = (id, features) =>
   supabase.from('tenants').update({ features }).eq('id', id).select().single()
 export const getTenantEmployees = (tenantId) =>
   supabase.from('employees').select('*').eq('tenant_id', tenantId).order('id')
-export const getRoles = () =>
-  supabase.from('roles').select('*').order('level')
-export const getPermissions = () =>
-  supabase.from('permissions').select('*').order('module, code')
-export const getRolePermissions = (roleId) =>
-  supabase.from('role_permissions').select('*, permissions(*)').eq('role_id', roleId)
+// getRoles, getPermissions, getRolePermissions — defined above in RBAC section
 export const updateRolePermissions = (roleId, permissionIds) =>
-  supabase.rpc('secure_update_role_permissions', {
-    p_role_id: roleId,
-    p_permission_ids: permissionIds,
-  })
+  setRolePermissions(roleId, permissionIds)
 
 // ── System Logs (Super Admin) ──
 export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {

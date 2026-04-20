@@ -58,10 +58,10 @@ export default function AttritionPrediction() {
 
     Promise.all([
       supabase.from('employees').select('*').eq('status', '在職').order('name'),
-      supabase.from('attendance_records').select('employee, date, status, hours').gte('date', since),
-      supabase.from('leave_requests').select('employee, days, status').gte('created_at', since),
+      supabase.from('attendance_records').select('employee_id, date, status, hours, employees(name)').gte('date', since),
+      supabase.from('leave_requests').select('employee_id, days, status, employees(name)').gte('created_at', since),
       supabase.from('performance_reviews').select('employee, overall_score, period').order('period', { ascending: false }),
-      supabase.from('salary_records').select('employee, base_salary, month').order('month', { ascending: false }),
+      supabase.from('salary_records').select('employee_id, base_salary, month, employees(name)').order('month', { ascending: false }),
       supabase.from('engagement_responses').select('employee, overall_score'),
     ]).then(([e, a, l, p, s, sv]) => {
       setEmployees(e.data || [])

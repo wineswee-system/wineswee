@@ -336,7 +336,36 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
         確認排班
       </button>
 
-      {/* Quick presets */}
+      {/* Store-defined shifts (門市班別) */}
+      {(() => {
+        const empType = emp.employment_type === '兼職' ? 'pt' : 'all'
+        const storeShifts = getStoreShifts ? getStoreShifts(emp.store || storeFilter, empType) : []
+        if (storeShifts.length === 0) return null
+        return (
+          <>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>📋 門市班別</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, marginBottom: 6 }}>
+            {storeShifts.map(sd => {
+              const isActive = startTime === sd.start_time?.slice(0,5) && endTime === sd.end_time?.slice(0,5)
+              return (
+                <button key={sd.name} onClick={() => { setStartTime(sd.start_time?.slice(0,5) || ''); setEndTime(sd.end_time?.slice(0,5) || '') }}
+                  style={{
+                    padding: '5px 2px', borderRadius: 6, border: isActive ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                    background: isActive ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
+                    color: isActive ? 'var(--accent-cyan)' : 'var(--text-primary)',
+                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                  {sd.name}
+                </button>
+              )
+            })}
+          </div>
+          </>
+        )
+      })()}
+
+      {/* Quick presets (彈性班次) */}
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>⚡ 彈性班次</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, marginBottom: 8 }}>
         {quickPresets.map(p => (
           <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end) }}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Rocket, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createTask, createChecklist } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -90,6 +91,8 @@ const DEFAULT_TEMPLATES = [
 ]
 
 export default function SOPTemplates() {
+  const { profile } = useAuth()
+  const currentUser = profile?.name || '管理員'
   const [templates, setTemplates] = useState([])
   const [locations, setLocations] = useState([])
   const [employees, setEmployees] = useState([])
@@ -109,7 +112,7 @@ export default function SOPTemplates() {
     Promise.all([
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('stores').select('*').order('name'),
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(async ([t, l, e, d]) => {
       let tpls = t.data || []
@@ -150,7 +153,7 @@ export default function SOPTemplates() {
         template_name: deployTemplate.name,
         store: loc,
         status: '進行中',
-        started_by: employees[0]?.name || '系統',
+        started_by: currentUser,
       }).select().single()
       if (instErr) throw instErr
 

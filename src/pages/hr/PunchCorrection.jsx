@@ -15,7 +15,7 @@ export default function PunchCorrection() {
   const load = () => {
     Promise.all([
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, dept').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, departments(name)').eq('status', '在職').order('name'),
     ]).then(([c, e]) => {
       setCorrections(c.data || [])
       setEmployees(e.data || [])

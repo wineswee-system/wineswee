@@ -3,6 +3,7 @@ import { Plus, Search, Info, Paperclip } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
+import { useAuth } from '../../contexts/AuthContext'
 import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest } from '../../lib/leavePolicy'
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
@@ -10,6 +11,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Leave() {
+  const { profile } = useAuth()
   const [leaves, setLeaves] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -25,7 +27,7 @@ export default function Leave() {
   useEffect(() => {
     Promise.all([
       getLeaveRequests(),
-      supabase.from('employees').select('id, name, dept, position, join_date, phone').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, join_date, phone, departments(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([l, e, d]) => {
       const emps = e.data || []
@@ -106,7 +108,7 @@ export default function Leave() {
     if (data) {
       setLeaves(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ employee: employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
+      setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
       setValidationMsg('')
 
       // 建立簽核流程（自動找主管 → 建 workflow_instance → 通知）

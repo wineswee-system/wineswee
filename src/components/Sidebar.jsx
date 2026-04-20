@@ -267,7 +267,7 @@ const groupNav = {
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
         { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
-        { icon: ArrowRightLeft, label: '轉調紀��', path: '/hr/transfer' },
+        { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
         { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
       ]
     },

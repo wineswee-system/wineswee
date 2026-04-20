@@ -39,7 +39,7 @@ export default function LineIntegration() {
       const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
         supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, department_id, position, status, departments!department_id(name)').eq('status', '在職').order('name'),
+        supabase.from('employees').select('id, name, dept, department_id, position, status, departments!department_id(name)').eq('status', '在職').order('name'),
         getLineGroups(),
         getLineMessages(),
         supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),

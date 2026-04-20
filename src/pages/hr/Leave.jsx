@@ -27,7 +27,7 @@ export default function Leave() {
   useEffect(() => {
     Promise.all([
       getLeaveRequests(),
-      supabase.from('employees').select('id, name, department_id, position, join_date, phone, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, join_date, phone, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([l, e, d]) => {
       const emps = e.data || []

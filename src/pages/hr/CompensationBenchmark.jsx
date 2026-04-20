@@ -46,7 +46,7 @@ export default function CompensationBenchmark() {
   useEffect(() => {
     Promise.all([
       getCompensationBands(),
-      supabase.from('employees').select('id, name, department_id, position, store_id, status, departments(name), stores(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('salary_records').select('employee_id, base_salary, allowance, month, employees(name)').order('month', { ascending: false }),
       supabase.from('departments').select('*').order('name'),
     ]).then(([b, e, s, d]) => {

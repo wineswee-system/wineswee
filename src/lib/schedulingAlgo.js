@@ -265,7 +265,8 @@ export function runProgrammaticSchedule(data) {
     const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
     const weeksTotal = (monthlyCtx?.weeksRemaining ?? 3) + 1
     const restNeededThisMonth = Math.max(0, monthRest - prevRestUsed)
-    const restPerWeek = Math.ceil(restNeededThisMonth / weeksTotal)
+    // 用 floor 取整：寧可少休一天留到後面的週，避免累積超標
+    const restPerWeek = Math.max(1, Math.floor(restNeededThisMonth / weeksTotal))
     const alreadyResting = weekDates.filter(d => restDayPlan[emp.name].has(d)).length
 
     if (alreadyResting < restPerWeek) {

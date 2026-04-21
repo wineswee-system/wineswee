@@ -36,11 +36,21 @@ export default function DeployModal({
               <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={deployForm.assignees[i] || ''}
                 onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
                 <option value="">請選擇</option>
-                {departments.map(d => (
-                  <optgroup key={d.id} label={d.name}>
-                    {employees.filter(e => e.dept === d.name).map(e => <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>)}
+                {departments.map(d => {
+                  const deptEmps = employees.filter(e => e.department_id === d.id || e.dept === d.name)
+                  if (deptEmps.length === 0) return null
+                  return (
+                    <optgroup key={d.id} label={d.name}>
+                      {deptEmps.map(e => <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>)}
+                    </optgroup>
+                  )
+                })}
+                {/* 沒有歸屬部門的員工 */}
+                {employees.filter(e => !e.department_id && !departments.some(d => d.name === e.dept)).length > 0 && (
+                  <optgroup label="其他">
+                    {employees.filter(e => !e.department_id && !departments.some(d => d.name === e.dept)).map(e => <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>)}
                   </optgroup>
-                ))}
+                )}
               </select>
             </div>
           ))}

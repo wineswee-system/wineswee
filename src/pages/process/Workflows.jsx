@@ -89,7 +89,7 @@ export default function Workflows() {
       getWorkflows(),
       getWorkflowInstances(),
       getTasks(),
-      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position, department_id').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),

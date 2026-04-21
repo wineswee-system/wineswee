@@ -67,14 +67,15 @@ export default function TaskDetailPanel({
     setShowTime(!!task.due_time)
     setEditingTitle(false)
 
+    const safe = (promise) => promise.catch(() => ({ data: null }))
     Promise.all([
-      getTaskComments(task.id),
-      getTaskAttachments(task.id),
-      getTaskChecklists(task.id),
-      getTaskDependencies(task.id),
-      getApprovalChains(),
-      getApprovalFormByTask(task.id),
-      getTaskConfirmations(task.id),
+      safe(getTaskComments(task.id)),
+      safe(getTaskAttachments(task.id)),
+      safe(getTaskChecklists(task.id)),
+      safe(getTaskDependencies(task.id)),
+      safe(getApprovalChains()),
+      safe(getApprovalFormByTask(task.id)),
+      safe(getTaskConfirmations(task.id)),
     ]).then(([c, a, cl, d, ac, af, tc]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
@@ -87,7 +88,7 @@ export default function TaskDetailPanel({
         setApprovalForm(af.data)
         setApprovalPriority(af.data.priority || '中')
         setApprovalMode(af.data.mode || 'sequential')
-        getApprovalFormSteps(af.data.id).then(({ data: steps }) => setApprovalSteps(steps || []))
+        getApprovalFormSteps(af.data.id).then(({ data: steps }) => setApprovalSteps(steps || [])).catch(() => setApprovalSteps([]))
       } else {
         setApprovalForm(null)
         setApprovalSteps([])
@@ -97,7 +98,7 @@ export default function TaskDetailPanel({
       // Load items for each linked checklist
       const linked = cl.data || []
       if (linked.length > 0) {
-        Promise.all(linked.map(lc => getChecklistItems(lc.checklist_id)))
+        Promise.all(linked.map(lc => safe(getChecklistItems(lc.checklist_id))))
           .then(results => {
             const map = {}
             linked.forEach((lc, i) => { map[lc.checklist_id] = results[i].data || [] })
@@ -106,7 +107,7 @@ export default function TaskDetailPanel({
       } else {
         setChecklistItemsMap({})
       }
-    })
+    }).catch(() => {})
   }, [task?.id])
 
   // Lock body scroll when modal is open

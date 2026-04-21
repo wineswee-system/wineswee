@@ -4,16 +4,22 @@ import { getAttendance, serverClockIn } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 export default function Attendance() {
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+  const isStaff = userRole === 'store_staff'
+  const isManager = userRole === 'manager'
+
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState('')
-  const [search, setSearch] = useState('')
+  const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
+  const [search, setSearch] = useState(isStaff ? (profile?.name || '') : '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
@@ -27,7 +33,15 @@ export default function Attendance() {
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*'),
     ]).then(([r, e, d, s]) => {
-      setRecords(r.data || [])
+      let recs = r.data || []
+      // store_staff: 只顯示自己的紀錄
+      if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
+      // manager: 只顯示自己門市
+      if (isManager && profile?.store) recs = recs.filter(r => {
+        const emp = (e.data || []).find(emp => emp.name === r.employee)
+        return emp?.store === profile.store
+      })
+      setRecords(recs)
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setStores(s.data || [])
@@ -146,18 +160,21 @@ export default function Attendance() {
         ))}
       </div>
 
-      {/* 門市篩選 */}
-      <div style={{
-        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
-        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-        alignItems: 'center',
-      }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
-          <option value="">全部門市</option>
-          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-        </select>
-      </div>
+      {/* 門市篩選 — store_staff 不顯示 */}
+      {!isStaff && (
+        <div style={{
+          display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+          background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+          alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
+            disabled={isManager}>
+            <option value="">全部門市</option>
+            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {tab === 'records' && <>
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

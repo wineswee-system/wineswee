@@ -70,6 +70,7 @@ export default function Schedule() {
   const [SHIFT_TYPES, setShiftTypes] = useState([REST_SHIFT])
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [minStaff, setMinStaff] = useState(3)
+  const [minStaffWeekend, setMinStaffWeekend] = useState(3)
   const [showLawModal, setShowLawModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
@@ -379,7 +380,7 @@ export default function Schedule() {
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
         employees: filtered, shiftDefs,
-        storeFilter, locations, minStaff, tenantId,
+        storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests
@@ -556,7 +557,7 @@ export default function Schedule() {
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
         employees: filtered, shiftDefs,
-        storeFilter, locations, minStaff, tenantId,
+        storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests
@@ -652,10 +653,13 @@ export default function Schedule() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-              最少上班
-              <input type="number" className="form-input" style={{ width: 50, padding: '4px 8px', fontSize: 12, textAlign: 'center' }}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+              平日
+              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
                 value={minStaff} onChange={e => setMinStaff(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
+              假日
+              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
+                value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
               人/天
             </div>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {

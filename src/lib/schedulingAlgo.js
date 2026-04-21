@@ -59,7 +59,10 @@ export function runProgrammaticSchedule(data) {
 
   const staffingRules = data.staffingRules || []
   const timeSlots = data.timeSlots || []
-  const minStaff = storeSettings?.minStaff || 1
+  const minStaffWeekday = storeSettings?.minStaff || 1
+  const minStaffWeekend = storeSettings?.minStaffWeekend || minStaffWeekday
+  const getMinStaff = (date) => isWeekendDay(new Date(date).getDay()) ? minStaffWeekend : minStaffWeekday
+  const minStaff = minStaffWeekday // backward compat for existing references
   const useTimeSlotMode = timeSlots.length > 0  // 時段覆蓋制 or 班別制
 
   // Guard: abort early if no shift definitions and no time slots
@@ -216,20 +219,20 @@ export function runProgrammaticSchedule(data) {
   }
 
   // Calculate minimum workers needed per day (from time slots or staffing rules)
+  // 使用平日/假日分開的 minStaff
   const minWorkersPerDay = {}
   for (const date of weekDates) {
     const dow = new Date(date).getDay()
     const isWeekend = isWeekendDay(dow)
+    const dayMinStaff = isWeekend ? minStaffWeekend : minStaffWeekday
     if (useTimeSlotMode) {
-      // Max concurrent requirement from time slots
       const daySlots = timeSlots.filter(s =>
         s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
       )
-      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), minStaff)
+      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), dayMinStaff)
     } else {
-      // Sum of shift staffing requirements
       const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
-      minWorkersPerDay[date] = total || minStaff
+      minWorkersPerDay[date] = total || dayMinStaff
     }
   }
 

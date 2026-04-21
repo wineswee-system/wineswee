@@ -221,11 +221,13 @@ export function runProgrammaticSchedule(data) {
     const dow = new Date(date).getDay()
     const isWeekend = isWeekendDay(dow)
     if (useTimeSlotMode) {
-      // Max concurrent requirement from time slots
+      // Max concurrent requirement from time slots (不用 minStaff 蓋掉)
       const daySlots = timeSlots.filter(s =>
         s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
       )
-      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), minStaff)
+      minWorkersPerDay[date] = daySlots.length > 0
+        ? Math.max(...daySlots.map(s => s.required_count))
+        : 1
     } else {
       // Sum of shift staffing requirements
       const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
@@ -291,7 +293,9 @@ export function runProgrammaticSchedule(data) {
         if (needed <= 0) break
         const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
         const workingAfter = employees.length - restingOnDay - 1
-        if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
+        // 用時段人力需求（不是 minStaff），最低保證 1 人上班
+        const dayMin = minWorkersPerDay[c.date] || 1
+        if (workingAfter < dayMin) continue
         restDayPlan[emp.name].add(c.date)
         needed--
       }

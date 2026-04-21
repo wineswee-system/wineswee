@@ -3,6 +3,7 @@ import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCir
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
+import { checkAndNotifyDueTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const STATUS_CONFIG = {
@@ -40,6 +41,8 @@ export default function ProcessOverview() {
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => {
       setLoading(false)
+      // 每次 session 自動檢查今天到期的任務，發 LINE 提醒
+      checkAndNotifyDueTasks().catch(() => {})
     })
   }, [])
 

@@ -521,7 +521,7 @@ export default function Sidebar() {
     store_staff:  ['dashboard', 'people'],
     office_staff: ['dashboard', 'people', 'project'],
     manager:      ['dashboard', 'people', 'project'],
-    admin:        ['dashboard', 'people', 'project', 'analytics'],
+    admin:        ['dashboard', 'people', 'project'],  // 只有 HR + 流程，其他未簽約
     super_admin:  null, // null = all
   }
   const allowedGroups = userRole in ROLE_GROUPS ? ROLE_GROUPS[userRole] : ROLE_GROUPS['store_staff']

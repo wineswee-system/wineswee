@@ -33,12 +33,12 @@ const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 
-// ── Route-level access control — 5 roles (MUST be before AdminApp) ──
+// ── Route-level access control — 5 roles ──
 const ROLE_ROUTES = {
   store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances'],
   office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/process', '/org'],
   manager:      ['/', '/hr', '/org', '/process'],
-  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
+  admin:        ['/', '/hr', '/org', '/process'],  // 只有 HR + 流程，其他模組未簽約
   super_admin:  null, // all
 }
 

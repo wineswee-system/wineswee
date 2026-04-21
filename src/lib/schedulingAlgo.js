@@ -277,13 +277,15 @@ export function runProgrammaticSchedule(data) {
     const weeksTotal = (monthlyCtx?.weeksRemaining ?? 3) + 1
     const restNeededThisMonth = Math.max(0, monthRest - prevRestUsed)
 
-    const avgPerWeek = isPT
-      ? Math.floor(restNeededThisMonth / weeksTotal)
-      : Math.ceil(restNeededThisMonth / weeksTotal)
-    // 月休已達標 → 本週不再追加休假（不被 minRestPerWeek 強制塞）
-    restPerWeekMap[emp.name] = restNeededThisMonth > 0
-      ? Math.max(minRestPerWeek, avgPerWeek)
-      : 0
+    // 正職：用 ceil 精確分配，不受 minRestPerWeek 干擾（10 天已超法定 8 天）
+    // 兼職：用 floor 彈性分配，但保證每週至少 minRestPerWeek（法定保護）
+    if (restNeededThisMonth <= 0) {
+      restPerWeekMap[emp.name] = 0
+    } else if (isPT) {
+      restPerWeekMap[emp.name] = Math.max(minRestPerWeek, Math.floor(restNeededThisMonth / weeksTotal))
+    } else {
+      restPerWeekMap[emp.name] = Math.ceil(restNeededThisMonth / weeksTotal)
+    }
   }
 
   // 第一輪：尊重 minStaff，正職先排（硬需求 10 天），兼職後排（彈性）

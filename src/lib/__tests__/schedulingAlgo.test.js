@@ -591,4 +591,37 @@ describe('monthly rest day precision', () => {
       expect(restDays, `${empName} 月休 ${restDays} 天，應為 10 天`).toBe(10)
     }
   })
+
+  it('REST-06: 正職月休 10 天 — 有希望休日也不能多', () => {
+    const data = realWorldData()
+    // 加一些 off requests（希望休），不應導致正職超過 10 天
+    data.offRequests = [
+      { employee: 'FT-1', date: '2026-04-05' },
+      { employee: 'FT-1', date: '2026-04-12' },
+      { employee: 'FT-1', date: '2026-04-19' },
+      { employee: 'FT-2', date: '2026-04-06' },
+      { employee: 'FT-2', date: '2026-04-20' },
+    ]
+    const result = runMonthlyProgrammaticSchedule(data)
+    for (let i = 1; i <= 3; i++) {
+      const empName = `FT-${i}`
+      const restDays = result.assignments.filter(
+        a => a.employee === empName && isAbsence(a.shift)
+      ).length
+      expect(restDays, `${empName} 月休 ${restDays} 天，應為 10 天`).toBe(10)
+    }
+  })
+
+  it('REST-07: 正職月休 10 天 — 不同月份天數也精確（5月31天）', () => {
+    const data = realWorldData()
+    data.monthDates = getMonthDates(2026, 5)  // 5月有31天
+    const result = runMonthlyProgrammaticSchedule(data)
+    for (let i = 1; i <= 3; i++) {
+      const empName = `FT-${i}`
+      const restDays = result.assignments.filter(
+        a => a.employee === empName && isAbsence(a.shift)
+      ).length
+      expect(restDays, `${empName} 月休 ${restDays} 天，應為 10 天`).toBe(10)
+    }
+  })
 })

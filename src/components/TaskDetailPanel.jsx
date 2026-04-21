@@ -67,7 +67,7 @@ export default function TaskDetailPanel({
     setShowTime(!!task.due_time)
     setEditingTitle(false)
 
-    const safe = (promise) => promise.catch(() => ({ data: null }))
+    const safe = (promise) => Promise.resolve(promise).then(r => r?.error ? { data: null } : r, () => ({ data: null }))
     Promise.all([
       safe(getTaskComments(task.id)),
       safe(getTaskAttachments(task.id)),

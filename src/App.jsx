@@ -111,19 +111,10 @@ function AdminApp({ role = 'store_staff' }) {
 
 // ── Protected wrapper ──
 function ProtectedApp() {
-  const { loading, isAuthenticated, profile, profileReady } = useAuth()
+  const { loading, isAuthenticated, profile } = useAuth()
 
   if (loading) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
-
-  // 等 profile 載完再決定
-  if (!profileReady) return <LoadingSpinner />
-
-  // 沒有 profile（RLS 擋住 = 一般員工）→ 導向員工入口
-  if (!profile) {
-    window.location.href = '/employee-portal/'
-    return <LoadingSpinner />
-  }
 
   return <AdminApp role={profile?.role || 'store_staff'} />
 }

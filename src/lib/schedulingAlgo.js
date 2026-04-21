@@ -434,8 +434,8 @@ export function runProgrammaticSchedule(data) {
 
       // ── Detect operating hours ──
       const oh = getOH(date)
-      const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')
-      const storeCloseStr = oh?.close || daySlots[daySlots.length - 1]?.end_time || '00:00'
+      const storeOpenH = parseTime(oh?.open || '11:00')
+      const storeCloseStr = oh?.close || '00:00'
       const storeCloseH = parseTime(storeCloseStr)
       const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
       const maxGrossH = effectiveCloseH - storeOpenH // max shift length = store hours

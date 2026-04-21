@@ -1,24 +1,33 @@
 import { useState, useEffect } from 'react'
 import { Plus, Check, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function PunchCorrection() {
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+  const isStaff = userRole === 'store_staff'
+
   const [corrections, setCorrections] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
-  const [form, setForm] = useState({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+  const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
 
   const load = () => {
     Promise.all([
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, department_id, departments(name)').eq('status', '在職').order('name'),
     ]).then(([c, e]) => {
-      setCorrections(c.data || [])
-      setEmployees(e.data || [])
+      let recs = c.data || []
+      if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
+      setCorrections(recs)
+      // store_staff: 只顯示自己
+      const emps = e.data || []
+      setEmployees(isStaff ? emps.filter(emp => emp.name === profile?.name) : emps)
     }).finally(() => setLoading(false))
   }
 

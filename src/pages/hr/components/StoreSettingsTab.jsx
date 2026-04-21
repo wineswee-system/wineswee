@@ -560,7 +560,9 @@ export default function StoreSettingsTab({
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>正職 (天/月)</label>
             <input className="form-input" type="number" min="4" max="15" value={storeSettings?.ft_monthly_rest_days ?? 8} onChange={async e => {
               if (!selectedStore) return
-              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, ft_monthly_rest_days: Number(e.target.value) || 8 }, { onConflict: 'store_id' }).select().single()
+              const val = Number(e.target.value) || 8
+              setStoreSettings(prev => ({ ...prev, ft_monthly_rest_days: val }))
+              const { data } = await supabase.from('store_settings').upsert({ ...storeSettings, store_id: selectedStore.id, ft_monthly_rest_days: val }, { onConflict: 'store_id' }).select().single()
               if (data) setStoreSettings(data)
             }} style={{ width: 80 }} />
           </div>
@@ -568,7 +570,9 @@ export default function StoreSettingsTab({
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>兼職 (天/月)</label>
             <input className="form-input" type="number" min="4" max="25" value={storeSettings?.pt_monthly_rest_days ?? 14} onChange={async e => {
               if (!selectedStore) return
-              const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, pt_monthly_rest_days: Number(e.target.value) || 14 }, { onConflict: 'store_id' }).select().single()
+              const val = Number(e.target.value) || 14
+              setStoreSettings(prev => ({ ...prev, pt_monthly_rest_days: val }))
+              const { data } = await supabase.from('store_settings').upsert({ ...storeSettings, store_id: selectedStore.id, pt_monthly_rest_days: val }, { onConflict: 'store_id' }).select().single()
               if (data) setStoreSettings(data)
             }} style={{ width: 80 }} />
           </div>

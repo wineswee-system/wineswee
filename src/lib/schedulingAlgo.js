@@ -280,7 +280,10 @@ export function runProgrammaticSchedule(data) {
     const avgPerWeek = isPT
       ? Math.floor(restNeededThisMonth / weeksTotal)
       : Math.ceil(restNeededThisMonth / weeksTotal)
-    restPerWeekMap[emp.name] = Math.max(minRestPerWeek, avgPerWeek)
+    // 月休已達標 → 本週不再追加休假（不被 minRestPerWeek 強制塞）
+    restPerWeekMap[emp.name] = restNeededThisMonth > 0
+      ? Math.max(minRestPerWeek, avgPerWeek)
+      : 0
   }
 
   // 第一輪：尊重 minStaff，正職先排（硬需求 10 天），兼職後排（彈性）
@@ -610,7 +613,7 @@ export function runProgrammaticSchedule(data) {
           // 用 restPerWeekMap 做精確控制，不會超過月目標
           if (allMaxMet && monthlyCtx) {
             const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
-            const weekRestTarget = restPerWeekMap[emp.name] || 2
+            const weekRestTarget = restPerWeekMap[emp.name] ?? 2
             if (thisWeekRest < weekRestTarget) { schedule[emp.name][date] = '休'; continue }
           }
         } else {
@@ -780,7 +783,7 @@ export function runProgrammaticSchedule(data) {
           // 正職：Step 1c 排不到的情況（人力不足），在這裡用 restPerWeekMap 精確補休
           if (monthlyCtx) {
             const thisWeekRest = getMonthRestUsed(emp.name) - (monthlyCtx.restDaysUsed?.[emp.name] || 0)
-            const weekRestTarget = restPerWeekMap[emp.name] || 2
+            const weekRestTarget = restPerWeekMap[emp.name] ?? 2
             if (thisWeekRest < weekRestTarget) {
               schedule[emp.name][date] = '休'
               return false

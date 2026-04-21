@@ -497,12 +497,12 @@ export function runProgrammaticSchedule(data) {
         for (const slot of slotCoverage) {
           if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
             const maxC = slot.max_count || slot.required_count + 2
-            if (slot.covered >= maxC) score -= 100
+            if (slot.covered >= maxC) return -999  // 硬擋：超過 max_count 直接不排
             else if (slot.covered < slot.required_count) {
               score += 40
-              if (slot.covered === 0) score += 30  // empty slot = most urgent
+              if (slot.covered === 0) score += 30
             } else {
-              score += 3  // over min, under max
+              score += 3
             }
           }
         }

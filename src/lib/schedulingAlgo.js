@@ -492,6 +492,8 @@ export function runProgrammaticSchedule(data) {
         const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
         const endH = startH + grossH
 
+        // Don't start before store opening
+        if (startH < storeOpenH) return null
         // Don't go past store closing
         if (endH > effectiveCloseH + 0.5) return null
         // Legal: max daily hours

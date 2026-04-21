@@ -47,6 +47,24 @@ export default function OrgChart() {
       && e.id !== dept.manager_id
     )
 
+  // Employees assigned to a store, with 店長 first
+  const isStoreLead = (e) => (e.position || '').includes('店長') && !(e.position || '').includes('副店長')
+  const storeEmployees = (store) =>
+    employees
+      .filter(e => e.store_id === store.id)
+      .sort((a, b) => {
+        const aLead = isStoreLead(a) ? 0 : 1
+        const bLead = isStoreLead(b) ? 0 : 1
+        if (aLead !== bLead) return aLead - bLead
+        return (a.name || '').localeCompare(b.name || '', 'zh-Hant')
+      })
+
+  // Dept members excluding those already shown under a store in that dept
+  const deptMembersExcludingStoreStaff = (dept) => {
+    const deptStoreIds = new Set(stores.filter(s => s.department_id === dept.id).map(s => s.id))
+    return members(dept).filter(e => !e.store_id || !deptStoreIds.has(e.store_id))
+  }
+
   // Stores belonging to a department
   const deptStores = (dept) =>
     stores.filter(s => s.department_id === dept.id)
@@ -54,12 +72,9 @@ export default function OrgChart() {
   // Stores not assigned to any department
   const unassignedStores = stores.filter(s => !s.department_id)
 
-  // Find 營運部
-  const opsDept = departments.find(d => d.name === '營運部')
-  const opsStores = opsDept ? deptStores(opsDept) : []
-
-  // All stores to show at bottom (營運部 stores + unassigned)
-  const bottomStores = [...opsStores, ...unassignedStores.filter(s => !opsStores.some(os => os.id === s.id))]
+  // Separate depts with many stores (fan-out tree) vs few (inline)
+  const BIG_STORE_THRESHOLD = 3
+  const bigStoreDepts = departments.filter(d => deptStores(d).length > BIG_STORE_THRESHOLD)
 
   return (
     <div className="fade-in">
@@ -71,7 +86,7 @@ export default function OrgChart() {
       <div className="card">
         <div className="card-body" style={{ padding: '32px 24px', overflowX: 'auto' }}>
           {/* Top: 總經理室 */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 0 }}>
             <div style={{
               background: 'linear-gradient(135deg, var(--accent-cyan-dim), var(--accent-blue-dim))',
               border: '2px solid var(--accent-cyan)',
@@ -91,47 +106,63 @@ export default function OrgChart() {
 
           {/* Horizontal line */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{ width: '90%', height: 1, background: 'var(--border-strong)' }} />
+            <div style={{ width: '92%', height: 1, background: 'var(--border-strong)' }} />
           </div>
 
-          {/* Departments */}
-          <div style={{ display: 'flex', justifyContent: 'space-around', gap: 10, flexWrap: 'wrap' }}>
+          {/* Departments row */}
+          <div style={{ display: 'flex', justifyContent: 'space-around', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {departments.map((dept, i) => {
               const color = colors[i % colors.length]
               const dim = dims[i % dims.length]
               const head = managerName(dept)
               const subs = subManagers(dept)
-              const mems = members(dept)
+              const mems = deptMembersExcludingStoreStaff(dept)
               const dStores = deptStores(dept)
-              const showStoresInline = dept.name !== '營運部' && dStores.length > 0
+              const hasMgr = head !== '-' || subs.length > 0
+              const isBigStoreDept = dStores.length > BIG_STORE_THRESHOLD
 
               return (
-                <div key={dept.id} style={{ flex: '1 1 120px', maxWidth: 160, minWidth: 100 }}>
-                  {/* vertical connector */}
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <div style={{ width: 1, height: 24, background: 'var(--border-strong)' }} />
-                  </div>
+                <div key={dept.id} style={{ flex: '1 1 110px', maxWidth: 160, minWidth: 100, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {/* vertical connector from top bus */}
+                  <div style={{ width: 1, height: 24, background: 'var(--border-strong)' }} />
 
-                  {/* Department card */}
+                  {/* Department solid box */}
                   <div style={{
                     background: dim,
-                    border: `1px solid ${color}`,
+                    border: `1.5px solid ${color}`,
                     borderRadius: 10,
                     padding: '10px 12px',
                     textAlign: 'center',
-                    marginBottom: 8,
+                    width: '100%',
                   }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>部門主管</div>
-                    <div style={{ fontWeight: 600, color, fontSize: 13 }}>{dept.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{head}</div>
-                    {subs.length > 0 && subs.map(s => (
-                      <div key={s.id} style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.name}</div>
-                    ))}
+                    <div style={{ fontWeight: 700, color, fontSize: 13, lineHeight: 1.3 }}>{dept.name}</div>
                   </div>
 
-                  {/* Members */}
+                  {/* Dashed manager box under dept */}
+                  {hasMgr && (
+                    <>
+                      <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
+                      <div style={{
+                        border: `1px dashed ${color}`,
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        textAlign: 'center',
+                        background: 'var(--glass-light)',
+                        minWidth: 80,
+                      }}>
+                        {head !== '-' && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{head}</div>
+                        )}
+                        {subs.map(s => (
+                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{s.name}</div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Members (inline, small count) */}
                   {mems.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, width: '100%' }}>
                       {mems.map(emp => (
                         <div key={emp.id} style={{
                           background: 'var(--glass-light)',
@@ -147,29 +178,131 @@ export default function OrgChart() {
                       ))}
                     </div>
                   )}
+
+                  {/* Inline stores (small groups) */}
+                  {dStores.length > 0 && !isBigStoreDept && (
+                    <>
+                      <div style={{ width: 1, height: 18, background: 'var(--border-strong)' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                        {dStores.map(s => {
+                          const staff = storeEmployees(s)
+                          return (
+                            <div key={s.id} style={{
+                              background: 'var(--glass-light)',
+                              border: '1.5px solid var(--border-strong)',
+                              borderRadius: 8,
+                              padding: '6px 8px',
+                              textAlign: 'center',
+                            }}>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
+                              {staff.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
+                                  {staff.map(emp => (
+                                    <div key={emp.id} style={{
+                                      fontSize: 11,
+                                      color: isStoreLead(emp) ? color : 'var(--text-secondary)',
+                                      fontWeight: isStoreLead(emp) ? 600 : 400,
+                                    }}>
+                                      {emp.name}
+                                      {emp.position && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>· {emp.position}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               )
             })}
           </div>
 
-          {/* Stores section at bottom */}
-          {bottomStores.length > 0 && (
-            <>
-              {/* Connector */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-                <div style={{ width: 1, height: 24, background: 'var(--border-strong)' }} />
+          {/* Fan-out tree for depts with many stores (e.g. 營運部) */}
+          {bigStoreDepts.map((dept, i) => {
+            const color = colors[departments.indexOf(dept) % colors.length]
+            const dStores = deptStores(dept)
+            return (
+              <div key={dept.id} style={{ marginTop: 20 }}>
+                {/* connector down from that dept column would be ideal, but stores span wider — show labeled tree */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: 1, height: 18, background: 'var(--border-strong)' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+                  <div style={{
+                    fontSize: 12,
+                    color,
+                    fontWeight: 600,
+                    border: `1px dashed ${color}`,
+                    borderRadius: 6,
+                    padding: '3px 10px',
+                    background: 'var(--glass-light)',
+                  }}>
+                    {dept.name}門市 ({dStores.length})
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: '92%', height: 1, background: 'var(--border-strong)' }} />
+                </div>
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center',
+                  marginTop: 12,
+                }}>
+                  {dStores.map(s => {
+                    const staff = storeEmployees(s)
+                    return (
+                      <div key={s.id} style={{
+                        background: 'var(--glass-light)',
+                        border: '1.5px solid var(--border-strong)',
+                        borderRadius: 8,
+                        padding: '8px 10px',
+                        textAlign: 'center',
+                        minWidth: 110,
+                        maxWidth: 160,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                      }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</div>
+                        {staff.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px dashed var(--border-subtle)', paddingTop: 6 }}>
+                            {staff.map(emp => (
+                              <div key={emp.id} style={{
+                                fontSize: 11,
+                                color: isStoreLead(emp) ? color : 'var(--text-secondary)',
+                                fontWeight: isStoreLead(emp) ? 700 : 500,
+                                lineHeight: 1.3,
+                              }}>
+                                {emp.name}
+                                {emp.position && (
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                                    {emp.position}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
+            )
+          })}
+
+          {/* Unassigned stores */}
+          {unassignedStores.length > 0 && (
+            <div style={{ marginTop: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>門市 ({bottomStores.length})</div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '90%', height: 1, background: 'var(--border-strong)' }} />
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>未分配門市 ({unassignedStores.length})</div>
               </div>
               <div style={{
                 display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
-                marginTop: 12,
               }}>
-                {bottomStores.map(s => (
+                {unassignedStores.map(s => (
                   <div key={s.id} style={{
                     background: 'var(--glass-light)',
                     border: '1px dashed var(--border-strong)',
@@ -184,7 +317,7 @@ export default function OrgChart() {
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

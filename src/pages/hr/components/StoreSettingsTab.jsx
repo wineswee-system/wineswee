@@ -285,7 +285,7 @@ export default function StoreSettingsTab({
                 const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
                 return (
                   <tr key={d.id}>
-                    <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: d.color }} /><b>{d.name}</b></div></td>
+                    <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--accent-cyan)' }} /><b>{d.name}</b></div></td>
                     <td>
                       <span style={{
                         display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
@@ -689,17 +689,9 @@ export default function StoreSettingsTab({
               <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.end_time} onChange={e => setField('end_time', e.target.value)} />
             </Field>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="休息時間（分鐘）">
-              <input className="form-input" type="number" style={{ width: '100%' }} min={0} step={15} value={shiftForm.break_minutes} onChange={e => setField('break_minutes', e.target.value)} />
-            </Field>
-            <Field label="顯示顏色">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="color" value={shiftForm.color} onChange={e => setField('color', e.target.value)} style={{ width: 40, height: 36, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
-                <input className="form-input" type="text" style={{ flex: 1 }} value={shiftForm.color} onChange={e => setField('color', e.target.value)} />
-              </div>
-            </Field>
-          </div>
+          <Field label="休息時間（分鐘）">
+            <input className="form-input" type="number" style={{ width: '100%' }} min={0} step={15} value={shiftForm.break_minutes} onChange={e => setField('break_minutes', e.target.value)} />
+          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="適用對象">
               <select className="form-input" style={{ width: '100%' }} value={shiftForm.employee_type} onChange={e => setField('employee_type', e.target.value)}>

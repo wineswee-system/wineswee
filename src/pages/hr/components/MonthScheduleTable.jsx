@@ -62,14 +62,23 @@ export default function MonthScheduleTable({
         </div>
       </div>
 
-      {/* Shift Legend */}
+      {/* Shift Legend — simplified when viewing all stores */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {SHIFT_TYPES.map(t => (
-          <span key={t.label} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(t.label) }}>
-            {t.label}
+        {storeFilter ? (
+          // Single store: show only that store's shifts (deduplicated)
+          getStoreShifts(storeFilter).map(d => (
+            <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(d.name) }}>
+              {d.name}
+            </span>
+          ))
+        ) : (
+          // All stores: just show a generic "work shift" chip
+          <span style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
+            background: 'rgba(34,211,238,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }}>
+            工作班
           </span>
-        ))}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>|</span>
+        )}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
         {absenceOptions.map(a => (
           <span key={a.value} style={{ fontSize: 10, color: getAbsenceConfig(a.value)?.color || '#666' }}>
             {a.icon}{a.label}
@@ -215,7 +224,7 @@ function EmployeeRow({
     else if (isAbsence(s)) restDays++
   }
 
-  const isPT = emp.position?.includes('PT') || emp.employment_type === 'PT'
+  const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
   return (
     <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -224,11 +233,7 @@ function EmployeeRow({
         padding: '4px 8px', borderRight: '1px solid var(--border-light)',
       }}>
         <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap' }}>
-          {emp.name}
-          {isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 4 }}>PT</span>}
-        </div>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {emp.position || emp.dept}
+          {emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}
         </div>
       </td>
       {monthDates.map(date => {

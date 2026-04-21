@@ -247,8 +247,8 @@ export default function Schedule() {
     return shiftDefs.filter(d => {
       // Match store: store-specific OR global (no store_id)
       const storeMatch = !d.store_id || d.store_id === storeId
-      // Match employee type
-      const typeMatch = !d.employee_type || d.employee_type === 'all' || d.employee_type === empType
+      // Match employee type: 'all' means return everything
+      const typeMatch = empType === 'all' || !d.employee_type || d.employee_type === 'all' || d.employee_type === empType
       return storeMatch && typeMatch
     })
   }
@@ -536,6 +536,13 @@ export default function Schedule() {
     if (!canUseAISchedule) { alert('您沒有使用排班功能的權限'); return }
     const isMonthly = viewMode === 'month'
     const rangeLabel = isMonthly ? `${selectedMonth} 月排班` : `${weekStart} ~ ${weekEnd}`
+    // Guard: check shift definitions exist for this store (ignore employee_type filter)
+    const selectedStoreObj = locations.find(l => l.name === storeFilter)
+    const storeShifts = shiftDefs.filter(d => !d.store_id || d.store_id === selectedStoreObj?.id)
+    if (storeShifts.length === 0) {
+      alert('⚠ 尚未設定班別定義，無法排班。\n\n請先到「門市設定」新增班別（例如：11-20 早班、15-0 晚班等）。')
+      return
+    }
     if (!confirm(`將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。`)) return
     setAutoScheduling(true)
     setAiDraft(null)
@@ -609,9 +616,13 @@ export default function Schedule() {
   )
 
   const getShiftStyle = (shift) => {
-    const type = SHIFT_TYPES.find(t => t.label === shift)
-    if (!type) return {}
-    return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
+    if (isAbsence(shift)) {
+      const type = SHIFT_TYPES.find(t => t.label === shift)
+      if (!type) return {}
+      return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
+    }
+    // All work shifts use a single unified color for cleaner visuals
+    return { background: 'rgba(34,211,238,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }
   }
 
   const selectedStore = locations.find(s => s.name === storeFilter)
@@ -958,6 +969,9 @@ export default function Schedule() {
         <PreferencesTab
           filtered={filtered} shiftDefs={shiftDefs}
           preferences={preferences} setPreferences={setPreferences}
+          storeFilter={storeFilter} locations={locations}
+          getStoreShifts={getStoreShifts}
+          schedules={schedules}
         />
       )}
 

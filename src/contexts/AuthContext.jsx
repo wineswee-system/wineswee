@@ -10,12 +10,15 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null)
   const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [profileReady, setProfileReady] = useState(false)
   const profileLoaded = useRef(false)
 
   const loadProfile = async (authUser) => {
+    setProfileReady(false)
     if (!authUser?.email) {
       setProfile(null); setOrganization(null); setRole(null); setPermissions([])
       profileLoaded.current = false
+      setProfileReady(true)
       return
     }
     if (profileLoaded.current) return
@@ -47,6 +50,8 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Failed to load employee profile:', err)
       setProfile(null)
+    } finally {
+      setProfileReady(true)
     }
   }
 
@@ -95,7 +100,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, profile, organization, role, permissions, loading,
+      user, profile, organization, role, permissions, loading, profileReady,
       isAuthenticated: !!user,
       isAdmin, isSuperAdmin, hasPermission,
       signIn, signOut,

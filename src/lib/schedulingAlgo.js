@@ -601,17 +601,29 @@ export function runProgrammaticSchedule(data) {
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
 
-        // 正職：純月制 — 工時到或時段滿時，看月累計決定要不要補休
+        // 正職：工時到或時段滿時，看月累計 + 當天人力決定能不能休
         // 兼職：彈性自動休（時段滿/工時達標/月休未到上限）
         if (!pt) {
-          const prevRest = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
-          const monthRestUsed = prevRest + thisWeekRest
-          const monthRestGoal = monthRestTarget[emp.name] || 10
           if (weekHours >= range.max || allMaxMet) {
-            // 月累計還沒到目標 → 補休；已達標 → 跳過不多給
-            if (monthRestUsed < monthRestGoal) { schedule[emp.name][date] = '休'; continue }
-            continue
+            // 月累計檢查
+            const prevRest = monthlyCtx?.restDaysUsed?.[emp.name] || 0
+            const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
+            const monthRestUsed = prevRest + thisWeekRest
+            const monthRestGoal = monthRestTarget[emp.name] || 10
+            if (monthRestUsed >= monthRestGoal) continue  // 月休已達標，不多給
+            // 當天人力檢查：今天還有幾人在上班？不能低於 minStaff
+            const workingToday = employees.filter(e => {
+              const s = schedule[e.name]?.[date]
+              return s && !isAbsence(s)
+            }).length
+            const restingToday = employees.filter(e => {
+              const s = schedule[e.name]?.[date]
+              return s && isAbsence(s)
+            }).length
+            const unscheduledToday = employees.length - workingToday - restingToday
+            // 如果已排班的人夠撐 minStaff，可以休；否則不能休（避免開天窗）
+            if (workingToday + unscheduledToday - 1 < (minWorkersPerDay[date] || minStaff)) continue
+            schedule[emp.name][date] = '休'; continue
           }
         } else {
           // 兼職
@@ -777,15 +789,23 @@ export function runProgrammaticSchedule(data) {
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
         const pt = isPTEmp(emp)
         if (!pt) {
-          // 正職：純月制 — 月累計還沒到目標才補休
+          // 正職：月累計還沒到目標 + 當天人力夠才補休
           if (monthlyCtx) {
             const monthRestGoal = monthRestTarget[emp.name] || 10
             if (getMonthRestUsed(emp.name) < monthRestGoal) {
-              schedule[emp.name][date] = '休'
-              return false
+              // 當天人力檢查
+              const workingToday = employees.filter(e => {
+                const s = schedule[e.name]?.[date]
+                return s && !isAbsence(s)
+              }).length
+              const unscheduled = employees.filter(e => !schedule[e.name]?.[date]).length
+              if (workingToday + unscheduled - 1 >= (minWorkersPerDay[date] || minStaff)) {
+                schedule[emp.name][date] = '休'
+                return false
+              }
             }
           }
-          return true  // 月休已達標，繼續排班
+          return true
         }
         const restLimit = monthRestTarget[emp.name] || 15
         if (getMonthRestUsed(emp.name) >= restLimit) return true  // PT 月休到上限

@@ -403,6 +403,30 @@ tbody tr:hover { background: var(--bg-2); }
 .tweak-sw:hover { transform: scale(1.15); }
 .tweak-sw.active { border-color: var(--fg-1); box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--fg-4); }
 
+/* ========== App Switcher ========== */
+.app-switcher {
+  position: fixed; top: calc(var(--header-h) + 6px); right: 16px; z-index: 210;
+  width: 320px; background: var(--bg-1); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 14px;
+  opacity: 0; transform: translateY(-6px) scale(0.98); pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.app-switcher.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.app-switcher-title { font-size: .72rem; font-weight: 700; color: var(--fg-3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; padding: 0 4px; }
+.app-switcher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.app-switcher-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 12px 6px; border-radius: var(--radius-sm); cursor: pointer;
+  text-decoration: none; color: var(--fg-1); transition: background var(--transition);
+}
+.app-switcher-item:hover { background: var(--bg-2); }
+.app-switcher-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 6px; color: #fff;
+}
+.app-switcher-label { font-size: .72rem; font-weight: 500; text-align: center; line-height: 1.3; }
+
 /* ========== Responsive ========== */
 @media (max-width: 1024px) {
   .dash-grid { grid-template-columns: 1fr; }
@@ -430,12 +454,35 @@ tbody tr:hover { background: var(--bg-2); }
   <div class="header-crumb">/ <span id="crumbCurrent">首頁</span></div>
   <div class="header-search" onclick="showToast('搜尋功能開發中','info')"><i data-lucide="search" style="width:14px;height:14px"></i> 搜尋... <kbd>⌘K</kbd></div>
   <div class="header-right">
+    <button class="header-btn" onclick="toggleAppSwitcher(event)" title="切換系統"><i data-lucide="layout-grid" style="width:18px;height:18px"></i></button>
     <button class="header-btn" onclick="toggleTheme()" title="切換主題"><i data-lucide="sun-moon" style="width:18px;height:18px"></i></button>
     <button class="header-btn" onclick="toggleTweaks()" title="設定"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
     <button class="header-btn" onclick="showToast('尚無新通知','bell')" title="通知"><i data-lucide="bell" style="width:18px;height:18px"></i><div class="dot"></div></button>
     <div class="header-avatar" id="headerAvatar" onclick="navigate('/profile')">...</div>
   </div>
 </header>
+
+<!-- App Switcher Popover -->
+<div class="app-switcher" id="appSwitcher">
+  <div class="app-switcher-title">切換系統</div>
+  <div class="app-switcher-grid">
+    <a class="app-switcher-item" href="/"><div class="app-switcher-icon" style="background:#64748b"><i data-lucide="home" style="width:20px;height:20px"></i></div><div class="app-switcher-label">主控台</div></a>
+    <a class="app-switcher-item" href="/hr"><div class="app-switcher-icon" style="background:#a78bfa"><i data-lucide="users" style="width:20px;height:20px"></i></div><div class="app-switcher-label">人資</div></a>
+    <a class="app-switcher-item" href="/crm"><div class="app-switcher-icon" style="background:#22d3ee"><i data-lucide="user-check" style="width:20px;height:20px"></i></div><div class="app-switcher-label">CRM</div></a>
+    <a class="app-switcher-item" href="/sales"><div class="app-switcher-icon" style="background:#34d399"><i data-lucide="trending-up" style="width:20px;height:20px"></i></div><div class="app-switcher-label">銷售</div></a>
+    <a class="app-switcher-item" href="/pos"><div class="app-switcher-icon" style="background:#f472b6"><i data-lucide="credit-card" style="width:20px;height:20px"></i></div><div class="app-switcher-label">POS</div></a>
+    <a class="app-switcher-item" href="/purchase"><div class="app-switcher-icon" style="background:#fb923c"><i data-lucide="shopping-cart" style="width:20px;height:20px"></i></div><div class="app-switcher-label">採購</div></a>
+    <a class="app-switcher-item" href="/wms"><div class="app-switcher-icon" style="background:#60a5fa"><i data-lucide="warehouse" style="width:20px;height:20px"></i></div><div class="app-switcher-label">倉儲</div></a>
+    <a class="app-switcher-item" href="/manufacturing"><div class="app-switcher-icon" style="background:#f87171"><i data-lucide="factory" style="width:20px;height:20px"></i></div><div class="app-switcher-label">製造</div></a>
+    <a class="app-switcher-item" href="/finance"><div class="app-switcher-icon" style="background:#fbbf24"><i data-lucide="wallet" style="width:20px;height:20px"></i></div><div class="app-switcher-label">財務</div></a>
+    <a class="app-switcher-item" href="/analytics"><div class="app-switcher-icon" style="background:#c084fc"><i data-lucide="bar-chart-3" style="width:20px;height:20px"></i></div><div class="app-switcher-label">數據分析</div></a>
+    <a class="app-switcher-item" href="/process"><div class="app-switcher-icon" style="background:#6366f1"><i data-lucide="workflow" style="width:20px;height:20px"></i></div><div class="app-switcher-label">流程</div></a>
+    <a class="app-switcher-item" href="/org"><div class="app-switcher-icon" style="background:#10b981"><i data-lucide="network" style="width:20px;height:20px"></i></div><div class="app-switcher-label">組織</div></a>
+    <a class="app-switcher-item" href="/ai"><div class="app-switcher-icon" style="background:#ec4899"><i data-lucide="sparkles" style="width:20px;height:20px"></i></div><div class="app-switcher-label">AI</div></a>
+    <a class="app-switcher-item" href="/integration"><div class="app-switcher-icon" style="background:#14b8a6"><i data-lucide="plug" style="width:20px;height:20px"></i></div><div class="app-switcher-label">整合</div></a>
+    <a class="app-switcher-item" href="/system"><div class="app-switcher-icon" style="background:#475569"><i data-lucide="settings-2" style="width:20px;height:20px"></i></div><div class="app-switcher-label">系統</div></a>
+  </div>
+</div>
 
 <!-- Sidebar -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>

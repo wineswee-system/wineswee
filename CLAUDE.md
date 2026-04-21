@@ -35,6 +35,22 @@ SME Ops System — a React-based ERP platform for small/medium enterprises. Cove
 - Commit messages are in English or Chinese (mixed is OK)
 - UI text is primarily in Traditional Chinese (zh-TW)
 
+## Color & Theme Rules
+
+All color tokens are defined in `src/index.css` with `[data-theme="light"]` overrides. Dark is the default. Never introduce a new color family — reuse existing tokens.
+
+1. **No hardcoded colors in JSX or CSS.** Use `var(--accent-*)`, `var(--bg-*)`, `var(--text-*)`, `var(--border-*)`. Exception: JS values passed to canvas-based libraries (Chart.js, SVG attributes) that can't parse `var(...)` — for these, import resolvers from `src/lib/theme/tokens.js`.
+2. **Semantic → color mapping is fixed.** Do not invent new pairings:
+   - success → `--accent-green` · warning → `--accent-orange` · error → `--accent-red` · info → `--accent-blue`
+   - primary/brand CTA → `--accent-cyan` · highlight/special → `--accent-purple`
+3. **Status-bearing UI must pair color with icon or text.** No color-only meaning. Use `src/components/ui/Badge.jsx` rather than rolling a custom badge.
+4. **Tinted backgrounds use `-dim` variants.** For a colored pill/chip, use `background: var(--accent-X-dim)` + `color: var(--accent-X)`. Do not write raw rgba approximations.
+5. **Muted text is for hints/captions only.** `--text-muted` sits near the 5:1 contrast edge on `--bg-secondary`. Body copy uses `--text-secondary` or stronger.
+6. **Inverse text on accent backgrounds may use `#fff` literal.** This is the one allowed hex — e.g., button text on `var(--accent-cyan)`, toggle knob on a colored track. Document with a comment if non-obvious.
+7. **No Tailwind palette utilities.** Never add `text-gray-*`, `bg-slate-*`, `bg-zinc-*`, `border-neutral-*`, etc. If you need gray, it's already a `--text-*` or `--bg-*` token.
+
+Chart colors: import `chartPalette()` and `chartTextTokens()` from `src/lib/theme/tokens.js` inside the component (wrap in `useMemo`) so values re-resolve when the theme changes.
+
 ## Key Files
 
 - `src/App.jsx` — Root routing
@@ -53,6 +69,7 @@ SME Ops System — a React-based ERP platform for small/medium enterprises. Cove
 - `src/lib/performanceUtils.js` — React perf hooks (debounce, throttle, lazy load)
 - `src/lib/useVirtualList.js` — Virtual scrolling for large tables
 - `src/lib/automation.js` — Cross-module orchestration functions
+- `src/lib/theme/tokens.js` — Resolves CSS theme vars to concrete strings for canvas/chart libs
 - `src/contexts/AuthContext.jsx` — Authentication provider
 - `src/contexts/TenantContext.jsx` — Multi-tenant provider
 - `supabase-schema.sql` — Full database schema

@@ -14,7 +14,6 @@ export function AuthProvider({ children }) {
   const profileLoaded = useRef(false)
 
   const loadProfile = async (authUser) => {
-    setProfileReady(false)
     if (!authUser?.email) {
       setProfile(null); setOrganization(null); setRole(null); setPermissions([])
       profileLoaded.current = false
@@ -23,6 +22,7 @@ export function AuthProvider({ children }) {
     }
     if (profileLoaded.current) return
     profileLoaded.current = true
+    setProfileReady(false)
 
     try {
       const { data: emp } = await supabase

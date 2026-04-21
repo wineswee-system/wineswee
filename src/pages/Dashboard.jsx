@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
@@ -21,6 +21,7 @@ import ProgressBar from '../components/ui/ProgressBar'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import DataTable from '../components/ui/DataTable'
+import { chartPalette, chartTextTokens } from '../lib/theme/tokens'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
@@ -29,28 +30,6 @@ const SectionTitle = ({ children }) => (
     {children}
   </div>
 )
-
-const C = {
-  cyan: '#0ea5c9', blue: '#3b82f6', purple: '#8b5cf6',
-  green: '#10b981', orange: '#f59e0b', red: '#ef4444',
-  pink: '#ec4899', yellow: '#eab308',
-}
-
-const chartOpts = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      labels: { color: '#64748b', font: { size: 11, weight: 600 }, padding: 14, usePointStyle: true, pointStyleWidth: 8 },
-    },
-    tooltip: {
-      backgroundColor: '#fff', titleColor: '#1e293b', bodyColor: '#475569',
-      borderColor: 'rgba(148,163,184,0.2)', borderWidth: 1,
-      padding: 12, cornerRadius: 12,
-    },
-  },
-}
-const grid = { color: 'rgba(148,163,184,0.10)' }
-const tick = { color: '#64748b', font: { size: 11 } }
 
 const fmt = v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)
 
@@ -355,6 +334,24 @@ export default function Dashboard() {
   const [pendingCorrections, setPendingCorrections] = useState(0)
   const [pendingOT, setPendingOT] = useState(0)
 
+  const C = useMemo(() => chartPalette(), [])
+  const T = useMemo(() => chartTextTokens(), [])
+  const chartOpts = useMemo(() => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: T.tertiary, font: { size: 11, weight: 600 }, padding: 14, usePointStyle: true, pointStyleWidth: 8 },
+      },
+      tooltip: {
+        backgroundColor: T.card, titleColor: T.primary, bodyColor: T.secondary,
+        borderColor: T.border, borderWidth: 1,
+        padding: 12, cornerRadius: 12,
+      },
+    },
+  }), [T])
+  const grid = useMemo(() => ({ color: T.border }), [T])
+  const tick = useMemo(() => ({ color: T.tertiary, font: { size: 11 } }), [T])
+
   useEffect(() => {
     Promise.all([
       getEmployees(), getTasks(), getWorkflows(), getAttendance(), getLeaveRequests(),
@@ -568,12 +565,12 @@ export default function Dashboard() {
               datasets: [
                 {
                   label: '正常', data: attByDay.map(d => d.normal),
-                  borderColor: C.green, backgroundColor: 'rgba(52,211,153,0.08)',
+                  borderColor: C.green, backgroundColor: `${C.green}14`,
                   fill: true, tension: 0.4, pointRadius: 5, pointBackgroundColor: C.green, borderWidth: 2.5,
                 },
                 {
                   label: '遲到', data: attByDay.map(d => d.late),
-                  borderColor: C.orange, backgroundColor: 'rgba(251,146,60,0.08)',
+                  borderColor: C.orange, backgroundColor: `${C.orange}14`,
                   fill: true, tension: 0.4, pointRadius: 5, pointBackgroundColor: C.orange, borderWidth: 2.5,
                 },
               ],
@@ -649,7 +646,7 @@ export default function Dashboard() {
                   data: Object.keys(leaveTypes).length > 0 ? Object.values(leaveTypes) : [1],
                   backgroundColor: Object.keys(leaveTypes).length > 0
                     ? [C.blue, C.purple, C.cyan, C.pink, C.yellow, C.orange]
-                    : ['rgba(148,163,184,0.15)'],
+                    : [T.border],
                   borderWidth: 0,
                 }],
               }}
@@ -759,7 +756,7 @@ export default function Dashboard() {
                         {
                           label: '總步驟數',
                           data: allEnabled.map(w => w.steps || 0),
-                          backgroundColor: allEnabled.map(() => 'rgba(148,163,184,0.15)'),
+                          backgroundColor: allEnabled.map(() => T.border),
                           borderRadius: 6,
                           barThickness: 22,
                         },

@@ -23,7 +23,7 @@ const RECURRENCE_PRESETS = [
   { value: 'FREQ=MONTHLY', label: '每月' },
 ]
 
-export default function TaskDrawer({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete }) {
+export default function TaskModal({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete }) {
   const [form, setForm] = useState({})
   const [comments, setComments] = useState([])
   const [commentDraft, setCommentDraft] = useState('')
@@ -33,19 +33,22 @@ export default function TaskDrawer({ task, employees = [], sections = [], curren
 
   useEffect(() => {
     if (!task) return
+    const resolvedId = task.assignee_id
+      || (task.assignee ? employees.find(e => e.name === task.assignee)?.id : null)
+      || null
     setForm({
       title: task.title || '',
       status: task.status || '未開始',
       priority: task.priority || '中',
       assignee: task.assignee || '',
-      assignee_id: task.assignee_id || null,
+      assignee_id: resolvedId,
       due_date: task.due_date || '',
       section_id: task.section_id || '',
       recurrence_rule: task.recurrence_rule || '',
       description: task.description || '',
     })
     getTaskComments(task.id).then(({ data }) => setComments(data || []))
-  }, [task?.id])
+  }, [task?.id, employees])
 
   if (!task) return null
 
@@ -102,15 +105,16 @@ export default function TaskDrawer({ task, employees = [], sections = [], curren
   }
 
   const overlay = (
-    <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 999,
-      }} />
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 560,
-        background: 'var(--bg-card)', borderLeft: '1px solid var(--border-medium)',
-        zIndex: 1000, display: 'flex', flexDirection: 'column',
-        boxShadow: '-8px 0 24px rgba(0,0,0,0.2)',
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', zIndex: 999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: 'min(640px, 100%)', maxHeight: '90vh',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+        borderRadius: 16, zIndex: 1000,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: 'var(--shadow-xl)',
       }}>
         {/* Header */}
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -173,15 +177,20 @@ export default function TaskDrawer({ task, employees = [], sections = [], curren
                   <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>負責人</label>
                   <select
                     className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={form.assignee_id || ''}
+                    value={form.assignee_id ? String(form.assignee_id) : (form.assignee ? `name:${form.assignee}` : '')}
                     onChange={e => {
-                      const emp = employees.find(x => String(x.id) === e.target.value)
+                      const v = e.target.value
+                      if (v.startsWith('name:')) return
+                      const emp = employees.find(x => String(x.id) === v)
                       set('assignee_id', emp?.id || null); set('assignee', emp?.name || '')
                       saveField({ assignee_id: emp?.id || null, assignee: emp?.name || null })
                     }}
                   >
                     <option value="">未指派</option>
                     {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    {form.assignee && !form.assignee_id && !employees.some(e => e.name === form.assignee) && (
+                      <option value={`name:${form.assignee}`} disabled>{form.assignee}（非員工）</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -298,7 +307,7 @@ export default function TaskDrawer({ task, employees = [], sections = [], curren
           )}
         </div>
       </div>
-    </>
+    </div>
   )
 
   return createPortal(overlay, document.body)

@@ -308,6 +308,42 @@ export const updateStepChecklistItem = (id, data) =>
 export const deleteStepChecklistItem = (id) =>
   supabase.from('workflow_step_checklist_items').delete().eq('id', id)
 
+// ── Workflow Categories (流程分類) ─────────────────────
+export const getWorkflowCategories = () =>
+  supabase.from('workflow_categories').select('*').eq('scope', 'workflow').order('sort_order').order('id')
+
+export const createWorkflowCategory = (data) =>
+  supabase.from('workflow_categories').insert({ scope: 'workflow', ...data }).select().single()
+
+export const deleteWorkflowCategory = (id) =>
+  supabase.from('workflow_categories').delete().eq('id', id)
+
+// ── Categories (通用分類，scope: workflow | project | task | checklist | approval) ──
+export const getCategories = (scope) =>
+  supabase.from('workflow_categories').select('*').eq('scope', scope).order('sort_order').order('id')
+
+export const createCategory = ({ scope, name, color, sort_order }) =>
+  supabase.from('workflow_categories').insert({ scope, name, color, sort_order }).select().single()
+
+export const updateCategory = (id, data) =>
+  supabase.from('workflow_categories').update(data).eq('id', id).select().single()
+
+export const deleteCategory = (id) =>
+  supabase.from('workflow_categories').delete().eq('id', id)
+
+// ── Tags (標籤) ──────────────────────────────────────────
+export const getTags = () =>
+  supabase.from('tags').select('*').order('sort_order').order('id')
+
+export const createTag = (data) =>
+  supabase.from('tags').insert(data).select().single()
+
+export const updateTag = (id, data) =>
+  supabase.from('tags').update(data).eq('id', id).select().single()
+
+export const deleteTag = (id) =>
+  supabase.from('tags').delete().eq('id', id)
+
 // ── Approval Chains (簽核鏈) ─────────────────────────────
 export const getApprovalChains = () =>
   supabase.from('approval_chains').select('*').order('id')

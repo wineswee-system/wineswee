@@ -8,6 +8,7 @@ import {
   getWorkflows, createWorkflow, updateWorkflow,
   getWorkflowInstances, updateWorkflowInstance,
   getTasks, getTasksByInstance, createTask, createTasksBatch, updateTask,
+  getWorkflowCategories, createWorkflowCategory, deleteWorkflowCategory,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -65,6 +66,11 @@ export default function Workflows() {
   const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
   const [approvalChains, setApprovalChains] = useState([])
 
+  // Workflow categories (流程分類)
+  const [categories, setCategories] = useState([])
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+
   // AI assistant
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -83,13 +89,14 @@ export default function Workflows() {
       getWorkflows(),
       getWorkflowInstances(),
       getTasks(),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, position').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('approval_chains').select('*').order('id'),
-    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac]) => {
+      getWorkflowCategories(),
+    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac, cat]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
       setAllTasks(t.data || [])
@@ -99,6 +106,7 @@ export default function Workflows() {
       setTemplates(tpl.data || [])
       setDepartments(dept.data || [])
       setApprovalChains(ac.data || [])
+      setCategories(cat.data || [])
     }).catch(err => {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
@@ -302,6 +310,25 @@ export default function Workflows() {
     }
   }
 
+  // ── Workflow Categories ──
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim()
+    if (!name) return
+    if (categories.some(c => c.name === name)) { setNewCategoryName(''); return }
+    const nextOrder = (categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 0) || 0) + 10
+    const { data, error } = await createWorkflowCategory({ name, sort_order: nextOrder })
+    if (error) { alert('新增失敗：' + error.message); return }
+    if (data) setCategories(prev => [...prev, data])
+    setNewCategoryName('')
+  }
+
+  const handleDeleteCategory = async (cat) => {
+    if (!confirm(`確定刪除分類「${cat.name}」？`)) return
+    const { error } = await deleteWorkflowCategory(cat.id)
+    if (error) { alert('刪除失敗：' + error.message); return }
+    setCategories(prev => prev.filter(c => c.id !== cat.id))
+  }
+
   // ── SOP Deploy ──
   const handleDeploy = async () => {
     if (!deployTemplate || !deployForm.location) return
@@ -473,6 +500,7 @@ export default function Workflows() {
           templates={templates}
           onDeploy={tpl => { setDeployTemplate(tpl); setDeployForm({ location: '', assignees: {} }); setDeployResult(null); setShowDeployModal(true) }}
           onCreateNew={() => setShowCreateTplModal(true)}
+          onManageCategories={() => setShowCategoryModal(true)}
         />
       )}
 
@@ -511,7 +539,42 @@ export default function Workflows() {
           onSubmit={handleCreateTpl}
           checklists={checklists}
           approvalChains={approvalChains}
+          categories={categories}
+          onManageCategories={() => setShowCategoryModal(true)}
         />
+      )}
+
+      {/* ══ Workflow Categories Modal ══ */}
+      {showCategoryModal && (
+        <Modal title="管理流程分類" onClose={() => setShowCategoryModal(false)} onSubmit={() => setShowCategoryModal(false)} submitLabel="完成">
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input className="form-input" type="text" placeholder="新分類名稱" style={{ flex: 1 }}
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory() } }} />
+            <button className="btn btn-primary" onClick={handleAddCategory} style={{ fontSize: 13 }}>
+              <Plus size={13} /> 新增
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {categories.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>尚無分類</div>
+            ) : categories.map(c => (
+              <div key={c.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', borderRadius: 8,
+                background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+              }}>
+                <span style={{ fontSize: 13 }}>{c.name}</span>
+                <button onClick={() => handleDeleteCategory(c)} style={{
+                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4,
+                }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
     </div>
   )

@@ -1,9 +1,10 @@
-import { Plus, Trash2, CheckSquare, Shield } from 'lucide-react'
+import { Plus, Trash2, CheckSquare, Shield, Settings } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 
 export default function CreateTemplateModal({
   newTpl, setNewTpl, onClose, onSubmit,
   checklists = [], approvalChains = [],
+  categories = [], onManageCategories,
 }) {
   const addTplStep = () => setNewTpl(t => ({
     ...t,
@@ -19,9 +20,24 @@ export default function CreateTemplateModal({
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"
             value={newTpl.name} onChange={e => setNewTpl(t => ({ ...t, name: e.target.value }))} />
         </Field>
-        <Field label="分類">
+        <Field label={
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>分類</span>
+            {onManageCategories && (
+              <button type="button" onClick={onManageCategories} style={{
+                background: 'none', border: 'none', color: 'var(--accent-cyan)',
+                fontSize: 11, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 2,
+              }}>
+                <Settings size={11} /> 管理
+              </button>
+            )}
+          </span>
+        }>
           <select className="form-input" style={{ width: '100%' }} value={newTpl.category} onChange={e => setNewTpl(t => ({ ...t, category: e.target.value }))}>
-            {['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服'].map(c => <option key={c}>{c}</option>)}
+            {(categories.length > 0
+              ? categories.map(c => c.name)
+              : ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
+            ).map(c => <option key={c}>{c}</option>)}
           </select>
         </Field>
       </div>

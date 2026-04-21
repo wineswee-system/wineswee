@@ -49,12 +49,12 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) { console.error('App crash:', error, info) }
   render() {
     if (this.state.error) return (
-      <div style={{ padding: 48, textAlign: 'center', color: '#ef4444' }}>
+      <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>
         <h2>系統發生錯誤</h2>
-        <pre style={{ textAlign: 'left', maxWidth: 600, margin: '16px auto', fontSize: 13, whiteSpace: 'pre-wrap', background: '#1e293b', color: '#f1f5f9', padding: 16, borderRadius: 8 }}>
+        <pre style={{ textAlign: 'left', maxWidth: 600, margin: '16px auto', fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', padding: 16, borderRadius: 8 }}>
           {this.state.error.message}{'\n'}{this.state.error.stack}
         </pre>
-        <button onClick={() => window.location.reload()} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer' }}>重新載入</button>
+        <button onClick={() => window.location.reload()} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', cursor: 'pointer' }}>重新載入</button>
       </div>
     )
     return this.props.children

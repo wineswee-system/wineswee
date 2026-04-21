@@ -7,6 +7,8 @@ import SOPTemplates from '../pages/process/SOPTemplates'
 import ApprovalChains from '../pages/system/ApprovalChains'
 import Projects from '../pages/process/Projects'
 import ExpenseApprovalSettings from '../pages/finance/ExpenseApprovalSettings'
+import Categories from '../pages/process/settings/Categories'
+import Tags from '../pages/process/settings/Tags'
 
 export default function ProcessModule() {
   return (
@@ -19,6 +21,8 @@ export default function ProcessModule() {
       <Route path="sop" element={<SOPTemplates />} />
       <Route path="approval-chains" element={<ApprovalChains />} />
       <Route path="expense-approval" element={<ExpenseApprovalSettings />} />
+      <Route path="settings/categories" element={<Categories />} />
+      <Route path="settings/tags" element={<Tags />} />
     </Routes>
   )
 }

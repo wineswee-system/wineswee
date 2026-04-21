@@ -1424,7 +1424,8 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         return aWorking - bWorking  // 人最少的天排前面
       })
 
-      for (let i = 0; i < excess; i++) {
+      const toFix = Math.min(excess, sortedByNeed.length)
+      for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
         // 找那天的營業時段，生成一個合理的班
         const oh = data.storeSettings?.operating_hours || data.storeSettings?.operatingHours || {}

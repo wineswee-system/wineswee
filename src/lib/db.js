@@ -423,6 +423,9 @@ export const createTaskConfirmation = (data) =>
 export const updateTaskConfirmation = (id, data) =>
   supabase.from('task_confirmations').update(data).eq('id', id).select().single()
 
+export const deleteTaskConfirmation = (id) =>
+  supabase.from('task_confirmations').delete().eq('id', id)
+
 // ── Approval Forms — task reference ─────────────────────
 export const getApprovalFormByTask = (taskId) =>
   supabase.from('approval_forms').select('*').eq('ref_task_id', taskId).maybeSingle()

@@ -601,10 +601,11 @@ export function runProgrammaticSchedule(data) {
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
 
-        // 正職：休假只從 Step 1c 來，Phase 3 不給休。工時到/時段滿就跳過。
+        // 正職：只有工時硬上限才跳過，時段滿了也嘗試排班（避免 null → 被算休假）
         // 兼職：彈性自動休（時段滿/工時達標/月休未到上限）
         if (!pt) {
-          if (weekHours >= range.max || allMaxMet) continue
+          if (weekHours >= range.max) continue
+          // allMaxMet 時不跳過，繼續往下嘗試排班
         } else {
           // 兼職
           const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
@@ -1397,6 +1398,51 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       }
     }
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
+  }
+
+  // ── 最終校正：正職月休強制精確到目標天數 ──
+  // 排班過程中可能因為時段滿、null→休 等原因導致正職休假超標
+  // 最後一關：超過的休假天，找附近有班的人換班或直接標上班
+  for (const emp of data.employees) {
+    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    if (isPT) continue
+
+    const target = data.storeSettings?.ft_monthly_rest_days ?? 10
+    const empAssignments = allAssignments.filter(a => a.employee === emp.name)
+    const restAssignments = empAssignments.filter(a => isAbsence(a.shift))
+    const excess = restAssignments.length - target
+
+    if (excess > 0) {
+      // 排除 off request 的天（希望休不能砍）
+      const offSet = new Set(data.offRequests.map(o => `${o.employee}_${o.date}`))
+      const convertible = restAssignments.filter(a => !offSet.has(`${a.employee}_${a.date}`))
+      // 挑「需求最高的天」優先轉回上班（那些天最缺人）
+      const sortedByNeed = [...convertible].sort((a, b) => {
+        // 那天有多少人上班？越少人的天越應該把休轉回上班
+        const aWorking = allAssignments.filter(x => x.date === a.date && !isAbsence(x.shift)).length
+        const bWorking = allAssignments.filter(x => x.date === b.date && !isAbsence(x.shift)).length
+        return aWorking - bWorking  // 人最少的天排前面
+      })
+
+      for (let i = 0; i < excess; i++) {
+        const ra = sortedByNeed[i]
+        // 找那天的營業時段，生成一個合理的班
+        const oh = data.storeSettings?.operating_hours || data.storeSettings?.operatingHours || {}
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+        const dow = new Date(ra.date).getDay()
+        const dayOH = oh[dayNames[dow]]
+        const openH = dayOH?.open || '11:00'
+        const closeH = dayOH?.close || '20:00'
+
+        ra.shift = `${openH.replace(':00','').replace(/^0/,'')}-${closeH.replace(':00','').replace(/^0/,'')}`
+        ra.actual_start = openH
+        ra.actual_end = closeH
+        const startH = parseTime(openH)
+        const endH = parseTime(closeH)
+        const gross = endH > startH ? endH - startH : (24 - startH + endH)
+        ra.actual_hours = gross >= 6 ? gross - 1 : gross  // 扣休息
+      }
+    }
   }
 
   // Monthly validation

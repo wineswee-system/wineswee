@@ -1400,14 +1400,14 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
   }
 
-  // ── 最終校正：正職月休強制精確到目標天數 ──
-  // 排班過程中可能因為時段滿、null→休 等原因導致正職休假超標
-  // 最後一關：超過的休假天，找附近有班的人換班或直接標上班
+  // ── 最終校正：月休強制精確到目標天數（正職 + 兼職都校正）──
+  // 排班過程中可能因為時段滿、null→休 等原因導致休假超標
+  // 最後一關：超過的休假天，挑缺人的天轉回上班
   for (const emp of data.employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    if (isPT) continue
-
-    const target = data.storeSettings?.ft_monthly_rest_days ?? 10
+    const target = isPT
+      ? (data.storeSettings?.pt_monthly_rest_days ?? 20)
+      : (data.storeSettings?.ft_monthly_rest_days ?? 10)
     const empAssignments = allAssignments.filter(a => a.employee === emp.name)
     const restAssignments = empAssignments.filter(a => isAbsence(a.shift))
     const excess = restAssignments.length - target

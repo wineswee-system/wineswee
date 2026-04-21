@@ -442,6 +442,9 @@ export function runProgrammaticSchedule(data) {
       // ── Detect operating hours ──
       const oh = getOH(date)
       const storeOpenH = parseTime(oh?.open || '11:00')
+      if (date === weekDates[0]) {
+        console.log(`[Schedule] date=${date} oh=`, JSON.stringify(oh), `storeOpenH=${storeOpenH}`)
+      }
       const storeCloseStr = oh?.close || '00:00'
       const storeCloseH = parseTime(storeCloseStr)
       const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH

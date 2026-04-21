@@ -14,7 +14,6 @@ export function AuthProvider({ children }) {
   const profileLoaded = useRef(false)
 
   const loadProfile = async (authUser) => {
-    setProfileReady(false)
     if (!authUser?.email) {
       setProfile(null); setOrganization(null); setRole(null); setPermissions([])
       profileLoaded.current = false
@@ -23,6 +22,7 @@ export function AuthProvider({ children }) {
     }
     if (profileLoaded.current) return
     profileLoaded.current = true
+    setProfileReady(false)
 
     try {
       const { data: emp } = await supabase
@@ -88,15 +88,13 @@ export function AuthProvider({ children }) {
   }
 
   const hasPermission = useCallback((code) => {
-    if (!user) return true // Demo mode
     if (permissions.includes('admin.system')) return true
     return permissions.includes(code)
-  }, [user, permissions])
+  }, [permissions])
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
     || role?.name === 'admin' || role?.name === 'super_admin'
-    || !user
-  const isSuperAdmin = profile?.role === 'super_admin' || role?.name === 'super_admin' || !user
+  const isSuperAdmin = profile?.role === 'super_admin' || role?.name === 'super_admin'
 
   return (
     <AuthContext.Provider value={{

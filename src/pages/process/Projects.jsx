@@ -340,7 +340,29 @@ export default function Projects() {
         </div>
 
         {detailTab === 'members' && (
-          <ProjectMembers projectId={p.id} employees={employees} currentUser={profile} />
+          <ProjectMembers
+            projectId={p.id}
+            employees={employees}
+            currentUser={profile}
+            autoMemberIds={(() => {
+              const ids = new Set()
+              const wfIds = new Set(pWorkflows.map(w => w.id))
+              // Canonical source: task assignee_id FKs
+              tasks.forEach(t => {
+                if (wfIds.has(t.workflow_instance_id) && t.assignee_id) ids.add(t.assignee_id)
+              })
+              // Name fallbacks: skip if that name is already represented by an id in the set
+              const nameAlreadyIn = (n) => [...ids].some(id => employees.find(e => e.id === id)?.name === n)
+              const byName = (n) => employees.find(e => e.name === n)?.id
+              if (p.owner_id) ids.add(p.owner_id)
+              else if (p.owner && !nameAlreadyIn(p.owner)) { const id = byName(p.owner); if (id) ids.add(id) }
+              pWorkflows.forEach(w => {
+                if (w.started_by_id) ids.add(w.started_by_id)
+                else if (w.started_by && !nameAlreadyIn(w.started_by)) { const id = byName(w.started_by); if (id) ids.add(id) }
+              })
+              return [...ids]
+            })()}
+          />
         )}
 
         {detailTab === 'fields' && (

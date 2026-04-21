@@ -9,7 +9,7 @@ const ROLE_OPTIONS = [
   { value: 'viewer', label: '檢視者',  color: '#64748b' },
 ]
 
-export default function ProjectMembers({ projectId, employees = [], currentUser }) {
+export default function ProjectMembers({ projectId, employees = [], currentUser, autoMemberIds = [] }) {
   const [members, setMembers] = useState([])
   const [adding, setAdding] = useState(false)
   const [pick, setPick] = useState('')
@@ -17,10 +17,30 @@ export default function ProjectMembers({ projectId, employees = [], currentUser 
 
   const load = async () => {
     const { data } = await getProjectMembers(projectId)
-    setMembers(data || [])
+    const current = data || []
+
+    const existing = new Set(current.map(m => m.employee_id).filter(Boolean))
+    const missing = autoMemberIds.filter(id => id && !existing.has(id))
+    console.log('[ProjectMembers]', { projectId, autoMemberIds, currentCount: current.length, missing })
+    if (missing.length === 0) { setMembers(current); return }
+
+    const results = await Promise.all(missing.map(id => {
+      const emp = employees.find(e => e.id === id)
+      return addProjectMember({
+        project_id: projectId,
+        employee_id: id,
+        employee_name: emp?.name || null,
+        role: 'member',
+        added_by: '自動同步',
+      })
+    }))
+    results.forEach(r => { if (r?.error) console.error('[ProjectMembers] insert error', r.error) })
+    const { data: updated } = await getProjectMembers(projectId)
+    setMembers(updated || [])
   }
 
-  useEffect(() => { if (projectId) load() }, [projectId])
+  const autoKey = autoMemberIds.join(',')
+  useEffect(() => { if (projectId) load() }, [projectId, autoKey])
 
   const add = async () => {
     const emp = employees.find(e => String(e.id) === String(pick))

@@ -1,9 +1,12 @@
-import { Plus, Rocket } from 'lucide-react'
+import { Plus, Rocket, Tag } from 'lucide-react'
 
-export default function TemplatesList({ templates, onDeploy, onCreateNew }) {
+export default function TemplatesList({ templates, onDeploy, onCreateNew, onManageCategories }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 4 }}>
+        {onManageCategories && (
+          <button className="btn btn-secondary" onClick={onManageCategories}><Tag size={13} /> 流程分類</button>
+        )}
         <button className="btn btn-primary" onClick={onCreateNew}><Plus size={13} /> 新增流程範本</button>
       </div>
       {templates.length === 0 ? (

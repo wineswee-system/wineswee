@@ -14,6 +14,9 @@ const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
 const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '中高齡者 (45+)', '長期失業者', '更生人', '獨力負擔家計者', '家庭暴力被害人', '二度就業婦女']
 
+// Hex literal needed for 8-digit alpha-suffix concat in boxShadow; mirrors --accent-purple
+const AVATAR_FALLBACK = '#8b5cf6'
+
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose }) {
   const { isAdmin } = useAuth()
   const [tab, setTab] = useState('personal')
@@ -182,7 +185,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   const DAYS = ['一', '二', '三', '四', '五', '六', '日']
   const AVAIL_STATUS = ['可排班', '偏好', '偏不排', '不可']
-  const AVAIL_COLORS = { '可排班': '#22c55e', '偏好': '#3b82f6', '偏不排': '#f59e0b', '不可': '#ef4444' }
+  const AVAIL_COLORS = { '可排班': 'var(--accent-green)', '偏好': 'var(--accent-blue)', '偏不排': 'var(--accent-orange)', '不可': 'var(--accent-red)' }
 
   const setAvail = async (dayIdx, status) => {
     const existing = availability.find(a => a.day_of_week === dayIdx)
@@ -227,8 +230,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     { key: 'records', label: '紀錄', icon: '📋' },
   ]
 
-  const empTypeColor = (form.employment_type || '全職') === '全職' ? '#22c55e' : '#f59e0b'
-  const statusColor = (form.status || '在職') === '在職' ? '#22c55e' : form.status === '留職停薪' ? '#f59e0b' : '#ef4444'
+  const empTypeColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green)' : 'var(--accent-orange)'
+  const statusColor = (form.status || '在職') === '在職' ? 'var(--accent-green)' : form.status === '留職停薪' ? 'var(--accent-orange)' : 'var(--accent-red)'
 
   const QuickInfo = ({ icon, label, value }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -262,7 +265,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isDirty && <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>未儲存變更</span>}
               <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '6px 16px', borderRadius: 8 }}>
-                <Save size={12} /> {saving ? '儲存中...' : '儲存'}
+                <Save size={12} /> {saving ? '...' : '更新'}
               </button>
             </div>
           </div>
@@ -270,10 +273,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           {/* Profile row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px 0' }}>
             <div style={{
-              width: 56, height: 56, borderRadius: 14, background: employee.avatar || '#8b5cf6',
+              width: 56, height: 56, borderRadius: 14, background: employee.avatar || AVATAR_FALLBACK,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 22, fontWeight: 800, color: '#fff',
-              boxShadow: `0 4px 12px ${(employee.avatar || '#8b5cf6')}44`,
+              boxShadow: `0 4px 12px ${(employee.avatar || AVATAR_FALLBACK)}44`,
             }}>
               {employee.name?.[0]}
             </div>
@@ -599,11 +602,11 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               <SectionTitle icon="⭐" text="排班優先級" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {[
-                  { value: 1, label: '最優先', color: '#ef4444', desc: '王牌員工，優先排熱門時段' },
-                  { value: 2, label: '優先', color: '#f59e0b', desc: '表現優秀' },
-                  { value: 3, label: '一般', color: '#06b6d4', desc: '預設' },
-                  { value: 4, label: '低', color: '#94a3b8', desc: '新進/訓練中' },
-                  { value: 5, label: '最低', color: '#cbd5e1', desc: '備用人力' },
+                  { value: 1, label: '最優先', color: 'var(--accent-red)', desc: '王牌員工，優先排熱門時段' },
+                  { value: 2, label: '優先', color: 'var(--accent-orange)', desc: '表現優秀' },
+                  { value: 3, label: '一般', color: 'var(--accent-cyan)', desc: '預設' },
+                  { value: 4, label: '低', color: 'var(--text-tertiary)', desc: '新進/訓練中' },
+                  { value: 5, label: '最低', color: 'var(--text-muted)', desc: '備用人力' },
                 ].map(p => (
                   <button key={p.value} onClick={() => set('schedule_priority', p.value)} title={p.desc} style={{
                     flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -770,7 +773,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                         <span>完成進度</span><span>{pct}%</span>
                       </div>
                       <div style={{ height: 6, borderRadius: 3, background: 'var(--glass-light)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 3, background: pct === 100 ? '#22c55e' : 'var(--accent-cyan)', width: `${pct}%`, transition: 'width 0.3s' }} />
+                        <div style={{ height: '100%', borderRadius: 3, background: pct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)', width: `${pct}%`, transition: 'width 0.3s' }} />
                       </div>
                     </div>
                     {onboardingTasks.map(t => (
@@ -853,7 +856,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
                       <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
-                      {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#22c55e22', color: '#22c55e', fontWeight: 600 }}>健保</span>}
+                      {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
                     </div>
                     <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
                   </div>

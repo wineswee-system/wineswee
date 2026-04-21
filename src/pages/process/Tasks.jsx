@@ -7,7 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import TaskKanban from '../../components/tasks/TaskKanban'
 import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
-import TaskDrawer from '../../components/tasks/TaskDrawer'
+import TaskModal from '../../components/tasks/TaskModal'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function Tasks() {
@@ -237,7 +237,7 @@ export default function Tasks() {
       )}
 
       {selectedTask && (
-        <TaskDrawer
+        <TaskModal
           task={selectedTask}
           employees={employees}
           currentUser={profile}

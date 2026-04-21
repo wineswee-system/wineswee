@@ -41,6 +41,7 @@ export async function gatherSchedulingData({
   storeFilter,
   locations,
   minStaff,
+  minStaffWeekend,
   tenantId,
 }) {
   const dates = monthDates || weekDates
@@ -98,6 +99,7 @@ export async function gatherSchedulingData({
 
   const storeSettings = {
     minStaff: minStaff || 3,
+    minStaffWeekend: minStaffWeekend || minStaff || 3,
     maxStaff: storeSettingsData?.max_staff || undefined,
     operatingHours: storeSettingsData?.operating_hours || undefined,
     peakDays: storeSettingsData?.peak_days || [5, 6], // Fri + Sat

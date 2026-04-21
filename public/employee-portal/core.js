@@ -197,6 +197,19 @@ function _applyHue(h) {
 function setAccent(h) { localStorage.setItem('accent-hue', h); _applyHue(h); _syncTweaksUI(); }
 function toggleTweaks() { document.getElementById('tweaksPanel').classList.toggle('show'); }
 
+function toggleAppSwitcher(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('appSwitcher').classList.toggle('show');
+}
+document.addEventListener('click', (e) => {
+  const sw = document.getElementById('appSwitcher');
+  if (!sw || !sw.classList.contains('show')) return;
+  if (sw.contains(e.target)) return;
+  const btn = e.target.closest('[onclick*="toggleAppSwitcher"]');
+  if (btn) return;
+  sw.classList.remove('show');
+});
+
 // ========== Calendar builder ==========
 function buildCalendar(year, month, scheduleData, isOffSelect) {
   const firstDay = new Date(year, month, 1).getDay();

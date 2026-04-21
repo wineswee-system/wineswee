@@ -15,6 +15,7 @@ import {
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator, Upload,
   UserCheck, Shield, Send, Search, Activity, AlertOctagon, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, BarChart, Scale, MessageSquare, FileBarChart, Gift,
+  FolderTree,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
@@ -316,21 +317,23 @@ const groupNav = {
       ]
     },
     {
-      label: '簽核管理',
-      icon: Shield,
-      divider: true,
-      children: [
-        { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
-        { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
-        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
-      ]
-    },
-    {
       label: '流程分析',
       icon: BarChart3,
       divider: true,
       children: [
         { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
+      ]
+    },
+    {
+      label: '設定管理',
+      icon: Settings,
+      divider: true,
+      children: [
+        { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
+        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
+        { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
+        { icon: FolderTree, label: '分類管理', path: '/process/settings/categories' },
+        { icon: Tag, label: '標籤管理', path: '/process/settings/tags' },
       ]
     },
   ],

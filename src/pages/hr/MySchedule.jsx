@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Calendar, Clock, ChevronLeft, ChevronRight, CalendarOff, ArrowLeftRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours } from '../../lib/scheduleUtils'
 
 export default function MySchedule() {
+  const { profile: authProfile } = useAuth()
   const [profile, setProfile] = useState(null)
   const [empInfo, setEmpInfo] = useState(null)  // { employment_type, ... }
   const [schedules, setSchedules] = useState([])
@@ -21,10 +23,9 @@ export default function MySchedule() {
   const monthDates = getMonthDates(mYear, mMonth)
 
   useEffect(() => {
-    try {
-      const p = JSON.parse(localStorage.getItem('sme_profile') || '{}')
-      setProfile(p)
-    } catch { setProfile({}) }
+    // Use AuthContext profile instead of localStorage
+    if (authProfile) setProfile(authProfile)
+    else setProfile({})
     supabase.from('shift_definitions').select('*').order('sort_order')
       .then(({ data }) => setShiftDefs(data || []))
   }, [])

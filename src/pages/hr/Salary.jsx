@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Download, Plus, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary } from '../../lib/payroll'
 import { exportSalaryPdf } from '../../lib/exportPdf'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
@@ -62,12 +63,18 @@ const emptyForm = {
 }
 
 export default function Salary() {
+  // Role-based access
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+  const isStaff = userRole === 'store_staff'
+  const isManager = userRole === 'manager'
+
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
@@ -89,7 +96,15 @@ export default function Salary() {
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([s, b, e, d, st]) => {
-      setRecords(s.data || [])
+      let recs = s.data || []
+      // store_staff: 只看自己的薪資
+      if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
+      // manager: 只看自己門市
+      if (isManager && profile?.store) {
+        const storeEmps = new Set((e.data || []).filter(emp => emp.store === profile.store).map(emp => emp.name))
+        recs = recs.filter(r => storeEmps.has(r.employee))
+      }
+      setRecords(recs)
       setBonusRecords(b.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
@@ -345,31 +360,36 @@ export default function Salary() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ fontSize: 13 }} />
-            <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
-              <Plus size={14} /> 新增薪資
-            </button>
-            <button className="btn btn-secondary" onClick={handleBatchPayroll}>
-              <Calculator size={14} /> 批次計薪
-            </button>
-            <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
-              <Download size={14} /> 匯出 PDF
-            </button>
+            {!isStaff && <>
+              <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
+                <Plus size={14} /> 新增薪資
+              </button>
+              <button className="btn btn-secondary" onClick={handleBatchPayroll}>
+                <Calculator size={14} /> 批次計薪
+              </button>
+              <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
+                <Download size={14} /> 匯出 PDF
+              </button>
+            </>}
           </div>
         </div>
       </div>
 
-      {/* ── Store filter ── */}
-      <div style={{
-        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
-        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-        alignItems: 'center',
-      }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
-          <option value="">全部門市</option>
-          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-        </select>
-      </div>
+      {/* ── Store filter — store_staff 不顯示 ── */}
+      {!isStaff && (
+        <div style={{
+          display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+          background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+          alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
+            disabled={isManager}>
+            <option value="">全部門市</option>
+            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* ── Stats cards ── */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

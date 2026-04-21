@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 const LEAVE_TYPES = ['特休', '病假', '事假', '喪假', '婚假', '產假', '陪產假', '無薪假']
 
 export default function LeaveBalances() {
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+  const isStaff = userRole === 'store_staff'
   const currentYear = new Date().getFullYear()
   const [balances, setBalances] = useState([])
   const [employees, setEmployees] = useState([])
@@ -44,7 +48,10 @@ export default function LeaveBalances() {
       ])
       if (balRes.error) throw balRes.error
       if (empRes.error) throw empRes.error
-      setBalances(balRes.data || [])
+      let bals = balRes.data || []
+      // store_staff: 只看自己的假別餘額
+      if (isStaff && profile?.id) bals = bals.filter(b => b.employee_id === profile.id)
+      setBalances(bals)
       setEmployees(empRes.data || [])
     } catch (err) {
       console.error('Failed to load leave balances:', err)
@@ -170,7 +177,7 @@ export default function LeaveBalances() {
             <h2><span className="header-icon">📊</span> 假別餘額管理</h2>
             <p>查看與管理員工各類假別剩餘天數</p>
           </div>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={14} /> 新增餘額</button>
+          {!isStaff && <button className="btn btn-primary" onClick={openAdd}><Plus size={14} /> 新增餘額</button>}
         </div>
       </div>
 

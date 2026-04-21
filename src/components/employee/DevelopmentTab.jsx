@@ -11,9 +11,9 @@ const LEVELS = ['基礎', '中級', '進階', '專家']
 
 const STATUS_MAP = {
   '規劃中': { color: 'var(--text-muted)', bg: 'var(--bg-secondary)' },
-  '進行中': { color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.12)' },
-  '已完成': { color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.12)' },
-  '已取消': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.12)' },
+  '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
+  '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
+  '已取消': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
 }
 
 const EMPTY_FORM = {
@@ -92,7 +92,7 @@ export default function DevelopmentTab({ employee }) {
           <button key={t.value} onClick={() => setFilter(t.value)} style={{
             padding: '4px 12px', borderRadius: 14, border: '1px solid',
             borderColor: filter === t.value ? 'var(--accent-cyan)' : 'var(--border-subtle)',
-            background: filter === t.value ? 'rgba(6,182,212,0.1)' : 'transparent',
+            background: filter === t.value ? 'var(--accent-cyan-dim)' : 'transparent',
             cursor: 'pointer', fontSize: 11, color: filter === t.value ? 'var(--accent-cyan)' : 'var(--text-muted)',
           }}>
             {t.icon || '📋'} {t.label}
@@ -176,7 +176,7 @@ export default function DevelopmentTab({ employee }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 700 }}>{plan.skill_name}</span>
-                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, color: isHard ? 'var(--accent-cyan)' : 'var(--accent-purple)', background: isHard ? 'rgba(6,182,212,0.1)' : 'rgba(139,92,246,0.1)' }}>
+                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, color: isHard ? 'var(--accent-cyan)' : 'var(--accent-purple)', background: isHard ? 'var(--accent-cyan-dim)' : 'var(--accent-purple-dim)' }}>
                     {isHard ? '🔧 硬技能' : '🤝 軟技能'}
                   </span>
                   <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, color: st.color, background: st.bg }}>

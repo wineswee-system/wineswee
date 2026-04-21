@@ -128,8 +128,8 @@ export default function ApprovalChains() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">🛡️</span> 簽核系統</h2>
-            <p>簽核鏈定義與表單簽核管理</p>
+            <h2><span className="header-icon">🛡️</span> 簽核鏈設定</h2>
+            <p>定義多步驟審批流程（如：主管→HR→財務），可手動提交簽核表單</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => { setEditingChain(null); setChainForm({ name: '', description: '', category: 'HR', steps: [{ role: '', label: '' }] }); setShowChainModal(true) }}><Plus size={14} /> 新增簽核鏈</button>

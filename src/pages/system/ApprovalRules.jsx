@@ -154,7 +154,7 @@ export default function ApprovalRules() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">🔐</span> 簽核規則</h2>
-            <p>Approval Rules — 跨模組通用簽核流程設定</p>
+            <p>依條件自動觸發審批（如：採購金額 ≥ 50,000 需主管核准）</p>
           </div>
           <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditingId(null); setShowModal(true) }}>
             <Plus size={14} /> 新增規則

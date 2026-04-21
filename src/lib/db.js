@@ -665,25 +665,6 @@ export const updateDepartment = (id, data) =>
 export const deleteDepartment = (id) =>
   supabase.from('departments').delete().eq('id', id)
 
-// ── Employee FK-aware queries ─────────────────────────────
-export const getEmployeesWithRefs = () =>
-  supabase.from('employees').select('*, dept_ref:departments!department_id(id,name), store_ref:stores!store_id(id,name), supervisor_ref:employees!supervisor_id(id,name)').order('id')
-
-// ── User Stores (multi-store assignment) ──────────────────
-export const getEmployeeStores = (employeeId) =>
-  supabase.from('user_stores').select('*, store:stores(*)').eq('employee_id', employeeId)
-
-export const setEmployeeStores = async (employeeId, storeIds, primaryStoreId) => {
-  await supabase.from('user_stores').delete().eq('employee_id', employeeId)
-  if (!storeIds?.length) return
-  const rows = storeIds.map(sid => ({
-    employee_id: employeeId,
-    store_id: sid,
-    is_primary: sid === primaryStoreId,
-  }))
-  return supabase.from('user_stores').insert(rows)
-}
-
 // ── Department Manager History ────────────────────────────
 export const getDeptManagerHistory = (deptId) =>
   supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })

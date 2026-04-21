@@ -309,14 +309,6 @@ const groupNav = {
       ]
     },
     {
-      label: '流程分析',
-      icon: BarChart3,
-      divider: true,
-      children: [
-        { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
-      ]
-    },
-    {
       label: '設定管理',
       icon: Settings,
       divider: true,
@@ -373,7 +365,6 @@ const systemItems = [
   { icon: Building2, label: '租戶管理', path: '/system/tenants' },
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },
-  { icon: Shield, label: '簽核規則', path: '/system/approval-rules' },
   { icon: ScrollText, label: '操作紀錄', path: '/system/audit' },
   { icon: Award, label: '系統效能', path: '/system/performance' },
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },

@@ -9,7 +9,6 @@ import DataImportExport from '../pages/system/DataImportExport'
 import DatabaseAdmin from '../pages/system/DatabaseAdmin'
 import TenantAdmin from '../pages/system/TenantAdmin'
 import ApprovalRules from '../pages/system/ApprovalRules'
-import ApprovalChains from '../pages/system/ApprovalChains'
 import TrainingGuide from '../pages/system/TrainingGuide'
 export default function SystemModule() {
   return (
@@ -25,7 +24,6 @@ export default function SystemModule() {
       <Route path="database" element={<DatabaseAdmin />} />
       <Route path="tenants" element={<TenantAdmin />} />
       <Route path="approval-rules" element={<ApprovalRules />} />
-      <Route path="approval-chains" element={<ApprovalChains />} />
     </Routes>
   )
 }

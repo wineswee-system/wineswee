@@ -605,16 +605,15 @@ export function runProgrammaticSchedule(data) {
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
 
-        // 正職：Step 1c 為主，Phase 3 只在 allMaxMet 且月休「剛好不足」時補休（精確到月目標）
+        // 正職：休假以 Step 1c 為準，Phase 3 只在 Step 1c 排不夠時精確補到週目標
         // 兼職：彈性自動休（時段滿/工時達標/月休未到上限）
         if (!pt) {
-          if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-          // 所有時段都滿了，且本週 Step 1c 預排的休假不夠（月休還差）→ 補休
-          // 用 restPerWeekMap 做精確控制，不會超過月目標
-          if (allMaxMet && monthlyCtx) {
-            const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
-            const weekRestTarget = restPerWeekMap[emp.name] ?? 2
+          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
+          const weekRestTarget = restPerWeekMap[emp.name] ?? 2
+          if (weekHours >= range.max || allMaxMet) {
+            // 工時到或時段滿：只在本週休假還不夠月目標時補休，否則跳過
             if (thisWeekRest < weekRestTarget) { schedule[emp.name][date] = '休'; continue }
+            continue  // 已達本週休假目標，不多給
           }
         } else {
           // 兼職
@@ -780,7 +779,7 @@ export function runProgrammaticSchedule(data) {
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
         const pt = isPTEmp(emp)
         if (!pt) {
-          // 正職：Step 1c 排不到的情況（人力不足），在這裡用 restPerWeekMap 精確補休
+          // 正職：只在 Step 1c 排不夠時才補休（人力不足的場景）
           if (monthlyCtx) {
             const thisWeekRest = getMonthRestUsed(emp.name) - (monthlyCtx.restDaysUsed?.[emp.name] || 0)
             const weekRestTarget = restPerWeekMap[emp.name] ?? 2
@@ -789,7 +788,7 @@ export function runProgrammaticSchedule(data) {
               return false
             }
           }
-          return true
+          return true  // 本週休假已達目標，繼續排班
         }
         const restLimit = monthRestTarget[emp.name] || 15
         if (getMonthRestUsed(emp.name) >= restLimit) return true  // PT 月休到上限

@@ -414,7 +414,14 @@ export function runProgrammaticSchedule(data) {
 
     const getOH = (date) => {
       const dow = new Date(date).getDay()
-      return storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
+      const oh = storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
+      if (!oh && date === weekDates[0]) {
+        console.warn(`[Schedule] 營業時間讀取失敗！date=${date} dow=${dow} dayName=${dayNames[dow]}`,
+          'operating_hours keys:', Object.keys(storeSettings?.operating_hours || {}),
+          'operatingHours keys:', Object.keys(storeSettings?.operatingHours || {}),
+          'raw operating_hours:', JSON.stringify(storeSettings?.operating_hours)?.slice(0, 200))
+      }
+      return oh
     }
 
     // Sort: 正職先排，兼職後排，同類別按時數缺口排

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
   ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
@@ -69,7 +70,148 @@ const taskColumns = [
   },
 ]
 
+// ── store_staff 精簡儀表板 ──
+function StaffDashboard({ profile }) {
+  const [schedules, setSchedules] = useState([])
+  const [attendance, setAttendance] = useState([])
+  const [loading, setLoading] = useState(true)
+  const empName = profile?.name || ''
+  const today = new Date().toISOString().slice(0, 10)
+  const monthStart = today.slice(0, 7) + '-01'
+
+  useEffect(() => {
+    if (!empName) { setLoading(false); return }
+    Promise.all([
+      supabase.from('schedules').select('date, shift').eq('employee', empName).gte('date', monthStart).order('date'),
+      supabase.from('attendance').select('date, clock_in, clock_out, status, hours').eq('employee', empName).gte('date', monthStart).order('date', { ascending: false }),
+    ]).then(([s, a]) => {
+      setSchedules(s.data || [])
+      setAttendance(a.data || [])
+    }).finally(() => setLoading(false))
+  }, [empName])
+
+  if (loading) return <LoadingSpinner />
+
+  const now = new Date()
+  const greeting = now.getHours() < 12 ? '早安' : now.getHours() < 18 ? '午安' : '晚安'
+  const todayShift = schedules.find(s => s.date === today)
+  const workDays = schedules.filter(s => s.shift && !['休', '補休', '特休', '病', '產', '會議'].includes(s.shift)).length
+  const restDays = schedules.filter(s => ['休', '補休', '特休'].includes(s.shift)).length
+  const totalHours = attendance.reduce((sum, a) => sum + (Number(a.hours) || 0), 0)
+  const lateDays = attendance.filter(a => a.status === '遲到').length
+
+  return (
+    <div className="fade-in" style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700 }}>{greeting} {empName}</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{profile?.store} · {profile?.dept} · {profile?.position || '員工'}</p>
+      </div>
+
+      {/* 今日班表 */}
+      <div className="card" style={{ marginBottom: 16, padding: 20 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>今日班表</div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: todayShift ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+          {todayShift ? todayShift.shift : '無排班'}
+        </div>
+      </div>
+
+      {/* 本月統計 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+        {[
+          { label: '出勤', value: `${workDays} 天`, color: 'var(--accent-cyan)' },
+          { label: '休假', value: `${restDays} 天`, color: '#10b981' },
+          { label: '累計工時', value: `${totalHours.toFixed(1)}h`, color: '#3b82f6' },
+          { label: '遲到', value: `${lateDays} 次`, color: lateDays > 0 ? '#ef4444' : '#10b981' },
+        ].map(m => (
+          <div key={m.label} className="card" style={{ padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: m.color }}>{m.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 近期班表 */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>本月班表</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+          {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, padding: 4 }}>{d}</div>
+          ))}
+          {(() => {
+            const firstDay = new Date(monthStart).getDay()
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+            const cells = []
+            for (let i = 0; i < firstDay; i++) cells.push(<div key={`pad-${i}`} />)
+            for (let d = 1; d <= daysInMonth; d++) {
+              const dateStr = `${today.slice(0, 7)}-${String(d).padStart(2, '0')}`
+              const sched = schedules.find(s => s.date === dateStr)
+              const isToday = dateStr === today
+              const isRest = sched && ['休', '補休', '特休'].includes(sched.shift)
+              cells.push(
+                <div key={d} style={{
+                  textAlign: 'center', padding: '6px 2px', borderRadius: 6, fontSize: 11,
+                  background: isToday ? 'rgba(34,211,238,0.15)' : isRest ? 'rgba(16,185,129,0.08)' : undefined,
+                  border: isToday ? '2px solid var(--accent-cyan)' : '1px solid transparent',
+                }}>
+                  <div style={{ fontWeight: isToday ? 700 : 500, fontSize: 10, color: isToday ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{d}</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: isRest ? '#10b981' : sched ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    {sched?.shift || '·'}
+                  </div>
+                </div>
+              )
+            }
+            return cells
+          })()}
+        </div>
+      </div>
+
+      {/* 最近出勤 */}
+      {attendance.length > 0 && (
+        <div className="card" style={{ padding: 20, marginTop: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>最近出勤紀錄</div>
+          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-medium)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>日期</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>上班</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>下班</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>工時</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.slice(0, 10).map(a => (
+                <tr key={a.date} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '8px' }}>{a.date?.slice(5)}</td>
+                  <td style={{ textAlign: 'center', padding: '8px' }}>{a.clock_in?.slice(0, 5) || '-'}</td>
+                  <td style={{ textAlign: 'center', padding: '8px' }}>{a.clock_out?.slice(0, 5) || '-'}</td>
+                  <td style={{ textAlign: 'center', padding: '8px', fontWeight: 600 }}>{a.hours ? `${Number(a.hours).toFixed(1)}h` : '-'}</td>
+                  <td style={{ textAlign: 'center', padding: '8px' }}>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      background: a.status === '正常' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                      color: a.status === '正常' ? '#10b981' : '#ef4444',
+                    }}>{a.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+
+  // store_staff → 精簡版個人儀表板
+  if (userRole === 'store_staff' && profile) {
+    return <StaffDashboard profile={profile} />
+  }
+
   const [employees, setEmployees] = useState([])
   const [tasks, setTasks] = useState([])
   const [workflows, setWorkflows] = useState([])

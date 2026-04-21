@@ -1427,21 +1427,24 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       const toFix = Math.min(excess, sortedByNeed.length)
       for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
-        // 找那天的營業時段，生成一個合理的班
-        const oh = data.storeSettings?.operating_hours || data.storeSettings?.operatingHours || {}
-        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-        const dow = new Date(ra.date).getDay()
-        const dayOH = oh[dayNames[dow]]
-        const openH = dayOH?.open || '11:00'
-        const closeH = dayOH?.close || '20:00'
-
-        ra.shift = `${openH.replace(':00','').replace(/^0/,'')}-${closeH.replace(':00','').replace(/^0/,'')}`
-        ra.actual_start = openH
-        ra.actual_end = closeH
-        const startH = parseTime(openH)
-        const endH = parseTime(closeH)
-        const gross = endH > startH ? endH - startH : (24 - startH + endH)
-        ra.actual_hours = gross >= 6 ? gross - 1 : gross  // 扣休息
+        // 從現有班別中挑一個適合的（優先挑適用該員工類型的）
+        const empType = isPT ? 'PT' : 'FT'
+        const eligible = data.shiftDefs.filter(sd => {
+          if (sd.employee_type && sd.employee_type !== 'all') {
+            const sdType = sd.employee_type === '正職' ? 'FT' : 'PT'
+            if (sdType !== empType) return false
+          }
+          return true
+        })
+        const picked = eligible[0] || data.shiftDefs[0]
+        if (picked) {
+          const s = picked.start_time?.slice(0, 5) || '11:00'
+          const e = picked.end_time?.slice(0, 5) || '20:00'
+          ra.shift = picked.name
+          ra.actual_start = s
+          ra.actual_end = e
+          ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
+        }
       }
     }
   }

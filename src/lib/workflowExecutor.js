@@ -227,11 +227,18 @@ async function executeWorkflow(workflow, context) {
  * Call once at app startup after the event bus is initialized.
  */
 export async function registerWorkflowExecutors(bus) {
-  const { data: workflows } = await supabase
+  // crm_workflows 表可能尚未建立（schema 有定義但這個環境的 DB 還沒 apply）→ 優雅跳過
+  const { data: workflows, error } = await supabase
     .from('crm_workflows')
     .select('*')
     .eq('status', 'active')
 
+  if (error) {
+    if (error.code !== 'PGRST116' && !/does not exist|schema cache/i.test(error.message || '')) {
+      console.warn('[workflowExecutor] Failed to load crm_workflows:', error.message)
+    }
+    return
+  }
   if (!workflows || workflows.length === 0) return
 
   for (const wf of workflows) {

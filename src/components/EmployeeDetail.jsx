@@ -241,7 +241,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 24 }}
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       {/* Backdrop */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
@@ -249,7 +249,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
       {/* Panel */}
       <div style={{
-        position: 'relative', width: '94vw', maxWidth: 960, height: '90vh',
+        position: 'relative', width: '94vw', maxWidth: 960, maxHeight: 'calc(100vh - 48px)',
         background: 'var(--bg-primary)', borderRadius: 16,
         border: '1px solid var(--border-medium)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column',

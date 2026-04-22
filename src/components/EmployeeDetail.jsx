@@ -34,6 +34,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [availability, setAvailability] = useState([])
   const [onboardingTasks, setOnboardingTasks] = useState([])
   const [assignments, setAssignments] = useState([])
+  const [lineAccounts, setLineAccounts] = useState([])
+  const [lineChannels, setLineChannels] = useState([])
+  const [newLineUserId, setNewLineUserId] = useState('')
+  const [newLineChannel, setNewLineChannel] = useState('')
 
   // Inline add
   const [newSkill, setNewSkill] = useState('')
@@ -65,6 +69,15 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
     })
+    // Load LINE accounts
+    Promise.all([
+      supabase.from('employee_line_accounts').select('*, line_channels(id, code, name)').eq('employee_id', employee.id).order('is_primary', { ascending: false }),
+      supabase.from('line_channels').select('id, code, name').eq('status', 'active').order('name'),
+    ]).then(([la, ch]) => {
+      setLineAccounts(la.data || [])
+      setLineChannels(ch.data || [])
+      if (ch.data?.[0]) setNewLineChannel(String(ch.data[0].id))
+    }).catch(() => {})
   }, [employee?.id])
 
   useEffect(() => {
@@ -551,9 +564,69 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 )}
               </div>
 
-              <SectionTitle icon="💬" text="LINE 整合" />
-              <div style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
-                LINE 帳號綁定請至「組織管理 → LINE 整合」管理，或由員工在 LINE 輸入 <code>/註冊 姓名</code> 自助綁定。
+              <SectionTitle icon="💬" text="LINE 帳號綁定" />
+
+              {/* 已綁定的 LINE 帳號 */}
+              {lineAccounts.length === 0 ? (
+                <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+                  尚未綁定任何 LINE 帳號
+                </div>
+              ) : lineAccounts.map(la => (
+                <div key={la.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {la.picture_url ? (
+                      <img src={la.picture_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                    ) : (
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#06C755', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>L</div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{la.display_name || 'LINE 使用者'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{la.line_user_id?.slice(0, 12)}...</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: la.is_primary ? 'var(--accent-green-dim)' : 'var(--glass-light)', color: la.is_primary ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {la.line_channels?.name || la.channel_id}{la.is_primary ? ' · 主要' : ''}
+                    </span>
+                    <button onClick={async () => {
+                      if (!confirm('確定解除此 LINE 綁定？')) return
+                      await supabase.from('employee_line_accounts').delete().eq('id', la.id)
+                      setLineAccounts(prev => prev.filter(x => x.id !== la.id))
+                    }} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* 新增綁定 */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <select className="form-input" style={{ flex: '0 0 140px', fontSize: 12 }}
+                  value={newLineChannel} onChange={e => setNewLineChannel(e.target.value)}>
+                  <option value="">選擇頻道</option>
+                  {lineChannels.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                </select>
+                <input className="form-input" type="text" style={{ flex: 1, fontSize: 12 }}
+                  placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap' }}
+                  disabled={!newLineUserId || !newLineChannel}
+                  onClick={async () => {
+                    const { data, error } = await supabase.from('employee_line_accounts').insert({
+                      employee_id: employee.id,
+                      channel_id: parseInt(newLineChannel),
+                      line_user_id: newLineUserId.trim(),
+                      is_primary: lineAccounts.length === 0,
+                      is_verified: true,
+                    }).select('*, line_channels(id, code, name)').single()
+                    if (error) { alert('綁定失敗：' + error.message); return }
+                    setLineAccounts(prev => [...prev, data])
+                    setNewLineUserId('')
+                  }}>
+                  <Plus size={12} /> 綁定
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                員工也可在 LINE 輸入 <code style={{ background: 'var(--glass-light)', padding: '1px 6px', borderRadius: 3 }}>/註冊 {employee.name}</code> 自助綁定
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginTop: 10, border: '1px solid var(--border-subtle)' }}>
                 <div>

@@ -59,7 +59,11 @@ export function flexLiffShortcut(opts: {
   emoji?: string;
 }) {
   const { title, subtitle, buttonLabel, liffId, liffPath = "", emoji = "📱" } = opts;
-  const uri = `https://liff.line.me/${liffId}${liffPath}`;
+  // LINE rejects LIFF URIs with sub-paths ("invalid uri scheme") so we pass
+  // the target route via ?to=... and let the LIFF read the query and navigate.
+  const uri = liffPath
+    ? `https://liff.line.me/${liffId}?to=${encodeURIComponent(liffPath)}`
+    : `https://liff.line.me/${liffId}`;
   return {
     type: "flex",
     altText: `${emoji} ${title}`,

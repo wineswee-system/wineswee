@@ -616,6 +616,28 @@ export default function Schedule() {
     (storeFilter === '' || e.store === storeFilter)
   )
 
+  // ── [TEMP DEBUG] dept/store 同步診斷 — 確認 filter 不動原因後移除 ──
+  if (typeof window !== 'undefined') {
+    const deptCounts = {}
+    const storeCounts = {}
+    for (const e of employees) {
+      const d = e.dept ?? '(null)'
+      const s = e.store ?? '(null)'
+      deptCounts[d] = (deptCounts[d] || 0) + 1
+      storeCounts[s] = (storeCounts[s] || 0) + 1
+    }
+    console.log('[排班 debug]', {
+      'employees 總數': employees.length,
+      'filtered 總數': filtered.length,
+      'deptFilter 目前值': deptFilter,
+      'storeFilter 目前值': storeFilter,
+      'employees.dept 分佈': deptCounts,
+      'employees.store 分佈': storeCounts,
+      'departments 表有幾個': departments.length,
+      'departments 名字列表': departments.map(d => d.name),
+    })
+  }
+
   const getShiftStyle = (shift) => {
     if (isAbsence(shift)) {
       const type = SHIFT_TYPES.find(t => t.label === shift)

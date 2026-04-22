@@ -245,7 +245,16 @@ serve(async (req) => {
       const isManager = (lineUser.is_verified && lineUser.employee_id)
         ? await checkManager(lineUser.employee_id, db)
         : false;
-      responseMsg = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId);
+      const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId);
+      // Append HR shortcut chips (max 13 items per LINE quick reply spec).
+      responseMsg = isGroup ? menu : withQuickReplies(menu, [
+        { label: "📍 打卡", text: "打卡" },
+        { label: "📅 班表", text: "班表" },
+        { label: "🏖 請假", text: "請假" },
+        { label: "⏰ 加班", text: "加班" },
+        { label: "💰 費用", text: "費用" },
+        { label: "✅ 簽核", text: "簽核" },
+      ]);
 
     } else if (lower.startsWith("/註冊") || lower.startsWith("註冊")) {
       commandName = "register";

@@ -58,7 +58,10 @@ export function flexLiffShortcut(opts: {
   liffPath?: string;
   emoji?: string;
 }) {
-  const { title, subtitle, buttonLabel, liffId, liffPath = "", emoji = "📱" } = opts;
+  const { title, subtitle, buttonLabel, liffPath = "", emoji = "📱" } = opts;
+  // Trim defensively — env vars and DB cells often arrive with stray whitespace,
+  // which makes the URL `https://liff.line.me/ <id>` fail LINE's URI validator.
+  const liffId = (opts.liffId ?? "").trim();
   // LINE rejects LIFF URIs with sub-paths ("invalid uri scheme") so we pass
   // the target route via ?to=... and let the LIFF read the query and navigate.
   const uri = liffPath

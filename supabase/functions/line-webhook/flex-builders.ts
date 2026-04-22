@@ -49,6 +49,48 @@ export function withQuickReplies(msg: object, items: Array<{ label: string; text
   };
 }
 
+/** Single-button shortcut card that opens a LIFF page (deeplink path appended to LIFF endpoint) */
+export function flexLiffShortcut(opts: {
+  title: string;
+  subtitle?: string;
+  buttonLabel: string;
+  liffId: string;
+  liffPath?: string;
+  emoji?: string;
+}) {
+  const { title, subtitle, buttonLabel, liffId, liffPath = "", emoji = "📱" } = opts;
+  const uri = `https://liff.line.me/${liffId}${liffPath}`;
+  return {
+    type: "flex",
+    altText: `${emoji} ${title}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "14px",
+        backgroundColor: "#2563EB",
+        contents: [
+          { type: "text", text: `${emoji} ${title}`, weight: "bold", color: "#FFFFFF", size: "lg" },
+          ...(subtitle ? [{ type: "text", text: subtitle, color: "#BFDBFE", size: "sm", margin: "xs", wrap: true }] : []),
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "12px",
+        contents: [{
+          type: "button",
+          style: "primary",
+          height: "sm",
+          action: { type: "uri", label: buttonLabel, uri },
+        }],
+      },
+    },
+  };
+}
+
 // ── Main Menu Flex ────────────────────────────────────────────────────────────
 
 export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "", liffDashboardId = "") {

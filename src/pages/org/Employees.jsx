@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { createAssignment, rotatePrimary, closeActivePrimary } from '../../lib/assignments'
@@ -62,6 +62,9 @@ export default function Employees() {
   const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
   const [showCsvImport, setShowCsvImport] = useState(false)
+  const [pageTab, setPageTab] = useState('employees')
+  const [showDeptModal, setShowDeptModal] = useState(false)
+  const [editingDept, setEditingDept] = useState(null)
 
   const deptName = (id) => departments.find(d => d.id === id)?.name || ''
   const storeName = (id) => locations.find(l => l.id === id)?.name || ''
@@ -307,6 +310,86 @@ export default function Employees() {
         </div>
       </div>
 
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--bg-card)', padding: 4, borderRadius: 10, width: 'fit-content', border: '1px solid var(--border-medium)' }}>
+        <button onClick={() => setPageTab('employees')} style={{
+          padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: pageTab === 'employees' ? 'var(--accent-cyan)' : 'transparent',
+          color: pageTab === 'employees' ? '#fff' : 'var(--text-secondary)',
+        }}>
+          <Users size={14} /> 員工 ({employees.filter(e => e.status === '在職').length})
+        </button>
+        <button onClick={() => setPageTab('departments')} style={{
+          padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: pageTab === 'departments' ? 'var(--accent-cyan)' : 'transparent',
+          color: pageTab === 'departments' ? '#fff' : 'var(--text-secondary)',
+        }}>
+          <Building2 size={14} /> 部門管理 ({departments.length})
+        </button>
+      </div>
+
+      {/* ══ Department Card View ══ */}
+      {pageTab === 'departments' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          {departments.map(dept => {
+            const manager = employees.find(e => e.id === dept.manager_id)
+            const members = employees.filter(e => (e.department_id === dept.id || e.dept === dept.name) && e.status === '在職')
+            return (
+              <div key={dept.id} className="card" style={{ padding: '18px 20px', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Building2 size={16} style={{ color: 'var(--accent-cyan)' }} />
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>{dept.name}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px' }}
+                      onClick={() => { setEditingDept(dept); setForm({ name: dept.name || '', manager_id: dept.manager_id || '', description: dept.description || '', level: dept.level || '部', parent_department_id: dept.parent_department_id || '' }); setShowDeptModal(true) }}>
+                      <Pencil size={12} />
+                    </button>
+                    <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px', color: 'var(--accent-red)' }}
+                      onClick={async () => { if (!confirm(`確定刪除「${dept.name}」？`)) return; const { error } = await supabase.from('departments').delete().eq('id', dept.id); if (!error) setDepartments(prev => prev.filter(d => d.id !== dept.id)) }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>主管</span>
+                  <span style={{ marginLeft: 8 }}>👤 {manager?.name || dept.head || '—'}</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>成員</span>
+                  <span style={{ marginLeft: 8, fontWeight: 700, color: 'var(--accent-cyan)' }}>{members.length}人</span>
+                </div>
+                {members.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {members.slice(0, 8).map(m => (
+                      <button key={m.id} onClick={() => setDetailEmp(m)} style={{
+                        display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px 3px 3px',
+                        borderRadius: 20, border: '1px solid var(--border-subtle)', background: 'var(--glass-light)',
+                        cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
+                      }}>
+                        <div style={{
+                          width: 22, height: 22, borderRadius: '50%', background: m.avatar || AVATARS[m.id % AVATARS.length],
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 700, color: '#fff',
+                        }}>{m.name?.[0]}</div>
+                        {m.name}
+                      </button>
+                    ))}
+                    {members.length > 8 && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>+{members.length - 8}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {pageTab === 'employees' && <>
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">在職</div>
@@ -447,6 +530,7 @@ export default function Employees() {
           </table>
         </div>
       </div>
+      </>}
 
       {/* 新增員工 Modal */}
       {showModal && (
@@ -688,6 +772,42 @@ export default function Employees() {
             getEmployees().then(r => setEmployees(r.data || []))
           }}
         />
+      )}
+
+      {/* Department Edit Modal */}
+      {showDeptModal && (
+        <Modal title={editingDept ? `編輯部門 — ${editingDept.name}` : '新增部門'}
+          onClose={() => { setShowDeptModal(false); setEditingDept(null) }}
+          onSubmit={async () => {
+            const payload = { name: form.name, manager_id: form.manager_id ? parseInt(form.manager_id) : null, description: form.description, level: form.level, parent_department_id: form.parent_department_id ? parseInt(form.parent_department_id) : null }
+            if (editingDept) {
+              const { data } = await supabase.from('departments').update(payload).eq('id', editingDept.id).select().single()
+              if (data) setDepartments(prev => prev.map(d => d.id === data.id ? data : d))
+            } else {
+              const { data } = await supabase.from('departments').insert(payload).select().single()
+              if (data) setDepartments(prev => [...prev, data])
+            }
+            setShowDeptModal(false); setEditingDept(null)
+          }}
+          submitLabel={editingDept ? '儲存' : '新增'}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="部門名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+            <Field label="層級"><select className="form-input" style={{ width: '100%' }} value={form.level} onChange={e => set('level', e.target.value)}>
+              <option value="部">部</option><option value="組">組</option><option value="課">課</option><option value="董事長">董事長室</option>
+            </select></Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="上級部門"><select className="form-input" style={{ width: '100%' }} value={form.parent_department_id} onChange={e => set('parent_department_id', e.target.value)}>
+              <option value="">無（頂層）</option>
+              {departments.filter(d => d.id !== editingDept?.id).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select></Field>
+            <Field label="部門主管"><select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
+              <option value="">請選擇</option>
+              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{e.name}{e.position ? ` (${e.position})` : ''}</option>)}
+            </select></Field>
+          </div>
+          <Field label="描述"><textarea className="form-input" style={{ width: '100%', height: 80 }} value={form.description} onChange={e => set('description', e.target.value)} /></Field>
+        </Modal>
       )}
 
       {/* Employee Detail Modal */}

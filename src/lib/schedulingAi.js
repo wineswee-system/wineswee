@@ -101,6 +101,7 @@ export async function gatherSchedulingData({
     minStaff: minStaff || 3,
     minStaffWeekend: minStaffWeekend || minStaff || 3,
     maxStaff: storeSettingsData?.max_staff || undefined,
+    operating_hours: storeSettingsData?.operating_hours || undefined,
     operatingHours: storeSettingsData?.operating_hours || undefined,
     peakDays: storeSettingsData?.peak_days || [5, 6], // Fri + Sat
     workHourSystem: storeSettingsData?.work_hour_system || undefined,

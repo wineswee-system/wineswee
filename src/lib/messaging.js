@@ -1,6 +1,10 @@
 /**
  * 訊息發送模組 (Email / LINE / SMS)
  * 統一訊息發送介面，支援多管道通知與行銷活動
+ *
+ * ⚠️ 注意：此模組的 email / SMS 為 placeholder，實際不會發送。
+ *    LINE 推播通知請使用 lineNotify.js（透過 Supabase Edge Function 真正發送）。
+ *    此模組主要用於 CRM 行銷活動的訊息記錄（寫入 message_logs 表）。
  */
 
 import { supabase } from './supabase'

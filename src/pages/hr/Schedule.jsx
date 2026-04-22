@@ -375,11 +375,13 @@ export default function Schedule() {
     try {
       const dateStart = isMonthly ? monthStart : weekStart
       const dateEnd = isMonthly ? monthEnd : weekEnd
+      const selectedStoreObj2 = locations.find(l => l.name === storeFilter)
+      const aiStoreShifts = shiftDefs.filter(d => !d.store_id || d.store_id === selectedStoreObj2?.id)
 
       let schedulingData = await gatherSchedulingData({
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
-        employees: filtered, shiftDefs,
+        employees: filtered, shiftDefs: aiStoreShifts,
         storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
 
@@ -556,7 +558,7 @@ export default function Schedule() {
       let schedulingData = await gatherSchedulingData({
         weekDates: isMonthly ? null : weekDates,
         monthDates: isMonthly ? monthDates : null,
-        employees: filtered, shiftDefs,
+        employees: filtered, shiftDefs: storeShifts,
         storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
 

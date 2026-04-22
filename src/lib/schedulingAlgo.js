@@ -261,40 +261,81 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // ── Step 1c: 主動分配休假 — 根據月休目標預排 ──
-  // 四週變形：每 4 週至少 8 天休 → 每週至少 2 天
-  // 正職：確保月底達到 ft_monthly_rest_days（硬性最低）
-  // 兼職：彈性分配，不強制但不超過上限
-  const is4WeekFlex = wsConstraints.periodWeeks === 4
-  const minRestPerWeek = is4WeekFlex ? 2 : wsConstraints.weeklyRestMin || 2
+  // ── Step 1c: 主動分配休假 — 純月制，累計到月目標就停 ──
+  // 正職：硬性 10 天（ft_monthly_rest_days），累計到就不再給
+  // 兼職：彈性，上限 20 天（pt_monthly_rest_days）
 
-  for (const emp of employees) {
-    const isPT = monthTargetMap[emp.name]?.isPT
-    const monthRest = monthRestTarget[emp.name] || 10
-    const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-    const weeksTotal = (monthlyCtx?.weeksRemaining ?? 3) + 1
-    const restNeededThisMonth = Math.max(0, monthRest - prevRestUsed)
+  // 計算每人「本週還能再給幾天休」
+  // 月排班：(月目標 - 已累計 - 本週已排)，但限制不超過本週均分上限
+  // 單週：月目標均分到 4 週
+  const getMonthRestRemaining = (empName) => {
+    const isPT = monthTargetMap[empName]?.isPT
+    const target = monthRestTarget[empName] || 10
+    const thisWeekUsed = weekDates.filter(d => restDayPlan[empName].has(d)).length
+    if (monthlyCtx) {
+      const prevUsed = monthlyCtx.restDaysUsed?.[empName] || 0
+      const monthRemaining = Math.max(0, target - prevUsed - thisWeekUsed)
+      // 正職：限制每週不超過均分上限，確保休假分散在各週
+      if (!isPT) {
+        const weeksLeft = (monthlyCtx.weeksRemaining ?? 0) + 1
+        const avgPerWeek = Math.ceil((target - prevUsed) / weeksLeft)
+        return Math.min(monthRemaining, Math.max(0, avgPerWeek - thisWeekUsed))
+      }
+      return monthRemaining
+    }
+    const weeklyTarget = Math.ceil(target / 4)
+    return Math.max(0, weeklyTarget - thisWeekUsed)
+  }
 
-    // 每週休假天數 = max(法定最低, 月目標均分)
-    // 正職用 ceil 確保達標，兼職用 floor 保持彈性
-    const avgPerWeek = isPT
-      ? Math.floor(restNeededThisMonth / weeksTotal)
-      : Math.ceil(restNeededThisMonth / weeksTotal)
-    const restPerWeek = Math.max(minRestPerWeek, avgPerWeek)
-    const alreadyResting = weekDates.filter(d => restDayPlan[emp.name].has(d)).length
+  // 正職先排（硬需求），兼職後排（彈性）
+  const ftFirstOrder = [...employees].sort((a, b) => {
+    const aIsPT = monthTargetMap[a.name]?.isPT ? 1 : 0
+    const bIsPT = monthTargetMap[b.name]?.isPT ? 1 : 0
+    return aIsPT - bIsPT
+  })
 
-    if (alreadyResting < restPerWeek) {
+  // 第一輪：尊重 minStaff，盡量分配
+  for (const emp of ftFirstOrder) {
+    const remaining = getMonthRestRemaining(emp.name)
+    if (remaining <= 0) continue
+
+    const candidates = weekDates
+      .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
+      .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
+      .sort((a, b) => a.demand - b.demand)
+
+    let needed = remaining
+    for (const c of candidates) {
+      if (needed <= 0) break
+      const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
+      const workingAfter = employees.length - restingOnDay - 1
+      if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
+      restDayPlan[emp.name].add(c.date)
+      needed--
+    }
+  }
+
+  // 第二輪：正職月休硬限制 — 第一輪排不滿時允許降到 minStaff-1
+  const maxMinWorkers = Math.max(...weekDates.map(d => minWorkersPerDay[d] || minStaff))
+  if (employees.length > maxMinWorkers) {
+    for (const emp of ftFirstOrder) {
+      const isPT = monthTargetMap[emp.name]?.isPT
+      if (isPT) continue
+
+      const remaining = getMonthRestRemaining(emp.name)
+      if (remaining <= 0) continue
+
       const candidates = weekDates
         .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
         .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
         .sort((a, b) => a.demand - b.demand)
 
-      let needed = restPerWeek - alreadyResting
+      let needed = remaining
       for (const c of candidates) {
         if (needed <= 0) break
         const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
         const workingAfter = employees.length - restingOnDay - 1
-        if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
+        if (workingAfter < Math.max(1, (minWorkersPerDay[c.date] || minStaff) - 1)) continue
         restDayPlan[emp.name].add(c.date)
         needed--
       }
@@ -373,7 +414,14 @@ export function runProgrammaticSchedule(data) {
 
     const getOH = (date) => {
       const dow = new Date(date).getDay()
-      return storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
+      const oh = storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
+      if (!oh && date === weekDates[0]) {
+        console.warn(`[Schedule] 營業時間讀取失敗！date=${date} dow=${dow} dayName=${dayNames[dow]}`,
+          'operating_hours keys:', Object.keys(storeSettings?.operating_hours || {}),
+          'operatingHours keys:', Object.keys(storeSettings?.operatingHours || {}),
+          'raw operating_hours:', JSON.stringify(storeSettings?.operating_hours)?.slice(0, 200))
+      }
+      return oh
     }
 
     // Sort: 正職先排，兼職後排，同類別按時數缺口排
@@ -393,8 +441,11 @@ export function runProgrammaticSchedule(data) {
 
       // ── Detect operating hours ──
       const oh = getOH(date)
-      const storeOpenH = parseTime(oh?.open || daySlots[0]?.start_time || '11:00')
-      const storeCloseStr = oh?.close || daySlots[daySlots.length - 1]?.end_time || '00:00'
+      const storeOpenH = parseTime(oh?.open || '11:00')
+      if (date === weekDates[0]) {
+        console.log(`[Schedule] date=${date} oh=`, JSON.stringify(oh), `storeOpenH=${storeOpenH}`)
+      }
+      const storeCloseStr = oh?.close || '00:00'
       const storeCloseH = parseTime(storeCloseStr)
       const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
       const maxGrossH = effectiveCloseH - storeOpenH // max shift length = store hours
@@ -451,6 +502,8 @@ export function runProgrammaticSchedule(data) {
         const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
         const endH = startH + grossH
 
+        // Don't start before store opening
+        if (startH < storeOpenH) return null
         // Don't go past store closing
         if (endH > effectiveCloseH + 0.5) return null
         // Legal: max daily hours
@@ -560,12 +613,11 @@ export function runProgrammaticSchedule(data) {
         const range = hoursRange[emp.name]
         const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
 
-        // 正職：休假完全由 Step 1c 決定，這裡只在月工時硬上限到了才強制休
+        // 正職：只有工時硬上限才跳過，時段滿了也嘗試排班（避免 null → 被算休假）
         // 兼職：彈性自動休（時段滿/工時達標/月休未到上限）
         if (!pt) {
-          // 正職：只有月工時硬上限才強制休
-          if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-          // 其他情況繼續排班
+          if (weekHours >= range.max) continue
+          // allMaxMet 時不跳過，繼續往下嘗試排班
         } else {
           // 兼職
           const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
@@ -573,12 +625,23 @@ export function runProgrammaticSchedule(data) {
           const monthRestUsed = prevRestUsed + thisWeekRest
           const monthRestLimit = monthRestTarget[emp.name] || 15
 
-          if (allMaxMet && monthRestUsed < monthRestLimit) { schedule[emp.name][date] = '休'; continue }
+          // 兼職 auto-rest 前先確認：今天是否還有正職月休不足且未排班？
+          // 如果有，兼職不能搶休，要讓正職有機會休
+          const ftStillNeedRest = unassigned.some(e => {
+            if (isPTEmp(e)) return false
+            if (schedule[e.name]?.[date]) return false
+            const ftPrevRest = monthlyCtx?.restDaysUsed?.[e.name] || 0
+            const ftThisWeekRest = Object.values(schedule[e.name]).filter(s => s && isAbsence(s)).length
+            const ftMonthRest = ftPrevRest + ftThisWeekRest
+            return ftMonthRest < (monthRestTarget[e.name] || 10)
+          })
+
+          if (allMaxMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) { schedule[emp.name][date] = '休'; continue }
           if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
 
           const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
           const empMonthMin = monthTargetMap[emp.name]?.min || 80
-          if (monthHoursSoFar >= empMonthMin && allMinMet && monthRestUsed < monthRestLimit) {
+          if (monthHoursSoFar >= empMonthMin && allMinMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) {
             schedule[emp.name][date] = '休'; continue
           }
         }
@@ -714,13 +777,24 @@ export function runProgrammaticSchedule(data) {
     const toAssign = employees.filter(emp => {
       if (schedule[emp.name][date]) return false
       if (restDayPlan[emp.name].has(date)) return false
-      // 正職：休假完全由 Step 1c 控制，不自動加休
+      // 正職：月排班模式下，工時達標且月休不足 → 給休
       // 兼職：週工時達標且月休未滿上限 → 可以自動休
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
         const pt = isPTEmp(emp)
-        if (!pt) return true  // 正職繼續排班，不自動休
+        if (!pt) {
+          // 正職：休假只從 Step 1c 來，這裡不給休
+          return true
+        }
         const restLimit = monthRestTarget[emp.name] || 15
         if (getMonthRestUsed(emp.name) >= restLimit) return true  // PT 月休到上限
+        // 兼職想休前，確認正職月休是否已達標
+        const ftNeedMore = employees.some(e => {
+          if (isPTEmp(e)) return false
+          if (schedule[e.name][date]) return false  // 已排班的不算
+          const ftRest = getMonthRestUsed(e.name)
+          return ftRest < (monthRestTarget[e.name] || 10)
+        })
+        if (ftNeedMore) return true  // 正職月休不足，兼職繼續上班
         schedule[emp.name][date] = '休'
         return false
       }
@@ -1336,6 +1410,55 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       }
     }
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
+  }
+
+  // ── 最終校正：月休強制精確到目標天數（正職 + 兼職都校正）──
+  // 排班過程中可能因為時段滿、null→休 等原因導致休假超標
+  // 最後一關：超過的休假天，挑缺人的天轉回上班
+  for (const emp of data.employees) {
+    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const target = isPT
+      ? (data.storeSettings?.pt_monthly_rest_days ?? 20)
+      : (data.storeSettings?.ft_monthly_rest_days ?? 10)
+    const empAssignments = allAssignments.filter(a => a.employee === emp.name)
+    const restAssignments = empAssignments.filter(a => isAbsence(a.shift))
+    const excess = restAssignments.length - target
+
+    if (excess > 0) {
+      // 排除 off request 的天（希望休不能砍）
+      const offSet = new Set(data.offRequests.map(o => `${o.employee}_${o.date}`))
+      const convertible = restAssignments.filter(a => !offSet.has(`${a.employee}_${a.date}`))
+      // 挑「需求最高的天」優先轉回上班（那些天最缺人）
+      const sortedByNeed = [...convertible].sort((a, b) => {
+        // 那天有多少人上班？越少人的天越應該把休轉回上班
+        const aWorking = allAssignments.filter(x => x.date === a.date && !isAbsence(x.shift)).length
+        const bWorking = allAssignments.filter(x => x.date === b.date && !isAbsence(x.shift)).length
+        return aWorking - bWorking  // 人最少的天排前面
+      })
+
+      const toFix = Math.min(excess, sortedByNeed.length)
+      for (let i = 0; i < toFix; i++) {
+        const ra = sortedByNeed[i]
+        // 從現有班別中挑一個適合的（優先挑適用該員工類型的）
+        const empType = isPT ? 'PT' : 'FT'
+        const eligible = data.shiftDefs.filter(sd => {
+          if (sd.employee_type && sd.employee_type !== 'all') {
+            const sdType = sd.employee_type === '正職' ? 'FT' : 'PT'
+            if (sdType !== empType) return false
+          }
+          return true
+        })
+        const picked = eligible[0] || data.shiftDefs[0]
+        if (picked) {
+          const s = picked.start_time?.slice(0, 5) || '11:00'
+          const e = picked.end_time?.slice(0, 5) || '20:00'
+          ra.shift = picked.name
+          ra.actual_start = s
+          ra.actual_end = e
+          ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
+        }
+      }
+    }
   }
 
   // Monthly validation

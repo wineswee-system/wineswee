@@ -1,11 +1,82 @@
 import { Rocket } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 
+// 步驟角色 → 部門名稱的對應表（支援模糊匹配）
+const ROLE_DEPT_MAP = {
+  '人資部': ['人力資源部', '人資部'],
+  'HR': ['人力資源部', '人資部'],
+  '管理部': ['總務部', '管理部'],
+  'IT': ['總務部', '管理部'],
+  '財務部': ['財務部'],
+  '倉儲物流部': ['倉儲物流部'],
+  '採購部': ['採購部'],
+  '營運部': ['營運部'],
+  '品牌行銷部': ['品牌行銷部'],
+  '行銷部': ['品牌行銷部'],
+  '展店事業部': ['加盟展店事業部'],
+  '加盟展店事業部': ['加盟展店事業部'],
+  '總經理室': ['總經理室'],
+}
+
+function getMatchingEmployees(role, employees, departments) {
+  if (!role) return { matched: [], others: employees }
+
+  // 1. 直接查 ROLE_DEPT_MAP
+  const deptNames = ROLE_DEPT_MAP[role] || []
+
+  // 2. 找匹配的部門 ID
+  const matchDeptIds = departments
+    .filter(d => deptNames.includes(d.name) || d.name.includes(role) || role.includes(d.name))
+    .map(d => d.id)
+
+  // 3. 角色是「主管」「店長」「督導」→ 找 is_manager 或 position 含對應字
+  const isManagerRole = ['主管', '店長', '督導', '組長'].some(k => role.includes(k))
+
+  const matched = []
+  const others = []
+
+  for (const emp of employees) {
+    const deptMatch = matchDeptIds.length > 0 && (
+      matchDeptIds.includes(emp.department_id) ||
+      deptNames.some(n => n === emp.dept)
+    )
+    const posMatch = isManagerRole && (
+      emp.is_manager ||
+      emp.position?.includes('主管') ||
+      emp.position?.includes('店長') ||
+      emp.position?.includes('督導') ||
+      emp.position?.includes('組長') ||
+      emp.position?.includes('經理')
+    )
+
+    if (deptMatch || posMatch) {
+      matched.push(emp)
+    } else {
+      others.push(emp)
+    }
+  }
+
+  return { matched, others }
+}
+
 export default function DeployModal({
   deployTemplate, deployForm, setDeployForm, deployResult, deploying,
   stores, employees, departments,
   onDeploy, onClose,
 }) {
+  const getDeptName = (emp) => {
+    return departments.find(d => d.id === emp.department_id)?.name || emp.dept || ''
+  }
+
+  const renderOption = (emp) => {
+    const dept = getDeptName(emp)
+    return (
+      <option key={emp.id} value={emp.name}>
+        {emp.name}｜{emp.position}{dept ? `（${dept}）` : ''}
+      </option>
+    )
+  }
+
   return (
     <Modal title={`🚀 部署「${deployTemplate.name}」`} onClose={onClose}
       onSubmit={deployResult ? onClose : onDeploy}
@@ -27,23 +98,31 @@ export default function DeployModal({
             </select>
           </Field>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '16px 0 10px' }}>指派負責人</div>
-          {(deployTemplate.steps || []).map((step, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'var(--glass-light)', marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Step {i + 1}：{step.title}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>角色：{step.role || '-'}</div>
+          {(deployTemplate.steps || []).map((step, i) => {
+            const { matched, others } = getMatchingEmployees(step.role, employees, departments)
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'var(--glass-light)', marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Step {i + 1}：{step.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預設角色：{step.role || '-'}</div>
+                </div>
+                <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={deployForm.assignees[i] || ''}
+                  onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
+                  <option value="">請選擇</option>
+                  {matched.length > 0 && (
+                    <optgroup label={`✦ 建議（${step.role}）`}>
+                      {matched.map(renderOption)}
+                    </optgroup>
+                  )}
+                  {others.length > 0 && (
+                    <optgroup label="其他員工">
+                      {others.map(renderOption)}
+                    </optgroup>
+                  )}
+                </select>
               </div>
-              <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={deployForm.assignees[i] || ''}
-                onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
-                <option value="">請選擇</option>
-                {departments.map(d => (
-                  <optgroup key={d.id} label={d.name}>
-                    {employees.filter(e => e.dept === d.name).map(e => <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-          ))}
+            )
+          })}
         </>
       )}
     </Modal>

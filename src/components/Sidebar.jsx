@@ -303,25 +303,9 @@ const groupNav = {
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: FolderOpen, label: '專案', path: '/process/projects' },
+        { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
-      ]
-    },
-    {
-      label: '流程設計',
-      icon: Workflow,
-      divider: true,
-      children: [
-        { icon: Workflow, label: '流程', path: '/process/workflows' },
-        { icon: BookOpen, label: 'SOP 範本', path: '/process/sop' },
-      ]
-    },
-    {
-      label: '流程分析',
-      icon: BarChart3,
-      divider: true,
-      children: [
-        { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
       ]
     },
     {
@@ -381,7 +365,6 @@ const systemItems = [
   { icon: Building2, label: '租戶管理', path: '/system/tenants' },
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },
-  { icon: Shield, label: '簽核規則', path: '/system/approval-rules' },
   { icon: ScrollText, label: '操作紀錄', path: '/system/audit' },
   { icon: Award, label: '系統效能', path: '/system/performance' },
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },

@@ -12,10 +12,42 @@ const MODULES = [
   { value: 'wms', label: '倉儲' },
 ]
 const DOC_TYPES = {
-  purchase: ['pr', 'po'],
-  finance: ['journal_entry', 'budget'],
-  hr: ['leave', 'expense', 'overtime', 'business_trip'],
-  wms: ['stock_adjustment'],
+  purchase: [
+    { value: 'pr', label: '請購單 PR' },
+    { value: 'po', label: '採購單 PO' },
+  ],
+  finance: [
+    { value: 'journal_entry', label: '傳票' },
+    { value: 'budget', label: '預算' },
+  ],
+  hr: [
+    { value: 'leave', label: '請假' },
+    { value: 'expense', label: '費用報帳' },
+    { value: 'overtime', label: '加班' },
+    { value: 'business_trip', label: '出差' },
+  ],
+  wms: [
+    { value: 'stock_adjustment', label: '庫存調整' },
+  ],
+}
+const CONDITION_FIELDS = {
+  purchase: [
+    { value: 'total_amount', label: '總金額' },
+    { value: 'item_count', label: '品項數' },
+  ],
+  finance: [
+    { value: 'total_amount', label: '總金額' },
+    { value: 'line_count', label: '分錄數' },
+  ],
+  hr: [
+    { value: 'days', label: '天數' },
+    { value: 'amount', label: '金額' },
+    { value: 'hours', label: '時數' },
+  ],
+  wms: [
+    { value: 'total_amount', label: '總金額' },
+    { value: 'quantity', label: '數量' },
+  ],
 }
 const OPERATORS = [
   { value: 'gte', label: '>=' },
@@ -24,7 +56,11 @@ const OPERATORS = [
   { value: 'lt', label: '<' },
   { value: 'eq', label: '=' },
 ]
-const ROLES = ['admin', 'manager', 'team_lead']
+const ROLES = [
+  { value: 'admin', label: '管理員' },
+  { value: 'manager', label: '部門主管' },
+  { value: 'team_lead', label: '組長' },
+]
 
 const emptyForm = {
   module: 'purchase', document_type: 'pr', condition_field: 'total_amount',
@@ -105,6 +141,9 @@ export default function ApprovalRules() {
   }
 
   const moduleLabel = (m) => MODULES.find(x => x.value === m)?.label || m
+  const docTypeLabel = (mod, dt) => (DOC_TYPES[mod] || []).find(x => x.value === dt)?.label || dt
+  const roleLabel = (r) => ROLES.find(x => x.value === r)?.label || r
+  const fieldLabel = (mod, f) => (CONDITION_FIELDS[mod] || []).find(x => x.value === f)?.label || f
   const statusIcon = (s) => s === '已核准' ? <CheckCircle size={14} style={{ color: 'var(--accent-green)' }} /> : s === '已退回' ? <XCircle size={14} style={{ color: 'var(--accent-red)' }} /> : <Clock size={14} style={{ color: '#fbbf24' }} />
 
   if (loading) return <LoadingSpinner />
@@ -115,7 +154,7 @@ export default function ApprovalRules() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">🔐</span> 簽核規則</h2>
-            <p>Approval Rules — 跨模組通用簽核流程設定</p>
+            <p>依條件自動觸發審批（如：採購金額 ≥ 50,000 需主管核准）</p>
           </div>
           <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditingId(null); setShowModal(true) }}>
             <Plus size={14} /> 新增規則
@@ -174,9 +213,9 @@ export default function ApprovalRules() {
               ) : rules.map(rule => (
                 <tr key={rule.id}>
                   <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' }}>{moduleLabel(rule.module)}</span></td>
-                  <td style={{ fontFamily: 'monospace' }}>{rule.document_type}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{rule.condition_field} {rule.condition_operator} {rule.condition_value?.toLocaleString()}</td>
-                  <td>{rule.required_role}</td>
+                  <td>{docTypeLabel(rule.module, rule.document_type)}</td>
+                  <td style={{ fontSize: 12 }}>{fieldLabel(rule.module, rule.condition_field)} {OPERATORS.find(o => o.value === rule.condition_operator)?.label || rule.condition_operator} {rule.condition_value?.toLocaleString()}</td>
+                  <td>{roleLabel(rule.required_role)}</td>
                   <td style={{ textAlign: 'center' }}>{rule.approval_order}</td>
                   <td>
                     <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: rule.is_active ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)', color: rule.is_active ? 'var(--accent-green)' : 'var(--accent-red)' }}>{rule.is_active ? '啟用' : '停用'}</span>
@@ -243,43 +282,50 @@ export default function ApprovalRules() {
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, padding: '8px 12px', borderRadius: 6, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', lineHeight: 1.6 }}>
+                設定當某模組的單據符合條件時，需要哪個角色審核。<br/>
+                例：採購單金額 &ge; 50,000 時需要部門主管審核。
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>模組</label>
-                  <select value={form.module} onChange={e => { set('module', e.target.value); set('document_type', (DOC_TYPES[e.target.value] || [])[0] || '') }} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                  <select value={form.module} onChange={e => { set('module', e.target.value); const types = DOC_TYPES[e.target.value] || []; set('document_type', types[0]?.value || ''); const fields = CONDITION_FIELDS[e.target.value] || []; set('condition_field', fields[0]?.value || 'total_amount') }} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                     {MODULES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>單據類型</label>
                   <select value={form.document_type} onChange={e => set('document_type', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                    {(DOC_TYPES[form.module] || []).map(d => <option key={d} value={d}>{d}</option>)}
+                    {(DOC_TYPES[form.module] || []).map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                   </select>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'end' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>條件欄位</label>
-                  <input type="text" value={form.condition_field} onChange={e => set('condition_field', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  <select value={form.condition_field} onChange={e => set('condition_field', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                    {(CONDITION_FIELDS[form.module] || []).map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
                 </div>
                 <select value={form.condition_operator} onChange={e => set('condition_operator', e.target.value)} style={{ padding: '8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>門檻值</label>
-                  <input type="number" value={form.condition_value} onChange={e => set('condition_value', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  <input type="number" value={form.condition_value} onChange={e => set('condition_value', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} placeholder="例：50000" />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>需要角色</label>
                   <select value={form.required_role} onChange={e => set('required_role', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>審核順序</label>
-                  <input type="number" value={form.approval_order} onChange={e => set('approval_order', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  <input type="number" min="1" value={form.approval_order} onChange={e => set('approval_order', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>同一單據若有多條規則，依此順序審核</div>
                 </div>
               </div>
               {editingId && (

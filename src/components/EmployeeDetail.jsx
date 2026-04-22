@@ -17,7 +17,7 @@ const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '
 // Hex literal needed for 8-digit alpha-suffix concat in boxShadow; mirrors --accent-purple
 const AVATAR_FALLBACK = '#8b5cf6'
 
-export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose }) {
+export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
   const { isAdmin } = useAuth()
   const [tab, setTab] = useState('personal')
   const [form, setForm] = useState({})
@@ -241,15 +241,18 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       {/* Backdrop */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
         onMouseDown={handleClose} />
 
-      {/* Panel */}
+      {/* Panel — 根據點擊位置定位 */}
       <div style={{
-        position: 'relative', width: '94vw', maxWidth: 960, height: '88vh',
+        position: 'absolute',
+        left: '50%', transform: 'translateX(-50%)',
+        top: Math.max(16, Math.min(clickY ? clickY - 120 : window.innerHeight * 0.06, window.innerHeight - window.innerHeight * 0.88 - 16)),
+        width: '94vw', maxWidth: 960, height: '88vh',
         background: 'var(--bg-primary)', borderRadius: 16,
         border: '1px solid var(--border-medium)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column',

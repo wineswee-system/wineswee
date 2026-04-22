@@ -1049,7 +1049,7 @@ export function runProgrammaticSchedule(data) {
           if (offMap.has(`${emp.name}_${date}`)) return false
           // Check legal: 11h gap, daily max, etc.
           const fakeShiftDef = { name: `flex_${shiftStart}-${shiftEnd}`, start_time: shiftStart, end_time: shiftEnd }
-          if (!isLegallyValid(emp, fakeShiftDef, date, data)) return false
+          if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return false
           // Check availability window
           if (availMap[emp.name]) {
             const dayAvail = availMap[emp.name][dow]

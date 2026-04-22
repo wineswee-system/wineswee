@@ -141,14 +141,11 @@ serve(async (req: Request) => {
     let empStoreName: string | null = null
 
     if (emp.store_id) {
+      // stores 就是 location — 沒有獨立 locations 表
       const { data: store } = await supabase
-        .from('stores').select('name').eq('id', emp.store_id).maybeSingle()
+        .from('stores').select('id, name, lat, lng, clock_radius, allowed_wifi').eq('id', emp.store_id).maybeSingle()
       empStoreName = store?.name ?? null
-      if (empStoreName) {
-        const { data } = await supabase
-          .from('locations').select('*').eq('name', empStoreName).maybeSingle()
-        location = data
-      }
+      location = store
     }
 
     // Resolve IP: prefer server-detected IP, fallback to client-reported
@@ -158,9 +155,9 @@ serve(async (req: Request) => {
     const resolvedIP = serverIP || clientIP || null
 
     // ── GPS / WiFi Validation ────────────────────────────
-    // locations table uses: gps_lat, gps_lng, gps_radius_m, wifi_allowed_ips
-    const hasGPSConfig = !!(location?.gps_lat && location?.gps_lng)
-    const hasWifiConfig = !!(location?.wifi_allowed_ips && location.wifi_allowed_ips.length > 0)
+    // stores 欄位：lat, lng, clock_radius, allowed_wifi
+    const hasGPSConfig = !!(location?.lat != null && location?.lng != null)
+    const hasWifiConfig = !!(location?.allowed_wifi && location.allowed_wifi.length > 0)
     const GPS_ACCURACY_THRESHOLD = 200
 
     let gpsPass = false
@@ -172,8 +169,8 @@ serve(async (req: Request) => {
       // GPS check
       if (hasGPSConfig) {
         if (lat != null && lng != null && accuracy != null && accuracy <= GPS_ACCURACY_THRESHOLD) {
-          const dist = haversineMetres(lat, lng, Number(location.gps_lat), Number(location.gps_lng))
-          const radius = location.gps_radius_m || 200
+          const dist = haversineMetres(lat, lng, Number(location.lat), Number(location.lng))
+          const radius = location.clock_radius || 200
           gpsPass = dist <= radius
           if (!gpsPass) {
             reasons.push(`GPS 距離超出範圍（${Math.round(dist)}m / 限 ${radius}m）`)
@@ -188,7 +185,7 @@ serve(async (req: Request) => {
       // WiFi check
       if (hasWifiConfig) {
         if (resolvedIP) {
-          wifiPass = location.wifi_allowed_ips.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
+          wifiPass = location.allowed_wifi.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
           if (!wifiPass) {
             reasons.push(`IP（${resolvedIP}）不在 WiFi 白名單`)
           }
@@ -270,7 +267,7 @@ serve(async (req: Request) => {
         late_minutes: lateMinutes,
         clock_in_lat: lat || null,
         clock_in_lng: lng || null,
-        clock_in_distance_m: method === 'gps' && lat && lng && location?.gps_lat ? Math.round(haversineMetres(lat, lng, Number(location.gps_lat), Number(location.gps_lng))) : null,
+        clock_in_distance_m: method === 'gps' && lat && lng && location?.lat != null ? Math.round(haversineMetres(lat, lng, Number(location.lat), Number(location.lng))) : null,
         clock_in_method: method,
       }).select().single()
       if (error) throw error

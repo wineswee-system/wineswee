@@ -28,7 +28,7 @@ export default function LiffClockIn() {
   async function initLiff() {
     try {
       if (window.liff) {
-        const liffId = import.meta.env.VITE_LIFF_ID
+        const liffId = import.meta.env.VITE_LIFF_CLOCK_ID || import.meta.env.VITE_LIFF_ID
         if (liffId) {
           await window.liff.init({ liffId })
           setLiffReady(true)

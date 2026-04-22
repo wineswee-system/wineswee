@@ -11,6 +11,7 @@ const DemoLanding = lazy(() => import('./pages/DemoLanding'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
 const LiffTask = lazy(() => import('./pages/liff/LiffTask'))
+const LiffManagerDashboard = lazy(() => import('./pages/liff/LiffManagerDashboard'))
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
 const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
@@ -131,6 +132,7 @@ export default function App() {
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           <Route path="/liff/clock" element={<LiffClockIn />} />
           <Route path="/liff/task" element={<LiffTask />} />
+          <Route path="/liff/dashboard" element={<LiffManagerDashboard />} />
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>

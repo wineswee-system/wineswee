@@ -8,7 +8,7 @@
  * - HTML: Network-first (SPA — always serve index.html)
  */
 
-const CACHE_VERSION = 'sme-ops-v1'
+const CACHE_VERSION = 'sme-ops-v2'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
 const API_CACHE = `${CACHE_VERSION}-api`
 const OFFLINE_QUEUE = 'sme-ops-offline-queue'
@@ -44,6 +44,12 @@ self.addEventListener('activate', (event) => {
 // ── Fetch: routing strategies ──
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
+
+  // LIFF pages need fresh code every load (build-time env vars).
+  // Bypass SW entirely for the HTML route and its referenced chunks.
+  if (url.pathname.startsWith('/liff/')) {
+    return
+  }
 
   // Skip non-GET requests for caching (POST/PUT/DELETE go to network)
   if (event.request.method !== 'GET') {

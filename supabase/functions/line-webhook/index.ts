@@ -46,6 +46,8 @@ serve(async (req) => {
     resolveEnv("LIFF_NEW_TASK_ID", channelCode) ??
     channelRow.liff_id ??
     "";
+  const liffDashboardId =
+    resolveEnv("LIFF_DASHBOARD_ID", channelCode) ?? "";
 
   if (!channelSecret || !accessToken) {
     console.error(`[webhook] Missing credentials for channel=${channelCode}`);
@@ -223,7 +225,7 @@ serve(async (req) => {
       const isManager = (lineUser.is_verified && lineUser.employee_id)
         ? await checkManager(lineUser.employee_id, db)
         : false;
-      responseMsg = flexMenu(isGroup, isManager, liffNewTaskId);
+      responseMsg = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId);
 
     } else if (lower.startsWith("/註冊") || lower.startsWith("註冊")) {
       commandName = "register";

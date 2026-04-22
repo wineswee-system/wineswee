@@ -35,6 +35,9 @@ export function infoRow(label: string, value: string, valueColor = "#333333") {
 
 /** Append quick reply chips to any message object */
 export function withQuickReplies(msg: object, items: Array<{ label: string; text: string }>) {
+  // LINE rejects quickReply with empty items (400: must be non-empty array).
+  // Guard here so every callsite is safe.
+  if (!items || items.length === 0) return { ...msg };
   return {
     ...msg,
     quickReply: {
@@ -48,10 +51,13 @@ export function withQuickReplies(msg: object, items: Array<{ label: string; text
 
 // ── Main Menu Flex ────────────────────────────────────────────────────────────
 
-export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "") {
+export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "", liffDashboardId = "") {
   const newTaskBtn = liffNewTaskId
     ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: `https://liff.line.me/${liffNewTaskId}` }, style: "secondary", height: "sm" }
     : mkBtn("➕ 新增任務", "/任務 新增", "secondary");
+  const dashboardBtn = liffDashboardId
+    ? { type: "button", action: { type: "uri", label: "📊 儀錶板", uri: `https://liff.line.me/${liffDashboardId}` }, style: "secondary", height: "sm" }
+    : null;
   return {
     type: "flex",
     altText: "📖 功能選單",
@@ -87,6 +93,7 @@ export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "")
               },
             ]),
           newTaskBtn,
+          ...(dashboardBtn ? [dashboardBtn] : []),
           mkBtn("⚙️ 工作流程狀態", "/流程 狀態", "secondary"),
           ...(isGroup ? [] : [mkBtn("📝 備註查詢", "/備註", "secondary")]),
           ...(isManager ? [mkBtn("🔑 管理員選單", "/管理", "secondary")] : []),

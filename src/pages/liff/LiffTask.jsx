@@ -33,7 +33,7 @@ export default function LiffTask() {
   async function initLiff() {
     try {
       if (window.liff) {
-        const liffId = import.meta.env.VITE_LIFF_ID
+        const liffId = import.meta.env.VITE_LIFF_TASK_ID || import.meta.env.VITE_LIFF_ID
         if (liffId) {
           await window.liff.init({ liffId })
           if (!window.liff.isLoggedIn()) { window.liff.login(); return }

@@ -270,13 +270,14 @@ BEGIN
 END $$;
 
 -- ── 10. 員工的出差單 ────────────────────────────────────────
+-- business_trips 表只有 employee TEXT，沒 employee_id FK
 CREATE OR REPLACE FUNCTION public.liff_list_business_trips(p_line_user_id text)
 RETURNS json
 LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
   SELECT COALESCE(json_agg(row_to_json(b.*) ORDER BY b.start_date DESC), '[]'::json)
   FROM public.business_trips b
-  WHERE b.employee_id = (SELECT id FROM public._liff_resolve_employee(p_line_user_id))
+  WHERE b.employee = (SELECT name FROM public._liff_resolve_employee(p_line_user_id))
 $$;
 
 CREATE OR REPLACE FUNCTION public.liff_upsert_business_trip(p_line_user_id text, p_id int, p_payload json)
@@ -292,10 +293,10 @@ BEGIN
 
   IF p_id IS NULL THEN
     INSERT INTO public.business_trips (
-      employee_id, destination, start_date, end_date, purpose, organization_id
+      employee, destination, start_date, end_date, purpose, organization_id
     )
     VALUES (
-      emp.id,
+      emp.name,
       p_payload->>'destination',
       (p_payload->>'start_date')::date,
       (p_payload->>'end_date')::date,
@@ -309,7 +310,7 @@ BEGIN
       start_date  = (p_payload->>'start_date')::date,
       end_date    = (p_payload->>'end_date')::date,
       purpose     = p_payload->>'purpose'
-    WHERE id = p_id AND employee_id = emp.id
+    WHERE id = p_id AND employee = emp.name
     RETURNING id INTO new_id;
   END IF;
 
@@ -528,12 +529,13 @@ AS $$
 DECLARE emp employees; n int;
 BEGIN
   SELECT * INTO emp FROM public._liff_resolve_employee(p_line_user_id);
-  DELETE FROM public.business_trips WHERE id = p_id AND employee_id = emp.id;
+  DELETE FROM public.business_trips WHERE id = p_id AND employee = emp.name;
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END $$;
 
 -- ── 補：費用 upsert / delete ───────────────────────────────
+-- expenses 沒有 organization_id 欄位
 CREATE OR REPLACE FUNCTION public.liff_upsert_expense(p_line_user_id text, p_id int, p_payload json)
 RETURNS json
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -544,15 +546,14 @@ BEGIN
   IF emp.id IS NULL THEN RAISE EXCEPTION 'employee not found'; END IF;
   IF p_id IS NULL THEN
     INSERT INTO public.expenses (
-      employee, date, category, amount, description, status, organization_id
+      employee, date, category, amount, description, status
     ) VALUES (
       emp.name,
       (p_payload->>'date')::date,
       p_payload->>'category',
       (p_payload->>'amount')::numeric,
       p_payload->>'description',
-      COALESCE(p_payload->>'status', '待核銷'),
-      emp.organization_id
+      COALESCE(p_payload->>'status', '待核銷')
     ) RETURNING id INTO new_id;
   ELSE
     UPDATE public.expenses SET

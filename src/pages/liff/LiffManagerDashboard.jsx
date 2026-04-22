@@ -313,6 +313,12 @@ export default function LiffManagerDashboard() {
     try {
       if (window.liff) {
         const liffId = resolveLiffId()
+        console.log('[LIFF Dashboard] resolved liff id:', liffId || '(none)')
+        if (!liffId) {
+          setError('LIFF ID 未設定 — 請於 Vercel 環境變數加入 VITE_LIFF_DASHBOARD_ID 並重新部署')
+          setLoading(false)
+          return
+        }
         if (liffId) {
           await window.liff.init({ liffId })
           if (!window.liff.isLoggedIn()) { window.liff.login(); return }

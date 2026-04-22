@@ -36,12 +36,15 @@ export default function LiffClockIn() {
           const profile = await window.liff.getProfile()
           const { data: ela } = await supabase
             .from('employee_line_accounts')
-            .select('employee_id, employees:employee_id(*)')
+            .select('employee_id')
             .eq('line_user_id', profile.userId)
             .limit(1)
             .maybeSingle()
-          const emp = ela?.employees
-          if (emp) { await loadEmployeeData(emp); return }
+          if (ela?.employee_id) {
+            const { data: emp } = await supabase
+              .from('employees').select('*').eq('id', ela.employee_id).maybeSingle()
+            if (emp) { await loadEmployeeData(emp); return }
+          }
         }
       }
       const params = new URLSearchParams(window.location.search)

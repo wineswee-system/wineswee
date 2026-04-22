@@ -13,11 +13,11 @@ export function registerPurchaseHandlers(bus) {
     const shortages = []
 
     for (const item of items) {
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('*')
-        .eq('sku_name', item.name)
-        .maybeSingle()
+      // stock_levels 只有 sku_code，先用品名查 skus 取 code
+      const { data: sku } = await supabase.from('skus').select('code, unit, unit_cost').eq('name', item.name).maybeSingle()
+      const { data: stock } = sku?.code
+        ? await supabase.from('stock_levels').select('*').eq('sku_code', sku.code).maybeSingle()
+        : { data: null }
 
       const available = stock?.quantity || 0
       const needed = item.qty || 0
@@ -29,8 +29,8 @@ export function registerPurchaseHandlers(bus) {
           needed,
           shortage: needed - available,
           suggested_qty: Math.ceil((needed - available) * 1.5),
-          unit: stock?.unit || item.unit || '個',
-          price: stock?.unit_cost || item.price || 0,
+          unit: sku?.unit || item.unit || '個',
+          price: sku?.unit_cost || item.price || 0,
         })
       }
     }

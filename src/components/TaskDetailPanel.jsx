@@ -172,7 +172,7 @@ export default function TaskDetailPanel({
     if (!form) return
     setApprovalForm(form)
     // Create steps from chain — parallel: all 待簽; sequential: only first 待簽
-    const chainSteps = chain.steps || chain.steps_legacy_jsonb || []
+    const chainSteps = chain.steps || []
     const stepRows = chainSteps.map((s, i) => ({
       form_id: form.id,
       step_order: i + 1,
@@ -896,7 +896,7 @@ export default function TaskDetailPanel({
                   <option value="">＋ 選擇簽核鏈以啟動...</option>
                   {approvalChains.map(ac => (
                     <option key={ac.id} value={ac.id}>
-                      {ac.name} ({(ac.steps || ac.steps_legacy_jsonb || []).length} 關)
+                      {ac.name} ({(ac.steps || []).length} 關)
                     </option>
                   ))}
                 </select>

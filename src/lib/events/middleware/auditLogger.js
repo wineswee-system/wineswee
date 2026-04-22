@@ -16,7 +16,7 @@ export async function auditLoggerMiddleware(event, next) {
       payload: event.payload,
       metadata: event.metadata,
       timestamp: event.timestamp,
-      tenant_id: event.metadata?.tenant_id || null,
+      organization_id: event.metadata?.organization_id || event.metadata?.tenant_id || null,
     }).then(({ error }) => {
       if (error) console.warn('[EventStore] Failed to persist event:', event.id, error.message)
     })

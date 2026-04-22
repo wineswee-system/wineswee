@@ -14,15 +14,9 @@ export function TenantProvider({ children }) {
       try {
         const parsed = JSON.parse(savedTenant)
         setTenant(parsed)
-        // Restore RLS tenant_id on page reload
-        if (parsed?.id) {
-          supabase.rpc('set_config', { setting: 'app.tenant_id', value: String(parsed.id) }).catch(() => {})
-        }
-        // Restore organization from saved data
         if (parsed?.organization) {
           setOrganization(parsed.organization)
         } else if (parsed?.organization_id) {
-          // Load organization if only ID was saved
           supabase.from('organizations').select('*').eq('id', parsed.organization_id).single()
             .then(({ data }) => { if (data) setOrganization(data) })
         }
@@ -33,11 +27,6 @@ export function TenantProvider({ children }) {
 
   const switchTenant = async (tenantData) => {
     setTenant(tenantData)
-    // Set tenant_id header for Supabase RLS policies
-    if (tenantData?.id) {
-      await supabase.rpc('set_config', { setting: 'app.tenant_id', value: String(tenantData.id) }).catch(() => {})
-    }
-    // Resolve and cache organization
     if (tenantData?.organization_id) {
       const { data: org } = await supabase.from('organizations').select('*').eq('id', tenantData.organization_id).single()
       if (org) {

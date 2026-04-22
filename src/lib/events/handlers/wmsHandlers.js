@@ -1,31 +1,26 @@
 import { supabase } from '../../supabase.js'
 
+// stock_levels 只有 sku_code（不是 sku_name），事件 payload 給的是品項名 → 先到 skus 表查 code
+async function resolveStockByName(itemName) {
+  if (!itemName) return null
+  const { data: sku } = await supabase.from('skus').select('code').eq('name', itemName).maybeSingle()
+  if (!sku?.code) return null
+  const { data: stock } = await supabase.from('stock_levels').select('*').eq('sku_code', sku.code).maybeSingle()
+  return stock
+}
+
 /**
  * WMS event handlers.
  * Subscribes to cross-module events that affect inventory and warehouse operations.
  */
 export function registerWMSHandlers(bus) {
   // ── Sales order created → reserve stock for order items ──
+  // NOTE: stock_levels 沒有 reserved_qty 欄位；預留邏輯暫以事件記錄，等 schema 補欄位再持久化
   bus.subscribe('sales.order.confirmed', async function onOrderConfirmedReserveStock(event) {
     const { order_id, order_number, items } = event.payload
     if (!items || items.length === 0) return
 
-    for (const item of items) {
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('*')
-        .eq('sku_name', item.name)
-        .maybeSingle()
-
-      if (!stock) continue
-
-      const reserved = (stock.reserved_qty || 0) + (item.qty || 0)
-      await supabase
-        .from('stock_levels')
-        .update({ reserved_qty: reserved })
-        .eq('id', stock.id)
-    }
-
+    // 僅發 wms.stock.reserved 事件讓下游知道（DB 沒欄位可記，跳過更新）
     await bus.publish('wms.stock.reserved', {
       order_id,
       order_number,
@@ -42,12 +37,7 @@ export function registerWMSHandlers(bus) {
     if (!items || items.length === 0) return
 
     for (const item of items) {
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('*')
-        .eq('sku_name', item.name)
-        .maybeSingle()
-
+      const stock = await resolveStockByName(item.name)
       if (!stock) continue
 
       const newQty = Math.max(0, (stock.quantity || 0) - (item.qty || 0))
@@ -75,12 +65,7 @@ export function registerWMSHandlers(bus) {
     if (!items || items.length === 0) return
 
     for (const item of items) {
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('*')
-        .eq('sku_name', item.name)
-        .maybeSingle()
-
+      const stock = await resolveStockByName(item.name)
       if (stock) {
         await supabase
           .from('stock_levels')
@@ -106,12 +91,7 @@ export function registerWMSHandlers(bus) {
     if (to_state !== '已完成') return
 
     if (product_name && quantity) {
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('*')
-        .eq('sku_name', product_name)
-        .maybeSingle()
-
+      const stock = await resolveStockByName(product_name)
       if (stock) {
         await supabase
           .from('stock_levels')

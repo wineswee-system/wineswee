@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getApprovalChains, createApprovalChain, updateApprovalChain, deleteApprovalChain } from '../../lib/db'
 import { notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -25,7 +26,7 @@ export default function ApprovalChains() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('approval_chains').select('*').order('id'),
+      getApprovalChains(),
       supabase.from('approval_forms').select('*').order('created_at', { ascending: false }),
       supabase.from('approval_form_steps').select('*').order('form_id,step_order'),
       supabase.from('employees').select('id, name, dept, department_id, position, role, departments!department_id(name)').eq('status', '在職').order('name'),
@@ -55,10 +56,11 @@ export default function ApprovalChains() {
       steps: chainForm.steps.filter(s => s.role || s.label),
     }
     if (editingChain) {
-      const { data } = await supabase.from('approval_chains').update(payload).eq('id', editingChain.id).select().single()
-      if (data) setChains(prev => prev.map(c => c.id === data.id ? data : c))
+      const { data, error } = await updateApprovalChain(editingChain.id, payload)
+      if (error) { alert('失敗：' + error.message); return }
+      if (data) setChains(prev => prev.map(c => c.id === data.id ? { ...c, ...data, steps: data.steps || c.steps } : c))
     } else {
-      const { data, error } = await supabase.from('approval_chains').insert(payload).select().single()
+      const { data, error } = await createApprovalChain(payload)
       if (error) { alert('失敗：' + error.message); return }
       if (data) setChains(prev => [...prev, data])
     }
@@ -238,7 +240,7 @@ export default function ApprovalChains() {
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-sm btn-secondary" onClick={() => openEditChain(c)}><Pencil size={12} /></button>
-                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={async () => { if (!confirm(`刪除「${c.name}」？`)) return; await supabase.from('approval_chains').delete().eq('id', c.id); setChains(prev => prev.filter(x => x.id !== c.id)) }}><Trash2 size={12} /></button>
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={async () => { if (!confirm(`刪除「${c.name}」？`)) return; await deleteApprovalChain(c.id); setChains(prev => prev.filter(x => x.id !== c.id)) }}><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>

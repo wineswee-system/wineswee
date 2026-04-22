@@ -64,7 +64,7 @@ export default function NotificationCenter() {
           id: `stock-${s.id}`, type: 'stock', icon: Package,
           color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
           title: '低庫存警示',
-          desc: `${s.sku_name || '未知品項'} 剩餘 ${s.quantity} ${s.unit || '個'}`,
+          desc: `${s.sku_code || '未知品項'} 剩餘 ${s.quantity} ${s.unit || '個'}`,
           time: '即時',
         }))
       }
@@ -94,9 +94,10 @@ export default function NotificationCenter() {
         }))
       }
 
-      // Workflow steps overdue
+      // Workflow steps overdue (tasks 承載流程執行)
       const { data: overdueSteps } = await supabase
-        .from('workflow_steps').select('id, title, assignee, due_date')
+        .from('tasks').select('id, title, assignee, due_date')
+        .not('workflow_instance_id', 'is', null)
         .in('status', ['待處理', '進行中']).lt('due_date', today).limit(5)
       if (overdueSteps) {
         overdueSteps.forEach(s => items.push({

@@ -90,14 +90,14 @@ export default function Contacts() {
     setLoading(true)
     setError(null)
     try {
-      const [cRes, compRes, actRes, msgRes] = await Promise.all([
+      // company_accounts 表在本版 schema 不存在 → 改由 contacts 的 company 欄位推導
+      const [cRes, actRes, msgRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('company_accounts').select('*').order('name'),
         supabase.from('crm_activities').select('*').order('created_at', { ascending: false }).limit(500),
         supabase.from('message_logs').select('*').order('sent_at', { ascending: false }).limit(500),
       ])
       setContacts(cRes.data || [])
-      setCompanies(compRes.data || [])
+      setCompanies([])
       setActivities(actRes.data || [])
       setMessages(msgRes.data || [])
     } catch (err) {

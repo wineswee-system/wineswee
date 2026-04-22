@@ -906,8 +906,15 @@ export async function cmdNotes(userId: string, db: SupabaseClient) {
 }
 
 // ── Project Tasks Commands ───────────────────────────────────────────────────
+// 注意：project_tasks 表在目前 DB 並未建立（整併到 tasks + project_id 後未補完）。
+// 這些指令暫時回覆提示訊息，避免 LINE 端 500。
+const PROJECT_TASKS_DISABLED = "⚠️ 專案任務模組整理中，暫時無法使用。";
 
 export async function cmdProjectList(db: SupabaseClient) {
+  // project_tasks 表不存在 → 暫停功能
+  return text(PROJECT_TASKS_DISABLED);
+
+  // @ts-ignore unreachable fallback kept for when the table is restored
   const { data: tasks } = await db
     .from("project_tasks")
     .select("task_no, name, assignee, planned_end, actual_end, status, note1")
@@ -978,7 +985,11 @@ export async function cmdProjectList(db: SupabaseClient) {
 }
 
 export async function cmdProjectDone(taskNo: number, db: SupabaseClient): Promise<object> {
+  return text(PROJECT_TASKS_DISABLED);
+
+  // @ts-ignore unreachable
   const today = new Date().toISOString().slice(0, 10);
+  // @ts-ignore unreachable
   const { data: task, error } = await db
     .from("project_tasks")
     .update({ status: '已完成', actual_end: today, sync_source: 'line' })
@@ -995,6 +1006,9 @@ export async function cmdProjectDone(taskNo: number, db: SupabaseClient): Promis
 }
 
 export async function cmdProjectNote(taskNo: number, note: string, db: SupabaseClient): Promise<object> {
+  return text(PROJECT_TASKS_DISABLED);
+
+  // @ts-ignore unreachable
   const { data: task, error } = await db
     .from("project_tasks")
     .update({ note1: note, sync_source: 'line' })
@@ -1011,6 +1025,9 @@ export async function cmdProjectNote(taskNo: number, note: string, db: SupabaseC
 }
 
 export async function cmdProjectStatus(taskNo: number, newStatus: string, db: SupabaseClient): Promise<object> {
+  return text(PROJECT_TASKS_DISABLED);
+
+  // @ts-ignore unreachable
   const validStatuses = ['未開始', '進行中', '已完成'];
   if (!validStatuses.includes(newStatus)) {
     return text(`❌ 無效狀態。請使用：${validStatuses.join('、')}`);

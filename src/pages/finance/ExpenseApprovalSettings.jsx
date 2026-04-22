@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { Plus, Trash2, Edit3, X, ArrowRight, GripVertical } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getEmployees } from '../../lib/db'
+import { getEmployees, getApprovalChains, createApprovalChain, updateApprovalChain, deleteApprovalChain } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '無上限'
@@ -22,10 +22,13 @@ export default function ExpenseApprovalSettings() {
   const load = async () => {
     setLoading(true)
     const [chainRes, empRes] = await Promise.all([
-      supabase.from('approval_chains').select('*').eq('category', '費用申請').order('min_amount'),
+      getApprovalChains(),
       getEmployees(),
     ])
-    setChains(chainRes.data || [])
+    const filtered = (chainRes.data || [])
+      .filter(c => c.category === '費用申請')
+      .sort((a, b) => (a.min_amount || 0) - (b.min_amount || 0))
+    setChains(filtered)
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setLoading(false)
   }
@@ -45,10 +48,10 @@ export default function ExpenseApprovalSettings() {
       steps: form.steps.filter(s => s.role),
     }
     if (editingId) {
-      const { error: err } = await supabase.from('approval_chains').update(payload).eq('id', editingId)
+      const { error: err } = await updateApprovalChain(editingId, payload)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
-      const { error: err } = await supabase.from('approval_chains').insert(payload)
+      const { error: err } = await createApprovalChain(payload)
       if (err) { setError(err.message); setSaving(false); return }
     }
     setSaving(false)
@@ -73,12 +76,12 @@ export default function ExpenseApprovalSettings() {
 
   const handleDelete = async (c) => {
     if (!confirm(`刪除「${c.name}」？`)) return
-    await supabase.from('approval_chains').delete().eq('id', c.id)
+    await deleteApprovalChain(c.id)
     load()
   }
 
   const toggleActive = async (c) => {
-    await supabase.from('approval_chains').update({ is_active: !c.is_active }).eq('id', c.id)
+    await updateApprovalChain(c.id, { is_active: !c.is_active })
     load()
   }
 

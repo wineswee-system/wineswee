@@ -33,10 +33,10 @@ const DATA_SOURCES = [
   { value: 'accounts_receivable', label: '應收帳款', fields: ['amount', 'paid_amount', 'status', 'due_date', 'created_at'] },
   { value: 'accounts_payable', label: '應付帳款', fields: ['amount', 'paid_amount', 'status', 'created_at'] },
   { value: 'opportunities', label: '商機', fields: ['amount', 'stage', 'created_at'] },
-  { value: 'stock_levels', label: '庫存', fields: ['quantity', 'min_qty', 'category', 'product_name'] },
-  { value: 'employees', label: '員工', fields: ['department', 'status', 'position', 'created_at'] },
-  { value: 'attendance_records', label: '出勤', fields: ['status', 'date', 'department'] },
-  { value: 'pos_transactions', label: 'POS交易', fields: ['total_amount', 'payment_method', 'created_at'] },
+  { value: 'stock_levels', label: '庫存', fields: ['quantity', 'min_qty', 'sku_code', 'warehouse'] },
+  { value: 'employees', label: '員工', fields: ['dept', 'status', 'position', 'created_at'] },
+  { value: 'attendance_records', label: '出勤', fields: ['status', 'date', 'hours'] },
+  { value: 'pos_transactions', label: 'POS交易', fields: ['total', 'payment_method', 'created_at'] },
 ]
 
 const METRICS = [

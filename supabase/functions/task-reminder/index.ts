@@ -166,29 +166,32 @@ serve(async (req: Request) => {
     let skippedCount = 0;
 
     // ── 1. Reminder: tasks with reminder_at <= now, not yet sent ──
+    // tasks 表沒有 reminder_sent 欄位 → 用 metadata.reminder_sent JSONB 標記
     if (mode === "all" || mode === "reminders") {
-      const { data: reminderTasks } = await sb.from("tasks")
-        .select("id, title, due_date, assignee_id, reminder_at, status")
+      const { data: rawReminderTasks } = await sb.from("tasks")
+        .select("id, title, due_date, assignee_id, reminder_at, status, metadata")
         .lte("reminder_at", now)
-        .eq("reminder_sent", false)
         .not("status", "in", '("已完成","已取消")')
-        .limit(50);
+        .limit(200);
 
-      if (reminderTasks) {
-        for (const task of reminderTasks) {
-          if (!task.assignee_id || !lineToken) {
-            await sb.from("tasks").update({ reminder_sent: true }).eq("id", task.id);
-            continue;
-          }
+      const reminderTasks = (rawReminderTasks || []).filter(
+        (t: any) => !(t.metadata && t.metadata.reminder_sent)
+      ).slice(0, 50);
 
-          const lineId = await resolveLineId(sb, task.assignee_id);
-          if (!lineId) { skippedCount++; continue; }
+      for (const task of reminderTasks) {
+        const meta = (task.metadata || {}) as Record<string, unknown>;
+        if (!task.assignee_id || !lineToken) {
+          await sb.from("tasks").update({ metadata: { ...meta, reminder_sent: true } }).eq("id", task.id);
+          continue;
+        }
 
-          const sent = await pushLine(lineId, [buildReminderFlex(task)], lineToken);
-          if (sent) {
-            await sb.from("tasks").update({ reminder_sent: true }).eq("id", task.id);
-            reminderCount++;
-          }
+        const lineId = await resolveLineId(sb, task.assignee_id);
+        if (!lineId) { skippedCount++; continue; }
+
+        const sent = await pushLine(lineId, [buildReminderFlex(task)], lineToken);
+        if (sent) {
+          await sb.from("tasks").update({ metadata: { ...meta, reminder_sent: true } }).eq("id", task.id);
+          reminderCount++;
         }
       }
     }

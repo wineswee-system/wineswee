@@ -2,13 +2,16 @@ import { supabase } from './supabase'
 
 /**
  * 系統日誌 + 錯誤日誌工具
- * 所有日誌自動綁定 tenant_id，供 Super Admin 跨組織監控
+ * 所有日誌自動綁定 organization_id，供 Super Admin 跨組織監控
  */
 
-function getTenantId() {
+function getOrgId() {
   try {
     const raw = localStorage.getItem('sme_tenant')
-    if (raw) return JSON.parse(raw).id || null
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return parsed.organization_id || parsed.organization?.id || null
+    }
   } catch { /* ignore */ }
   return null
 }
@@ -17,7 +20,7 @@ function getTenantId() {
 
 export async function logSystem({ level = 'info', module, action, message, user, userEmail, ip, userAgent, metadata = {} }) {
   const { error } = await supabase.from('system_logs').insert({
-    tenant_id: getTenantId(),
+    organization_id: getOrgId(),
     level,
     module,
     action,
@@ -56,7 +59,7 @@ export const logConfigChange = ({ user, module, field, oldValue, newValue }) =>
 
 export async function logError({ level = 'error', module, errorCode, message, stackTrace, component, url, user, userEmail, metadata = {} }) {
   const { error } = await supabase.from('error_logs').insert({
-    tenant_id: getTenantId(),
+    organization_id: getOrgId(),
     level,
     module,
     error_code: errorCode,
@@ -77,7 +80,7 @@ export const logFatal = (params) => logError({ ...params, level: 'fatal' })
 
 export async function logActivity({ userName, userEmail, action, module, page, target, detail, durationSec, ip, device, metadata = {} }) {
   const { error } = await supabase.from('user_activity').insert({
-    tenant_id: getTenantId(),
+    organization_id: getOrgId(),
     user_name: userName,
     user_email: userEmail,
     action,

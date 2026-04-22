@@ -62,7 +62,7 @@ export default function UserConfig() {
       (e.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (e.email || '').toLowerCase().includes(search.toLowerCase()) ||
       (e.employee_id || '').toLowerCase().includes(search.toLowerCase())
-    const matchTenant = !filterTenant || String(e.tenant_id) === filterTenant
+    const matchTenant = !filterTenant || String(e.organization_id) === filterTenant
     const matchRole = !filterRole || e.role === filterRole
     return matchSearch && matchTenant && matchRole
   })
@@ -186,7 +186,7 @@ export default function UserConfig() {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                       <Building2 size={11} style={{ color: 'var(--accent-cyan)' }} />
-                      {e.tenants?.name || `#${e.tenant_id}`}
+                      {e.organizations?.name || `#${e.organization_id}`}
                     </div>
                   </td>
                   <td>

@@ -366,13 +366,15 @@ export default function LiffManagerDashboard() {
           .select('id, template_name, status, started_at, completed_at, due_date, store, assignee')
           .order('started_at', { ascending: false })
           .limit(60),
-        supabase.from('workflow_steps')
-          .select('id, instance_id, title, status, due_date, assignee, store, completed_at, created_at')
+        supabase.from('tasks')
+          .select('id, workflow_instance_id, title, status, due_date, assignee, store, completed_at, created_at')
+          .not('workflow_instance_id', 'is', null)
           .gte('created_at', thirtyDaysAgo)
           .order('step_order', { ascending: true })
           .limit(500),
         supabase.from('tasks')
           .select('id, title, status, priority, due_date, assignee, workflow, created_at')
+          .is('workflow_instance_id', null)
           .gte('created_at', thirtyDaysAgo)
           .order('created_at', { ascending: false })
           .limit(300),
@@ -414,8 +416,8 @@ export default function LiffManagerDashboard() {
   const stepsByInstance = useMemo(() => {
     const map = new Map()
     rawSteps.forEach(s => {
-      if (!map.has(s.instance_id)) map.set(s.instance_id, [])
-      map.get(s.instance_id).push(s)
+      if (!map.has(s.workflow_instance_id)) map.set(s.workflow_instance_id, [])
+      map.get(s.workflow_instance_id).push(s)
     })
     return map
   }, [rawSteps])

@@ -157,26 +157,19 @@ export default function SOPTemplates() {
       }).select().single()
       if (instErr) throw instErr
 
-      // Create workflow steps
-      const stepRows = steps.map((step, i) => ({
-        instance_id: instance.id,
-        step_order: i + 1,
-        title: step.title,
-        description: step.description,
-        role: step.role,
-        assignee: deployForm.assignees[i] || '',
-        status: '待處理',
-      }))
-      await supabase.from('workflow_steps').insert(stepRows)
-
-      // Also create tasks for assignees
+      // Create tasks (執行面，workflow_instance_id 連結回實例)
       const results = []
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i]
         const assignee = deployForm.assignees[i] || ''
         const { data, error } = await createTask({
           title: `【${loc}】${step.title}`,
+          description: step.description || null,
           workflow: deployTemplate.name,
+          workflow_instance_id: instance.id,
+          step_order: i + 1,
+          step_type: 'workflow_step',
+          role: step.role || null,
           assignee,
           priority: step.priority || '中',
           status: '未開始',

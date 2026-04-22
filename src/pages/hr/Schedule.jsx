@@ -214,7 +214,6 @@ export default function Schedule() {
       shift,
       actual_start: actualStart || null,
       actual_end: actualEnd || null,
-      ...(tenantId ? { tenant_id: tenantId } : {}),
     }
 
     const existing = schedules.find(s => s.employee === empName && s.date === date)
@@ -350,7 +349,7 @@ export default function Schedule() {
   }
 
   const handleAssignCover = async (coverEmpName, date, shift) => {
-    const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift, ...(tenantId ? { tenant_id: tenantId } : {}) }, { onConflict: 'employee,date' }).select().single()
+    const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' }).select().single()
     if (data) {
       setSchedules(prev => {
         const idx = prev.findIndex(s => s.employee === coverEmpName && s.date === date)
@@ -438,7 +437,6 @@ export default function Schedule() {
       actual_hours: a.actual_hours || null,
       source_store: a.store || null,
       month_group: monthGroup,
-      ...(tenantId ? { tenant_id: tenantId } : {}),
     }))
 
     const { data } = await supabase.from('schedules')
@@ -690,8 +688,7 @@ export default function Schedule() {
                 }
               }
               if (newSchedules.length > 0) {
-                const withTenant = tenantId ? newSchedules.map(s => ({ ...s, tenant_id: tenantId })) : newSchedules
-                const { data } = await supabase.from('schedules').upsert(withTenant, { onConflict: 'employee,date' }).select()
+                const { data } = await supabase.from('schedules').upsert(newSchedules, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
                 alert(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
               }
@@ -1018,7 +1015,7 @@ export default function Schedule() {
                 if (data) setSchedules(prev => prev.map(s => s.id === existing.id ? data : s))
               } else {
                 const { data } = await supabase.from('schedules')
-                  .insert({ employee, date, shift: '補休', ...(tenantId ? { tenant_id: tenantId } : {}) })
+                  .insert({ employee, date, shift: '補休' })
                   .select().single()
                 if (data) setSchedules(prev => [...prev, data])
               }

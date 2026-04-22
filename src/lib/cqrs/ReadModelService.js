@@ -42,15 +42,16 @@ export async function getDashboardKPIs() {
   const cached = getCached(cacheKey, 30_000)
   if (cached) return cached
 
+  const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00Z'
   const [sales, ar, ap, inventory, orders, employees] = await Promise.all([
     supabase.from('pos_transactions').select('total', { count: 'exact' })
-      .gte('date', new Date().toISOString().slice(0, 10)),
+      .gte('created_at', todayStart),
     supabase.from('accounts_receivable').select('amount, paid_amount')
       .eq('status', '未收款'),
     supabase.from('accounts_payable').select('amount, paid_amount')
       .eq('status', '未付款'),
-    supabase.from('stock_levels').select('quantity, sku_name'),
-    supabase.from('sales_orders').select('total_amount, status')
+    supabase.from('stock_levels').select('quantity'),
+    supabase.from('sales_orders').select('total, status')
       .eq('status', '處理中'),
     supabase.from('employees').select('id', { count: 'exact' })
       .eq('status', '在職'),
@@ -64,7 +65,7 @@ export async function getDashboardKPIs() {
     lowStockItems: inventory.data?.filter(s => (s.quantity || 0) < 10).length || 0,
     totalSKUs: inventory.data?.length || 0,
     pendingOrders: orders.data?.length || 0,
-    pendingOrderValue: orders.data?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0,
+    pendingOrderValue: orders.data?.reduce((sum, o) => sum + (o.total || 0), 0) || 0,
     activeEmployees: employees.count || 0,
     timestamp: new Date().toISOString(),
   }
@@ -99,17 +100,18 @@ export async function getSalesAnalytics(period = 'daily', days = 30) {
     log.debug('MV not available, using live query', { view: 'mv_daily_sales' })
     const { data: txns } = await supabase
       .from('pos_transactions')
-      .select('date, store, total, payment_method')
-      .gte('date', sinceStr)
-      .order('date', { ascending: true })
+      .select('created_at, store, total, payment_method')
+      .gte('created_at', sinceStr + 'T00:00:00Z')
+      .order('created_at', { ascending: true })
 
     if (txns) {
       // Aggregate in-memory
       const grouped = {}
       for (const t of txns) {
-        const key = `${t.date}|${t.store}`
+        const day = (t.created_at || '').slice(0, 10)
+        const key = `${day}|${t.store}`
         if (!grouped[key]) {
-          grouped[key] = { date: t.date, store: t.store, transaction_count: 0, total_sales: 0, cash_sales: 0, card_sales: 0 }
+          grouped[key] = { date: day, store: t.store, transaction_count: 0, total_sales: 0, cash_sales: 0, card_sales: 0 }
         }
         grouped[key].transaction_count++
         grouped[key].total_sales += t.total || 0
@@ -185,11 +187,12 @@ export async function getInventoryHealth() {
 
   if (!stocks) return { items: [], summary: {} }
 
+  // stock_levels 沒有 sku_name 與 reserved_qty 欄位 → 用 sku_code；reserved 暫留 0
   const items = stocks.map(s => ({
-    sku_name: s.sku_name,
+    sku_code: s.sku_code,
     quantity: s.quantity || 0,
-    reserved: s.reserved_qty || 0,
-    available: (s.quantity || 0) - (s.reserved_qty || 0),
+    reserved: 0,
+    available: s.quantity || 0,
     status: (s.quantity || 0) <= 0 ? 'out_of_stock'
       : (s.quantity || 0) < 10 ? 'low_stock'
       : 'healthy',

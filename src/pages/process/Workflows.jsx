@@ -9,6 +9,7 @@ import {
   getWorkflowInstances, updateWorkflowInstance,
   getTasks, getTasksByInstance, createTask, createTasksBatch, updateTask,
   getWorkflowCategories, createWorkflowCategory, deleteWorkflowCategory,
+  getApprovalChains,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -94,7 +95,7 @@ export default function Workflows() {
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
-      supabase.from('approval_chains').select('*').order('id'),
+      getApprovalChains(),
       getWorkflowCategories(),
     ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac, cat]) => {
       setWorkflows(w.data || [])

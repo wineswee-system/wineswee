@@ -255,59 +255,6 @@ export const updateWorkflowStep = (id, data) =>
 export const deleteWorkflowStep = (id) =>
   supabase.from('workflow_steps').delete().eq('id', id)
 
-// ── Step Dependencies (前置條件 & 觸發動作) ─────────────
-export const getStepDependencies = (stepId) =>
-  supabase.from('workflow_step_dependencies').select('*').or(`step_id.eq.${stepId},depends_on_step_id.eq.${stepId}`)
-
-export const getStepDependenciesByInstance = (stepIds) =>
-  supabase.from('workflow_step_dependencies').select('*').in('step_id', stepIds)
-
-export const createStepDependency = (data) =>
-  supabase.from('workflow_step_dependencies').insert(data).select().single()
-
-export const deleteStepDependency = (id) =>
-  supabase.from('workflow_step_dependencies').delete().eq('id', id)
-
-// ── Step Comments (備註留言) ──────────────────────────────
-export const getStepComments = (stepId) =>
-  supabase.from('workflow_step_comments').select('*').eq('step_id', stepId).order('created_at', { ascending: true })
-
-export const createStepComment = (data) =>
-  supabase.from('workflow_step_comments').insert(data).select().single()
-
-// ── Step Attachments (附件) ──────────────────────────────
-export const getStepAttachments = (stepId) =>
-  supabase.from('workflow_step_attachments').select('*').eq('step_id', stepId).order('created_at')
-
-export const createStepAttachment = (data) =>
-  supabase.from('workflow_step_attachments').insert(data).select().single()
-
-export const deleteStepAttachment = (id) =>
-  supabase.from('workflow_step_attachments').delete().eq('id', id)
-
-// ── Step-Checklist Link (關聯查核清單) ───────────────────
-export const getStepChecklists = (stepId) =>
-  supabase.from('workflow_step_checklists').select('*, checklists(*)').eq('step_id', stepId)
-
-export const linkStepChecklist = (stepId, checklistId) =>
-  supabase.from('workflow_step_checklists').insert({ step_id: stepId, checklist_id: checklistId }).select().single()
-
-export const unlinkStepChecklist = (id) =>
-  supabase.from('workflow_step_checklists').delete().eq('id', id)
-
-// ── Step Checklist Items (任務內建清單) ──────────────────
-export const getStepChecklistItems = (stepId) =>
-  supabase.from('workflow_step_checklist_items').select('*').eq('step_id', stepId).order('sort_order')
-
-export const createStepChecklistItem = (data) =>
-  supabase.from('workflow_step_checklist_items').insert(data).select().single()
-
-export const updateStepChecklistItem = (id, data) =>
-  supabase.from('workflow_step_checklist_items').update(data).eq('id', id).select().single()
-
-export const deleteStepChecklistItem = (id) =>
-  supabase.from('workflow_step_checklist_items').delete().eq('id', id)
-
 // ── Workflow Categories (流程分類) ─────────────────────
 export const getWorkflowCategories = () =>
   supabase.from('workflow_categories').select('*').eq('scope', 'workflow').order('sort_order').order('id')
@@ -345,11 +292,99 @@ export const deleteTag = (id) =>
   supabase.from('tags').delete().eq('id', id)
 
 // ── Approval Chains (簽核鏈) ─────────────────────────────
-export const getApprovalChains = () =>
-  supabase.from('approval_chains').select('*').order('id')
+// 注意：phase 2.3 後 steps 已從 JSONB 拆成 approval_chain_steps 關聯表。
+// 為保持 caller 相容，getApprovalChains() 以 FK join 把 steps 陣列組回來。
+export const getApprovalChains = async () => {
+  const { data, error } = await supabase
+    .from('approval_chains')
+    .select('*, approval_chain_steps(id, step_order, role_name, role_id, label, target_type, target_role_id, target_dept_id, target_emp_id)')
+    .order('id')
+  if (error) return { data: null, error }
+  const rows = (data || []).map(c => {
+    const rawSteps = [...(c.approval_chain_steps || [])].sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    const steps = rawSteps.map(s => ({
+      id: s.id,
+      step_order: s.step_order,
+      role: s.role_name,
+      label: s.label,
+      target_type: s.target_type,
+      target_role_id: s.target_role_id,
+      target_dept_id: s.target_dept_id,
+      target_emp_id: s.target_emp_id,
+    }))
+    const { approval_chain_steps: _unused, ...rest } = c
+    return { ...rest, steps }
+  })
+  return { data: rows, error: null }
+}
 
-export const createApprovalChain = (data) =>
-  supabase.from('approval_chains').insert(data).select().single()
+// data 可包含 steps: [{role, label, target_type?, ...}]；會一併寫入 approval_chain_steps
+export const createApprovalChain = async (data) => {
+  const { steps, ...chainCore } = data || {}
+  const { data: chain, error } = await supabase
+    .from('approval_chains')
+    .insert(chainCore)
+    .select()
+    .single()
+  if (error || !chain) return { data: chain, error }
+  if (Array.isArray(steps) && steps.length > 0) {
+    const rows = steps.map((s, i) => ({
+      chain_id: chain.id,
+      step_order: s.step_order ?? i,
+      role_name: s.role || s.role_name || (s.label || '審核'),
+      role_id: s.role_id ?? null,
+      label: s.label ?? null,
+      target_type: s.target_type || 'label',
+      target_role_id: s.target_role_id ?? null,
+      target_dept_id: s.target_dept_id ?? null,
+      target_emp_id: s.target_emp_id ?? null,
+      organization_id: chain.organization_id ?? null,
+    }))
+    const { error: stepErr } = await supabase.from('approval_chain_steps').insert(rows)
+    if (stepErr) return { data: chain, error: stepErr }
+  }
+  return { data: { ...chain, steps: steps || [] }, error: null }
+}
+
+// update data 若包含 steps 陣列，會整批刪舊 + 插新
+export const updateApprovalChain = async (id, data) => {
+  const { steps, ...chainCore } = data || {}
+  let chain = null
+  if (Object.keys(chainCore).length > 0) {
+    const { data: c, error } = await supabase
+      .from('approval_chains')
+      .update(chainCore)
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) return { data: null, error }
+    chain = c
+  }
+  if (Array.isArray(steps)) {
+    await supabase.from('approval_chain_steps').delete().eq('chain_id', id)
+    if (steps.length > 0) {
+      const { data: existing } = await supabase.from('approval_chains').select('organization_id').eq('id', id).maybeSingle()
+      const rows = steps.map((s, i) => ({
+        chain_id: id,
+        step_order: s.step_order ?? i,
+        role_name: s.role || s.role_name || (s.label || '審核'),
+        role_id: s.role_id ?? null,
+        label: s.label ?? null,
+        target_type: s.target_type || 'label',
+        target_role_id: s.target_role_id ?? null,
+        target_dept_id: s.target_dept_id ?? null,
+        target_emp_id: s.target_emp_id ?? null,
+        organization_id: existing?.organization_id ?? null,
+      }))
+      const { error: stepErr } = await supabase.from('approval_chain_steps').insert(rows)
+      if (stepErr) return { data: chain, error: stepErr }
+    }
+  }
+  return { data: { ...(chain || { id }), steps: steps || undefined }, error: null }
+}
+
+export const deleteApprovalChain = (id) =>
+  supabase.from('approval_chains').delete().eq('id', id)
 
 // ── Approval Forms (簽核表單) ────────────────────────────
 export const getApprovalFormByStep = (stepId) =>
@@ -1267,15 +1302,15 @@ export const updateCustomerSegment = (id, data) =>
 export const deleteCustomerSegment = (id) =>
   supabase.from('customer_segments').delete().eq('id', id)
 
-// ── Tenants ──
+// ── Organizations (formerly Tenants) ──
 export const getTenants = () =>
-  supabase.from('tenants').select('*').order('id')
+  supabase.from('organizations').select('*').order('id')
 export const createTenantRecord = (data) =>
-  supabase.from('tenants').insert(data).select().single()
+  supabase.from('organizations').insert(data).select().single()
 export const updateTenantRecord = (id, data) =>
-  supabase.from('tenants').update(data).eq('id', id).select().single()
+  supabase.from('organizations').update(data).eq('id', id).select().single()
 export const deleteTenantRecord = (id) =>
-  supabase.from('tenants').delete().eq('id', id)
+  supabase.from('organizations').delete().eq('id', id)
 
 // ── Warehouses ──
 export const getWarehouses = () =>
@@ -1425,25 +1460,26 @@ export const createCarrierConfig = (data) =>
 export const updateCarrierConfig = (id, data) =>
   supabase.from('carrier_configs').update(data).eq('id', id).select().single()
 
-// ── Super Admin: Cross-tenant operations ──
+// ── Super Admin: Cross-organization operations ──
 export const getAllEmployees = () =>
-  supabase.from('employees').select('*, tenants(name)').order('id')
+  supabase.from('employees').select('*, organizations(name)').order('id')
 export const updateEmployeeRole = (id, data) =>
   supabase.from('employees').update(data).eq('id', id).select().single()
-export const getTenantModuleConfig = (tenantId) =>
-  supabase.from('tenants').select('id, name, features, plan, status, max_users').eq('id', tenantId).single()
+export const getTenantModuleConfig = (orgId) =>
+  supabase.from('organizations').select('id, name, features, plan, status, max_users').eq('id', orgId).single()
 export const updateTenantModules = (id, features) =>
-  supabase.from('tenants').update({ features }).eq('id', id).select().single()
-export const getTenantEmployees = (tenantId) =>
-  supabase.from('employees').select('*').eq('tenant_id', tenantId).order('id')
+  supabase.from('organizations').update({ features }).eq('id', id).select().single()
+export const getTenantEmployees = (orgId) =>
+  supabase.from('employees').select('*').eq('organization_id', orgId).order('id')
 // getRoles, getPermissions, getRolePermissions — defined above in RBAC section
 export const updateRolePermissions = (roleId, permissionIds) =>
   setRolePermissions(roleId, permissionIds)
 
 // ── System Logs (Super Admin) ──
-export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module, action, from, to } = {}) => {
-  let q = supabase.from('system_logs').select('*, tenants(name)', { count: 'exact' })
-  if (tenantId) q = q.eq('tenant_id', tenantId)
+export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, orgId, level, module, action, from, to } = {}) => {
+  let q = supabase.from('system_logs').select('*, organizations(name)', { count: 'exact' })
+  const scopeId = orgId ?? tenantId
+  if (scopeId) q = q.eq('organization_id', scopeId)
   if (level) q = q.eq('level', level)
   if (module) q = q.eq('module', module)
   if (action) q = q.eq('action', action)
@@ -1453,9 +1489,10 @@ export const getSystemLogs = ({ limit = 200, offset = 0, tenantId, level, module
 }
 
 // ── Error Logs (Super Admin) ──
-export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, level, module, resolved, from, to } = {}) => {
-  let q = supabase.from('error_logs').select('*, tenants(name)', { count: 'exact' })
-  if (tenantId) q = q.eq('tenant_id', tenantId)
+export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, orgId, level, module, resolved, from, to } = {}) => {
+  let q = supabase.from('error_logs').select('*, organizations(name)', { count: 'exact' })
+  const scopeId = orgId ?? tenantId
+  if (scopeId) q = q.eq('organization_id', scopeId)
   if (level) q = q.eq('level', level)
   if (module) q = q.eq('module', module)
   if (resolved !== undefined) q = q.eq('resolved', resolved)
@@ -1471,9 +1508,10 @@ export const deleteErrorLog = (id) =>
   supabase.from('error_logs').delete().eq('id', id)
 
 // ── User Activity (Super Admin) ──
-export const getUserActivity = ({ limit = 200, offset = 0, tenantId, userName, action, module, from, to } = {}) => {
-  let q = supabase.from('user_activity').select('*, tenants(name)', { count: 'exact' })
-  if (tenantId) q = q.eq('tenant_id', tenantId)
+export const getUserActivity = ({ limit = 200, offset = 0, tenantId, orgId, userName, action, module, from, to } = {}) => {
+  let q = supabase.from('user_activity').select('*, organizations(name)', { count: 'exact' })
+  const scopeId = orgId ?? tenantId
+  if (scopeId) q = q.eq('organization_id', scopeId)
   if (userName) q = q.eq('user_name', userName)
   if (action) q = q.eq('action', action)
   if (module) q = q.eq('module', module)

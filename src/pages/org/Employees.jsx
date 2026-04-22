@@ -134,13 +134,17 @@ export default function Employees() {
             status: '進行中', started_by: '系統',
           }).select().single()
           if (inst && tpl.steps?.length) {
+            const { data: orgIdRes } = await supabase.rpc('current_employee_org')
             const stepRows = tpl.steps.map((s, i) => ({
-              instance_id: inst.id, step_order: i + 1,
+              workflow_instance_id: inst.id,
+              organization_id: orgIdRes ?? inst.organization_id ?? null,
+              step_order: i + 1,
+              step_type: 'workflow_step',
               title: s.title, description: s.description,
               role: s.role, assignee: data.name,
               store: storeLabel, status: '待處理',
             }))
-            await supabase.from('workflow_steps').insert(stepRows)
+            await supabase.from('tasks').insert(stepRows)
           }
         }
       }

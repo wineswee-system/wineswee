@@ -21,11 +21,11 @@ export function registerManufacturingHandlers(bus) {
       if (!bom) continue // Not a manufactured item
 
       // Check stock — if insufficient, suggest MO
-      const { data: stock } = await supabase
-        .from('stock_levels')
-        .select('quantity')
-        .eq('sku_name', item.name)
-        .maybeSingle()
+      // stock_levels 只有 sku_code：先從 skus 以品名找 code
+      const { data: sku } = await supabase.from('skus').select('code').eq('name', item.name).maybeSingle()
+      const { data: stock } = sku?.code
+        ? await supabase.from('stock_levels').select('quantity').eq('sku_code', sku.code).maybeSingle()
+        : { data: null }
 
       const available = stock?.quantity || 0
       const needed = item.qty || 0

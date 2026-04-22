@@ -27,7 +27,7 @@ export default function ProcessOverview() {
     Promise.all([
       getWorkflows(),
       getWorkflowInstances(),
-      supabase.from('workflow_steps').select('*').order('step_order'),
+      supabase.from('tasks').select('*').not('workflow_instance_id', 'is', null).order('step_order'),
       getTasks(),
       getChecklists(),
     ]).then(([w, inst, st, t, c]) => {
@@ -50,7 +50,7 @@ export default function ProcessOverview() {
     setLoading(true)
     Promise.all([
       getWorkflows(), getWorkflowInstances(),
-      supabase.from('workflow_steps').select('*').order('step_order'),
+      supabase.from('tasks').select('*').not('workflow_instance_id', 'is', null).order('step_order'),
       getTasks(), getChecklists(),
     ]).then(([w, inst, st, t, c]) => {
       setWorkflows(w.data || [])
@@ -133,7 +133,7 @@ export default function ProcessOverview() {
                   尚無簽核流程 — 當員工提交請假/加班/報帳/出差/採購時會自動產生
                 </td></tr>
               ) : instances.map(inst => {
-                const instSteps = steps.filter(s => s.instance_id === inst.id)
+                const instSteps = steps.filter(s => s.workflow_instance_id === inst.id)
                 const completed = instSteps.filter(s => s.status === '已完成').length
                 const total = instSteps.length
                 const cfg = STATUS_CONFIG[inst.status] || STATUS_CONFIG['進行中']

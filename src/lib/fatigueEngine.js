@@ -34,13 +34,17 @@ function classifyShift(shiftDef, dateStr, holidays = []) {
 /**
  * Calculate fatigue scores for a given month from schedule data.
  * @param {string} month - Format "YYYY-MM"
+ * @param {number} [storeId] - Optional store_id to scope shift_definitions
  * @returns {Object} { byEmployee: { name: { breakdown, total } } }
  */
-export async function calculateMonthlyFatigue(month) {
+export async function calculateMonthlyFatigue(month, storeId) {
   const [year, mon] = month.split('-').map(Number)
   const daysInMonth = new Date(year, mon, 0).getDate()
   const dateStart = `${month}-01`
   const dateEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`
+
+  let shiftQ = supabase.from('shift_definitions').select('name, start_time, end_time, store_id')
+  if (storeId) shiftQ = shiftQ.or(`store_id.eq.${storeId},store_id.is.null`)
 
   const [
     { data: schedules },
@@ -49,7 +53,7 @@ export async function calculateMonthlyFatigue(month) {
   ] = await Promise.all([
     supabase.from('schedules').select('employee, date, shift')
       .gte('date', dateStart).lte('date', dateEnd),
-    supabase.from('shift_definitions').select('name, start_time, end_time'),
+    shiftQ,
     supabase.from('holidays').select('date')
       .gte('date', dateStart).lte('date', dateEnd),
   ])

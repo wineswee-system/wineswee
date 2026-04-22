@@ -26,12 +26,12 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     .gte('date', dateStart).lte('date', dateEnd)
   const attQ = supabase.from('attendance_records').select('employee_name, date, clock_in, clock_out, status')
     .gte('date', dateStart).lte('date', dateEnd)
-  const defQ = supabase.from('shift_definitions').select('name, start_time, end_time')
 
-  // Load late tolerance from stores table
+  // Load late tolerance + store_id from stores table
   let lateTolerance = 5  // default: 5 minutes
+  let scopedStoreId = null
   if (storeNameOrId) {
-    let storeQuery = supabase.from('stores').select('late_tolerance_minutes')
+    let storeQuery = supabase.from('stores').select('id, late_tolerance_minutes')
     if (typeof storeNameOrId === 'number') {
       storeQuery = storeQuery.eq('id', storeNameOrId)
     } else {
@@ -39,7 +39,12 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     }
     const { data: store } = await storeQuery.maybeSingle()
     if (store?.late_tolerance_minutes != null) lateTolerance = store.late_tolerance_minutes
+    if (store?.id != null) scopedStoreId = store.id
   }
+
+  // Scope shift_definitions to this store (fallback to global if store_id null)
+  let defQ = supabase.from('shift_definitions').select('name, start_time, end_time, store_id')
+  if (scopedStoreId) defQ = defQ.or(`store_id.eq.${scopedStoreId},store_id.is.null`)
 
   const [{ data: schedules }, { data: attendance }, { data: shiftDefs }] = await Promise.all([schedQ, attQ, defQ])
 

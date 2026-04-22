@@ -65,9 +65,9 @@ function StaffDashboard({ profile }) {
     if (!empName) { setLoading(false); return }
     Promise.all([
       supabase.from('schedules').select('date, shift').eq('employee', empName).gte('date', monthStart).order('date'),
-      supabase.from('attendance').select('date, clock_in, clock_out, status, hours').eq('employee', empName).gte('date', monthStart).order('date', { ascending: false }),
+      supabase.from('attendance_records').select('date, clock_in, clock_out, status, hours').eq('employee', empName).gte('date', monthStart).order('date', { ascending: false }),
       supabase.from('leave_requests').select('id, type, start_date, end_date, status').eq('employee', empName).order('created_at', { ascending: false }).limit(5),
-      supabase.from('workflow_instances').select('id, workflow_name, status, created_at').eq('created_by', empName).order('created_at', { ascending: false }).limit(5),
+      supabase.from('workflow_instances').select('id, template_name, status, created_at').eq('started_by', empName).order('created_at', { ascending: false }).limit(5),
     ]).then(([s, a, l, f]) => {
       setSchedules(s.data || [])
       setAttendance(a.data || [])
@@ -269,7 +269,7 @@ function StaffDashboard({ profile }) {
               <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
                 <span style={{ fontSize: 18 }}>📋</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{f.workflow_name}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{f.template_name}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.created_at?.slice(0, 10)}</div>
                 </div>
                 <span style={{
@@ -360,7 +360,7 @@ export default function Dashboard() {
       supabase.from('opportunities').select('stage, amount'),
       supabase.from('stock_levels').select('*'),
       supabase.from('workflow_instances').select('id, status').eq('status', '進行中'),
-      supabase.from('workflow_steps').select('id, status, assignee, due_date').in('status', ['待處理', '進行中']),
+      supabase.from('tasks').select('id, status, assignee, due_date').not('workflow_instance_id', 'is', null).in('status', ['待處理', '進行中']),
       supabase.from('clock_corrections').select('id').eq('status', '待審核'),
       supabase.from('overtime_requests').select('id').eq('status', '待審核'),
     ])

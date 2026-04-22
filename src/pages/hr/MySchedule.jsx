@@ -26,9 +26,7 @@ export default function MySchedule() {
     // Use AuthContext profile instead of localStorage
     if (authProfile) setProfile(authProfile)
     else setProfile({})
-    supabase.from('shift_definitions').select('*').order('sort_order')
-      .then(({ data }) => setShiftDefs(data || []))
-  }, [])
+  }, [authProfile])
 
   const [published, setPublished] = useState(false)
 
@@ -44,6 +42,12 @@ export default function MySchedule() {
       const empId = empData?.id
       const storeId = empData?.store_id
       setEmpInfo(empData)
+
+      // Load shift_definitions scoped to employee's store (+ global fallback)
+      let shiftQ = supabase.from('shift_definitions').select('*').order('sort_order')
+      if (storeId) shiftQ = shiftQ.or(`store_id.eq.${storeId},store_id.is.null`)
+      const { data: shifts } = await shiftQ
+      setShiftDefs(shifts || [])
 
       // Check next month off_request count (for reminder)
       const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1)

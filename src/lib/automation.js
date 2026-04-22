@@ -15,12 +15,12 @@ export async function checkStockAndCreatePR(orderItems, requester = '系統') {
   const shortages = []
 
   for (const item of orderItems) {
-    // 查 WMS 庫存
-    const { data: stock } = await supabase
-      .from('stock_levels')
-      .select('*')
-      .eq('sku_name', item.name)
-      .maybeSingle()
+    // 查 WMS 庫存：stock_levels 只有 sku_code，先由 skus 表以品名查到 code
+    const { data: sku } = await supabase.from('skus')
+      .select('code, unit, unit_cost').eq('name', item.name).maybeSingle()
+    const { data: stock } = sku?.code
+      ? await supabase.from('stock_levels').select('*').eq('sku_code', sku.code).maybeSingle()
+      : { data: null }
 
     const available = stock?.quantity || 0
     const needed = item.qty || 0
@@ -33,8 +33,8 @@ export async function checkStockAndCreatePR(orderItems, requester = '系統') {
         shortage: needed - available,
         // 建議採購量 = 缺少量 × 1.5 (安全係數)
         suggested_qty: Math.ceil((needed - available) * 1.5),
-        unit: stock?.unit || item.unit || '個',
-        price: stock?.unit_cost || item.price || 0,
+        unit: sku?.unit || item.unit || '個',
+        price: sku?.unit_cost || item.price || 0,
       })
     }
   }
@@ -475,12 +475,20 @@ export async function getCustomer360(customerName) {
     .eq('customer', customerName)
     .order('created_at', { ascending: false })
 
-  // POS transactions
-  const { data: posTransactions } = await supabase
-    .from('pos_transactions')
-    .select('*')
-    .eq('customer', customerName)
-    .order('created_at', { ascending: false })
+  // POS transactions — pos_transactions 沒有 customer 欄位（只有 member_id）
+  // 先用會員姓名比對；未來可補 member_id → customer 關聯
+  const { data: memberForCustomer } = await supabase
+    .from('members')
+    .select('id')
+    .eq('name', customerName)
+    .maybeSingle()
+  const { data: posTransactions } = memberForCustomer?.id
+    ? await supabase
+        .from('pos_transactions')
+        .select('*')
+        .eq('member_id', String(memberForCustomer.id))
+        .order('created_at', { ascending: false })
+    : { data: [] }
 
   // AR history
   const { data: arRecords } = await supabase

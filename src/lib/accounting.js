@@ -187,11 +187,17 @@ export async function postJournalEntry(entryId, lines, supabase) {
         balanceChange = credit - debit
       }
 
-      const { error: balanceError } = await supabase.rpc('update_account_balance', {
-        p_account_code: line.account_code,
-        p_amount: balanceChange,
-      })
-
+      // update_account_balance RPC 尚未建立，改 read-then-write（高併發下有 race risk，
+      // 建議未來補一個 SQL 原子遞增函式）
+      const { data: acct, error: readErr } = await supabase
+        .from('accounts').select('balance').eq('code', line.account_code).maybeSingle()
+      if (readErr) {
+        errors.push(`讀取科目 ${line.account_code} ${line.account_name} 餘額失敗：${readErr.message}`)
+        continue
+      }
+      const newBalance = Number(acct?.balance || 0) + balanceChange
+      const { error: balanceError } = await supabase
+        .from('accounts').update({ balance: newBalance }).eq('code', line.account_code)
       if (balanceError) {
         errors.push(`更新科目 ${line.account_code} ${line.account_name} 餘額失敗：${balanceError.message}`)
       }

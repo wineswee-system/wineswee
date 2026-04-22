@@ -28,9 +28,15 @@ export default function MonthScheduleTable({
   departments,
   storeSettings,
 }) {
-  // Group employees by store when no store filter
+  // Group employees by store when no store filter.
+  // 沒分配門市的員工（store = null/空）集中到「未分配門市」群組，避免被吃掉看不到。
+  const UNASSIGNED_LABEL = '未分配門市'
   const storeGroups = !storeFilter
-    ? [...new Set(employees.map(e => e.store))].filter(Boolean).sort()
+    ? (() => {
+        const named = [...new Set(employees.map(e => e.store).filter(Boolean))].sort()
+        const hasUnassigned = employees.some(e => !e.store)
+        return hasUnassigned ? [...named, UNASSIGNED_LABEL] : named
+      })()
     : null
 
   const absenceOptions = getAbsenceOptions()
@@ -133,7 +139,9 @@ export default function MonthScheduleTable({
               {storeGroups && !storeFilter ? (
                 // Grouped by store
                 storeGroups.map(store => {
-                  const storeEmps = filtered.filter(e => e.store === store)
+                  const storeEmps = store === UNASSIGNED_LABEL
+                    ? filtered.filter(e => !e.store)
+                    : filtered.filter(e => e.store === store)
                   if (storeEmps.length === 0) return null
                   return (
                     <StoreSection

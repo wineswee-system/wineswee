@@ -36,8 +36,8 @@ export async function checkAndNotifyDueTasks() {
     try {
       const result = await notifyTaskDue(task.assignee, task.title, task.due_date)
       if (result?.ok !== false) sent++
-    } catch {
-      // LINE 推播失敗不阻擋
+    } catch (err) {
+      console.warn(`[TaskDueChecker] Failed to notify ${task.assignee}:`, err)
     }
   }
 

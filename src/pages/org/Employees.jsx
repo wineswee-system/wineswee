@@ -66,6 +66,8 @@ export default function Employees() {
   const [pageTab, setPageTab] = useState('employees')
   const [showDeptModal, setShowDeptModal] = useState(false)
   const [editingDept, setEditingDept] = useState(null)
+  const [deptForm, setDeptForm] = useState({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '' })
+  const setDept = (k, v) => setDeptForm(f => ({ ...f, [k]: v }))
 
   const deptName = (id) => departments.find(d => d.id === id)?.name || ''
   const storeName = (id) => locations.find(l => l.id === id)?.name || ''
@@ -346,11 +348,11 @@ export default function Employees() {
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px' }}
-                      onClick={() => { setEditingDept(dept); setForm({ name: dept.name || '', manager_id: dept.manager_id || '', description: dept.description || '', level: dept.level || '部', parent_department_id: dept.parent_department_id || '' }); setShowDeptModal(true) }}>
+                      onClick={() => { setEditingDept(dept); setDeptForm({ name: dept.name || '', manager_id: dept.manager_id ? String(dept.manager_id) : '', description: dept.description || '', level: dept.level || '部', parent_department_id: dept.parent_department_id ? String(dept.parent_department_id) : '' }); setShowDeptModal(true) }}>
                       <Pencil size={12} />
                     </button>
                     <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px', color: 'var(--accent-red)' }}
-                      onClick={async () => { if (!confirm(`確定刪除「${dept.name}」？`)) return; const { error } = await supabase.from('departments').delete().eq('id', dept.id); if (!error) setDepartments(prev => prev.filter(d => d.id !== dept.id)) }}>
+                      onClick={async () => { if (!confirm(`確定刪除「${dept.name}」？`)) return; const { error } = await supabase.from('departments').delete().eq('id', dept.id); if (error) { alert('刪除失敗：' + error.message) } else { setDepartments(prev => prev.filter(d => d.id !== dept.id)) } }}>
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -780,34 +782,36 @@ export default function Employees() {
         <Modal title={editingDept ? `編輯部門 — ${editingDept.name}` : '新增部門'}
           onClose={() => { setShowDeptModal(false); setEditingDept(null) }}
           onSubmit={async () => {
-            const payload = { name: form.name, manager_id: form.manager_id ? parseInt(form.manager_id) : null, description: form.description, level: form.level, parent_department_id: form.parent_department_id ? parseInt(form.parent_department_id) : null }
+            const payload = { name: deptForm.name, manager_id: deptForm.manager_id ? parseInt(deptForm.manager_id) : null, description: deptForm.description, level: deptForm.level, parent_department_id: deptForm.parent_department_id ? parseInt(deptForm.parent_department_id) : null }
             if (editingDept) {
-              const { data } = await supabase.from('departments').update(payload).eq('id', editingDept.id).select().single()
+              const { data, error } = await supabase.from('departments').update(payload).eq('id', editingDept.id).select().single()
+              if (error) { alert('儲存失敗：' + error.message); return }
               if (data) setDepartments(prev => prev.map(d => d.id === data.id ? data : d))
             } else {
-              const { data } = await supabase.from('departments').insert(payload).select().single()
+              const { data, error } = await supabase.from('departments').insert(payload).select().single()
+              if (error) { alert('新增失敗：' + error.message); return }
               if (data) setDepartments(prev => [...prev, data])
             }
             setShowDeptModal(false); setEditingDept(null)
           }}
           submitLabel={editingDept ? '儲存' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} /></Field>
-            <Field label="層級"><select className="form-input" style={{ width: '100%' }} value={form.level} onChange={e => set('level', e.target.value)}>
+            <Field label="部門名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} value={deptForm.name} onChange={e => setDept('name', e.target.value)} /></Field>
+            <Field label="層級"><select className="form-input" style={{ width: '100%' }} value={deptForm.level} onChange={e => setDept('level', e.target.value)}>
               <option value="部">部</option><option value="組">組</option><option value="課">課</option><option value="董事長">董事長室</option>
             </select></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="上級部門"><select className="form-input" style={{ width: '100%' }} value={form.parent_department_id} onChange={e => set('parent_department_id', e.target.value)}>
+            <Field label="上級部門"><select className="form-input" style={{ width: '100%' }} value={deptForm.parent_department_id} onChange={e => setDept('parent_department_id', e.target.value)}>
               <option value="">無（頂層）</option>
-              {departments.filter(d => d.id !== editingDept?.id).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {departments.filter(d => d.id !== editingDept?.id).map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
             </select></Field>
-            <Field label="部門主管"><select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
+            <Field label="部門主管"><select className="form-input" style={{ width: '100%' }} value={deptForm.manager_id} onChange={e => setDept('manager_id', e.target.value)}>
               <option value="">請選擇</option>
-              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{e.name}{e.position ? ` (${e.position})` : ''}</option>)}
+              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={String(e.id)}>{e.name}{e.position ? ` (${e.position})` : ''}</option>)}
             </select></Field>
           </div>
-          <Field label="描述"><textarea className="form-input" style={{ width: '100%', height: 80 }} value={form.description} onChange={e => set('description', e.target.value)} /></Field>
+          <Field label="描述"><textarea className="form-input" style={{ width: '100%', height: 80 }} value={deptForm.description} onChange={e => setDept('description', e.target.value)} /></Field>
         </Modal>
       )}
 

@@ -42,7 +42,7 @@ export default function ProcessOverview() {
     }).finally(() => {
       setLoading(false)
       // 每次 session 自動檢查今天到期的任務，發 LINE 提醒
-      checkAndNotifyDueTasks().catch(() => {})
+      checkAndNotifyDueTasks().catch(err => console.warn('[Overview] Task due check failed:', err))
     })
   }, [])
 

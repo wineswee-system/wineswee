@@ -55,7 +55,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_reviews').select('*').eq('employee_id', employee.id).order('review_date', { ascending: false }),
       supabase.from('employee_schedule_prefs').select('*').eq('employee_id', employee.id).order('id'),
       supabase.from('leave_requests').select('*').eq('employee_id', employee.id).order('id', { ascending: false }).limit(10),
-      supabase.from('employee_availability').select('*').eq('employee_id', employee.id).order('day_of_week'),
+      supabase.from('employee_availability').select('*').eq('employee', employee.name).order('day_of_week'),
       supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待處理']).order('created_at', { ascending: false }),
       supabase.from('employee_assignments').select('*, departments(name), stores(name), updated_by_emp:updated_by(name)').eq('employee_id', employee.id).order('start_date', { ascending: false }),
     ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn]) => {
@@ -68,7 +68,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setAvailability(av.data || [])
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
-    })
+    }).catch(err => console.warn('Failed to load employee sub-data:', err))
     // Load LINE accounts
     Promise.all([
       supabase.from('employee_line_accounts').select('*, line_channels(id, code, name)').eq('employee_id', employee.id).order('is_primary', { ascending: false }),
@@ -604,7 +604,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 <select className="form-input" style={{ flex: '0 0 140px', fontSize: 12 }}
                   value={newLineChannel} onChange={e => setNewLineChannel(e.target.value)}>
                   <option value="">選擇頻道</option>
-                  {lineChannels.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                  {lineChannels.map(ch => <option key={ch.id} value={String(ch.id)}>{ch.name}</option>)}
                 </select>
                 <input className="form-input" type="text" style={{ flex: 1, fontSize: 12 }}
                   placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />

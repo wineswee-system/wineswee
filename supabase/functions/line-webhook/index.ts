@@ -245,7 +245,7 @@ serve(async (req) => {
       const isManager = (lineUser.is_verified && lineUser.employee_id)
         ? await checkManager(lineUser.employee_id, db)
         : false;
-      const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId);
+      const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId, liffTaskId);
       // Append HR shortcut chips (max 13 items per LINE quick reply spec).
       responseMsg = isGroup ? menu : withQuickReplies(menu, [
         { label: "📍 打卡", text: "打卡" },

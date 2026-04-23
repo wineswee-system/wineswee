@@ -119,7 +119,7 @@ export async function cmdWorkflowTasks(shortId: string, db: SupabaseClient, show
       {
         type: "button",
         action: liffTaskId
-          ? { type: "uri", label: "✏️ 更新任務", uri: `https://liff.line.me/${liffTaskId}?task_id=${t.id}` }
+          ? { type: "uri", label: "✏️ 更新任務", uri: `https://liff.line.me/${liffTaskId}?to=${encodeURIComponent(`/tasks?task=${t.id}`)}` }
           : { type: "message", label: "✏️ 更新任務", text: `/任務 #${shortTaskId} 更新` },
         style: "secondary", height: "sm", flex: 1,
       },

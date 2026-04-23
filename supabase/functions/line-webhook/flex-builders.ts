@@ -100,13 +100,54 @@ export function flexLiffShortcut(opts: {
 
 // ── Main Menu Flex ────────────────────────────────────────────────────────────
 
-export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "", liffDashboardId = "") {
-  const newTaskBtn = liffNewTaskId
-    ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: `https://liff.line.me/${liffNewTaskId}` }, style: "secondary", height: "sm" }
-    : mkBtn("➕ 新增任務", "/任務 新增", "secondary");
-  const dashboardBtn = liffDashboardId
-    ? { type: "button", action: { type: "uri", label: "📊 儀錶板", uri: `https://liff.line.me/${liffDashboardId}` }, style: "secondary", height: "sm" }
+// Build a LIFF deep-link URI. LINE rejects sub-paths so we pass the SPA route
+// via ?to=..., and the LIFF's LiffDeepLinkRedirect forwards the target route.
+function liffUri(liffId: string, path: string): string {
+  return `https://liff.line.me/${liffId.trim()}?to=${encodeURIComponent(path)}`;
+}
+
+// Pick first non-empty LIFF id from the fallback chain. Lets callers pass any
+// mix of LIFF_TASK_ID / LIFF_NEW_TASK_ID / LIFF_DASHBOARD_ID — one is enough.
+function pickLiff(...ids: string[]): string {
+  for (const id of ids) if (id && id.trim()) return id.trim();
+  return "";
+}
+
+// LIFF deep-link button helper. Returns null when no LIFF id available so caller
+// can fall back to a text-command button.
+function liffDeepLinkBtn(
+  label: string,
+  id: string,
+  path: string,
+  style: "primary" | "secondary" = "secondary",
+) {
+  return id
+    ? { type: "button", action: { type: "uri", label, uri: liffUri(id, path) }, style, height: "sm" }
     : null;
+}
+
+export function flexMenu(
+  isGroup = false,
+  _isManager = false,
+  liffNewTaskId = "",
+  liffDashboardId = "",
+  liffTaskId = "",
+) {
+  // 四顆按鈕通吃：儀表板 / 新增任務 / 更新任務 / 代辦項目
+  // 都是 LIFF deep-link；沒設 LIFF id 就 fallback 成文字指令。
+  const listId = pickLiff(liffTaskId, liffNewTaskId, liffDashboardId);
+  const newId  = pickLiff(liffNewTaskId, liffTaskId, liffDashboardId);
+  const dashId = pickLiff(liffDashboardId, liffTaskId, liffNewTaskId);
+
+  const dashboardBtn = liffDeepLinkBtn("📊 儀表板", dashId, "/dashboard", "primary")
+    ?? mkBtn("📊 儀表板", "/流程 狀態", "primary");
+  const newTaskBtn = liffDeepLinkBtn("➕ 新增任務", newId, "/tasks/new")
+    ?? mkBtn("➕ 新增任務", "/任務 新增", "secondary");
+  const updateTaskBtn = liffDeepLinkBtn("⚙️ 更新任務", listId, "/tasks")
+    ?? mkBtn("⚙️ 更新任務", "/任務 列表", "secondary");
+  const todoBtn = liffDeepLinkBtn("📋 代辦項目", listId, "/todo")
+    ?? mkBtn("📋 代辦項目", "/代辦", "secondary");
+
   return {
     type: "flex",
     altText: "📖 功能選單",
@@ -127,26 +168,47 @@ export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "",
         layout: "vertical",
         spacing: "sm",
         paddingAll: "12px",
+        contents: isGroup
+          // 群組裡只顯示兩顆（新增/代辦），儀表板跟更新任務是個人向資料
+          ? [newTaskBtn, todoBtn]
+          : [dashboardBtn, newTaskBtn, updateTaskBtn, todoBtn],
+      },
+    },
+  };
+}
+
+// ── 出勤卡片（文字指令「出勤」觸發）─────────────────────────────
+// 單張 flex，四顆 LIFF deep-link 按鈕：打卡 / 班表 / 請假 / 加班。
+export function flexAttendanceCard(
+  liffTaskId = "",
+  liffNewTaskId = "",
+  liffDashboardId = "",
+) {
+  const id = pickLiff(liffTaskId, liffNewTaskId, liffDashboardId);
+  // 沒有 LIFF id 就退化成文字指令版（各自的 LIFF_SHORTCUTS 或提示）。
+  const btn = (label: string, path: string, style: "primary" | "secondary" = "secondary") =>
+    liffDeepLinkBtn(label, id, path, style) ?? mkBtn(label, label.replace(/^\S+\s/, ""), style);
+
+  return {
+    type: "flex",
+    altText: "🗓 出勤功能",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box", layout: "vertical", paddingAll: "14px",
+        backgroundColor: "#06b6d4",
         contents: [
-          ...(isGroup
-            ? [mkBtn("📋 任務列表", "/任務 列表", "primary")]
-            : [
-              {
-                type: "box",
-                layout: "horizontal",
-                spacing: "sm",
-                contents: [
-                  mkBtn("📋 進行中任務", "/任務 列表", "primary"),
-                  mkBtn("📁 所有任務", "/任務 全部", "secondary"),
-                ],
-              },
-            ]),
-          newTaskBtn,
-          ...(dashboardBtn ? [dashboardBtn] : []),
-          mkBtn("⚙️ 工作流程狀態", "/流程 狀態", "secondary"),
-          ...(isGroup ? [] : [mkBtn("📝 備註查詢", "/備註", "secondary")]),
-          ...(isManager ? [mkBtn("🔑 管理員選單", "/管理", "secondary")] : []),
-          ...(isGroup ? [] : [mkBtn("👤 帳號連結說明", "/說明", "link")]),
+          { type: "text", text: "🗓 出勤", weight: "bold", color: "#FFFFFF", size: "lg" },
+          { type: "text", text: "打卡、班表、請假、加班", color: "#CFFAFE", size: "xs", margin: "xs" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px",
+        contents: [
+          btn("⏰ 打卡", "/clock", "primary"),
+          btn("📅 班表", "/my-schedule"),
+          btn("🏖 請假", "/leave"),
+          btn("🕐 加班", "/overtime"),
         ],
       },
     },
@@ -190,7 +252,7 @@ export function flexTaskList(tasks: any[], ownerName?: string, liffNewTaskId = "
             layout: "vertical",
             paddingAll: "8px",
             contents: [liffNewTaskId
-              ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: `https://liff.line.me/${liffNewTaskId}` }, style: "primary", height: "sm" }
+              ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: liffUri(liffNewTaskId, "/tasks/new") }, style: "primary", height: "sm" }
               : mkBtn("➕ 新增任務", "/任務 新增", "primary")],
           },
         },
@@ -547,7 +609,30 @@ export function flexWorkflowStatus(instances: any[]) {
 
 // ── Manager Flex Builders ─────────────────────────────────────────────────────
 
-export function flexManagerMenu() {
+export function flexManagerMenu(liffTaskId = "", liffNewTaskId = "", liffDashboardId = "") {
+  const listId = pickLiff(liffTaskId, liffNewTaskId, liffDashboardId);
+  const newId  = pickLiff(liffNewTaskId, liffTaskId, liffDashboardId);
+  const dashId = pickLiff(liffDashboardId, liffTaskId, liffNewTaskId);
+
+  const liffBtn = (label: string, id: string, path: string, style: "primary" | "secondary" = "secondary") =>
+    id
+      ? { type: "button", action: { type: "uri", label, uri: liffUri(id, path) }, style, height: "sm" }
+      : null;
+
+  // B3: top row = direct LIFF dashboard shortcut (primary)
+  const topDashBtn = liffBtn("📊 開啟 LIFF 儀表板", dashId, "/dashboard", "primary");
+
+  // Existing 4 buttons — mapped to LIFF routes when LIFF id available,
+  // fallback to text commands (old BOT flow) when no LIFF id configured.
+  const overviewBtn = liffBtn("📊 團隊任務全覽", dashId, "/dashboard")
+    ?? mkBtn("📊 團隊任務全覽", "/管理 全覽", "primary");
+  const assignBtn = liffBtn("➕ 指派任務", newId, "/tasks/new")
+    ?? mkBtn("➕ 指派任務", "/管理 指派", "secondary");
+  const workflowBtn = liffBtn("⚙️ 流程狀態", dashId, "/dashboard")
+    ?? mkBtn("⚙️ 流程狀態", "/流程 狀態", "secondary");
+  const myTasksBtn = liffBtn("📋 我的任務", listId, "/tasks")
+    ?? mkBtn("📋 我的任務", "/任務 列表", "secondary");
+
   return withQuickReplies(
     {
       type: "flex",
@@ -570,10 +655,11 @@ export function flexManagerMenu() {
           spacing: "sm",
           paddingAll: "12px",
           contents: [
-            mkBtn("📊 團隊任務全覽", "/管理 全覽", "primary"),
-            mkBtn("➕ 指派任務", "/管理 指派", "secondary"),
-            mkBtn("⚙️ 流程狀態", "/流程 狀態", "secondary"),
-            mkBtn("📋 我的任務", "/任務 列表", "secondary"),
+            ...(topDashBtn ? [topDashBtn, { type: "separator", margin: "xs" }] : []),
+            overviewBtn,
+            assignBtn,
+            workflowBtn,
+            myTasksBtn,
           ],
         },
       },

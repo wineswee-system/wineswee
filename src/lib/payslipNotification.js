@@ -68,7 +68,7 @@ function buildPayslipFlexMessage(employee, payslip, liffId) {
         contents: [
           {
             type: 'button',
-            action: { type: 'uri', label: '查看詳細薪資單', uri: `https://liff.line.me/${lid}/hr/self-service` },
+            action: { type: 'uri', label: '查看詳細薪資單', uri: `https://liff.line.me/${lid}?to=${encodeURIComponent('/salary')}` },
             style: 'primary',
             color: '#1DB446',
           },

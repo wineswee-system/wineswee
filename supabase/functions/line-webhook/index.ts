@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { PendingAction } from './types.ts';
 import { verifySignature, getLineProfile, getGroupSummary, text, replyAndLog, pushAndLog } from './line-api.ts';
 import { upsertLineUser, upsertLineGroup, upsertLineGroupMember, logMessage, logCommand, logError } from './db-helpers.ts';
-import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut } from './flex-builders.ts';
+import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard } from './flex-builders.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
 import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
@@ -22,6 +22,9 @@ const LIFF_SHORTCUTS: LiffShortcut[] = [
   { key: "expenses_list",    match: ["費用紀錄", "/費用紀錄"],                            title: "費用紀錄",     subtitle: "查看歷史費用單",             buttonLabel: "📊 開啟紀錄",   path: "/expenses",         emoji: "📊" },
   { key: "approve",          match: ["簽核", "/簽核", "待簽核", "審核"],                   title: "待我簽核",     subtitle: "主管審批項目",               buttonLabel: "✅ 開啟簽核",   path: "/approve",          emoji: "✅" },
   { key: "approval_status",  match: ["簽核狀態", "/簽核狀態", "我的申請"],                title: "我的申請進度", subtitle: "查看送出單據的審批狀態",     buttonLabel: "📋 查看進度",   path: "/approval-status",  emoji: "📋" },
+  { key: "dashboard",        match: ["儀表板", "儀錶板", "/儀表板", "/儀錶板"],           title: "營運儀表板",   subtitle: "流程進度 / 任務統計",        buttonLabel: "📊 開啟儀表板", path: "/dashboard",        emoji: "📊" },
+  { key: "salary",           match: ["薪水", "/薪水", "查薪水", "薪資"],                   title: "薪資查詢",     subtitle: "查看歷月薪資單",             buttonLabel: "💰 查看薪資",   path: "/salary",           emoji: "💰" },
+  { key: "todo",             match: ["代辦", "代辦項目", "/代辦", "/代辦項目", "待辦"],     title: "代辦項目",     subtitle: "任務與簽核一覽",             buttonLabel: "📋 開啟代辦",   path: "/todo",             emoji: "📋" },
 ];
 function matchLiffShortcut(text: string): LiffShortcut | null {
   for (const sc of LIFF_SHORTCUTS) if (sc.match.includes(text)) return sc;
@@ -245,9 +248,10 @@ serve(async (req) => {
       const isManager = (lineUser.is_verified && lineUser.employee_id)
         ? await checkManager(lineUser.employee_id, db)
         : false;
-      const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId);
+      const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId, liffTaskId);
       // Append HR shortcut chips (max 13 items per LINE quick reply spec).
       responseMsg = isGroup ? menu : withQuickReplies(menu, [
+        { label: "🗓 出勤", text: "出勤" },
         { label: "📍 打卡", text: "打卡" },
         { label: "📅 班表", text: "班表" },
         { label: "🏖 請假", text: "請假" },
@@ -255,6 +259,10 @@ serve(async (req) => {
         { label: "💰 費用", text: "費用" },
         { label: "✅ 簽核", text: "簽核" },
       ]);
+
+    } else if (lower === "/出勤" || lower === "出勤" || lower === "attendance") {
+      commandName = "attendance_card";
+      responseMsg = flexAttendanceCard(liffTaskId, liffNewTaskId, liffDashboardId);
 
     } else if (lower.startsWith("/註冊") || lower.startsWith("註冊")) {
       commandName = "register";
@@ -468,7 +476,7 @@ serve(async (req) => {
       } else if (!await checkManager(lineUser.employee_id, db)) {
         responseMsg = text("🔒 您沒有管理員權限。\n如需開通，請聯絡系統管理員。");
       } else {
-        responseMsg = flexManagerMenu();
+        responseMsg = flexManagerMenu(liffTaskId, liffNewTaskId, liffDashboardId);
       }
 
     } else if (lower === "/管理 全覽" || lower === "/manage overview") {

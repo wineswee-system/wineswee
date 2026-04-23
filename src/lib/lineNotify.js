@@ -65,10 +65,20 @@ async function sendLinePush(lineUserId, messages, channelCode) {
 /**
  * LIFF task page URL — uses the channel's LIFF ID if available.
  */
+// LINE rejects LIFF URIs with sub-paths, so we pass the SPA route via ?to=...
+// and let the LIFF's LiffDeepLinkRedirect forward to /tasks (preserving ?task=<id>).
 export function getLiffTaskUrl(taskId, liffId) {
   const lid = liffId || LIFF_ID
-  const base = lid ? `https://liff.line.me/${lid}/task` : `${window.location.origin}/liff/task`
-  return taskId ? `${base}?task=${taskId}` : base
+  if (!lid) {
+    // Dev / preview fallback — local SPA build under /liff/...
+    return taskId
+      ? `${window.location.origin}/liff/tasks?task=${taskId}`
+      : `${window.location.origin}/liff/tasks`
+  }
+  const toParam = taskId
+    ? `/tasks?task=${taskId}`
+    : `/tasks`
+  return `https://liff.line.me/${lid}?to=${encodeURIComponent(toParam)}`
 }
 
 /**
@@ -207,8 +217,8 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
 
   const lid = account.liffId || LIFF_ID
   const liffUrl = lid
-    ? `https://liff.line.me/${lid}/my-schedule`
-    : `${window.location.origin}/hr/my-schedule`
+    ? `https://liff.line.me/${lid}?to=${encodeURIComponent('/my-schedule')}`
+    : `${window.location.origin}/liff/my-schedule`
 
   const messages = [{
     type: 'flex',

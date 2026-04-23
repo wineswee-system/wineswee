@@ -128,17 +128,16 @@ function liffDeepLinkBtn(
 
 export function flexMenu(
   isGroup = false,
-  _isManager = false,
+  isManager = false,
   liffNewTaskId = "",
   liffDashboardId = "",
   liffTaskId = "",
 ) {
-  // 四顆按鈕通吃：儀表板 / 新增任務 / 更新任務 / 代辦項目
-  // 都是 LIFF deep-link；沒設 LIFF id 就 fallback 成文字指令。
   const listId = pickLiff(liffTaskId, liffNewTaskId, liffDashboardId);
   const newId  = pickLiff(liffNewTaskId, liffTaskId, liffDashboardId);
   const dashId = pickLiff(liffDashboardId, liffTaskId, liffNewTaskId);
 
+  // 主 LIFF 區（儀表板優先）
   const dashboardBtn = liffDeepLinkBtn("📊 儀表板", dashId, "/dashboard", "primary")
     ?? mkBtn("📊 儀表板", "/流程 狀態", "primary");
   const newTaskBtn = liffDeepLinkBtn("➕ 新增任務", newId, "/tasks/new")
@@ -147,6 +146,13 @@ export function flexMenu(
     ?? mkBtn("⚙️ 更新任務", "/任務 列表", "secondary");
   const todoBtn = liffDeepLinkBtn("📋 代辦項目", listId, "/todo")
     ?? mkBtn("📋 代辦項目", "/代辦", "secondary");
+
+  // 原先的 BOT 內部功能（非 LIFF）
+  const inProgressTaskBtn = mkBtn("📋 進行中任務", "/任務 列表", "secondary");
+  const allTasksBtn       = mkBtn("📁 所有任務",   "/任務 全部", "secondary");
+  const notesBtn          = mkBtn("📝 備註查詢",   "/備註",       "secondary");
+  const managerBtn        = mkBtn("🔑 管理員選單", "/管理",       "secondary");
+  const helpBtn           = mkBtn("👤 帳號連結說明", "/說明 連結", "link");
 
   return {
     type: "flex",
@@ -169,9 +175,26 @@ export function flexMenu(
         spacing: "sm",
         paddingAll: "12px",
         contents: isGroup
-          // 群組裡只顯示兩顆（新增/代辦），儀表板跟更新任務是個人向資料
-          ? [newTaskBtn, todoBtn]
-          : [dashboardBtn, newTaskBtn, updateTaskBtn, todoBtn],
+          // 群組裡較簡短：任務列表 + 新增 + 代辦 + 管理員（若有）
+          ? [
+              inProgressTaskBtn,
+              newTaskBtn,
+              todoBtn,
+              ...(isManager ? [managerBtn] : []),
+            ]
+          : [
+              // 新 LIFF 功能區
+              dashboardBtn,
+              newTaskBtn,
+              updateTaskBtn,
+              todoBtn,
+              // 原 BOT 內部功能區
+              { type: "box", layout: "horizontal", spacing: "sm",
+                contents: [inProgressTaskBtn, allTasksBtn] },
+              notesBtn,
+              ...(isManager ? [managerBtn] : []),
+              helpBtn,
+            ],
       },
     },
   };

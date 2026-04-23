@@ -278,6 +278,7 @@ const groupNav = {
       icon: Brain,
       children: [
         { icon: Bot, label: 'HR AI 助理', path: '/hr/assistant' },
+        { icon: Sparkles, label: 'HR 導覽助理', path: '/ai/nav-assistant' },
         { icon: Brain, label: 'AI 離職預測', path: '/hr/attrition' },
         { icon: MessageSquare, label: '滿意度調查', path: '/hr/surveys' },
         { icon: UserCircle, label: '員工自助', path: '/hr/self-service' },
@@ -303,6 +304,7 @@ const groupNav = {
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: FolderOpen, label: '專案', path: '/process/projects' },
+        { icon: Bot, label: '流程導覽助理', path: '/ai/nav-assistant' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
@@ -370,6 +372,7 @@ const systemItems = [
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },
   { icon: FileText, label: '匯入匯出', path: '/system/import-export' },
   { icon: Bot, label: 'Agent 控制台', path: '/ai/agent' },
+  { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant' },
   { icon: BookOpen, label: '說明中心', path: '/ai/help' },
   { icon: BookOpen, label: '教學中心', path: '/ai/tutorial' },
   { icon: FileText, label: '電商串接', path: '/integration/ecommerce' },

@@ -243,7 +243,7 @@ export default function TaskDetailPanel({
     if (data) setApprovalForm(data)
   }
 
-  // ── Task Confirmations (認可 / 確認回應) ──
+  // ── Task Confirmations (確認審批) ──
   const handleAddConfirmation = async () => {
     if (!newConfirmApprover) return
     if (confirmations.some(c => c.approver === newConfirmApprover)) return
@@ -261,7 +261,7 @@ export default function TaskDetailPanel({
       setConfirmations(prev => [...prev, data])
       // 只有真的 pending 才立刻通知（排隊中的等前面回應再推播）
       if (initialStatus === 'pending') {
-        notifyApproval(newConfirmApprover, task.title, `請求認可（${newConfirmPriority}）`)
+        notifyApproval(newConfirmApprover, task.title, `請求審批（${newConfirmPriority}）`)
       }
       setNewConfirmApprover('')
       setNewConfirmPriority('中')
@@ -291,7 +291,7 @@ export default function TaskDetailPanel({
           const { data: promoted } = await updateTaskConfirmation(nextWaiting.id, { status: 'pending' })
           if (promoted) {
             next = next.map(c => c.id === promoted.id ? promoted : c)
-            notifyApproval(promoted.approver, task.title, `請求認可（${promoted.priority || '中'}）`)
+            notifyApproval(promoted.approver, task.title, `請求審批（${promoted.priority || '中'}）`)
           }
         }
       }
@@ -582,12 +582,12 @@ export default function TaskDetailPanel({
           </div>
           )}
 
-          {/* ═══ Section: 認可回應（統一的任務認可機制）═══
+          {/* ═══ Section: 確認審批（統一的任務審批機制）═══
                 合併舊的「🔐 確認審批」+「🤝 認可回應」，並加上「審核方式」。 */}
           {activeTab === 'approval' && (
           <div style={sectionStyle}>
             <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🤝 認可回應 ({confirmations.length})</span>
+              <span>🔐 確認審批 ({confirmations.length})</span>
               {confirmations.length > 0 && (
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
                   已回應 {confirmations.filter(c => c.status !== 'pending' && c.status !== 'waiting').length}/{confirmations.length}
@@ -595,7 +595,7 @@ export default function TaskDetailPanel({
               )}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              指定員工認可本任務。不需走完整簽核鏈時使用。
+              指定員工審批本任務。不需走完整簽核鏈時使用。
             </div>
 
             {/* 審核方式 */}
@@ -609,7 +609,7 @@ export default function TaskDetailPanel({
               </select>
               {(form.confirmation_mode === 'sequential') && (
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                  依序模式：同一時間只有一位在「待認可」，前一位回應後自動換下一位（依優先度 高→中→低）。
+                  依序模式：同一時間只有一位在「待審批」，前一位回應後自動換下一位（依優先度 高→中→低）。
                 </div>
               )}
             </div>
@@ -620,10 +620,10 @@ export default function TaskDetailPanel({
               const isWaiting = c.status === 'waiting'
               const pri = c.priority || '中'
               const priColor = pri === '高' ? 'var(--accent-red)' : pri === '低' ? 'var(--text-muted)' : 'var(--accent-orange)'
-              const badgeLabel = isDone ? '✅ 已認可'
+              const badgeLabel = isDone ? '✅ 已審批'
                 : isRejected ? '❌ 已拒絕'
                 : isWaiting ? '🕐 排隊中'
-                : '⏳ 待認可'
+                : '⏳ 待審批'
               const badgeBg = isDone ? 'var(--accent-green-dim)'
                 : isRejected ? 'rgba(239,68,68,0.1)'
                 : isWaiting ? 'var(--glass-light)'
@@ -666,9 +666,9 @@ export default function TaskDetailPanel({
                         <button className="btn btn-sm"
                           style={{ background: 'var(--accent-green)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
                           onClick={() => {
-                            const n = prompt('認可備註（可留空）：')
+                            const n = prompt('審批備註（可留空）：')
                             handleConfirmationAction(c.id, 'approved', n)
-                          }}>✅ 認可</button>
+                          }}>✅ 審批</button>
                         <button className="btn btn-sm"
                           style={{ background: 'var(--accent-red)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
                           onClick={() => {

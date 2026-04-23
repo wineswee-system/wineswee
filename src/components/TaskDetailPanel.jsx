@@ -60,7 +60,7 @@ export default function TaskDetailPanel({
       due_date: task.due_date || '',
       due_time: task.due_time || '',
       reminder_at: task.reminder_at || '',
-      approval_chain_id: task.approval_chain_id || '',
+      confirmation_mode: task.confirmation_mode || 'parallel',
       notes: task.notes || '',
     })
     setTitleDraft(task.title)
@@ -140,7 +140,7 @@ export default function TaskDetailPanel({
       due_date: form.due_date || null,
       due_time: form.due_time || null,
       reminder_at: form.reminder_at || null,
-      approval_chain_id: form.approval_chain_id ? Number(form.approval_chain_id) : null,
+      confirmation_mode: form.confirmation_mode || 'parallel',
       completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
     }
     const { data } = await updateTask(task.id, payload)
@@ -247,15 +247,22 @@ export default function TaskDetailPanel({
   const handleAddConfirmation = async () => {
     if (!newConfirmApprover) return
     if (confirmations.some(c => c.approver === newConfirmApprover)) return
+    // 依序模式：若已有 pending 則新的排 'waiting'，避免同時多人在審
+    const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
+    const hasActive = confirmations.some(c => c.status === 'pending')
+    const initialStatus = (mode === 'sequential' && hasActive) ? 'waiting' : 'pending'
     const { data } = await createTaskConfirmation({
       task_id: task.id,
       approver: newConfirmApprover,
-      status: 'pending',
+      status: initialStatus,
       priority: newConfirmPriority,
     })
     if (data) {
       setConfirmations(prev => [...prev, data])
-      notifyApproval(newConfirmApprover, task.title, `請求認可（${newConfirmPriority}）`)
+      // 只有真的 pending 才立刻通知（排隊中的等前面回應再推播）
+      if (initialStatus === 'pending') {
+        notifyApproval(newConfirmApprover, task.title, `請求認可（${newConfirmPriority}）`)
+      }
       setNewConfirmApprover('')
       setNewConfirmPriority('中')
     }
@@ -267,7 +274,29 @@ export default function TaskDetailPanel({
       notes: notes || null,
       responded_at: new Date().toISOString(),
     })
-    if (data) setConfirmations(prev => prev.map(c => c.id === id ? data : c))
+    if (!data) return
+
+    let next = confirmations.map(c => c.id === id ? data : c)
+
+    // 依序模式：前一位回應後，自動把排隊中優先度最高的升成 pending
+    const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
+    if (mode === 'sequential' && (status === 'approved' || status === 'rejected')) {
+      const stillPending = next.some(c => c.status === 'pending')
+      if (!stillPending) {
+        const priRank = { '高': 0, '中': 1, '低': 2 }
+        const nextWaiting = next
+          .filter(c => c.status === 'waiting')
+          .sort((a, b) => (priRank[a.priority] ?? 1) - (priRank[b.priority] ?? 1) || a.id - b.id)[0]
+        if (nextWaiting) {
+          const { data: promoted } = await updateTaskConfirmation(nextWaiting.id, { status: 'pending' })
+          if (promoted) {
+            next = next.map(c => c.id === promoted.id ? promoted : c)
+            notifyApproval(promoted.approver, task.title, `請求認可（${promoted.priority || '中'}）`)
+          }
+        }
+      }
+    }
+    setConfirmations(next)
   }
 
   const handleRemoveConfirmation = async (id) => {
@@ -553,43 +582,62 @@ export default function TaskDetailPanel({
           </div>
           )}
 
-          {/* ═══ Section: Approval chain selector ═══ */}
-          {activeTab === 'approval' && (
-          <div style={sectionStyle}>
-            <div style={labelStyle}>🔐 確認審批</div>
-            <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id}
-              onChange={e => setAndDirty('approval_chain_id', e.target.value)}>
-              <option value="">＋ 新增審批</option>
-              {approvalChains.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
-            </select>
-          </div>
-          )}
-
-          {/* ═══ Section: 認可（Acknowledgement / 回應請求）═══ */}
+          {/* ═══ Section: 認可回應（統一的任務認可機制）═══
+                合併舊的「🔐 確認審批」+「🤝 認可回應」，並加上「審核方式」。 */}
           {activeTab === 'approval' && (
           <div style={sectionStyle}>
             <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>🤝 認可回應 ({confirmations.length})</span>
               {confirmations.length > 0 && (
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-                  已回應 {confirmations.filter(c => c.status !== 'pending').length}/{confirmations.length}
+                  已回應 {confirmations.filter(c => c.status !== 'pending' && c.status !== 'waiting').length}/{confirmations.length}
                 </span>
               )}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              需要對方認可但不需走完整簽核鏈時使用
+              指定員工認可本任務。不需走完整簽核鏈時使用。
+            </div>
+
+            {/* 審核方式 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>審核方式</div>
+              <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                value={form.confirmation_mode || 'parallel'}
+                onChange={e => setAndDirty('confirmation_mode', e.target.value)}>
+                <option value="parallel">⚡ 同時（全部一起審）</option>
+                <option value="sequential">🔀 依序（一位審完再換下一位）</option>
+              </select>
+              {(form.confirmation_mode === 'sequential') && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  依序模式：同一時間只有一位在「待認可」，前一位回應後自動換下一位（依優先度 高→中→低）。
+                </div>
+              )}
             </div>
 
             {confirmations.map(c => {
               const isDone = c.status === 'approved'
               const isRejected = c.status === 'rejected'
+              const isWaiting = c.status === 'waiting'
               const pri = c.priority || '中'
               const priColor = pri === '高' ? 'var(--accent-red)' : pri === '低' ? 'var(--text-muted)' : 'var(--accent-orange)'
+              const badgeLabel = isDone ? '✅ 已認可'
+                : isRejected ? '❌ 已拒絕'
+                : isWaiting ? '🕐 排隊中'
+                : '⏳ 待認可'
+              const badgeBg = isDone ? 'var(--accent-green-dim)'
+                : isRejected ? 'rgba(239,68,68,0.1)'
+                : isWaiting ? 'var(--glass-light)'
+                : 'var(--accent-orange-dim)'
+              const badgeColor = isDone ? 'var(--accent-green)'
+                : isRejected ? 'var(--accent-red)'
+                : isWaiting ? 'var(--text-muted)'
+                : 'var(--accent-orange)'
               return (
                 <div key={c.id} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px',
                   background: 'var(--glass-light)', borderRadius: 8, marginBottom: 6,
                   border: '1px solid var(--border-subtle)',
+                  opacity: isWaiting ? 0.7 : 1,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -600,11 +648,8 @@ export default function TaskDetailPanel({
                       }}>{pri}</span>
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                        background: isDone ? 'var(--accent-green-dim)' : isRejected ? 'rgba(239,68,68,0.1)' : 'var(--glass-light)',
-                        color: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' : 'var(--text-muted)',
-                      }}>
-                        {isDone ? '✅ 已認可' : isRejected ? '❌ 已拒絕' : '⏳ 等待回應'}
-                      </span>
+                        background: badgeBg, color: badgeColor,
+                      }}>{badgeLabel}</span>
                     </div>
                     {c.responded_at && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>

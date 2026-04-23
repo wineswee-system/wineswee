@@ -9,9 +9,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 // ── Standalone pages (not part of any module) ──
 const DemoLanding = lazy(() => import('./pages/DemoLanding'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const LiffClockIn = lazy(() => import('./pages/liff/LiffClockIn'))
-const LiffTask = lazy(() => import('./pages/liff/LiffTask'))
-const LiffManagerDashboard = lazy(() => import('./pages/liff/LiffManagerDashboard'))
+// 舊的 Liff* 頁面（2026-04-23 移除）已搬到獨立 repo aska911023/sme-ops-liff
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
 const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
@@ -130,9 +128,7 @@ export default function App() {
         <Routes>
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
-          <Route path="/liff/clock" element={<LiffClockIn />} />
-          <Route path="/liff/task" element={<LiffTask />} />
-          <Route path="/liff/dashboard" element={<LiffManagerDashboard />} />
+          {/* /liff/* routes 已移除 — 由獨立 LIFF app (sme-ops-liff.vercel.app) 處理 */}
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
           </Route>

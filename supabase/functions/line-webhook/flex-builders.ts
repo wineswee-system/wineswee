@@ -100,46 +100,13 @@ export function flexLiffShortcut(opts: {
 
 // ── Main Menu Flex ────────────────────────────────────────────────────────────
 
-export function flexMenu(
-  isGroup = false,
-  isManager = false,
-  liffNewTaskId = "",
-  liffDashboardId = "",
-  liffTaskId = "",
-) {
-  // Pick a usable base LIFF id for deep-links. Prefer task-specific, then dashboard
-  // (same LIFF, different route), else the new-task LIFF. Any of them hosts the
-  // same sme-ops-liff SPA which honours ?to=/route.
-  const liffBase = (liffTaskId || liffDashboardId || liffNewTaskId || "").trim();
-
-  /** Button that opens the LIFF SPA at a given route; falls back to postback text. */
-  const liffBtn = (
-    label: string,
-    path: string,
-    fallbackText: string,
-    style: "primary" | "secondary" | "link" = "secondary",
-  ) => {
-    if (!liffBase) return mkBtn(label, fallbackText, style);
-    const uri = `https://liff.line.me/${liffBase}?to=${encodeURIComponent(path)}`;
-    return {
-      type: "button",
-      action: { type: "uri", label, uri },
-      style,
-      height: "sm",
-      margin: "xs",
-    };
-  };
-
+export function flexMenu(isGroup = false, isManager = false, liffNewTaskId = "", liffDashboardId = "") {
   const newTaskBtn = liffNewTaskId
-    ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: `https://liff.line.me/${liffNewTaskId.trim()}` }, style: "secondary", height: "sm" }
-    : liffBtn("➕ 新增任務", "/tasks", "/任務 新增", "secondary");
-
+    ? { type: "button", action: { type: "uri", label: "➕ 新增任務", uri: `https://liff.line.me/${liffNewTaskId}` }, style: "secondary", height: "sm" }
+    : mkBtn("➕ 新增任務", "/任務 新增", "secondary");
   const dashboardBtn = liffDashboardId
-    ? { type: "button", action: { type: "uri", label: "📊 儀錶板", uri: `https://liff.line.me/${liffDashboardId.trim()}` }, style: "secondary", height: "sm" }
-    : liffBase
-      ? liffBtn("📊 儀錶板", "/", "/說明", "secondary")
-      : null;
-
+    ? { type: "button", action: { type: "uri", label: "📊 儀錶板", uri: `https://liff.line.me/${liffDashboardId}` }, style: "secondary", height: "sm" }
+    : null;
   return {
     type: "flex",
     altText: "📖 功能選單",
@@ -162,23 +129,23 @@ export function flexMenu(
         paddingAll: "12px",
         contents: [
           ...(isGroup
-            ? [liffBtn("📋 任務列表", "/tasks", "/任務 列表", "primary")]
+            ? [mkBtn("📋 任務列表", "/任務 列表", "primary")]
             : [
               {
                 type: "box",
                 layout: "horizontal",
                 spacing: "sm",
                 contents: [
-                  liffBtn("📋 進行中任務", "/tasks", "/任務 列表", "primary"),
-                  liffBtn("📁 所有任務", "/tasks?all=1", "/任務 全部", "secondary"),
+                  mkBtn("📋 進行中任務", "/任務 列表", "primary"),
+                  mkBtn("📁 所有任務", "/任務 全部", "secondary"),
                 ],
               },
             ]),
           newTaskBtn,
           ...(dashboardBtn ? [dashboardBtn] : []),
-          liffBtn("⚙️ 工作流程狀態", "/approval-status", "/流程 狀態", "secondary"),
-          ...(isGroup ? [] : [liffBtn("📝 備註查詢", "/tasks", "/備註", "secondary")]),
-          ...(isManager ? [liffBtn("🔑 管理員選單", "/approve", "/管理", "secondary")] : []),
+          mkBtn("⚙️ 工作流程狀態", "/流程 狀態", "secondary"),
+          ...(isGroup ? [] : [mkBtn("📝 備註查詢", "/備註", "secondary")]),
+          ...(isManager ? [mkBtn("🔑 管理員選單", "/管理", "secondary")] : []),
           ...(isGroup ? [] : [mkBtn("👤 帳號連結說明", "/說明", "link")]),
         ],
       },

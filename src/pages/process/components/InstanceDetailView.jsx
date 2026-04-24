@@ -3,6 +3,7 @@ import {
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
+import { empLabel } from '../../../lib/empLabel'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 
@@ -145,7 +146,7 @@ export default function InstanceDetailView({
         <Modal title="新增任務" onClose={() => setShowAddTaskModal(false)} onSubmit={onAddTask}>
           <Field label="任務名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：電力申請" value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={taskForm.assignee} onChange={e => setTaskForm(f => ({ ...f, assignee: e.target.value }))}><option value="">請選擇</option>{employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}</select></Field>
+            <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={taskForm.assignee} onChange={e => setTaskForm(f => ({ ...f, assignee: e.target.value }))}><option value="">請選擇</option>{employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}</select></Field>
             <Field label="門市"><select className="form-input" style={{ width: '100%' }} value={taskForm.store} onChange={e => setTaskForm(f => ({ ...f, store: e.target.value }))}><option value="">請選擇</option>{stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -157,7 +158,7 @@ export default function InstanceDetailView({
       )}
       {showEditModal && (
         <Modal title="編輯指派" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
-          <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={editForm.assignee} onChange={e => setEditForm(f => ({ ...f, assignee: e.target.value }))}><option value="">未指定</option>{employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}</select></Field>
+          <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={editForm.assignee} onChange={e => setEditForm(f => ({ ...f, assignee: e.target.value }))}><option value="">未指定</option>{employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}</select></Field>
           <Field label="群組（逗號分隔）"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：Ai, 信義安和-新店建置專案群組" value={editForm.groups} onChange={e => setEditForm(f => ({ ...f, groups: e.target.value }))} /></Field>
         </Modal>
       )}

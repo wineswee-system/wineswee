@@ -1,5 +1,6 @@
 import { Calculator } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import { empLabel } from '../../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -11,7 +12,7 @@ function EmpSelect({ value, onChange, employees, departments }) {
       {departments.map(d => (
         <optgroup key={d.id} label={d.name}>
           {employees.filter(e => e.dept === d.name).map(e => (
-            <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
+            <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
           ))}
         </optgroup>
       ))}

@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', working_hour_type: 'standard', variable_period_start: '' }
 
@@ -223,7 +224,7 @@ export default function Locations() {
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.position ? ` (${emp.position})` : ''}</option>)}
+                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{empLabel(emp)}{emp.position ? ` (${emp.position})` : ''}</option>)}
               </select>
             </Field>
           </div>

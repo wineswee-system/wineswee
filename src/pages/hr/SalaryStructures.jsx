@@ -3,6 +3,7 @@ import { Plus, Edit2, DollarSign, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -236,7 +237,7 @@ export default function SalaryStructures() {
           <Field label="員工">
             <select className="form-input" value={form.employee_id} onChange={e => set('employee_id', e.target.value)} disabled={!!editingId}>
               <option value="">請選擇員工</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name}（{e.dept || '-'} / {e.store || '-'}）</option>)}
+              {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)}（{e.dept || '-'} / {e.store || '-'}）</option>)}
             </select>
           </Field>
           <Field label="薪資類型">

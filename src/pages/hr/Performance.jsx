@@ -4,6 +4,7 @@ import { getPerformanceReviews } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const PERIODS = ['2026 Q1', '2026 Q2', '2026 Q3', '2026 Q4', '2025 Q4']
 const RATINGS = ['S', 'A+', 'A', 'B+', 'B', 'C']
@@ -85,7 +86,7 @@ export default function Performance() {
       {departments.map(d => (
         <optgroup key={d.id} label={d.name}>
           {employees.filter(e => e.dept === d.name).map(e => (
-            <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
+            <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
           ))}
         </optgroup>
       ))}

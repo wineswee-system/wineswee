@@ -8,6 +8,7 @@ import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeave
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Leave() {
@@ -320,7 +321,7 @@ export default function Leave() {
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
                   {employees.filter(e => e.dept === d.name).map(e => (
-                    <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
+                    <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
                   ))}
                 </optgroup>
               ))}

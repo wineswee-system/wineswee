@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, History } from 'lucide-react'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, getEmployees, getDeptManagerHistory } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const LEVELS = [
   { value: '董事長', label: '董事長室' },
@@ -183,7 +184,7 @@ export default function Departments() {
             <Field label="部門主管">
               <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{e.name}{e.position ? ` (${e.position})` : ''}</option>)}
+                {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{empLabel(e)}{e.position ? ` (${e.position})` : ''}</option>)}
               </select>
             </Field>
           </div>

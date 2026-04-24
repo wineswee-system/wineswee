@@ -5,6 +5,7 @@ import { getEngagementSurveys, createEngagementSurvey, updateEngagementSurvey, d
 import { generateSurveyInsights, isConfigured as aiReady } from '../../lib/ai/hrAI'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
   '草稿': { color: 'var(--text-muted)', bg: 'var(--bg-secondary)' },
@@ -572,7 +573,7 @@ export default function EngagementSurveys() {
             <Field label="員工 *">
               <select className="form-input" style={{ width: '100%' }} value={fillEmployee} onChange={e => setFillEmployee(e.target.value)}>
                 <option value="">選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name} ({e.dept})</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept})</option>)}
               </select>
             </Field>
           )}

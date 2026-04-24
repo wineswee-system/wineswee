@@ -6,6 +6,7 @@ import { notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 export default function ApprovalChains() {
   const { profile } = useAuth()
@@ -279,7 +280,7 @@ export default function ApprovalChains() {
                 <option value="">選擇簽核人</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.name}>
-                    {emp.name}（{emp.position || emp.dept || '—'}）
+                    {empLabel(emp)}（{emp.position || emp.dept || '—'}）
                   </option>
                 ))}
               </select>

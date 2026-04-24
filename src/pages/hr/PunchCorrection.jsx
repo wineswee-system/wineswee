@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
@@ -207,7 +208,7 @@ export default function PunchCorrection() {
             <Field label="員工 *">
               <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
               </select>
             </Field>
             <Field label="日期 *">

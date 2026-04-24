@@ -7,6 +7,7 @@ import { getEventBus } from '../../lib/events/index.js'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
@@ -176,7 +177,7 @@ export default function Expenses() {
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
                   {employees.filter(e => e.dept === d.name).map(e => (
-                    <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
+                    <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
                   ))}
                 </optgroup>
               ))}

@@ -4,6 +4,7 @@ import {
   X, Users, User, Play, Pause, Rocket, Archive,
   ClipboardList, Square, RotateCcw, Ban, ChevronDown
 } from 'lucide-react'
+import { empLabel } from '../../lib/empLabel'
 import {
   getWorkflows, createWorkflow, updateWorkflow,
   getWorkflowInstances, updateWorkflowInstance,
@@ -498,7 +499,7 @@ export default function Workflows() {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👤 負責人</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
             <option value="">全部人員</option>
-            {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+            {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
           </select>
         </div>
       </div>
@@ -512,7 +513,7 @@ export default function Workflows() {
           { key: 'archived', label: `📦 封存流程 (${archivedInstances.length})` },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '8px 20px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
             borderRadius: 8,
             background: tab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
             color: tab === t.key ? '#fff' : 'var(--text-muted)',

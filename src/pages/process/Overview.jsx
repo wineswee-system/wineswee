@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
 import { checkAndNotifyDueTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { empLabel } from '../../lib/empLabel'
 
 const STATUS_CONFIG = {
   '進行中': { color: 'var(--accent-cyan)', icon: Clock, badge: 'badge-info' },
@@ -426,7 +427,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
                   )}
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.name}>
-                      {emp.name}{emp.position ? ` - ${emp.position}` : ''}
+                      {empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}
                     </option>
                   ))}
                 </select>

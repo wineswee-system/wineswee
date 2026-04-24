@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getProbationRecords, createProbationRecord, updateProbationRecord } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 const STATUS_STYLES = {
   '試用中': { color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.12)' },
@@ -258,13 +259,13 @@ export default function ProbationTracker() {
                 }
               }}>
                 <option value="">選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name} ({e.dept})</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept})</option>)}
               </select>
             </Field>
             <Field label="指導人">
               <select className="form-input" style={{ width: '100%' }} value={form.mentor} onChange={e => setF('mentor', e.target.value)}>
                 <option value="">選擇指導人</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
               </select>
             </Field>
             <Field label="開始日期 *">

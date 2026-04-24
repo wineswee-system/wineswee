@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 export default function BusinessTravel() {
   const { profile } = useAuth()
@@ -159,7 +160,7 @@ export default function BusinessTravel() {
               {departments.map(d => (
                 <optgroup key={d.id} label={d.name}>
                   {employees.filter(e => e.dept === d.name).map(e => (
-                    <option key={e.id} value={e.name}>{e.name}｜{e.position}</option>
+                    <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
                   ))}
                 </optgroup>
               ))}

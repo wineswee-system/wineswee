@@ -103,7 +103,6 @@ export default function MentionInput({ value, onChange, employees = [], onSubmit
 export function MentionText({ content, employees }) {
   return (
     <span
-      {/* Safe: renderMentionsHTML escapes both source text and captured mention names via escapeHtml */}
       dangerouslySetInnerHTML={{ __html: renderMentionsHTML(content, employees) }}
     />
   )

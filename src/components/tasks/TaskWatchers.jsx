@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Eye, UserPlus, X } from 'lucide-react'
 import { getTaskWatchers, addTaskWatcher, removeTaskWatcher } from '../../lib/db'
+import { empLabel } from '../../lib/empLabel'
 
 export default function TaskWatchers({ taskId, employees = [], currentUser, onChange }) {
   const [watchers, setWatchers] = useState([])
@@ -90,7 +91,7 @@ export default function TaskWatchers({ taskId, employees = [], currentUser, onCh
               <option value="">選擇員工...</option>
               {employees
                 .filter(e => !watchers.some(w => w.employees?.id === e.id))
-                .map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                .map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
             </select>
             <button
               className="btn btn-primary"

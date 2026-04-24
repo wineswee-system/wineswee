@@ -1,5 +1,6 @@
 import { Rocket } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import { empLabel } from '../../../lib/empLabel'
 
 // 步驟角色 → 部門名稱的對應表（支援模糊匹配）
 const ROLE_DEPT_MAP = {
@@ -72,7 +73,7 @@ export default function DeployModal({
     const dept = getDeptName(emp)
     return (
       <option key={emp.id} value={emp.name}>
-        {emp.name}｜{emp.position}{dept ? `（${dept}）` : ''}
+        {empLabel(emp)}｜{emp.position}{dept ? `（${dept}）` : ''}
       </option>
     )
   }

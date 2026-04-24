@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getLineGroups, getLineMessages } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { empLabel } from '../../lib/empLabel'
 
 export default function LineIntegration() {
   const [channels, setChannels] = useState([])
@@ -724,7 +725,7 @@ export default function LineIntegration() {
             <select className="form-input" style={{ width: '100%' }} value={linkForm.employee_id}
               onChange={e => setLinkForm(f => ({ ...f, employee_id: e.target.value }))}>
               <option value="">請選擇員工</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.dept} · {e.position})</option>)}
+              {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)} ({e.dept} · {e.position})</option>)}
             </select>
           </Field>
           <Field label="官方帳號 *">

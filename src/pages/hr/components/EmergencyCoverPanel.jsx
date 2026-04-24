@@ -3,6 +3,7 @@ import { AlertTriangle, Phone, UserPlus, Check, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { isAbsence, getShiftHours, isWeekendDay } from '../../../lib/scheduleUtils'
 import { notifySchedulePublished } from '../../../lib/lineNotify'
+import { empLabel } from '../../../lib/empLabel'
 
 /**
  * Emergency Cover Panel
@@ -196,7 +197,7 @@ export default function EmergencyCoverPanel({
             <option value="">選擇員工</option>
             {todayEmployees.map(emp => {
               const s = schedules.find(x => x.employee === emp.name && x.date === sickDate)
-              return <option key={emp.name} value={emp.name}>{emp.name}（{s?.shift}）</option>
+              return <option key={emp.name} value={emp.name}>{empLabel(emp)}（{s?.shift}）</option>
             })}
           </select>
         </div>

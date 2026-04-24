@@ -8,6 +8,7 @@ import { updateEmployee } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import PersonalityTab from './employee/PersonalityTab'
 import DevelopmentTab from './employee/DevelopmentTab'
+import { empLabel } from '../lib/empLabel'
 
 // Mask sensitive fields for non-admin users
 const maskId = (v) => v ? v.slice(0, 3) + '****' + v.slice(-2) : ''
@@ -328,7 +329,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
           {/* Quick info bar */}
           <div style={{ display: 'flex', gap: 16, padding: '12px 24px 14px', overflowX: 'auto', flexWrap: 'wrap' }}>
-            <QuickInfo icon="💼" value={employee.position || '未設定'} />
+            <QuickInfo icon="💼" value={[employee.position, employee.position_secondary, employee.position_third].filter(Boolean).join(' / ') || '未設定'} />
             <QuickInfo icon="🏪" value={employee.store || '未指派'} />
             <QuickInfo icon="🏢" value={employee.dept || '未指派'} />
             {employee.join_date && <QuickInfo icon="📅" value={`到職 ${employee.join_date}`} />}
@@ -472,13 +473,16 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   <select className="form-input" style={{ width: '100%' }} value={form.supervisor || ''} onChange={e => set('supervisor', e.target.value)}>
                     <option value="">— 未指派 —</option>
                     {(allEmployees || []).filter(e => e.id !== employee.id && e.status === '在職').map(e => (
-                      <option key={e.id} value={e.name}>{e.name} — {e.position || e.dept}</option>
+                      <option key={e.id} value={e.name}>{empLabel(e)} — {e.position || e.dept}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div><div style={L}>職位</div><input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" /></div>
+                <div>
+                  <div style={L}>主職位</div>
+                  <input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" />
+                </div>
                 <div><div style={L}>角色（系統權限）</div>
                   <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}
                     onChange={e => {
@@ -495,6 +499,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                     ))}
                   </select>
                 </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div><div style={L}>副職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_secondary || ''} onChange={e => set('position_secondary', e.target.value)} placeholder="選填" /></div>
+                <div><div style={L}>第三職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_third || ''} onChange={e => set('position_third', e.target.value)} placeholder="選填" /></div>
               </div>
 
               <SectionTitle icon="💰" text="薪資" />

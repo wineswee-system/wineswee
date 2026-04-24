@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { empLabel } from '../../lib/empLabel'
 
 export default function SelfService() {
   const [loading, setLoading] = useState(true)
@@ -71,7 +72,7 @@ export default function SelfService() {
           </div>
           <div>
             <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={selectedEmpName} onChange={e => setSelectedEmpName(e.target.value)}>
-              {employees.map(e => <option key={e.id} value={e.name}>{e.name} — {e.dept}</option>)}
+              {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} — {e.dept}</option>)}
             </select>
           </div>
         </div>

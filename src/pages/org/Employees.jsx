@@ -8,6 +8,7 @@ import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
 import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
+import { empLabel } from '../../lib/empLabel'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
@@ -40,6 +41,21 @@ const POSITIONS = [
   { label: '實習生', level: 'store_staff' },
 ]
 
+const PosSelect = ({ value, onChange }) => (
+  <select className="form-input" style={{ width: '100%' }} value={value} onChange={onChange}>
+    <option value="">— 不選 —</option>
+    <optgroup label="管理職">
+      {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+    </optgroup>
+    <optgroup label="行政職">
+      {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+    </optgroup>
+    <optgroup label="門市職">
+      {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+    </optgroup>
+  </select>
+)
+
 export default function Employees() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -59,7 +75,7 @@ export default function Employees() {
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
   const [editForm, setEditForm] = useState({})
-  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
   const [detailEmp, setDetailEmp] = useState(null)
   const [detailClickY, setDetailClickY] = useState(null)
   const [showCsvImport, setShowCsvImport] = useState(false)
@@ -123,7 +139,7 @@ export default function Employees() {
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
-        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
@@ -209,6 +225,7 @@ export default function Employees() {
     setEditForm({
       name: emp.name || '', name_en: emp.name_en || '',
       department_id: emp.department_id ?? null, position: emp.position || '',
+      position_secondary: emp.position_secondary || '', position_third: emp.position_third || '',
       store_id: emp.store_id ?? null, email: emp.email || '',
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
@@ -490,7 +507,14 @@ export default function Employees() {
                   </td>
                   <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: (empType?.color || '#22c55e') + '22', color: empType?.color || '#22c55e' }}>{empType?.label || '全職'}</span></td>
                   <td>{deptName(e.department_id)}</td>
-                  <td>{e.position}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {e.position && <span style={{ fontSize: 12, fontWeight: 600 }}>{e.position}</span>}
+                      {e.position_secondary && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{e.position_secondary}</span>}
+                      {e.position_third && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.position_third}</span>}
+                      {!e.position && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                    </div>
+                  </td>
                   <td>{storeName(e.store_id)}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}><MaskedText value={e.email} type="email" canReveal={true} /></td>
                   <td style={{ fontSize: 12 }}><MaskedText value={e.phone} type="phone" canReveal={true} /></td>
@@ -567,7 +591,7 @@ export default function Employees() {
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
-            <Field label="職稱">
+            <Field label="主職稱">
               <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => {
                 const pos = e.target.value
                 setForm(f => {
@@ -590,6 +614,14 @@ export default function Employees() {
                   {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="副職稱">
+              <PosSelect value={form.position_secondary} onChange={e => set('position_secondary', e.target.value)} />
+            </Field>
+            <Field label="第三職稱">
+              <PosSelect value={form.position_third} onChange={e => set('position_third', e.target.value)} />
             </Field>
           </div>
           <Field label="門市 / 分店">
@@ -703,7 +735,7 @@ export default function Employees() {
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
-            <Field label="職稱">
+            <Field label="主職稱">
               <select className="form-input" style={{ width: '100%' }} value={editForm.position} onChange={e => {
                 const pos = e.target.value
                 setEditForm(f => {
@@ -726,6 +758,14 @@ export default function Employees() {
                   {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
                 </optgroup>
               </select>
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="副職稱">
+              <PosSelect value={editForm.position_secondary} onChange={e => setE('position_secondary', e.target.value)} />
+            </Field>
+            <Field label="第三職稱">
+              <PosSelect value={editForm.position_third} onChange={e => setE('position_third', e.target.value)} />
             </Field>
           </div>
           <Field label="門市 / 分店">
@@ -812,7 +852,7 @@ export default function Employees() {
             </select></Field>
             <Field label="部門主管"><select className="form-input" style={{ width: '100%' }} value={deptForm.manager_id} onChange={e => setDept('manager_id', e.target.value)}>
               <option value="">請選擇</option>
-              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={String(e.id)}>{e.name}{e.position ? ` (${e.position})` : ''}</option>)}
+              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={String(e.id)}>{empLabel(e)}{e.position ? ` (${e.position})` : ''}</option>)}
             </select></Field>
           </div>
           <Field label="描述"><textarea className="form-input" style={{ width: '100%', height: 80 }} value={deptForm.description} onChange={e => setDept('description', e.target.value)} /></Field>

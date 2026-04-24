@@ -8,6 +8,7 @@ import {
 import { processCommentMentions, notifyWatchers } from '../../lib/mentions'
 import { describeRule, materializeNextInstance } from '../../lib/recurrence'
 import TaskWatchers from './TaskWatchers'
+import { empLabel } from '../../lib/empLabel'
 import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
 import MentionInput, { MentionText } from './MentionInput'
@@ -187,7 +188,7 @@ export default function TaskModal({ task, employees = [], sections = [], current
                     }}
                   >
                     <option value="">未指派</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
                     {form.assignee && !form.assignee_id && !employees.some(e => e.name === form.assignee) && (
                       <option value={`name:${form.assignee}`} disabled>{form.assignee}（非員工）</option>
                     )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { UserPlus, X, Users } from 'lucide-react'
 import { getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember } from '../../lib/db'
+import { empLabel } from '../../lib/empLabel'
 
 const ROLE_OPTIONS = [
   { value: 'owner',  label: '擁有者',  color: '#f43f5e' },
@@ -86,7 +87,7 @@ export default function ProjectMembers({ projectId, employees = [], currentUser,
           <select value={pick} onChange={e => setPick(e.target.value)} className="form-input" style={{ flex: 1, fontSize: 12 }} autoFocus>
             <option value="">選擇員工...</option>
             {employees.filter(e => !members.some(m => m.employee_id === e.id)).map(e => (
-              <option key={e.id} value={e.id}>{e.name}{e.dept ? `（${e.dept}）` : ''}</option>
+              <option key={e.id} value={e.id}>{empLabel(e)}{e.dept ? `（${e.dept}）` : ''}</option>
             ))}
           </select>
           <select value={role} onChange={e => setRole(e.target.value)} className="form-input" style={{ fontSize: 12 }}>

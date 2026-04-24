@@ -7,6 +7,7 @@ import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { empLabel } from '../../lib/empLabel'
 
 const STATUS_COLORS = {
   '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
@@ -382,7 +383,7 @@ export default function ExpenseRequests() {
                 <select value={form.employee} onChange={e => set('employee', e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{e.name} ({e.dept}) {e.store ? `- ${e.store}` : ''}</option>)}
+                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept}) {e.store ? `- ${e.store}` : ''}</option>)}
                 </select>
               </div>
               {/* Expense / Non-expense toggle */}

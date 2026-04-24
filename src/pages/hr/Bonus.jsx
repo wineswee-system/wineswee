@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
+import { empLabel } from '../../lib/empLabel'
 
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
@@ -464,7 +465,7 @@ export default function Bonus() {
             <Field label="員工姓名 *">
               <select className="form-input" style={{ width: '100%' }} value={recordForm.employee_name} onChange={e => handleEmployeeSelect(e.target.value)}>
                 <option value="">請選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}{e.store ? ` (${e.store})` : ''}</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}{e.store ? ` (${e.store})` : ''}</option>)}
               </select>
             </Field>
             <Field label="職類">

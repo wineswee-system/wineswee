@@ -36,6 +36,8 @@ create table employees (
   name_en text,
   dept text,
   position text,
+  position_secondary text,
+  position_third text,
   store text,
   status text default '在職',
   email text unique,

@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { getBenefitPolicies, createBenefitPolicy, updateBenefitPolicy, deleteBenefitPolicy } from '../../lib/db'
 import { LEAVE_TYPES } from '../../lib/leavePolicy'
 import { validateBenefitPolicy, BONUS_TYPE_LABELS, getLeaveLabel } from '../../lib/benefitPolicy'
+import { empLabel } from '../../lib/empLabel'
 
 const TABS = [
   { key: 'leave', label: '假別政策', icon: Calendar },
@@ -309,7 +310,7 @@ export default function BenefitSettings() {
                 <option value="">所有員工</option>
                 {employees
                   .filter(emp => !selectedStoreId || stores.find(s => s.id === selectedStoreId)?.name === emp.store)
-                  .map(e => <option key={e.id} value={e.id}>{e.name}</option>)
+                  .map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)
                 }
               </select>
             </label>

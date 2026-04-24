@@ -13,6 +13,7 @@ import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
 import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
+import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
   '規劃中': { color: 'var(--accent-blue)', icon: Clock },
@@ -535,7 +536,7 @@ export default function Projects() {
               <Field label="負責人">
                 <select className="form-input" style={{ width: '100%' }} value={form.owner} onChange={e => set('owner', e.target.value)}>
                   <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}（{e.dept || e.position}）</option>)}
+                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}（{e.dept || e.position}）</option>)}
                 </select>
               </Field>
               <Field label="門市">
@@ -668,7 +669,7 @@ export default function Projects() {
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={deployForm.owner} onChange={e => setDeployForm(f => ({ ...f, owner: e.target.value }))}>
                 <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
               </select>
             </Field>
             <Field label="門市">
@@ -770,7 +771,7 @@ export default function Projects() {
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={form.owner} onChange={e => set('owner', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}（{e.dept || e.position}）</option>)}
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}（{e.dept || e.position}）</option>)}
               </select>
             </Field>
             <Field label="門市">

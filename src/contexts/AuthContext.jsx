@@ -26,11 +26,12 @@ export function AuthProvider({ children }) {
 
     try {
       // H-7: Prefer auth_user_id (immune to email-change hijack); fall back to email for legacy records
+      const EMP_FIELDS = 'id, name, name_en, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position, position_secondary, position_third'
       let { data: emp } = await supabase
-        .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('auth_user_id', authUser.id).maybeSingle()
+        .from('employees').select(EMP_FIELDS).eq('auth_user_id', authUser.id).maybeSingle()
       if (!emp) {
         const { data: empByEmail } = await supabase
-          .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('email', authUser.email).maybeSingle()
+          .from('employees').select(EMP_FIELDS).eq('email', authUser.email).maybeSingle()
         emp = empByEmail
       }
       setProfile(emp || null)

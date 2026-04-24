@@ -9,6 +9,7 @@ import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
 import { useAuth } from '../../contexts/AuthContext'
+import { empLabel } from '../../lib/empLabel'
 
 export default function Tasks() {
   const { profile } = useAuth()
@@ -147,7 +148,7 @@ export default function Tasks() {
           <optgroup label="員工">
             {employees.map(e => {
               const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
-              const label = `${e.name}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
+              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
               return <option key={e.id} value={e.name}>{label}</option>
             })}
           </optgroup>
@@ -270,7 +271,7 @@ export default function Tasks() {
                 <optgroup label="員工">
             {employees.map(e => {
               const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
-              const label = `${e.name}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
+              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
               return <option key={e.id} value={e.name}>{label}</option>
             })}
           </optgroup>

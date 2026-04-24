@@ -16,6 +16,7 @@ export default function Tasks() {
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
+  const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
   const [dependencies, setDependencies] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,13 +34,15 @@ export default function Tasks() {
   const refresh = () => {
     return Promise.all([
       getTasks(),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([t, e, s]) => {
+      supabase.from('departments').select('id, name').order('name'),
+    ]).then(([t, e, s, d]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
       setStores(s.data || [])
+      setDepartments(d.data || [])
       const ids = rows.map(r => r.id)
       if (ids.length) {
         getTaskDependenciesByInstance(ids).then(({ data }) => setDependencies(data || []))
@@ -141,7 +144,13 @@ export default function Tasks() {
         </div>
         <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
           <option value="">全部人員</option>
-          {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+          <optgroup label="員工">
+            {employees.map(e => {
+              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
+              const label = `${e.name}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
+              return <option key={e.id} value={e.name}>{label}</option>
+            })}
+          </optgroup>
         </select>
         <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
           <option value="">全部門市</option>
@@ -258,7 +267,13 @@ export default function Tasks() {
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={form.assignee} onChange={e => set('assignee', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                <optgroup label="員工">
+            {employees.map(e => {
+              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
+              const label = `${e.name}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
+              return <option key={e.id} value={e.name}>{label}</option>
+            })}
+          </optgroup>
               </select>
             </Field>
           </div>

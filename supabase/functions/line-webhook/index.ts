@@ -264,6 +264,15 @@ serve(async (req) => {
       commandName = "attendance_card";
       responseMsg = flexAttendanceCard(liffTaskId, liffNewTaskId, liffDashboardId);
 
+    } else if (lower === "/帳號連結" || lower === "帳號連結" || lower === "帳號連結說明") {
+      commandName = "account_help";
+      responseMsg = text(
+        "👤 帳號連結說明\n\n" +
+        "① 傳訊息給機器人：\n   /註冊 您的姓名\n   例：/註冊 張小明\n\n" +
+        "② 綁定完成後即可：\n   • 透過 LINE 打卡 / 看班表 / 請假 / 報帳\n   • 收到任務派發與審批推播\n   • 開啟 LIFF 主管儀表板（限主管）\n\n" +
+        "③ 如綁定失敗或需換綁，請聯絡系統管理員。"
+      );
+
     } else if (lower.startsWith("/註冊") || lower.startsWith("註冊")) {
       commandName = "register";
       if (isGroup) {

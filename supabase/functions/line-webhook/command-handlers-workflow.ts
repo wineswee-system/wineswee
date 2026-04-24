@@ -61,7 +61,7 @@ export async function cmdWorkflowTasks(shortId: string, db: SupabaseClient, show
 
   // Build one bubble per task (carousel / horizontal slider)
   const bubbles: any[] = tasks.map((t: any) => {
-    const shortTaskId = t.id.slice(0, 6);
+    const shortTaskId = String(t.id).slice(0, 6);
     const due = t.due_date ? t.due_date.slice(0, 10) : "無截止日";
     const pColor = PRIORITY_COLOR[t.priority] ?? "#95A5A6";
     const sColor = STATUS_COLOR[t.status] ?? "#95A5A6";
@@ -332,7 +332,7 @@ export async function cmdManagerLeaveReview(leaveId: string, isApprove: boolean,
   }
 
   const actionLabel = isApprove ? '核准' : '退回';
-  return flexSuccess(isApprove ? '✅' : '❌', `請假已${actionLabel}`, `請假記錄 ${leaveId.slice(0, 6)} 已${actionLabel}`);
+  return flexSuccess(isApprove ? '✅' : '❌', `請假已${actionLabel}`, `請假記錄 ${String(leaveId).slice(0, 6)} 已${actionLabel}`);
 }
 
 // ── Enhanced Task Creation: Multi-Step Conversational Flow ──────────────────

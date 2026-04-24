@@ -152,7 +152,7 @@ export function flexMenu(
   const allTasksBtn       = mkBtn("📁 所有任務",   "/任務 全部", "secondary");
   const notesBtn          = mkBtn("📝 備註查詢",   "/備註",       "secondary");
   const managerBtn        = mkBtn("🔑 管理員選單", "/管理",       "secondary");
-  const helpBtn           = mkBtn("👤 帳號連結說明", "/說明 連結", "link");
+  const helpBtn           = mkBtn("👤 帳號連結說明", "/帳號連結", "link");
 
   return {
     type: "flex",
@@ -288,7 +288,7 @@ export function flexTaskList(tasks: any[], ownerName?: string, liffNewTaskId = "
 
   const now = new Date();
   const bubbles = tasks.slice(0, 10).map((t: any, i: number) => {
-    const shortId = t.id.slice(0, 6);
+    const shortId = String(t.id).slice(0, 6);
     const due = t.due_date ? t.due_date.slice(0, 10) : "無截止日";
     const pColor = PRIORITY_COLOR[t.priority] ?? "#95A5A6";
     const sColor = STATUS_COLOR[t.status] ?? "#95A5A6";
@@ -422,7 +422,7 @@ export function flexGroupTaskList(tasks: any[]) {
 
   const now = new Date();
   const bubbles: any[] = tasks.slice(0, 10).map((t: any, i: number) => {
-    const shortId = t.id.slice(0, 6);
+    const shortId = String(t.id).slice(0, 6);
     const due = t.due_date ? t.due_date.slice(0, 10) : "無截止日";
     const pColor = PRIORITY_COLOR[t.priority] ?? "#95A5A6";
     const sColor = STATUS_COLOR[t.status] ?? "#95A5A6";
@@ -577,7 +577,7 @@ export function flexWorkflowStatus(instances: any[]) {
 
   const bodyContents: any[] = [];
   instances.forEach((wi: any, idx: number) => {
-    const shortId = (wi.id as string).slice(0, 6);
+    const shortId = String(wi.id).slice(0, 6);
     const date = wi.started_at ? (wi.started_at as string).slice(0, 10) : "";
     const wiStatusLabel = wi.status === "paused" ? "⏸ 暫停" : "🔄 進行中";
 
@@ -726,7 +726,7 @@ export function flexManagerOverview(tasks: any[]) {
   }
 
   const bubbles: any[] = tasks.slice(0, 10).map((t: any, i: number) => {
-    const shortId = t.id.slice(0, 6);
+    const shortId = String(t.id).slice(0, 6);
     const due = t.due_date ? t.due_date.slice(0, 10) : "無截止日";
     const pColor = PRIORITY_COLOR[t.priority] ?? "#95A5A6";
     const assigneeName = t.assignee?.name ?? "—";

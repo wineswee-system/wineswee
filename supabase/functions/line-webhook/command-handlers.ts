@@ -313,7 +313,7 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
     // Push notification to assignee
     const due = triggered.due_date ? triggered.due_date.slice(0, 10) : "無截止日";
     const pColor = PRIORITY_COLOR[triggered.priority] ?? "#95A5A6";
-    const shortTriggeredId = triggered.id.slice(0, 6);
+    const shortTriggeredId = String(triggered.id).slice(0, 6);
 
     await pushAndLog(lineUser.line_user_id, [
       withQuickReplies(
@@ -864,7 +864,7 @@ export async function cmdNotes(userId: string, db: SupabaseClient) {
   }
 
   const bubbles = tasks.map((t: any) => {
-    const shortId = t.id.slice(0, 6);
+    const shortId = String(t.id).slice(0, 6);
     const lastNote = t.notes.split("\n").filter(Boolean).slice(-2).join("\n");
     return {
       type: "bubble",

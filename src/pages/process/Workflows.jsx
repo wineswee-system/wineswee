@@ -16,7 +16,6 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { useAuth } from '../../contexts/AuthContext'
 
 import InstanceDetailView from './components/InstanceDetailView'
@@ -27,8 +26,6 @@ import ActiveInstancesList from './components/ActiveInstancesList'
 import TemplatesList from './components/TemplatesList'
 import ArchivedInstancesList from './components/ArchivedInstancesList'
 import { generateFlowByRules } from './components/flowTemplates'
-
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
 export default function Workflows() {
   const { profile } = useAuth()
@@ -253,20 +250,22 @@ export default function Workflows() {
 
     try {
       let json
-      const useRealAi = GEMINI_KEY && GEMINI_KEY !== 'your_gemini_api_key_here'
-
-      if (useRealAi) {
-        // Real AI mode
-        const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-        const result = await model.generateContent(`你是流程設計專家。根據以下需求，設計一個標準作業流程（SOP）。
-需求：${userMsg}
-請以 JSON 格式回覆（不要 markdown code block）：
-{"name":"流程名稱","category":"分類","description":"流程說明","steps":[{"title":"步驟名稱","role":"負責角色","priority":"高/中/低","description":"步驟說明"}]}`)
-        const text = result.response.text()
+      try {
+        // Route through gemini-proxy edge function — API key stays server-side
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke('gemini-proxy', {
+          body: {
+            action: 'chat',
+            payload: {
+              message: `你是流程設計專家。根據以下需求，設計一個標準作業流程（SOP）。\n需求：${userMsg}\n請以 JSON 格式回覆（不要 markdown code block）：\n{"name":"流程名稱","category":"分類","description":"流程說明","steps":[{"title":"步驟名稱","role":"負責角色","priority":"高/中/低","description":"步驟說明"}]}`,
+              history: [],
+            },
+          },
+        })
+        if (proxyError) throw proxyError
+        const text = proxyData?.data?.text ?? ''
         json = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
-      } else {
-        // Smart rule-based fallback
+      } catch {
+        // Rule-based fallback if proxy unavailable
         json = generateFlowByRules(userMsg)
       }
 
@@ -405,12 +404,13 @@ export default function Workflows() {
                 title: `${deployTemplate.name} — ${loc}`,
                 store: loc,
                 status: '待簽',
-                notes: `流程部署自動建立`,
+                applicant: profile?.name || null,
+                form_data: { notes: `流程部署自動建立` },
               }).select().single()
               if (form && chain.steps) {
                 const formSteps = chain.steps.map((s, idx) => ({
                   form_id: form.id, step_order: idx + 1,
-                  role: s.role, label: s.label, status: '待簽',
+                  role: s.role, status: '待簽',
                 }))
                 await supabase.from('approval_form_steps').insert(formSteps)
               }

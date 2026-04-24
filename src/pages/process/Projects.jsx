@@ -121,7 +121,7 @@ export default function Projects() {
   // CRUD
   const handleSubmit = async () => {
     if (!form.name) return
-    const payload = { ...form, budget: form.budget ? Number(form.budget) : null, organization_id: 1 }
+    const payload = { ...form, budget: form.budget ? Number(form.budget) : null, organization_id: profile?.organization_id || 1 }
     if (editingId) {
       const { data } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
       if (data) {
@@ -186,7 +186,7 @@ export default function Projects() {
         start_date: today,
         end_date: endDate,
         budget: tpl.estimated_budget,
-        organization_id: 1,
+        organization_id: profile?.organization_id || 1,
       }).select().single()
 
       if (!project) throw new Error('建立專案失敗')

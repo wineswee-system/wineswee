@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
 import { Plus, X, Check, Upload, FileText, Image, Trash2, Eye, Send, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -25,6 +26,7 @@ const emptyForm = {
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
+  const { profile } = useAuth()
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -123,7 +125,7 @@ export default function ExpenseRequests() {
       items: validItems,
       store: form.store || null,
       status: '申請中',
-      organization_id: 1,
+      organization_id: profile?.organization_id ?? null,
     }
     const { data, error: insertErr } = await supabase.from('expense_requests').insert(payload).select().single()
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
@@ -149,7 +151,7 @@ export default function ExpenseRequests() {
   // Approve request (update expense_requests + sync workflow if exists)
   const handleApprove = async (req) => {
     const { error } = await supabase.from('expense_requests')
-      .update({ status: '已核准', approved_by: '管理員', approved_at: new Date().toISOString() })
+      .update({ status: '已核准', approved_by: profile?.name || '管理員', approved_at: new Date().toISOString() })
       .eq('id', req.id)
     if (error) { setError(error.message); return }
     // Also complete any linked workflow_instance
@@ -223,12 +225,12 @@ export default function ExpenseRequests() {
         ],
         p_source: '費用申請',
         p_source_id: req.id,
-        p_created_by: '財務',
+        p_created_by: profile?.name || '財務',
       })
     } catch { /* journal entry is optional */ }
 
     const { error } = await supabase.from('expense_requests')
-      .update({ status: '已核銷', settled_by: '財務', settled_at: new Date().toISOString() })
+      .update({ status: '已核銷', settled_by: profile?.name || '財務', settled_at: new Date().toISOString() })
       .eq('id', req.id)
     if (error) setError(error.message)
     else load()
@@ -241,6 +243,10 @@ export default function ExpenseRequests() {
   }
 
   const deleteFile = async (att) => {
+    if (profile?.role !== 'admin' && profile?.role !== 'super_admin' && att.uploaded_by !== profile?.name) {
+      alert('僅能刪除自己上傳的檔案')
+      return
+    }
     if (!confirm(`刪除 ${att.file_name}？`)) return
     await supabase.storage.from('attachments').remove([att.storage_path])
     await supabase.from('expense_request_attachments').delete().eq('id', att.id)

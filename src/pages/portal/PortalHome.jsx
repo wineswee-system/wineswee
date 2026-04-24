@@ -6,12 +6,15 @@ import { supabase } from '../../lib/supabase'
 import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
 
-const QUICK_ACTIONS = [
+const ALL_QUICK_ACTIONS = [
   { icon: Calendar, label: '請假', desc: '假單申請', path: '/hr/leave', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
-  { icon: DollarSign, label: '薪資', desc: '查看薪資單', path: '/hr/salary', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { icon: DollarSign, label: '薪資', desc: '查看薪資單', path: '/hr/salary', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', minRole: 'office_staff' },
   { icon: GitBranch, label: '流程', desc: '任務回報', path: '/process/tasks', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
   { icon: Calendar, label: '出勤', desc: '出勤紀錄', path: '/hr/attendance', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
 ]
+
+const ROLE_ORDER = ['store_staff', 'office_staff', 'manager', 'admin', 'super_admin']
+const roleAtLeast = (userRole, minRole) => ROLE_ORDER.indexOf(userRole) >= ROLE_ORDER.indexOf(minRole)
 
 export default function PortalHome() {
   const { profile } = useAuth()
@@ -63,7 +66,7 @@ export default function PortalHome() {
 
       // Server-side validation + record write
       const data = await serverClockIn({
-        employee: profile.name,
+        employee_id: profile.id,
         action,
         lat: result.lat,
         lng: result.lng,
@@ -208,7 +211,7 @@ export default function PortalHome() {
       <div style={{ marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>快速操作</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {QUICK_ACTIONS.map(a => {
+          {ALL_QUICK_ACTIONS.filter(a => !a.minRole || roleAtLeast(profile?.role, a.minRole)).map(a => {
             const Icon = a.icon
             return (
               <Link key={a.path} to={a.path} style={{

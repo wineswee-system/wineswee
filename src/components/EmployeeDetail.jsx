@@ -25,6 +25,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [isDirty, setIsDirty] = useState(false)
 
   // Sub-data
+  const [roles, setRoles] = useState([])
   const [skills, setSkills] = useState([])
   const [dependents, setDependents] = useState([])
   const [transfers, setTransfers] = useState([])
@@ -69,6 +70,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
     }).catch(err => console.warn('Failed to load employee sub-data:', err))
+    // Load roles（角色下拉）
+    supabase.from('roles').select('id, name, description, level').order('level', { ascending: false })
+      .then(({ data }) => setRoles(data || []))
     // Load LINE accounts
     Promise.all([
       supabase.from('employee_line_accounts').select('*, line_channels(id, code, name)').eq('employee_id', employee.id).order('is_primary', { ascending: false }),
@@ -461,7 +465,25 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   </select>
                 </div>
               </div>
-              <div><div style={L}>職位</div><input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div><div style={L}>職位</div><input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" /></div>
+                <div><div style={L}>角色（系統權限）</div>
+                  <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}
+                    onChange={e => {
+                      const id = e.target.value ? Number(e.target.value) : null
+                      const r = roles.find(x => x.id === id)
+                      set('role_id', id)
+                      if (r) set('role', r.name)
+                    }}>
+                    <option value="">— 未指派 —</option>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}{r.description ? `（${r.description}）` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
               <SectionTitle icon="💰" text="薪資" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

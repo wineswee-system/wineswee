@@ -368,6 +368,14 @@ export default function Workflows() {
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])
 
+          // LINE 推播任務指派（notifyTaskAssignee 內部會解 employee_line_accounts；
+          // 沒綁 LINE 的員工會靜默 fail，不影響其他）
+          insertedTasks.forEach(task => {
+            if (task.assignee) {
+              notifyTaskAssignee(task.assignee, task.title, loc || deployTemplate.name, task.id).catch(() => {})
+            }
+          })
+
           // 掛查核清單到任務
           for (let i = 0; i < tplSteps.length; i++) {
             if (tplSteps[i].checklist_id && insertedTasks[i]) {

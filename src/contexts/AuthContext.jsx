@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
 
     try {
       // H-7: Prefer auth_user_id (immune to email-change hijack); fall back to email for legacy records
-      const EMP_FIELDS = 'id, name, name_en, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position, position_secondary, position_third'
+      const EMP_FIELDS = 'id, name, name_en, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position'
       let { data: emp } = await supabase
         .from('employees').select(EMP_FIELDS).eq('auth_user_id', authUser.id).maybeSingle()
       if (!emp) {

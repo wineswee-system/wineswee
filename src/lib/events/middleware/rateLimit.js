@@ -29,7 +29,7 @@ export function createRateLimitMiddleware(config = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...config }
 
   return async function rateLimitMiddleware(event, next) {
-    const tenantId = event.metadata?.tenant_id || 'global'
+    const tenantId = event.metadata?.organization_id || event.metadata?.tenant_id || 'global'
     const domain = event.domain
     const key = `${tenantId}:${domain}`
     const now = Date.now()

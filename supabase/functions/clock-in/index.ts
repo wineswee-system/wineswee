@@ -1,8 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
+const SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': SITE_URL,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -79,24 +80,29 @@ serve(async (req: Request) => {
       })
     }
 
-    // ── If employee_id is provided directly (not via line_user_id), validate JWT ──
-    if (employee_id && !line_user_id) {
+    // ── JWT required for all non-LINE paths ─────────────────
+    if (!line_user_id) {
       const authHeader = req.headers.get('Authorization')
-      if (authHeader) {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user } } = await supabase.auth.getUser(token)
-        if (user) {
-          // Verify the JWT user matches the requested employee_id
-          const { data: authEmp } = await supabase.from('employees').select('id').eq('email', user.email).maybeSingle()
-          if (authEmp && authEmp.id !== employee_id) {
-            // Only admin/super_admin can clock in for others
-            const { data: roleCheck } = await supabase.from('employees').select('role').eq('id', authEmp.id).single()
-            if (!roleCheck || !['admin', 'super_admin'].includes(roleCheck.role)) {
-              return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
-                status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              })
-            }
-          }
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: '未授權：請提供 Authorization header' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: '憑證無效' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      // Proxy clock-in: only admin/super_admin may clock in for another employee
+      if (employee_id) {
+        const { data: authEmp } = await supabase
+          .from('employees').select('id, role').eq('email', user.email).maybeSingle()
+        if (authEmp && authEmp.id !== employee_id && !['admin', 'super_admin'].includes(authEmp.role)) {
+          return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
         }
       }
     }

@@ -101,14 +101,14 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- The other employees from the employee list screenshot
 -- Alicia, Anita, Dave, Ken, Vicky, Zoey, 學文
-INSERT INTO employees (name, name_en, department_id, position, store_id, organization_id, status, role, role_id, employment_type, employee_number) VALUES
-  ('Alicia', 'Alicia', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-003'),
-  ('Anita', 'Anita', 8, '採購專員', 20, 1, '在職', 'office_staff', 4, '全職', 'EMP-004'),
-  ('Dave', 'Dave', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-006'),
-  ('Ken', 'Ken', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-007'),
+INSERT INTO employees (name, name_en, department_id, position, store_id, organization_id, status, role, role_id, employment_type, employee_number, is_manager) VALUES
+  ('Alicia', 'Alicia', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-003', false),
+  ('Anita', 'Anita', 8, '採購專員', 20, 1, '在職', 'office_staff', 4, '全職', 'EMP-004', false),
+  ('Dave', 'Dave', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-006', false),
+  ('Ken', 'Ken', 6, '門市人員', 29, 1, '在職', 'store_staff', 5, '全職', 'EMP-007', false),
   ('Vicky', 'Vicky', 6, '區域主管', 20, 1, '在職', 'manager', 3, '全職', 'EMP-008', true),
-  ('Zoey', 'Zoey', 1, '行銷專員', 29, 1, '在職', 'office_staff', 4, '全職', 'EMP-010'),
-  ('學文', '學文', 6, '總務專員', 20, 1, '在職', 'office_staff', 4, '全職', 'EMP-011')
+  ('Zoey', 'Zoey', 1, '行銷專員', 29, 1, '在職', 'office_staff', 4, '全職', 'EMP-010', false),
+  ('學文', '學文', 6, '總務專員', 20, 1, '在職', 'office_staff', 4, '全職', 'EMP-011', false)
 ON CONFLICT (employee_number) DO NOTHING;
 
 -- ═══ 6. Holidays ═══
@@ -140,8 +140,8 @@ WHERE s.id NOT IN (25, 27, 30)
 ON CONFLICT (store_id) DO NOTHING;
 
 -- ═══ 8. LINE channel placeholder ═══
-INSERT INTO line_channels (id, code, name, channel_type, is_default, status) VALUES
-  (1, 'main', '主要 BOT', 'messaging', true, 'active')
+INSERT INTO line_channels (id, code, name, is_default, status) VALUES
+  (1, 'main', '主要 BOT', true, 'active')
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

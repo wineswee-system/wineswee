@@ -33,9 +33,14 @@ export default function AttachmentsPanel({ entityType, entityId }) {
       .finally(() => setLoading(false))
   }, [entityType, entityId])
 
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+  const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!ALLOWED_TYPES.includes(file.type)) { alert('不支援此檔案類型'); return }
+    if (file.size > MAX_SIZE) { alert('檔案大小不可超過 10MB'); return }
     setUploading(true)
     try {
       const path = `crm/${entityType}/${entityId}/${Date.now()}_${file.name}`

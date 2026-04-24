@@ -1,7 +1,5 @@
 import { supabase } from './supabase'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
 
 /**
@@ -43,18 +41,12 @@ async function sendLinePush(lineUserId, messages, channelCode) {
   if (!lineUserId) return { ok: false, reason: 'no_user_id' }
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/line-push`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'apikey': SUPABASE_KEY,
-      },
-      body: JSON.stringify({ to: lineUserId, messages, channelCode }),
+    const { data, error } = await supabase.functions.invoke('line-push', {
+      body: { to: lineUserId, messages, channelCode },
     })
-    const data = await res.json()
-    await logMessage(lineUserId, messages, data.ok ? 'sent' : 'failed', channelCode)
-    return data
+    if (error) throw error
+    await logMessage(lineUserId, messages, data?.ok ? 'sent' : 'failed', channelCode)
+    return data || { ok: false }
   } catch (err) {
     console.error('[LINE] Push error:', err)
     await logMessage(lineUserId, messages, 'failed', channelCode)

@@ -1,9 +1,6 @@
 import { supabase } from './supabase'
 import { resolveLineAccount, getLiffTaskUrl } from './lineNotify'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-
 // Matches @員工姓名 or @username — CJK, latin, underscore, hyphen allowed.
 // Stops at whitespace, punctuation (besides . _ -), or end of input.
 const MENTION_RE = /@([\p{L}\p{N}_\-.]+)/gu
@@ -16,14 +13,19 @@ export function extractMentionNames(text) {
   return [...names]
 }
 
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 export function renderMentionsHTML(text, employees = []) {
   if (!text) return ''
   const escaped = text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   return escaped.replace(MENTION_RE, (match, name) => {
+    const safeName = escapeHtml(name)
     const emp = employees.find(e => e.name === name)
     const color = emp ? 'var(--accent-cyan)' : 'var(--text-muted)'
     const bg = emp ? 'color-mix(in srgb, var(--accent-cyan) 15%, transparent)' : 'transparent'
-    return `<span style="color:${color};background:${bg};padding:1px 4px;border-radius:3px;font-weight:600">@${name}</span>`
+    return `<span style="color:${color};background:${bg};padding:1px 4px;border-radius:3px;font-weight:600">@${safeName}</span>`
   })
 }
 
@@ -109,17 +111,11 @@ async function sendMentionNotification({ employeeName, taskId, taskTitle, mentio
   }]
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/line-push`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'apikey': SUPABASE_KEY,
-      },
-      body: JSON.stringify({ to: account.lineUserId, messages, channelCode: account.channelCode }),
+    const { data, error } = await supabase.functions.invoke('line-push', {
+      body: { to: account.lineUserId, messages, channelCode: account.channelCode },
     })
-    const data = await res.json()
-    return !!data.ok
+    if (error) throw error
+    return !!data?.ok
   } catch {
     return false
   }
@@ -146,16 +142,10 @@ export async function notifyWatchers(taskId, { taskTitle, action, actor }) {
       text: `🔔 關注的任務有更新\n「${taskTitle}」\n${actor || '系統'}：${action}\n${liffUrl}`,
     }]
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/line-push`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'apikey': SUPABASE_KEY,
-        },
-        body: JSON.stringify({ to: account.lineUserId, messages, channelCode: account.channelCode }),
+      const { data } = await supabase.functions.invoke('line-push', {
+        body: { to: account.lineUserId, messages, channelCode: account.channelCode },
       })
-      if ((await res.json()).ok) sent++
+      if (data?.ok) sent++
     } catch { /* swallow */ }
   }
   return sent

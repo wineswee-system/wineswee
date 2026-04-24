@@ -26,14 +26,14 @@ export function AuthProvider({ children }) {
 
     try {
       const { data: emp } = await supabase
-        .from('employees').select('*').eq('email', authUser.email).maybeSingle()
+        .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('email', authUser.email).maybeSingle()
       setProfile(emp || null)
       if (!emp) return
 
       // Load organization
       if (emp.organization_id) {
         const { data: org } = await supabase
-          .from('organizations').select('*').eq('id', emp.organization_id).maybeSingle()
+          .from('organizations').select('id, name, slug, plan, status').eq('id', emp.organization_id).maybeSingle()
         setOrganization(org || null)
       }
 
@@ -92,9 +92,8 @@ export function AuthProvider({ children }) {
     return permissions.includes(code)
   }, [permissions])
 
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
-    || role?.name === 'admin' || role?.name === 'super_admin'
-  const isSuperAdmin = profile?.role === 'super_admin' || role?.name === 'super_admin'
+  const isAdmin = role?.name === 'admin' || role?.name === 'super_admin'
+  const isSuperAdmin = role?.name === 'super_admin'
 
   return (
     <AuthContext.Provider value={{

@@ -28,7 +28,10 @@ const IS_PROD = import.meta.env?.PROD ?? false
 function getTenantId() {
   try {
     const saved = localStorage.getItem('sme_tenant')
-    if (saved) return JSON.parse(saved)?.id || null
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return parsed?.organization_id ?? parsed?.id ?? null
+    }
   } catch { /* SSR / test */ }
   return null
 }

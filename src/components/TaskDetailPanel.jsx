@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check } from 'lucide-react'
+import InputModal from './ui/InputModal'
 import {
   updateTask, deleteTask,
   getTaskComments, createTaskComment,
@@ -47,6 +48,12 @@ export default function TaskDetailPanel({
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
   const commentsListRef = useRef(null)
+
+  // InputModal state (replaces window.prompt calls)
+  const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
+  const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
+    setInputModal({ open: true, title, label, placeholder, required, onConfirm })
+  const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
 
   useEffect(() => {
     if (!task) return
@@ -665,16 +672,20 @@ export default function TaskDetailPanel({
                       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                         <button className="btn btn-sm"
                           style={{ background: 'var(--accent-green)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
-                          onClick={() => {
-                            const n = prompt('審批備註（可留空）：')
-                            handleConfirmationAction(c.id, 'approved', n)
-                          }}>✅ 審批</button>
+                          onClick={() => openInput(
+                            '審批確認',
+                            '審批備註（可留空）：',
+                            (n) => { closeInput(); handleConfirmationAction(c.id, 'approved', n || null) },
+                            { placeholder: '選填', required: false }
+                          )}>✅ 審批</button>
                         <button className="btn btn-sm"
                           style={{ background: 'var(--accent-red)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
-                          onClick={() => {
-                            const n = prompt('拒絕原因：')
-                            if (n) handleConfirmationAction(c.id, 'rejected', n)
-                          }}>❌ 拒絕</button>
+                          onClick={() => openInput(
+                            '拒絕確認',
+                            '拒絕原因：',
+                            (n) => { closeInput(); handleConfirmationAction(c.id, 'rejected', n) },
+                            { placeholder: '請填寫拒絕原因', required: true }
+                          )}>❌ 拒絕</button>
                       </div>
                     )}
                   </div>
@@ -872,14 +883,24 @@ export default function TaskDetailPanel({
             <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>📎 附件 ({attachments.length})</span>
               <button className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}
-                onClick={() => {
-                  const url = prompt('輸入檔案 URL:')
-                  const name = prompt('檔案名稱:')
-                  if (url && name) {
-                    createTaskAttachment({ task_id: task.id, file_name: name, file_url: url, uploaded_by: '使用者' })
-                      .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
-                  }
-                }}>
+                onClick={() => openInput(
+                  '新增附件',
+                  '檔案 URL（須以 https:// 開頭）：',
+                  (url) => {
+                    if (!url.startsWith('https://')) { alert('請輸入有效的 https:// 網址'); return }
+                    openInput(
+                      '新增附件',
+                      '檔案名稱：',
+                      (name) => {
+                        closeInput()
+                        createTaskAttachment({ task_id: task.id, file_name: name, file_url: url, uploaded_by: '使用者' })
+                          .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
+                      },
+                      { placeholder: '例如：合約.pdf' }
+                    )
+                  },
+                  { placeholder: 'https://...' }
+                )}>
                 <Upload size={11} /> 上傳
               </button>
             </div>
@@ -891,7 +912,7 @@ export default function TaskDetailPanel({
                 padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
                 marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
               }}>
-                <a href={a.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>
+                <a href={a.file_url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-cyan)' }}>
                   📄 {a.file_name}
                 </a>
                 <button onClick={async () => {
@@ -1075,10 +1096,12 @@ export default function TaskDetailPanel({
                                   background: 'var(--accent-green)', color: '#fff', border: 'none',
                                   padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
                                 }}
-                                onClick={() => {
-                                  const comment = prompt('審核意見（可留空）：')
-                                  handleApprovalAction(as.id, 'approve', comment)
-                                }}
+                                onClick={() => openInput(
+                                  '核准簽核',
+                                  '審核意見（可留空）：',
+                                  (comment) => { closeInput(); handleApprovalAction(as.id, 'approve', comment || null) },
+                                  { placeholder: '選填', required: false }
+                                )}
                               >
                                 ✅ 核准
                               </button>
@@ -1088,10 +1111,12 @@ export default function TaskDetailPanel({
                                   background: 'var(--accent-red)', color: '#fff', border: 'none',
                                   padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
                                 }}
-                                onClick={() => {
-                                  const comment = prompt('退回原因：')
-                                  if (comment) handleApprovalAction(as.id, 'reject', comment)
-                                }}
+                                onClick={() => openInput(
+                                  '退回簽核',
+                                  '退回原因：',
+                                  (comment) => { closeInput(); handleApprovalAction(as.id, 'reject', comment) },
+                                  { placeholder: '請填寫退回原因', required: true }
+                                )}
                               >
                                 ❌ 退回
                               </button>
@@ -1143,6 +1168,16 @@ export default function TaskDetailPanel({
 
         </div>
       </div>
+
+      <InputModal
+        isOpen={inputModal.open}
+        title={inputModal.title}
+        label={inputModal.label}
+        placeholder={inputModal.placeholder}
+        required={inputModal.required}
+        onConfirm={inputModal.onConfirm || (() => {})}
+        onCancel={closeInput}
+      />
     </div>
   )
 }

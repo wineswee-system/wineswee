@@ -13,16 +13,8 @@ export const updateEmployee = (id, data) =>
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)
 
-export async function inviteEmployee(email, name) {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-  const res = await fetch(`${url}/functions/v1/invite-employee`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'apikey': key },
-    body: JSON.stringify({ email, name }),
-  })
-  return res.json()
-}
+export const inviteEmployee = (email, name) =>
+  supabase.functions.invoke('invite-employee', { body: { email, name } })
 
 // ── Attendance ─────────────────────────────────────────────
 export const getAttendance = (date) => {
@@ -40,22 +32,11 @@ export const upsertAttendance = (data) =>
  * @throws {Error} with descriptive message on validation failure or server error
  */
 export async function serverClockIn(payload) {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-  const res = await fetch(`${url}/functions/v1/clock-in`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
-      'apikey': key,
-    },
-    body: JSON.stringify(payload),
-  })
-  const data = await res.json()
-  if (!res.ok) {
-    const msg = data.reasons ? `${data.error}\n${data.reasons.join('\n')}` : (data.error || '伺服器錯誤')
+  const { data, error } = await supabase.functions.invoke('clock-in', { body: payload })
+  if (error) {
+    const msg = data?.reasons ? `${data.error}\n${data.reasons.join('\n')}` : (error.message || '伺服器錯誤')
     const err = new Error(msg)
-    err.code = res.status === 403 ? 'VALIDATION_FAILED' : 'SERVER_ERROR'
+    err.code = error.context?.status === 403 ? 'VALIDATION_FAILED' : 'SERVER_ERROR'
     throw err
   }
   return data
@@ -66,18 +47,10 @@ export async function serverClockIn(payload) {
  * @param {string} [date] - optional date override (YYYY-MM-DD), defaults to yesterday
  */
 export async function checkMissedClockout(date) {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-  const res = await fetch(`${url}/functions/v1/check-missed-clockout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
-      'apikey': key,
-    },
-    body: JSON.stringify(date ? { date } : {}),
+  const { data } = await supabase.functions.invoke('check-missed-clockout', {
+    body: date ? { date } : {},
   })
-  return res.json()
+  return data
 }
 
 // ── Leave Requests ─────────────────────────────────────────

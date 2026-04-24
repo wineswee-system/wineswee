@@ -40,7 +40,7 @@ function createSpan(event) {
       'event.domain': event.domain,
       'event.action': event.action,
       'event.version': event.version,
-      'tenant.id': event.metadata?.tenant_id || 'unknown',
+      'tenant.id': event.metadata?.organization_id || event.metadata?.tenant_id || 'unknown',
       'event.replay': event.metadata?._replay || false,
     },
     events: [], // Sub-span events (handler start/end, errors)

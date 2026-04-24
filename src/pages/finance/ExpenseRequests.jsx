@@ -76,10 +76,15 @@ export default function ExpenseRequests() {
     setAttachments(prev => ({ ...prev, [requestId]: data || [] }))
   }
 
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+  const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+
   // Upload files to Supabase Storage
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
     const results = []
     for (const file of fileList) {
+      if (!ALLOWED_TYPES.includes(file.type)) { alert('不支援此檔案類型'); continue }
+      if (file.size > MAX_SIZE) { alert('檔案大小不可超過 10MB'); continue }
       const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${file.name}`
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
       if (upErr) continue

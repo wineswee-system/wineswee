@@ -19,10 +19,16 @@ export default function Login() {
 
   // Show LINE login error if any (from redirect)
   useEffect(() => {
+    const LINE_ERROR_MESSAGES = {
+      'auth_failed': 'LINE 驗證失敗，請重試',
+      'no_account': '此 LINE 帳號尚未綁定，請先登入',
+      'cancelled': '已取消 LINE 登入',
+    }
     const params = new URLSearchParams(window.location.search)
     const lineError = params.get('line_error')
-    if (lineError) {
-      setError(lineError)
+    const lineErrorMsg = lineError ? (LINE_ERROR_MESSAGES[lineError] || 'LINE 登入發生錯誤') : null
+    if (lineErrorMsg) {
+      setError(lineErrorMsg)
       window.history.replaceState({}, '', '/login')
     }
   }, [])

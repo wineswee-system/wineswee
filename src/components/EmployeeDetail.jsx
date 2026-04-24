@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { X, Save, Plus, Trash2 } from 'lucide-react'
+import InputModal from './ui/InputModal'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
@@ -39,6 +40,12 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [lineChannels, setLineChannels] = useState([])
   const [newLineUserId, setNewLineUserId] = useState('')
   const [newLineChannel, setNewLineChannel] = useState('')
+
+  // InputModal state (replaces window.prompt calls)
+  const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
+  const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
+    setInputModal({ open: true, title, label, placeholder, required, onConfirm })
+  const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
 
   // Inline add
   const [newSkill, setNewSkill] = useState('')
@@ -98,7 +105,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     // Check if store changed
     const storeChanged = form.store !== employee.store && employee.store && form.store
     const { data, error } = await updateEmployee(employee.id, form)
-    if (error) { alert('儲存失敗：' + error.message); setSaving(false); return }
+    if (error) { console.error('Save failed:', error); alert('儲存失敗，請稍後再試'); setSaving(false); return }
     if (data) {
       onUpdate(data); setIsDirty(false)
       // If store changed, remove future schedules (shifts may not exist at new store)
@@ -158,41 +165,46 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     } catch (e) { alert('刪除失敗') }
   }
 
-  const addReview = async () => {
-    const score = prompt('評分（1-5）：')
-    if (!score) return
-    const notes = prompt('評語：') || ''
-    try {
-      const { data } = await supabase.from('employee_reviews').insert({
-        employee_id: employee.id, review_date: new Date().toISOString().slice(0, 10),
-        reviewer: '管理員', score: Number(score), notes,
-      }).select().single()
-      if (data) setReviews(prev => [data, ...prev])
-    } catch (e) { alert('新增失敗') }
+  const addReview = () => {
+    openInput('新增績效評估', '評分（1-5）：', (score) => {
+      openInput('新增績效評估', '評語：', async (notes) => {
+        closeInput()
+        try {
+          const { data } = await supabase.from('employee_reviews').insert({
+            employee_id: employee.id, review_date: new Date().toISOString().slice(0, 10),
+            reviewer: '管理員', score: Number(score), notes,
+          }).select().single()
+          if (data) setReviews(prev => [data, ...prev])
+        } catch (e) { alert('新增失敗') }
+      }, { placeholder: '選填', required: false })
+    }, { placeholder: '1–5' })
   }
 
-  const addTransfer = async () => {
-    const to_store = prompt('調到哪個門市：')
-    if (!to_store) return
-    const reason = prompt('調動原因：') || ''
-    try {
-      const { data } = await supabase.from('employee_transfers').insert({
-        employee_id: employee.id, transfer_date: new Date().toISOString().slice(0, 10),
-        from_store: employee.store, to_store, from_dept: employee.dept, from_position: employee.position, reason,
-      }).select().single()
-      if (data) setTransfers(prev => [data, ...prev])
-    } catch (e) { alert('新增失敗') }
+  const addTransfer = () => {
+    openInput('新增異動紀錄', '調到哪個門市：', (to_store) => {
+      openInput('新增異動紀錄', '調動原因：', async (reason) => {
+        closeInput()
+        try {
+          const { data } = await supabase.from('employee_transfers').insert({
+            employee_id: employee.id, transfer_date: new Date().toISOString().slice(0, 10),
+            from_store: employee.store, to_store, from_dept: employee.dept, from_position: employee.position, reason,
+          }).select().single()
+          if (data) setTransfers(prev => [data, ...prev])
+        } catch (e) { alert('新增失敗') }
+      }, { placeholder: '選填', required: false })
+    }, { placeholder: '門市名稱' })
   }
 
-  const addSchedPref = async () => {
-    const notes = prompt('排班偏好（例如：週六不排晚班）：')
-    if (!notes) return
-    try {
-      const { data } = await supabase.from('employee_schedule_prefs').insert({
-        employee_id: employee.id, pref_type: 'note', notes,
-      }).select().single()
-      if (data) setSchedPrefs(prev => [...prev, data])
-    } catch (e) { alert('新增失敗') }
+  const addSchedPref = () => {
+    openInput('新增排班偏好', '排班偏好說明：', async (notes) => {
+      closeInput()
+      try {
+        const { data } = await supabase.from('employee_schedule_prefs').insert({
+          employee_id: employee.id, pref_type: 'note', notes,
+        }).select().single()
+        if (data) setSchedPrefs(prev => [...prev, data])
+      } catch (e) { alert('新增失敗') }
+    }, { placeholder: '例如：週六不排晚班' })
   }
 
   const deleteSchedPref = async (id) => {
@@ -640,7 +652,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                       is_primary: lineAccounts.length === 0,
                       is_verified: true,
                     }).select('*, line_channels(id, code, name)').single()
-                    if (error) { alert('綁定失敗：' + error.message); return }
+                    if (error) { console.error('Save failed:', error); alert('儲存失敗，請稍後再試'); return }
                     setLineAccounts(prev => [...prev, data])
                     setNewLineUserId('')
                   }}>
@@ -988,6 +1000,16 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           )}
         </div>
       </div>
+
+      <InputModal
+        isOpen={inputModal.open}
+        title={inputModal.title}
+        label={inputModal.label}
+        placeholder={inputModal.placeholder}
+        required={inputModal.required}
+        onConfirm={inputModal.onConfirm || (() => {})}
+        onCancel={closeInput}
+      />
     </div>
   )
 }

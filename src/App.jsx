@@ -50,9 +50,11 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>
         <h2>系統發生錯誤</h2>
-        <pre style={{ textAlign: 'left', maxWidth: 600, margin: '16px auto', fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', padding: 16, borderRadius: 8 }}>
-          {this.state.error.message}{'\n'}{this.state.error.stack}
-        </pre>
+        {import.meta.env.PROD ? (
+          <p style={{ color: 'var(--text-secondary)' }}>系統發生錯誤，請聯繫系統管理員</p>
+        ) : (
+          <pre style={{ color: 'var(--text-secondary)', textAlign: 'left', fontSize: 12, overflowX: 'auto' }}>{this.state.error.stack}</pre>
+        )}
         <button onClick={() => window.location.reload()} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', cursor: 'pointer' }}>重新載入</button>
       </div>
     )
@@ -66,6 +68,7 @@ function AdminApp({ role = 'store_staff' }) {
   const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
   // Module-level access check: '/hr/leave' in allowed → can enter '/hr' module
   // Page-level filtering is handled by Sidebar's ROLE_ALLOWED_PATHS
+  // Note: this is a UX layer only — server-side RLS is the true enforcement layer.
   const canAccess = (modulePrefix) => {
     if (allowed === null) return true
     return allowed.some(r => r === modulePrefix || r.startsWith(modulePrefix + '/') || modulePrefix.startsWith(r))
@@ -110,12 +113,20 @@ function AdminApp({ role = 'store_staff' }) {
 
 // ── Protected wrapper ──
 function ProtectedApp() {
-  const { loading, isAuthenticated, profile } = useAuth()
+  const { loading, profileReady, isAuthenticated, role } = useAuth()
 
-  if (loading) return <LoadingSpinner />
+  if (loading || !profileReady) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
 
-  return <AdminApp role={profile?.role || 'store_staff'} />
+  return <AdminApp role={role?.name || 'store_staff'} />
+}
+
+// ── Portal auth guard — portal pages fetch sensitive employee data ──
+function PortalGuard({ children }) {
+  const { loading, isAuthenticated } = useAuth()
+  if (loading) return <LoadingSpinner />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  return children
 }
 
 // ── Root App ──
@@ -129,10 +140,10 @@ export default function App() {
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* /liff/* routes 已移除 — 由獨立 LIFF app (sme-ops-liff.vercel.app) 處理 */}
-          <Route path="/portal" element={<PortalLayout />}>
+          <Route path="/portal" element={<PortalGuard><PortalLayout /></PortalGuard>}>
             <Route index element={<PortalHome />} />
           </Route>
-          <Route path="/employee-portal" element={<Suspense fallback={<LoadingSpinner />}><EmployeePortal /></Suspense>} />
+          <Route path="/employee-portal" element={<PortalGuard><Suspense fallback={<LoadingSpinner />}><EmployeePortal /></Suspense></PortalGuard>} />
           <Route path="/*" element={<ProtectedApp />} />
         </Routes>
         </Suspense>

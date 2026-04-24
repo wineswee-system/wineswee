@@ -57,6 +57,7 @@ export class EventBus {
       version: meta._version || 1,
       payload: payload || {},
       metadata: {
+        organization_id: meta.organization_id || null,
         tenant_id: meta.tenant_id || null,
         user_id: meta.user_id || null,
         correlation_id: meta.correlation_id || `corr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,

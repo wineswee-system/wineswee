@@ -8,6 +8,7 @@ import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolation
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
 import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
 import StoreSettingsTab from './components/StoreSettingsTab'
@@ -43,14 +44,8 @@ export default function Schedule() {
   const { tenant } = useTenant()
   const tenantId = tenant?.id || null
 
-  // Role check: read from localStorage profile (set by AuthContext)
-  const [userRole, setUserRole] = useState('viewer')
-  useEffect(() => {
-    try {
-      const profile = JSON.parse(localStorage.getItem('sme_profile') || '{}')
-      setUserRole(profile?.role || 'manager')
-    } catch { setUserRole('manager') }
-  }, [])
+  const { role: authRole } = useAuth()
+  const userRole = authRole?.name || 'store_staff'
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
   const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
 

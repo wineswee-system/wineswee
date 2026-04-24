@@ -1,8 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
+const SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': SITE_URL,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -16,6 +17,37 @@ serve(async (req) => {
   }
 
   try {
+    // ── Auth: require valid JWT with admin or super_admin role ──
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: '未授權' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, serviceKey)
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: '憑證無效' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { data: caller } = await supabase
+      .from('employees').select('role').eq('email', user.email).maybeSingle()
+    if (!caller || !['admin', 'super_admin'].includes(caller.role)) {
+      return new Response(JSON.stringify({ error: '權限不足：僅管理員可邀請員工' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { email, name, redirectTo } = await req.json()
 
     if (!email) {
@@ -25,10 +57,7 @@ serve(async (req) => {
       })
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, serviceKey)
-    const siteUrl = redirectTo || Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
+    const siteUrl = redirectTo || SITE_URL
 
     // Check if auth user already exists
     const { data: { users } } = await supabase.auth.admin.listUsers()

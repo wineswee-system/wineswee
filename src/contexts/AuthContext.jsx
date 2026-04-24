@@ -25,8 +25,14 @@ export function AuthProvider({ children }) {
     setProfileReady(false)
 
     try {
-      const { data: emp } = await supabase
-        .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('email', authUser.email).maybeSingle()
+      // H-7: Prefer auth_user_id (immune to email-change hijack); fall back to email for legacy records
+      let { data: emp } = await supabase
+        .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('auth_user_id', authUser.id).maybeSingle()
+      if (!emp) {
+        const { data: empByEmail } = await supabase
+          .from('employees').select('id, name, email, role, role_id, organization_id, dept, status, phone, avatar, avatar_url, store, store_id, position').eq('email', authUser.email).maybeSingle()
+        emp = empByEmail
+      }
       setProfile(emp || null)
       if (!emp) return
 
@@ -88,9 +94,9 @@ export function AuthProvider({ children }) {
   }
 
   const hasPermission = useCallback((code) => {
-    if (permissions.includes('admin.system')) return true
+    if (role?.name === 'super_admin') return true
     return permissions.includes(code)
-  }, [permissions])
+  }, [permissions, role])
 
   const isAdmin = role?.name === 'admin' || role?.name === 'super_admin'
   const isSuperAdmin = role?.name === 'super_admin'

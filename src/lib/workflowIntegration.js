@@ -95,6 +95,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       started_by_id: requesterId,
       assignee: supervisor?.name || null,
       store: record?.store || null,
+      organization_id: orgId ?? null,
       started_at: new Date().toISOString(),
     })
     .select()
@@ -293,9 +294,12 @@ async function writeBackStatus(instance, action) {
   let query = supabase
     .from(mapping.table)
     .select('id')
-    .in('status', mapping.pendingStatuses || ['待審核', '待確認'])  // H-1: use per-table pending statuses
+    .in('status', mapping.pendingStatuses || ['待審核', '待確認'])
     .order('created_at', { ascending: false })
     .limit(1)
+  if (instance.organization_id) {
+    query = query.eq('organization_id', instance.organization_id)
+  }
   if (instance.started_by_id) {
     query = query.eq('employee_id', instance.started_by_id)
   } else {

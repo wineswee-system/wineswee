@@ -144,8 +144,11 @@ export default function Leave() {
         return
       }
     }
-    // Fallback: no workflow running — update directly
-    const { data } = await updateLeaveStatus(id, '已核准', profile?.name || '主管')
+    // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
+    const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
+      p_id: id, p_status: '已核准', p_approver: profile?.name || '',
+    })
+    if (rpcErr) { alert('操作失敗：' + rpcErr.message); return }
     if (data) {
       setLeaves(prev => prev.map(l => l.id === id ? data : l))
       if (data.start_date && data.days) {
@@ -176,7 +179,10 @@ export default function Leave() {
         return
       }
     }
-    const { data } = await updateLeaveStatus(id, '已拒絕', profile?.name || '主管', reason.trim())
+    const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
+      p_id: id, p_status: '已駁回', p_approver: profile?.name || '', p_reject_reason: reason.trim(),
+    })
+    if (rpcErr) { alert('操作失敗：' + rpcErr.message); return }
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 

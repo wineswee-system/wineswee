@@ -10,9 +10,9 @@ import { useAuth } from '../contexts/AuthContext'
  *   <Route element={<ProtectedRoute requiredPermission="finance.edit" />}> ... </Route>
  */
 export default function ProtectedRoute({ children, requiredPermission }) {
-  const { user, loading, hasPermission } = useAuth()
+  const { user, loading, profileReady, hasPermission } = useAuth()
 
-  if (loading) return null
+  if (loading || !profileReady) return null
 
   if (!user) {
     return <Navigate to="/login" replace />

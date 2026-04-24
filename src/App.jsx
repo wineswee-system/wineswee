@@ -63,9 +63,11 @@ class ErrorBoundary extends React.Component {
 }
 
 // ── AdminApp (uses ROLE_ROUTES) ──
-function AdminApp({ role = 'store_staff' }) {
+function AdminApp() {
+  const { role, hasPermission, isSuperAdmin } = useAuth()
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
-  const allowed = role in ROLE_ROUTES ? ROLE_ROUTES[role] : ROLE_ROUTES['store_staff']
+  const roleName = role?.name || 'store_staff'
+  const allowed = roleName in ROLE_ROUTES ? ROLE_ROUTES[roleName] : ROLE_ROUTES['store_staff']
   // Module-level access check: '/hr/leave' in allowed → can enter '/hr' module
   // Page-level filtering is handled by Sidebar's ROLE_ALLOWED_PATHS
   // Note: this is a UX layer only — server-side RLS is the true enforcement layer.
@@ -73,6 +75,8 @@ function AdminApp({ role = 'store_staff' }) {
     if (allowed === null) return true
     return allowed.some(r => r === modulePrefix || r.startsWith(modulePrefix + '/') || modulePrefix.startsWith(r))
   }
+  // Combines route whitelist with explicit permission code for sensitive modules
+  const canAccessWithPerm = (modulePrefix, permCode) => canAccess(modulePrefix) && hasPermission(permCode)
   const blocked = <Navigate to="/" replace />
 
   return (
@@ -86,9 +90,9 @@ function AdminApp({ role = 'store_staff' }) {
             <Route path="/" element={<Dashboard />} />
             <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
             <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
-            <Route path="/finance/*" element={canAccess('/finance') ? <FinanceModule /> : blocked} />
-            <Route path="/analytics" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
-            <Route path="/analytics/*" element={canAccess('/analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.read') ? <FinanceModule /> : blocked} />
+            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'report.view') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'report.view') ? <AnalyticsModule /> : blocked} />
             <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
             <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
             <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
@@ -98,10 +102,10 @@ function AdminApp({ role = 'store_staff' }) {
             <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
             <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
             <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
-            <Route path="/system/*" element={canAccess('/system') ? <SystemModule /> : blocked} />
+            <Route path="/system/*" element={canAccessWithPerm('/system', 'admin.system') ? <SystemModule /> : blocked} />
             <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
             <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
-            <Route path="/super-admin/*" element={canAccess('/super-admin') ? <SuperAdminModule /> : blocked} />
+            <Route path="/super-admin/*" element={isSuperAdmin ? <SuperAdminModule /> : blocked} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>
@@ -113,19 +117,19 @@ function AdminApp({ role = 'store_staff' }) {
 
 // ── Protected wrapper ──
 function ProtectedApp() {
-  const { loading, profileReady, isAuthenticated, role } = useAuth()
+  const { loading, profileReady, isAuthenticated } = useAuth()
 
   if (loading || !profileReady) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
 
-  return <AdminApp role={role?.name || 'store_staff'} />
+  return <AdminApp />
 }
 
 // ── Portal auth guard — portal pages fetch sensitive employee data ──
 function PortalGuard({ children }) {
-  const { loading, isAuthenticated } = useAuth()
-  if (loading) return <LoadingSpinner />
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const { loading, profileReady, isAuthenticated, profile } = useAuth()
+  if (loading || !profileReady) return <LoadingSpinner />
+  if (!isAuthenticated || !profile) return <Navigate to="/login" replace />
   return children
 }
 
@@ -137,7 +141,7 @@ export default function App() {
       <TenantProvider>
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          <Route path="/demo" element={<DemoLanding />} />
+          <Route path="/demo" element={<PortalGuard><DemoLanding /></PortalGuard>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* /liff/* routes 已移除 — 由獨立 LIFF app (sme-ops-liff.vercel.app) 處理 */}
           <Route path="/portal" element={<PortalGuard><PortalLayout /></PortalGuard>}>

@@ -90,8 +90,10 @@ export default function Overtime() {
           return
         }
       }
-      // Fallback: no workflow running — update directly
-      const { data, error } = await updateOvertimeStatus(id, '已核准')
+      // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
+      const { data, error } = await supabase.rpc('secure_update_overtime_status', {
+        p_id: id, p_status: '已核准',
+      })
       if (error) throw error
       if (data) {
         setRecords(prev => prev.map(r => r.id === id ? data : r))
@@ -119,8 +121,10 @@ export default function Overtime() {
           return
         }
       }
-      // Fallback: no workflow running — update directly
-      const { data, error } = await updateOvertimeStatus(id, '已拒絕', reason.trim())
+      // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
+      const { data, error } = await supabase.rpc('secure_update_overtime_status', {
+        p_id: id, p_status: '已駁回', p_reject_reason: reason.trim(),
+      })
       if (error) throw error
       if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
     } catch (err) {

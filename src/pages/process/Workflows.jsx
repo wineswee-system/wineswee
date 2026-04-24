@@ -293,17 +293,31 @@ export default function Workflows() {
 
   // ── Create SOP Template ──
   const handleCreateTpl = async () => {
-    if (!newTpl.name || !newTpl.steps.some(s => s.title)) return
-    const validSteps = newTpl.steps.filter(s => s.title).map(s => ({
+    if (!newTpl.name?.trim()) {
+      alert('請填寫範本名稱')
+      return
+    }
+    if (!newTpl.steps.some(s => s.title?.trim())) {
+      alert('至少需要填寫一個步驟名稱')
+      return
+    }
+    const validSteps = newTpl.steps.filter(s => s.title?.trim()).map(s => ({
       ...s,
       checklist_id: s.checklist_id || null,
       approval_chain_id: s.approval_chain_id || null,
     }))
-    const { data } = await supabase.from('sop_templates').insert({
-      name: newTpl.name, category: newTpl.category,
-      description: newTpl.description, steps: validSteps,
+    const { data, error } = await supabase.from('sop_templates').insert({
+      name: newTpl.name.trim(),
+      category: newTpl.category,
+      description: newTpl.description,
+      steps: validSteps,
       approval_chain_id: newTpl.approval_chain_id || null,
     }).select().single()
+    if (error) {
+      alert('建立失敗：' + error.message)
+      console.error('sop_templates insert error', error)
+      return
+    }
     if (data) {
       setTemplates(prev => [...prev, data])
       setShowCreateTplModal(false)

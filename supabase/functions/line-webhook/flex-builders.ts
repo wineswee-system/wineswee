@@ -147,13 +147,6 @@ export function flexMenu(
   const todoBtn = liffDeepLinkBtn("📋 代辦項目", listId, "/todo")
     ?? mkBtn("📋 代辦項目", "/代辦", "secondary");
 
-  // 原先的 BOT 內部功能（非 LIFF）
-  const inProgressTaskBtn = mkBtn("📋 進行中任務", "/任務 列表", "secondary");
-  const allTasksBtn       = mkBtn("📁 所有任務",   "/任務 全部", "secondary");
-  const notesBtn          = mkBtn("📝 備註查詢",   "/備註",       "secondary");
-  const managerBtn        = mkBtn("🔑 管理員選單", "/管理",       "secondary");
-  const helpBtn           = mkBtn("👤 帳號連結說明", "/帳號連結", "link");
-
   return {
     type: "flex",
     altText: "📖 功能選單",
@@ -175,26 +168,8 @@ export function flexMenu(
         spacing: "sm",
         paddingAll: "12px",
         contents: isGroup
-          // 群組裡較簡短：任務列表 + 新增 + 代辦 + 管理員（若有）
-          ? [
-              inProgressTaskBtn,
-              newTaskBtn,
-              todoBtn,
-              ...(isManager ? [managerBtn] : []),
-            ]
-          : [
-              // 新 LIFF 功能區
-              dashboardBtn,
-              newTaskBtn,
-              updateTaskBtn,
-              todoBtn,
-              // 原 BOT 內部功能區
-              { type: "box", layout: "horizontal", spacing: "sm",
-                contents: [inProgressTaskBtn, allTasksBtn] },
-              notesBtn,
-              ...(isManager ? [managerBtn] : []),
-              helpBtn,
-            ],
+          ? [newTaskBtn, todoBtn]
+          : [dashboardBtn, newTaskBtn, updateTaskBtn, todoBtn],
       },
     },
   };

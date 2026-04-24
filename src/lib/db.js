@@ -1319,7 +1319,7 @@ export const deleteWarehouseBin = (id) =>
 
 // ── Approval Rules & Requests ──
 export const getApprovalRules = (module) => {
-  const q = supabase.from('approval_rules').select('*').order('approval_order')
+  const q = supabase.from('approval_rules').select('*').order('approval_order').limit(200)
   return module ? q.eq('module', module) : q
 }
 export const createApprovalRule = (data) =>
@@ -1329,7 +1329,7 @@ export const updateApprovalRule = (id, data) =>
 export const deleteApprovalRule = (id) =>
   supabase.from('approval_rules').delete().eq('id', id)
 export const getApprovalRequests = (status) => {
-  const q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false })
+  const q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false }).limit(200)
   return status ? q.eq('status', status) : q
 }
 export const createApprovalRequest = (data) =>
@@ -1673,7 +1673,7 @@ export const updateProbationRecord = (id, data) =>
 
 // ── Approval Delegation ───────────────────────────────────
 export const getApprovalDelegations = () =>
-  supabase.from('approval_delegations').select('*').order('start_date', { ascending: false })
+  supabase.from('approval_delegations').select('*').order('start_date', { ascending: false }).limit(200)
 
 export const createApprovalDelegation = (data) =>
   supabase.from('approval_delegations').insert(data).select().single()

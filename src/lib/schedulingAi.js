@@ -13,7 +13,6 @@
  */
 
 import { supabase } from './supabase'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import {
   parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks, ABSENCE_TYPES, MONTHLY_OVERTIME_CAP, MONTHLY_REST_DAYS_TARGET,
@@ -23,7 +22,15 @@ import {
 import { runProgrammaticSchedule } from './schedulingAlgo'
 import { chat as geminiChat, isConfigured as geminiIsConfigured } from './gemini'
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
+// All direct Gemini calls route through the gemini-proxy Edge Function.
+async function invokeSchedulingProxy(prompt) {
+  const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+    body: { action: 'schedulingFallback', payload: { prompt } },
+  })
+  if (error) throw new Error(`AI 服務錯誤：${error.message || '請稍後再試'}`)
+  if (data?.error) throw new Error(`AI 服務錯誤：${data.error}`)
+  return data?.data?.text ?? ''
+}
 
 // ══════════════════════════════════════════════════════════════
 //  Phase 2: Data Gathering
@@ -276,26 +283,11 @@ async function callEdgeFunction(data) {
 // ══════════════════════════════════════════════════════════════
 
 async function callGeminiClientSide(schedulingData) {
-  if (!GEMINI_KEY || GEMINI_KEY === 'your_gemini_api_key_here') {
-    throw new Error('請在 .env 設定 VITE_GEMINI_API_KEY')
-  }
-
-  const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 16384,
-      responseMimeType: 'application/json',
-    },
-  })
-
   const prompt = buildClientPrompt(schedulingData)
 
   // Attempt 1
-  console.log('[schedulingAi] Calling Gemini 2.5 Flash (attempt 1)...')
-  const result1 = await model.generateContent(prompt)
-  let raw = result1.response.text()
+  console.log('[schedulingAi] Calling gemini-proxy schedulingFallback (attempt 1)...')
+  const raw = await invokeSchedulingProxy(prompt)
   console.log('[schedulingAi] Raw response length:', raw.length)
 
   let parsed = parseResponse(raw)
@@ -306,8 +298,7 @@ async function callGeminiClientSide(schedulingData) {
   if (errors1.length > 0) {
     console.log(`[schedulingAi] ${errors1.length} errors, retrying...`)
     const fixPrompt = buildFixPromptClient(prompt, violations, parsed.assignments)
-    const result2 = await model.generateContent(fixPrompt)
-    const raw2 = result2.response.text()
+    const raw2 = await invokeSchedulingProxy(fixPrompt)
     const parsed2 = parseResponse(raw2)
     const violations2 = validateClientSide(parsed2.assignments, schedulingData)
     const errors2 = violations2.filter(v => v.severity === 'error')
@@ -1081,21 +1072,10 @@ function applyAiSuggestions(assignments, suggestions, data) {
 // ══════════════════════════════════════════════════════════════
 
 export async function fixViolations(schedulingData, currentAssignments, violations) {
-  if (!GEMINI_KEY || GEMINI_KEY === 'your_gemini_api_key_here') {
-    throw new Error('請在 .env 設定 VITE_GEMINI_API_KEY')
-  }
-
-  const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { temperature: 0.2, maxOutputTokens: 16384, responseMimeType: 'application/json' },
-  })
-
   const basePrompt = buildClientPrompt(schedulingData)
   const fixPrompt = buildFixPromptClient(basePrompt, violations, currentAssignments)
 
-  const result = await model.generateContent(fixPrompt)
-  const raw = result.response.text()
+  const raw = await invokeSchedulingProxy(fixPrompt)
   console.log('[schedulingAi:fix] Raw response length:', raw.length)
   const parsed = parseResponse(raw)
   const newViolations = validateClientSide(parsed.assignments, schedulingData)

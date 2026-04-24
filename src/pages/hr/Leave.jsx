@@ -6,7 +6,7 @@ import { getSupervisor } from '../../lib/approval'
 import { useAuth } from '../../contexts/AuthContext'
 import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest } from '../../lib/leavePolicy'
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
-import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
+import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -121,18 +121,40 @@ export default function Leave() {
   }
 
   const handleApprove = async (id) => {
-    const { data } = await updateLeaveStatus(id, '已核准', '主管')
+    const leave = leaves.find(l => l.id === id)
+    if (leave) {
+      const wf = await getWorkflowForRecord('請假簽核', leave.employee)
+      const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
+      if (pendingStep) {
+        const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
+        if (result.error) { alert('操作失敗：' + result.error); return }
+        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已核准' } : l))
+        // Write leave to schedule
+        if (leave.start_date && leave.days) {
+          const totalDays = Math.ceil(leave.days)
+          for (let i = 0; i < totalDays; i++) {
+            const d = new Date(leave.start_date)
+            d.setDate(d.getDate() + i)
+            await supabase.from('schedules').upsert(
+              { employee: leave.employee, date: d.toISOString().slice(0, 10), shift: '休' },
+              { onConflict: 'employee,date' }
+            )
+          }
+        }
+        return
+      }
+    }
+    // Fallback: no workflow running — update directly
+    const { data } = await updateLeaveStatus(id, '已核准', profile?.name || '主管')
     if (data) {
       setLeaves(prev => prev.map(l => l.id === id ? data : l))
-      // Write leave days to schedule as '休'
       if (data.start_date && data.days) {
-        const totalDays = Math.ceil(data.days) // 0.5天也要標休（半天假整天不排班）
+        const totalDays = Math.ceil(data.days)
         for (let i = 0; i < totalDays; i++) {
           const d = new Date(data.start_date)
           d.setDate(d.getDate() + i)
-          const dateStr = d.toISOString().slice(0, 10)
           await supabase.from('schedules').upsert(
-            { employee: data.employee, date: dateStr, shift: '休' },
+            { employee: data.employee, date: d.toISOString().slice(0, 10), shift: '休' },
             { onConflict: 'employee,date' }
           )
         }
@@ -141,9 +163,20 @@ export default function Leave() {
   }
   const handleReject = async (id) => {
     const reason = prompt('請輸入拒絕原因：')
-    if (reason === null) return // cancelled
+    if (reason === null) return
     if (!reason.trim()) { alert('請填寫拒絕原因'); return }
-    const { data } = await updateLeaveStatus(id, '已拒絕', '主管', reason.trim())
+    const leave = leaves.find(l => l.id === id)
+    if (leave) {
+      const wf = await getWorkflowForRecord('請假簽核', leave.employee)
+      const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
+      if (pendingStep) {
+        const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
+        if (result.error) { alert('操作失敗：' + result.error); return }
+        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已拒絕' } : l))
+        return
+      }
+    }
+    const { data } = await updateLeaveStatus(id, '已拒絕', profile?.name || '主管', reason.trim())
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 

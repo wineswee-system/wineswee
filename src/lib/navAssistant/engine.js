@@ -2,8 +2,8 @@
  * Nav Assistant Engine
  *
  * Conversational backend for the HR + Workflow navigation assistant.
- * Prefers Gemini (JSON mode). Falls back to a local keyword matcher
- * when VITE_GEMINI_API_KEY is missing or the API call fails.
+ * Calls the gemini-proxy Edge Function (navChat action, JSON mode).
+ * Falls back to a local keyword matcher when the API call fails.
  *
  * All responses share the same shape so the UI can render them
  * uniformly:
@@ -19,78 +19,20 @@
  *   }
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { supabase } from '../supabase'
 import { KNOWLEDGE_BASE, buildKbContext, keywordSearch } from './knowledgeBase'
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-let client = null
-let chat = null
+// Client-side conversation history passed to the stateless edge function on each call.
+let navHistory = []
 
+/** Key is now server-side — always enabled */
 export function isAiEnabled() {
-  return !!API_KEY && API_KEY !== 'your_gemini_api_key_here'
+  return true
 }
 
-function getClient() {
-  if (!isAiEnabled()) throw new Error('missing-api-key')
-  if (!client) client = new GoogleGenerativeAI(API_KEY)
-  return client
-}
-
-const SYSTEM_PROMPT = `你是 SME Ops 系統的「導覽助理」，專精人資 (HR) 與工作流程 (Workflow) 模組。
-你的工作：當使用者用自然語言問「怎麼做某件事」時，你要回答：
-  1) 一段友善、簡短的口語說明（繁體中文）；
-  2) 一組 step-by-step 指示；
-  3) 對應的頁面連結（必須從下方知識庫挑選，不要自創路徑）；
-  4) 2-3 個有用的延伸問題建議。
-
-嚴格規則：
-- 回傳 **純 JSON**，符合此 schema：
-  {
-    "reply": string,
-    "steps": string[],
-    "links": [ { "label": string, "path": string, "tip": string? } ],
-    "suggestions": string[]
-  }
-- path 一定要來自知識庫；若不確定就只放最相關的 1 條而不是亂猜。
-- 若使用者問的主題不在 HR / Workflow 範圍（例如財務、庫存），禮貌說明你專精 HR 與流程，並列出相近主題建議。
-- 回覆使用繁體中文。
-- 保持簡潔：reply 不超過 2 句，steps 建議 3-6 步。
-
-===== 知識庫 =====
-${buildKbContext()}
-===== 知識庫結束 =====`
-
-function ensureChat() {
-  if (chat) return chat
-  const genAI = getClient()
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.4,
-    },
-  })
-  chat = model.startChat({
-    history: [
-      { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-      {
-        role: 'model',
-        parts: [{
-          text: JSON.stringify({
-            reply: '您好，我是 HR 與工作流程的導覽助理，告訴我您想做什麼，我會指引您到正確的頁面。',
-            steps: [],
-            links: [],
-            suggestions: ['我要請特休', '怎麼補登打卡', '怎麼建立新流程'],
-          })
-        }]
-      },
-    ],
-  })
-  return chat
-}
-
+/** Clear conversation history to start a fresh session */
 export function resetChat() {
-  chat = null
+  navHistory = []
 }
 
 function parseJson(raw) {
@@ -148,13 +90,19 @@ export async function ask(query) {
     }
   }
 
-  if (!isAiEnabled()) return keywordAnswer(text)
-
   try {
-    const session = ensureChat()
-    const res = await session.sendMessage([{ text }])
-    const raw = res.response.text()
-    const parsed = parseJson(raw)
+    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+      body: { action: 'navChat', payload: { message: text, history: navHistory } },
+    })
+
+    if (error) throw new Error(error.message)
+    if (data?.error) throw new Error(data.error)
+
+    const result = data?.data
+    // Persist updated history for the next turn
+    if (result?.history) navHistory = result.history
+
+    const parsed = parseJson(result?.text)
     if (!parsed) return keywordAnswer(text)
 
     return {

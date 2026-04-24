@@ -41,6 +41,11 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   const category = CHAIN_CATEGORY_MAP[type] || 'HR'
   const amount = record?.estimated_amount || record?.amount || 0
 
+  // H-4 / M-2: resolve org and employee ID via direct query
+  const { data: empOrgRow } = await supabase.from('employees').select('id, organization_id').eq('name', requesterName).maybeSingle()
+  const orgId = empOrgRow?.organization_id ?? null
+  const requesterId = empOrgRow?.id ?? null
+
   // approval_chains.steps 已遷移到 approval_chain_steps 關聯表 → 用 FK join 帶回
   const { data: allChains } = await supabase
     .from('approval_chains')
@@ -48,6 +53,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
     .eq('category', category)
     .not('is_active', 'is', false)
     .lte('min_amount', amount)
+    .eq('organization_id', orgId)   // H-6: filter by org to avoid cross-tenant chain matches
     .order('min_amount', { ascending: false })
     .limit(10)
 
@@ -55,14 +61,26 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   const chain = (allChains || []).find(c =>
     c.max_amount == null || Number(c.max_amount) >= amount
   )
+  const sortedChainSteps = chain
+    ? [...(chain.approval_chain_steps || [])].sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    : null
+
   const template = chain
     ? {
         name: chain.name,
-        steps: [...(chain.approval_chain_steps || [])]
-          .sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
-          .map(s => s.label || s.role_name || '審核'),
+        steps: (sortedChainSteps || []).map(s => s.label || s.role_name || '審核'),
       }
     : defaultTpl
+
+  // Pre-fetch employee names for target_emp_id values in chain steps
+  let empById = {}
+  if (sortedChainSteps) {
+    const empIds = sortedChainSteps.map(s => s.target_emp_id).filter(Boolean)
+    if (empIds.length > 0) {
+      const { data: empRows } = await supabase.from('employees').select('id, name').in('id', empIds).eq('status', '在職')
+      empById = Object.fromEntries((empRows || []).map(e => [e.id, e.name]))
+    }
+  }
 
   // 找直屬主管
   const supervisor = await getSupervisor(requesterName)
@@ -74,6 +92,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       template_name: template.name,
       status: '進行中',
       started_by: requesterName,
+      started_by_id: requesterId,
       assignee: supervisor?.name || null,
       store: record?.store || null,
       started_at: new Date().toISOString(),
@@ -84,19 +103,25 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   if (instErr) return { error: instErr.message }
 
   // 建立簽核步驟（以 tasks 執行表承載，workflow_instance_id 連結回實例）
-  const { data: orgIdRes } = await supabase.rpc('current_employee_org')
-  const stepRows = template.steps.map((title, i) => ({
-    workflow_instance_id: instance.id,
-    organization_id: orgIdRes ?? instance.organization_id ?? null,
-    step_order: i + 1,
-    step_type: 'workflow_step',
-    title,
-    assignee: i === 0 ? (supervisor?.name || null) : null,
-    role: title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager',
-    status: '待處理',
-    due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
-    store: record?.store || null,
-  }))
+  // orgId already resolved above (H-4)
+  const stepRows = template.steps.map((title, i) => {
+    const cs = sortedChainSteps?.[i]
+    const assignee = (cs?.target_type === 'employee' && cs?.target_emp_id)
+      ? (empById[cs.target_emp_id] || null)
+      : (i === 0 ? (supervisor?.name || null) : null)
+    return {
+      workflow_instance_id: instance.id,
+      organization_id: orgId ?? null,
+      step_order: i + 1,
+      step_type: 'workflow_step',
+      title,
+      assignee,
+      role: cs?.role_name?.includes('HR') ? 'hr' : cs?.role_name?.includes('財務') ? 'finance' : (title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager'),
+      status: '待處理',
+      due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+      store: record?.store || null,
+    }
+  })
 
   const { data: steps, error: stepErr } = await supabase
     .from('tasks')
@@ -132,23 +157,18 @@ export async function createApprovalWorkflow(type, record, requesterName) {
  * @param {string} comment - 備註/退回原因
  */
 export async function advanceWorkflow(stepId, approverName, action, comment = '') {
-  // 更新當前步驟（tasks 承載 workflow 執行）
-  const newStatus = action === '核准' ? '已完成' : '已退回'
-  const { data: step, error: stepErr } = await supabase
-    .from('tasks')
-    .update({
-      status: newStatus,
-      confirmed: action === '核准',
-      confirmed_by: approverName,
-      confirmed_at: new Date().toISOString(),
-      notes: comment || null,
-      completed_at: action === '核准' ? new Date().toISOString() : null,
-    })
-    .eq('id', stepId)
-    .select()
-    .single()
+  // 更新當前步驟（透過 secure RPC 執行，包含 caller 驗證、自我核准防範、assignee guard 及 optimistic lock）
+  const { data: rpcResult, error: rpcErr } = await supabase.rpc('secure_advance_workflow_step', {
+    p_step_id: stepId,
+    p_action: action,
+    p_comment: comment || null,
+  })
+  if (rpcErr) return { error: rpcErr.message }
 
-  if (stepErr) return { error: stepErr.message }
+  // Re-fetch the updated step for downstream logic
+  const { data: step, error: stepErr } = await supabase
+    .from('tasks').select('*').eq('id', stepId).single()
+  if (stepErr || !step) return { error: stepErr?.message || 'step_not_found' }
 
   // 取得同 instance 所有步驟
   const { data: allSteps } = await supabase
@@ -253,12 +273,12 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
 // ══════════════════════════════════════
 
 const TEMPLATE_TABLE_MAP = {
-  '請假簽核': { table: 'leave_requests', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
-  '加班簽核': { table: 'overtime_requests', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
-  '費用報帳簽核': { table: 'expenses', statusField: 'status', approved: '已核銷', rejected: '已拒絕' },
-  '出差申請簽核': { table: 'business_trips', statusField: 'status', approved: '已核准', rejected: '已拒絕' },
-  '採購簽核': { table: 'purchase_orders', statusField: 'status', approved: '已確認', rejected: '已取消' },
-  '費用申請簽核': { table: 'expense_requests', statusField: 'status', approved: '已核准', rejected: '已駁回' },
+  '請假簽核': { table: 'leave_requests', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
+  '加班簽核': { table: 'overtime_requests', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
+  '費用報帳簽核': { table: 'expenses', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核銷', rejected: '已拒絕' },
+  '出差申請簽核': { table: 'business_trips', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
+  '採購簽核': { table: 'purchase_orders', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已確認', rejected: '已取消' },
+  '費用申請簽核': { table: 'expense_requests', statusField: 'status', pendingStatuses: ['申請中', '待審核'], approved: '已核准', rejected: '已駁回' },  // H-1: expense_requests starts as '申請中'
 }
 
 async function writeBackStatus(instance, action) {
@@ -273,7 +293,7 @@ async function writeBackStatus(instance, action) {
   let query = supabase
     .from(mapping.table)
     .select('id')
-    .in('status', ['待審核', '待確認'])
+    .in('status', mapping.pendingStatuses || ['待審核', '待確認'])  // H-1: use per-table pending statuses
     .order('created_at', { ascending: false })
     .limit(1)
   if (instance.started_by_id) {
@@ -296,15 +316,22 @@ async function writeBackStatus(instance, action) {
 /**
  * 取得某筆紀錄關聯的流程實例
  */
-export async function getWorkflowForRecord(templateName, requesterName) {
-  const { data: instance } = await supabase
+export async function getWorkflowForRecord(templateName, requesterName, requesterId = null) {
+  let resolvedId = requesterId
+  if (!resolvedId && requesterName) {
+    const { data: emp } = await supabase.from('employees').select('id').eq('name', requesterName).maybeSingle()
+    resolvedId = emp?.id ?? null
+  }
+  let wiQuery = supabase
     .from('workflow_instances')
     .select('*')
     .eq('template_name', templateName)
-    .eq('started_by', requesterName)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+  wiQuery = resolvedId
+    ? wiQuery.eq('started_by_id', resolvedId)
+    : wiQuery.eq('started_by', requesterName)
+  const { data: instance } = await wiQuery.maybeSingle()
   if (!instance) return null
   const { data: steps } = await supabase
     .from('tasks')

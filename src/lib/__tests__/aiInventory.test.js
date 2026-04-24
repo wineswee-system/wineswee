@@ -1,27 +1,31 @@
 /**
  * AI Inventory & CRM AI — test suite
  *
- * Tests that AI module functions export correctly, handle missing API key,
- * and validate input/output contracts with mocked Gemini.
+ * Tests that AI module functions export correctly and validate
+ * input/output contracts. Gemini calls are now proxied through the
+ * gemini-proxy Edge Function — mock supabase.functions.invoke instead.
  */
 
-// Mock the Google Generative AI module
-vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: vi.fn().mockReturnValue({
-      generateContent: vi.fn().mockResolvedValue({
-        response: {
-          text: () => JSON.stringify({
-            intent: 'stock_query',
-            answer: '庫存查詢結果',
-            data: [],
-            suggestions: ['建議1'],
-            actionable: null,
-          }),
+// Mock supabase so aiInventory.js and crmAI.js don't make real network calls
+vi.mock('../supabase', () => ({
+  supabase: {
+    functions: {
+      invoke: vi.fn().mockResolvedValue({
+        data: {
+          data: {
+            text: JSON.stringify({
+              intent: 'stock_query',
+              answer: '庫存查詢結果',
+              data: [],
+              suggestions: ['建議1'],
+              actionable: null,
+            }),
+          },
         },
+        error: null,
       }),
-    }),
-  })),
+    },
+  },
 }))
 
 // ═══════════════════════════════════════════════
@@ -50,13 +54,10 @@ describe('AI-INV-01: Module Exports', () => {
     }
   })
 
-  test('isAIConfigured reflects env var', async () => {
+  test('isAIConfigured always returns true (key is server-side)', async () => {
     const mod = await import('../aiInventory')
-    // In test environment, VITE_GEMINI_API_KEY may not be set
     expect(typeof mod.isAIConfigured).toBe('function')
-    // Function should return boolean
-    const result = mod.isAIConfigured()
-    expect(typeof result).toBe('boolean')
+    expect(mod.isAIConfigured()).toBe(true)
   })
 })
 

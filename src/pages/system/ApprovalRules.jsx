@@ -136,7 +136,17 @@ export default function ApprovalRules() {
   }
 
   const handleDecision = async (reqId, status) => {
-    await updateApprovalRequest(reqId, { status, decided_at: new Date().toISOString() })
+    let rejectReason = null
+    if (status === '已退回') {
+      rejectReason = prompt('請輸入駁回原因：')
+      if (!rejectReason) return
+    }
+    const { error } = await updateApprovalRequest(reqId, {
+      status,
+      reject_reason: rejectReason,
+      decided_at: new Date().toISOString(),
+    })
+    if (error) { alert(`操作失敗：${error.message || error}`); return }
     load()
   }
 

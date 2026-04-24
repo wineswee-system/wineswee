@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
-import { createApprovalWorkflow } from '../../lib/workflowIntegration'
+import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -56,30 +56,46 @@ export default function Overtime() {
     }
   }
 
+  // Helper: write overtime hours to attendance_records
+  const writeAttendance = async (rec) => {
+    if (rec.employee && rec.date && rec.hours) {
+      const { data: att } = await supabase.from('attendance_records')
+        .select('id, hours')
+        .eq(rec.employee_id ? 'employee_id' : 'employee', rec.employee_id || rec.employee)
+        .eq('date', rec.date).maybeSingle()
+      if (att) {
+        await supabase.from('attendance_records').update({
+          hours: (Number(att.hours) || 0) + Number(rec.hours),
+        }).eq('id', att.id)
+      } else {
+        await supabase.from('attendance_records').insert({
+          employee: rec.employee, date: rec.date,
+          hours: Number(rec.hours), status: '加班',
+        })
+      }
+    }
+  }
+
   const handleApprove = async (id) => {
     try {
+      const record = records.find(r => r.id === id)
+      if (record) {
+        const wf = await getWorkflowForRecord('加班簽核', record.employee)
+        const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
+        if (pendingStep) {
+          const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
+          if (result.error) { alert('操作失敗：' + result.error); return }
+          setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已核准' } : r))
+          await writeAttendance(record)
+          return
+        }
+      }
+      // Fallback: no workflow running — update directly
       const { data, error } = await updateOvertimeStatus(id, '已核准')
       if (error) throw error
       if (data) {
         setRecords(prev => prev.map(r => r.id === id ? data : r))
-        // Update attendance: add overtime hours
-        if (data.employee && data.date && data.hours) {
-          const { data: att } = await supabase.from('attendance_records')
-            .select('id, hours')
-            .eq(data.employee_id ? 'employee_id' : 'employee', data.employee_id || data.employee)
-            .eq('date', data.date).maybeSingle()
-          if (att) {
-            await supabase.from('attendance_records').update({
-              hours: (Number(att.hours) || 0) + Number(data.hours),
-            }).eq('id', att.id)
-          } else {
-            // No attendance record — create one with overtime hours
-            await supabase.from('attendance_records').insert({
-              employee: data.employee, date: data.date,
-              hours: Number(data.hours), status: '加班',
-            })
-          }
-        }
+        await writeAttendance(data)
       }
     } catch (err) {
       console.error('Operation failed:', err)
@@ -92,6 +108,18 @@ export default function Overtime() {
     if (reason === null) return
     if (!reason.trim()) { alert('請填寫駁回原因'); return }
     try {
+      const record = records.find(r => r.id === id)
+      if (record) {
+        const wf = await getWorkflowForRecord('加班簽核', record.employee)
+        const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
+        if (pendingStep) {
+          const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
+          if (result.error) { alert('操作失敗：' + result.error); return }
+          setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已拒絕' } : r))
+          return
+        }
+      }
+      // Fallback: no workflow running — update directly
       const { data, error } = await updateOvertimeStatus(id, '已拒絕', reason.trim())
       if (error) throw error
       if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))

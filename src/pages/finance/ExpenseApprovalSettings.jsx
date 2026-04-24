@@ -100,7 +100,7 @@ export default function ExpenseApprovalSettings() {
   const hasGap = sortedActive.some((c, i) => {
     if (i === 0) return false
     const prevMax = sortedActive[i - 1].max_amount
-    return prevMax != null && (c.min_amount || 0) > prevMax + 1
+    return prevMax != null && (c.min_amount || 0) > prevMax
   })
 
   return (

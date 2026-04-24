@@ -16,18 +16,7 @@
  * 12. 視覺盤點（Visual Stock Count — camera placeholder）
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-let genAI = null
-
-function getModel() {
-  if (!API_KEY || API_KEY === 'your_gemini_api_key_here') {
-    throw new Error('請在 .env 設定 VITE_GEMINI_API_KEY')
-  }
-  if (!genAI) genAI = new GoogleGenerativeAI(API_KEY)
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-}
+import { supabase } from './supabase'
 
 function parseJSON(text) {
   try {
@@ -37,10 +26,15 @@ function parseJSON(text) {
   }
 }
 
+// Route all Gemini calls through the server-side proxy so the API key
+// never reaches the browser bundle.
 async function ask(prompt) {
-  const model = getModel()
-  const result = await model.generateContent(prompt)
-  return result.response.text()
+  const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+    body: { action: 'chat', payload: { message: prompt, history: [] } },
+  })
+  if (error) throw new Error(`AI 服務錯誤：${error.message || '請稍後再試'}`)
+  if (data?.error) throw new Error(`AI 服務錯誤：${data.error}`)
+  return data?.data?.text ?? ''
 }
 
 async function askJSON(prompt) {
@@ -673,5 +667,5 @@ ${JSON.stringify(data.supplierSummary || [], null, 2)}
 }
 
 export function isAIConfigured() {
-  return !!API_KEY && API_KEY !== 'your_gemini_api_key_here'
+  return true
 }

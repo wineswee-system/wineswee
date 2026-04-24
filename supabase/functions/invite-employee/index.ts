@@ -40,8 +40,9 @@ serve(async (req) => {
     }
 
     const { data: caller } = await supabase
-      .from('employees').select('role').eq('email', user.email).maybeSingle()
-    if (!caller || !['admin', 'super_admin'].includes(caller.role)) {
+      .from('employees').select('role, roles(name)').eq('email', user.email).maybeSingle()
+    const callerRole = (caller?.roles as any)?.name ?? caller?.role
+    if (!caller || !['admin', 'super_admin'].includes(callerRole)) {
       return new Response(JSON.stringify({ error: '權限不足：僅管理員可邀請員工' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -98,8 +98,9 @@ serve(async (req: Request) => {
       // Proxy clock-in: only admin/super_admin may clock in for another employee
       if (employee_id) {
         const { data: authEmp } = await supabase
-          .from('employees').select('id, role').eq('email', user.email).maybeSingle()
-        if (authEmp && authEmp.id !== employee_id && !['admin', 'super_admin'].includes(authEmp.role)) {
+          .from('employees').select('id, role, roles(name)').eq('email', user.email).maybeSingle()
+        const authRole = (authEmp?.roles as any)?.name ?? authEmp?.role
+        if (authEmp && authEmp.id !== employee_id && !['admin', 'super_admin'].includes(authRole)) {
           return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
             status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })

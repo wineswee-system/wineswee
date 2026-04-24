@@ -60,7 +60,7 @@ export default function Projects() {
     const [pRes, wRes, tRes, eRes, sRes, cRes, tplRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
-      supabase.from('tasks').select('*').order('step_order'),
+      supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order'),
       getEmployees(),
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
@@ -209,11 +209,15 @@ export default function Projects() {
           const taskRows = wf.tasks.map((t, j) => ({
             title: t.title,
             workflow_instance_id: instance.id,
+            project_id: project.id,
             status: '未開始',
             role: t.role || null,
             step_order: j + 1,
             priority: t.priority || '中',
             due_date: endDate,
+            store: deployForm.store || null,
+            bucket: 'Project',
+            category: wf.name || null,
           }))
           await supabase.from('tasks').insert(taskRows)
         }

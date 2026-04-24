@@ -76,6 +76,11 @@ export default function Workflows() {
   const [aiResult, setAiResult] = useState(null)
   const [aiMessages, setAiMessages] = useState([])
 
+  // New workflow menu
+  const [showNewWorkflowMenu, setShowNewWorkflowMenu] = useState(false)
+  const [showBlankWorkflowModal, setShowBlankWorkflowModal] = useState(false)
+  const [blankWorkflowForm, setBlankWorkflowForm] = useState({ name: '', store: '', assignee: '', due_date: '' })
+
   // SOP deploy
   const [showDeployModal, setShowDeployModal] = useState(false)
   const [deployTemplate, setDeployTemplate] = useState(null)
@@ -132,6 +137,12 @@ export default function Workflows() {
     if (data) {
       const updatedTasks = tasks.map(t => t.id === taskId ? data : t)
       setAllTasks(updatedTasks)
+
+      // Notify assignee on any transition to 進行中
+      if (newStatus === '進行中' && data.assignee) {
+        const inst = instances.find(i => i.id === data.workflow_instance_id)
+        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id).catch(() => {})
+      }
 
       // Auto-progression: when a task completes, check if dependent tasks can start
       let latestTasks = updatedTasks
@@ -344,6 +355,27 @@ export default function Workflows() {
     setCategories(prev => prev.filter(c => c.id !== cat.id))
   }
 
+  // ── Blank Workflow ──
+  const handleCreateBlankWorkflow = async () => {
+    const name = blankWorkflowForm.name.trim()
+    if (!name) { alert('請填寫流程名稱'); return }
+    const { data, error } = await supabase.from('workflow_instances').insert({
+      template_name: name,
+      store: blankWorkflowForm.store || null,
+      assignee: blankWorkflowForm.assignee || null,
+      due_date: blankWorkflowForm.due_date || null,
+      started_by: currentUser,
+      status: '進行中',
+    }).select().single()
+    if (error) { alert('建立失敗：' + error.message); return }
+    if (data) {
+      setInstances(prev => [data, ...prev])
+      setBlankWorkflowForm({ name: '', store: '', assignee: '', due_date: '' })
+      setShowBlankWorkflowModal(false)
+      setSelectedInstance(data)
+    }
+  }
+
   // ── SOP Deploy ──
   const handleDeploy = async () => {
     if (!deployTemplate || !deployForm.location) return
@@ -479,6 +511,11 @@ export default function Workflows() {
             <h2><span className="header-icon">🔄</span> 流程管理</h2>
             <p>管理流程範本及進行中的工作流程</p>
           </div>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-primary" onClick={() => setShowNewWorkflowMenu(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={15} /> 新增流程
+            </button>
+          </div>
         </div>
       </div>
 
@@ -575,6 +612,110 @@ export default function Workflows() {
           categories={categories}
           onManageCategories={() => setShowCategoryModal(true)}
         />
+      )}
+
+      {/* ══ Blank Workflow Modal ══ */}
+      {showBlankWorkflowModal && (
+        <Modal
+          title="建立空白流程"
+          onClose={() => setShowBlankWorkflowModal(false)}
+          onSubmit={handleCreateBlankWorkflow}
+          submitLabel="建立"
+        >
+          <Field label="流程名稱 *">
+            <input className="form-input" placeholder="例：新店開幕準備" autoFocus
+              value={blankWorkflowForm.name}
+              onChange={e => setBlankWorkflowForm(p => ({ ...p, name: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateBlankWorkflow() } }}
+            />
+          </Field>
+          <Field label="門市／地點">
+            <select className="form-input" value={blankWorkflowForm.store} onChange={e => setBlankWorkflowForm(p => ({ ...p, store: e.target.value }))}>
+              <option value="">— 選擇門市 —</option>
+              {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+          </Field>
+          <Field label="負責人">
+            <select className="form-input" value={blankWorkflowForm.assignee} onChange={e => setBlankWorkflowForm(p => ({ ...p, assignee: e.target.value }))}>
+              <option value="">— 選擇人員 —</option>
+              {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+            </select>
+          </Field>
+          <Field label="截止日期">
+            <input className="form-input" type="date"
+              value={blankWorkflowForm.due_date}
+              onChange={e => setBlankWorkflowForm(p => ({ ...p, due_date: e.target.value }))}
+            />
+          </Field>
+        </Modal>
+      )}
+
+      {/* ══ New Workflow Chooser Overlay ══ */}
+      {showNewWorkflowMenu && (
+        <div
+          onClick={() => setShowNewWorkflowMenu(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.55)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+              borderRadius: 16, padding: 32, width: 420, maxWidth: '92vw',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>新增流程</h3>
+              <button onClick={() => setShowNewWorkflowMenu(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                {
+                  icon: '📄',
+                  label: '建立空白流程',
+                  desc: '從頭手動填寫步驟與設定',
+                  action: () => { setShowNewWorkflowMenu(false); setShowBlankWorkflowModal(true) },
+                },
+                {
+                  icon: '📁',
+                  label: '從範本建立',
+                  desc: '選擇現有 SOP 範本快速部署',
+                  action: () => { setShowNewWorkflowMenu(false); setTab('templates') },
+                },
+                {
+                  icon: '🤖',
+                  label: 'AI 助手建立',
+                  desc: '描述需求，讓 AI 自動生成流程',
+                  action: () => { setShowNewWorkflowMenu(false); setTab('ai') },
+                },
+              ].map(opt => (
+                <button
+                  key={opt.label}
+                  onClick={opt.action}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 16,
+                    padding: '16px 20px', borderRadius: 12, cursor: 'pointer',
+                    background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                    textAlign: 'left', transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
+                >
+                  <span style={{ fontSize: 28, lineHeight: 1 }}>{opt.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>{opt.label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{opt.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══ Workflow Categories Modal ══ */}

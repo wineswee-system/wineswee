@@ -7,7 +7,8 @@ import {
   Users, Settings, Columns
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection } from '../../lib/db'
+import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask } from '../../lib/db'
+import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -24,6 +25,14 @@ const STATUS_MAP = {
 }
 
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
+const TASK_STATUS_LIST = ['未開始', '待處理', '進行中', '已完成', '已擱置']
+const TASK_STATUS_CONFIG = {
+  '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
+  '待處理': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
+  '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
+  '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
+  '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },
+}
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '' }
@@ -53,20 +62,45 @@ export default function Projects() {
   const [filterStore, setFilterStore] = useState('')
   const [sections, setSections] = useState([])
   const [newSection, setNewSection] = useState('')
+  // Workflow management within project
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false)
+  const [workflowTab, setWorkflowTab] = useState('attach') // 'attach' | 'create'
+  const [freeInstances, setFreeInstances] = useState([])
+  const [selectedAttachId, setSelectedAttachId] = useState('')
+  const [newWfForm, setNewWfForm] = useState({ template_name: '', assignee: '', store: '', due_date: '' })
+  const [workflowSaving, setWorkflowSaving] = useState(false)
+  const [pendingWfAttach, setPendingWfAttach] = useState([])
+  const [pendingWfCreate, setPendingWfCreate] = useState([])
+  const [inlineWfMode, setInlineWfMode] = useState(null) // null | 'attach' | 'create'
+  const [inlineWfAttachId, setInlineWfAttachId] = useState('')
+  const [inlineWfCreate, setInlineWfCreate] = useState({ template_name: '' })
+  const [pendingTasks, setPendingTasks] = useState([])
+  const [inlineTaskMode, setInlineTaskMode] = useState(false)
+  const [inlineTask, setInlineTask] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
+  // Task interaction in project detail
+  const [selectedTask, setSelectedTask] = useState(null)
+  const [addingTaskWfId, setAddingTaskWfId] = useState(null)
+  const [addTaskForm, setAddTaskForm] = useState({ title: '', assignee: '', due_date: '' })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const load = async () => {
     setLoading(true)
-    const [pRes, wRes, tRes, eRes, sRes, cRes, tplRes] = await Promise.all([
+    const [pRes, wRes, eRes, sRes, cRes, tplRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
-      supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order'),
       getEmployees(),
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
       supabase.from('project_templates').select('*').order('id'),
     ])
+    // Load tasks that either carry project_id directly OR belong to a project's workflow instance
+    const wIds = (wRes.data || []).map(w => w.id)
+    const tRes = wIds.length > 0
+      ? await supabase.from('tasks').select('*')
+          .or(`project_id.not.is.null,workflow_instance_id.in.(${wIds.join(',')})`)
+          .order('step_order')
+      : await supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order')
     setProjects(pRes.data || [])
     setWorkflows(wRes.data || [])
     setTasks(tRes.data || [])
@@ -119,24 +153,63 @@ export default function Projects() {
     return { total, completed, inProgress, pending, pct, workflows: pWorkflows.length }
   }
 
+  const resetNewProjectState = () => {
+    setPendingWfAttach([]); setPendingWfCreate([]); setInlineWfMode(null); setInlineWfAttachId(''); setInlineWfCreate({ template_name: '' })
+    setPendingTasks([]); setInlineTaskMode(false); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' })
+  }
+
   // CRUD
   const handleSubmit = async () => {
     if (!form.name) return
-    const payload = { ...form, budget: form.budget ? Number(form.budget) : null, organization_id: profile?.organization_id || 1 }
+    const payload = {
+      ...form,
+      budget: form.budget ? Number(form.budget) : null,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+    }
+    if (profile?.organization_id) payload.organization_id = profile.organization_id
     if (editingId) {
-      const { data } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
+      const { data, error } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
+      if (error) { alert('更新失敗：' + error.message); return }
       if (data) {
         setProjects(prev => prev.map(p => p.id === editingId ? data : p))
         if (selected?.id === editingId) setSelected(data)
       }
     } else {
       payload.owner = payload.owner || profile?.name || ''
-      const { data } = await supabase.from('projects').insert(payload).select().single()
-      if (data) setProjects(prev => [data, ...prev])
+      const { data, error } = await supabase.from('projects').insert(payload).select().single()
+      if (error) { alert('建立失敗：' + error.message); return }
+      if (data) {
+        setProjects(prev => [data, ...prev])
+        let sortOrder = 1
+        for (const id of pendingWfAttach) {
+          await supabase.from('workflow_instances').update({ project_id: data.id, sort_order: sortOrder++ }).eq('id', id)
+        }
+        for (const wf of pendingWfCreate) {
+          await createWorkflowInstance({
+            template_name: wf.template_name, status: '進行中',
+            started_by: payload.owner, store: payload.store || null,
+            due_date: payload.end_date || null, project_id: data.id,
+            sort_order: sortOrder++, started_at: new Date().toISOString(),
+          })
+        }
+        if (pendingTasks.length > 0) {
+          const taskRows = pendingTasks.map((t, i) => ({
+            title: t.title, project_id: data.id,
+            assignee: t.assignee || null, due_date: t.due_date || null,
+            priority: t.priority || '中', status: '未開始',
+            step_order: i + 1, bucket: 'Project',
+            store: payload.store || null,
+          }))
+          await supabase.from('tasks').insert(taskRows)
+        }
+        if (pendingWfAttach.length > 0 || pendingWfCreate.length > 0 || pendingTasks.length > 0) load()
+      }
     }
     setShowModal(false)
     setForm(emptyForm)
     setEditingId(null)
+    resetNewProjectState()
   }
 
   const openEdit = (p, e) => {
@@ -156,6 +229,80 @@ export default function Projects() {
     await supabase.from('projects').delete().eq('id', id)
     setProjects(prev => prev.filter(p => p.id !== id))
     if (selected?.id === id) setSelected(null)
+  }
+
+  const openWorkflowModal = async (proj) => {
+    const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
+    setFreeInstances(data || [])
+    setSelectedAttachId('')
+    setNewWfForm({ template_name: '', assignee: proj.owner || profile?.name || '', store: proj.store || '', due_date: proj.end_date || '' })
+    setWorkflowTab('attach')
+    setShowWorkflowModal(true)
+  }
+
+  const attachWorkflow = async () => {
+    if (!selectedAttachId || !selected) return
+    setWorkflowSaving(true)
+    const { error } = await supabase.from('workflow_instances').update({ project_id: selected.id }).eq('id', selectedAttachId)
+    if (error) { alert('連結失敗：' + error.message); setWorkflowSaving(false); return }
+    const maxOrder = workflows.filter(w => w.project_id === selected.id).reduce((m, w) => Math.max(m, w.sort_order || 0), 0)
+    await supabase.from('workflow_instances').update({ sort_order: maxOrder + 1 }).eq('id', selectedAttachId)
+    setShowWorkflowModal(false)
+    setWorkflowSaving(false)
+    load()
+  }
+
+  const createWorkflow = async () => {
+    if (!newWfForm.template_name || !selected) return
+    setWorkflowSaving(true)
+    const maxOrder = workflows.filter(w => w.project_id === selected.id).reduce((m, w) => Math.max(m, w.sort_order || 0), 0)
+    const { error } = await createWorkflowInstance({
+      template_name: newWfForm.template_name,
+      status: '進行中',
+      started_by: newWfForm.assignee || profile?.name || '',
+      store: newWfForm.store || null,
+      due_date: newWfForm.due_date || null,
+      project_id: selected.id,
+      sort_order: maxOrder + 1,
+      started_at: new Date().toISOString(),
+    })
+    if (error) { alert('建立失敗：' + error.message); setWorkflowSaving(false); return }
+    setShowWorkflowModal(false)
+    setWorkflowSaving(false)
+    load()
+  }
+
+  const handleTaskStatusChange = async (taskId, newStatus) => {
+    const { data } = await updateTask(taskId, {
+      status: newStatus,
+      completed_at: newStatus === '已完成' ? new Date().toISOString() : null,
+    })
+    if (data) setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+  }
+
+  const handleAddTaskToWorkflow = async (wfId) => {
+    if (!addTaskForm.title.trim()) return
+    const instTasks = tasks.filter(t => t.workflow_instance_id === wfId)
+    const maxOrder = instTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
+    const wf = workflows.find(w => w.id === wfId)
+    const { data } = await createTask({
+      workflow_instance_id: wfId,
+      project_id: selected?.id || null,
+      title: addTaskForm.title.trim(),
+      assignee: addTaskForm.assignee || null,
+      due_date: addTaskForm.due_date || null,
+      status: '待處理',
+      step_order: maxOrder + 1,
+      bucket: 'Workflow',
+      category: 'Workflow',
+      priority: '中',
+    })
+    if (data) {
+      setTasks(prev => [...prev, data])
+      setAddTaskForm({ title: '', assignee: '', due_date: '' })
+      setAddingTaskWfId(null)
+      if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id).catch(() => {})
+    }
   }
 
   const addComment = async (projectId) => {
@@ -415,8 +562,13 @@ export default function Projects() {
         {detailTab === 'overview' && <>
 
         {/* Workflows */}
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-          <Workflow size={15} /> 流程（{pWorkflows.length}）
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+            <Workflow size={15} /> 流程（{pWorkflows.length}）
+          </span>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openWorkflowModal(p)}>
+            <Plus size={12} /> 連結 / 建立流程
+          </button>
         </div>
 
         {pWorkflows.length === 0 ? (
@@ -463,26 +615,79 @@ export default function Projects() {
                 </div>
               </div>
 
-              {/* Tasks */}
-              {wTasks.length > 0 && (
-                <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 6 }}>
-                  {wTasks.map(t => (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0 6px 24px', fontSize: 13 }}>
-                      <CheckSquare size={13} style={{ flexShrink: 0 }} color={t.status === '已完成' ? 'var(--accent-green)' : t.status === '進行中' ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
-                      <span style={{ flex: 1, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'inherit', lineHeight: 1.4 }}>
-                        {t.title}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{t.assignee || t.assigned_to || ''}</span>
-                      {t.due_date && <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{t.due_date}</span>}
-                      <span style={{
-                        padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                        color: t.status === '已完成' ? 'var(--accent-green)' : t.status === '進行中' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                        background: t.status === '已完成' ? 'var(--accent-green-dim)' : t.status === '進行中' ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
-                      }}>{t.status}</span>
-                    </div>
-                  ))}
+              {/* Tasks section */}
+              <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingLeft: 24 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <CheckSquare size={11} /> 步驟任務 ({wTasks.length})
+                  </span>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 3 }}
+                    onClick={e => { e.stopPropagation(); setAddingTaskWfId(addingTaskWfId === w.id ? null : w.id); setAddTaskForm({ title: '', assignee: '', due_date: '' }) }}
+                  >
+                    <Plus size={10} /> 新增任務
+                  </button>
                 </div>
-              )}
+
+                {wTasks.length === 0 && addingTaskWfId !== w.id && (
+                  <div style={{ paddingLeft: 24, fontSize: 12, color: 'var(--text-muted)', paddingBottom: 4 }}>尚無步驟，點右側「新增任務」開始</div>
+                )}
+
+                {wTasks.map((t, idx) => {
+                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_CONFIG['待處理']
+                  return (
+                    <div key={t.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px 5px 24px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      onClick={() => setSelectedTask(t)}
+                    >
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                      <span style={{
+                        flex: 1, fontWeight: 500, lineHeight: 1.4,
+                        textDecoration: t.status === '已完成' ? 'line-through' : 'none',
+                        color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)',
+                      }}>{t.title}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
+                      <select
+                        value={t.status}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => { e.stopPropagation(); handleTaskStatusChange(t.id, e.target.value) }}
+                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${sc.color}`, background: sc.bg, color: sc.color, cursor: 'pointer', outline: 'none', minWidth: 72 }}
+                      >
+                        {TASK_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )
+                })}
+
+                {addingTaskWfId === w.id && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px 24px', flexWrap: 'wrap' }}>
+                    <input
+                      className="form-input"
+                      style={{ flex: '1 1 160px', fontSize: 12 }}
+                      placeholder="任務名稱 *"
+                      autoFocus
+                      value={addTaskForm.title}
+                      onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
+                    />
+                    <select className="form-input" style={{ flex: '0 0 110px', fontSize: 12 }}
+                      value={addTaskForm.assignee} onChange={e => setAddTaskForm(f => ({ ...f, assignee: e.target.value }))}>
+                      <option value="">負責人</option>
+                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                    </select>
+                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
+                      value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
+                      disabled={!addTaskForm.title.trim()} onClick={() => handleAddTaskToWorkflow(w.id)}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
+                      onClick={() => setAddingTaskWfId(null)}>取消</button>
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}
@@ -510,6 +715,89 @@ export default function Projects() {
         </div>
 
         </>}
+
+        {/* Task detail panel */}
+        {selectedTask && (
+          <TaskDetailPanel
+            step={selectedTask}
+            instance={pWorkflows.find(w => w.id === selectedTask.workflow_instance_id)}
+            allSteps={tasks.filter(t => t.workflow_instance_id === selectedTask.workflow_instance_id)}
+            employees={employees}
+            stores={stores}
+            checklists={[]}
+            onUpdate={updated => {
+              setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+              setSelectedTask(updated)
+            }}
+            onDelete={id => {
+              setTasks(prev => prev.filter(t => t.id !== id))
+              setSelectedTask(null)
+            }}
+            onClose={() => setSelectedTask(null)}
+          />
+        )}
+
+        {/* Workflow attach/create modal */}
+        {showWorkflowModal && (
+          <Modal
+            title="連結 / 建立流程"
+            onClose={() => setShowWorkflowModal(false)}
+            onSubmit={workflowTab === 'attach' ? attachWorkflow : createWorkflow}
+            submitLabel={workflowSaving ? '儲存中...' : workflowTab === 'attach' ? '連結' : '建立'}
+          >
+            <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+              {[{ k: 'attach', label: '連結現有流程' }, { k: 'create', label: '建立新流程' }].map(t => (
+                <button key={t.k} onClick={() => setWorkflowTab(t.k)} style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  background: workflowTab === t.k ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                  color: workflowTab === t.k ? '#fff' : 'var(--text-muted)',
+                  border: workflowTab === t.k ? 'none' : '1px solid var(--border-medium)',
+                }}>{t.label}</button>
+              ))}
+            </div>
+            {workflowTab === 'attach' ? (
+              freeInstances.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
+                  沒有未連結的流程實例。請先在「流程管理」建立流程。
+                </div>
+              ) : (
+                <Field label="選擇要連結的流程">
+                  <select className="form-input" style={{ width: '100%' }} value={selectedAttachId} onChange={e => setSelectedAttachId(e.target.value)}>
+                    <option value="">請選擇…</option>
+                    {freeInstances.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.template_name} — {w.status}{w.started_by ? ` (${w.started_by})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )
+            ) : (
+              <>
+                <Field label="流程名稱 *">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：開店前準備流程" value={newWfForm.template_name} onChange={e => setNewWfForm(f => ({ ...f, template_name: e.target.value }))} />
+                </Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <Field label="負責人">
+                    <select className="form-input" style={{ width: '100%' }} value={newWfForm.assignee} onChange={e => setNewWfForm(f => ({ ...f, assignee: e.target.value }))}>
+                      <option value="">請選擇</option>
+                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="門市">
+                    <select className="form-input" style={{ width: '100%' }} value={newWfForm.store} onChange={e => setNewWfForm(f => ({ ...f, store: e.target.value }))}>
+                      <option value="">不指定</option>
+                      {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="到期日">
+                  <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.due_date} onChange={e => setNewWfForm(f => ({ ...f, due_date: e.target.value }))} />
+                </Field>
+              </>
+            )}
+          </Modal>
+        )}
 
         {/* Modal in detail view */}
         {showModal && (
@@ -568,7 +856,12 @@ export default function Projects() {
             <h2><span className="header-icon">📁</span> 專案管理</h2>
             <p>Project → Workflow → Task 三層架構</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm, owner: profile?.name || '' }); setEditingId(null); setShowModal(true) }}>
+          <button className="btn btn-primary" onClick={async () => {
+            const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
+            setFreeInstances(data || [])
+            resetNewProjectState()
+            setForm({ ...emptyForm, owner: profile?.name || '' }); setEditingId(null); setShowModal(true)
+          }}>
             <Plus size={14} /> 新增專案
           </button>
         </div>
@@ -748,7 +1041,7 @@ export default function Projects() {
 
       {/* Modal */}
       {showModal && (
-        <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
+        <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => { setShowModal(false); setEditingId(null); resetNewProjectState() }} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
           <Field label="專案名稱 *">
             <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：南京門市裝潢翻新" />
           </Field>
@@ -792,6 +1085,118 @@ export default function Projects() {
           <Field label="說明">
             <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
           </Field>
+
+          {!editingId && <>
+            {/* Workflows */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Workflow size={13} /> 流程（選填）
+              </div>
+              {(pendingWfAttach.length > 0 || pendingWfCreate.length > 0) && (
+                <div style={{ marginBottom: 8 }}>
+                  {pendingWfAttach.map(id => {
+                    const wf = freeInstances.find(w => w.id === id)
+                    return wf ? (
+                      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
+                        <Workflow size={11} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                        <span style={{ flex: 1 }}>{wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（連結現有）</span></span>
+                        <button onClick={() => setPendingWfAttach(p => p.filter(x => x !== id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
+                      </div>
+                    ) : null
+                  })}
+                  {pendingWfCreate.map((wf, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
+                      <Plus size={11} style={{ color: 'var(--accent-purple)', flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>{wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（新建）</span></span>
+                      <button onClick={() => setPendingWfCreate(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {inlineWfMode === 'attach' && (
+                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
+                  {freeInstances.filter(w => !pendingWfAttach.includes(w.id)).length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>沒有未連結的流程實例</div>
+                  ) : (
+                    <select className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} value={inlineWfAttachId} onChange={e => setInlineWfAttachId(e.target.value)}>
+                      <option value="">選擇現有流程…</option>
+                      {freeInstances.filter(w => !pendingWfAttach.includes(w.id)).map(w => (
+                        <option key={w.id} value={w.id}>{w.template_name} — {w.status}{w.started_by ? ` (${w.started_by})` : ''}</option>
+                      ))}
+                    </select>
+                  )}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineWfAttachId}
+                      onClick={() => { if (inlineWfAttachId) { setPendingWfAttach(p => [...p, Number(inlineWfAttachId)]); setInlineWfAttachId(''); setInlineWfMode(null) } }}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setInlineWfMode(null); setInlineWfAttachId('') }}>取消</button>
+                  </div>
+                </div>
+              )}
+              {inlineWfMode === 'create' && (
+                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
+                  <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="流程名稱 *"
+                    value={inlineWfCreate.template_name} onChange={e => setInlineWfCreate(f => ({ ...f, template_name: e.target.value }))} />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineWfCreate.template_name}
+                      onClick={() => { if (inlineWfCreate.template_name) { setPendingWfCreate(p => [...p, { ...inlineWfCreate }]); setInlineWfCreate({ template_name: '' }); setInlineWfMode(null) } }}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setInlineWfMode(null); setInlineWfCreate({ template_name: '' }) }}>取消</button>
+                  </div>
+                </div>
+              )}
+              {!inlineWfMode && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setInlineWfMode('attach')}><Workflow size={11} /> 連結現有流程</button>
+                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setInlineWfMode('create')}><Plus size={11} /> 建立新流程</button>
+                </div>
+              )}
+            </div>
+
+            {/* Tasks */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckSquare size={13} /> 任務（選填）
+              </div>
+              {pendingTasks.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  {pendingTasks.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
+                      <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}{t.due_date && <span style={{ color: 'var(--text-muted)' }}> · {t.due_date}</span>}</span>
+                      <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--glass-light)', color: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
+                      <button onClick={() => setPendingTasks(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {inlineTaskMode && (
+                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
+                  <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="任務名稱 *"
+                    value={inlineTask.title} onChange={e => setInlineTask(f => ({ ...f, title: e.target.value }))} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.assignee} onChange={e => setInlineTask(f => ({ ...f, assignee: e.target.value }))}>
+                      <option value="">負責人</option>
+                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                    </select>
+                    <input className="form-input" type="date" style={{ fontSize: 13 }} value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
+                    <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
+                      <option>高</option><option>中</option><option>低</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title}
+                      onClick={() => { if (inlineTask.title) { setPendingTasks(p => [...p, { ...inlineTask }]); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' }); setInlineTaskMode(false) } }}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setInlineTaskMode(false)}>取消</button>
+                  </div>
+                </div>
+              )}
+              {!inlineTaskMode && (
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setInlineTaskMode(true)}><Plus size={11} /> 新增任務</button>
+              )}
+            </div>
+          </>}
         </Modal>
       )}
     </div>

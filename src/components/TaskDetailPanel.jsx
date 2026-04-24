@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { empLabel } from '../lib/empLabel'
 import {
@@ -15,9 +15,10 @@ import {
   getApprovalFormByTask, createApprovalForm, updateApprovalForm,
   getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
   getTaskConfirmations, createTaskConfirmation, updateTaskConfirmation, deleteTaskConfirmation,
+  createWorkflowInstance,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { notifyApproval } from '../lib/lineNotify'
+import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -49,6 +50,12 @@ export default function TaskDetailPanel({
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
   const commentsListRef = useRef(null)
+
+  // Trigger workflow
+  const [sopTemplates, setSopTemplates] = useState([])
+  const [triggeredInstances, setTriggeredInstances] = useState([])
+  const [triggerTemplateId, setTriggerTemplateId] = useState('')
+  const [triggering, setTriggering] = useState(false)
 
   // InputModal state (replaces window.prompt calls)
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
@@ -84,13 +91,17 @@ export default function TaskDetailPanel({
       safe(getApprovalChains()),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
-    ]).then(([c, a, cl, d, ac, af, tc]) => {
+      safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
+      safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
+    ]).then(([c, a, cl, d, ac, af, tc, tpl, trig]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
       setApprovalChains(ac.data || [])
       setConfirmations(tc.data || [])
+      setSopTemplates(tpl.data || [])
+      setTriggeredInstances(trig.data || [])
       // Load approval form & steps
       if (af.data) {
         setApprovalForm(af.data)
@@ -367,6 +378,52 @@ export default function TaskDetailPanel({
   const handleRemoveDep = async (depId) => {
     await deleteTaskDependency(depId)
     setDependencies(prev => prev.filter(d => d.id !== depId))
+  }
+
+  // Trigger a workflow from this task
+  const handleTriggerWorkflow = async () => {
+    if (!triggerTemplateId) return
+    const tpl = sopTemplates.find(t => t.id === Number(triggerTemplateId))
+    if (!tpl) return
+    setTriggering(true)
+    try {
+      const { data: inst, error } = await createWorkflowInstance({
+        template_name: tpl.name,
+        store: task.store || null,
+        status: '進行中',
+        started_by: task.assignee || '系統',
+        triggered_by_task_id: task.id,
+        started_at: new Date().toISOString(),
+      })
+      if (error || !inst) throw new Error(error?.message || '建立流程失敗')
+
+      const steps = Array.isArray(tpl.steps) ? tpl.steps : []
+      if (steps.length > 0) {
+        const taskRows = steps.map((s, i) => ({
+          workflow_instance_id: inst.id,
+          step_order: i + 1,
+          title: s.title,
+          description: s.description || null,
+          role: s.role || null,
+          assignee: i === 0 ? (task.assignee || null) : null,
+          store: task.store || null,
+          status: i === 0 ? '進行中' : '待處理',
+          bucket: 'Workflow',
+          category: 'Workflow',
+          priority: s.priority || '中',
+        }))
+        const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
+        if (createdTasks?.[0]?.assignee) {
+          notifyTaskAssignee(createdTasks[0].assignee, createdTasks[0].title, tpl.name, createdTasks[0].id).catch(() => {})
+        }
+      }
+
+      setTriggeredInstances(prev => [inst, ...prev])
+      setTriggerTemplateId('')
+    } catch (err) {
+      alert('觸發失敗：' + err.message)
+    }
+    setTriggering(false)
   }
 
   // Reminder quick set
@@ -825,6 +882,50 @@ export default function TaskDetailPanel({
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
             ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}
             {task.confirmation_status === 'approved' && <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>✅ {task.confirmation_responded_at?.slice(0, 10)}</span>}
+          </div>
+          )}
+
+          {/* ═══ Section: Trigger Workflow ═══ */}
+          {activeTab === 'relations' && (
+          <div style={sectionStyle}>
+            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Rocket size={13} style={{ color: 'var(--accent-purple)' }} />
+              <span style={{ color: 'var(--accent-purple)' }}>觸發流程</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              從此任務啟動一個工作流程，第一個步驟自動設為進行中並通知負責人。
+            </div>
+            {triggeredInstances.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                {triggeredInstances.map(inst => {
+                  const iColor = inst.status === '已完成' ? 'var(--accent-green)' : 'var(--accent-cyan)'
+                  return (
+                    <div key={inst.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                      background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
+                      border: '1px solid var(--border-subtle)', fontSize: 12,
+                    }}>
+                      <Workflow size={11} style={{ color: iColor, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontWeight: 600 }}>{inst.template_name}</span>
+                      {inst.store && <span style={{ color: 'var(--text-muted)' }}>{inst.store}</span>}
+                      <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 700, color: iColor, background: `color-mix(in srgb, ${iColor} 15%, transparent)` }}>{inst.status}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{inst.started_at?.slice(0, 10)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select className="form-input" style={{ flex: 1, fontSize: 12 }}
+                value={triggerTemplateId} onChange={e => setTriggerTemplateId(e.target.value)}>
+                <option value="">選擇流程範本…</option>
+                {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-purple)', border: 'none' }}
+                onClick={handleTriggerWorkflow} disabled={!triggerTemplateId || triggering}>
+                <Rocket size={12} /> {triggering ? '觸發中...' : '觸發'}
+              </button>
+            </div>
           </div>
           )}
 

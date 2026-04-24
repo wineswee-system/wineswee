@@ -356,14 +356,23 @@ export default function Workflows() {
         status: '進行中', started_by: currentUser,
       }).select().single()
       if (instance) {
-        const taskRows = tplSteps.map((step, i) => ({
-          workflow_instance_id: instance.id, step_order: i + 1,
-          title: step.title, description: step.description,
-          role: step.role, assignee: deployForm.assignees[i] || '',
-          store: loc, status: '待處理',
-          bucket: 'Workflow', category: 'Workflow',
-          priority: step.priority || '中',
-        }))
+        // 建一個 name → employee_id 的對照，讓任務 FK 正確寫入
+        // （沒有 FK 的話 LIFF 的 liff_list_my_tasks 會找不到任務）
+        const empByName = new Map((employees || []).map(e => [e.name, e.id]))
+
+        const taskRows = tplSteps.map((step, i) => {
+          const assigneeName = deployForm.assignees[i] || ''
+          return {
+            workflow_instance_id: instance.id, step_order: i + 1,
+            title: step.title, description: step.description,
+            role: step.role,
+            assignee: assigneeName,
+            assignee_id: assigneeName ? (empByName.get(assigneeName) || null) : null,
+            store: loc, status: '待處理',
+            bucket: 'Workflow', category: 'Workflow',
+            priority: step.priority || '中',
+          }
+        })
         const { data: insertedTasks } = await createTasksBatch(taskRows)
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])

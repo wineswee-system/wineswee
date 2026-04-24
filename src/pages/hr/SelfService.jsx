@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 
 export default function SelfService() {
+  const { profile, isSuperAdmin, isAdmin } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [employee, setEmployee] = useState(null)
@@ -21,13 +23,16 @@ export default function SelfService() {
       .then(({ data }) => {
         setEmployees(data || [])
         if (data?.length) {
-          setSelectedEmpName(data[0].name)
-          setEmployee(data[0])
+          // Default to the logged-in user's record; fall back to first in list
+          const self = profile?.name ? data.find(e => e.id === profile.id) : null
+          const defaultEmp = self || data[0]
+          setSelectedEmpName(defaultEmp.name)
+          setEmployee(defaultEmp)
         }
       })
-      .catch(err => setError('載入失敗'))
+      .catch(() => setError('載入失敗'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [profile?.id])
 
   useEffect(() => {
     if (!selectedEmpName) return
@@ -70,11 +75,13 @@ export default function SelfService() {
             <h2><span className="header-icon">👤</span> 員工自助服務</h2>
             <p>查看個人資料、出勤、薪資、請假紀錄</p>
           </div>
-          <div>
-            <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={selectedEmpName} onChange={e => setSelectedEmpName(e.target.value)}>
-              {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} — {e.dept}</option>)}
-            </select>
-          </div>
+          {(isSuperAdmin || isAdmin) && (
+            <div>
+              <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={selectedEmpName} onChange={e => setSelectedEmpName(e.target.value)}>
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} — {e.dept}</option>)}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

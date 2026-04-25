@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { DollarSign, Plus, Trash2, Edit2, Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getCompensationBands, createCompensationBand, updateCompensationBand, deleteCompensationBand } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -29,6 +30,7 @@ function ratioLabel(ratio) {
 }
 
 export default function CompensationBenchmark() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [bands, setBands] = useState([])
@@ -44,11 +46,13 @@ export default function CompensationBenchmark() {
   const setB = (k, v) => setBandForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
       getCompensationBands(),
-      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('salary_records').select('employee_id, base_salary, allowance, month, employees(name)').order('month', { ascending: false }),
-      supabase.from('departments').select('*').order('name'),
+      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('salary_records').select('employee_id, base_salary, allowance, month, employees(name)').eq('organization_id', orgId).order('month', { ascending: false }),
+      supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([b, e, s, d]) => {
       setBands(b.data || [])
       setEmployees(e.data || [])
@@ -58,7 +62,7 @@ export default function CompensationBenchmark() {
       console.error('Failed to load compensation data:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   // Build employee compensation view
   const empComp = useMemo(() => {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, CheckCircle, XCircle, AlertTriangle, Download, Printer, FileText, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import Modal from '../../components/Modal'
@@ -22,6 +23,7 @@ const statusBadge = (status) => {
 }
 
 export default function LaborInspection() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [month, setMonth] = useState(currentMonth())
@@ -41,13 +43,17 @@ export default function LaborInspection() {
   const [detailModal, setDetailModal] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
+    // ★ 加 org_id filter + 限縮日期範圍到 90 天，避免一次載 2000+ 筆全公司資料
+    const since90 = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
     Promise.all([
-      supabase.from('employees').select('*').eq('status', '在職').order('name'),
-      supabase.from('attendance_records').select('*').order('date', { ascending: false }).limit(2000),
-      supabase.from('overtime_records').select('*').order('date', { ascending: false }).limit(1000),
-      supabase.from('leave_records').select('*').order('start_date', { ascending: false }).limit(1000),
-      supabase.from('salary_records').select('*').order('month', { ascending: false }).limit(1000),
-      supabase.from('schedules').select('*').order('date', { ascending: false }).limit(1000),
+      supabase.from('employees').select('*').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('attendance_records').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(2000),
+      supabase.from('overtime_records').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(1000),
+      supabase.from('leave_records').select('*').eq('organization_id', orgId).gte('start_date', since90).order('start_date', { ascending: false }).limit(1000),
+      supabase.from('salary_records').select('*').eq('organization_id', orgId).order('month', { ascending: false }).limit(1000),
+      supabase.from('schedules').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(1000),
     ]).then(([emp, att, ot, lv, sal, sch]) => {
       setEmployees(emp.data || [])
       setAttendance(att.data || [])
@@ -59,7 +65,7 @@ export default function LaborInspection() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const generateReport = useCallback((id) => {
     const generators = {

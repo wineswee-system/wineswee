@@ -3,6 +3,7 @@ import { Download, Printer } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DateRangePicker from '../../components/DateRangePicker'
@@ -50,6 +51,7 @@ function getPrevPeriodRange(dateRange) {
 }
 
 export default function FinanceAnalytics() {
+  const { profile } = useAuth()
   const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -57,11 +59,13 @@ export default function FinanceAnalytics() {
   const [showComparison, setShowComparison] = useState(false)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('accounts_receivable').select('*'),
-      supabase.from('accounts_payable').select('*'),
-      supabase.from('budgets').select('*'),
-      supabase.from('journal_entries').select('*'),
+      supabase.from('accounts_receivable').select('*').eq('organization_id', orgId),
+      supabase.from('accounts_payable').select('*').eq('organization_id', orgId),
+      supabase.from('budgets').select('*').eq('organization_id', orgId),
+      supabase.from('journal_entries').select('*').eq('organization_id', orgId),
     ]).then(([ar, ap, budgets, journal]) => {
       setRaw({
         ar: ar.data || [], ap: ap.data || [],
@@ -71,7 +75,7 @@ export default function FinanceAnalytics() {
       console.error('Failed to load finance data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return (

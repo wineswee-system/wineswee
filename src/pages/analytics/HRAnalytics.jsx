@@ -3,6 +3,7 @@ import { Download, Printer } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DateRangePicker from '../../components/DateRangePicker'
@@ -21,17 +22,20 @@ const gridStyle = { color: 'rgba(148,163,184,0.06)' }
 const tickStyle = { color: '#64748b', font: { size: 11 } }
 
 export default function HRAnalytics() {
+  const { profile } = useAuth()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [dateRange, setDateRange] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('employees').select('*'),
-      supabase.from('overtime_requests').select('*'),
-      supabase.from('leave_requests').select('*'),
-      supabase.from('recruitment_jobs').select('*'),
+      supabase.from('employees').select('*').eq('organization_id', orgId),
+      supabase.from('overtime_requests').select('*').eq('organization_id', orgId),
+      supabase.from('leave_requests').select('*').eq('organization_id', orgId),
+      supabase.from('recruitment_jobs').select('*').eq('organization_id', orgId),
     ]).then(([emp, ot, leave, recruit]) => {
       setData({
         employees: emp.data || [],
@@ -45,7 +49,7 @@ export default function HRAnalytics() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

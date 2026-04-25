@@ -112,13 +112,15 @@ export default function POSTerminal() {
 
   const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0)
 
-  // Use einvoice tax calculation
+  // ★ 折扣先攤掉，tax 才算在實付金額上（之前 tax 用原價算 → 客戶付了沒享受到折扣的稅）
+  const safeDiscount = Math.max(0, Math.min(subtotal, Number(discount) || 0))
+  const taxableAmount = Math.max(0, subtotal - safeDiscount)
   const taxCalc = calculateInvoiceTax(
-    cart.map(c => ({ description: c.name, qty: c.qty, unitPrice: c.price })),
+    [{ description: '小計（折扣後）', qty: 1, unitPrice: taxableAmount }],
     '應稅'
   )
   const tax = taxCalc.taxAmount
-  const total = subtotal - discount + tax
+  const total = taxableAmount + tax
 
   const changeAmount = selectedPayment === 'cash' && cashTendered ? Math.max(0, Number(cashTendered) - total) : 0
 

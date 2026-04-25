@@ -26,7 +26,7 @@ export default function Inventory() {
   const [tab, setTab] = useState('stock')
   const [showAdjModal, setShowAdjModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
-  const [adjForm, setAdjForm] = useState({ sku_code: '', sku_name: '', bin_code: '', quantity: '', reason: '', operator: '' })
+  const [adjForm, setAdjForm] = useState({ sku_code: '', sku_name: '', bin_code: '', warehouse: '', quantity: '', reason: '', operator: '' })
   const [transferForm, setTransferForm] = useState({ sku_code: '', from_bin: '', to_bin: '', quantity: '' })
 
   // Inventory valuation state
@@ -64,16 +64,49 @@ export default function Inventory() {
   const handleAdjust = async () => {
     if (!adjForm.sku_code || !adjForm.quantity || !adjForm.reason) return
     if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
-    const { data } = await supabase.from('inventory_adjustments').insert({
-      ...adjForm,
-      quantity: Number(adjForm.quantity),
-      organization_id: profile.organization_id,  // ★ 多租戶
-    }).select().single()
-    if (data) {
-      setAdjustments(prev => [data, ...prev])
-      setShowAdjModal(false)
-      setAdjForm({ sku_code: '', sku_name: '', bin_code: '', quantity: '', reason: '', operator: '' })
+    // ★ 用 atomic RPC：原子更新 stock_levels + 寫 audit
+    //   舊路徑只 INSERT audit 不動 stock_levels → 帳面跟實際對不上
+    //   warehouse 必填（從表單選或 scan 帶入）
+    let warehouseName = adjForm.warehouse
+    if (!warehouseName) {
+      // fallback: 從 scannedItem 或既有 stock 找該 SKU 的倉庫
+      const stockHit = stocks.find(s => s.skus?.code === adjForm.sku_code)
+      const wh = warehouses.find(w => w.id === stockHit?.warehouse_id)
+      warehouseName = wh?.name || ''
     }
+    if (!warehouseName) {
+      alert('請選擇倉庫（atomic 更新 stock_levels 必須）')
+      return
+    }
+    const { data: result, error: rpcErr } = await supabase.rpc('apply_inventory_adjustment_atomic', {
+      p_sku_code:       adjForm.sku_code,
+      p_warehouse:      warehouseName,
+      p_qty_delta:      Number(adjForm.quantity),
+      p_reason:         adjForm.reason,
+      p_operator:       adjForm.operator || profile?.name || '系統',
+      p_bin_code:       adjForm.bin_code || null,
+      p_organization_id: profile.organization_id,
+    })
+    if (rpcErr || !result?.ok) {
+      const msgMap = {
+        INSUFFICIENT_STOCK: `庫存不足（現有 ${result?.have}，欲扣 ${result?.requested_decrease}）`,
+        STOCK_NOT_FOUND_FOR_DECREASE: '此倉庫無此 SKU 的庫存紀錄，無法做負調整',
+        WAREHOUSE_REQUIRED: '請選擇倉庫',
+        QTY_DELTA_ZERO: '調整數量不可為 0',
+      }
+      alert(msgMap[result?.error] || ('調整失敗：' + (rpcErr?.message || result?.error || '未知')))
+      return
+    }
+    // 重抓 stocks + adjustments
+    const orgId = profile.organization_id
+    const [s, a] = await Promise.all([
+      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),
+      supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50),
+    ])
+    setStocks(s.data || [])
+    setAdjustments(a.data || [])
+    setShowAdjModal(false)
+    setAdjForm({ sku_code: '', sku_name: '', bin_code: '', warehouse: '', quantity: '', reason: '', operator: '' })
   }
 
   const handleTransfer = async () => {
@@ -450,9 +483,15 @@ export default function Inventory() {
             <Field label="品名"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="商品名稱" value={adjForm.sku_name} onChange={e => setA('sku_name', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="儲位"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="A-01-01" value={adjForm.bin_code} onChange={e => setA('bin_code', e.target.value)} /></Field>
-            <Field label="調整數量 *"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="負數=減少，正數=增加" value={adjForm.quantity} onChange={e => setA('quantity', e.target.value)} /></Field>
+            <Field label="倉庫 *">
+              <select className="form-input" style={{ width: '100%' }} value={adjForm.warehouse} onChange={e => setA('warehouse', e.target.value)}>
+                <option value="">— 自動偵測或選擇 —</option>
+                {warehouses.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
+              </select>
+            </Field>
+            <Field label="儲位"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="A-01-01（選填，僅 audit 用）" value={adjForm.bin_code} onChange={e => setA('bin_code', e.target.value)} /></Field>
           </div>
+          <Field label="調整數量 *"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="負數=減少，正數=增加" value={adjForm.quantity} onChange={e => setA('quantity', e.target.value)} /></Field>
           <Field label="原因 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="損壞/遺失/盤點調整..." value={adjForm.reason} onChange={e => setA('reason', e.target.value)} /></Field>
           <Field label="操作人"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={adjForm.operator} onChange={e => setA('operator', e.target.value)} /></Field>
         </Modal>

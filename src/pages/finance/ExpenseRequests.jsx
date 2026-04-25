@@ -141,9 +141,16 @@ export default function ExpenseRequests() {
       await uploadFiles(data.id, files, 'request')
     }
 
-    // Create approval workflow
+    // Create approval workflow + 把 instance.id 寫回 expense_request 建立雙向 link
     if (data) {
-      await createApprovalWorkflow('expense_request', data, form.employee).catch(() => {})
+      try {
+        const wfResult = await createApprovalWorkflow('expense_request', data, form.employee)
+        if (wfResult?.instance?.id) {
+          await supabase.from('expense_requests')
+            .update({ workflow_instance_id: wfResult.instance.id })
+            .eq('id', data.id)
+        }
+      } catch (e) { /* workflow 建立失敗不阻擋主流程 */ }
     }
 
     setSaving(false)
@@ -154,9 +161,10 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // 找出對應的 workflow_instance：限定 org + 同申請人 + 進行中 + 取最近一筆
-  // （之前一次更新所有「同人 + 同類型」的 instance，多筆並存會一起被誤改）
+  // ★ 直接用 expense_request.workflow_instance_id FK（剛加的 schema），精準對應
+  //   舊資料 (workflow_instance_id 為 NULL) fallback 到「最近一筆同人進行中」模糊匹配
   const resolveLinkedInstanceId = async (req) => {
+    if (req.workflow_instance_id) return req.workflow_instance_id
     if (!profile?.organization_id) return null
     const { data } = await supabase.from('workflow_instances')
       .select('id, started_at')

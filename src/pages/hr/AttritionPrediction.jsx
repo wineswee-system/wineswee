@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { AlertTriangle, TrendingDown, Users, RefreshCw, ChevronDown, ChevronUp, Brain } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 // ── Risk factor weights & thresholds ──
@@ -35,6 +36,7 @@ function riskLevel(score) {
 }
 
 export default function AttritionPrediction() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [employees, setEmployees] = useState([])
@@ -51,18 +53,20 @@ export default function AttritionPrediction() {
   const [computing, setComputing] = useState(false)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     const now = new Date()
     const d90 = new Date(now)
     d90.setDate(d90.getDate() - 90)
     const since = d90.toISOString().slice(0, 10)
 
     Promise.all([
-      supabase.from('employees').select('*').eq('status', '在職').order('name'),
-      supabase.from('attendance_records').select('employee_id, date, status, hours, employees(name)').gte('date', since),
-      supabase.from('leave_requests').select('employee_id, days, status, employees(name)').gte('created_at', since),
-      supabase.from('performance_reviews').select('employee, overall_score, period').order('period', { ascending: false }),
-      supabase.from('salary_records').select('employee_id, base_salary, month, employees(name)').order('month', { ascending: false }),
-      supabase.from('engagement_responses').select('employee, overall_score'),
+      supabase.from('employees').select('*').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('attendance_records').select('employee_id, date, status, hours, employees(name)').eq('organization_id', orgId).gte('date', since),
+      supabase.from('leave_requests').select('employee_id, days, status, employees(name)').eq('organization_id', orgId).gte('created_at', since),
+      supabase.from('performance_reviews').select('employee, overall_score, period').eq('organization_id', orgId).order('period', { ascending: false }),
+      supabase.from('salary_records').select('employee_id, base_salary, month, employees(name)').eq('organization_id', orgId).order('month', { ascending: false }),
+      supabase.from('engagement_responses').select('employee, overall_score').eq('organization_id', orgId),
     ]).then(([e, a, l, p, s, sv]) => {
       setEmployees(e.data || [])
       setAttendance(a.data || [])
@@ -74,7 +78,7 @@ export default function AttritionPrediction() {
       console.error('Failed to load attrition data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const riskData = useMemo(() => {
     if (!employees.length) return []

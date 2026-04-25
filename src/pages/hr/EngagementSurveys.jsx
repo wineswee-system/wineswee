@@ -3,6 +3,7 @@ import { Plus, Send, BarChart2, Eye, Trash2, Edit2, Copy, ChevronDown, ChevronUp
 import { supabase } from '../../lib/supabase'
 import { getEngagementSurveys, createEngagementSurvey, updateEngagementSurvey, deleteEngagementSurvey, getEngagementResponses, submitEngagementResponse } from '../../lib/db'
 import { generateSurveyInsights, isConfigured as aiReady } from '../../lib/ai/hrAI'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -40,6 +41,7 @@ const EMPTY_SURVEY = {
 }
 
 export default function EngagementSurveys() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [surveys, setSurveys] = useState([])
@@ -60,9 +62,11 @@ export default function EngagementSurveys() {
   const setS = (k, v) => setSurveyForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      getEngagementSurveys(),
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      getEngagementSurveys(),  // ← 表 query 走 db.js helper，後續可加 org param
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
     ]).then(([s, e]) => {
       setSurveys(s.data || [])
       setEmployees(e.data || [])
@@ -70,7 +74,7 @@ export default function EngagementSurveys() {
       console.error('Failed to load surveys:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const handleCreateSurvey = async () => {
     if (!surveyForm.title) return alert('請填寫問卷標題')

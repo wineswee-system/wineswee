@@ -1,7 +1,20 @@
-import { useMemo, useEffect } from 'react'
-import { Rocket, Calendar, User, AlertTriangle, CheckCircle2, Bell } from 'lucide-react'
+import { useMemo, useEffect, useState } from 'react'
+import { Rocket, Calendar, User, AlertTriangle, CheckCircle2, Bell, Settings, Copy, ChevronDown, ChevronRight } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import { empLabel } from '../../../lib/empLabel'
+
+// 提醒預設選項
+const REMINDER_PRESETS = [
+  { value: '1hr',  label: '到期前 1 小時' },
+  { value: '1day', label: '到期前 1 天' },
+  { value: '09am', label: '當天 09:00' },
+  { value: 'none', label: '不提醒' },
+]
+const PRIORITY_OPTIONS = [
+  { value: '高', label: '高' },
+  { value: '中', label: '中' },
+  { value: '低', label: '低' },
+]
 
 // 步驟角色 → 部門名稱的對應表（支援模糊匹配）
 const ROLE_DEPT_MAP = {
@@ -66,15 +79,23 @@ export default function DeployModal({
 }) {
   const targetType = detectTargetType(deployTemplate?.name)
   const tplSteps = deployTemplate?.steps || []
+  // 哪些步驟展開了「進階設定」
+  const [expandedSteps, setExpandedSteps] = useState(new Set())
+  const toggleExpand = (i) => {
+    setExpandedSteps(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
 
   // ── 表單初始化（第一次開啟）──
   useEffect(() => {
-    // 帶入預設：開始日今天、預估天數從範本來、優先度中、每步 offset 1 天
     if (!deployForm.planned_start_date) {
       const today = new Date().toISOString().slice(0, 10)
       const estDays = deployTemplate?.estimated_days || tplSteps.length || 7
       const endDate = new Date(Date.now() + estDays * 86400000).toISOString().slice(0, 10)
-      // 預設每步 offset = ceil(總天數 / 步數)
       const stepOffset = Math.max(1, Math.ceil(estDays / Math.max(1, tplSteps.length)))
       const offsets = {}
       tplSteps.forEach((_, i) => { offsets[i] = (i + 1) * stepOffset })
@@ -86,9 +107,46 @@ export default function DeployModal({
         notes: '',
         target_employee_id: '',
         step_offsets: offsets,
+        // ★ 批次預設（套用到所有步驟，個別可覆寫）
+        batch_defaults: { due_time: '17:00', reminder_preset: '1hr', priority: '中' },
+        // ★ 每步覆寫 (空物件 = 用 batch default)
+        step_overrides: {},
       }))
     }
   }, [deployTemplate?.id])
+
+  // 批次預設操作
+  const setBatch = (k, v) => setDeployForm(f => ({
+    ...f,
+    batch_defaults: { ...(f.batch_defaults || {}), [k]: v }
+  }))
+  // 個別覆寫操作
+  const setStepOverride = (i, k, v) => setDeployForm(f => {
+    const overrides = { ...(f.step_overrides || {}) }
+    overrides[i] = { ...(overrides[i] || {}), [k]: v }
+    // 如果清空回 ''，從 override 移除（恢復用 batch default）
+    if (v === '' || v === null || v === undefined) {
+      delete overrides[i][k]
+      if (Object.keys(overrides[i]).length === 0) delete overrides[i]
+    }
+    return { ...f, step_overrides: overrides }
+  })
+  // 「套用到所有步驟」: 把指定步驟的 override 複製給所有步驟
+  const applyOverrideToAll = (sourceIdx) => {
+    const src = deployForm.step_overrides?.[sourceIdx]
+    if (!src || Object.keys(src).length === 0) {
+      alert('此步驟沒有覆寫設定，無需套用')
+      return
+    }
+    if (!confirm(`要把 Step ${sourceIdx + 1} 的進階設定複製到其他 ${tplSteps.length - 1} 個步驟嗎？`)) return
+    setDeployForm(f => {
+      const overrides = { ...(f.step_overrides || {}) }
+      tplSteps.forEach((_, i) => {
+        if (i !== sourceIdx) overrides[i] = { ...src }
+      })
+      return { ...f, step_overrides: overrides }
+    })
+  }
 
   const getDeptName = (emp) =>
     departments.find(d => d.id === emp.department_id)?.name || emp.dept || ''
@@ -126,13 +184,18 @@ export default function DeployModal({
       Object.values(deployForm.assignees || {}).filter(Boolean)
     )
     const targetEmp = employees.find(e => e.id === Number(deployForm.target_employee_id))
+    // 算多少步用了覆寫
+    const customCount = Object.values(deployForm.step_overrides || {})
+      .filter(o => o && Object.keys(o).length > 0).length
     return {
       taskCount,
       assigneeCount: uniqueAssignees.size,
-      lineNotifyCount: uniqueAssignees.size,  // 每位收一則 LINE
+      lineNotifyCount: uniqueAssignees.size,
       targetName: targetEmp?.name || null,
       startDate: deployForm.planned_start_date,
       endDate: deployForm.planned_end_date,
+      customizedSteps: customCount,
+      defaultSteps: taskCount - customCount,
     }
   }, [deployForm, tplSteps, employees])
 
@@ -216,6 +279,40 @@ export default function DeployModal({
             </Field>
           </div>
 
+          {/* ─── 批次預設（套用到所有步驟，個別可覆寫）─── */}
+          <div style={{
+            marginTop: 14, padding: '12px 14px', borderRadius: 10,
+            background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-purple)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings size={12} /> 批次預設（所有步驟自動繼承，個別可在「⚙ 進階」覆寫）
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>截止時間</label>
+                <input className="form-input" type="time" style={{ width: '100%', fontSize: 12 }}
+                  value={deployForm.batch_defaults?.due_time || '17:00'}
+                  onChange={e => setBatch('due_time', e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>提醒</label>
+                <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                  value={deployForm.batch_defaults?.reminder_preset || '1hr'}
+                  onChange={e => setBatch('reminder_preset', e.target.value)}>
+                  {REMINDER_PRESETS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>優先度</label>
+                <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                  value={deployForm.batch_defaults?.priority || '中'}
+                  onChange={e => setBatch('priority', e.target.value)}>
+                  {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* ─── 指派負責人 + 每步天數 ─── */}
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '16px 0 10px' }}>
             指派負責人 + 每步預估天數
@@ -226,35 +323,123 @@ export default function DeployModal({
             const dueDate = deployForm.planned_start_date
               ? new Date(new Date(deployForm.planned_start_date).getTime() + offset * 86400000).toISOString().slice(0, 10)
               : '—'
+            const override = deployForm.step_overrides?.[i] || {}
+            const isExpanded = expandedSteps.has(i)
+            const hasOverride = Object.keys(override).length > 0
+            const batch = deployForm.batch_defaults || {}
             return (
               <div key={i} style={{
-                display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 8, alignItems: 'center',
-                padding: '10px 12px', borderRadius: 8, background: 'var(--glass-light)',
-                marginBottom: 6, border: '1px solid var(--border-subtle)',
+                padding: '10px 12px', borderRadius: 8,
+                background: hasOverride ? 'rgba(34,211,238,0.05)' : 'var(--glass-light)',
+                marginBottom: 6, border: `1px solid ${hasOverride ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}`,
               }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Step {i + 1}：{step.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    預設角色：{step.role || '-'} · 截止：{dueDate}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 0.7fr auto', gap: 8, alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      Step {i + 1}：{step.title}
+                      {hasOverride && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan)', color: '#fff' }}>已覆寫</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      預設角色：{step.role || '-'} · 截止：{dueDate} {override.due_time || batch.due_time || '17:00'}
+                    </div>
                   </div>
+                  <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                    value={deployForm.assignees?.[i] || ''}
+                    onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
+                    <option value="">請選擇</option>
+                    {matched.length > 0 && (
+                      <optgroup label={`✦ 建議（${step.role}）`}>{matched.map(renderOption)}</optgroup>
+                    )}
+                    {others.length > 0 && (
+                      <optgroup label="其他員工">{others.map(renderOption)}</optgroup>
+                    )}
+                  </select>
+                  <input className="form-input" type="number" min="0" max="180"
+                    style={{ width: '100%', fontSize: 12 }} title="從開始日起算第幾天到期"
+                    value={offset}
+                    onChange={e => setDeployForm(f => ({
+                      ...f, step_offsets: { ...f.step_offsets, [i]: Number(e.target.value) }
+                    }))} />
+                  <button type="button" onClick={() => toggleExpand(i)}
+                    title="進階設定（截止時間/提醒/優先度/備註）"
+                    style={{
+                      padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                      background: isExpanded ? 'var(--accent-cyan)' : 'transparent',
+                      color: isExpanded ? '#fff' : 'var(--text-muted)',
+                      border: '1px solid var(--border-subtle)',
+                      display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap',
+                    }}>
+                    {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />} 進階
+                  </button>
                 </div>
-                <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                  value={deployForm.assignees?.[i] || ''}
-                  onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
-                  <option value="">請選擇</option>
-                  {matched.length > 0 && (
-                    <optgroup label={`✦ 建議（${step.role}）`}>{matched.map(renderOption)}</optgroup>
-                  )}
-                  {others.length > 0 && (
-                    <optgroup label="其他員工">{others.map(renderOption)}</optgroup>
-                  )}
-                </select>
-                <input className="form-input" type="number" min="0" max="180"
-                  style={{ width: '100%', fontSize: 12 }} title="從開始日起算第幾天到期"
-                  value={offset}
-                  onChange={e => setDeployForm(f => ({
-                    ...f, step_offsets: { ...f.step_offsets, [i]: Number(e.target.value) }
-                  }))} />
+
+                {/* ─── 展開區塊 ─── */}
+                {isExpanded && (
+                  <div style={{
+                    marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)',
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                          截止時間 {!override.due_time && <span style={{ fontSize: 9 }}>(預設)</span>}
+                        </label>
+                        <input className="form-input" type="time" style={{ width: '100%', fontSize: 12 }}
+                          value={override.due_time || batch.due_time || '17:00'}
+                          onChange={e => setStepOverride(i, 'due_time', e.target.value)} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                          提醒 {!override.reminder_preset && <span style={{ fontSize: 9 }}>(預設)</span>}
+                        </label>
+                        <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                          value={override.reminder_preset || batch.reminder_preset || '1hr'}
+                          onChange={e => setStepOverride(i, 'reminder_preset', e.target.value)}>
+                          {REMINDER_PRESETS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                          優先度 {!override.priority && <span style={{ fontSize: 9 }}>(預設)</span>}
+                        </label>
+                        <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                          value={override.priority || batch.priority || '中'}
+                          onChange={e => setStepOverride(i, 'priority', e.target.value)}>
+                          {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                        此步備註（給負責人的提示）
+                      </label>
+                      <textarea className="form-input" style={{ width: '100%', fontSize: 12, minHeight: 50 }}
+                        placeholder="例：請先準備好證件影本"
+                        value={override.notes || ''}
+                        onChange={e => setStepOverride(i, 'notes', e.target.value)} />
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      {hasOverride && (
+                        <button type="button" onClick={() => setDeployForm(f => {
+                          const o = { ...(f.step_overrides || {}) }; delete o[i]
+                          return { ...f, step_overrides: o }
+                        })} style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                          border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)',
+                        }}>清除覆寫（用預設）</button>
+                      )}
+                      <button type="button" onClick={() => applyOverrideToAll(i)}
+                        disabled={!hasOverride}
+                        style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: hasOverride ? 'pointer' : 'not-allowed',
+                          border: '1px solid var(--accent-cyan)', background: 'rgba(34,211,238,0.1)',
+                          color: 'var(--accent-cyan)', opacity: hasOverride ? 1 : 0.4,
+                          display: 'flex', alignItems: 'center', gap: 4,
+                        }}>
+                        <Copy size={10} /> 套用到所有步驟
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -281,6 +466,9 @@ export default function DeployModal({
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
                   即將建立 <strong>{preview.taskCount}</strong> 個任務，指派給 <strong>{preview.assigneeCount}</strong> 位員工
                   {preview.targetName && <>，對象：<strong>{preview.targetName}</strong></>}
+                  <br />
+                  <Settings size={11} style={{ display: 'inline', marginRight: 4 }} />
+                  <strong>{preview.defaultSteps}</strong> 步用批次預設、<strong style={{ color: 'var(--accent-cyan)' }}>{preview.customizedSteps}</strong> 步有個別覆寫
                   <br />
                   <Bell size={11} style={{ display: 'inline', marginRight: 4 }} />
                   將推 <strong>{preview.lineNotifyCount}</strong> 則 LINE 通知（每位指派人 1 則）

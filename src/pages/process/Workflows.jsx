@@ -408,6 +408,28 @@ export default function Workflows() {
         if (!offsetDays || offsetDays <= 0) return null
         return new Date(new Date(startDate).getTime() + offsetDays * 86400000).toISOString().slice(0, 10)
       }
+      // 算提醒時間：依 preset (1hr/1day/09am/none) + 截止日時
+      const calcReminderAt = (dueDate, dueTime, preset) => {
+        if (!dueDate || !preset || preset === 'none') return null
+        const due = new Date(`${dueDate}T${dueTime || '17:00'}:00`)
+        if (isNaN(due.getTime())) return null
+        if (preset === '1hr')  return new Date(due.getTime() - 3600000).toISOString()
+        if (preset === '1day') return new Date(due.getTime() - 86400000).toISOString()
+        if (preset === '09am') return new Date(`${dueDate}T09:00:00`).toISOString()
+        return null
+      }
+      // 解析每步實際生效設定：override > batch default > 後備
+      const batch = deployForm.batch_defaults || {}
+      const overrides = deployForm.step_overrides || {}
+      const resolveStepConfig = (i) => {
+        const o = overrides[i] || {}
+        return {
+          due_time: o.due_time || batch.due_time || '17:00',
+          reminder_preset: o.reminder_preset || batch.reminder_preset || '1hr',
+          priority: o.priority || batch.priority || deployForm.priority || '中',
+          notes: o.notes || null,
+        }
+      }
 
       const { data: instance } = await supabase.from('workflow_instances').insert({
         template_name: deployTemplate.name,
@@ -428,23 +450,31 @@ export default function Workflows() {
         const taskRows = tplSteps.map((step, i) => {
           const assigneeName = deployForm.assignees[i] || ''
           const offset = deployForm.step_offsets?.[i] ?? (i + 1)
-          // ★ 第 1 步自動進行中；其餘待處理（依序流轉）
           const stepStatus = i === 0 ? '進行中' : '待處理'
-          // 對象員工提示加在 task title（demo 時看得清楚是給誰的）
           const titleWithTarget = targetEmp
             ? `${step.title}（${targetEmp.name}）`
             : step.title
+          // ★ 解析此步驟生效設定（override > batch default > template default）
+          const cfg = resolveStepConfig(i)
+          const dueDate = calcDueDate(offset)
+          const reminderAt = calcReminderAt(dueDate, cfg.due_time, cfg.reminder_preset)
+          // 備註：合併 step.description（範本預設）+ 部署時填的 cfg.notes
+          const mergedNotes = [step.description, cfg.notes].filter(Boolean).join('\n\n— 部署備註 —\n')
           return {
             workflow_instance_id: instance.id, step_order: i + 1,
-            title: titleWithTarget, description: step.description,
+            title: titleWithTarget,
+            description: step.description,
             role: step.role,
             assignee: assigneeName,
             assignee_id: assigneeName ? (empByName.get(assigneeName) || null) : null,
             store: loc, status: stepStatus,
             started_at: i === 0 ? new Date().toISOString() : null,
-            due_date: calcDueDate(offset),
+            due_date: dueDate,
+            due_time: cfg.due_time,           // ★ 截止時間（每步可覆寫）
+            reminder_at: reminderAt,           // ★ 提醒時間（從 preset 算）
+            notes: cfg.notes || null,          // ★ 部署時填的備註
             bucket: 'Workflow', category: 'Workflow',
-            priority: deployForm.priority || step.priority || '中',
+            priority: cfg.priority,            // ★ 優先度（每步可覆寫）
             organization_id: profile?.organization_id || null,
           }
         })

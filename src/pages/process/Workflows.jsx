@@ -179,10 +179,24 @@ export default function Workflows() {
   // ★ 任務完成時自動觸發另一個 SOP 範本
   //   來源：tasks.trigger_template_id_on_complete（部署時設定）
   //   行為：建一個新 workflow_instance + 對應 tasks，第 1 步進行中 + 通知
+  //   防護：trigger_depth 上限 5，避免「A→B→A」無限迴圈把資料庫塞爆
+  const TRIGGER_DEPTH_LIMIT = 5
   const triggerSopOnComplete = async (templateId, sourceTask) => {
     const tpl = templates.find(t => t.id === Number(templateId))
     if (!tpl) return
     const sourceInst = instances.find(i => i.id === sourceTask.workflow_instance_id)
+    const parentDepth = Number(sourceInst?.trigger_depth || 0)
+    if (parentDepth >= TRIGGER_DEPTH_LIMIT) {
+      console.warn(`[triggerSopOnComplete] depth ${parentDepth} 已達上限 ${TRIGGER_DEPTH_LIMIT}，停止 cascade`)
+      // 寫一筆通知讓管理員知道（避免悄悄停止）
+      await supabase.from('notifications').insert({
+        recipient: sourceInst?.started_by || '系統',
+        type: '流程觸發中止',
+        title: `「${tpl.name}」未自動觸發：cascade 深度已達 ${TRIGGER_DEPTH_LIMIT}，疑似觸發迴圈`,
+        read: false,
+      }).then(() => {}, () => {})
+      return
+    }
     const { data: newInst, error } = await supabase.from('workflow_instances').insert({
       template_name: tpl.name,
       store: sourceTask.store || sourceInst?.store || null,
@@ -192,7 +206,10 @@ export default function Workflows() {
       organization_id: profile?.organization_id || null,
       target_employee_id: sourceInst?.target_employee_id || null,
       target_type: sourceInst?.target_type || null,
-      notes: `由「${sourceInst?.template_name}」第 ${sourceTask.step_order} 步完成自動觸發`,
+      notes: `由「${sourceInst?.template_name}」第 ${sourceTask.step_order} 步完成自動觸發（depth ${parentDepth + 1}）`,
+      // ★ 防迴圈
+      trigger_depth: parentDepth + 1,
+      triggered_by_instance_id: sourceInst?.id || null,
     }).select().single()
     if (error || !newInst) return
     const tplSteps = Array.isArray(tpl.steps) ? tpl.steps : []

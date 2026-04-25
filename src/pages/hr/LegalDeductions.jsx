@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit2, Pause, Play, Trash2, Gavel, AlertCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -29,6 +30,7 @@ const emptyForm = {
 }
 
 export default function LegalDeductions() {
+  const { profile } = useAuth()
   const [items, setItems] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -118,6 +120,7 @@ export default function LegalDeductions() {
     if (!monthlyAmt || monthlyAmt <= 0) return alert('每月金額必須大於 0')
     if (!/^\d{4}-\d{2}$/.test(form.started_month)) return alert('開始月份格式錯誤（應為 YYYY-MM）')
 
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
     const payload = {
       employee_id: Number(form.employee_id),
       title: form.title.trim(),
@@ -126,6 +129,7 @@ export default function LegalDeductions() {
       started_month: form.started_month,
       case_number: form.case_number || null,
       notes: form.notes || null,
+      organization_id: profile.organization_id,
     }
     try {
       if (editingId) {

@@ -116,8 +116,11 @@ export default function Leave() {
       return
     }
 
+    // ★ 解析 employee_id（強型別 FK）+ org_id 多租戶
+    const empRow = employees.find(e2 => e2.name === form.employee)
     const { data } = await createLeaveRequest({
       employee: form.employee,
+      employee_id: empRow?.id || null,
       type: selectedPolicy?.shortName || form.type,
       start_date: form.start_date,
       end_date: form.end_date || form.start_date,
@@ -128,6 +131,7 @@ export default function Leave() {
       reason: form.reason,
       status: '待審核',
       approver: '-',
+      organization_id: profile?.organization_id || null,
     })
     if (data) {
       setLeaves(prev => [data, ...prev])

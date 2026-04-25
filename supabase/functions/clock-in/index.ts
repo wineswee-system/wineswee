@@ -276,6 +276,7 @@ serve(async (req: Request) => {
         clock_in_lng: lng || null,
         clock_in_distance_m: method === 'gps' && lat && lng && location?.lat != null ? Math.round(haversineMetres(lat, lng, Number(location.lat), Number(location.lng))) : null,
         clock_in_method: method,
+        organization_id: (emp as any).organization_id || null,  // ★ 多租戶
       }).select().single()
       if (error) throw error
       record = data

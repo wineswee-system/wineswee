@@ -384,27 +384,56 @@ export default function Workflows() {
     try {
       const tplSteps = deployTemplate.steps || []
       const loc = deployForm.location
+
+      // ★ 偵測對象類型 + 解析 target employee
+      const tname = deployTemplate.name || ''
+      const targetType = /新人|到職|onboard|入職|報到|離職|offboard|退職|晉升|轉調|職務異動/.test(tname) ? 'employee' : null
+      const targetEmpId = deployForm.target_employee_id ? Number(deployForm.target_employee_id) : null
+      const targetEmp = targetEmpId ? employees.find(e => e.id === targetEmpId) : null
+
+      // 計算每步 due_date：開始日 + step_offsets[i]
+      const startDate = deployForm.planned_start_date || new Date().toISOString().slice(0, 10)
+      const calcDueDate = (offsetDays) => {
+        if (!offsetDays || offsetDays <= 0) return null
+        return new Date(new Date(startDate).getTime() + offsetDays * 86400000).toISOString().slice(0, 10)
+      }
+
       const { data: instance } = await supabase.from('workflow_instances').insert({
-        template_name: deployTemplate.name, store: loc,
-        status: '進行中', started_by: currentUser,
+        template_name: deployTemplate.name,
+        store: loc,
+        status: '進行中',
+        started_by: currentUser,
         organization_id: profile?.organization_id || null,
+        target_employee_id: targetType === 'employee' ? targetEmpId : null,
+        target_type: targetType,
+        planned_start_date: deployForm.planned_start_date || null,
+        planned_end_date: deployForm.planned_end_date || null,
+        priority: deployForm.priority || '中',
+        notes: deployForm.notes || null,
       }).select().single()
       if (instance) {
-        // 建一個 name → employee_id 的對照，讓任務 FK 正確寫入
-        // （沒有 FK 的話 LIFF 的 liff_list_my_tasks 會找不到任務）
         const empByName = new Map((employees || []).map(e => [e.name, e.id]))
 
         const taskRows = tplSteps.map((step, i) => {
           const assigneeName = deployForm.assignees[i] || ''
+          const offset = deployForm.step_offsets?.[i] ?? (i + 1)
+          // ★ 第 1 步自動進行中；其餘待處理（依序流轉）
+          const stepStatus = i === 0 ? '進行中' : '待處理'
+          // 對象員工提示加在 task title（demo 時看得清楚是給誰的）
+          const titleWithTarget = targetEmp
+            ? `${step.title}（${targetEmp.name}）`
+            : step.title
           return {
             workflow_instance_id: instance.id, step_order: i + 1,
-            title: step.title, description: step.description,
+            title: titleWithTarget, description: step.description,
             role: step.role,
             assignee: assigneeName,
             assignee_id: assigneeName ? (empByName.get(assigneeName) || null) : null,
-            store: loc, status: '待處理',
+            store: loc, status: stepStatus,
+            started_at: i === 0 ? new Date().toISOString() : null,
+            due_date: calcDueDate(offset),
             bucket: 'Workflow', category: 'Workflow',
-            priority: step.priority || '中',
+            priority: deployForm.priority || step.priority || '中',
             organization_id: profile?.organization_id || null,
           }
         })
@@ -412,11 +441,10 @@ export default function Workflows() {
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])
 
-          // LINE 推播任務指派（notifyTaskAssignee 內部會解 employee_line_accounts；
-          // 沒綁 LINE 的員工會靜默 fail，不影響其他）
-          // ★ 同一人被指派多個 task 時，只推一次（避免同一個 deploy 同一個人收 N 條訊息）
-          //   通知內容代表第一筆任務 + 額外幾筆計數，足夠提醒去 LIFF 看清單
-          const notifiedBy = new Map()  // assignee → first task
+          // ★ LINE 通知策略：第 1 步負責人「立即行動」 + 其餘負責人「待處理」
+          //   去重 by assignee：同人被指派多個任務只推一次
+          const firstStepAssignee = insertedTasks[0]?.assignee
+          const notifiedBy = new Map()
           insertedTasks.forEach(task => {
             if (!task.assignee) return
             if (notifiedBy.has(task.assignee)) {
@@ -425,11 +453,13 @@ export default function Workflows() {
               notifiedBy.set(task.assignee, { ...task, _extraCount: 0 })
             }
           })
-          for (const [, t] of notifiedBy) {
+          for (const [name, t] of notifiedBy) {
+            const isFirst = name === firstStepAssignee
+            const prefix = isFirst ? '🚀 [立即行動] ' : ''
             const title = t._extraCount > 0
-              ? `${t.title}（含其他 ${t._extraCount} 個任務）`
-              : t.title
-            notifyTaskAssignee(t.assignee, title, loc || deployTemplate.name, t.id).catch(() => {})
+              ? `${prefix}${t.title}（含其他 ${t._extraCount} 個任務）`
+              : `${prefix}${t.title}`
+            notifyTaskAssignee(name, title, loc || deployTemplate.name, t.id).catch(() => {})
           }
 
           // 掛查核清單到任務
@@ -466,7 +496,12 @@ export default function Workflows() {
           }
         }
         setInstances(prev => [instance, ...prev])
-        setDeployResult({ location: loc, count: tplSteps.length })
+        setDeployResult({
+          location: loc,
+          count: tplSteps.length,
+          targetName: targetEmp?.name || null,
+          instance,  // 給「查看流程」按鈕跳轉用
+        })
       }
     } catch (err) {
       alert('部署失敗：' + (err.message || '未知錯誤'))
@@ -612,7 +647,17 @@ export default function Workflows() {
           deployResult={deployResult} deploying={deploying}
           stores={stores} employees={employees} departments={departments}
           onDeploy={handleDeploy}
-          onClose={() => { setShowDeployModal(false); setDeployResult(null) }}
+          onClose={() => {
+            // ★ 部署成功後關 modal → 直接跳轉到該流程的詳細視圖
+            //   這樣使用者不會「部署完了不知道去哪看進度」
+            const goToInstance = deployResult?.instance
+            setShowDeployModal(false)
+            setDeployResult(null)
+            if (goToInstance) {
+              setSelectedInstance(goToInstance)
+              setTab('active')  // 切回進行中分頁
+            }
+          }}
         />
       )}
 

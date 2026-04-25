@@ -59,18 +59,26 @@ export default function Performance() {
 
   const handleAddGoal = async () => {
     if (!goalForm.employee || !goalForm.title) return
+    const currentVal = Number(goalForm.current) || 0
     const { data } = await supabase.from('performance_goals').insert({
       ...goalForm,
       target: Number(goalForm.target),
-      current: Number(goalForm.current),
+      current: currentVal,
+      progress: currentVal,  // 雙寫：schema 主欄位是 progress，LIFF 也讀 progress
     }).select().single()
     if (data) { setGoals(prev => [...prev, data]); setShowGoalModal(false) }
     setGoalForm({ employee: '', category: GOAL_CATEGORIES[0], title: '', target: '', current: '0', unit: '', deadline: '', note: '' })
   }
 
   const updateProgress = async (goal, delta) => {
-    const newVal = Math.max(0, Math.min(goal.target, (goal.current || 0) + delta))
-    const { data } = await supabase.from('performance_goals').update({ current: newVal }).eq('id', goal.id).select().single()
+    // 讀進度 prefer progress（schema 主欄位），fallback current（legacy）
+    const cur = Number(goal.progress ?? goal.current ?? 0)
+    const targetNum = Number(goal.target) || Infinity
+    const newVal = Math.max(0, Math.min(targetNum, cur + delta))
+    // 雙寫保持兩欄位同步
+    const { data } = await supabase.from('performance_goals')
+      .update({ current: newVal, progress: newVal })
+      .eq('id', goal.id).select().single()
     if (data) setGoals(prev => prev.map(g => g.id === goal.id ? data : g))
   }
 

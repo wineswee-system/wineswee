@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
-export default function Modal({ title, onClose, children, onSubmit, submitLabel = '儲存' }) {
+export default function Modal({ title, onClose, children, onSubmit, submitLabel = '儲存', submitDisabled = false }) {
   const modalRef = useRef(null)
   const previousFocusRef = useRef(null)
 
@@ -63,7 +63,10 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
         </div>
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={onSubmit}>{submitLabel}</button>
+          <button className="btn btn-primary" onClick={onSubmit} disabled={submitDisabled}
+            style={submitDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+            {submitLabel}
+          </button>
         </div>
       </div>
     </div>,

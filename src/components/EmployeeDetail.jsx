@@ -37,6 +37,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [availability, setAvailability] = useState([])
   const [onboardingTasks, setOnboardingTasks] = useState([])
   const [assignments, setAssignments] = useState([])
+  const [targetWorkflows, setTargetWorkflows] = useState([])  // 以此員工為對象的流程
+  const [targetWfTasks, setTargetWfTasks] = useState([])      // 上述流程下的所有任務
   const [lineAccounts, setLineAccounts] = useState([])
   const [lineChannels, setLineChannels] = useState([])
   const [newLineUserId, setNewLineUserId] = useState('')
@@ -78,6 +80,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
     }).catch(err => console.warn('Failed to load employee sub-data:', err))
+    // 載入「以此員工為對象」的流程實例 + 任務
+    supabase.from('workflow_instances')
+      .select('*')
+      .eq('target_employee_id', employee.id)
+      .order('started_at', { ascending: false })
+      .then(({ data: wfs }) => {
+        setTargetWorkflows(wfs || [])
+        if (wfs && wfs.length > 0) {
+          const ids = wfs.map(w => w.id)
+          supabase.from('tasks').select('*').in('workflow_instance_id', ids).order('step_order')
+            .then(({ data: ts }) => setTargetWfTasks(ts || []))
+        } else {
+          setTargetWfTasks([])
+        }
+      })
+      .catch(() => {})
     // Load roles（角色下拉）
     supabase.from('roles').select('id, name, description, level').order('level', { ascending: false })
       .then(({ data }) => setRoles(data || []))
@@ -252,6 +270,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const TABS = [
     { key: 'personal', label: '個人資訊', icon: '👤' },
     { key: 'org', label: '組織', icon: '🏢' },
+    { key: 'workflows', label: '進行中流程', icon: '🚀' },
     { key: 'assignments', label: '指派歷史', icon: '📜' },
     { key: 'skills', label: '技能', icon: '🏷️' },
     { key: 'personality', label: '性格分析', icon: '🧬' },
@@ -741,6 +760,86 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                 AI 排班會根據優先級決定排班順序，優先級高的員工會先被排入尖峰時段
               </div>
+            </>
+          )}
+
+          {/* ═══ 進行中流程（以此員工為對象的 SOP 部署）═══ */}
+          {tab === 'workflows' && (
+            <>
+              <SectionTitle icon="🚀" text={`進行中 / 已完成的相關流程 (${targetWorkflows.length})`} />
+              {targetWorkflows.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32, fontSize: 13 }}>
+                  尚無以此員工為對象的流程<br />
+                  <span style={{ fontSize: 11 }}>（部署 SOP 時若選擇此員工為對象，會在這裡顯示）</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {targetWorkflows.map(wf => {
+                    const wfTasks = targetWfTasks.filter(t => t.workflow_instance_id === wf.id)
+                    const done = wfTasks.filter(t => t.status === '已完成').length
+                    const total = wfTasks.length || 1
+                    const pct = Math.round((done / total) * 100)
+                    const statusColor = wf.status === '進行中' ? 'var(--accent-cyan)'
+                      : wf.status === '已完成' ? 'var(--accent-green)'
+                      : 'var(--accent-orange)'
+                    return (
+                      <div key={wf.id} style={{
+                        padding: 14, borderRadius: 10,
+                        background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>
+                            {wf.template_name}
+                            {wf.priority && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>優先：{wf.priority}</span>}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: statusColor }}>
+                            {wf.status}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <div style={{ flex: 1, height: 6, background: 'rgba(148,163,184,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: statusColor }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 60, textAlign: 'right' }}>
+                            {done} / {total} ({pct}%)
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {wf.store && <span>📍 {wf.store}</span>}
+                          {wf.planned_start_date && <span>🗓 {wf.planned_start_date}{wf.planned_end_date ? ` ~ ${wf.planned_end_date}` : ''}</span>}
+                          {wf.started_by && <span>👤 由 {wf.started_by} 發起</span>}
+                        </div>
+                        {wf.notes && (
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic' }}>
+                            📝 {wf.notes}
+                          </div>
+                        )}
+                        {/* 步驟細節（前 3 個 + 摘要）*/}
+                        {wfTasks.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
+                            {wfTasks.slice(0, 5).map(t => (
+                              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                                <span>
+                                  {t.status === '已完成' ? '✅' : t.status === '進行中' ? '⏳' : '⚪'}
+                                  <span style={{ marginLeft: 6, color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: t.status === '已完成' ? 'line-through' : 'none' }}>
+                                    {t.title}
+                                  </span>
+                                </span>
+                                <span style={{ color: 'var(--text-muted)' }}>{t.assignee || '—'}</span>
+                              </div>
+                            ))}
+                            {wfTasks.length > 5 && (
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
+                                ...另有 {wfTasks.length - 5} 個步驟
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
 

@@ -3,6 +3,7 @@ import { Plus, ChevronDown, ChevronRight, AlertTriangle, ScanBarcode, CheckCircl
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
 import { playBeep } from '../../lib/barcodeScanner'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
@@ -11,6 +12,7 @@ const STATUSES = ['待揀貨', '揀貨中', '已複核', '已出貨']
 const CARRIERS = ['黑貓', '新竹', '郵局', '順豐', '7-11', '全家', '自取', '其他']
 
 export default function Outbound() {
+  const { profile } = useAuth()
   const [orders, setOrders] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [customers, setCustomers] = useState([])
@@ -23,10 +25,12 @@ export default function Outbound() {
   const [highlightItem, setHighlightItem] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('outbound_orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('warehouses').select('*'),
-      supabase.from('customers').select('id, name, credit_limit, outstanding_amount'),
+      supabase.from('outbound_orders').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('warehouses').select('*').eq('organization_id', orgId),
+      supabase.from('customers').select('id, name, credit_limit, outstanding_amount').eq('organization_id', orgId),
     ]).then(([o, w, c]) => {
       setOrders(o.data || [])
       setWarehouses(w.data || [])
@@ -37,7 +41,7 @@ export default function Outbound() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -52,7 +56,12 @@ export default function Outbound() {
 
   const handleSubmit = async () => {
     if (!form.order_number || !form.customer) return
-    const { data } = await supabase.from('outbound_orders').insert({ ...form, warehouse_id: form.warehouse_id || null }).select().single()
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    const { data } = await supabase.from('outbound_orders').insert({
+      ...form,
+      warehouse_id: form.warehouse_id || null,
+      organization_id: profile.organization_id,
+    }).select().single()
     if (data) { setOrders(prev => [data, ...prev]); setShowModal(false); setForm({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨', items: [{ sku_name: '', quantity: 1, unit: '個' }], notes: '' }) }
   }
 
@@ -62,10 +71,25 @@ export default function Outbound() {
   }
 
   const updateTracking = async (id, tracking_number) => {
-    const { data } = await supabase.from('outbound_orders').update({ tracking_number, status: '已出貨' }).eq('id', id).select().single()
+    // ★ 用 commit_outbound_shipment RPC 原子完成「扣 stock_levels + 寫 audit + 更新狀態」
+    //   之前只 update outbound_orders 不扣庫存 → 帳面消失
+    const order = orders.find(o => o.id === id)
+    const warehouseName = warehouses.find(w => w.id === order?.warehouse_id)?.name || order?.warehouse || null
+
+    const { data: shipResult, error: shipErr } = await supabase.rpc('commit_outbound_shipment', {
+      p_outbound_id: id,
+      p_warehouse: warehouseName,
+      p_actor: profile?.name || '系統',
+    })
+    if (shipErr || !shipResult?.ok) {
+      alert('出貨失敗：' + (shipResult?.error || shipErr?.message || '未知'))
+      return
+    }
+    // 更新 tracking + 重抓 order
+    const { data } = await supabase.from('outbound_orders').update({ tracking_number }).eq('id', id).select().single()
     if (data) {
       setOrders(prev => prev.map(o => o.id === id ? data : o))
-      // 自動產生 AR 應收帳款
+      // 應收帳款事件
       if (data.total_amount > 0) {
         getEventBus().publish('wms.shipment.completed', {
           shipment_id: data.id,

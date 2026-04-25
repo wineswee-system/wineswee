@@ -35,6 +35,12 @@ function calcTotals(lineItems) {
 }
 
 function dbLineToLocal(line) {
+  // tax_rate 預設邏輯修：DB 是小數（0.05），UI 顯示是百分比（5）
+  // 之前 NaN || 5 會把 NULL 也吃掉變 5，掩蓋資料錯誤；改成顯式 fallback
+  const rawTax = line.tax_rate
+  const taxPct = (rawTax === null || rawTax === undefined || isNaN(Number(rawTax)))
+    ? 5
+    : Number(rawTax) * 100
   return {
     _id: line.id,
     sku_id: line.sku_id || '',
@@ -42,7 +48,7 @@ function dbLineToLocal(line) {
     qty: Number(line.quantity) || 1,
     unit_price: Number(line.unit_price) || 0,
     discount: Number(line.discount_percent) || 0,
-    tax_rate: Number(line.tax_rate) * 100 || 5,
+    tax_rate: taxPct,
   }
 }
 

@@ -120,10 +120,11 @@ export default function JournalEntries() {
       })
       if (entryErr || !entry) { setSubmitError('建立傳票失敗'); return }
 
-      // Create all journal lines
+      // Create all journal lines（強制 round 到小數 2 位 + 拒絕負值，避免精度漂移）
+      const round2 = (n) => Math.round(n * 100) / 100
       for (const line of formLines) {
-        const debit = Number(line.debit) || 0
-        const credit = Number(line.credit) || 0
+        const debit = Math.max(0, round2(Number(line.debit) || 0))
+        const credit = Math.max(0, round2(Number(line.credit) || 0))
         if (debit === 0 && credit === 0) continue
         await createJournalLine({
           entry_id: entry.id,

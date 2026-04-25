@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
 import { calculateFIFO, calculateWeightedAverage, valuateInventory } from '../../lib/inventoryCosting'
 import { playBeep } from '../../lib/barcodeScanner'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
@@ -15,6 +16,7 @@ const COSTING_METHODS = [
 ]
 
 export default function Inventory() {
+  const { profile } = useAuth()
   const [stocks, setStocks] = useState([])
   const [adjustments, setAdjustments] = useState([])
   const [warehouses, setWarehouses] = useState([])
@@ -38,10 +40,12 @@ export default function Inventory() {
   const barcodeRef = useRef(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),
-      supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false }).limit(50),
-      supabase.from('warehouses').select('*'),
+      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),  // stock_levels schema 沒 org_id，靠 skus FK 連
+      supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50),
+      supabase.from('warehouses').select('*').eq('organization_id', orgId),
     ]).then(([s, a, w]) => {
       setStocks(s.data || [])
       setAdjustments(a.data || [])
@@ -52,14 +56,19 @@ export default function Inventory() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   const setA = (k, v) => setAdjForm(f => ({ ...f, [k]: v }))
   const setT = (k, v) => setTransferForm(f => ({ ...f, [k]: v }))
 
   const handleAdjust = async () => {
     if (!adjForm.sku_code || !adjForm.quantity || !adjForm.reason) return
-    const { data } = await supabase.from('inventory_adjustments').insert({ ...adjForm, quantity: Number(adjForm.quantity) }).select().single()
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    const { data } = await supabase.from('inventory_adjustments').insert({
+      ...adjForm,
+      quantity: Number(adjForm.quantity),
+      organization_id: profile.organization_id,  // ★ 多租戶
+    }).select().single()
     if (data) {
       setAdjustments(prev => [data, ...prev])
       setShowAdjModal(false)
@@ -69,17 +78,31 @@ export default function Inventory() {
 
   const handleTransfer = async () => {
     if (!transferForm.sku_code || !transferForm.from_bin || !transferForm.to_bin) return
-    await supabase.from('inventory_adjustments').insert({
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    // ⚠️ 注意：這裡的 transfer 是「儲位 (bin) 級」，不是 stock_levels 的 warehouse 級
+    // 真正改 stock_levels 數量還是另一條路徑。本處只寫 audit 紀錄 + 補 org_id。
+    // 為避免「源 insert 成功但目標 insert 失敗」的半成功，包成 try 並補償回滾
+    const orgId = profile.organization_id
+    const { data: from, error: fromErr } = await supabase.from('inventory_adjustments').insert({
       sku_code: transferForm.sku_code, bin_code: transferForm.from_bin,
       quantity: -Number(transferForm.quantity),
-      reason: `庫內移倉至 ${transferForm.to_bin}`, operator: '系統'
-    })
-    await supabase.from('inventory_adjustments').insert({
+      reason: `庫內移倉至 ${transferForm.to_bin}`, operator: '系統',
+      organization_id: orgId,
+    }).select().single()
+    if (fromErr) { alert('移倉失敗（源）：' + fromErr.message); return }
+    const { error: toErr } = await supabase.from('inventory_adjustments').insert({
       sku_code: transferForm.sku_code, bin_code: transferForm.to_bin,
       quantity: Number(transferForm.quantity),
-      reason: `從 ${transferForm.from_bin} 移入`, operator: '系統'
+      reason: `從 ${transferForm.from_bin} 移入`, operator: '系統',
+      organization_id: orgId,
     })
-    const { data } = await supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false }).limit(50)
+    if (toErr) {
+      // 補償：刪掉剛剛源的紀錄，避免帳面消失
+      await supabase.from('inventory_adjustments').delete().eq('id', from.id)
+      alert('移倉失敗（目標），已自動回滾源紀錄：' + toErr.message)
+      return
+    }
+    const { data } = await supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50)
     setAdjustments(data || [])
     setShowTransferModal(false)
     setTransferForm({ sku_code: '', from_bin: '', to_bin: '', quantity: '' })

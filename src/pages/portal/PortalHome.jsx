@@ -17,7 +17,7 @@ const ROLE_ORDER = ['store_staff', 'office_staff', 'manager', 'admin', 'super_ad
 const roleAtLeast = (userRole, minRole) => ROLE_ORDER.indexOf(userRole) >= ROLE_ORDER.indexOf(minRole)
 
 export default function PortalHome() {
-  const { profile } = useAuth()
+  const { profile, profileReady } = useAuth()
   const [todayAttendance, setTodayAttendance] = useState(null)
   const [pendingTasks, setPendingTasks] = useState(0)
   const [recentLeaves, setRecentLeaves] = useState([])
@@ -30,7 +30,8 @@ export default function PortalHome() {
   const greeting = hour < 12 ? '早安' : hour < 18 ? '午安' : '晚安'
 
   useEffect(() => {
-    if (!profile?.name) return
+    // ★ 等 profile 完全載入完（含 organization_id）才查；避免「name 有但 id 還沒」的競態
+    if (!profileReady || !profile?.id) return
 
     supabase.from('attendance_records').select('*')
       .eq('employee_id', profile.id).eq('date', today).maybeSingle()
@@ -52,7 +53,7 @@ export default function PortalHome() {
             .then(({ data: s }) => setStore(s))
         }
       })
-  }, [profile])
+  }, [profileReady, profile?.id, today])
 
   const handleClock = async () => {
     if (!profile?.name) return

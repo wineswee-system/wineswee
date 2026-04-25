@@ -1,8 +1,13 @@
 import { supabase } from './supabase'
 
 // ── Employees ──────────────────────────────────────────────
-export const getEmployees = () =>
-  supabase.from('employees').select('*').order('id')
+// 多租戶：呼叫端應傳 orgId（從 useAuth().profile.organization_id 拿）
+// 不傳 orgId 時 fallback 全域查（給尚未升級的 caller 暫時相容，但會被 RLS 擋）
+export const getEmployees = (orgId) => {
+  let q = supabase.from('employees').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
@@ -267,11 +272,14 @@ export const deleteTag = (id) =>
 // ── Approval Chains (簽核鏈) ─────────────────────────────
 // 注意：phase 2.3 後 steps 已從 JSONB 拆成 approval_chain_steps 關聯表。
 // 為保持 caller 相容，getApprovalChains() 以 FK join 把 steps 陣列組回來。
-export const getApprovalChains = async () => {
-  const { data, error } = await supabase
+// 多租戶：傳 orgId 篩
+export const getApprovalChains = async (orgId) => {
+  let q = supabase
     .from('approval_chains')
     .select('*, approval_chain_steps(id, step_order, role_name, role_id, label, target_type, target_role_id, target_dept_id, target_emp_id)')
     .order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  const { data, error } = await q
   if (error) return { data: null, error }
   const rows = (data || []).map(c => {
     const rawSteps = [...(c.approval_chain_steps || [])].sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
@@ -658,8 +666,12 @@ export const deleteStore = (id) =>
   supabase.from('stores').delete().eq('id', id)
 
 // ── Departments ───────────────────────────────────────────
-export const getDepartments = () =>
-  supabase.from('departments').select('*').order('id')
+// 同 getEmployees：多租戶呼叫端應傳 orgId
+export const getDepartments = (orgId) => {
+  let q = supabase.from('departments').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getDepartmentsWithRefs = () =>
   supabase.from('departments').select('*, manager_ref:employees!manager_id(id,name), parent:departments!parent_department_id(id,name)').order('id')
@@ -740,8 +752,12 @@ export const markNotificationRead = (id) =>
 export const markAllNotificationsRead = () =>
   supabase.from('notifications').update({ read: true }).eq('read', false)
 
-export const getAuditLogs = () =>
-  supabase.from('audit_logs').select('*').order('time', { ascending: false })
+// 多租戶：傳 orgId 篩；不傳 fallback 全域查（會被 RLS 擋）
+export const getAuditLogs = (orgId) => {
+  let q = supabase.from('audit_logs').select('*').order('time', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createAuditLog = (data) =>
   supabase.from('audit_logs').insert(data)

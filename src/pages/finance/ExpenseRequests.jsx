@@ -128,6 +128,11 @@ export default function ExpenseRequests() {
       status: '申請中',
       organization_id: profile?.organization_id ?? null,
     }
+    if (!payload.organization_id) {
+      setError('身份未載入完成，請重新登入再操作')
+      setSaving(false)
+      return
+    }
     const { data, error: insertErr } = await supabase.from('expense_requests').insert(payload).select().single()
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
 
@@ -149,22 +154,35 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // Approve request (update expense_requests + sync workflow if exists)
+  // 找出對應的 workflow_instance：限定 org + 同申請人 + 進行中 + 取最近一筆
+  // （之前一次更新所有「同人 + 同類型」的 instance，多筆並存會一起被誤改）
+  const resolveLinkedInstanceId = async (req) => {
+    if (!profile?.organization_id) return null
+    const { data } = await supabase.from('workflow_instances')
+      .select('id, started_at')
+      .eq('organization_id', profile.organization_id)
+      .eq('template_name', '費用申請簽核')
+      .eq('started_by', req.employee)
+      .eq('status', '進行中')
+      .order('started_at', { ascending: false })
+      .limit(1)
+    return data?.[0]?.id || null
+  }
+
   const handleApprove = async (req) => {
     const { error } = await supabase.from('expense_requests')
       .update({ status: '已核准', approved_by: profile?.name || '管理員', approved_at: new Date().toISOString() })
       .eq('id', req.id)
     if (error) { setError(error.message); return }
-    // Also complete any linked workflow_instance
-    await supabase.from('workflow_instances')
-      .update({ status: '已完成', completed_at: new Date().toISOString() })
-      .eq('template_name', '費用申請簽核')
-      .eq('started_by', req.employee)
-      .eq('status', '進行中')
+    const instId = await resolveLinkedInstanceId(req)
+    if (instId) {
+      await supabase.from('workflow_instances')
+        .update({ status: '已完成', completed_at: new Date().toISOString() })
+        .eq('id', instId)
+    }
     load()
   }
 
-  // Reject request
   const handleReject = async (req) => {
     const reason = prompt('駁回原因：')
     if (!reason) return
@@ -172,12 +190,12 @@ export default function ExpenseRequests() {
       .update({ status: '已駁回', reject_reason: reason })
       .eq('id', req.id)
     if (error) { setError(error.message); return }
-    // Also reject linked workflow_instance
-    await supabase.from('workflow_instances')
-      .update({ status: '已退回', completed_at: new Date().toISOString() })
-      .eq('template_name', '費用申請簽核')
-      .eq('started_by', req.employee)
-      .eq('status', '進行中')
+    const instId = await resolveLinkedInstanceId(req)
+    if (instId) {
+      await supabase.from('workflow_instances')
+        .update({ status: '已退回', completed_at: new Date().toISOString() })
+        .eq('id', instId)
+    }
     load()
   }
 

@@ -3,6 +3,7 @@ import { Plus, ChevronDown, ChevronRight, ScanBarcode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { addCostLayer } from '../../lib/inventoryCosting'
 import { playBeep } from '../../lib/barcodeScanner'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
@@ -10,6 +11,7 @@ import BarcodeInput from '../../components/BarcodeInput'
 const STATUSES = ['待到貨', '收貨中', '已完成', '異常']
 
 export default function Inbound() {
+  const { profile } = useAuth()
   const [orders, setOrders] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -24,9 +26,11 @@ export default function Inbound() {
   const [highlightItem, setHighlightItem] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('inbound_orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('warehouses').select('*'),
+      supabase.from('inbound_orders').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('warehouses').select('*').eq('organization_id', orgId),
     ]).then(([o, w]) => {
       setOrders(o.data || [])
       setWarehouses(w.data || [])
@@ -36,7 +40,7 @@ export default function Inbound() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -51,7 +55,12 @@ export default function Inbound() {
 
   const handleSubmit = async () => {
     if (!form.po_number || !form.supplier) return
-    const { data } = await supabase.from('inbound_orders').insert({ ...form, warehouse_id: form.warehouse_id || null }).select().single()
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    const { data } = await supabase.from('inbound_orders').insert({
+      ...form,
+      warehouse_id: form.warehouse_id || null,
+      organization_id: profile.organization_id,
+    }).select().single()
     if (data) { setOrders(prev => [data, ...prev]); setShowModal(false); setForm({ po_number: '', supplier: '', warehouse_id: '', expected_date: '', status: '待到貨' }) }
   }
 

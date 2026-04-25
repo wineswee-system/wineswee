@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { RefreshCw, Plus, Star, Trash2, Link2, Users, MessageCircle, Terminal, Search, Wand2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getLineGroups, getLineMessages } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 
 export default function LineIntegration() {
+  const { profile } = useAuth()
   const [channels, setChannels] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -31,16 +33,18 @@ export default function LineIntegration() {
   const [scanning, setScanning] = useState(false)
   const [candidateOverrides, setCandidateOverrides] = useState({}) // key → employee_id
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [profile?.organization_id])
 
   async function loadData() {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     setLoading(true)
     setError(null)
     try {
       const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
         supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, dept, department_id, position, status, departments!department_id(name)').eq('status', '在職').order('name'),
+        supabase.from('employees').select('id, name, dept, department_id, position, status, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
         getLineGroups(),
         getLineMessages(),
         supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),

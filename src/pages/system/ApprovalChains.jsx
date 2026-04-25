@@ -26,12 +26,14 @@ export default function ApprovalChains() {
   const [applyForm, setApplyForm] = useState({ chain_id: '', title: '', store: '', notes: '' })
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }  // 等 profile 載入完再執行
     Promise.all([
-      getApprovalChains(),
-      supabase.from('approval_forms').select('*').order('created_at', { ascending: false }),
+      getApprovalChains(orgId),
+      supabase.from('approval_forms').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('approval_form_steps').select('*').order('form_id,step_order'),
-      supabase.from('employees').select('id, name, dept, department_id, position, role, departments!department_id(name)').eq('status', '在職').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, role, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([c, f, fs, e, s]) => {
       setChains(c.data || [])
       setForms(f.data || [])
@@ -39,7 +41,7 @@ export default function ApprovalChains() {
       setEmployees(e.data || [])
       setStores(s.data || [])
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const openEditChain = (c) => {
     setEditingChain(c)
@@ -49,11 +51,16 @@ export default function ApprovalChains() {
 
   const handleChainSubmit = async () => {
     if (!chainForm.name) return
+    if (!profile?.organization_id) {
+      alert('身份資訊未載入完成，請重新登入再操作')
+      return
+    }
     const payload = {
       name: chainForm.name, description: chainForm.description, category: chainForm.category,
       min_amount: chainForm.min_amount !== '' ? Number(chainForm.min_amount) : 0,
       max_amount: chainForm.max_amount !== '' ? Number(chainForm.max_amount) : null,
       is_active: chainForm.is_active,
+      organization_id: profile.organization_id,  // ★ 多租戶必須
       steps: chainForm.steps.filter(s => s.role || s.label),
     }
     if (editingChain) {
@@ -73,11 +80,16 @@ export default function ApprovalChains() {
     if (!applyForm.chain_id || !applyForm.title) return
     const chain = chains.find(c => c.id === Number(applyForm.chain_id))
     if (!chain) return
+    if (!profile?.organization_id) {
+      alert('身份資訊未載入完成，請重新登入再操作')
+      return
+    }
     const { data: form, error } = await supabase.from('approval_forms').insert({
       chain_id: chain.id, title: applyForm.title, category: chain.category,
       applicant: currentUser, store: applyForm.store,
       form_data: { notes: applyForm.notes }, current_step: 0,
       status: chain.steps.length === 0 ? '已通過' : '簽核中',
+      organization_id: profile.organization_id,
     }).select().single()
     if (error) { alert('失敗：' + error.message); return }
     if (chain.steps.length > 0 && form) {

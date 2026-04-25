@@ -3,6 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, ArrowUpCircle } from 'lucide-react'
 import { getMembers, createMember, updateMember, createPointTransaction, getAllPointTransactions, getReferralCodes, createReferralCode, getReferralCodeByCode, getReferralRedemptionsByReferee, createReferralRedemption, updateReferralCode, getAllReferralRedemptions } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import { earnPoints, redeemPoints, refundPoints, generateReferralCode } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MemberListTab from './components/MemberListTab'
@@ -131,40 +132,48 @@ export default function Members() {
     const result = earnPoints(purchaseMember, amount, '消費累點')
     setPurchaseResult(result)
 
+    // ★ 用 atomic RPC 取代「讀-算-雙寫」，避免兩次同時請求弄丟點數
+    //   RPC 內部 SELECT FOR UPDATE 鎖會員列，再原子更新 total/available/visit + 寫 transaction
+    const reference = `POS-${Date.now()}`
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('earn_member_points_atomic', {
+      p_member_id: purchaseMember.id,
+      p_points_delta: result.pointsEarned,
+      p_amount: amount,
+      p_reason: result.transaction.description,
+      p_reference_no: reference,
+      p_operator: '系統',
+    })
+
     const memberUpdate = {
-      total_points: result.newTotalPoints,
-      available_points: result.newAvailablePoints,
+      total_points: rpcResult?.ok ? rpcResult.total_points : result.newTotalPoints,
+      available_points: rpcResult?.ok ? rpcResult.available_points : result.newAvailablePoints,
       total_spent: result.newTotalSpent,
       level: result.newTier,
       visit_count: (purchaseMember.visit_count || 0) + 1,
       last_visit: new Date().toISOString().slice(0, 10),
     }
 
-    // Persist to DB
-    try {
-      const [memberRes, txRes] = await Promise.all([
-        updateMember(purchaseMember.id, memberUpdate),
-        createPointTransaction({
+    if (rpcErr || !rpcResult?.ok) {
+      console.error('Atomic points failed, fallback:', rpcErr || rpcResult)
+      // Fallback：RPC 沒部署或失敗時，沿用舊路徑（接受雙寫風險）
+      try {
+        await updateMember(purchaseMember.id, memberUpdate)
+        await createPointTransaction({
           member_id: purchaseMember.id,
           type: 'earn',
           points: result.pointsEarned,
           balance: result.newAvailablePoints,
-          reference: `POS-${Date.now()}`,
+          reference,
           description: result.transaction.description,
-        }),
-      ])
-      if (memberRes.error) throw memberRes.error
-      if (txRes.error) throw txRes.error
-
-      // Update local state with DB response
-      setMembers(prev => prev.map(m => m.id !== purchaseMember.id ? m : { ...m, ...memberUpdate }))
-      setPointHistory(prev => [txRes.data || result.transaction, ...prev])
-    } catch (err) {
-      console.error('Failed to persist purchase:', err)
-      // Still update UI optimistically
-      setMembers(prev => prev.map(m => m.id !== purchaseMember.id ? m : { ...m, ...memberUpdate }))
-      setPointHistory(prev => [result.transaction, ...prev])
+        })
+      } catch (err) {
+        console.error('Fallback also failed:', err)
+      }
     }
+
+    // Update local state（RPC 回傳的 total/available 會優先採用）
+    setMembers(prev => prev.map(m => m.id !== purchaseMember.id ? m : { ...m, ...memberUpdate }))
+    setPointHistory(prev => [result.transaction, ...prev])
 
     // Add POS transaction display
     const posTx = {

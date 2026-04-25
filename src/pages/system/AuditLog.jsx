@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Download, Clock, User, Edit3, Trash2, Plus, Eye, Settings, LogIn } from 'lucide-react'
 import { getAuditLogs } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const actionConfig = {
@@ -21,6 +22,7 @@ function getActionStyle(action) {
 }
 
 export default function AuditLog() {
+  const { profile } = useAuth()
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -28,7 +30,8 @@ export default function AuditLog() {
   const [view, setView] = useState('timeline') // 'timeline' | 'table'
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => {
+    if (!profile?.organization_id) { setLoading(false); return }
+    getAuditLogs(profile.organization_id).then(({ data }) => {
       setLogs(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -36,7 +39,7 @@ export default function AuditLog() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

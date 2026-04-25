@@ -28,8 +28,9 @@ describe('CRM-EVT-01: Event Catalog Schema', () => {
     expect(formEvent.payload.data.required).toBe(true)
   })
 
-  test('10 CRM events defined', () => {
-    expect(Object.keys(CRM_EVENTS)).toHaveLength(10)
+  test('at least 10 CRM events defined', () => {
+    // catalog 會持續成長，固定數字會 rot；改成 baseline 斷言
+    expect(Object.keys(CRM_EVENTS).length).toBeGreaterThanOrEqual(10)
   })
 
   test('all event keys match domain.action pattern', () => {

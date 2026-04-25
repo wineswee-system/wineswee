@@ -1,46 +1,49 @@
 import { describe, it, expect, vi } from 'vitest'
 
 // Mock supabase module
+// 註：schema 已從 employees.supervisor (text name) 改成 supervisor_id (FK)
+//     mock 同步用 supervisor_id 數字，跟 src/lib/approval.js 的實際 query 對齊
 vi.mock('../supabase.js', () => {
   const employees = [
-    { id: '1', name: '張小華', supervisor: '李經理', status: '在職', role_id: 'employee' },
-    { id: '2', name: '李經理', supervisor: '王總監', status: '在職', role_id: 'manager' },
-    { id: '3', name: '王總監', supervisor: null, status: '在職', role_id: 'director' },
+    { id: 1, name: '張小華', supervisor_id: 2, status: '在職', role_id: 'employee', email: 'a@x.com' },
+    { id: 2, name: '李經理', supervisor_id: 3, status: '在職', role_id: 'manager',  email: 'b@x.com' },
+    { id: 3, name: '王總監', supervisor_id: null, status: '在職', role_id: 'director', email: 'c@x.com' },
   ]
 
   const permissions = {
-    manager: [{ permissions: { code: 'leave.approve' } }],
+    manager:  [{ permissions: { code: 'leave.approve' } }],
     director: [{ permissions: { code: 'leave.approve' } }, { permissions: { code: 'pr.approve' } }],
     employee: [],
   }
 
-  const mockSelect = (table) => {
-    return {
-      select: () => ({
-        eq: (field, value) => {
-          if (table === 'employees') {
-            return {
-              eq: (f2, v2) => ({
-                maybeSingle: () => {
-                  const emp = employees.find(e => e[field] === value && e[f2] === v2)
-                  return Promise.resolve({ data: emp || null })
-                },
-              }),
-            }
-          }
-          if (table === 'role_permissions') {
-            const perms = permissions[value] || []
-            return Promise.resolve({ data: perms })
-          }
-          return Promise.resolve({ data: null })
-        },
-      }),
-    }
-  }
+  const mockFrom = (table) => ({
+    select: () => {
+      if (table === 'role_permissions') {
+        return {
+          eq: (_field, value) => Promise.resolve({ data: permissions[value] || [] }),
+        }
+      }
+      // employees: 支援 .eq().eq().maybeSingle() 連鎖
+      return {
+        eq: (field, value) => ({
+          eq: (f2, v2) => ({
+            maybeSingle: () => {
+              const emp = employees.find(e => e[field] === value && e[f2] === v2)
+              return Promise.resolve({ data: emp || null })
+            },
+          }),
+          maybeSingle: () => {
+            const emp = employees.find(e => e[field] === value)
+            return Promise.resolve({ data: emp || null })
+          },
+        }),
+      }
+    },
+  })
 
   return {
     supabase: {
-      from: (table) => mockSelect(table),
+      from: (table) => mockFrom(table),
     },
   }
 })

@@ -122,3 +122,16 @@ CREATE POLICY auth_project_templates ON project_templates FOR ALL TO authenticat
 CREATE POLICY anon_project_templates ON project_templates FOR ALL TO anon USING (true) WITH CHECK (true);
 
 SELECT 'Projects tables ready' AS result;
+
+-- ============================================================
+-- Fix: Task confirmation enhancements
+-- ============================================================
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmed_by TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_status TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_required BOOLEAN DEFAULT false;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_responded_at TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_approver TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_rejected_reason TEXT;
+
+SELECT 'Task confirmation columns ready' AS result;

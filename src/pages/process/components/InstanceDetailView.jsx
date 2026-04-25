@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import {
-  Plus, Pencil, X, Users, User, ClipboardList
+  Plus, Pencil, X, Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
@@ -15,7 +16,8 @@ const STATUS_CONFIG = {
 }
 
 export default function InstanceDetailView({
-  inst, instSteps, stats, employees, stores, checklists,
+  inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
+  currentUser = '', isAdmin = false, isSuperAdmin = false,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
   showAddTaskModal, taskForm, setTaskForm, setShowAddTaskModal,
@@ -25,6 +27,14 @@ export default function InstanceDetailView({
   onClose, onStatusChange, onConfirmTask, onSaveNotes, onAddTask, onEditInstance,
   onStepUpdate, onStepDelete,
 }) {
+  const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
+  const currentProject = projects.find(p => p.id === inst.project_id)
+
+  const canConfirm = (step) => {
+    if (isSuperAdmin || isAdmin) return true
+    if (step.confirmation_approver && step.confirmation_approver === currentUser) return true
+    return false
+  }
   return (
     <div className="fade-in">
       {/* Header */}
@@ -34,7 +44,7 @@ export default function InstanceDetailView({
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.template_name} · {inst.started_at?.slice(0, 10)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>指派</span>
-            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: (inst.groups || []).join(', ') }); setShowEditModal(true) }}>
+            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: inst.groups || [], project_id: inst.project_id || '' }); setShowEditModal(true) }}>
               <Pencil size={11} /> 編輯
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -45,6 +55,9 @@ export default function InstanceDetailView({
                 <Users size={12} /> {g}
               </div>
             ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '3px 10px', borderRadius: 6, background: currentProject ? 'var(--accent-purple-dim)' : 'var(--glass-light)', color: currentProject ? 'var(--accent-purple)' : 'var(--text-muted)', border: currentProject ? '1px solid rgba(168,85,247,0.2)' : '1px solid var(--border-subtle)' }}>
+              <FolderOpen size={12} /> {currentProject ? currentProject.name : '未關聯專案'}
+            </div>
           </div>
         </div>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={22} /></button>
@@ -119,13 +132,26 @@ export default function InstanceDetailView({
                       </select>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
                           onClick={e => { e.stopPropagation(); setNotesStep(step); setNotesText(step.notes || ''); setShowNotesModal(true) }}>📝 備註</button>
-                        {step.confirmation_status !== 'approved' ? (
+                        {step.confirmation_status === 'approved' ? (
+                          <span style={{ fontSize: 11, color: 'var(--accent-green)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            ✅ {step.confirmed_by} {step.confirmed_at?.slice(0, 10)}
+                          </span>
+                        ) : step.confirmation_status === 'rejected' ? (
+                          <span style={{ fontSize: 11, color: 'var(--accent-red)', fontWeight: 600, whiteSpace: 'nowrap', cursor: 'help' }}
+                            title={step.confirmation_rejected_reason || ''}>
+                            ❌ {step.confirmed_by} {step.confirmed_at?.slice(0, 10)}
+                          </span>
+                        ) : canConfirm(step) ? (
                           <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
-                            onClick={e => { e.stopPropagation(); onConfirmTask(step.id) }}>🔐 確認任務</button>
-                        ) : <span style={{ fontSize: 11, color: 'var(--accent-green)', fontWeight: 600 }}>✅ 完成</span>}
+                            onClick={e => { e.stopPropagation(); setConfirmModal({ open: true, step, reason: '' }) }}>
+                            🔐 確認任務
+                          </button>
+                        ) : step.confirmation_approver ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>待 {step.confirmation_approver}</span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -159,7 +185,38 @@ export default function InstanceDetailView({
       {showEditModal && (
         <Modal title="編輯指派" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
           <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={editForm.assignee} onChange={e => setEditForm(f => ({ ...f, assignee: e.target.value }))}><option value="">未指定</option>{employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}</select></Field>
-          <Field label="群組（逗號分隔）"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：Ai, 信義安和-新店建置專案群組" value={editForm.groups} onChange={e => setEditForm(f => ({ ...f, groups: e.target.value }))} /></Field>
+          <Field label="群組">
+            {lineGroups.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無 LINE 群組（由 LINE Webhook 自動建立）</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', padding: '4px 0' }}>
+                {lineGroups.map(g => {
+                  const checked = (editForm.groups || []).includes(g.group_name)
+                  return (
+                    <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: checked ? 'var(--accent-cyan-dim)' : 'transparent', border: checked ? '1px solid rgba(6,182,212,0.2)' : '1px solid transparent' }}>
+                      <input type="checkbox" checked={checked}
+                        onChange={e => setEditForm(f => ({
+                          ...f,
+                          groups: e.target.checked
+                            ? [...(f.groups || []), g.group_name]
+                            : (f.groups || []).filter(x => x !== g.group_name)
+                        }))}
+                        style={{ accentColor: 'var(--accent-cyan)', width: 14, height: 14 }}
+                      />
+                      <Users size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                      <span style={{ color: checked ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>{g.group_name}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </Field>
+          <Field label="所屬專案">
+            <select className="form-input" style={{ width: '100%' }} value={editForm.project_id} onChange={e => setEditForm(f => ({ ...f, project_id: e.target.value }))}>
+              <option value="">不關聯專案</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
         </Modal>
       )}
       {selectedStep && (
@@ -167,6 +224,51 @@ export default function InstanceDetailView({
           onUpdate={onStepUpdate}
           onDelete={onStepDelete}
           onClose={() => setSelectedStep(null)} />
+      )}
+
+      {/* ── Confirm / Reject Task Modal ── */}
+      {confirmModal.open && confirmModal.step && (
+        <div onClick={() => setConfirmModal(s => ({ ...s, open: false }))}
+          style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 16, padding: 28, width: 420, maxWidth: '92vw' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🔐 確認任務</h3>
+              <button onClick={() => setConfirmModal(s => ({ ...s, open: false }))}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20, padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{confirmModal.step.title}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>負責人：{confirmModal.step.assignee || '—'}</div>
+            </div>
+            <Field label="拒絕原因（拒絕時必填）">
+              <textarea className="form-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+                placeholder="如選擇拒絕，請說明原因..."
+                value={confirmModal.reason}
+                onChange={e => setConfirmModal(s => ({ ...s, reason: e.target.value }))} />
+            </Field>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmModal(s => ({ ...s, open: false }))}>取消</button>
+              <button
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: 'var(--accent-red)', color: '#fff' }}
+                onClick={() => {
+                  if (!confirmModal.reason.trim()) { alert('請填寫拒絕原因'); return }
+                  onConfirmTask(confirmModal.step.id, 'rejected', confirmModal.reason.trim())
+                  setConfirmModal({ open: false, step: null, reason: '' })
+                }}>
+                <ShieldX size={14} /> 拒絕
+              </button>
+              <button
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: 'var(--accent-green)', color: '#fff' }}
+                onClick={() => {
+                  onConfirmTask(confirmModal.step.id, 'approved', null)
+                  setConfirmModal({ open: false, step: null, reason: '' })
+                }}>
+                <ShieldCheck size={14} /> 核准
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

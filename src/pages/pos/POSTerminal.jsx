@@ -134,6 +134,19 @@ export default function POSTerminal() {
   const handleCheckout = async () => {
     if (cart.length === 0) return
 
+    // ★ 防呆：discount 不可為負（避免收銀員手動把 state 改成 -999 弄出負總額）
+    //   也不可超過 subtotal
+    const safeDiscount = Math.max(0, Math.min(subtotal, Number(discount) || 0))
+    if (safeDiscount !== discount) {
+      setDiscount(safeDiscount)
+      alert('折扣金額已自動修正為合法範圍（0 ~ 小計）')
+      return
+    }
+    if (total < 0) {
+      alert('總額不可為負，請檢查折扣與品項')
+      return
+    }
+
     // For cash: validate tendered amount
     if (selectedPayment === 'cash') {
       const tendered = Number(cashTendered)

@@ -48,6 +48,7 @@ export default function PunchCorrection() {
       corrected_time: form.corrected_time,
       reason: form.reason,
       status: '待審核',
+      organization_id: profile?.organization_id || null,
     }
     const { data } = await supabase.from('punch_corrections').insert(insertData).select().single()
     if (data) {

@@ -44,7 +44,7 @@ export default function Schedule() {
   const { tenant } = useTenant()
   const tenantId = tenant?.id || null
 
-  const { role: authRole } = useAuth()
+  const { role: authRole, profile: authProfile } = useAuth()
   const userRole = authRole?.name || 'store_staff'
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
   const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
@@ -216,7 +216,10 @@ export default function Schedule() {
       const { data } = await supabase.from('schedules').update(record).eq('id', existing.id).select().single()
       if (data) setSchedules(prev => prev.map(s => s.id === existing.id ? data : s))
     } else {
-      const { data } = await supabase.from('schedules').insert({ employee: empName, date, ...record }).select().single()
+      const { data } = await supabase.from('schedules').insert({
+        employee: empName, date, ...record,
+        organization_id: authProfile?.organization_id || null,
+      }).select().single()
       if (data) setSchedules(prev => [...prev, data])
     }
     setEditCell(null)

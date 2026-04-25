@@ -24,6 +24,16 @@ export default function Returns() {
   const handleSubmit = async () => {
     if (!form.return_number || !form.customer) return
     const refund = Number(form.total_refund)
+    // ★ 防呆：退款金額必須 > 0；若有指定 original_order，要不超過原訂單總額
+    if (!refund || refund <= 0) { alert('退款金額必須大於 0'); return }
+    if (form.original_order) {
+      const { data: orig } = await supabase.from('sales_orders')
+        .select('total').eq('order_number', form.original_order).maybeSingle()
+      if (orig?.total != null && refund > Number(orig.total)) {
+        alert(`退款金額 NT$${refund.toLocaleString()} 超過原訂單總額 NT$${Number(orig.total).toLocaleString()}，請確認`)
+        return
+      }
+    }
     const { data } = await createReturn({ ...form, total_refund: refund })
     if (data) {
       setItems(prev => [...prev, data])

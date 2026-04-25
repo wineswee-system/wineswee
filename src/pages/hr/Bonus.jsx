@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Settings, Gift } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
@@ -9,6 +10,7 @@ import { empLabel } from '../../lib/empLabel'
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
 export default function Bonus() {
+  const { profile } = useAuth()
   const [tab, setTab] = useState('業務')
   const [records, setRecords] = useState([])
   const [settings, setSettings] = useState([])
@@ -89,7 +91,8 @@ export default function Bonus() {
     if (!recordForm.employee_name) return
     try {
       const total = (Number(recordForm.base_bonus) || 0) + (Number(recordForm.data_bonus) || 0)
-      const { data, error } = await supabase.from('bonus_records').insert({ ...recordForm, base_bonus: Number(recordForm.base_bonus) || 0, data_bonus: Number(recordForm.data_bonus) || 0, total_bonus: total }).select().single()
+      if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+      const { data, error } = await supabase.from('bonus_records').insert({ ...recordForm, base_bonus: Number(recordForm.base_bonus) || 0, data_bonus: Number(recordForm.data_bonus) || 0, total_bonus: total, organization_id: profile.organization_id }).select().single()
       if (error) throw error
       if (data) { setRecords(prev => [data, ...prev]); setShowRecordModal(false); setRecordForm({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' }) }
     } catch (err) {

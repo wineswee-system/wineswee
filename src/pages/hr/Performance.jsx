@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, ChevronUp, ChevronDown } from 'lucide-react'
 import { getPerformanceReviews } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -11,6 +12,7 @@ const RATINGS = ['S', 'A+', 'A', 'B+', 'B', 'C']
 const GOAL_CATEGORIES = ['業績', '學習', '專案', '品質', '協作', '其他']
 
 export default function Performance() {
+  const { profile } = useAuth()
   const [tab, setTab] = useState('reviews')
   const [reviews, setReviews] = useState([])
   const [goals, setGoals] = useState([])
@@ -48,23 +50,27 @@ export default function Performance() {
 
   const handleAddReview = async () => {
     if (!reviewForm.employee || !reviewForm.overall_score) return
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
     const { data } = await supabase.from('performance_reviews').insert({
       ...reviewForm,
       overall_score: Number(reviewForm.overall_score),
       goals_completed: Number(reviewForm.goals_completed),
       goals: Number(reviewForm.goals),
+      organization_id: profile.organization_id,
     }).select().single()
     if (data) { setReviews(prev => [...prev, data]); setShowReviewModal(false) }
   }
 
   const handleAddGoal = async () => {
     if (!goalForm.employee || !goalForm.title) return
+    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
     const currentVal = Number(goalForm.current) || 0
     const { data } = await supabase.from('performance_goals').insert({
       ...goalForm,
       target: Number(goalForm.target),
       current: currentVal,
-      progress: currentVal,  // 雙寫：schema 主欄位是 progress，LIFF 也讀 progress
+      progress: currentVal,
+      organization_id: profile.organization_id,
     }).select().single()
     if (data) { setGoals(prev => [...prev, data]); setShowGoalModal(false) }
     setGoalForm({ employee: '', category: GOAL_CATEGORIES[0], title: '', target: '', current: '0', unit: '', deadline: '', note: '' })

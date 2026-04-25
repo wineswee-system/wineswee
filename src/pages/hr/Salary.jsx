@@ -16,7 +16,16 @@ const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 function computeDeductions(f) {
   const baseSalary = Number(f.base_salary) || 0
   const overtimePay = Number(f.overtime_pay) || 0
-  const allowances = Number(f.allowances) || 0
+  // ★ 拆分津貼欄位（與 salary_structures 一致）
+  const roleAllowance      = Number(f.role_allowance) || 0
+  const mealAllowance      = Number(f.meal_allowance) || 0
+  const transportAllowance = Number(f.transport_allowance) || 0
+  const attendanceBonus    = Number(f.attendance_bonus) || 0
+  // ★ 自訂津貼累加（chip 列表）
+  const customAllowancesTotal = Array.isArray(f.custom_allowances)
+    ? f.custom_allowances.reduce((s, c) => s + (Number(c.amount) || 0), 0)
+    : 0
+  const allowancesTotal = roleAllowance + mealAllowance + transportAllowance + attendanceBonus + customAllowancesTotal
   const bonus = Number(f.bonus) || 0
   const dependents = Number(f.dependents) || 0
   const voluntaryRate = (Number(f.voluntary_pension_rate) || 0) / 100
@@ -24,7 +33,7 @@ function computeDeductions(f) {
   const lateDeduction = Number(f.late_deduction) || 0
   const otherDeduction = Number(f.other_deduction) || 0
 
-  const gross = baseSalary + overtimePay + allowances + bonus
+  const gross = baseSalary + overtimePay + allowancesTotal + bonus
 
   const labor = calculateLaborInsurance(baseSalary)
   const health = calculateHealthInsurance(baseSalary, dependents)
@@ -48,6 +57,8 @@ function computeDeductions(f) {
     manualDeductions,
     totalDeductions,
     net,
+    allowancesTotal,
+    customAllowancesTotal,
     laborDetail: labor,
     healthDetail: health,
     pensionDetail: pension,
@@ -57,7 +68,10 @@ function computeDeductions(f) {
 
 const emptyForm = {
   employee: '', month: new Date().toISOString().slice(0, 7),
-  base_salary: '', overtime_pay: '', allowances: '', bonus: '',
+  base_salary: '', overtime_pay: '', bonus: '',
+  // ★ 拆分津貼欄位（跟 salary_structures 對齊）
+  role_allowance: '', meal_allowance: '', transport_allowance: '', attendance_bonus: '',
+  custom_allowances: [],  // [{name, amount}]
   dependents: '0', voluntary_pension_rate: '0',
   absence_deduction: '', late_deduction: '', other_deduction: '', deduction_note: '',
 }
@@ -119,33 +133,91 @@ export default function Salary() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  // ★ 自訂津貼操作（跟 SalaryStructures 同 pattern）
+  const addCustomAllowance = (preset) => {
+    setForm(f => ({ ...f, custom_allowances: [...(f.custom_allowances || []), { name: preset || '', amount: 0 }] }))
+  }
+  const updateCustomAllowance = (idx, key, val) => {
+    setForm(f => ({ ...f, custom_allowances: f.custom_allowances.map((c, i) => i === idx ? { ...c, [key]: val } : c) }))
+  }
+  const removeCustomAllowance = (idx) => {
+    setForm(f => ({ ...f, custom_allowances: f.custom_allowances.filter((_, i) => i !== idx) }))
+  }
+
+  // ★ 選員工後自動從 salary_structures 帶入預設值（新增模式）
+  useEffect(() => {
+    if (!form.employee || editingRecord) return  // 編輯模式不覆蓋
+    const emp = employees.find(e => e.name === form.employee)
+    if (!emp?.id) return
+    supabase.from('salary_structures').select('*').eq('employee_id', emp.id).maybeSingle()
+      .then(({ data: ss }) => {
+        if (!ss) return
+        setForm(f => ({
+          ...f,
+          base_salary:         f.base_salary         || String(ss.base_salary || ''),
+          role_allowance:      f.role_allowance      || String(ss.role_allowance || ''),
+          meal_allowance:      f.meal_allowance      || String(ss.meal_allowance || ''),
+          transport_allowance: f.transport_allowance || String(ss.transport_allowance || ''),
+          attendance_bonus:    f.attendance_bonus    || String(ss.attendance_bonus || ''),
+          custom_allowances:   (f.custom_allowances?.length > 0) ? f.custom_allowances : (ss.custom_allowances || []),
+          dependents:          f.dependents !== '0' ? f.dependents : String(ss.health_ins_dependents ?? 0),
+        }))
+      })
+  }, [form.employee, editingRecord, employees])
+
+  // ★ 同月份警告：是否已有 payroll_record
+  const [payrollWarning, setPayrollWarning] = useState(null)
+  useEffect(() => {
+    if (!form.employee || !form.month) { setPayrollWarning(null); return }
+    const emp = employees.find(e => e.name === form.employee)
+    if (!emp?.id) { setPayrollWarning(null); return }
+    supabase.from('payroll_records').select('id').eq('employee_id', emp.id).eq('pay_period', form.month).maybeSingle()
+      .then(({ data }) => {
+        setPayrollWarning(data?.id ? '⚠️ 此員工此月份已有正式薪資結算紀錄（payroll_records）。手動建立可能造成雙重計算。' : null)
+      }).catch(() => setPayrollWarning(null))
+  }, [form.employee, form.month, employees])
+
   // Real-time deduction preview
   const deductions = useMemo(() => computeDeductions(form), [form])
 
   // ── Create / Edit submit ──
   const handleSubmit = async () => {
     if (!form.employee) return
+    // ★ 同月已有 payroll_record 警告（雙重計算防呆）
+    if (payrollWarning && !editingRecord) {
+      if (!confirm(payrollWarning + '\n\n仍要繼續建立手動紀錄嗎？')) return
+    }
     const d = deductions
+    // 過濾空 custom_allowances
+    const cleanCustomAllowances = (form.custom_allowances || [])
+      .filter(c => c.name && c.name.trim())
+      .map(c => ({ name: c.name.trim(), amount: Number(c.amount) || 0 }))
+
     const payload = {
       employee: form.employee,
       month: form.month,
       base_salary: Number(form.base_salary) || 0,
-      allowance: Number(form.allowances) || 0,
-      overtime: Number(form.overtime_pay) || 0,
-      bonus: Number(form.bonus) || 0,
-      dependents: Number(form.dependents) || 0,
-      voluntary_pension_rate: Number(form.voluntary_pension_rate) || 0,
-      labor_insurance: d.laborIns,
-      health_insurance: d.healthIns,
-      pension_self: d.pensionSelf,
-      income_tax: d.incomeTax,
-      absence_deduction: Number(form.absence_deduction) || 0,
-      late_deduction: Number(form.late_deduction) || 0,
-      other_deduction: Number(form.other_deduction) || 0,
-      deduction_note: form.deduction_note || '',
-      insurance: d.laborIns + d.healthIns,
-      deductions: d.totalDeductions,
-      net_salary: d.net,
+      // ★ 對齊 salary_structures 的拆分欄位
+      role_allowance:      Number(form.role_allowance) || 0,
+      meal_allowance:      Number(form.meal_allowance) || 0,
+      transport_allowance: Number(form.transport_allowance) || 0,
+      attendance_bonus:    Number(form.attendance_bonus) || 0,
+      custom_allowances:   cleanCustomAllowances,
+      // 加班 / 獎金 / 保險參數
+      overtime_pay:        Number(form.overtime_pay) || 0,
+      bonus:               Number(form.bonus) || 0,
+      health_ins_dependents: Number(form.dependents) || 0,
+      pension_self_pct:    Number(form.voluntary_pension_rate) || 0,
+      // 扣款
+      absence_deduction:   Number(form.absence_deduction) || 0,
+      late_deduction:      Number(form.late_deduction) || 0,
+      other_deduction:     Number(form.other_deduction) || 0,
+      other_deduction_note: form.deduction_note || '',
+      // legacy 合併欄位（用 deductions 結果）
+      allowances_total:    d.allowancesTotal,
+      insurance:           d.laborIns + d.healthIns,
+      deductions_total:    d.totalDeductions,
+      net_salary:          d.net,
     }
 
     if (editingRecord) {
@@ -154,12 +226,9 @@ export default function Salary() {
         setRecords(prev => prev.map(r => r.id === data.id ? data : r))
       }
     } else {
-      const { data } = await supabase.rpc('secure_upsert_salary', {
-        p_employee: payload.employee, p_month: payload.month,
-        p_base_salary: payload.base_salary, p_allowance: payload.allowance ?? 0,
-        p_overtime: payload.overtime ?? 0, p_deductions: payload.deductions ?? 0,
-        p_insurance: payload.insurance ?? 0, p_net_salary: payload.net_salary ?? null,
-      })
+      // ★ 改用 v2：JSONB-based，支援所有對齊後欄位（含拆分津貼/自訂津貼/扣款明細）
+      const { data, error } = await supabase.rpc('secure_upsert_salary_v2', { p_data: payload })
+      if (error) { alert('儲存失敗：' + error.message); return }
       if (data) {
         setRecords(prev => [...prev, data])
       }
@@ -430,6 +499,10 @@ export default function Salary() {
           deductions={deductions}
           employees={employees}
           departments={departments}
+          payrollWarning={payrollWarning}
+          addCustomAllowance={addCustomAllowance}
+          updateCustomAllowance={updateCustomAllowance}
+          removeCustomAllowance={removeCustomAllowance}
           onClose={() => { setShowModal(false); setEditingRecord(null); setForm(emptyForm) }}
           onSubmit={handleSubmit}
         />

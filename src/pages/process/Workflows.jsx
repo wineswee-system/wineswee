@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Plus, Pencil, Trash2, ChevronRight, CheckCircle,
   X, Users, User, Play, Pause, Rocket, Archive,
@@ -29,7 +30,7 @@ import ArchivedInstancesList from './components/ArchivedInstancesList'
 import { generateFlowByRules } from './components/flowTemplates'
 
 export default function Workflows() {
-  const { profile } = useAuth()
+  const { profile, isAdmin, isSuperAdmin } = useAuth()
   const currentUser = profile?.name || '管理員'
   const [tab, setTab] = useState('active')
   const [workflows, setWorkflows] = useState([])
@@ -42,6 +43,7 @@ export default function Workflows() {
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [projects, setProjects] = useState([])
 
   // Filters
   const [filterStore, setFilterStore] = useState('')
@@ -58,7 +60,8 @@ export default function Workflows() {
   const [notesStep, setNotesStep] = useState(null)
   const [notesText, setNotesText] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editForm, setEditForm] = useState({ assignee: '', groups: '' })
+  const [editForm, setEditForm] = useState({ assignee: '', groups: [], project_id: '' })
+  const [lineGroups, setLineGroups] = useState([])
 
   // Create SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
@@ -100,7 +103,9 @@ export default function Workflows() {
       supabase.from('departments').select('*').order('name'),
       getApprovalChains(),
       getWorkflowCategories(),
-    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac, cat]) => {
+      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('line_groups').select('id, group_name').order('group_name'),
+    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac, cat, proj, lg]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
       setAllTasks(t.data || [])
@@ -111,6 +116,8 @@ export default function Workflows() {
       setDepartments(dept.data || [])
       setApprovalChains(ac.data || [])
       setCategories(cat.data || [])
+      setProjects(proj.data || [])
+      setLineGroups(lg.data || [])
     }).catch(err => {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
@@ -198,11 +205,15 @@ export default function Workflows() {
     return result
   }
 
-  const handleConfirmTask = async (taskId) => {
+  const handleConfirmTask = async (taskId, action, reason = null) => {
+    const now = new Date().toISOString()
     const { data } = await updateTask(taskId, {
       confirmation_required: true,
-      confirmation_status: 'approved',
-      confirmation_responded_at: new Date().toISOString(),
+      confirmation_status: action,
+      confirmation_responded_at: now,
+      confirmed_by: currentUser,
+      confirmed_at: now,
+      confirmation_rejected_reason: action === 'rejected' ? reason : null,
     })
     if (data) setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
   }
@@ -236,10 +247,10 @@ export default function Workflows() {
 
   const handleEditInstance = async () => {
     if (!selectedInstance) return
-    const groups = editForm.groups ? editForm.groups.split(',').map(g => g.trim()).filter(Boolean) : []
     const { data } = await updateWorkflowInstance(selectedInstance.id, {
       assignee: editForm.assignee || null,
-      groups: groups.length > 0 ? groups : null,
+      groups: editForm.groups.length > 0 ? editForm.groups : null,
+      project_id: editForm.project_id ? Number(editForm.project_id) : null,
     })
     if (data) {
       setInstances(prev => prev.map(i => i.id === selectedInstance.id ? data : i))
@@ -532,7 +543,8 @@ export default function Workflows() {
     return (
       <InstanceDetailView
         inst={inst} instSteps={instTasks} stats={stats}
-        employees={employees} stores={stores} checklists={checklists}
+        employees={employees} stores={stores} checklists={checklists} projects={projects} lineGroups={lineGroups}
+        currentUser={currentUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
         showNotesModal={showNotesModal} notesStep={notesStep} notesText={notesText}
         setNotesText={setNotesText} setShowNotesModal={setShowNotesModal} setNotesStep={setNotesStep}
         showAddTaskModal={showAddTaskModal} taskForm={taskForm} setTaskForm={setTaskForm} setShowAddTaskModal={setShowAddTaskModal}
@@ -611,7 +623,7 @@ export default function Workflows() {
 
       {/* ══ Active Instances ══ */}
       {tab === 'active' && (
-        <ActiveInstancesList instances={activeInstances} getStats={getStats} onSelect={setSelectedInstance} />
+        <ActiveInstancesList instances={activeInstances} getStats={getStats} onSelect={setSelectedInstance} projects={projects} lineGroups={lineGroups} />
       )}
 
       {/* ══ Templates (SOP) ══ */}
@@ -711,11 +723,11 @@ export default function Workflows() {
       )}
 
       {/* ══ New Workflow Chooser Overlay ══ */}
-      {showNewWorkflowMenu && (
+      {showNewWorkflowMenu && createPortal(
         <div
           onClick={() => setShowNewWorkflowMenu(false)}
           style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
+            position: 'fixed', inset: 0, zIndex: 10000,
             background: 'rgba(0,0,0,0.55)', display: 'flex',
             alignItems: 'center', justifyContent: 'center',
           }}
@@ -775,7 +787,8 @@ export default function Workflows() {
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ══ Workflow Categories Modal ══ */}

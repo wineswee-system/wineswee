@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
-import { getChecklists, createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../../lib/db'
+import { createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -10,6 +11,11 @@ export default function Checklists() {
   const [showModal, setShowModal] = useState(false)
   const [newName, setNewName] = useState('')
 
+  // Edit checklist overlay
+  const [editChecklist, setEditChecklist] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editAssignee, setEditAssignee] = useState('')
+
   // Expanded checklist
   const [expandedId, setExpandedId] = useState(null)
   const [items, setItems] = useState([])
@@ -18,9 +24,11 @@ export default function Checklists() {
   const [editingText, setEditingText] = useState('')
 
   useEffect(() => {
-    getChecklists().then(({ data }) => {
-      setChecklists(data || [])
-    }).finally(() => setLoading(false))
+    supabase.from('checklists')
+      .select('*, task_checklists(task_id, tasks(id, title, workflow, assignee))')
+      .order('id')
+      .then(({ data }) => setChecklists(data || []))
+      .finally(() => setLoading(false))
   }, [])
 
   const handleCreate = async () => {
@@ -31,6 +39,24 @@ export default function Checklists() {
       setShowModal(false)
       setNewName('')
     }
+  }
+
+  const handleOpenEdit = async (c) => {
+    setEditChecklist(c)
+    setEditName(c.name)
+    setEditAssignee(c.assignee || '')
+    setExpandedId(c.id)
+    const { data } = await getChecklistItems(c.id)
+    setItems(data || [])
+    setNewItemText('')
+  }
+
+  const handleSaveEditChecklist = async () => {
+    if (!editName.trim() || !editChecklist) return
+    const updates = { name: editName.trim(), assignee: editAssignee.trim() || null }
+    const { data } = await updateChecklist(editChecklist.id, updates)
+    if (data) setChecklists(prev => prev.map(c => c.id === editChecklist.id ? { ...c, ...updates } : c))
+    setEditChecklist(null)
   }
 
   const handleDelete = async (id) => {
@@ -105,6 +131,8 @@ export default function Checklists() {
           const isOpen = expandedId === c.id
           const done = c.completed || 0
           const total = c.items || 0
+          const linkedTasks = (c.task_checklists || []).map(tc => tc.tasks).filter(Boolean)
+          const firstTask = linkedTasks[0]
           return (
             <div key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
               {/* Header */}
@@ -112,24 +140,50 @@ export default function Checklists() {
                 onClick={() => handleExpand(c.id)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px', cursor: 'pointer',
+                  padding: '12px 16px', cursor: 'pointer', gap: 12,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                   {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
+                  <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>{c.name}</span>
                   {total > 0 && (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {done}/{total}
                     </span>
                   )}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginLeft: 4 }}>
+                    {c.assignee && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'var(--glass-light)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>
+                        👤 {c.assignee}
+                      </span>
+                    )}
+                    {firstTask && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', whiteSpace: 'nowrap' }}>
+                        📋 {firstTask.title}
+                        {linkedTasks.length > 1 && ` +${linkedTasks.length - 1}`}
+                      </span>
+                    )}
+                    {firstTask?.workflow && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid rgba(168,85,247,0.2)', whiteSpace: 'nowrap' }}>
+                        🔄 {firstTask.workflow}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={e => { e.stopPropagation(); handleDelete(c.id) }}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleOpenEdit(c) }}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(c.id) }}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
 
               {/* Items */}
@@ -186,6 +240,66 @@ export default function Checklists() {
           )
         })}
       </div>
+
+      {editChecklist && (
+        <div onClick={() => setEditChecklist(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 16, padding: 28, width: 520, maxWidth: '94vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Title bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>✏️ 編輯清單</h3>
+              <button onClick={() => setEditChecklist(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
+            </div>
+            {/* Name + assignee */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+              <Field label="清單名稱 *">
+                <input className="form-input" style={{ width: '100%' }} autoFocus
+                  value={editName} onChange={e => setEditName(e.target.value)} />
+              </Field>
+              <Field label="負責人">
+                <input className="form-input" style={{ width: '100%' }} placeholder="負責人姓名"
+                  value={editAssignee} onChange={e => setEditAssignee(e.target.value)} />
+              </Field>
+            </div>
+            {/* Items */}
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--text-secondary)' }}>項目清單</div>
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
+              {items.map((item, idx) => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 20 }}>{idx + 1}.</span>
+                  {editingItemId === item.id ? (
+                    <input className="form-input" style={{ flex: 1, fontSize: 13, padding: '3px 8px' }}
+                      value={editingText} onChange={e => setEditingText(e.target.value)}
+                      onBlur={() => handleSaveEdit(item)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(item); if (e.key === 'Escape') setEditingItemId(null) }}
+                      autoFocus />
+                  ) : (
+                    <span onClick={() => { setEditingItemId(item.id); setEditingText(item.title) }}
+                      style={{ flex: 1, fontSize: 13, cursor: 'pointer', padding: '3px 0' }}>
+                      {item.title}
+                      <Pencil size={10} style={{ marginLeft: 6, color: 'var(--text-muted)', opacity: 0.4, verticalAlign: 'middle' }} />
+                    </span>
+                  )}
+                  <button onClick={() => handleDeleteItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, opacity: 0.5 }}><X size={13} /></button>
+                </div>
+              ))}
+            </div>
+            {/* Add item */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <input className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder="新增項目..."
+                value={newItemText} onChange={e => setNewItemText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
+              <button className="btn btn-sm btn-primary" onClick={handleAddItem} style={{ fontSize: 12 }}><Plus size={12} /> 新增</button>
+            </div>
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setEditChecklist(null)}>取消</button>
+              <button className="btn btn-primary" onClick={handleSaveEditChecklist}>儲存</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <Modal title="新增清單" onClose={() => setShowModal(false)} onSubmit={handleCreate}>

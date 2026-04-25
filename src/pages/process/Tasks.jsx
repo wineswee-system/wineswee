@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
-import { getTasks, createTask, updateTask, getTaskDependenciesByInstance } from '../../lib/db'
+import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -19,6 +19,8 @@ export default function Tasks() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
+  const [projects, setProjects] = useState([])
+  const [taskCategories, setTaskCategories] = useState([])
   const [dependencies, setDependencies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -28,6 +30,8 @@ export default function Tasks() {
   const [filterAssignee, setFilterAssignee] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [filterBucket, setFilterBucket] = useState('')
+  const [filterProject, setFilterProject] = useState('')
+  const [filterWorkflow, setFilterWorkflow] = useState('')
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
@@ -38,12 +42,16 @@ export default function Tasks() {
       supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('departments').select('id, name').order('name'),
-    ]).then(([t, e, s, d]) => {
+      supabase.from('projects').select('id, name').order('name'),
+      getCategories('task'),
+    ]).then(([t, e, s, d, p, cat]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
       setStores(s.data || [])
       setDepartments(d.data || [])
+      setProjects(p.data || [])
+      setTaskCategories(cat.data || [])
       const ids = rows.map(r => r.id)
       if (ids.length) {
         getTaskDependenciesByInstance(ids).then(({ data }) => setDependencies(data || []))
@@ -84,6 +92,7 @@ export default function Tasks() {
     title: t.title,
     assignee: t.assignee,
     workflow: t.workflow || '',
+    projectName: projects.find(p => p.id === t.project_id)?.name || '',
     store: t.store || '',
     due_date: t.due_date,
     priority: t.priority || '中',
@@ -91,11 +100,15 @@ export default function Tasks() {
     bucket: t.bucket || (t.workflow_instance_id ? 'Workflow' : 'General'),
   }))
 
+  const workflows = [...new Set(allItems.map(t => t.workflow).filter(Boolean))].sort()
+
   // Filter
   const filtered = allItems.filter(t => {
     if (filterAssignee && t.assignee !== filterAssignee) return false
     if (filterStore && t.store !== filterStore) return false
     if (filterBucket && t.bucket !== filterBucket) return false
+    if (filterProject && t.projectName !== filterProject) return false
+    if (filterWorkflow && t.workflow !== filterWorkflow) return false
     if (search && !t.title?.toLowerCase().includes(search.toLowerCase()) && !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false
     if (tab === 'pending') return t.status === '未開始' || t.status === '待處理'
     if (tab === 'active') return t.status === '進行中'
@@ -122,47 +135,8 @@ export default function Tasks() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
-        {[
-          { key: 'all', label: `📋 待辦任務` },
-          { key: 'active', label: `🔄 進行中 (${activeCount})` },
-          { key: 'done', label: `✅ 已完成 (${doneCount})` },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            flex: 1, padding: '10px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            background: tab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
-            color: tab === t.key ? '#fff' : 'var(--text-muted)',
-          }}>{t.label}</button>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div className="search-bar" style={{ flex: 1, minWidth: 200 }}>
-          <Search className="search-icon" />
-          <input type="text" placeholder="搜尋任務..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
-          <option value="">全部人員</option>
-          <optgroup label="員工">
-            {employees.map(e => {
-              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
-              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
-              return <option key={e.id} value={e.name}>{label}</option>
-            })}
-          </optgroup>
-        </select>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
-          <option value="">全部門市</option>
-          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-        </select>
-        {buckets.length > 1 && (
-          <select className="form-input" style={{ fontSize: 13, minWidth: 130 }} value={filterBucket} onChange={e => setFilterBucket(e.target.value)}>
-            <option value="">全部分類</option>
-            {buckets.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-        )}
+      {/* View switcher */}
+      <div style={{ display: 'flex', marginBottom: 12 }}>
         <div style={{ display: 'flex', border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
           {[
             { k: 'list',     icon: List,    label: '列表' },
@@ -185,6 +159,58 @@ export default function Tasks() {
           })}
         </div>
       </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+        {[
+          { key: 'all', label: `📋 待辦任務` },
+          { key: 'active', label: `🔄 進行中 (${activeCount})` },
+          { key: 'done', label: `✅ 已完成 (${doneCount})` },
+        ].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            flex: 1, padding: '10px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            background: tab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+            color: tab === t.key ? '#fff' : 'var(--text-muted)',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Filters — row 1 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
+        <div className="search-bar" style={{ minWidth: 180, flex: '0 0 180px' }}>
+          <Search className="search-icon" />
+          <input type="text" placeholder="搜尋任務..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <select className="form-input" style={{ fontSize: 13, flex: '0 0 130px' }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
+          <option value="">全部人員</option>
+          <optgroup label="員工">
+            {employees.map(e => {
+              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
+              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
+              return <option key={e.id} value={e.name}>{label}</option>
+            })}
+          </optgroup>
+        </select>
+        <select className="form-input" style={{ fontSize: 13, flex: '0 0 120px' }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
+        <select className="form-input" style={{ fontSize: 13, flex: '0 0 120px' }} value={filterBucket} onChange={e => setFilterBucket(e.target.value)}>
+          <option value="">全部分類</option>
+          {taskCategories.length > 0
+            ? taskCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+            : buckets.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select className="form-input" style={{ fontSize: 13, flex: '0 0 130px' }} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+          <option value="">全部專案</option>
+          {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+        </select>
+        <select className="form-input" style={{ fontSize: 13, flex: '0 0 130px' }} value={filterWorkflow} onChange={e => setFilterWorkflow(e.target.value)}>
+          <option value="">全部流程</option>
+          {workflows.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </div>
+
 
       {view === 'kanban' && (
         <TaskKanban
@@ -215,13 +241,14 @@ export default function Tasks() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>任務名稱</th><th>所屬流程</th><th>負責人</th><th>門市</th><th>截止日期</th><th>優先度</th><th>分類</th><th>狀態</th></tr>
+              <tr><th>任務名稱</th><th>所屬專案</th><th>所屬流程</th><th>負責人</th><th>門市</th><th>截止日期</th><th>優先度</th><th>分類</th><th>狀態</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
               {filtered.map(t => (
                 <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}>
                   <td style={{ fontWeight: 600 }}>{t.title}</td>
+                  <td>{t.projectName ? <span className="badge badge-neutral" style={{ color: 'var(--accent-purple)', background: 'var(--accent-purple-dim)' }}>{t.projectName}</span> : '—'}</td>
                   <td>{t.workflow ? <span className="badge badge-neutral">{t.workflow}</span> : '—'}</td>
                   <td style={{ fontWeight: 600, fontSize: 13 }}>{t.assignee || '—'}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.store || '—'}</td>
@@ -287,7 +314,10 @@ export default function Tasks() {
             </Field>
             <Field label="分類">
               <select className="form-input" style={{ width: '100%' }} value={form.bucket} onChange={e => set('bucket', e.target.value)}>
-                <option>General</option><option>Personal</option><option>Workflow</option>
+                <option value="">— 選擇分類 —</option>
+                {taskCategories.length > 0
+                  ? taskCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                  : ['General', 'Personal', 'Workflow'].map(b => <option key={b}>{b}</option>)}
               </select>
             </Field>
           </div>

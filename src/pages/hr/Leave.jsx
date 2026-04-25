@@ -25,16 +25,28 @@ export default function Leave() {
   const [validationMsg, setValidationMsg] = useState('')
   const [error, setError] = useState(null)
 
+  // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
+  // storeKey: 'all' = 全公司預設、其他 = store id
+  const [stepSettings, setStepSettings] = useState({ all: {} })
   useEffect(() => {
     Promise.all([
       getLeaveRequests(),
-      supabase.from('employees').select('id, name, dept, department_id, position, join_date, phone, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([l, e, d]) => {
+      supabase.from('leave_step_settings').select('*'),
+    ]).then(([l, e, d, ls]) => {
       const emps = e.data || []
       setLeaves(l.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
+      // 整理 stepSettings
+      const map = { all: {} }
+      ;(ls.data || []).forEach(row => {
+        const k = row.store_id || 'all'
+        if (!map[k]) map[k] = {}
+        map[k][row.leave_code] = { step: Number(row.step), unit: row.unit }
+      })
+      setStepSettings(map)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -55,17 +67,28 @@ export default function Leave() {
     try {
     if (!form.start_date || !form.employee) return
 
+    // 取此假別此員工的 step 設定（先看員工所屬店覆寫，沒有則全公司預設，再沒有用 leavePolicy.js）
+    const empForStep = employees.find(em => em.name === form.employee)
+    const storeKey = empForStep?.store_id || null
+    const storeOverride = (storeKey && stepSettings[storeKey]?.[form.type]) || null
+    const globalOverride = stepSettings.all?.[form.type] || null
+    const stepCfg = storeOverride || globalOverride || { step: selectedPolicy?.minUnit || 0.5, unit: selectedPolicy?.unit || 'day' }
+
     // Calculate days/hours
     let days, hours
     if (form.unit === 'hour') {
       const [sh, sm] = form.start_time.split(':').map(Number)
       const [eh, em] = form.end_time.split(':').map(Number)
       hours = Math.max(0.5, (eh + em / 60) - (sh + sm / 60))
+      // 對齊 step（小時模式）
+      if (stepCfg.unit === 'hour') hours = Math.ceil(hours / stepCfg.step - 1e-9) * stepCfg.step
       days = Math.round(hours / 8 * 10) / 10
     } else {
       const start = new Date(form.start_date)
       const end = new Date(form.end_date || form.start_date)
       days = Math.max(1, Math.ceil((end - start) / 86400000) + 1)
+      // 對齊 step（天模式）
+      if (stepCfg.unit === 'day') days = Math.ceil(days / stepCfg.step - 1e-9) * stepCfg.step
       hours = days * 8
     }
 
@@ -344,6 +367,19 @@ export default function Leave() {
               <div><strong style={{ color: 'var(--accent-cyan)' }}>法源：</strong>{selectedPolicy.law}</div>
               <div><strong style={{ color: 'var(--accent-cyan)' }}>薪資：</strong>{selectedPolicy.salary}</div>
               <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{selectedPolicy.description}</div>
+              {(() => {
+                const empSel = employees.find(em => em.name === form.employee)
+                const sk = empSel?.store_id || null
+                const cfg = (sk && stepSettings[sk]?.[form.type]) || stepSettings.all?.[form.type]
+                if (!cfg) return null
+                return (
+                  <div style={{ fontSize: 11, marginTop: 6, paddingTop: 6, borderTop: '1px dashed rgba(34,211,238,0.2)' }}>
+                    <strong style={{ color: 'var(--accent-purple)' }}>廠商設定：</strong>
+                    最小單位 {cfg.step} {cfg.unit === 'day' ? '天' : '小時'}
+                    （在「工時/假別單位」設定）· 不滿一個單位會自動進位
+                  </div>
+                )
+              })()}
             </div>
           )}
           {/* Unit toggle */}

@@ -300,6 +300,14 @@ export default function Payroll() {
                                               <DetailRow label="交通津貼" value={fmt(rec.transport_allowance)} />
                                               <DetailRow label="全勤獎金" value={fmt(rec.attendance_bonus_earned)} />
                                               <DetailRow label="加班費" value={fmt(rec.overtime_pay)} />
+                                              {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
+                                                <>
+                                                  {rec.custom_allowances_breakdown.map((c, i) => (
+                                                    <DetailRow key={i} label={`└ ${c.name}`} value={fmt(c.amount)} />
+                                                  ))}
+                                                  <DetailRow label="自訂津貼合計" value={fmt(rec.custom_allowances_total)} bold />
+                                                </>
+                                              )}
                                               <DetailRow label="應發合計" value={fmt(rec.gross_salary)} bold />
                                             </div>
                                             {/* Deductions */}
@@ -309,7 +317,29 @@ export default function Payroll() {
                                               <DetailRow label="勞保（個人）" value={fmt(rec.labor_ins_employee)} />
                                               <DetailRow label="健保（個人）" value={fmt(rec.health_ins_employee)} />
                                               <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
+                                              {Array.isArray(rec.legal_deduction_breakdown) && rec.legal_deduction_breakdown.length > 0 && (
+                                                <>
+                                                  {rec.legal_deduction_breakdown.map((d, i) => (
+                                                    <DetailRow
+                                                      key={i}
+                                                      label={`└ ${d.title}${d.shortfall > 0 ? ' ⚠️' : ''}`}
+                                                      value={fmt(d.amount)}
+                                                    />
+                                                  ))}
+                                                  <DetailRow label="法扣合計" value={fmt(rec.legal_deduction_total)} bold />
+                                                </>
+                                              )}
                                               <DetailRow label="扣除合計" value={fmt(rec.total_deductions)} bold />
+                                              {Array.isArray(rec.legal_deduction_breakdown) &&
+                                                rec.legal_deduction_breakdown.some(d => d.shortfall > 0) && (
+                                                <div style={{
+                                                  marginTop: 6, fontSize: 11, color: 'var(--accent-orange)',
+                                                  padding: '4px 8px', background: 'rgba(251,146,60,0.08)',
+                                                  borderRadius: 6,
+                                                }}>
+                                                  ⚠️ 部分法扣金額不足當月扣完，已自動延後到下月
+                                                </div>
+                                              )}
                                             </div>
                                             {/* Summary */}
                                             <div>

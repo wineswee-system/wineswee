@@ -19,16 +19,23 @@ export default function Overtime() {
   const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '' })
   const [error, setError] = useState(null)
 
+  // 各店的加班 step 設定 → {store_id: step}
+  const [storeSteps, setStoreSteps] = useState({})
+  // employees 多帶 store_id 進來，這樣選人後可查 step
   useEffect(() => {
     Promise.all([
       getOvertimeRequests(),
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store_id, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([r, e, d]) => {
+      supabase.from('stores').select('id, overtime_step_hours'),
+    ]).then(([r, e, d, s]) => {
       const emps = e.data || []
       setRecords(r.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
+      const steps = {}
+      ;(s.data || []).forEach(st => { steps[st.id] = Number(st.overtime_step_hours) || 0.5 })
+      setStoreSteps(steps)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -242,7 +249,31 @@ export default function Overtime() {
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />
           </Field>
           <Field label="加班時數">
-            <input className="form-input" type="number" min="0.5" step="0.5" style={{ width: '100%' }} value={form.hours} onChange={e => set('hours', Number(e.target.value))} />
+            {(() => {
+              const selectedEmp = employees.find(e => e.name === form.employee)
+              const step = (selectedEmp && storeSteps[selectedEmp.store_id]) || 0.5
+              const opts = []
+              for (let v = step; v <= 12 + 1e-9; v += step) opts.push(Math.round(v * 100) / 100)
+              // 若 form.hours 不在 opts 內，自動進位到最近合法值
+              const safeHours = opts.includes(form.hours)
+                ? form.hours
+                : (opts.find(o => o >= form.hours) || opts[opts.length - 1])
+              return (
+                <>
+                  <select
+                    className="form-input"
+                    style={{ width: '100%' }}
+                    value={safeHours}
+                    onChange={e => set('hours', Number(e.target.value))}
+                  >
+                    {opts.map(h => <option key={h} value={h}>{h} 小時</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    本店加班最小單位 <b style={{ color: 'var(--accent-cyan)' }}>{step}</b> 小時（可在「工時/假別單位」設定）
+                  </div>
+                </>
+              )
+            })()}
           </Field>
           <Field label="原因">
             <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />

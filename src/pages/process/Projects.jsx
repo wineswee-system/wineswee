@@ -317,6 +317,14 @@ export default function Projects() {
   // Deploy template → create project + workflows + tasks
   const handleDeploy = async () => {
     if (!deployTpl || !deployForm.name) return
+    // ★ 多廠商安全：profile.organization_id 一定要有，沒有就拒絕（之前 fallback || 1 會把
+    //   未載入的 profile 全部塞進 demo org，是 silent corruption）
+    const orgId = profile?.organization_id
+    if (!orgId) {
+      alert('身份資訊未載入完成，請重新登入再操作')
+      return
+    }
+
     setDeploying(true)
     try {
       const tpl = deployTpl
@@ -334,7 +342,7 @@ export default function Projects() {
         start_date: today,
         end_date: endDate,
         budget: tpl.estimated_budget,
-        organization_id: profile?.organization_id || 1,
+        organization_id: orgId,
       }).select().single()
 
       if (!project) throw new Error('建立專案失敗')
@@ -349,6 +357,7 @@ export default function Projects() {
           started_by: deployForm.owner || profile?.name || '',
           store: deployForm.store || null,
           project_id: project.id,
+          organization_id: orgId,  // ★ 補 org_id，否則 org-scoped 查詢會漏
           sort_order: i + 1,
           started_at: new Date().toISOString(),
         }).select().single()
@@ -358,6 +367,7 @@ export default function Projects() {
             title: t.title,
             workflow_instance_id: instance.id,
             project_id: project.id,
+            organization_id: orgId,  // ★ 補 org_id
             status: '未開始',
             role: t.role || null,
             step_order: j + 1,

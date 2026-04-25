@@ -411,11 +411,23 @@ export default function Workflows() {
 
           // LINE 推播任務指派（notifyTaskAssignee 內部會解 employee_line_accounts；
           // 沒綁 LINE 的員工會靜默 fail，不影響其他）
+          // ★ 同一人被指派多個 task 時，只推一次（避免同一個 deploy 同一個人收 N 條訊息）
+          //   通知內容代表第一筆任務 + 額外幾筆計數，足夠提醒去 LIFF 看清單
+          const notifiedBy = new Map()  // assignee → first task
           insertedTasks.forEach(task => {
-            if (task.assignee) {
-              notifyTaskAssignee(task.assignee, task.title, loc || deployTemplate.name, task.id).catch(() => {})
+            if (!task.assignee) return
+            if (notifiedBy.has(task.assignee)) {
+              notifiedBy.get(task.assignee)._extraCount++
+            } else {
+              notifiedBy.set(task.assignee, { ...task, _extraCount: 0 })
             }
           })
+          for (const [, t] of notifiedBy) {
+            const title = t._extraCount > 0
+              ? `${t.title}（含其他 ${t._extraCount} 個任務）`
+              : t.title
+            notifyTaskAssignee(t.assignee, title, loc || deployTemplate.name, t.id).catch(() => {})
+          }
 
           // 掛查核清單到任務
           for (let i = 0; i < tplSteps.length; i++) {

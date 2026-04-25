@@ -107,16 +107,24 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   // orgId already resolved above (H-4)
   const stepRows = template.steps.map((title, i) => {
     const cs = sortedChainSteps?.[i]
-    const assignee = (cs?.target_type === 'employee' && cs?.target_emp_id)
-      ? (empById[cs.target_emp_id] || null)
-      : (i === 0 ? (supervisor?.name || null) : null)
+    // 解析該步的承辦人 name + id（兩者都要寫，否則 LIFF liff_list_my_tasks 用 assignee_id 篩會找不到）
+    let assigneeName = null
+    let assigneeId = null
+    if (cs?.target_type === 'employee' && cs?.target_emp_id) {
+      assigneeId = cs.target_emp_id
+      assigneeName = empById[cs.target_emp_id] || null
+    } else if (i === 0 && supervisor) {
+      assigneeId = supervisor.id || null
+      assigneeName = supervisor.name || null
+    }
     return {
       workflow_instance_id: instance.id,
       organization_id: orgId ?? null,
       step_order: i + 1,
       step_type: 'workflow_step',
       title,
-      assignee,
+      assignee:    assigneeName,
+      assignee_id: assigneeId,  // ★ FK，LIFF 端必須
       role: cs?.role_name?.includes('HR') ? 'hr' : cs?.role_name?.includes('財務') ? 'finance' : (title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager'),
       status: '待處理',
       due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
@@ -276,8 +284,9 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
 const TEMPLATE_TABLE_MAP = {
   '請假簽核': { table: 'leave_requests', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
   '加班簽核': { table: 'overtime_requests', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
-  '費用報帳簽核': { table: 'expenses', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核銷', rejected: '已拒絕' },
-  '出差申請簽核': { table: 'business_trips', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已拒絕' },
+  // ★ 統一字串：跟 LIFF approve RPC + 主系統 ExpenseRequests/Expenses UI 對齊
+  '費用報帳簽核': { table: 'expenses', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核銷', rejected: '已駁回' },
+  '出差申請簽核': { table: 'business_trips', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已核准', rejected: '已駁回' },
   '採購簽核': { table: 'purchase_orders', statusField: 'status', pendingStatuses: ['待審核', '申請中'], approved: '已確認', rejected: '已取消' },
   '費用申請簽核': { table: 'expense_requests', statusField: 'status', pendingStatuses: ['申請中', '待審核'], approved: '已核准', rejected: '已駁回' },  // H-1: expense_requests starts as '申請中'
 }

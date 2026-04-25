@@ -473,7 +473,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   <select className="form-input" style={{ width: '100%' }} value={form.supervisor || ''} onChange={e => set('supervisor', e.target.value)}>
                     <option value="">— 未指派 —</option>
                     {(allEmployees || []).filter(e => e.id !== employee.id && e.status === '在職').map(e => (
-                      <option key={e.id} value={e.name}>{empLabel(e)} — {e.position || e.dept}</option>
+                      <option key={e.id} value={e.name}>{empLabel(e)}{(e.position || e.dept) ? ` - ${e.position || e.dept}` : ''}</option>
                     ))}
                   </select>
                 </div>

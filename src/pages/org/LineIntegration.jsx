@@ -700,7 +700,7 @@ export default function LineIntegration() {
                               <option value="">— 請選擇 —</option>
                               {employees.map(emp => (
                                 <option key={emp.id} value={emp.id}>
-                                  {emp.name}{emp.id === c.matched_employee_id ? ' ★' : ''}
+                                  {empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}{emp.id === c.matched_employee_id ? ' ★' : ''}
                                 </option>
                               ))}
                             </select>

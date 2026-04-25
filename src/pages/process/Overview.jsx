@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp, Check, X, Pencil, Save } from 'lucide-react'
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists, updateTask, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -368,13 +369,13 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
     border: '1px solid var(--border-subtle)', borderRadius: 6,
   }
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1000, padding: 16,
+        zIndex: 10000, padding: 16,
       }}
     >
       <div
@@ -489,6 +490,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

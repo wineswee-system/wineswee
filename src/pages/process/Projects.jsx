@@ -81,6 +81,10 @@ export default function Projects() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [addingTaskWfId, setAddingTaskWfId] = useState(null)
   const [addTaskForm, setAddTaskForm] = useState({ title: '', assignee: '', due_date: '' })
+  const [addingDirectTask, setAddingDirectTask] = useState(false)
+  const [directTaskForm, setDirectTaskForm] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
+  const [collapsedWfIds, setCollapsedWfIds] = useState(new Set())
+  const toggleWf = (id) => setCollapsedWfIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -144,7 +148,9 @@ export default function Projects() {
   // Stats
   const getStats = (projectId) => {
     const pWorkflows = workflows.filter(w => w.project_id === projectId)
-    const pTasks = pWorkflows.flatMap(w => tasks.filter(t => t.workflow_instance_id === w.id))
+    const wfTasks = pWorkflows.flatMap(w => tasks.filter(t => t.workflow_instance_id === w.id))
+    const directTasks = tasks.filter(t => t.project_id === projectId && !t.workflow_instance_id)
+    const pTasks = [...wfTasks, ...directTasks]
     const total = pTasks.length
     const completed = pTasks.filter(t => t.status === '已完成').length
     const inProgress = pTasks.filter(t => t.status === '進行中').length
@@ -303,6 +309,28 @@ export default function Projects() {
       setAddTaskForm({ title: '', assignee: '', due_date: '' })
       setAddingTaskWfId(null)
       if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id).catch(() => {})
+    }
+  }
+
+  const handleAddDirectTask = async () => {
+    if (!directTaskForm.title.trim() || !selected) return
+    const directTasks = tasks.filter(t => t.project_id === selected.id && !t.workflow_instance_id)
+    const maxOrder = directTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
+    const { data } = await createTask({
+      project_id: selected.id,
+      title: directTaskForm.title.trim(),
+      assignee: directTaskForm.assignee || null,
+      due_date: directTaskForm.due_date || null,
+      priority: directTaskForm.priority || '中',
+      status: '待處理',
+      step_order: maxOrder + 1,
+      bucket: 'Project',
+      category: 'Project',
+    })
+    if (data) {
+      setTasks(prev => [...prev, data])
+      setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中' })
+      setAddingDirectTask(false)
     }
   }
 
@@ -595,11 +623,15 @@ export default function Projects() {
           const wPct = wTotal > 0 ? Math.round((wDone / wTotal) * 100) : 0
           const wColor = w.status === '已完成' ? 'var(--accent-green)' : w.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-cyan)'
 
+          const wCollapsed = collapsedWfIds.has(w.id)
           return (
             <div key={w.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  {wCollapsed
+                    ? <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 0.2s' }} />
+                    : <ChevronDown size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0, transition: 'transform 0.2s' }} />
+                  }
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{w.template_name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -627,7 +659,7 @@ export default function Projects() {
               </div>
 
               {/* Tasks section */}
-              <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+              {!wCollapsed && <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingLeft: 24 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <CheckSquare size={11} /> 步驟任務 ({wTasks.length})
@@ -698,10 +730,84 @@ export default function Projects() {
                       onClick={() => setAddingTaskWfId(null)}>取消</button>
                   </div>
                 )}
-              </div>
+              </div>}
             </div>
           )
         })}
+
+        {/* Direct project tasks (not inside any workflow) */}
+        {(() => {
+          const directTasks = tasks.filter(t => t.project_id === p.id && !t.workflow_instance_id)
+          return (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                  <CheckSquare size={15} /> 獨立任務（{directTasks.length}）
+                </span>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => { setAddingDirectTask(v => !v); setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中' }) }}>
+                  <Plus size={12} /> 新增任務
+                </button>
+              </div>
+              <div className="card" style={{ padding: '8px 12px' }}>
+                {directTasks.length === 0 && !addingDirectTask && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無獨立任務。點「新增任務」直接加入專案。</div>
+                )}
+                {directTasks.map((t, idx) => {
+                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_CONFIG['待處理']
+                  return (
+                    <div key={t.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      onClick={() => setSelectedTask(t)}
+                    >
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                      <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
+                      <select
+                        value={t.status}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => { e.stopPropagation(); handleTaskStatusChange(t.id, e.target.value) }}
+                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${sc.color}`, background: sc.bg, color: sc.color, cursor: 'pointer', outline: 'none', minWidth: 72 }}
+                      >
+                        {TASK_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )
+                })}
+                {addingDirectTask && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px', flexWrap: 'wrap' }}>
+                    <input
+                      className="form-input" style={{ flex: '1 1 160px', fontSize: 12 }}
+                      placeholder="任務名稱 *" autoFocus
+                      value={directTaskForm.title}
+                      onChange={e => setDirectTaskForm(f => ({ ...f, title: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && handleAddDirectTask()}
+                    />
+                    <select className="form-input" style={{ flex: '0 0 110px', fontSize: 12 }}
+                      value={directTaskForm.assignee} onChange={e => setDirectTaskForm(f => ({ ...f, assignee: e.target.value }))}>
+                      <option value="">負責人</option>
+                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                    </select>
+                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
+                      value={directTaskForm.due_date} onChange={e => setDirectTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+                    <select className="form-input" style={{ flex: '0 0 70px', fontSize: 12 }}
+                      value={directTaskForm.priority} onChange={e => setDirectTaskForm(f => ({ ...f, priority: e.target.value }))}>
+                      <option>高</option><option>中</option><option>低</option>
+                    </select>
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
+                      disabled={!directTaskForm.title.trim()} onClick={handleAddDirectTask}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
+                      onClick={() => setAddingDirectTask(false)}>取消</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Comments */}
         <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
@@ -731,8 +837,10 @@ export default function Projects() {
         {selectedTask && (
           <TaskDetailPanel
             step={selectedTask}
-            instance={pWorkflows.find(w => w.id === selectedTask.workflow_instance_id)}
-            allSteps={tasks.filter(t => t.workflow_instance_id === selectedTask.workflow_instance_id)}
+            instance={pWorkflows.find(w => w.id === selectedTask.workflow_instance_id) || null}
+            allSteps={selectedTask.workflow_instance_id
+              ? tasks.filter(t => t.workflow_instance_id === selectedTask.workflow_instance_id)
+              : [selectedTask]}
             employees={employees}
             stores={stores}
             checklists={[]}

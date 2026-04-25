@@ -224,7 +224,7 @@ export default function Locations() {
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
                 <option value="">請選擇</option>
-                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{empLabel(emp)}{emp.position ? ` (${emp.position})` : ''}</option>)}
+                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}</option>)}
               </select>
             </Field>
           </div>

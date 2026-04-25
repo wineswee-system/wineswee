@@ -254,11 +254,11 @@ export default function ExpenseApprovalSettings() {
                       style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                       <option value="">選擇簽核人</option>
                       {employees.filter(e => e.is_manager || e.position?.includes('主管') || e.position?.includes('經理') || e.position?.includes('財務')).map(emp => (
-                        <option key={emp.id} value={emp.name}>{empLabel(emp)}（{emp.position || emp.dept}）</option>
+                        <option key={emp.id} value={emp.name}>{empLabel(emp)}{(emp.position || emp.dept) ? ` - ${emp.position || emp.dept}` : ''}</option>
                       ))}
                       <optgroup label="── 全部員工 ──">
                         {employees.map(emp => (
-                          <option key={`all-${emp.id}`} value={emp.name}>{empLabel(emp)}（{emp.dept}）</option>
+                          <option key={`all-${emp.id}`} value={emp.name}>{empLabel(emp)}{emp.dept ? ` - ${emp.dept}` : ''}</option>
                         ))}
                       </optgroup>
                     </select>

@@ -562,7 +562,7 @@ export default function TaskDetailPanel({
                 <select className="form-input" style={{ width: '100%' }} value={form.assignee}
                   onChange={e => setAndDirty('assignee', e.target.value)}>
                   <option value="">未指定</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}{e.position ? ` - ${e.position}` : ''}</option>)}
                 </select>
               </div>
               <div>
@@ -760,7 +760,7 @@ export default function TaskDetailPanel({
                 value={newConfirmApprover} onChange={e => setNewConfirmApprover(e.target.value)}>
                 <option value="">＋ 選擇員工...</option>
                 {employees.filter(emp => !confirmations.some(c => c.approver === emp.name))
-                  .map(emp => <option key={emp.id} value={emp.name}>{empLabel(emp)}</option>)}
+                  .map(emp => <option key={emp.id} value={emp.name}>{empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}</option>)}
               </select>
               <select className="form-input" style={{ width: 90, fontSize: 12 }}
                 value={newConfirmPriority} onChange={e => setNewConfirmPriority(e.target.value)}>

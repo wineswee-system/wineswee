@@ -292,7 +292,7 @@ export default function ApprovalChains() {
                 <option value="">選擇簽核人</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.name}>
-                    {empLabel(emp)}（{emp.position || emp.dept || '—'}）
+                    {empLabel(emp)}{(emp.position || emp.dept) ? ` - ${emp.position || emp.dept}` : ''}
                   </option>
                 ))}
               </select>

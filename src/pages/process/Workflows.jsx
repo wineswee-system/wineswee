@@ -155,6 +155,13 @@ export default function Workflows() {
       let latestTasks = updatedTasks
       if (newStatus === '已完成') {
         latestTasks = await autoProgressDependents(data.id, data.workflow_instance_id, updatedTasks)
+
+        // ★ 完成時觸發另一個 SOP（部署時可選）
+        if (data.trigger_template_id_on_complete) {
+          await triggerSopOnComplete(data.trigger_template_id_on_complete, data).catch(err => {
+            console.warn('Trigger SOP on complete failed:', err)
+          })
+        }
       }
 
       // Check if entire instance is done
@@ -167,6 +174,56 @@ export default function Workflows() {
         }
       }
     }
+  }
+
+  // ★ 任務完成時自動觸發另一個 SOP 範本
+  //   來源：tasks.trigger_template_id_on_complete（部署時設定）
+  //   行為：建一個新 workflow_instance + 對應 tasks，第 1 步進行中 + 通知
+  const triggerSopOnComplete = async (templateId, sourceTask) => {
+    const tpl = templates.find(t => t.id === Number(templateId))
+    if (!tpl) return
+    const sourceInst = instances.find(i => i.id === sourceTask.workflow_instance_id)
+    const { data: newInst, error } = await supabase.from('workflow_instances').insert({
+      template_name: tpl.name,
+      store: sourceTask.store || sourceInst?.store || null,
+      status: '進行中',
+      started_by: sourceTask.assignee || profile?.name || '系統',
+      started_at: new Date().toISOString(),
+      organization_id: profile?.organization_id || null,
+      target_employee_id: sourceInst?.target_employee_id || null,
+      target_type: sourceInst?.target_type || null,
+      notes: `由「${sourceInst?.template_name}」第 ${sourceTask.step_order} 步完成自動觸發`,
+    }).select().single()
+    if (error || !newInst) return
+    const tplSteps = Array.isArray(tpl.steps) ? tpl.steps : []
+    if (tplSteps.length > 0) {
+      const empByName = new Map((employees || []).map(e => [e.name, e.id]))
+      const newRows = tplSteps.map((s, i) => {
+        const an = i === 0 ? (sourceTask.assignee || null) : null
+        return {
+          workflow_instance_id: newInst.id, step_order: i + 1,
+          title: s.title, description: s.description || null,
+          role: s.role || null,
+          assignee: an, assignee_id: an ? (empByName.get(an) || null) : null,
+          store: sourceTask.store || null,
+          status: i === 0 ? '進行中' : '待處理',
+          started_at: i === 0 ? new Date().toISOString() : null,
+          bucket: 'Workflow', category: 'Workflow',
+          priority: s.priority || '中',
+          organization_id: profile?.organization_id || null,
+        }
+      })
+      const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
+      if (createdTasks?.[0]?.assignee) {
+        notifyTaskAssignee(
+          createdTasks[0].assignee,
+          `🚀 [自動觸發] ${createdTasks[0].title}`,
+          `由「${sourceInst?.template_name}」觸發`,
+          createdTasks[0].id
+        ).catch(() => {})
+      }
+    }
+    setInstances(prev => [newInst, ...prev])
   }
 
   // Auto-progress: find tasks that depend on the completed task, start them if all prerequisites met
@@ -447,6 +504,8 @@ export default function Workflows() {
       if (instance) {
         const empByName = new Map((employees || []).map(e => [e.name, e.id]))
 
+        // ★ 取每步的「關聯與簽核」extras
+        const stepExtras = deployForm.step_extras || {}
         const taskRows = tplSteps.map((step, i) => {
           const assigneeName = deployForm.assignees[i] || ''
           const offset = deployForm.step_offsets?.[i] ?? (i + 1)
@@ -454,12 +513,10 @@ export default function Workflows() {
           const titleWithTarget = targetEmp
             ? `${step.title}（${targetEmp.name}）`
             : step.title
-          // ★ 解析此步驟生效設定（override > batch default > template default）
           const cfg = resolveStepConfig(i)
           const dueDate = calcDueDate(offset)
           const reminderAt = calcReminderAt(dueDate, cfg.due_time, cfg.reminder_preset)
-          // 備註：合併 step.description（範本預設）+ 部署時填的 cfg.notes
-          const mergedNotes = [step.description, cfg.notes].filter(Boolean).join('\n\n— 部署備註 —\n')
+          const extras = stepExtras[i] || {}
           return {
             workflow_instance_id: instance.id, step_order: i + 1,
             title: titleWithTarget,
@@ -470,12 +527,16 @@ export default function Workflows() {
             store: loc, status: stepStatus,
             started_at: i === 0 ? new Date().toISOString() : null,
             due_date: dueDate,
-            due_time: cfg.due_time,           // ★ 截止時間（每步可覆寫）
-            reminder_at: reminderAt,           // ★ 提醒時間（從 preset 算）
-            notes: cfg.notes || null,          // ★ 部署時填的備註
+            due_time: cfg.due_time,
+            reminder_at: reminderAt,
+            notes: cfg.notes || null,
             bucket: 'Workflow', category: 'Workflow',
-            priority: cfg.priority,            // ★ 優先度（每步可覆寫）
+            priority: cfg.priority,
             organization_id: profile?.organization_id || null,
+            // ★ 關聯欄位
+            approval_chain_id: extras.approval_chain_id || step.approval_chain_id || null,
+            confirmation_mode: extras.confirmation_mode || 'parallel',
+            trigger_template_id_on_complete: extras.trigger_template_id || null,
           }
         })
         const { data: insertedTasks } = await createTasksBatch(taskRows)
@@ -503,13 +564,28 @@ export default function Workflows() {
             notifyTaskAssignee(name, title, loc || deployTemplate.name, t.id).catch(() => {})
           }
 
-          // 掛查核清單到任務
+          // ★ 掛查核清單 + 確認審批人員（部署時 extras > 範本內建）
           for (let i = 0; i < tplSteps.length; i++) {
-            if (tplSteps[i].checklist_id && insertedTasks[i]) {
+            if (!insertedTasks[i]) continue
+            const taskId = insertedTasks[i].id
+            const extras = stepExtras[i] || {}
+            // 清單：extras 優先，否則範本
+            const checklistId = extras.checklist_id || tplSteps[i].checklist_id
+            if (checklistId) {
               await supabase.from('task_checklists').insert({
-                task_id: insertedTasks[i].id,
-                checklist_id: tplSteps[i].checklist_id,
-              })
+                task_id: taskId, checklist_id: checklistId,
+              }).then(() => {}, () => {})
+            }
+            // 確認審批人員
+            const confs = extras.confirmations || []
+            if (confs.length > 0) {
+              const rows = confs.map(c => ({
+                task_id: taskId,
+                approver: c.approver,
+                status: 'pending',
+              }))
+              await supabase.from('task_confirmations').insert(rows)
+                .then(() => {}, () => {})
             }
           }
 
@@ -688,6 +764,7 @@ export default function Workflows() {
           deployTemplate={deployTemplate} deployForm={deployForm} setDeployForm={setDeployForm}
           deployResult={deployResult} deploying={deploying}
           stores={stores} employees={employees} departments={departments}
+          checklists={checklists} approvalChains={approvalChains} templates={templates}
           onDeploy={handleDeploy}
           onClose={() => {
             // ★ 部署成功後關 modal → 直接跳轉到該流程的詳細視圖

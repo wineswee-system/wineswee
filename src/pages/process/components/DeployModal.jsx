@@ -75,6 +75,7 @@ function getMatchingEmployees(role, employees, departments) {
 export default function DeployModal({
   deployTemplate, deployForm, setDeployForm, deployResult, deploying,
   stores, employees, departments,
+  checklists = [], approvalChains = [], templates = [],
   onDeploy, onClose,
 }) {
   const targetType = detectTargetType(deployTemplate?.name)
@@ -98,7 +99,17 @@ export default function DeployModal({
       const endDate = new Date(Date.now() + estDays * 86400000).toISOString().slice(0, 10)
       const stepOffset = Math.max(1, Math.ceil(estDays / Math.max(1, tplSteps.length)))
       const offsets = {}
-      tplSteps.forEach((_, i) => { offsets[i] = (i + 1) * stepOffset })
+      const extras = {}
+      tplSteps.forEach((s, i) => {
+        offsets[i] = (i + 1) * stepOffset
+        // 範本本來就有的 checklist_id / approval_chain_id 自動帶入
+        const e = {}
+        if (s.checklist_id) e.checklist_id = s.checklist_id
+        if (s.approval_chain_id) e.approval_chain_id = s.approval_chain_id
+        e.confirmations = []  // [{approver, priority}]
+        e.confirmation_mode = 'parallel'  // 預設同時
+        if (Object.keys(e).length > 0) extras[i] = e
+      })
       setDeployForm(f => ({
         ...f,
         planned_start_date: today,
@@ -107,13 +118,38 @@ export default function DeployModal({
         notes: '',
         target_employee_id: '',
         step_offsets: offsets,
-        // ★ 批次預設（套用到所有步驟，個別可覆寫）
         batch_defaults: { due_time: '17:00', reminder_preset: '1hr', priority: '中' },
-        // ★ 每步覆寫 (空物件 = 用 batch default)
         step_overrides: {},
+        // ★ 每步「關聯與簽核」設定
+        step_extras: extras,
       }))
     }
   }, [deployTemplate?.id])
+
+  // 操作 step_extras
+  const setStepExtra = (i, key, value) => setDeployForm(f => {
+    const extras = { ...(f.step_extras || {}) }
+    extras[i] = { ...(extras[i] || {}), [key]: value }
+    if (value === '' || value === null || value === undefined) delete extras[i][key]
+    return { ...f, step_extras: extras }
+  })
+  const addConfirmation = (i, approver, priority) => {
+    if (!approver) return
+    setDeployForm(f => {
+      const extras = { ...(f.step_extras || {}) }
+      const cur = extras[i] || {}
+      const list = cur.confirmations || []
+      if (list.some(c => c.approver === approver)) return f  // 不重複
+      extras[i] = { ...cur, confirmations: [...list, { approver, priority: priority || '中' }] }
+      return { ...f, step_extras: extras }
+    })
+  }
+  const removeConfirmation = (i, idx) => setDeployForm(f => {
+    const extras = { ...(f.step_extras || {}) }
+    const cur = extras[i] || {}
+    extras[i] = { ...cur, confirmations: (cur.confirmations || []).filter((_, j) => j !== idx) }
+    return { ...f, step_extras: extras }
+  })
 
   // 批次預設操作
   const setBatch = (k, v) => setDeployForm(f => ({
@@ -437,6 +473,100 @@ export default function DeployModal({
                         }}>
                         <Copy size={10} /> 套用到所有步驟
                       </button>
+                    </div>
+
+                    {/* ─── 🔗 關聯與簽核（每步可獨立設定） ─── */}
+                    <div style={{
+                      marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--border-subtle)',
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-purple)', marginBottom: 8 }}>
+                        🔗 關聯與簽核
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>📋 清單</label>
+                          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                            value={deployForm.step_extras?.[i]?.checklist_id || ''}
+                            onChange={e => setStepExtra(i, 'checklist_id', e.target.value ? Number(e.target.value) : '')}>
+                            <option value="">— 不掛 —</option>
+                            {checklists.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>🚀 完成時觸發 SOP</label>
+                          <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                            value={deployForm.step_extras?.[i]?.trigger_template_id || ''}
+                            onChange={e => setStepExtra(i, 'trigger_template_id', e.target.value ? Number(e.target.value) : '')}>
+                            <option value="">— 不觸發 —</option>
+                            {templates.filter(t => t.id !== deployTemplate?.id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>🛡 簽核鏈</label>
+                        <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                          value={deployForm.step_extras?.[i]?.approval_chain_id || ''}
+                          onChange={e => setStepExtra(i, 'approval_chain_id', e.target.value ? Number(e.target.value) : '')}>
+                          <option value="">— 不掛簽核鏈 —</option>
+                          {approvalChains.map(c => <option key={c.id} value={c.id}>{c.name}{c.category ? `（${c.category}）` : ''}</option>)}
+                        </select>
+                      </div>
+                      {/* 確認審批：多人 + 模式 */}
+                      <div style={{
+                        padding: 8, borderRadius: 6, background: 'rgba(34,211,238,0.04)',
+                        border: '1px dashed rgba(34,211,238,0.2)',
+                      }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔐 確認審批</span>
+                          <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: 100 }}
+                            value={deployForm.step_extras?.[i]?.confirmation_mode || 'parallel'}
+                            onChange={e => setStepExtra(i, 'confirmation_mode', e.target.value)}>
+                            <option value="parallel">同時審批</option>
+                            <option value="sequential">依序審批</option>
+                          </select>
+                        </div>
+                        {/* 已加入的審批人 */}
+                        {(deployForm.step_extras?.[i]?.confirmations || []).length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                            {(deployForm.step_extras[i].confirmations || []).map((c, idx) => (
+                              <span key={idx} style={{
+                                padding: '2px 8px', borderRadius: 999, fontSize: 11,
+                                background: 'var(--accent-cyan)', color: '#fff',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                              }}>
+                                {c.approver}（{c.priority}）
+                                <button type="button" onClick={() => removeConfirmation(i, idx)} style={{
+                                  background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1,
+                                }}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* 新增審批人 */}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <select className="form-input" style={{ flex: 2, fontSize: 11 }}
+                            id={`add-conf-emp-${i}`} defaultValue="">
+                            <option value="">+ 加員工</option>
+                            {employees.filter(e => !(deployForm.step_extras?.[i]?.confirmations || []).some(c => c.approver === e.name))
+                              .map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                          </select>
+                          <select className="form-input" style={{ flex: 1, fontSize: 11 }}
+                            id={`add-conf-pri-${i}`} defaultValue="中">
+                            <option value="高">高</option><option value="中">中</option><option value="低">低</option>
+                          </select>
+                          <button type="button" style={{
+                            padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                            border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan)', color: '#fff',
+                          }} onClick={() => {
+                            const empSel = document.getElementById(`add-conf-emp-${i}`)
+                            const priSel = document.getElementById(`add-conf-pri-${i}`)
+                            if (empSel?.value) {
+                              addConfirmation(i, empSel.value, priSel?.value || '中')
+                              empSel.value = ''
+                            }
+                          }}>加入</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

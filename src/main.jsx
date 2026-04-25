@@ -26,13 +26,37 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         })
 
         // Listen for offline queue sync results
-        navigator.serviceWorker.addEventListener('message', (event) => {
+        navigator.serviceWorker.addEventListener('message', async (event) => {
           if (event.data?.type === 'OFFLINE_QUEUE_FLUSHED') {
             log.info('Offline queue flushed', {
               synced: event.data.synced,
               failed: event.data.failed,
             })
           }
+          // ★ 偵測到舊 build chunk 已不存在 → 自動 unregister SW + 清快取 + reload
+          //    避免使用者卡在「系統發生錯誤」白屏
+          if (event.data?.type === 'STALE_BUILD_DETECTED') {
+            log.warn('Stale build detected, auto-recovering', { url: event.data.url })
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations()
+              await Promise.all(regs.map(r => r.unregister()))
+              const keys = await caches.keys()
+              await Promise.all(keys.map(k => caches.delete(k)))
+            } catch { /* best effort */ }
+            // 強制重整（bypass cache）
+            window.location.reload()
+          }
+        })
+
+        // 自動偵測 SW 有新版 → 提示用戶 reload
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing
+          if (!newWorker) return
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              log.info('New SW installed, will activate on next navigation')
+            }
+          })
         })
       })
       .catch((err) => {

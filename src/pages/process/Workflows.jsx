@@ -366,6 +366,7 @@ export default function Workflows() {
       due_date: blankWorkflowForm.due_date || null,
       started_by: currentUser,
       status: '進行中',
+      organization_id: profile?.organization_id || null,
     }).select().single()
     if (error) { alert('建立失敗：' + error.message); return }
     if (data) {
@@ -386,6 +387,7 @@ export default function Workflows() {
       const { data: instance } = await supabase.from('workflow_instances').insert({
         template_name: deployTemplate.name, store: loc,
         status: '進行中', started_by: currentUser,
+        organization_id: profile?.organization_id || null,
       }).select().single()
       if (instance) {
         // 建一個 name → employee_id 的對照，讓任務 FK 正確寫入
@@ -403,6 +405,7 @@ export default function Workflows() {
             store: loc, status: '待處理',
             bucket: 'Workflow', category: 'Workflow',
             priority: step.priority || '中',
+            organization_id: profile?.organization_id || null,
           }
         })
         const { data: insertedTasks } = await createTasksBatch(taskRows)

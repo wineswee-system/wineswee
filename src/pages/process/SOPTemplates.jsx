@@ -155,6 +155,7 @@ export default function SOPTemplates() {
         store: loc,
         status: '進行中',
         started_by: currentUser,
+        organization_id: profile?.organization_id || null,
       }).select().single()
       if (instErr) throw instErr
 

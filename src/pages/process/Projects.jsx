@@ -200,6 +200,7 @@ export default function Projects() {
             priority: t.priority || '中', status: '未開始',
             step_order: i + 1, bucket: 'Project',
             store: payload.store || null,
+            organization_id: profile?.organization_id || null,
           }))
           await supabase.from('tasks').insert(taskRows)
         }

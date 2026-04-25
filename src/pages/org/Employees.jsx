@@ -145,12 +145,14 @@ export default function Employees() {
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
         if (tpl) {
           const storeLabel = storeName(data.store_id)
+          // 先解析 org，給 instance + tasks 共用
+          const { data: orgIdRes } = await supabase.rpc('current_employee_org')
           const { data: inst } = await supabase.from('workflow_instances').insert({
             template_name: tpl.name, store: storeLabel,
             status: '進行中', started_by: '系統',
+            organization_id: orgIdRes ?? null,
           }).select().single()
           if (inst && tpl.steps?.length) {
-            const { data: orgIdRes } = await supabase.rpc('current_employee_org')
             const stepRows = tpl.steps.map((s, i) => ({
               workflow_instance_id: inst.id,
               organization_id: orgIdRes ?? inst.organization_id ?? null,

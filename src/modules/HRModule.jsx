@@ -30,6 +30,8 @@ import BenefitSettings from '../pages/hr/BenefitSettings'
 import LeaveBalances from '../pages/hr/LeaveBalances'
 import SalaryStructures from '../pages/hr/SalaryStructures'
 import Payroll from '../pages/hr/Payroll'
+import LegalDeductions from '../pages/hr/LegalDeductions'
+import WorkUnitSettings from '../pages/hr/WorkUnitSettings'
 
 export default function HRModule() {
   return (
@@ -65,6 +67,8 @@ export default function HRModule() {
       <Route path="leave-balances" element={<LeaveBalances />} />
       <Route path="salary-structures" element={<SalaryStructures />} />
       <Route path="payroll" element={<Payroll />} />
+      <Route path="legal-deductions" element={<LegalDeductions />} />
+      <Route path="work-unit-settings" element={<WorkUnitSettings />} />
     </Routes>
   )
 }

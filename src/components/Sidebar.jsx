@@ -246,6 +246,7 @@ const groupNav = {
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
         { icon: Workflow, label: '排班規則', path: '/hr/schedule-rules' },
+        { icon: Workflow, label: '工時/假別單位', path: '/hr/work-unit-settings' },
         { icon: CalendarDays, label: '假日管理', path: '/hr/holidays' },
       ]
     },
@@ -256,6 +257,7 @@ const groupNav = {
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
         { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
         { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
+        { icon: Scale, label: '法扣管理', path: '/hr/legal-deductions' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },

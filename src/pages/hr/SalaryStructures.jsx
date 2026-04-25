@@ -1,11 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Edit2, DollarSign, Users } from 'lucide-react'
+import { Plus, Edit2, DollarSign, Users, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+
+// 內建常見津貼項目，廠商可一鍵加入；也支援完全自訂
+const PRESET_ALLOWANCES = [
+  '夜班津貼', '主管加給', '證照津貼', '外語津貼',
+  '專業加給', '危險津貼', '久任津貼', '油資補貼',
+  '通訊費補助', '託兒津貼', '房屋津貼', '績效獎金',
+]
 
 const emptyForm = {
   employee_id: '',
@@ -20,6 +27,7 @@ const emptyForm = {
   effective_from: new Date().toISOString().slice(0, 10),
   year_end_bonus_months: '',
   notes: '',
+  custom_allowances: [],  // [{name, amount}]
 }
 
 export default function SalaryStructures() {
@@ -96,8 +104,30 @@ export default function SalaryStructures() {
       effective_from: s.effective_from || new Date().toISOString().slice(0, 10),
       year_end_bonus_months: String(s.year_end_bonus_months || ''),
       notes: s.notes || '',
+      custom_allowances: Array.isArray(s.custom_allowances) ? s.custom_allowances : [],
     })
     setShowModal(true)
+  }
+
+  // 自訂津貼操作
+  const addCustomAllowance = (preset) => {
+    const name = preset || ''
+    setForm(f => ({
+      ...f,
+      custom_allowances: [...(f.custom_allowances || []), { name, amount: 0 }],
+    }))
+  }
+  const updateCustomAllowance = (idx, key, val) => {
+    setForm(f => ({
+      ...f,
+      custom_allowances: f.custom_allowances.map((c, i) => i === idx ? { ...c, [key]: val } : c),
+    }))
+  }
+  const removeCustomAllowance = (idx) => {
+    setForm(f => ({
+      ...f,
+      custom_allowances: f.custom_allowances.filter((_, i) => i !== idx),
+    }))
   }
 
   const handleSubmit = async () => {
@@ -115,6 +145,9 @@ export default function SalaryStructures() {
       effective_from: form.effective_from,
       year_end_bonus_months: Number(form.year_end_bonus_months) || 0,
       notes: form.notes || '',
+      custom_allowances: (form.custom_allowances || [])
+        .filter(c => c.name && c.name.trim())
+        .map(c => ({ name: c.name.trim(), amount: Number(c.amount) || 0 })),
     }
     try {
       if (editingId) {
@@ -188,14 +221,14 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '部門', '門市', '薪資類型', '底薪', '職務津貼', '餐費津貼', '交通津貼', '全勤獎金', '生效日', '操作'].map(h => (
+                {['員工', '部門', '門市', '薪資類型', '底薪', '職務津貼', '餐費津貼', '交通津貼', '全勤獎金', '其他津貼', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
+                <tr><td colSpan={12} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
               ) : filtered.map(s => {
                 const emp = empMap[s.employee_id]
                 return (
@@ -217,6 +250,16 @@ export default function SalaryStructures() {
                     <td style={{ padding: '10px 14px' }}>{fmt(s.meal_allowance)}</td>
                     <td style={{ padding: '10px 14px' }}>{fmt(s.transport_allowance)}</td>
                     <td style={{ padding: '10px 14px' }}>{fmt(s.attendance_bonus)}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      {Array.isArray(s.custom_allowances) && s.custom_allowances.length > 0 ? (
+                        <div title={s.custom_allowances.map(c => `${c.name}: ${fmt(c.amount)}`).join('\n')}>
+                          {fmt(s.custom_allowances.reduce((sum, c) => sum + (Number(c.amount) || 0), 0))}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
+                            ({s.custom_allowances.length} 項)
+                          </span>
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
                     <td style={{ padding: '10px 14px' }}>{s.effective_from || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <button onClick={() => openEdit(s)} style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', padding: 4 }}>
@@ -277,6 +320,86 @@ export default function SalaryStructures() {
           <Field label="生效日">
             <input className="form-input" type="date" value={form.effective_from} onChange={e => set('effective_from', e.target.value)} />
           </Field>
+
+          {/* ─── 自訂津貼 ─── */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                其他自訂津貼
+              </label>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {(form.custom_allowances || []).length} 項
+              </span>
+            </div>
+
+            {/* 預設快選 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {PRESET_ALLOWANCES.map(name => {
+                const used = (form.custom_allowances || []).some(c => c.name === name)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => !used && addCustomAllowance(name)}
+                    disabled={used}
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: used ? 'default' : 'pointer',
+                      border: '1px solid var(--border-subtle)',
+                      background: used ? 'var(--bg-tertiary)' : 'transparent',
+                      color: used ? 'var(--text-muted)' : 'var(--accent-cyan)',
+                      opacity: used ? 0.5 : 1,
+                    }}
+                  >
+                    {used ? '✓ ' : '+ '}{name}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => addCustomAllowance('')}
+                style={{
+                  padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+                  border: '1px dashed var(--accent-purple)',
+                  background: 'rgba(167,139,250,0.08)', color: 'var(--accent-purple)',
+                }}
+              >+ 完全自訂</button>
+            </div>
+
+            {/* 已加入的津貼列表 */}
+            {(form.custom_allowances || []).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {form.custom_allowances.map((c, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="form-input"
+                      placeholder="津貼名稱"
+                      value={c.name}
+                      onChange={e => updateCustomAllowance(idx, 'name', e.target.value)}
+                      style={{ flex: 2 }}
+                    />
+                    <input
+                      className="form-input"
+                      type="number"
+                      placeholder="金額"
+                      value={c.amount}
+                      onChange={e => updateCustomAllowance(idx, 'amount', e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomAllowance(idx)}
+                      style={{
+                        background: 'transparent', border: '1px solid var(--border-subtle)',
+                        color: 'var(--accent-red)', cursor: 'pointer',
+                        borderRadius: 6, padding: 6, display: 'flex',
+                      }}
+                    ><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <Field label="備註">
             <textarea className="form-input" value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="備註說明..." />
           </Field>

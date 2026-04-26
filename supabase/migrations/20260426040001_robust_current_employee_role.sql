@@ -14,13 +14,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   WITH me AS (
-    SELECT e.id, e.role AS role_text, r.code AS role_code
+    SELECT e.id, e.role AS role_text, r.name AS role_name
       FROM employees e
       LEFT JOIN roles r ON r.id = e.role_id
      WHERE e.email = (SELECT email FROM auth.users WHERE id = auth.uid())
      LIMIT 1
   )
-  SELECT COALESCE(role_code, role_text) FROM me;
+  SELECT COALESCE(role_name, role_text) FROM me;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.current_employee_role() TO authenticated, anon;
@@ -37,7 +37,7 @@ AS $$
     'employee',   (
       SELECT json_build_object(
         'id', e.id, 'name', e.name, 'email', e.email,
-        'role_text', e.role, 'role_id', e.role_id, 'role_code', r.code,
+        'role_text', e.role, 'role_id', e.role_id, 'role_name', r.name,
         'organization_id', e.organization_id
       )
       FROM employees e LEFT JOIN roles r ON r.id = e.role_id

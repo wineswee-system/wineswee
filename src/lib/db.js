@@ -12,8 +12,16 @@ export const getEmployees = (orgId) => {
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
 
-export const updateEmployee = (id, data) =>
-  supabase.from('employees').update(data).eq('id', id).select().single()
+export const updateEmployee = async (id, data) => {
+  // 走 SECURITY DEFINER RPC 繞過 RLS（RLS 卡 super_admin 編輯員工的問題）
+  const { data: result, error } = await supabase.rpc('secure_update_employee', {
+    p_id: id,
+    p_data: data,
+  })
+  if (error) return { data: null, error }
+  if (!result?.ok) return { data: null, error: { message: result?.error || 'UPDATE_FAILED', details: JSON.stringify(result) } }
+  return { data: result.employee, error: null }
+}
 
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)

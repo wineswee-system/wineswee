@@ -303,19 +303,75 @@ export default function Workflows() {
     if (!taskForm.title || !selectedInstance) return
     const instTasks = getInstanceTasks(selectedInstance.id)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
+
+    // ★ 修：assignee_id 必須填 — 否則 LIFF liff_get_task_detail / liff_list_my_tasks
+    //   會用 assignee_id 過濾抓不到 → 員工看不到任務內的 checklist 等
+    const empId = taskForm.assignee
+      ? (employees.find(e => e.name === taskForm.assignee)?.id || null)
+      : null
+
     const { data } = await createTask({
       workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,
-      title: taskForm.title, assignee: taskForm.assignee,
+      title: taskForm.title,
+      description: taskForm.description || null,
+      assignee: taskForm.assignee,
+      assignee_id: empId,
       store: taskForm.store || selectedInstance.store,
       planned_start: taskForm.planned_start || null,
-      due_date: taskForm.due_date || null, due_time: taskForm.due_time || '17:00',
+      due_date: taskForm.due_date || null,
+      due_time: taskForm.due_time || '17:00',
+      priority: taskForm.priority || '中',
+      role: taskForm.role || null,
       status: '待處理', bucket: 'Workflow', category: 'Workflow',
+      organization_id: profile?.organization_id || null,
     })
     if (data) {
       setAllTasks(prev => [...prev, data])
+
+      // ★ 掛清單
+      const subFailures = []
+      if (taskForm.checklist_id) {
+        const { error } = await supabase.from('task_checklists').insert({
+          task_id: data.id, checklist_id: Number(taskForm.checklist_id),
+        })
+        if (error) {
+          console.error('[addTask] task_checklists 失敗:', error)
+          subFailures.push(`清單未掛上：${error.message}`)
+        }
+      }
+      // ★ 掛審批人員
+      const approvers = taskForm.confirmation_approvers || []
+      if (approvers.length > 0) {
+        const rows = approvers.map(name => ({
+          task_id: data.id,
+          approver: name,
+          status: 'pending',
+          organization_id: profile?.organization_id || null,
+        }))
+        const { error } = await supabase.from('task_confirmations').insert(rows)
+        if (error) {
+          console.error('[addTask] task_confirmations 失敗:', error)
+          subFailures.push(`審批人員未掛上：${error.message}`)
+        }
+        // 同時寫 confirmation_mode 到 tasks
+        if (!error && taskForm.confirmation_mode) {
+          await supabase.from('tasks').update({
+            confirmation_mode: taskForm.confirmation_mode,
+            confirmation_required: true,
+          }).eq('id', data.id)
+        }
+      }
+
       setShowAddTaskModal(false)
       setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
-      if (taskForm.assignee) notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id)
+
+      if (subFailures.length > 0) {
+        alert(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
+      }
+
+      if (taskForm.assignee) {
+        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id).catch(() => {})
+      }
     }
   }
 

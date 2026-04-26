@@ -409,7 +409,8 @@ export function runProgrammaticSchedule(data) {
     const fmtLabel = (startTime, endTime) => {
       const s = startTime.replace(':00', '').replace(/^0/, '')
       const e = endTime.replace(':00', '').replace(/^0/, '')
-      return `${s}-${e}`
+      // 用 ~ 而不是 - ，避免 Excel 把 "11-20" 自動轉成 "11月20日"
+      return `${s}~${e}`
     }
 
     const getOH = (date) => {

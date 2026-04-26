@@ -330,19 +330,20 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
   const midH = openH + Math.floor((effectiveClose - openH) / 2)
   const fmt = (h) => `${String(h % 24).padStart(2, '0')}:00`
 
+  // 用 ~ 而不是 -，避免 Excel 把 "11-20" 自動轉成日期
   const presets = [
-    { label: `${openH}-${effectiveClose % 24 || 24}`, start: fmt(openH), end: fmt(effectiveClose) },
-    { label: `${openH}-${midH}`, start: fmt(openH), end: fmt(midH) },
-    { label: `${midH}-${effectiveClose % 24 || 24}`, start: fmt(midH), end: fmt(effectiveClose) },
-    { label: `${openH}-${openH + 9}`, start: fmt(openH), end: fmt(openH + 9) },
-    { label: `${openH + 4}-${effectiveClose % 24 || 24}`, start: fmt(openH + 4), end: fmt(effectiveClose) },
+    { label: `${openH}~${effectiveClose % 24 || 24}`, start: fmt(openH), end: fmt(effectiveClose) },
+    { label: `${openH}~${midH}`, start: fmt(openH), end: fmt(midH) },
+    { label: `${midH}~${effectiveClose % 24 || 24}`, start: fmt(midH), end: fmt(effectiveClose) },
+    { label: `${openH}~${openH + 9}`, start: fmt(openH), end: fmt(openH + 9) },
+    { label: `${openH + 4}~${effectiveClose % 24 || 24}`, start: fmt(openH + 4), end: fmt(effectiveClose) },
   ].filter((p, i, arr) => arr.findIndex(x => x.label === p.label) === i)
 
   const handleConfirm = () => {
     if (!startTime || !endTime) return
     const s = startTime.replace(':00', '').replace(/^0/, '')
     const e = endTime.replace(':00', '').replace(/^0/, '')
-    handleSetShift(emp.name, date, `${s}-${e}`, startTime, endTime)
+    handleSetShift(emp.name, date, `${s}~${e}`, startTime, endTime)
   }
 
   return (

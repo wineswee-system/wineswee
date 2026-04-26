@@ -295,3 +295,192 @@ export function exportExpenseRequestPdf(req) {
 
   doc.save(`expense-request-${req.id}.pdf`)
 }
+
+// ══════════════════════════════════════
+//  排班月曆 PDF — 用瀏覽器列印（中文字完美顯示，無需內嵌字型）
+// ══════════════════════════════════════
+
+const escapeHtml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+const fmtDateLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/**
+ * 匯出排班月曆 PDF（傳統月曆排版，7欄 × 5-6列）
+ * 用新分頁 + 瀏覽器列印對話框，使用者選「另存 PDF」即可
+ *
+ * @param {Object} opts
+ * @param {string} opts.storeName     門市名稱（顯示在標題）
+ * @param {string} opts.yearMonth     '2026-04'
+ * @param {string[]} opts.monthDates  ['2026-04-01', ...]
+ * @param {Array} opts.schedules      [{employee, date, shift, actual_start, actual_end}]
+ * @param {Set<string>} [opts.holidaySet]  國定假日日期集合
+ */
+export function exportScheduleCalendarPdf({ storeName, yearMonth, monthDates, schedules, holidaySet }) {
+  if (!monthDates || monthDates.length === 0) {
+    alert('沒有可匯出的排班資料')
+    return
+  }
+
+  const monthStart = new Date(monthDates[0])
+  const monthEnd = new Date(monthDates[monthDates.length - 1])
+
+  // 月曆從週日開始，往前補到該週週日，往後補到最後一週週六
+  const firstCell = new Date(monthStart)
+  firstCell.setDate(firstCell.getDate() - firstCell.getDay())
+  const lastCell = new Date(monthEnd)
+  lastCell.setDate(lastCell.getDate() + (6 - lastCell.getDay()))
+
+  // 切成週
+  const weeks = []
+  let cur = new Date(firstCell)
+  while (cur <= lastCell) {
+    const week = []
+    for (let i = 0; i < 7; i++) {
+      week.push(new Date(cur))
+      cur.setDate(cur.getDate() + 1)
+    }
+    weeks.push(week)
+  }
+
+  // 依日期分組排班
+  const isAbsenceShift = (s) => !s || s === '休' || s === '病' || s === '事' || s === '特休' || s === '事假'
+  const byDate = {}
+  for (const s of schedules || []) {
+    if (!byDate[s.date]) byDate[s.date] = []
+    byDate[s.date].push(s)
+  }
+
+  // 排序：每日的班次依開始時間排
+  for (const date of Object.keys(byDate)) {
+    byDate[date].sort((a, b) => (a.actual_start || '').localeCompare(b.actual_start || ''))
+  }
+
+  const buildCell = (day) => {
+    const dateStr = fmtDateLocal(day)
+    const isOtherMonth = day < monthStart || day > monthEnd
+    const isHol = holidaySet?.has?.(dateStr)
+    const dow = day.getDay()
+    const isWeekend = dow === 0 || dow === 6
+
+    const dayEntries = (byDate[dateStr] || []).filter(e => !isAbsenceShift(e.shift))
+
+    const classes = []
+    if (isOtherMonth) classes.push('other-month')
+    if (isHol) classes.push('holiday')
+    else if (isWeekend) classes.push('weekend')
+
+    const dateNum = day.getDate()
+    const numColor = isHol || dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''
+
+    return `
+      <td class="${classes.join(' ')}">
+        <div class="date-num ${numColor}">
+          <span>${dateNum}</span>
+          ${isHol ? '<span class="tag">假</span>' : ''}
+        </div>
+        ${isOtherMonth ? '' : dayEntries.map(e => `
+          <div class="entry"><span class="name">${escapeHtml(e.employee)}</span><span class="shift">${escapeHtml(e.shift)}</span></div>
+        `).join('')}
+        ${!isOtherMonth && dayEntries.length > 0 ? `<div class="summary">共 ${dayEntries.length} 人</div>` : ''}
+      </td>
+    `
+  }
+
+  const totalWorkingPersonDays = Object.values(byDate)
+    .reduce((sum, arr) => sum + arr.filter(e => !isAbsenceShift(e.shift)).length, 0)
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>排班月曆 ${escapeHtml(yearMonth)}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "Heiti TC", sans-serif;
+    margin: 0; padding: 12px; color: #111; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; padding: 0 4px; }
+  .header h1 { margin: 0; font-size: 18px; color: #0e7490; }
+  .header .meta { color: #666; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead th {
+    background: #0e7490; color: #fff; padding: 6px 4px;
+    font-size: 11px; text-align: center; border: 1px solid #0e7490;
+    font-weight: 600;
+  }
+  thead th.sun { background: #b91c1c; border-color: #b91c1c; }
+  thead th.sat { background: #1d4ed8; border-color: #1d4ed8; }
+  tbody td {
+    border: 1px solid #d4d4d4; padding: 4px 5px;
+    vertical-align: top; height: 32mm;
+    font-size: 9px; line-height: 1.35;
+    overflow: hidden; word-break: break-all;
+  }
+  tbody td.other-month { background: #fafafa; color: #ccc; }
+  tbody td.weekend { background: #f8fafc; }
+  tbody td.holiday { background: #fef2f2; }
+  .date-num {
+    font-weight: 700; font-size: 13px; margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px dotted #e5e5e5; padding-bottom: 2px;
+  }
+  .date-num.sun { color: #b91c1c; }
+  .date-num.sat { color: #1d4ed8; }
+  .date-num .tag { font-size: 8px; color: #b91c1c; font-weight: 600; padding: 1px 4px; background: #fee2e2; border-radius: 3px; }
+  .entry { display: flex; justify-content: space-between; gap: 4px; padding: 1px 0; }
+  .entry .name { color: #111; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry .shift { color: #0e7490; font-family: ui-monospace, "SF Mono", Consolas, monospace; flex-shrink: 0; font-weight: 600; }
+  .summary { font-size: 8px; color: #888; margin-top: 3px; text-align: right; font-style: italic; }
+  .footer { margin-top: 8px; display: flex; justify-content: space-between; color: #999; font-size: 10px; padding: 0 4px; }
+  .toolbar { position: fixed; top: 12px; right: 12px; z-index: 999; }
+  .toolbar button {
+    padding: 10px 20px; background: #0e7490; color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-family: inherit; font-weight: 600;
+  }
+  .toolbar button:hover { background: #155e75; }
+  @media print { .toolbar { display: none; } body { padding: 0; } }
+</style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨️ 列印 / 另存為 PDF</button></div>
+  <div class="header">
+    <h1>${escapeHtml(storeName || '全部門市')} 排班月曆 — ${escapeHtml(yearMonth)}</h1>
+    <div class="meta">列印時間：${escapeHtml(new Date().toLocaleString('zh-TW'))}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="sun">週日</th><th>週一</th><th>週二</th><th>週三</th><th>週四</th><th>週五</th><th class="sat">週六</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${weeks.map(week => `<tr>${week.map(buildCell).join('')}</tr>`).join('')}
+    </tbody>
+  </table>
+  <div class="footer">
+    <span>本月總出勤人次：${totalWorkingPersonDays}</span>
+    <span>由 SME Ops System 產生</span>
+  </div>
+  <script>
+    // 開啟後自動跳列印對話框
+    window.addEventListener('load', () => setTimeout(() => window.print(), 300))
+  </script>
+</body>
+</html>`
+
+  // 開新分頁顯示月曆，順便自動跳列印對話框
+  const win = window.open('', '_blank')
+  if (!win) {
+    alert('請允許彈出視窗，才能匯出 PDF')
+    return
+  }
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
+}

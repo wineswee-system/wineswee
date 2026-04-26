@@ -12,8 +12,14 @@ export const getEmployees = (orgId) => {
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
 
-export const updateEmployee = (id, data) =>
-  supabase.from('employees').update(data).eq('id', id).select().single()
+export const updateEmployee = async (id, data) => {
+  // 走 SECURITY DEFINER RPC dynamic SQL 版繞過 RLS（RLS 莫名擋 super_admin）
+  // RPC 內動態抓 employees 所有欄位 ∩ p_data → 全欄位都會 update，不再有白名單漏欄位
+  const { data: result, error } = await supabase.rpc('secure_update_employee', { p_id: id, p_data: data })
+  if (error) return { data: null, error }
+  if (!result?.ok) return { data: null, error: { message: result?.error || 'UPDATE_FAILED', details: JSON.stringify(result) } }
+  return { data: result.employee, error: null }
+}
 
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)

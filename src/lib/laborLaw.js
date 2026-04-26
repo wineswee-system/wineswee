@@ -375,7 +375,8 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
  */
 function parseShiftString(shift) {
   if (!shift || typeof shift !== 'string') return null
-  const match = shift.match(/^(\d{1,2})-(\d{1,2})$/)
+  // 同時接受 "11-20"（舊格式）和 "11~20"（新格式，避免 Excel 誤判為日期）
+  const match = shift.match(/^(\d{1,2})[-~](\d{1,2})$/)
   if (!match) return null
   return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) }
 }

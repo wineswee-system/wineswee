@@ -17,6 +17,7 @@ const STATUS_CONFIG = {
 
 export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
+  approvalChains = [],
   currentUser = '', isAdmin = false, isSuperAdmin = false,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
@@ -170,15 +171,194 @@ export default function InstanceDetailView({
       )}
       {showAddTaskModal && (
         <Modal title="新增任務" onClose={() => setShowAddTaskModal(false)} onSubmit={onAddTask}>
-          <Field label="任務名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：電力申請" value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} /></Field>
+          <Field label="任務名稱 *">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：電力申請"
+              value={taskForm.title}
+              onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />
+          </Field>
+          <Field label="說明">
+            <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }}
+              placeholder="任務細節（選填）"
+              value={taskForm.description || ''}
+              onChange={e => setTaskForm(f => ({ ...f, description: e.target.value }))} />
+          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={taskForm.assignee} onChange={e => setTaskForm(f => ({ ...f, assignee: e.target.value }))}><option value="">請選擇</option>{employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}</select></Field>
-            <Field label="門市"><select className="form-input" style={{ width: '100%' }} value={taskForm.store} onChange={e => setTaskForm(f => ({ ...f, store: e.target.value }))}><option value="">請選擇</option>{stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></Field>
+            <Field label="負責人">
+              <select className="form-input" style={{ width: '100%' }}
+                value={taskForm.assignee}
+                onChange={e => setTaskForm(f => ({ ...f, assignee: e.target.value }))}>
+                <option value="">請選擇</option>
+                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+              </select>
+            </Field>
+            <Field label="門市">
+              <select className="form-input" style={{ width: '100%' }}
+                value={taskForm.store}
+                onChange={e => setTaskForm(f => ({ ...f, store: e.target.value }))}>
+                <option value="">請選擇</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="優先級">
+              <select className="form-input" style={{ width: '100%' }}
+                value={taskForm.priority || '中'}
+                onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value }))}>
+                <option value="高">高</option>
+                <option value="中">中</option>
+                <option value="低">低</option>
+              </select>
+            </Field>
+            <Field label="角色（選填）">
+              <input className="form-input" type="text" style={{ width: '100%' }}
+                placeholder="例：店長 / 督導"
+                value={taskForm.role || ''}
+                onChange={e => setTaskForm(f => ({ ...f, role: e.target.value }))} />
+            </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="計畫開始"><input className="form-input" type="date" style={{ width: '100%' }} value={taskForm.planned_start} onChange={e => setTaskForm(f => ({ ...f, planned_start: e.target.value }))} /></Field>
-            <Field label="截止日期"><input className="form-input" type="date" style={{ width: '100%' }} value={taskForm.due_date} onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} /></Field>
-            <Field label="截止時間"><input className="form-input" type="time" style={{ width: '100%' }} value={taskForm.due_time} onChange={e => setTaskForm(f => ({ ...f, due_time: e.target.value }))} /></Field>
+            <Field label="計畫開始">
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={taskForm.planned_start}
+                onChange={e => setTaskForm(f => ({ ...f, planned_start: e.target.value }))} />
+            </Field>
+            <Field label="截止日期">
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={taskForm.due_date}
+                onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+            </Field>
+            <Field label="截止時間">
+              <input className="form-input" type="time" style={{ width: '100%' }}
+                value={taskForm.due_time}
+                onChange={e => setTaskForm(f => ({ ...f, due_time: e.target.value }))} />
+            </Field>
+          </div>
+
+          {/* ★ 進階：清單勾選 + 簽核 */}
+          <div style={{
+            marginTop: 16, padding: 12, borderRadius: 8,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>
+              🔧 進階設定（選填）
+            </div>
+
+            <Field label="清單勾選（任務內顯示給執行人勾完成）">
+              <select className="form-input" style={{ width: '100%' }}
+                value={taskForm.checklist_id || ''}
+                onChange={e => setTaskForm(f => ({ ...f, checklist_id: e.target.value }))}>
+                <option value="">不掛清單</option>
+                {checklists.map(cl => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+              </select>
+            </Field>
+
+            <Field label="簽核方式">
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { v: 'none',  l: '不需簽核' },
+                  { v: 'people', l: '指定人員' },
+                  { v: 'chain', l: '套用簽核鏈' },
+                ].map(opt => {
+                  const cur = taskForm.approval_mode || 'none'
+                  const active = cur === opt.v
+                  return (
+                    <button type="button" key={opt.v}
+                      onClick={() => setTaskForm(f => ({
+                        ...f,
+                        approval_mode: opt.v,
+                        confirmation_approvers: opt.v === 'people' ? (f.confirmation_approvers || []) : [],
+                        approval_chain_id: opt.v === 'chain' ? (f.approval_chain_id || '') : '',
+                      }))}
+                      style={{
+                        flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer',
+                        border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                        background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                        color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      }}>
+                      {opt.l}
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+
+            {/* 指定人員 */}
+            {taskForm.approval_mode === 'people' && (
+              <>
+                <Field label="加入審批人員">
+                  <select className="form-input" style={{ width: '100%' }} value=""
+                    onChange={e => {
+                      const name = e.target.value
+                      if (!name) return
+                      setTaskForm(f => {
+                        const cur = f.confirmation_approvers || []
+                        if (cur.includes(name)) return f
+                        return { ...f, confirmation_approvers: [...cur, name] }
+                      })
+                    }}>
+                    <option value="">+ 從員工挑一位</option>
+                    {employees
+                      .filter(e => !(taskForm.confirmation_approvers || []).includes(e.name))
+                      .map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                  </select>
+                </Field>
+                {(taskForm.confirmation_approvers || []).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {(taskForm.confirmation_approvers || []).map(name => (
+                      <span key={name} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 10px', borderRadius: 14, fontSize: 12,
+                        background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                        border: '1px solid var(--accent-purple)',
+                      }}>
+                        <ShieldCheck size={11} /> {name}
+                        <button type="button"
+                          onClick={() => setTaskForm(f => ({
+                            ...f,
+                            confirmation_approvers: (f.confirmation_approvers || []).filter(x => x !== name)
+                          }))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', padding: 0, lineHeight: 1 }}>
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {(taskForm.confirmation_approvers || []).length > 1 && (
+                  <Field label="多人簽核模式">
+                    <select className="form-input" style={{ width: '100%' }}
+                      value={taskForm.confirmation_mode || 'parallel'}
+                      onChange={e => setTaskForm(f => ({ ...f, confirmation_mode: e.target.value }))}>
+                      <option value="parallel">並簽（任一人通過即可）</option>
+                      <option value="sequential">會簽（每個人都要通過）</option>
+                    </select>
+                  </Field>
+                )}
+              </>
+            )}
+
+            {/* 套用簽核鏈 */}
+            {taskForm.approval_mode === 'chain' && (
+              <Field label="選擇簽核鏈">
+                <select className="form-input" style={{ width: '100%' }}
+                  value={taskForm.approval_chain_id || ''}
+                  onChange={e => setTaskForm(f => ({ ...f, approval_chain_id: e.target.value }))}>
+                  <option value="">— 請選擇 —</option>
+                  {approvalChains.map(ac => (
+                    <option key={ac.id} value={ac.id}>
+                      {ac.name}{ac.category ? ` (${ac.category})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {taskForm.approval_chain_id && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                    執行人按完成後，系統會依鏈逐關通知合法簽核者
+                  </div>
+                )}
+              </Field>
+            )}
           </div>
         </Modal>
       )}

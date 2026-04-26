@@ -299,8 +299,8 @@ export default function ExpenseRequests() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📝</span> 費用申請</h2>
-            <p>先申請核准，購買後核銷入帳</p>
+            <h2><span className="header-icon">📝</span> 申請（申請與核銷）</h2>
+            <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷入帳</p>
           </div>
           <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
             <Plus size={14} /> 新增申請
@@ -400,7 +400,7 @@ export default function ExpenseRequests() {
         <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0 }}>新增費用申請</h3>
+              <h3 style={{ margin: 0 }}>新增申請（事項 / 採購 / 預算）</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

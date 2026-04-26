@@ -123,8 +123,29 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     setSaving(true)
     // Check if store changed
     const storeChanged = form.store !== employee.store && employee.store && form.store
-    const { data, error } = await updateEmployee(employee.id, form)
-    if (error) { console.error('Save failed:', error); alert('儲存失敗，請稍後再試'); setSaving(false); return }
+
+    // ★ 修：表單收集的是文字 (supervisor / dept / store) 但 DB 還有對應的 _id FK 欄
+    //   直接送 form 不會更新 _id → UI 看似改了但下次重整又跳回（因為 *_id 沒動）
+    //   這裡同步對齊：
+    const dataToSave = { ...form }
+    // supervisor name → supervisor_id
+    if ('supervisor' in form) {
+      const sup = (allEmployees || []).find(e => e.name === form.supervisor)
+      dataToSave.supervisor_id = sup ? sup.id : null
+    }
+    // dept name → department_id
+    if ('dept' in form) {
+      const d = (departments || []).find(x => x.name === form.dept)
+      dataToSave.department_id = d ? d.id : null
+    }
+    // store name → store_id
+    if ('store' in form) {
+      const s = (stores || []).find(x => x.name === form.store)
+      dataToSave.store_id = s ? s.id : null
+    }
+
+    const { data, error } = await updateEmployee(employee.id, dataToSave)
+    if (error) { console.error('Save failed:', error); alert('儲存失敗：' + (error.message || '請稍後再試')); setSaving(false); return }
     if (data) {
       onUpdate(data); setIsDirty(false)
       // If store changed, remove future schedules (shifts may not exist at new store)

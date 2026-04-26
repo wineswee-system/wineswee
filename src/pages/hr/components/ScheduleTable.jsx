@@ -301,7 +301,8 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
     if (!startTime || !endTime) return
     const s = startTime.replace(':00', '').replace(/^0/, '')
     const e = endTime.replace(':00', '').replace(/^0/, '')
-    const label = `${s}-${e}`
+    // 用 ~ 而不是 -，避免 Excel 把 "11-20" 自動轉成日期
+    const label = `${s}~${e}`
     handleSetShift(emp.name, date, label, startTime, endTime)
   }
 

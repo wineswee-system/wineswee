@@ -12,16 +12,10 @@ export const getEmployees = (orgId) => {
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
 
-export const updateEmployee = async (id, data) => {
-  // 走 SECURITY DEFINER RPC 繞過 RLS（RLS 卡 super_admin 編輯員工的問題）
-  const { data: result, error } = await supabase.rpc('secure_update_employee', {
-    p_id: id,
-    p_data: data,
-  })
-  if (error) return { data: null, error }
-  if (!result?.ok) return { data: null, error: { message: result?.error || 'UPDATE_FAILED', details: JSON.stringify(result) } }
-  return { data: result.employee, error: null }
-}
+export const updateEmployee = (id, data) =>
+  // 直接 update 走 RLS（current_employee_role() 已修能正確回 super_admin）
+  // 之前繞 RPC 維護白名單漏太多欄位（supervisor 文字 / 薪資欄位 / 特殊類別...）
+  supabase.from('employees').update(data).eq('id', id).select().single()
 
 export const deleteEmployee = (id) =>
   supabase.from('employees').delete().eq('id', id)

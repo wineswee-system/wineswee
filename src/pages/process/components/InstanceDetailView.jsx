@@ -17,6 +17,7 @@ const STATUS_CONFIG = {
 
 export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
+  approvalChains = [],
   currentUser = '', isAdmin = false, isSuperAdmin = false,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
@@ -234,7 +235,7 @@ export default function InstanceDetailView({
             </Field>
           </div>
 
-          {/* ★ 進階：清單勾選 + 確認審批人員 */}
+          {/* ★ 進階：清單勾選 + 簽核 */}
           <div style={{
             marginTop: 16, padding: 12, borderRadius: 8,
             background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
@@ -242,6 +243,7 @@ export default function InstanceDetailView({
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>
               🔧 進階設定（選填）
             </div>
+
             <Field label="清單勾選（任務內顯示給執行人勾完成）">
               <select className="form-input" style={{ width: '100%' }}
                 value={taskForm.checklist_id || ''}
@@ -250,41 +252,111 @@ export default function InstanceDetailView({
                 {checklists.map(cl => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
               </select>
             </Field>
-            <Field label="確認審批人員（執行人按完成後等這些人通過才算完成）">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 0' }}>
-                {employees.map(e => {
-                  const checked = (taskForm.confirmation_approvers || []).includes(e.name)
+
+            <Field label="簽核方式">
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { v: 'none',  l: '不需簽核' },
+                  { v: 'people', l: '指定人員' },
+                  { v: 'chain', l: '套用簽核鏈' },
+                ].map(opt => {
+                  const cur = taskForm.approval_mode || 'none'
+                  const active = cur === opt.v
                   return (
-                    <label key={e.id} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                      background: checked ? 'var(--accent-purple-dim)' : 'var(--glass-light)',
-                      color: checked ? 'var(--accent-purple)' : 'var(--text-secondary)',
-                      border: `1px solid ${checked ? 'var(--accent-purple)' : 'var(--border-subtle)'}`,
-                    }}>
-                      <input type="checkbox" checked={checked} style={{ display: 'none' }}
-                        onChange={ev => setTaskForm(f => ({
-                          ...f,
-                          confirmation_approvers: ev.target.checked
-                            ? [...(f.confirmation_approvers || []), e.name]
-                            : (f.confirmation_approvers || []).filter(x => x !== e.name)
-                        }))}
-                      />
-                      {checked && <ShieldCheck size={11} />}
-                      {e.name}
-                    </label>
+                    <button type="button" key={opt.v}
+                      onClick={() => setTaskForm(f => ({
+                        ...f,
+                        approval_mode: opt.v,
+                        confirmation_approvers: opt.v === 'people' ? (f.confirmation_approvers || []) : [],
+                        approval_chain_id: opt.v === 'chain' ? (f.approval_chain_id || '') : '',
+                      }))}
+                      style={{
+                        flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer',
+                        border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                        background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                        color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      }}>
+                      {opt.l}
+                    </button>
                   )
                 })}
               </div>
             </Field>
-            {(taskForm.confirmation_approvers || []).length > 1 && (
-              <Field label="審批模式">
+
+            {/* 指定人員 */}
+            {taskForm.approval_mode === 'people' && (
+              <>
+                <Field label="加入審批人員">
+                  <select className="form-input" style={{ width: '100%' }} value=""
+                    onChange={e => {
+                      const name = e.target.value
+                      if (!name) return
+                      setTaskForm(f => {
+                        const cur = f.confirmation_approvers || []
+                        if (cur.includes(name)) return f
+                        return { ...f, confirmation_approvers: [...cur, name] }
+                      })
+                    }}>
+                    <option value="">+ 從員工挑一位</option>
+                    {employees
+                      .filter(e => !(taskForm.confirmation_approvers || []).includes(e.name))
+                      .map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
+                  </select>
+                </Field>
+                {(taskForm.confirmation_approvers || []).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {(taskForm.confirmation_approvers || []).map(name => (
+                      <span key={name} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 10px', borderRadius: 14, fontSize: 12,
+                        background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                        border: '1px solid var(--accent-purple)',
+                      }}>
+                        <ShieldCheck size={11} /> {name}
+                        <button type="button"
+                          onClick={() => setTaskForm(f => ({
+                            ...f,
+                            confirmation_approvers: (f.confirmation_approvers || []).filter(x => x !== name)
+                          }))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', padding: 0, lineHeight: 1 }}>
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {(taskForm.confirmation_approvers || []).length > 1 && (
+                  <Field label="多人簽核模式">
+                    <select className="form-input" style={{ width: '100%' }}
+                      value={taskForm.confirmation_mode || 'parallel'}
+                      onChange={e => setTaskForm(f => ({ ...f, confirmation_mode: e.target.value }))}>
+                      <option value="parallel">並簽（任一人通過即可）</option>
+                      <option value="sequential">會簽（每個人都要通過）</option>
+                    </select>
+                  </Field>
+                )}
+              </>
+            )}
+
+            {/* 套用簽核鏈 */}
+            {taskForm.approval_mode === 'chain' && (
+              <Field label="選擇簽核鏈">
                 <select className="form-input" style={{ width: '100%' }}
-                  value={taskForm.confirmation_mode || 'parallel'}
-                  onChange={e => setTaskForm(f => ({ ...f, confirmation_mode: e.target.value }))}>
-                  <option value="parallel">並簽（任一人通過即可）</option>
-                  <option value="sequential">會簽（每個人都要通過）</option>
+                  value={taskForm.approval_chain_id || ''}
+                  onChange={e => setTaskForm(f => ({ ...f, approval_chain_id: e.target.value }))}>
+                  <option value="">— 請選擇 —</option>
+                  {approvalChains.map(ac => (
+                    <option key={ac.id} value={ac.id}>
+                      {ac.name}{ac.category ? ` (${ac.category})` : ''}
+                    </option>
+                  ))}
                 </select>
+                {taskForm.approval_chain_id && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                    執行人按完成後，系統會依鏈逐關通知合法簽核者
+                  </div>
+                )}
               </Field>
             )}
           </div>

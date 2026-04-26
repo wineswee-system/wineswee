@@ -310,6 +310,9 @@ export default function Workflows() {
       ? (employees.find(e => e.name === taskForm.assignee)?.id || null)
       : null
 
+    const useChain   = taskForm.approval_mode === 'chain' && taskForm.approval_chain_id
+    const usePeople  = taskForm.approval_mode === 'people' && (taskForm.confirmation_approvers || []).length > 0
+
     const { data } = await createTask({
       workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,
       title: taskForm.title,
@@ -324,6 +327,9 @@ export default function Workflows() {
       role: taskForm.role || null,
       status: '待處理', bucket: 'Workflow', category: 'Workflow',
       organization_id: profile?.organization_id || null,
+      approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
+      confirmation_required: useChain || usePeople,
+      confirmation_mode: usePeople ? (taskForm.confirmation_mode || 'parallel') : null,
     })
     if (data) {
       setAllTasks(prev => [...prev, data])
@@ -339,26 +345,19 @@ export default function Workflows() {
           subFailures.push(`清單未掛上：${error.message}`)
         }
       }
-      // ★ 掛審批人員
-      const approvers = taskForm.confirmation_approvers || []
-      if (approvers.length > 0) {
-        const rows = approvers.map(name => ({
+      // ★ 指定人員模式：掛 task_confirmations（chain 模式不掛，等執行人按完成時 RPC 自動建）
+      if (usePeople) {
+        const rows = (taskForm.confirmation_approvers || []).map(name => ({
           task_id: data.id,
           approver: name,
           status: 'pending',
+          step_order: 0,
           organization_id: profile?.organization_id || null,
         }))
         const { error } = await supabase.from('task_confirmations').insert(rows)
         if (error) {
           console.error('[addTask] task_confirmations 失敗:', error)
           subFailures.push(`審批人員未掛上：${error.message}`)
-        }
-        // 同時寫 confirmation_mode 到 tasks
-        if (!error && taskForm.confirmation_mode) {
-          await supabase.from('tasks').update({
-            confirmation_mode: taskForm.confirmation_mode,
-            confirmation_required: true,
-          }).eq('id', data.id)
         }
       }
 
@@ -769,6 +768,7 @@ export default function Workflows() {
       <InstanceDetailView
         inst={inst} instSteps={instTasks} stats={stats}
         employees={employees} stores={stores} checklists={checklists} projects={projects} lineGroups={lineGroups}
+        approvalChains={approvalChains}
         currentUser={currentUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
         showNotesModal={showNotesModal} notesStep={notesStep} notesText={notesText}
         setNotesText={setNotesText} setShowNotesModal={setShowNotesModal} setNotesStep={setNotesStep}

@@ -19,6 +19,7 @@ import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
 import { notifySchedulePublished } from '../../lib/lineNotify'
+import { exportScheduleCalendarPdf } from '../../lib/exportPdf'
 import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
 
@@ -723,6 +724,17 @@ export default function Schedule() {
               a.click(); URL.revokeObjectURL(url)
             }}>
               📥 匯出 CSV
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
+              exportScheduleCalendarPdf({
+                storeName: storeFilter || '全部門市',
+                yearMonth: selectedMonth,
+                monthDates,
+                schedules: schedules.filter(s => filtered.some(e => e.name === s.employee)),
+                holidaySet,
+              })
+            }}>
+              📅 月曆 PDF
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件

@@ -560,50 +560,67 @@ export default function Workflows() {
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])
 
-          // ★ LINE 通知策略：第 1 步負責人「立即行動」 + 其餘負責人「待處理」
-          //   去重 by assignee：同人被指派多個任務只推一次
-          const firstStepAssignee = insertedTasks[0]?.assignee
-          const notifiedBy = new Map()
-          insertedTasks.forEach(task => {
-            if (!task.assignee) return
-            if (notifiedBy.has(task.assignee)) {
-              notifiedBy.get(task.assignee)._extraCount++
-            } else {
-              notifiedBy.set(task.assignee, { ...task, _extraCount: 0 })
+          // ★ Bug 修：建 task_dependencies — 每步依賴上一步
+          //   原本沒建 dep 導致第 1 步完成後第 2 步永遠停在「待處理」、流程永遠到不了 100% 也不會自動封存
+          if (insertedTasks.length > 1) {
+            const depRows = []
+            for (let i = 1; i < insertedTasks.length; i++) {
+              depRows.push({
+                task_id: insertedTasks[i].id,
+                depends_on_task_id: insertedTasks[i - 1].id,
+                dep_type: 'prerequisite',
+              })
             }
-          })
-          for (const [name, t] of notifiedBy) {
-            const isFirst = name === firstStepAssignee
-            const prefix = isFirst ? '🚀 [立即行動] ' : ''
-            const title = t._extraCount > 0
-              ? `${prefix}${t.title}（含其他 ${t._extraCount} 個任務）`
-              : `${prefix}${t.title}`
-            notifyTaskAssignee(name, title, loc || deployTemplate.name, t.id).catch(() => {})
+            const { error: depErr } = await supabase.from('task_dependencies').insert(depRows)
+            if (depErr) console.error('[deploy] task_dependencies 建立失敗:', depErr)
+          }
+
+          // ★ Bug 修：LINE 通知只發給第 1 步負責人
+          //   原本所有 step 的負責人都會立即收到通知 → 老闆是第 N 步審批者，部署當下就被打擾
+          //   修正後：第 1 步當下發；後續步驟由 autoProgressDependents 在前一步完成時接力發
+          const firstStepAssignee = insertedTasks[0]?.assignee
+          if (firstStepAssignee) {
+            const totalSteps = insertedTasks.length
+            const title = totalSteps > 1
+              ? `🚀 [立即行動] ${insertedTasks[0].title}（流程共 ${totalSteps} 步，後續會接力通知）`
+              : `🚀 [立即行動] ${insertedTasks[0].title}`
+            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, insertedTasks[0].id).catch(() => {})
           }
 
           // ★ 掛查核清單 + 確認審批人員（部署時 extras > 範本內建）
+          //   ※ 不再吞錯誤；累計失敗最後 alert，避免使用者「設定了卻沒生效」
+          const subFailures = []
           for (let i = 0; i < tplSteps.length; i++) {
             if (!insertedTasks[i]) continue
             const taskId = insertedTasks[i].id
             const extras = stepExtras[i] || {}
-            // 清單：extras 優先，否則範本
             const checklistId = extras.checklist_id || tplSteps[i].checklist_id
             if (checklistId) {
-              await supabase.from('task_checklists').insert({
+              const { error } = await supabase.from('task_checklists').insert({
                 task_id: taskId, checklist_id: checklistId,
-              }).then(() => {}, () => {})
+              })
+              if (error) {
+                console.error(`[deploy] step ${i + 1} task_checklists 失敗:`, error)
+                subFailures.push(`第 ${i + 1} 步「清單勾選」未建立：${error.message}`)
+              }
             }
-            // 確認審批人員
             const confs = extras.confirmations || []
             if (confs.length > 0) {
               const rows = confs.map(c => ({
                 task_id: taskId,
                 approver: c.approver,
                 status: 'pending',
+                organization_id: profile?.organization_id || null,
               }))
-              await supabase.from('task_confirmations').insert(rows)
-                .then(() => {}, () => {})
+              const { error } = await supabase.from('task_confirmations').insert(rows)
+              if (error) {
+                console.error(`[deploy] step ${i + 1} task_confirmations 失敗:`, error)
+                subFailures.push(`第 ${i + 1} 步「審批人員」未掛上：${error.message}`)
+              }
             }
+          }
+          if (subFailures.length > 0) {
+            alert(`流程已建立，但有 ${subFailures.length} 項子設定失敗：\n\n${subFailures.join('\n')}\n\n請到流程詳細頁手動補上。`)
           }
 
           // 建立流程結束簽核（如果範本有設定 approval_chain_id）
@@ -643,14 +660,43 @@ export default function Workflows() {
     setDeploying(false)
   }
 
+  // ── Archive / Delete instance ──
+  const handleArchiveInstance = async (inst) => {
+    if (!confirm(`確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「封存流程」分頁查看。`)) return
+    const { data, error } = await supabase.from('workflow_instances')
+      .update({
+        status: '已完成',
+        archived_at: new Date().toISOString(),
+        completed_at: inst.completed_at || new Date().toISOString(),
+      })
+      .eq('id', inst.id).select().single()
+    if (error) { alert('封存失敗：' + error.message); return }
+    if (data) setInstances(prev => prev.map(i => i.id === inst.id ? data : i))
+  }
+
+  const handleDeleteInstance = async (inst) => {
+    const stats = getStats(inst.id)
+    const warning = stats.pct < 100
+      ? `⚠️ 此流程僅完成 ${stats.pct}%，刪除後無法復原（連同 ${stats.total} 筆任務一併刪除）。`
+      : `刪除後無法復原（連同 ${stats.total} 筆任務一併刪除）。建議改用「封存」保留紀錄。`
+    if (!confirm(`確定刪除「${inst.template_name}」？\n\n${warning}\n\n仍要刪除？`)) return
+    // 先刪 tasks（task_dependencies / task_checklists / task_confirmations 都 ON DELETE CASCADE）
+    await supabase.from('tasks').delete().eq('workflow_instance_id', inst.id)
+    const { error } = await supabase.from('workflow_instances').delete().eq('id', inst.id)
+    if (error) { alert('刪除失敗：' + error.message); return }
+    setInstances(prev => prev.filter(i => i.id !== inst.id))
+    setAllTasks(prev => prev.filter(t => t.workflow_instance_id !== inst.id))
+  }
+
   // ── Filtered instances ──
   const filteredInstances = instances.filter(i => {
     if (filterStore && i.store !== filterStore) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true
   })
-  const activeInstances = filteredInstances.filter(i => i.status === '進行中')
-  const archivedInstances = filteredInstances.filter(i => i.status === '已完成')
+  // ★ 進行中 = status='進行中' AND 未封存（archived_at IS NULL）
+  const activeInstances = filteredInstances.filter(i => i.status === '進行中' && !i.archived_at)
+  const archivedInstances = filteredInstances.filter(i => i.status === '已完成' || i.archived_at)
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
@@ -746,7 +792,15 @@ export default function Workflows() {
 
       {/* ══ Active Instances ══ */}
       {tab === 'active' && (
-        <ActiveInstancesList instances={activeInstances} getStats={getStats} onSelect={setSelectedInstance} projects={projects} lineGroups={lineGroups} />
+        <ActiveInstancesList
+          instances={activeInstances}
+          getStats={getStats}
+          onSelect={setSelectedInstance}
+          onArchive={handleArchiveInstance}
+          onDelete={handleDeleteInstance}
+          projects={projects}
+          lineGroups={lineGroups}
+        />
       )}
 
       {/* ══ Templates (SOP) ══ */}

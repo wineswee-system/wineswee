@@ -529,7 +529,7 @@ serve(async (req) => {
       }
 
     // ── Project task commands (/專案) ──────────────────────────────────────
-    } else if (lower === "/專案 列表" || lower === "/專案列表" || lower === "/project list" || lower === "專案") {
+    } else if (lower === "/專案 列表" || lower === "/專案列表" || lower === "/project list" || lower === "專案" || lower === "/專案") {
       commandName = "project_list";
       responseMsg = await cmdProjectList(db);
 
@@ -569,7 +569,7 @@ serve(async (req) => {
 
     } else if (lower === "/任務 列表" || lower === "/task list" || lower === "任務" || lower === "tasks"
       || lower.replace(/\s+/g, ' ') === "/任務 列表"
-      || lower === "/任務列表") {
+      || lower === "/任務列表" || lower === "/任務") {
       commandName = "task_list";
       console.log("[ROUTE] matched /任務 列表 branch");
       if (!lineUser.is_verified || !lineUser.employee_id) {
@@ -718,7 +718,7 @@ serve(async (req) => {
         responseMsg = await cmdNotes(lineUser.employee_id, db);
       }
 
-    } else if (lower === "/流程 狀態" || lower === "/workflow status" || lower === "流程" || lower === "workflows") {
+    } else if (lower === "/流程 狀態" || lower === "/workflow status" || lower === "流程" || lower === "workflows" || lower === "/流程") {
       commandName = "workflow_status";
       responseMsg = await cmdWorkflowStatus(db);
 

@@ -35,7 +35,7 @@ const LIFF_SHORTCUTS: LiffShortcut[] = [
   { key: "approval_status",  match: ["簽核狀態", "/簽核狀態", "我的申請"],                title: "我的申請進度", subtitle: "查看送出單據的審批狀態",     buttonLabel: "📋 查看進度",   path: "/approval-status",  emoji: "📋" },
   { key: "dashboard",        match: ["儀表板", "儀錶板", "/儀表板", "/儀錶板"],           title: "營運儀表板",   subtitle: "流程進度 / 任務統計",        buttonLabel: "📊 開啟儀表板", path: "/dashboard",        emoji: "📊" },
   { key: "salary",           match: ["薪水", "/薪水", "查薪水", "薪資"],                   title: "薪資查詢",     subtitle: "查看歷月薪資單",             buttonLabel: "💰 查看薪資",   path: "/salary",           emoji: "💰" },
-  { key: "todo",             match: ["代辦", "代辦項目", "/代辦", "/代辦項目", "待辦"],     title: "代辦項目",     subtitle: "任務與簽核一覽",             buttonLabel: "📋 開啟代辦",   path: "/todo",             emoji: "📋" },
+  { key: "todo",             match: ["待辦", "待辦項目", "/待辦", "/待辦項目", "代辦", "代辦項目", "/代辦", "/代辦項目"],     title: "待辦項目",     subtitle: "任務與簽核一覽",             buttonLabel: "📋 開啟待辦",   path: "/todo",             emoji: "📋" },
 ];
 function matchLiffShortcut(text: string): LiffShortcut | null {
   for (const sc of LIFF_SHORTCUTS) if (sc.match.includes(text)) return sc;

@@ -98,16 +98,34 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     title: `${rec.employee ?? "員工"}的${palette.label}`,
   });
 
-  // 提示：請輸入駁回原因（用最小化文字 + quick reply 取消）
-  const promptText = `❌ 駁回 ${rec.employee ?? "員工"} 的${palette.label}（#${id}）\n請直接輸入駁回原因，或按下方取消。`;
+  // 提示：請輸入駁回原因。給 4 個常用快速按鈕 + 1 個取消，使用者按一下就送出，
+  //       不想用罐頭原因 → 直接在對話框打字也行。
+  const promptText =
+    `❌ 你正在駁回「${rec.employee ?? "員工"}」的${palette.label}（#${id}）\n\n` +
+    `👇 在對話框直接打字輸入駁回原因，按送出即完成駁回。\n` +
+    `也可以下方選常用原因 ↓`;
+
+  const quickReasons: Array<{ label: string; reason: string }> = [
+    { label: "需附證明", reason: "需附證明文件" },
+    { label: "日期改其他天", reason: "請改其他日期" },
+    { label: "工時不允許", reason: "當天工時不允許" },
+    { label: "再溝通", reason: "請先跟主管討論" },
+  ];
+
   return [{
     type: "text",
     text: promptText,
     quickReply: {
-      items: [{
-        type: "action",
-        action: { type: "postback", label: "取消駁回", data: `action=cancel&type=request&rt=${rt}&id=${id}` },
-      }],
+      items: [
+        ...quickReasons.map(q => ({
+          type: "action",
+          action: { type: "message", label: q.label, text: q.reason },
+        })),
+        {
+          type: "action",
+          action: { type: "postback", label: "取消駁回", data: `action=cancel&type=request&rt=${rt}&id=${id}` },
+        },
+      ],
     },
   }];
 };

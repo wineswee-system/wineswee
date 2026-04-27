@@ -15,7 +15,7 @@ import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.t
 import { buildClockTodayMessage } from './card-clock.ts';
 import { buildTodaySummaryBubble } from './card-summary.ts';
 import type { ApprovalRequestType } from './types.ts';
-import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
+import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus, cmdProjectTasks } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
 import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
 
@@ -532,6 +532,12 @@ serve(async (req) => {
     } else if (lower === "/專案 列表" || lower === "/專案列表" || lower === "/project list" || lower === "專案") {
       commandName = "project_list";
       responseMsg = await cmdProjectList(db);
+
+    } else if (lower.match(/^\/專案\s+任務\s+#?(\d+)/)) {
+      commandName = "project_tasks";
+      const m = rawText.match(/\/專案\s+任務\s+#?(\d+)/);
+      const projectId = m ? parseInt(m[1], 10) : 0;
+      responseMsg = await cmdProjectTasks(projectId, db);
 
     } else if (lower.match(/^\/專案\s+#?(\d+)\s+完成/)) {
       commandName = "project_done";

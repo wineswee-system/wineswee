@@ -3,7 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { PendingAction } from './types.ts';
 import { verifySignature, getLineProfile, getGroupSummary, text, replyAndLog, pushAndLog } from './line-api.ts';
 import { upsertLineUser, upsertLineGroup, upsertLineGroupMember, logMessage, logCommand, logError } from './db-helpers.ts';
-import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard } from './flex-builders.ts';
+import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard, flexResultOk, flexResultErr } from './flex-builders.ts';
+import { dispatchPostback } from './postback-handlers.ts';
+import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
+import { buildApprovalCardMessage } from './card-approval.ts';
+import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
 import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
@@ -147,6 +151,48 @@ serve(async (req) => {
       continue;
     }
 
+    // ── Postback events (button taps with data payload) ──────────────────────
+    if (event.type === "postback") {
+      const lineUserId: string = event.source?.userId ?? "";
+      if (!lineUserId) continue;
+      const data: string = event.postback?.data ?? "";
+      const sourceType = isGroup ? (event.source?.type ?? "group") : "user";
+
+      const profile = await getLineProfile(lineUserId, accessToken, groupId);
+      await logMessage(db, {
+        channelId, lineUserId,
+        displayName: profile.displayName,
+        messageText: `[postback] ${data}`,
+        sourceType, direction: "incoming", groupId,
+        eventType: "postback",
+      });
+
+      const { row: lineUser } = await upsertLineUser(lineUserId, profile.displayName, db, channelId);
+      if (!lineUser) continue;
+
+      const messages = await dispatchPostback(data, {
+        db, accessToken,
+        channelCode, channelId,
+        userId: lineUserId,
+        replyToken: event.replyToken,
+        lineUser: {
+          id: lineUser.id,
+          line_user_id: lineUser.line_user_id,
+          display_name: lineUser.display_name,
+          employee_id: lineUser.employee_id,
+          is_verified: lineUser.is_verified,
+        },
+        liffIds: { task: liffTaskId, newTask: liffNewTaskId, dashboard: liffDashboardId },
+      });
+
+      if (messages && messages.length > 0) {
+        await replyAndLog(event.replyToken, messages, accessToken, db, {
+          channelId, lineUserId, displayName: profile.displayName, sourceType, groupId,
+        });
+      }
+      continue;
+    }
+
     // ── Only text messages from here ─────────────────────────────────────────
     if (event.type !== "message" || event.message?.type !== "text") continue;
     if (!event.source?.userId) continue;
@@ -226,6 +272,51 @@ serve(async (req) => {
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
         await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
+      } else if (pending.action === "approval_reject_reason") {
+        // 簽核駁回 — 把使用者打的文字當駁回原因，呼叫 liff_approve_request reject
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const reason = rawText.trim();
+        let resultMsg: any;
+
+        if (!reason) {
+          resultMsg = flexResultErr({
+            title: "駁回原因不能空白", lines: ["請重新點 [❌ 駁回] 並輸入原因。"],
+          });
+        } else {
+          const { data, error } = await db.rpc("liff_approve_request", {
+            p_line_user_id: lineUserId,
+            p_type: pending.request_type,
+            p_id: pending.request_id,
+            p_action: "reject",
+            p_reason: reason,
+          });
+          if (error || !(data as any)?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "找不到你的員工檔，請先綁定 LINE。",
+              "NOT_FOUND_OR_ALREADY_PROCESSED": "此申請單不存在或已被處理。",
+              "ORG_MISMATCH": "你不屬於此申請人的組織。",
+              "NOT_YOUR_TURN": "目前不輪到你簽核這張單。",
+            };
+            resultMsg = flexResultErr({
+              title: "駁回失敗",
+              lines: [errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"],
+            });
+          } else {
+            resultMsg = flexResultOk({
+              title: `已駁回 ${pending.title}`,
+              chip: `#${pending.request_id}`,
+              lines: [
+                `駁回原因：${reason}`,
+                `狀態：${(data as any).status ?? "已退回"}`,
+                "✅ 已通知申請人，可修改後重送。",
+              ],
+            });
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_approval_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
       } else if (pending.action === "create_task") {
         const cmdStart = Date.now();
         const stepResult = await handleCreateTaskStep(lineUser, rawText, db, accessToken);
@@ -263,6 +354,36 @@ serve(async (req) => {
     } else if (lower === "/出勤" || lower === "出勤" || lower === "attendance") {
       commandName = "attendance_card";
       responseMsg = flexAttendanceCard(liffTaskId, liffNewTaskId, liffDashboardId);
+
+    } else if (lower.startsWith("/卡測試")) {
+      // 用法：/卡測試 leave 42  或  /卡測試 請假 42
+      // 把指定申請單拉成新版簽核卡丟回來，方便視覺驗證 / debug。
+      commandName = "card_preview";
+      const parts = rawText.replace(/^\/卡測試\s*/, "").trim().split(/\s+/);
+      const typeAlias: Record<string, ApprovalRequestType> = {
+        leave: "leave", 請假: "leave",
+        overtime: "overtime", 加班: "overtime",
+        trip: "trip", 出差: "trip",
+        expense: "expense", 報帳: "expense",
+        expense_request: "expense_request", 經費: "expense_request", 申請: "expense_request",
+        correction: "correction", 補卡: "correction", 補打卡: "correction",
+        cover: "cover", 代班: "cover",
+        off_request: "off_request", 希望休: "off_request",
+      };
+      const rt = typeAlias[parts[0] ?? ""] ?? null;
+      const id = Number(parts[1]);
+      if (!rt || !id) {
+        responseMsg = flexResultErr({
+          title: "用法錯誤",
+          lines: [
+            "/卡測試 <類型> <id>",
+            "類型：請假 / 加班 / 出差 / 報帳 / 經費 / 補卡 / 代班 / 希望休",
+            "例：/卡測試 請假 2",
+          ],
+        });
+      } else {
+        responseMsg = await buildApprovalCardMessage(db, rt, id, liffTaskId || liffDashboardId);
+      }
 
     } else if (lower === "/帳號連結" || lower === "帳號連結" || lower === "帳號連結說明") {
       commandName = "account_help";

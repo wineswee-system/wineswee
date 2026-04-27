@@ -1,4 +1,10 @@
 import { priorityLabel, statusLabel, PRIORITY_COLOR, STATUS_COLOR } from './constants.ts';
+import {
+  COLOR_SUCCESS, COLOR_DANGER, COLOR_INFO, COLOR_WARNING, COLOR_PRIMARY,
+  TEXT_ON_COLOR, TEXT_ON_COLOR_MUTED, TEXT_DIM_SUCCESS, TEXT_DIM_DANGER, TEXT_DIM_PRIMARY,
+  TEXT_TITLE, TEXT_BODY, TEXT_SECONDARY, TEXT_LABEL, TEXT_MUTED,
+  REQUEST_TYPE_COLORS,
+} from './colors.ts';
 
 // ── Core Flex Helpers ─────────────────────────────────────────────────────────
 
@@ -94,6 +100,257 @@ export function flexLiffShortcut(opts: {
           action: { type: "uri", label: buttonLabel, uri },
         }],
       },
+    },
+  };
+}
+
+// ── Generic Result Cards ──────────────────────────────────────────────────────
+// 用於操作完成後給 user 一張結果卡（取代「文字成功」訊息）。
+// 所有 postback 操作（核准 / 完成 / 拒絕 / 解鎖 ...）共用這兩個 builder。
+
+type ResultCardOpts = {
+  title: string;
+  /** body 多行說明，每個元素一行 */
+  lines?: string[];
+  /** 標頭右上角 chip 文字（例：完成時間 / 操作者）*/
+  chip?: string;
+  /** footer 按鈕（最多 3 顆），未提供則無 footer */
+  buttons?: Array<{ label: string; uri?: string; postback?: string; messageText?: string; style?: "primary" | "secondary"; color?: string; displayText?: string }>;
+};
+
+function buildResultCard(opts: ResultCardOpts, headerColor: string, dimColor: string, emoji: string, altPrefix: string) {
+  const { title, lines = [], chip, buttons } = opts;
+  const headerContents: any[] = [
+    { type: "text", text: `${emoji} ${title}`, color: TEXT_ON_COLOR, weight: "bold", size: "md", wrap: true },
+  ];
+  if (chip) {
+    headerContents.push({ type: "text", text: chip, color: dimColor, size: "xs", margin: "xs" });
+  }
+
+  const bubble: any = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box", layout: "vertical", paddingAll: "14px",
+      backgroundColor: headerColor,
+      contents: headerContents,
+    },
+  };
+
+  if (lines.length > 0) {
+    bubble.body = {
+      type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+      contents: lines.map(l => ({ type: "text", text: l, size: "sm", color: TEXT_BODY, wrap: true })),
+    };
+  }
+
+  if (buttons && buttons.length > 0) {
+    bubble.footer = {
+      type: "box", layout: "vertical", spacing: "xs", paddingAll: "10px",
+      contents: buttons.slice(0, 3).map(b => {
+        const action: any = b.uri
+          ? { type: "uri", label: b.label, uri: b.uri }
+          : b.postback
+          ? { type: "postback", label: b.label, data: b.postback, ...(b.displayText ? { displayText: b.displayText } : {}) }
+          : { type: "message", label: b.label, text: b.messageText ?? b.label };
+        return {
+          type: "button", action,
+          style: b.style ?? "secondary",
+          height: "sm",
+          ...(b.color ? { color: b.color } : {}),
+        };
+      }),
+    };
+  }
+
+  return { type: "flex", altText: `${altPrefix} ${title}`, contents: bubble };
+}
+
+/** 操作成功的結果卡（綠色 header） */
+export function flexResultOk(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_SUCCESS, TEXT_DIM_SUCCESS, "✅", "✅");
+}
+
+/** 操作失敗的結果卡（紅色 header） */
+export function flexResultErr(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_DANGER, TEXT_DIM_DANGER, "❌", "❌");
+}
+
+/** 中性資訊卡（藍色 header） — 用於 preview / 提示 */
+export function flexResultInfo(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_PRIMARY, TEXT_DIM_PRIMARY, "ℹ️", "ℹ️");
+}
+
+// ── Compact two-column row used by upgraded approval/task cards ──────────────
+// 比 infoRow 多一點視覺層次：label 灰、value 黑粗體 + 可選彩色 dot 提示。
+export function rowKv(label: string, value: string, opts?: { valueColor?: string; valueWeight?: "regular" | "bold"; dot?: string }) {
+  const contents: any[] = [
+    { type: "text", text: label, color: TEXT_LABEL, size: "xs", flex: 3 },
+    { type: "text", text: value, color: opts?.valueColor ?? TEXT_BODY, size: "xs", flex: 6, weight: opts?.valueWeight ?? "bold", wrap: true },
+  ];
+  if (opts?.dot) {
+    contents.splice(1, 0, { type: "text", text: opts.dot, size: "xs", flex: 0, margin: "none" });
+  }
+  return { type: "box", layout: "horizontal", spacing: "sm", margin: "xs", contents };
+}
+
+// ── Approval Request Card (P0) ───────────────────────────────────────────────
+// 統一的簽核請求卡：請假 / 加班 / 出差 / 經費 / 補卡 / 代班 / 希望休 七種共用。
+// 使用 REQUEST_TYPE_COLORS 取顏色，header / footer / button 都統一格式。
+//
+// 操作按鈕走 postback：
+//   - approve:request&type=leave&id=42       → 直接核准
+//   - reject:request&type=leave&id=42        → 進入 pending → 等使用者打駁回原因
+//   - detail:request&type=leave&id=42&path=/approve  → 開 LIFF 看完整詳情
+
+export type ApprovalCardData = {
+  /** 7 種申請類型之一 */
+  type: "leave" | "overtime" | "trip" | "expense" | "expense_request" | "correction" | "cover" | "off_request";
+  /** 該申請單在 DB 的 id */
+  id: number;
+  /** 申請人姓名 */
+  applicantName: string;
+  /** 申請人單位（部門/門市，可選） */
+  applicantDept?: string | null;
+  /** 狀態 chip 文字（例：「待審核」「待你審核」） */
+  statusChip?: string;
+  /** key/value 欄位列（依類型不同而異） */
+  rows: Array<{ label: string; value: string; valueColor?: string }>;
+  /** 申請原因 / 描述（會以全寬 wrap 顯示） */
+  reason?: string | null;
+  /** 附件清單（檔名 + URL） */
+  attachments?: Array<{ name: string; url?: string | null }>;
+  /** 提示行（餘額、衝突警示、SLA 提醒…） */
+  alerts?: string[];
+  /** 看完整詳情的 LIFF 路徑（預設 /approve） */
+  liffDetailPath?: string;
+  /** LIFF id（從 webhook ctx 帶進來） */
+  liffId?: string;
+};
+
+export function flexApprovalRequest(d: ApprovalCardData) {
+  const palette = REQUEST_TYPE_COLORS[d.type] ?? REQUEST_TYPE_COLORS.leave;
+
+  // ── Header ──
+  const header: any = {
+    type: "box", layout: "vertical", paddingAll: "16px",
+    backgroundColor: palette.header,
+    contents: [
+      {
+        type: "box", layout: "horizontal", contents: [
+          { type: "text", text: `${palette.emoji} ${palette.label}`, color: TEXT_ON_COLOR, weight: "bold", size: "lg", flex: 5 },
+          ...(d.statusChip ? [{ type: "text", text: d.statusChip, color: TEXT_ON_COLOR_MUTED, size: "xs", align: "end", gravity: "center", flex: 3 }] : []),
+        ],
+      },
+      { type: "text", text: `#${d.id}`, color: palette.subtitle, size: "xs", margin: "xs" },
+    ],
+  };
+
+  // ── Body ──
+  const bodyContents: any[] = [];
+
+  // 申請人區塊（突出顯示）
+  bodyContents.push({
+    type: "box", layout: "horizontal", spacing: "sm",
+    contents: [
+      { type: "text", text: "👤", size: "lg", flex: 0 },
+      {
+        type: "box", layout: "vertical", flex: 7,
+        contents: [
+          { type: "text", text: d.applicantName, weight: "bold", size: "md", color: TEXT_TITLE },
+          ...(d.applicantDept ? [{ type: "text", text: d.applicantDept, size: "xs", color: TEXT_SECONDARY, margin: "none" }] : []),
+        ],
+      },
+    ],
+  });
+
+  bodyContents.push({ type: "separator", margin: "md" });
+
+  // 欄位列
+  for (const r of d.rows) {
+    bodyContents.push(rowKv(r.label, r.value, { valueColor: r.valueColor }));
+  }
+
+  // 原因（full width，獨立區塊）
+  if (d.reason && d.reason.trim()) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({
+      type: "box", layout: "vertical", margin: "sm", paddingAll: "10px",
+      backgroundColor: "#F9FAFB", cornerRadius: "8px",
+      contents: [
+        { type: "text", text: "📝 申請原因", size: "xxs", color: TEXT_LABEL, weight: "bold" },
+        { type: "text", text: d.reason, size: "sm", color: TEXT_BODY, wrap: true, margin: "sm" },
+      ],
+    });
+  }
+
+  // 附件
+  if (d.attachments && d.attachments.length > 0) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({
+      type: "box", layout: "vertical", spacing: "xs", margin: "sm",
+      contents: [
+        { type: "text", text: "📎 附件", size: "xxs", color: TEXT_LABEL, weight: "bold" },
+        ...d.attachments.slice(0, 4).map(a => ({
+          type: "text",
+          text: `• ${a.name}`,
+          size: "xs",
+          color: a.url ? COLOR_INFO : TEXT_SECONDARY,
+          wrap: true,
+          ...(a.url ? { action: { type: "uri", label: a.name, uri: a.url } } : {}),
+        })),
+      ],
+    });
+  }
+
+  // 提醒 / 影響 / 餘額
+  if (d.alerts && d.alerts.length > 0) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({
+      type: "box", layout: "vertical", spacing: "xs", margin: "sm",
+      contents: d.alerts.map(a => ({ type: "text", text: a, size: "xs", color: COLOR_WARNING, wrap: true })),
+    });
+  }
+
+  // ── Footer ──
+  const liffDetailUri = d.liffId
+    ? `https://liff.line.me/${d.liffId.trim()}?to=${encodeURIComponent(d.liffDetailPath ?? "/approve")}`
+    : null;
+
+  const footerButtons: any[] = [
+    {
+      type: "box", layout: "horizontal", spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          action: { type: "postback", label: "✅ 核准", data: `action=approve&type=request&rt=${d.type}&id=${d.id}`, displayText: `✅ 我已核准 ${d.applicantName} 的${palette.label}` },
+          style: "primary", color: COLOR_SUCCESS, height: "sm", flex: 1,
+        },
+        {
+          type: "button",
+          action: { type: "postback", label: "❌ 駁回", data: `action=reject&type=request&rt=${d.type}&id=${d.id}`, displayText: `❌ 我已駁回 ${d.applicantName} 的${palette.label}` },
+          style: "primary", color: COLOR_DANGER, height: "sm", flex: 1,
+        },
+      ],
+    },
+  ];
+  if (liffDetailUri) {
+    footerButtons.push({
+      type: "button",
+      action: { type: "uri", label: "📋 看完整詳情", uri: liffDetailUri },
+      style: "secondary", height: "sm",
+    });
+  }
+
+  return {
+    type: "flex",
+    altText: `${palette.emoji} ${palette.label} — ${d.applicantName}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      header,
+      body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", contents: bodyContents },
+      footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons },
     },
   };
 }

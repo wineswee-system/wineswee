@@ -76,7 +76,7 @@ export async function buildTodaySummaryBubble(db: SupabaseClient, lineUserId: st
 
   return {
     type: "bubble",
-    size: "kilo",
+    // 不指定 size：跟 flexMenu 對齊（兩張 bubble 在 carousel 內須同尺寸，否則 LINE 拒收）
     header: {
       type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: COLOR_PRIMARY,
       contents: [

@@ -8,6 +8,7 @@ import { dispatchPostback } from './postback-handlers.ts';
 import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
 import './postback-task.ts'; // side-effect: registers complete/postpone/note:task handlers
 import './postback-salary.ts'; // side-effect: registers unlock/setup:salary handlers
+import './postback-cover.ts';  // side-effect: registers claim:cover handler
 import { buildApprovalCardMessage } from './card-approval.ts';
 import { buildScheduleBriefMessage } from './card-schedule.ts';
 import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.ts';
@@ -361,21 +362,27 @@ serve(async (req) => {
         if (!reason) {
           resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
         } else {
-          const { data, error } = await db.rpc("liff_approve_request", {
-            p_line_user_id: lineUserId,
-            p_type: pending.request_type,
-            p_id: pending.request_id,
-            p_action: "reject",
-            p_reason: reason,
-          });
-          if (error || !(data as any)?.ok) {
+          // off_request 走獨立 RPC liff_approve_off_request，其他走通用 liff_approve_request
+          let data: any, error: any;
+          if (pending.request_type === "off_request") {
+            ({ data, error } = await db.rpc("liff_approve_off_request", {
+              p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          } else {
+            ({ data, error } = await db.rpc("liff_approve_request", {
+              p_line_user_id: lineUserId, p_type: pending.request_type, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          }
+          if (error || !data?.ok) {
             const errMap: Record<string, string> = {
               "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工，請先 /註冊 姓名",
               "NOT_FOUND_OR_ALREADY_PROCESSED": "此單不存在或已被處理",
+              "ALREADY_PROCESSED": "此單已被處理",
+              "NOT_FOUND": "找不到此單",
               "ORG_MISMATCH": "跨組織不能簽核",
               "NOT_YOUR_TURN": "不輪到你簽核",
             };
-            resultMsg = text(`❌ 駁回失敗：${errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
+            resultMsg = text(`❌ 駁回失敗：${errMap[data?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
           } else {
             resultMsg = text(`❌ 已駁回 ${pending.title}（#${pending.request_id}）\n原因：${reason}`);
           }

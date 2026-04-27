@@ -37,20 +37,24 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
 
   const palette = REQUEST_TYPE_COLORS[rt];
 
-  // 呼叫既有的 liff_approve_request RPC（已支援 7 種類型 + 多租戶 + chain step）
-  const { data, error } = await ctx.db.rpc("liff_approve_request", {
-    p_line_user_id: ctx.userId,
-    p_type: rt,
-    p_id: id,
-    p_action: "approve",
-    p_reason: null,
-  });
+  // 呼叫對應 RPC：off_request 走 liff_approve_off_request，其他走 liff_approve_request
+  let data: any, error: any;
+  if (rt === "off_request") {
+    ({ data, error } = await ctx.db.rpc("liff_approve_off_request", {
+      p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  } else {
+    ({ data, error } = await ctx.db.rpc("liff_approve_request", {
+      p_line_user_id: ctx.userId, p_type: rt, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  }
 
   if (error) return [txt(`❌ 核准失敗：${error.message}`)];
 
   const result = data as {
     ok?: boolean; error?: string; status?: string; applicant?: any; event?: string;
     next_approvers?: Array<{ emp_id: number; name?: string }>;
+    applicant_emp_id?: number; date?: string;  // off_request 用
   } | null;
   if (!result?.ok) {
     const errorMap: Record<string, string> = {
@@ -58,6 +62,8 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
       "INVALID_ACTION":                 "操作參數錯誤",
       "REASON_REQUIRED":                "駁回需要原因",
       "NOT_FOUND_OR_ALREADY_PROCESSED": "此單不存在或已被處理",
+      "ALREADY_PROCESSED":              "此單已被處理",
+      "NOT_FOUND":                      "找不到此申請單",
       "APPLICANT_NOT_FOUND":            "找不到申請人資料",
       "ORG_MISMATCH":                   "跨組織不能簽核",
       "NOT_YOUR_TURN":                  "不輪到你簽核",
@@ -65,7 +71,7 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
     return [txt(`❌ ${errorMap[result?.error ?? ""] ?? result?.error ?? "核准失敗"}`)];
   }
 
-  // 如果 chain advanced 到下一關 → 推 rich card 給下關簽核者
+  // 如果 chain advanced 到下一關 → 推 rich card 給下關簽核者（只有 expense_request 走 chain）
   if (result.event === "advanced" && Array.isArray(result.next_approvers) && result.next_approvers.length > 0) {
     await pushCardToApprovers(ctx, rt, id, result.next_approvers);
   }
@@ -75,6 +81,10 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   const applicantName = typeof result.applicant === "string" ? result.applicant : (result.applicant?.name ?? "申請人");
   const nextHint = (result.event === "advanced" && (result.next_approvers?.length ?? 0) > 0)
     ? `（已推給下關 ${result.next_approvers!.length} 位簽核者）` : "";
+
+  if (rt === "off_request") {
+    return [txt(`✅ ${result.date ?? ""} 的希望休已核准（#${id}）`)];
+  }
   return [txt(`✅ ${applicantName} 的${palette.label}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）${nextHint}`)];
 };
 

@@ -11,6 +11,7 @@ import './postback-salary.ts'; // side-effect: registers unlock/setup:salary han
 import { buildApprovalCardMessage } from './card-approval.ts';
 import { buildScheduleBriefMessage } from './card-schedule.ts';
 import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.ts';
+import { buildClockTodayMessage } from './card-clock.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
@@ -1074,11 +1075,13 @@ serve(async (req) => {
       commandName = `liff_shortcut_${sc.key}`;
       const liffId = liffNewTaskId || liffTaskId;
 
-      // 升級型：班表 → 7 天 preview 卡，薪水 → masked + PIN 解鎖卡
+      // 升級型：班表 / 薪水 / 打卡 都改顯示 preview，主動作再開 LIFF
       if (sc.key === "schedule") {
         responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
       } else if (sc.key === "salary") {
         responseMsg = await buildSalaryBriefMessage(db, lineUserId, liffId);
+      } else if (sc.key === "clock") {
+        responseMsg = await buildClockTodayMessage(db, lineUserId, liffId);
       } else if (!liffId) {
         responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
       } else {

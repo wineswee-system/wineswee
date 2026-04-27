@@ -8,6 +8,7 @@ import { dispatchPostback } from './postback-handlers.ts';
 import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
 import './postback-task.ts'; // side-effect: registers complete/postpone/note:task handlers
 import { buildApprovalCardMessage } from './card-approval.ts';
+import { buildScheduleBriefMessage } from './card-schedule.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
@@ -1025,7 +1026,11 @@ serve(async (req) => {
       const sc = matchLiffShortcut(lower)!;
       commandName = `liff_shortcut_${sc.key}`;
       const liffId = liffNewTaskId || liffTaskId;
-      if (!liffId) {
+
+      // 升級型：班表 → 直接給 7 天 preview 卡（不開 LIFF）
+      if (sc.key === "schedule") {
+        responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
+      } else if (!liffId) {
         responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
       } else {
         responseMsg = flexLiffShortcut({

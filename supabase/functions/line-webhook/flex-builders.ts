@@ -317,18 +317,19 @@ export function flexApprovalRequest(d: ApprovalCardData) {
     ? `https://liff.line.me/${d.liffId.trim()}?to=${encodeURIComponent(d.liffDetailPath ?? "/approve")}`
     : null;
 
+  // 注意：postback 不帶 displayText → 按了不會在聊天室留回音文字（節省版面）
   const footerButtons: any[] = [
     {
       type: "box", layout: "horizontal", spacing: "sm",
       contents: [
         {
           type: "button",
-          action: { type: "postback", label: "✅ 核准", data: `action=approve&type=request&rt=${d.type}&id=${d.id}`, displayText: `✅ 我已核准 ${d.applicantName} 的${palette.label}` },
+          action: { type: "postback", label: "✅ 核准", data: `action=approve&type=request&rt=${d.type}&id=${d.id}` },
           style: "primary", color: COLOR_SUCCESS, height: "sm", flex: 1,
         },
         {
           type: "button",
-          action: { type: "postback", label: "❌ 駁回", data: `action=reject&type=request&rt=${d.type}&id=${d.id}`, displayText: `❌ 我已駁回 ${d.applicantName} 的${palette.label}` },
+          action: { type: "postback", label: "❌ 駁回", data: `action=reject&type=request&rt=${d.type}&id=${d.id}` },
           style: "primary", color: COLOR_DANGER, height: "sm", flex: 1,
         },
       ],

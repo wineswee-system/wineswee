@@ -6,11 +6,14 @@
 //
 // 全部 7 種類型共用：rt 欄位指定 (leave|overtime|trip|expense|expense_request|correction|cover|off_request)
 
-import { registerPostback, setPending, type PostbackHandler } from './postback-handlers.ts';
+import { registerPostback, setPending, clearPending, type PostbackHandler } from './postback-handlers.ts';
 import { flexResultOk, flexResultErr } from './flex-builders.ts';
 import { buildApprovalCardMessage } from './card-approval.ts';
 import { COLOR_DANGER, COLOR_SUCCESS, REQUEST_TYPE_COLORS } from './colors.ts';
 import type { ApprovalRequestType } from './types.ts';
+
+// 純文字訊息（單行）— 用於替代大張結果卡，減少版面浪費
+function txt(s: string) { return { type: "text", text: s }; }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +32,7 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   const id = Number(params.id);
 
   if (!rt || !id) {
-    return [flexResultErr({ title: "無效的操作參數", lines: ["缺少類型或單號"] })];
+    return [txt("⚠️ 操作參數有誤")];
   }
 
   const palette = REQUEST_TYPE_COLORS[rt];
@@ -43,39 +46,25 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
     p_reason: null,
   });
 
-  if (error) {
-    return [flexResultErr({
-      title: "核准失敗",
-      lines: ["DB 錯誤：" + error.message, "請聯絡管理員。"],
-    })];
-  }
+  if (error) return [txt(`❌ 核准失敗：${error.message}`)];
 
   const result = data as { ok?: boolean; error?: string; status?: string; applicant?: string } | null;
   if (!result?.ok) {
     const errorMap: Record<string, string> = {
-      "EMPLOYEE_NOT_FOUND":             "找不到你的員工檔，請先綁定 LINE 帳號。",
-      "INVALID_ACTION":                 "操作參數錯誤。",
-      "REASON_REQUIRED":                "駁回需要原因。",
-      "NOT_FOUND_OR_ALREADY_PROCESSED": "此申請單不存在或已被處理。",
-      "APPLICANT_NOT_FOUND":            "找不到申請人資料。",
-      "ORG_MISMATCH":                   "你不屬於此申請人的組織。",
-      "NOT_YOUR_TURN":                  "目前不輪到你簽核這張單。",
+      "EMPLOYEE_NOT_FOUND":             "你的 LINE 還沒綁員工，請先 /註冊 姓名",
+      "INVALID_ACTION":                 "操作參數錯誤",
+      "REASON_REQUIRED":                "駁回需要原因",
+      "NOT_FOUND_OR_ALREADY_PROCESSED": "此單不存在或已被處理",
+      "APPLICANT_NOT_FOUND":            "找不到申請人資料",
+      "ORG_MISMATCH":                   "跨組織不能簽核",
+      "NOT_YOUR_TURN":                  "不輪到你簽核",
     };
-    return [flexResultErr({
-      title: "無法核准",
-      lines: [errorMap[result?.error ?? ""] ?? result?.error ?? "未知錯誤"],
-    })];
+    return [txt(`❌ ${errorMap[result?.error ?? ""] ?? result?.error ?? "核准失敗"}`)];
   }
 
-  return [flexResultOk({
-    title: `已核准 ${palette.label}`,
-    chip: `#${id}`,
-    lines: [
-      `申請人：${result.applicant ?? "—"}`,
-      `狀態：${result.status ?? "已核准"}`,
-      "✅ 已通知申請人 + 下一關簽核者（若有）",
-    ],
-  })];
+  // 成功：單行文字（含申請人 + 類型 + 狀態 + 單號）
+  const status = result.status ?? "已核准";
+  return [txt(`✅ ${result.applicant ?? "申請人"} 的${palette.label}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）`)];
 };
 
 // ── Handler: reject (set pending → ask reason) ────────────────────────────────
@@ -84,9 +73,7 @@ const handleReject: PostbackHandler = async (params, ctx) => {
   const rt = parseRequestType(params.rt);
   const id = Number(params.id);
 
-  if (!rt || !id) {
-    return [flexResultErr({ title: "無效的操作參數", lines: ["缺少類型或單號"] })];
-  }
+  if (!rt || !id) return [txt("⚠️ 操作參數有誤")];
 
   const palette = REQUEST_TYPE_COLORS[rt];
 
@@ -98,52 +85,29 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     off_request: "off_requests",
   };
   const { data: rec } = await ctx.db.from(tableMap[rt]).select("status, employee").eq("id", id).maybeSingle();
-  if (!rec) {
-    return [flexResultErr({ title: "找不到申請單", lines: [`#${id} 可能已被刪除`] })];
-  }
+  if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
   if (rec.status !== "待審核" && rec.status !== "申請中") {
-    return [flexResultErr({
-      title: "此單已處理過",
-      lines: [`目前狀態：${rec.status}`, "如需重新審核請聯絡 HR / 管理員。"],
-    })];
+    return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
   }
 
   // 寫 pending action — 下一段使用者打的文字會被當駁回原因
-  await setPending(ctx.db, ctx.userId, {
+  await setPending(ctx, {
     action: "approval_reject_reason",
     request_type: rt,
     request_id: id,
     title: `${rec.employee ?? "員工"}的${palette.label}`,
   });
 
-  // 提示卡：請輸入駁回原因
+  // 提示：請輸入駁回原因（用最小化文字 + quick reply 取消）
+  const promptText = `❌ 駁回 ${rec.employee ?? "員工"} 的${palette.label}（#${id}）\n請直接輸入駁回原因，或按下方取消。`;
   return [{
-    type: "flex",
-    altText: `❌ 請輸入駁回 ${palette.label} 的原因`,
-    contents: {
-      type: "bubble",
-      size: "kilo",
-      header: {
-        type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: COLOR_DANGER,
-        contents: [
-          { type: "text", text: `❌ 駁回 ${palette.label}`, color: "#FFFFFF", weight: "bold", size: "md" },
-          { type: "text", text: `#${id} ${rec.employee ?? ""}`, color: "#FECACA", size: "xs", margin: "xs" },
-        ],
-      },
-      body: {
-        type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
-        contents: [
-          { type: "text", text: "請直接輸入駁回原因（會通知申請人）", size: "sm", color: "#333333", wrap: true },
-          { type: "text", text: "範例：「需要附上醫師診斷書」、「請改成下週三」", size: "xxs", color: "#9CA3AF", margin: "sm", wrap: true },
-        ],
-      },
-      footer: {
-        type: "box", layout: "vertical", paddingAll: "10px",
-        contents: [{
-          type: "button", style: "secondary", height: "sm",
-          action: { type: "postback", label: "取消駁回", data: `action=cancel&type=request&rt=${rt}&id=${id}`, displayText: "已取消駁回" },
-        }],
-      },
+    type: "text",
+    text: promptText,
+    quickReply: {
+      items: [{
+        type: "action",
+        action: { type: "postback", label: "取消駁回", data: `action=cancel&type=request&rt=${rt}&id=${id}` },
+      }],
     },
   }];
 };
@@ -151,8 +115,8 @@ const handleReject: PostbackHandler = async (params, ctx) => {
 // ── Handler: cancel (clear pending) ──────────────────────────────────────────
 
 const handleCancel: PostbackHandler = async (_params, ctx) => {
-  await ctx.db.from("line_users").update({ pending_action: null }).eq("line_user_id", ctx.userId);
-  return [flexResultOk({ title: "已取消", lines: ["駁回流程已中止，此單仍維持原狀。"] })];
+  await clearPending(ctx);
+  return [txt("已取消駁回，此單維持原狀。")];
 };
 
 // ── Handler: resend ──────────────────────────────────────────────────────────

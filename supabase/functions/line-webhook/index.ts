@@ -280,9 +280,7 @@ serve(async (req) => {
         let resultMsg: any;
 
         if (!reason) {
-          resultMsg = flexResultErr({
-            title: "駁回原因不能空白", lines: ["請重新點 [❌ 駁回] 並輸入原因。"],
-          });
+          resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
         } else {
           const { data, error } = await db.rpc("liff_approve_request", {
             p_line_user_id: lineUserId,
@@ -293,25 +291,14 @@ serve(async (req) => {
           });
           if (error || !(data as any)?.ok) {
             const errMap: Record<string, string> = {
-              "EMPLOYEE_NOT_FOUND": "找不到你的員工檔，請先綁定 LINE。",
-              "NOT_FOUND_OR_ALREADY_PROCESSED": "此申請單不存在或已被處理。",
-              "ORG_MISMATCH": "你不屬於此申請人的組織。",
-              "NOT_YOUR_TURN": "目前不輪到你簽核這張單。",
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工，請先 /註冊 姓名",
+              "NOT_FOUND_OR_ALREADY_PROCESSED": "此單不存在或已被處理",
+              "ORG_MISMATCH": "跨組織不能簽核",
+              "NOT_YOUR_TURN": "不輪到你簽核",
             };
-            resultMsg = flexResultErr({
-              title: "駁回失敗",
-              lines: [errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"],
-            });
+            resultMsg = text(`❌ 駁回失敗：${errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
           } else {
-            resultMsg = flexResultOk({
-              title: `已駁回 ${pending.title}`,
-              chip: `#${pending.request_id}`,
-              lines: [
-                `駁回原因：${reason}`,
-                `狀態：${(data as any).status ?? "已退回"}`,
-                "✅ 已通知申請人，可修改後重送。",
-              ],
-            });
+            resultMsg = text(`❌ 已駁回 ${pending.title}（#${pending.request_id}）\n原因：${reason}`);
           }
         }
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_approval_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });

@@ -105,14 +105,23 @@ export async function dispatchPostback(data: string, ctx: PostbackContext): Prom
 
 // ── PendingAction helpers (for two-step flows: postback → ask text → execute) ─
 
-/** Set a pending action on the line_users row. Cleared automatically when
- * the next text message is processed by index.ts. */
-export async function setPending(db: SupabaseClient, lineUserId: string, pending: PendingAction): Promise<void> {
-  await db.from("line_users").update({ pending_action: pending }).eq("line_user_id", lineUserId);
+/** Set a pending action on the line_users row identified by ctx.lineUser.id (PK).
+ * Cleared automatically when the next text message is processed by index.ts. */
+export async function setPending(ctx: PostbackContext, pending: PendingAction): Promise<void> {
+  if (!ctx.lineUser?.id) {
+    // Fallback to line_user_id if PK not available (shouldn't happen in normal flow)
+    await ctx.db.from("line_users").update({ pending_action: pending }).eq("line_user_id", ctx.userId);
+    return;
+  }
+  await ctx.db.from("line_users").update({ pending_action: pending }).eq("id", ctx.lineUser.id);
 }
 
-export async function clearPending(db: SupabaseClient, lineUserId: string): Promise<void> {
-  await db.from("line_users").update({ pending_action: null }).eq("line_user_id", lineUserId);
+export async function clearPending(ctx: PostbackContext): Promise<void> {
+  if (!ctx.lineUser?.id) {
+    await ctx.db.from("line_users").update({ pending_action: null }).eq("line_user_id", ctx.userId);
+    return;
+  }
+  await ctx.db.from("line_users").update({ pending_action: null }).eq("id", ctx.lineUser.id);
 }
 
 // ── Re-export helpers used by individual handler modules ─────────────────────

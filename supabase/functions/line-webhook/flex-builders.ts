@@ -738,17 +738,20 @@ export function flexGroupTaskList(tasks: any[]) {
             ? {
                 type: "button",
                 action: { type: "message", label: "🔐 請求確認", text: `/任務 ${shortId} 請求確認` },
-                style: "primary",
-                height: "sm",
-                color: "#8b5cf6",
+                style: "primary", height: "sm", color: "#8b5cf6",
               }
             : {
                 type: "button",
-                action: { type: "message", label: "✅ 標記完成", text: `/任務 #${shortId} 完成` },
-                style: "primary",
-                height: "sm",
-                color: "#27AE60",
+                action: { type: "postback", label: "✅ 標記完成", data: `action=complete&type=task&id=${t.id}` },
+                style: "primary", height: "sm", color: "#27AE60",
               },
+          {
+            type: "box", layout: "horizontal", spacing: "xs",
+            contents: [
+              { type: "button", flex: 1, action: { type: "postback", label: "⏰ 延 1d", data: `action=postpone&type=task&id=${t.id}&days=1` }, style: "secondary", height: "sm" },
+              { type: "button", flex: 1, action: { type: "postback", label: "📝 備註", data: `action=note&type=task&id=${t.id}` }, style: "secondary", height: "sm" },
+            ],
+          },
         ],
       },
     };
@@ -841,29 +844,80 @@ export function flexWorkflowStatus(instances: any[]) {
   }
 
   const bodyContents: any[] = [];
+  const now = Date.now();
   instances.forEach((wi: any, idx: number) => {
     const shortId = String(wi.id).slice(0, 6);
-    const date = wi.started_at ? (wi.started_at as string).slice(0, 10) : "";
+    const startDate = wi.started_at ? (wi.started_at as string).slice(0, 10) : "";
+    const startDays = wi.started_at ? Math.floor((now - new Date(wi.started_at).getTime()) / 86400000) : 0;
     const wiStatusLabel = wi.status === "paused" ? "⏸ 暫停" : "🔄 進行中";
+
+    const total: number = wi.effectiveTotal ?? wi.total ?? 0;
+    const completed: number = wi.completed ?? 0;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const stuckDays: number = wi.stuckDays ?? 0;
+    const isStuck = stuckDays >= 7;
+
+    // 進度條：用 spacer + flex 比例呈現（LINE Flex 沒原生 progress bar）
+    const filled = Math.max(0, Math.min(total, completed));
+    const remain = Math.max(0, total - completed);
+    const barFilledFlex = Math.max(filled, 0.001);
+    const barRemainFlex = Math.max(remain, 0.001);
+    const barColor = pct >= 80 ? "#16a34a" : pct >= 40 ? "#f59e0b" : "#3b82f6";
 
     if (idx > 0) bodyContents.push({ type: "separator", margin: "md" });
 
     bodyContents.push({
-      type: "box", layout: "vertical", margin: idx === 0 ? "none" : "md",
+      type: "box", layout: "vertical", margin: idx === 0 ? "none" : "md", spacing: "xs",
       contents: [
-        { type: "text", text: wi.name ?? "—", weight: "bold", size: "sm", wrap: true },
-        { type: "text", text: `${wiStatusLabel}　開始：${date}`, color: "#AAAAAA", size: "xs", margin: "xs" },
+        // 流程名 + 狀態 chip
+        {
+          type: "box", layout: "horizontal",
+          contents: [
+            { type: "text", text: wi.name ?? "—", weight: "bold", size: "sm", wrap: true, flex: 6 },
+            { type: "text", text: wiStatusLabel, color: isStuck ? "#dc2626" : "#9CA3AF", size: "xxs", align: "end", gravity: "center", flex: 3 },
+          ],
+        },
+        // 進度條 + 百分比
+        {
+          type: "box", layout: "horizontal", spacing: "none", margin: "xs",
+          contents: [
+            { type: "filler", flex: 0 },
+            {
+              type: "box", layout: "horizontal", height: "6px", flex: 8,
+              backgroundColor: "#E5E7EB", cornerRadius: "3px",
+              contents: total > 0 ? [
+                { type: "box", layout: "vertical", flex: barFilledFlex, backgroundColor: barColor, contents: [] },
+                { type: "filler", flex: barRemainFlex },
+              ] : [{ type: "filler", flex: 1 }],
+            },
+            { type: "text", text: `${completed}/${total}`, size: "xxs", color: "#666666", align: "end", margin: "sm", flex: 2 },
+          ],
+        },
+        // 當前 step + 負責人 + 卡關提示
+        ...(wi.currentStepName ? [{
+          type: "text",
+          text: `▸ ${wi.currentStepName}${wi.currentAssignee ? ` (${wi.currentAssignee})` : ""}${isStuck ? ` ⚠️卡關 ${stuckDays} 天` : ""}`,
+          color: isStuck ? "#dc2626" : "#666666",
+          size: "xxs", margin: "xs", wrap: true,
+        }] : []),
+        // 開始日 + 已啟動天數
+        {
+          type: "text",
+          text: `開始：${startDate}${startDays > 0 ? ` (${startDays} 天前)` : ""}`,
+          color: "#9CA3AF", size: "xxs", margin: "xs",
+        },
+        // 兩顆按鈕並排（仍用 message — 它去呼 cmdWorkflowTasks，那邊已 work）
         {
           type: "box", layout: "horizontal", spacing: "sm", margin: "sm",
           contents: [
             {
               type: "button",
-              action: { type: "message", label: "🔄 進行中", text: `/流程 任務 #${shortId}` },
+              action: { type: "message", label: "📋 看任務", text: `/流程 任務 #${shortId}` },
               style: "secondary", height: "sm", flex: 1,
             },
             {
               type: "button",
-              action: { type: "message", label: "📋 全部", text: `/流程 任務 #${shortId} 全部` },
+              action: { type: "message", label: "📊 全部", text: `/流程 任務 #${shortId} 全部` },
               style: "secondary", height: "sm", flex: 1,
             },
           ],

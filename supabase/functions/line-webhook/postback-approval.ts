@@ -98,12 +98,12 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     title: `${rec.employee ?? "員工"}的${palette.label}`,
   });
 
-  // 提示：請輸入駁回原因。給 4 個常用快速按鈕 + 1 個取消，使用者按一下就送出，
-  //       不想用罐頭原因 → 直接在對話框打字也行。
+  // 提示：4 個常用按鈕 (一鍵送) + 自己寫 (跳 LIFF popup) + 取消
+  const applicantName = rec.employee ?? "員工";
   const promptText =
-    `❌ 你正在駁回「${rec.employee ?? "員工"}」的${palette.label}（#${id}）\n\n` +
-    `👇 在對話框直接打字輸入駁回原因，按送出即完成駁回。\n` +
-    `也可以下方選常用原因 ↓`;
+    `❌ 你正在駁回「${applicantName}」的${palette.label}（#${id}）\n\n` +
+    `下方選常用原因（一鍵送出）\n` +
+    `或按 [✏️ 自己寫] 開啟視窗輸入`;
 
   const quickReasons: Array<{ label: string; reason: string }> = [
     { label: "需附證明", reason: "需附證明文件" },
@@ -111,6 +111,16 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     { label: "工時不允許", reason: "當天工時不允許" },
     { label: "再溝通", reason: "請先跟主管討論" },
   ];
+
+  // 跳 LIFF popup 的 URI（帶 type / id / applicant 給頁面預填）
+  const liffId = (ctx.liffIds.task || ctx.liffIds.newTask || ctx.liffIds.dashboard || "").trim();
+  const liffWriteAction = liffId
+    ? {
+        type: "uri",
+        label: "✏️ 自己寫",
+        uri: `https://liff.line.me/${liffId}?to=${encodeURIComponent("/reject-reason")}&type=${rt}&id=${id}&applicant=${encodeURIComponent(applicantName)}`,
+      }
+    : null;
 
   return [{
     type: "text",
@@ -121,6 +131,7 @@ const handleReject: PostbackHandler = async (params, ctx) => {
           type: "action",
           action: { type: "message", label: q.label, text: q.reason },
         })),
+        ...(liffWriteAction ? [{ type: "action", action: liffWriteAction }] : []),
         {
           type: "action",
           action: { type: "postback", label: "取消駁回", data: `action=cancel&type=request&rt=${rt}&id=${id}` },

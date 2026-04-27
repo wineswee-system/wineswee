@@ -6,6 +6,7 @@ import { upsertLineUser, upsertLineGroup, upsertLineGroupMember, logMessage, log
 import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard, flexResultOk, flexResultErr } from './flex-builders.ts';
 import { dispatchPostback } from './postback-handlers.ts';
 import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
+import './postback-task.ts'; // side-effect: registers complete/postpone/note:task handlers
 import { buildApprovalCardMessage } from './card-approval.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
@@ -271,6 +272,34 @@ serve(async (req) => {
         const responseMsg = await cmdTaskConfirmRespond(pending.short_id, "拒絕", lineUser.employee_id!, db, accessToken, reason);
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
         await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
+      } else if (pending.action === "task_note_v2") {
+        // 任務加備註 v2 — postback note:task 觸發 → 等使用者打文字
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const note = rawText.trim();
+        let resultMsg: any;
+        if (!note) {
+          resultMsg = text("⚠️ 備註不能空白，請重新點 [📝 備註]");
+        } else {
+          const { data: t } = await db.from("tasks")
+            .select("id, title, notes")
+            .eq("id", pending.task_id).maybeSingle();
+          if (!t) {
+            resultMsg = text(`❌ 找不到任務「${pending.title}」`);
+          } else {
+            const ts = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+            const newNotes = `${t.notes ? t.notes + "\n" : ""}[${ts}] ${note}`;
+            const { error: e } = await db.from("tasks")
+              .update({ notes: newNotes, updated_at: new Date().toISOString() })
+              .eq("id", t.id);
+            resultMsg = e
+              ? text(`❌ 備註儲存失敗：${e.message}`)
+              : text(`📝 已加備註到「${t.title}」\n${note}`);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_task_note_v2", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
       } else if (pending.action === "approval_reject_reason") {
         // 簽核駁回 — 把使用者打的文字當駁回原因，呼叫 liff_approve_request reject

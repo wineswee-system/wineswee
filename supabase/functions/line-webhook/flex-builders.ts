@@ -598,26 +598,34 @@ export function flexTaskList(tasks: any[], ownerName?: string, liffNewTaskId = "
         spacing: "xs",
         paddingAll: "8px",
         contents: [
+          // 主動作：請求確認 / 標記完成
           t.confirmation_required
             ? {
                 type: "button",
+                // 確認類保留 message 模式（它的處理在 cmdTaskRequestConfirm，後續可改 postback）
                 action: { type: "message", label: "🔐 請求確認", text: `/任務 ${shortId} 請求確認` },
-                style: "primary",
-                height: "sm",
-                color: "#8b5cf6",
+                style: "primary", height: "sm", color: "#8b5cf6",
               }
             : {
                 type: "button",
-                action: { type: "message", label: "✅ 標記完成", text: `/任務 #${shortId} 完成` },
-                style: "primary",
-                height: "sm",
-                color: "#27AE60",
+                action: { type: "postback", label: "✅ 標記完成", data: `action=complete&type=task&id=${t.id}` },
+                style: "primary", height: "sm", color: "#27AE60",
               },
+          // 兩顆並排：延 1 天 + 加備註
           {
-            type: "button",
-            action: { type: "message", label: "📝 更新備註", text: `/任務 #${shortId} 更新` },
-            style: "secondary",
-            height: "sm",
+            type: "box", layout: "horizontal", spacing: "xs",
+            contents: [
+              {
+                type: "button", flex: 1,
+                action: { type: "postback", label: "⏰ 延 1d", data: `action=postpone&type=task&id=${t.id}&days=1` },
+                style: "secondary", height: "sm",
+              },
+              {
+                type: "button", flex: 1,
+                action: { type: "postback", label: "📝 備註", data: `action=note&type=task&id=${t.id}` },
+                style: "secondary", height: "sm",
+              },
+            ],
           },
         ],
       },

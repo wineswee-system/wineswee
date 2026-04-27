@@ -857,12 +857,20 @@ export function flexWorkflowStatus(instances: any[]) {
     const stuckDays: number = wi.stuckDays ?? 0;
     const isStuck = stuckDays >= 7;
 
-    // 進度條：用 spacer + flex 比例呈現（LINE Flex 沒原生 progress bar）
-    const filled = Math.max(0, Math.min(total, completed));
-    const remain = Math.max(0, total - completed);
-    const barFilledFlex = Math.max(filled, 0.001);
-    const barRemainFlex = Math.max(remain, 0.001);
+    // 進度條：橫向 box，flex 必須 INT，contents 不能空，用 filler 當填充
+    const pctInt = total > 0 ? Math.min(100, Math.max(0, pct)) : 0;
     const barColor = pct >= 80 ? "#16a34a" : pct >= 40 ? "#f59e0b" : "#3b82f6";
+    const barChildren: any[] = [];
+    if (pctInt > 0) {
+      barChildren.push({
+        type: "box", layout: "vertical", flex: pctInt, backgroundColor: barColor,
+        contents: [{ type: "filler" }],  // 不能空 contents，塞個 filler
+      });
+    }
+    if (pctInt < 100) {
+      barChildren.push({ type: "filler", flex: 100 - pctInt });
+    }
+    if (barChildren.length === 0) barChildren.push({ type: "filler" }); // 雙重保險
 
     if (idx > 0) bodyContents.push({ type: "separator", margin: "md" });
 
@@ -879,18 +887,14 @@ export function flexWorkflowStatus(instances: any[]) {
         },
         // 進度條 + 百分比
         {
-          type: "box", layout: "horizontal", spacing: "none", margin: "xs",
+          type: "box", layout: "horizontal", spacing: "sm", margin: "xs", alignItems: "center",
           contents: [
-            { type: "filler", flex: 0 },
             {
               type: "box", layout: "horizontal", height: "6px", flex: 8,
               backgroundColor: "#E5E7EB", cornerRadius: "3px",
-              contents: total > 0 ? [
-                { type: "box", layout: "vertical", flex: barFilledFlex, backgroundColor: barColor, contents: [] },
-                { type: "filler", flex: barRemainFlex },
-              ] : [{ type: "filler", flex: 1 }],
+              contents: barChildren,
             },
-            { type: "text", text: `${completed}/${total}`, size: "xxs", color: "#666666", align: "end", margin: "sm", flex: 2 },
+            { type: "text", text: `${completed}/${total}`, size: "xxs", color: "#666666", align: "end", flex: 2 },
           ],
         },
         // 當前 step + 負責人 + 卡關提示

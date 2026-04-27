@@ -356,10 +356,12 @@ serve(async (req) => {
       responseMsg = flexAttendanceCard(liffTaskId, liffNewTaskId, liffDashboardId);
 
     } else if (lower.startsWith("/卡測試")) {
-      // 用法：/卡測試 leave 42  或  /卡測試 請假 42
+      // 用法：
+      //   /卡測試 請假        → 自動撈最新一筆待審
+      //   /卡測試 請假 42     → 指定 id
       // 把指定申請單拉成新版簽核卡丟回來，方便視覺驗證 / debug。
       commandName = "card_preview";
-      const parts = rawText.replace(/^\/卡測試\s*/, "").trim().split(/\s+/);
+      const parts = rawText.replace(/^\/卡測試\s*/, "").trim().split(/\s+/).filter(Boolean);
       const typeAlias: Record<string, ApprovalRequestType> = {
         leave: "leave", 請假: "leave",
         overtime: "overtime", 加班: "overtime",
@@ -370,19 +372,51 @@ serve(async (req) => {
         cover: "cover", 代班: "cover",
         off_request: "off_request", 希望休: "off_request",
       };
+      const tableMap: Record<ApprovalRequestType, string> = {
+        leave: "leave_requests", overtime: "overtime_requests", trip: "business_trips",
+        expense: "expenses", expense_request: "expense_requests",
+        correction: "clock_corrections", cover: "shift_cover_requests",
+        off_request: "off_requests",
+      };
       const rt = typeAlias[parts[0] ?? ""] ?? null;
-      const id = Number(parts[1]);
-      if (!rt || !id) {
+      let id = Number(parts[1]);
+
+      if (!rt) {
         responseMsg = flexResultErr({
           title: "用法錯誤",
           lines: [
-            "/卡測試 <類型> <id>",
+            "/卡測試 <類型> [id]",
             "類型：請假 / 加班 / 出差 / 報帳 / 經費 / 補卡 / 代班 / 希望休",
-            "例：/卡測試 請假 2",
+            "id 省略時自動撈最新一筆待審。",
+            "例：/卡測試 請假",
           ],
         });
       } else {
-        responseMsg = await buildApprovalCardMessage(db, rt, id, liffTaskId || liffDashboardId);
+        // 沒給 id → 自動撈最新一筆待審
+        if (!id) {
+          const { data: latest } = await db
+            .from(tableMap[rt])
+            .select("id, status")
+            .in("status", ["待審核", "申請中"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latest?.id) {
+            id = Number(latest.id);
+          }
+        }
+        if (!id) {
+          responseMsg = flexResultErr({
+            title: `沒有待審的${typeAlias[parts[0]] === "expense_request" ? "經費申請" : parts[0]}`,
+            lines: [
+              `${tableMap[rt]} 找不到「待審核」或「申請中」的單。`,
+              "請先用 LIFF 送一張，或指定 id：",
+              `/卡測試 ${parts[0]} <id>`,
+            ],
+          });
+        } else {
+          responseMsg = await buildApprovalCardMessage(db, rt, id, liffTaskId || liffDashboardId);
+        }
       }
 
     } else if (lower === "/帳號連結" || lower === "帳號連結" || lower === "帳號連結說明") {

@@ -48,7 +48,10 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
 
   if (error) return [txt(`❌ 核准失敗：${error.message}`)];
 
-  const result = data as { ok?: boolean; error?: string; status?: string; applicant?: string } | null;
+  const result = data as {
+    ok?: boolean; error?: string; status?: string; applicant?: any; event?: string;
+    next_approvers?: Array<{ emp_id: number; name?: string }>;
+  } | null;
   if (!result?.ok) {
     const errorMap: Record<string, string> = {
       "EMPLOYEE_NOT_FOUND":             "你的 LINE 還沒綁員工，請先 /註冊 姓名",
@@ -62,10 +65,59 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
     return [txt(`❌ ${errorMap[result?.error ?? ""] ?? result?.error ?? "核准失敗"}`)];
   }
 
-  // 成功：單行文字（含申請人 + 類型 + 狀態 + 單號）
+  // 如果 chain advanced 到下一關 → 推 rich card 給下關簽核者
+  if (result.event === "advanced" && Array.isArray(result.next_approvers) && result.next_approvers.length > 0) {
+    await pushCardToApprovers(ctx, rt, id, result.next_approvers);
+  }
+
+  // 成功：單行文字
   const status = result.status ?? "已核准";
-  return [txt(`✅ ${result.applicant ?? "申請人"} 的${palette.label}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）`)];
+  const applicantName = typeof result.applicant === "string" ? result.applicant : (result.applicant?.name ?? "申請人");
+  const nextHint = (result.event === "advanced" && (result.next_approvers?.length ?? 0) > 0)
+    ? `（已推給下關 ${result.next_approvers!.length} 位簽核者）` : "";
+  return [txt(`✅ ${applicantName} 的${palette.label}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）${nextHint}`)];
 };
+
+// ── Push helper: notify next approvers with rich card ────────────────────────
+// 用 line-push Edge Function 處理 token / channel 解析，自己這裡不重複那段邏輯。
+
+async function pushCardToApprovers(
+  ctx: PostbackContext,
+  rt: ApprovalRequestType,
+  requestId: number,
+  approvers: Array<{ emp_id: number; name?: string }>,
+): Promise<void> {
+  const liffId = (ctx.liffIds.task || ctx.liffIds.newTask || ctx.liffIds.dashboard || "").trim();
+  let card: object | null = null;
+  try {
+    card = await buildApprovalCardMessage(ctx.db, rt, requestId, liffId);
+  } catch (err) {
+    console.warn(`[postback-approval] buildApprovalCardMessage failed for ${rt}/${requestId}`, err);
+    return;
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return;
+
+  for (const ap of approvers) {
+    if (!ap?.emp_id) continue;
+    try {
+      const { data: target } = await ctx.db.rpc("liff_resolve_line_target", { p_emp_id: ap.emp_id });
+      const lineUserId = (target as any)?.line_user_id;
+      const channelCode = (target as any)?.channel_code;
+      if (!lineUserId) continue;
+
+      await fetch(`${supabaseUrl}/functions/v1/line-push`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ to: lineUserId, messages: [card], channelCode }),
+      });
+    } catch (err) {
+      console.warn(`[postback-approval] push to approver ${ap.emp_id} failed`, err);
+    }
+  }
+}
 
 // ── Handler: reject (set pending → ask reason) ────────────────────────────────
 

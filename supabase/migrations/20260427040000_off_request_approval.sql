@@ -37,7 +37,9 @@ CREATE INDEX IF NOT EXISTS idx_off_req_pending
 
 
 -- ── Section 2. RPC: 員工提交希望休（覆蓋舊版以加 status） ──
+-- 舊版 RETURNS json，要改 jsonb 必須先 DROP
 
+DROP FUNCTION IF EXISTS public.liff_insert_off_request(text, date, text);
 CREATE OR REPLACE FUNCTION public.liff_insert_off_request(
   p_line_user_id text,
   p_date         date,
@@ -92,7 +94,9 @@ GRANT EXECUTE ON FUNCTION public.liff_insert_off_request(text, date, text) TO au
 
 -- ── Section 3. RPC: 員工取消（只能取消自己的待審/已駁回） ──
 -- 已核准的不能直接刪（需主管才能改），保護排班一致性
+-- 舊版 RETURNS int，要改 jsonb 必須先 DROP
 
+DROP FUNCTION IF EXISTS public.liff_delete_off_request(text, date);
 CREATE OR REPLACE FUNCTION public.liff_delete_off_request(
   p_line_user_id text,
   p_date         date
@@ -346,7 +350,9 @@ END $$;
 
 
 -- ── Section 6. RPC: 員工列我的希望休（含狀態） ──────────
+-- 舊版同名 (RETURNS json)，新版回傳結構不同（多 status 等欄位）→ 為求穩妥也 DROP
 
+DROP FUNCTION IF EXISTS public.liff_list_off_requests(text, date, date);
 CREATE OR REPLACE FUNCTION public.liff_list_off_requests(
   p_line_user_id text,
   p_from         date DEFAULT NULL,

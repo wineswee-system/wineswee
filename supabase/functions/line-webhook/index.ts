@@ -12,6 +12,7 @@ import { buildApprovalCardMessage } from './card-approval.ts';
 import { buildScheduleBriefMessage } from './card-schedule.ts';
 import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.ts';
 import { buildClockTodayMessage } from './card-clock.ts';
+import { buildTodaySummaryBubble } from './card-summary.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
@@ -405,8 +406,21 @@ serve(async (req) => {
         ? await checkManager(lineUser.employee_id, db)
         : false;
       const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId, liffTaskId);
-      // Append HR shortcut chips (max 13 items per LINE quick reply spec).
-      responseMsg = isGroup ? menu : withQuickReplies(menu, [
+
+      // 私訊時前面加一張「今日摘要」卡（待辦/待簽/班別/打卡），組成 carousel
+      let combined: any = menu;
+      if (!isGroup) {
+        const summary = await buildTodaySummaryBubble(db, lineUserId, liffNewTaskId || liffTaskId || liffDashboardId);
+        if (summary) {
+          combined = {
+            type: "flex",
+            altText: "👋 今日摘要 + 功能選單",
+            contents: { type: "carousel", contents: [summary, (menu as any).contents] },
+          };
+        }
+      }
+
+      responseMsg = isGroup ? combined : withQuickReplies(combined, [
         { label: "🗓 出勤", text: "出勤" },
         { label: "📍 打卡", text: "打卡" },
         { label: "📅 班表", text: "班表" },

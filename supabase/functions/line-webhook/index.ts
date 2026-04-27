@@ -7,8 +7,10 @@ import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildW
 import { dispatchPostback } from './postback-handlers.ts';
 import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
 import './postback-task.ts'; // side-effect: registers complete/postpone/note:task handlers
+import './postback-salary.ts'; // side-effect: registers unlock/setup:salary handlers
 import { buildApprovalCardMessage } from './card-approval.ts';
 import { buildScheduleBriefMessage } from './card-schedule.ts';
+import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
@@ -273,6 +275,51 @@ serve(async (req) => {
         const responseMsg = await cmdTaskConfirmRespond(pending.short_id, "拒絕", lineUser.employee_id!, db, accessToken, reason);
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
         await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
+      } else if (pending.action === "salary_pin") {
+        // 薪資 PIN 解鎖 / 設定
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const pin = rawText.trim();
+        let resultMsg: any;
+
+        if (!/^[0-9]{4,6}$/.test(pin)) {
+          resultMsg = text("⚠️ 密碼格式錯誤（請輸入 4-6 位數字）");
+        } else if (pending.mode === "setup") {
+          const { data, error } = await db.rpc("liff_card_set_line_pin", {
+            p_line_user_id: lineUserId,
+            p_pin: pin,
+          });
+          if (error || !(data as any)?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工，請先 /註冊 姓名",
+              "INVALID_PIN_FORMAT": "密碼格式錯誤",
+            };
+            resultMsg = text(`❌ 設定失敗：${errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
+          } else {
+            resultMsg = text(`✅ 薪資密碼已設定。下次看「薪水」就能用這組密碼解鎖完整明細。`);
+          }
+        } else {
+          // unlock
+          const { data, error } = await db.rpc("liff_card_my_salary_unlock", {
+            p_line_user_id: lineUserId,
+            p_pin: pin,
+          });
+          if (error) {
+            resultMsg = text(`❌ 系統錯誤：${error.message}`);
+          } else if (!(data as any)?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工",
+              "PIN_NOT_SET": "尚未設定密碼，請先點 [🔧 設定密碼]",
+              "WRONG_PIN": "密碼錯誤，請重新點 [🔓 輸入密碼解鎖] 再試",
+            };
+            resultMsg = text(`❌ ${errMap[(data as any)?.error ?? ""] ?? "解鎖失敗"}`);
+          } else {
+            resultMsg = buildSalaryFullMessage(data);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: `pending_salary_pin_${pending.mode}`, rawInput: "[hidden]", sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
       } else if (pending.action === "task_note_v2") {
         // 任務加備註 v2 — postback note:task 觸發 → 等使用者打文字
@@ -1027,9 +1074,11 @@ serve(async (req) => {
       commandName = `liff_shortcut_${sc.key}`;
       const liffId = liffNewTaskId || liffTaskId;
 
-      // 升級型：班表 → 直接給 7 天 preview 卡（不開 LIFF）
+      // 升級型：班表 → 7 天 preview 卡，薪水 → masked + PIN 解鎖卡
       if (sc.key === "schedule") {
         responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
+      } else if (sc.key === "salary") {
+        responseMsg = await buildSalaryBriefMessage(db, lineUserId, liffId);
       } else if (!liffId) {
         responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
       } else {

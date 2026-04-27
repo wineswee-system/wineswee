@@ -56,6 +56,6 @@ export type PendingAction =
   // 薪資 PIN 解鎖 — 等使用者打 4-6 位密碼
   | {
       action: "salary_pin";
-      year_month: string; // 'YYYY-MM'
-      attempts: number;   // 已嘗試次數
+      mode: "unlock" | "setup";   // unlock=驗 PIN 看薪資, setup=新 PIN
+      attempts?: number;          // 已嘗試次數（僅 unlock）
     };

@@ -218,8 +218,8 @@ export type ApprovalCardData = {
   rows: Array<{ label: string; value: string; valueColor?: string }>;
   /** 申請原因 / 描述（會以全寬 wrap 顯示） */
   reason?: string | null;
-  /** 附件清單（檔名 + URL） */
-  attachments?: Array<{ name: string; url?: string | null }>;
+  /** 附件清單（檔名 + URL + 可選 mime hint） */
+  attachments?: Array<{ name: string; url?: string | null; fileType?: string | null }>;
   /** 提示行（餘額、衝突警示、SLA 提醒…） */
   alerts?: string[];
   /** 看完整詳情的 LIFF 路徑（預設 /approve） */
@@ -284,22 +284,46 @@ export function flexApprovalRequest(d: ApprovalCardData) {
     });
   }
 
-  // 附件
+  // 附件 — 第一張圖直接內嵌預覽，其餘列檔名
   if (d.attachments && d.attachments.length > 0) {
     bodyContents.push({ type: "separator", margin: "md" });
+
+    const firstImage = d.attachments.find(a => a.url && (a.fileType?.startsWith("image") ?? false));
+    const headerLabel = `📎 附件（${d.attachments.length}）`;
+
+    const blocks: any[] = [
+      { type: "text", text: headerLabel, size: "xxs", color: TEXT_LABEL, weight: "bold" },
+    ];
+
+    // 圖片 hero — 點擊放大
+    if (firstImage?.url) {
+      blocks.push({
+        type: "image",
+        url: firstImage.url,
+        size: "full",
+        aspectMode: "cover",
+        aspectRatio: "20:13",
+        margin: "sm",
+        action: { type: "uri", label: firstImage.name, uri: firstImage.url },
+      });
+    }
+
+    // 全部附件清單（檔名 + 點開）
+    blocks.push(
+      ...d.attachments.slice(0, 6).map(a => ({
+        type: "text",
+        text: `• ${a.name}`,
+        size: "xs",
+        color: a.url ? COLOR_INFO : TEXT_SECONDARY,
+        wrap: true,
+        margin: "xs",
+        ...(a.url ? { action: { type: "uri", label: a.name, uri: a.url } } : {}),
+      })),
+    );
+
     bodyContents.push({
       type: "box", layout: "vertical", spacing: "xs", margin: "sm",
-      contents: [
-        { type: "text", text: "📎 附件", size: "xxs", color: TEXT_LABEL, weight: "bold" },
-        ...d.attachments.slice(0, 4).map(a => ({
-          type: "text",
-          text: `• ${a.name}`,
-          size: "xs",
-          color: a.url ? COLOR_INFO : TEXT_SECONDARY,
-          wrap: true,
-          ...(a.url ? { action: { type: "uri", label: a.name, uri: a.url } } : {}),
-        })),
-      ],
+      contents: blocks,
     });
   }
 

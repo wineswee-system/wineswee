@@ -41,6 +41,7 @@ export async function buildClockTodayMessage(db: SupabaseClient, lineUserId: str
   const store = r.store ?? null;
   const clockIn = r.clock_in;
   const clockOut = r.clock_out;
+  // clock_out_location 欄位不存在於 attendance_records，所以這裡只取 clock_in_location
   const hours = r.hours;
   const shift = r.shift;
   const shiftStart = r.shift_start;

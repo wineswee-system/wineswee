@@ -415,15 +415,20 @@ serve(async (req) => {
       const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId, liffTaskId);
 
       // 私訊時前面加一張「今日摘要」卡（待辦/待簽/班別/打卡），組成 carousel
+      // 防呆：如果 today_summary RPC 出問題，fallback 到只顯示 menu，不要整個指令爆掉
       let combined: any = menu;
       if (!isGroup) {
-        const summary = await buildTodaySummaryBubble(db, lineUserId, liffNewTaskId || liffTaskId || liffDashboardId);
-        if (summary) {
-          combined = {
-            type: "flex",
-            altText: "👋 今日摘要 + 功能選單",
-            contents: { type: "carousel", contents: [summary, (menu as any).contents] },
-          };
+        try {
+          const summary = await buildTodaySummaryBubble(db, lineUserId, liffNewTaskId || liffTaskId || liffDashboardId);
+          if (summary) {
+            combined = {
+              type: "flex",
+              altText: "👋 今日摘要 + 功能選單",
+              contents: { type: "carousel", contents: [summary, (menu as any).contents] },
+            };
+          }
+        } catch (sumErr) {
+          console.warn("[/說明] today summary build failed, fallback to menu only", sumErr);
         }
       }
 

@@ -255,6 +255,45 @@ export async function sendDirectPush(lineUserId, messages, channelCode) {
 }
 
 /**
+ * 代班邀請 — Web 端發出後推 LINE flex card 給所有候選人
+ * @param {Array<{empId:number, name:string}>} candidates
+ * @param {{ shift_date:string, shift_label:string, absent_emp_name:string, reason?:string }} info
+ */
+export async function notifyCoverInvitationFromWeb(candidates, info) {
+  const liffBase = LIFF_ID ? `https://liff.line.me/${LIFF_ID}` : ''
+  const url = liffBase ? `${liffBase}?to=${encodeURIComponent('/cover-invitations')}` : '/cover-invitations'
+  const bubble = {
+    type: 'bubble', size: 'kilo',
+    header: {
+      type: 'box', layout: 'vertical', backgroundColor: '#f59e0b', paddingAll: '14px',
+      contents: [{ type: 'text', text: '🆘 代班邀請', color: '#ffffff', weight: 'bold', size: 'md' }],
+    },
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
+      contents: [
+        { type: 'text', text: `${info.shift_date} ${info.shift_label}`, weight: 'bold', size: 'lg', wrap: true },
+        { type: 'text', text: `代 ${info.absent_emp_name || '同事'} 的班`, size: 'sm', color: '#8c8c8c', wrap: true },
+        ...(info.reason ? [{ type: 'text', text: info.reason, size: 'xs', color: '#a8a8a8', wrap: true, margin: 'sm' }] : []),
+        { type: 'text', text: '先搶先贏！', size: 'xs', color: '#f59e0b', weight: 'bold', margin: 'sm' },
+      ],
+    },
+    footer: {
+      type: 'box', layout: 'vertical', paddingAll: '12px',
+      contents: [{
+        type: 'button',
+        action: { type: 'uri', label: '我可以接', uri: url },
+        style: 'primary', color: '#f59e0b', height: 'sm',
+      }],
+    },
+  }
+  for (const c of candidates) {
+    const account = await resolveLineAccount(c.empId || c.name)
+    if (!account.lineUserId) continue
+    await sendLinePush(account.lineUserId, [{ type: 'flex', altText: '代班邀請', contents: bubble }], account.channelCode)
+  }
+}
+
+/**
  * Get all LINE accounts for an employee.
  */
 export async function getEmployeeLineAccounts(employeeNameOrId) {

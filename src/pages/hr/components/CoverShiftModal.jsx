@@ -1,5 +1,18 @@
-export default function CoverShiftModal({ coverModal, setCoverModal, coverLoading, coverCandidates, handleAssignCover }) {
+import { useState } from 'react'
+
+export default function CoverShiftModal({ coverModal, setCoverModal, coverLoading, coverCandidates, handleAssignCover, handlePostCoverRequest }) {
+  const [reason, setReason] = useState('')
+  const [posting, setPosting] = useState(false)
+  const [showForceMode, setShowForceMode] = useState(false)
+
   if (!coverModal) return null
+
+  const eligible = coverCandidates.filter(c => c.isOff && c.valid11h)
+
+  const handleInvite = async () => {
+    setPosting(true)
+    try { await handlePostCoverRequest(reason) } finally { setPosting(false) }
+  }
 
   return (
     <div style={{
@@ -29,15 +42,53 @@ export default function CoverShiftModal({ coverModal, setCoverModal, coverLoadin
               <div className="spinner" style={{ margin: '0 auto 12px' }} />
               分析可代班人選...
             </div>
-          ) : coverCandidates.length === 0 ? (
+          ) : eligible.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
               😔 沒有符合條件的人選
               <div style={{ fontSize: 12, marginTop: 8 }}>所有員工當天都有班或不符合 11 小時班距規定</div>
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                找到 {coverCandidates.length} 位可代班人選（依適合度排序）
+              {/* ── 邀請模式（推薦） ── */}
+              <div style={{
+                padding: '14px 16px', borderRadius: 12, marginBottom: 16,
+                background: 'var(--accent-orange-dim)', border: '1px solid rgba(245,158,11,0.3)',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-orange)', marginBottom: 4 }}>
+                  📨 發出代班邀請（推薦）
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  推 LINE 給 {eligible.length} 位候選人，先搶先贏（24h 過期）
+                </div>
+                <textarea value={reason} onChange={e => setReason(e.target.value)}
+                  placeholder="原因/補充說明（選填）"
+                  style={{
+                    width: '100%', minHeight: 50, padding: '8px 10px', borderRadius: 8,
+                    border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                    color: 'var(--text-primary)', fontSize: 12, fontFamily: 'inherit',
+                    resize: 'vertical', marginBottom: 10,
+                  }} />
+                <button disabled={posting} onClick={handleInvite} style={{
+                  width: '100%', padding: '10px', borderRadius: 8, border: 'none',
+                  background: 'var(--accent-orange)', color: '#fff',
+                  fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                  opacity: posting ? 0.5 : 1,
+                }}>
+                  {posting ? '發送中...' : `📨 發出邀請給 ${eligible.length} 位候選人`}
+                </button>
+              </div>
+
+              {/* ── 候選人列表 + 強制指派（fallback） ── */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  候選人列表（依適合度排序）
+                </div>
+                <button onClick={() => setShowForceMode(s => !s)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: 11, textDecoration: 'underline',
+                }}>
+                  {showForceMode ? '隱藏強制指派' : '顯示強制指派 (緊急)'}
+                </button>
               </div>
               {coverCandidates.map((c, i) => (
                 <div key={c.name} style={{
@@ -57,10 +108,16 @@ export default function CoverShiftModal({ coverModal, setCoverModal, coverLoadin
                       {c.wouldLoseRest && <span style={{ color: 'var(--accent-orange)', marginLeft: 6 }}>⚠ 僅剩 {c.restDays} 天休</span>}
                     </div>
                   </div>
-                  <button className="btn btn-sm btn-primary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
-                    onClick={() => handleAssignCover(c.name, coverModal.date, coverModal.shift)}>
-                    指派代班
-                  </button>
+                  {showForceMode && (
+                    <button className="btn btn-sm" style={{
+                      fontSize: 11, whiteSpace: 'nowrap',
+                      background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+                      border: '1px solid rgba(248,113,113,0.3)',
+                    }}
+                      onClick={() => handleAssignCover(c.name, coverModal.date, coverModal.shift)}>
+                      強制指派
+                    </button>
+                  )}
                 </div>
               ))}
             </>

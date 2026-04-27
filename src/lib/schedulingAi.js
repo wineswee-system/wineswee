@@ -77,8 +77,9 @@ export async function gatherSchedulingData({
   ] = await Promise.all([
     supabase.from('schedules').select('employee, date, shift, absence_type, source_store')
       .gte('date', dateStart).lte('date', dateEnd),
-    supabase.from('off_requests').select('employee, date')
-      .gte('date', dateStart).lte('date', dateEnd),
+    supabase.from('off_requests').select('employee, date, status')
+      .gte('date', dateStart).lte('date', dateEnd)
+      .or('status.eq.已核准,status.is.null'),  // 待審核/已駁回 不影響排班
     supabase.from('schedules').select('employee, date, shift')
       .gte('date', prevStart).lte('date', prevEnd),
     supabase.from('employee_shift_preferences').select('employee, preferred_shifts, avoid_shifts'),

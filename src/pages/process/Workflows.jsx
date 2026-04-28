@@ -617,7 +617,19 @@ export default function Workflows() {
             trigger_template_id_on_complete: extras.trigger_template_id || null,
           }
         })
-        const { data: insertedTasks } = await createTasksBatch(taskRows)
+        const { data: insertedTasks, error: tasksErr } = await createTasksBatch(taskRows)
+        if (tasksErr) {
+          console.error('[deploy] task insert failed', tasksErr, 'rows=', taskRows)
+          alert(`❌ 任務建立失敗：${tasksErr.message}\n\n部署中斷，請檢查 console。`)
+          setDeploying(false)
+          return
+        }
+        if (!insertedTasks || insertedTasks.length === 0) {
+          console.error('[deploy] insertedTasks empty', taskRows)
+          alert('❌ 任務沒有任何被建立（可能 RLS 擋住或欄位錯誤）。請看 console。')
+          setDeploying(false)
+          return
+        }
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])
 

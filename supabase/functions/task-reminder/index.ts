@@ -360,12 +360,88 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── 5. Drain task_pending_notifications：cascade 啟動的任務推 LINE ──
+    let startedNotifyCount = 0;
+    if (mode === "all" || mode === "task_started" || mode === "drain_queue") {
+      const { data: pending } = await sb.from("task_pending_notifications")
+        .select("id, task_id, notif_type")
+        .is("sent_at", null)
+        .eq("notif_type", "task_started")
+        .limit(50);
+
+      if (pending) {
+        for (const p of pending as Array<{ id: number; task_id: number; notif_type: string }>) {
+          // 抓 task 詳情
+          const { data: task } = await sb.from("tasks")
+            .select("id, title, priority, due_date, assignee_id, workflow_instance_id, store")
+            .eq("id", p.task_id).maybeSingle();
+          if (!task || !task.assignee_id) {
+            // task 不見了或沒人，標記已處理免得重抓
+            await sb.from("task_pending_notifications").update({ sent_at: new Date().toISOString() }).eq("id", p.id);
+            continue;
+          }
+
+          // 抓 instance 名（給 subtitle）
+          let instanceName = "";
+          if (task.workflow_instance_id) {
+            const { data: inst } = await sb.from("workflow_instances")
+              .select("template_name, store").eq("id", task.workflow_instance_id).maybeSingle();
+            instanceName = inst?.template_name || inst?.store || "";
+          }
+
+          // 解析 LINE id
+          const lineId = await resolveLineId(sb, task.assignee_id);
+          if (!lineId) {
+            await sb.from("task_pending_notifications").update({ sent_at: new Date().toISOString() }).eq("id", p.id);
+            continue;
+          }
+
+          const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
+          const priorityColor: Record<string, string> = { 低: "#4CAF50", 中: "#E67E22", 高: "#E74C3C" };
+          const pColor = priorityColor[task.priority ?? ""] ?? "#06b6d4";
+
+          const flex = {
+            type: "flex",
+            altText: `🚀 新任務：${task.title}`,
+            contents: {
+              type: "bubble", size: "kilo",
+              header: {
+                type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: pColor,
+                contents: [
+                  { type: "text", text: "🚀 新任務啟動", color: "#FFFFFF", weight: "bold", size: "md" },
+                  ...(instanceName ? [{ type: "text", text: instanceName, color: "#FFFFFFCC", size: "xxs", margin: "xs", wrap: true }] : []),
+                ],
+              },
+              body: {
+                type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+                contents: [
+                  { type: "text", text: task.title, weight: "bold", size: "md", wrap: true },
+                  { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
+                  ...(task.store ? [{ type: "text", text: `門市：${task.store}`, size: "xs", color: "#666666" }] : []),
+                ],
+              },
+              footer: actionFooter(task.id),
+            },
+          };
+
+          const sent = await pushLine(lineId, [flex], lineToken);
+          if (sent) {
+            await sb.from("task_pending_notifications")
+              .update({ sent_at: new Date().toISOString() })
+              .eq("id", p.id);
+            startedNotifyCount++;
+          }
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       ok: true, mode,
       reminders_sent: reminderCount,
       overdue_sent: overdueCount,
       due_soon_sent: dueSoonCount,
       sla_sent: slaCount,
+      task_started_sent: startedNotifyCount,
       skipped_no_line_id: skippedCount,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

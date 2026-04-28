@@ -149,11 +149,19 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // Secrets list has LINE_CHANNEL_TOKEN (workflow OA) — fallback to legacy name for safety
-    const lineToken = Deno.env.get("LINE_CHANNEL_TOKEN")
-      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW")
-      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")
-      || "";
+    // line_user_id is channel-scoped — pick the token matching the channel the
+    // assignee is bound to. Fallback to legacy generic token for old reminders.
+    const tokenByChannel: Record<string, string> = {
+      workflow: Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "",
+    };
+    const fallbackToken =
+      Deno.env.get("LINE_CHANNEL_TOKEN") ||
+      Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ||
+      "";
+    const tokenFor = (channelCode: string | null | undefined): string =>
+      (channelCode && tokenByChannel[channelCode]) || fallbackToken;
+    // Legacy reminder/overdue/due_soon paths still use the fallback
+    const lineToken = fallbackToken;
     const sb = createClient(supabaseUrl, serviceKey);
 
     let mode = "all";
@@ -390,6 +398,7 @@ serve(async (req: Request) => {
           task_workflow_instance_id: number | null;
           instance_template_name: string | null;
           line_user_id: string | null;
+          channel_code: string | null;
         }>) {
           // task 不見了或沒人 → 標記已處理免得重抓
           if (!p.task_id || !p.task_assignee_id) {
@@ -404,7 +413,9 @@ serve(async (req: Request) => {
             continue;
           }
 
-          if (!lineToken) continue;
+          // Use the token matching the channel the assignee is bound to
+          const channelToken = tokenFor(p.channel_code);
+          if (!channelToken) continue;
 
           const dueLabel = p.task_due_date ? formatDate(p.task_due_date) : "未設定";
           const priorityColor: Record<string, string> = { 低: "#4CAF50", 中: "#E67E22", 高: "#E74C3C" };
@@ -435,7 +446,7 @@ serve(async (req: Request) => {
             },
           };
 
-          const sent = await pushLine(p.line_user_id, [flex], lineToken);
+          const sent = await pushLine(p.line_user_id, [flex], channelToken);
           if (sent) {
             await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
             startedNotifyCount++;

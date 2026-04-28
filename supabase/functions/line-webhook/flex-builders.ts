@@ -1,4 +1,10 @@
 import { priorityLabel, statusLabel, PRIORITY_COLOR, STATUS_COLOR } from './constants.ts';
+import {
+  COLOR_SUCCESS, COLOR_DANGER, COLOR_INFO, COLOR_WARNING, COLOR_PRIMARY,
+  TEXT_ON_COLOR, TEXT_ON_COLOR_MUTED, TEXT_DIM_SUCCESS, TEXT_DIM_DANGER, TEXT_DIM_PRIMARY,
+  TEXT_TITLE, TEXT_BODY, TEXT_SECONDARY, TEXT_LABEL, TEXT_MUTED,
+  REQUEST_TYPE_COLORS,
+} from './colors.ts';
 
 // ── Core Flex Helpers ─────────────────────────────────────────────────────────
 
@@ -98,6 +104,282 @@ export function flexLiffShortcut(opts: {
   };
 }
 
+// ── Generic Result Cards ──────────────────────────────────────────────────────
+// 用於操作完成後給 user 一張結果卡（取代「文字成功」訊息）。
+// 所有 postback 操作（核准 / 完成 / 拒絕 / 解鎖 ...）共用這兩個 builder。
+
+type ResultCardOpts = {
+  title: string;
+  /** body 多行說明，每個元素一行 */
+  lines?: string[];
+  /** 標頭右上角 chip 文字（例：完成時間 / 操作者）*/
+  chip?: string;
+  /** footer 按鈕（最多 3 顆），未提供則無 footer */
+  buttons?: Array<{ label: string; uri?: string; postback?: string; messageText?: string; style?: "primary" | "secondary"; color?: string; displayText?: string }>;
+};
+
+function buildResultCard(opts: ResultCardOpts, headerColor: string, dimColor: string, emoji: string, altPrefix: string) {
+  const { title, lines = [], chip, buttons } = opts;
+  const headerContents: any[] = [
+    { type: "text", text: `${emoji} ${title}`, color: TEXT_ON_COLOR, weight: "bold", size: "md", wrap: true },
+  ];
+  if (chip) {
+    headerContents.push({ type: "text", text: chip, color: dimColor, size: "xs", margin: "xs" });
+  }
+
+  const bubble: any = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box", layout: "vertical", paddingAll: "14px",
+      backgroundColor: headerColor,
+      contents: headerContents,
+    },
+  };
+
+  if (lines.length > 0) {
+    bubble.body = {
+      type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+      contents: lines.map(l => ({ type: "text", text: l, size: "sm", color: TEXT_BODY, wrap: true })),
+    };
+  }
+
+  if (buttons && buttons.length > 0) {
+    bubble.footer = {
+      type: "box", layout: "vertical", spacing: "xs", paddingAll: "10px",
+      contents: buttons.slice(0, 3).map(b => {
+        const action: any = b.uri
+          ? { type: "uri", label: b.label, uri: b.uri }
+          : b.postback
+          ? { type: "postback", label: b.label, data: b.postback, ...(b.displayText ? { displayText: b.displayText } : {}) }
+          : { type: "message", label: b.label, text: b.messageText ?? b.label };
+        return {
+          type: "button", action,
+          style: b.style ?? "secondary",
+          height: "sm",
+          ...(b.color ? { color: b.color } : {}),
+        };
+      }),
+    };
+  }
+
+  return { type: "flex", altText: `${altPrefix} ${title}`, contents: bubble };
+}
+
+/** 操作成功的結果卡（綠色 header） */
+export function flexResultOk(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_SUCCESS, TEXT_DIM_SUCCESS, "✅", "✅");
+}
+
+/** 操作失敗的結果卡（紅色 header） */
+export function flexResultErr(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_DANGER, TEXT_DIM_DANGER, "❌", "❌");
+}
+
+/** 中性資訊卡（藍色 header） — 用於 preview / 提示 */
+export function flexResultInfo(opts: ResultCardOpts) {
+  return buildResultCard(opts, COLOR_PRIMARY, TEXT_DIM_PRIMARY, "ℹ️", "ℹ️");
+}
+
+// ── Compact two-column row used by upgraded approval/task cards ──────────────
+// 比 infoRow 多一點視覺層次：label 灰、value 黑粗體 + 可選彩色 dot 提示。
+export function rowKv(label: string, value: string, opts?: { valueColor?: string; valueWeight?: "regular" | "bold"; dot?: string }) {
+  const contents: any[] = [
+    { type: "text", text: label, color: TEXT_LABEL, size: "xs", flex: 3 },
+    { type: "text", text: value, color: opts?.valueColor ?? TEXT_BODY, size: "xs", flex: 6, weight: opts?.valueWeight ?? "bold", wrap: true },
+  ];
+  if (opts?.dot) {
+    contents.splice(1, 0, { type: "text", text: opts.dot, size: "xs", flex: 0, margin: "none" });
+  }
+  return { type: "box", layout: "horizontal", spacing: "sm", margin: "xs", contents };
+}
+
+// ── Approval Request Card (P0) ───────────────────────────────────────────────
+// 統一的簽核請求卡：請假 / 加班 / 出差 / 經費 / 補卡 / 代班 / 希望休 七種共用。
+// 使用 REQUEST_TYPE_COLORS 取顏色，header / footer / button 都統一格式。
+//
+// 操作按鈕走 postback：
+//   - approve:request&type=leave&id=42       → 直接核准
+//   - reject:request&type=leave&id=42        → 進入 pending → 等使用者打駁回原因
+//   - detail:request&type=leave&id=42&path=/approve  → 開 LIFF 看完整詳情
+
+export type ApprovalCardData = {
+  /** 7 種申請類型之一 */
+  type: "leave" | "overtime" | "trip" | "expense" | "expense_request" | "correction" | "cover" | "off_request";
+  /** 該申請單在 DB 的 id */
+  id: number;
+  /** 申請人姓名 */
+  applicantName: string;
+  /** 申請人單位（部門/門市，可選） */
+  applicantDept?: string | null;
+  /** 狀態 chip 文字（例：「待審核」「待你審核」） */
+  statusChip?: string;
+  /** key/value 欄位列（依類型不同而異） */
+  rows: Array<{ label: string; value: string; valueColor?: string }>;
+  /** 申請原因 / 描述（會以全寬 wrap 顯示） */
+  reason?: string | null;
+  /** 附件清單（檔名 + URL + 可選 mime hint） */
+  attachments?: Array<{ name: string; url?: string | null; fileType?: string | null }>;
+  /** 提示行（餘額、衝突警示、SLA 提醒…） */
+  alerts?: string[];
+  /** 看完整詳情的 LIFF 路徑（預設 /approve） */
+  liffDetailPath?: string;
+  /** LIFF id（從 webhook ctx 帶進來） */
+  liffId?: string;
+};
+
+export function flexApprovalRequest(d: ApprovalCardData) {
+  const palette = REQUEST_TYPE_COLORS[d.type] ?? REQUEST_TYPE_COLORS.leave;
+
+  // ── Header ──
+  const header: any = {
+    type: "box", layout: "vertical", paddingAll: "16px",
+    backgroundColor: palette.header,
+    contents: [
+      {
+        type: "box", layout: "horizontal", contents: [
+          { type: "text", text: `${palette.emoji} ${palette.label}`, color: TEXT_ON_COLOR, weight: "bold", size: "lg", flex: 5 },
+          ...(d.statusChip ? [{ type: "text", text: d.statusChip, color: TEXT_ON_COLOR_MUTED, size: "xs", align: "end", gravity: "center", flex: 3 }] : []),
+        ],
+      },
+      { type: "text", text: `#${d.id}`, color: palette.subtitle, size: "xs", margin: "xs" },
+    ],
+  };
+
+  // ── Body ──
+  const bodyContents: any[] = [];
+
+  // 申請人區塊（突出顯示）
+  bodyContents.push({
+    type: "box", layout: "horizontal", spacing: "sm",
+    contents: [
+      { type: "text", text: "👤", size: "lg", flex: 0 },
+      {
+        type: "box", layout: "vertical", flex: 7,
+        contents: [
+          { type: "text", text: d.applicantName, weight: "bold", size: "md", color: TEXT_TITLE },
+          ...(d.applicantDept ? [{ type: "text", text: d.applicantDept, size: "xs", color: TEXT_SECONDARY, margin: "none" }] : []),
+        ],
+      },
+    ],
+  });
+
+  bodyContents.push({ type: "separator", margin: "md" });
+
+  // 欄位列
+  for (const r of d.rows) {
+    bodyContents.push(rowKv(r.label, r.value, { valueColor: r.valueColor }));
+  }
+
+  // 原因（full width，獨立區塊）
+  if (d.reason && d.reason.trim()) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({
+      type: "box", layout: "vertical", margin: "sm", paddingAll: "10px",
+      backgroundColor: "#F9FAFB", cornerRadius: "8px",
+      contents: [
+        { type: "text", text: "📝 申請原因", size: "xxs", color: TEXT_LABEL, weight: "bold" },
+        { type: "text", text: d.reason, size: "sm", color: TEXT_BODY, wrap: true, margin: "sm" },
+      ],
+    });
+  }
+
+  // 附件 — 第一張圖直接內嵌預覽，其餘列檔名
+  if (d.attachments && d.attachments.length > 0) {
+    bodyContents.push({ type: "separator", margin: "md" });
+
+    const firstImage = d.attachments.find(a => a.url && (a.fileType?.startsWith("image") ?? false));
+    const headerLabel = `📎 附件（${d.attachments.length}）`;
+
+    const blocks: any[] = [
+      { type: "text", text: headerLabel, size: "xxs", color: TEXT_LABEL, weight: "bold" },
+    ];
+
+    // 圖片 hero — 點擊放大
+    if (firstImage?.url) {
+      blocks.push({
+        type: "image",
+        url: firstImage.url,
+        size: "full",
+        aspectMode: "cover",
+        aspectRatio: "20:13",
+        margin: "sm",
+        action: { type: "uri", label: firstImage.name, uri: firstImage.url },
+      });
+    }
+
+    // 全部附件清單（檔名 + 點開）
+    blocks.push(
+      ...d.attachments.slice(0, 6).map(a => ({
+        type: "text",
+        text: `• ${a.name}`,
+        size: "xs",
+        color: a.url ? COLOR_INFO : TEXT_SECONDARY,
+        wrap: true,
+        margin: "xs",
+        ...(a.url ? { action: { type: "uri", label: a.name, uri: a.url } } : {}),
+      })),
+    );
+
+    bodyContents.push({
+      type: "box", layout: "vertical", spacing: "xs", margin: "sm",
+      contents: blocks,
+    });
+  }
+
+  // 提醒 / 影響 / 餘額
+  if (d.alerts && d.alerts.length > 0) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({
+      type: "box", layout: "vertical", spacing: "xs", margin: "sm",
+      contents: d.alerts.map(a => ({ type: "text", text: a, size: "xs", color: COLOR_WARNING, wrap: true })),
+    });
+  }
+
+  // ── Footer ──
+  const liffDetailUri = d.liffId
+    ? `https://liff.line.me/${d.liffId.trim()}?to=${encodeURIComponent(d.liffDetailPath ?? "/approve")}`
+    : null;
+
+  // 注意：postback 不帶 displayText → 按了不會在聊天室留回音文字（節省版面）
+  const footerButtons: any[] = [
+    {
+      type: "box", layout: "horizontal", spacing: "sm",
+      contents: [
+        {
+          type: "button",
+          action: { type: "postback", label: "✅ 核准", data: `action=approve&type=request&rt=${d.type}&id=${d.id}` },
+          style: "primary", color: COLOR_SUCCESS, height: "sm", flex: 1,
+        },
+        {
+          type: "button",
+          action: { type: "postback", label: "❌ 駁回", data: `action=reject&type=request&rt=${d.type}&id=${d.id}` },
+          style: "primary", color: COLOR_DANGER, height: "sm", flex: 1,
+        },
+      ],
+    },
+  ];
+  if (liffDetailUri) {
+    footerButtons.push({
+      type: "button",
+      action: { type: "uri", label: "📋 看完整詳情", uri: liffDetailUri },
+      style: "secondary", height: "sm",
+    });
+  }
+
+  return {
+    type: "flex",
+    altText: `${palette.emoji} ${palette.label} — ${d.applicantName}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      header,
+      body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", contents: bodyContents },
+      footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons },
+    },
+  };
+}
+
 // ── Main Menu Flex ────────────────────────────────────────────────────────────
 
 // Build a LIFF deep-link URI. LINE rejects sub-paths so we pass the SPA route
@@ -144,8 +426,8 @@ export function flexMenu(
     ?? mkBtn("➕ 新增任務", "/任務 新增", "secondary");
   const updateTaskBtn = liffDeepLinkBtn("⚙️ 更新任務", listId, "/tasks")
     ?? mkBtn("⚙️ 更新任務", "/任務 列表", "secondary");
-  const todoBtn = liffDeepLinkBtn("📋 代辦項目", listId, "/todo")
-    ?? mkBtn("📋 代辦項目", "/代辦", "secondary");
+  const todoBtn = liffDeepLinkBtn("📋 待辦項目", listId, "/todo")
+    ?? mkBtn("📋 待辦項目", "/待辦", "secondary");
 
   return {
     type: "flex",
@@ -316,26 +598,34 @@ export function flexTaskList(tasks: any[], ownerName?: string, liffNewTaskId = "
         spacing: "xs",
         paddingAll: "8px",
         contents: [
+          // 主動作：請求確認 / 標記完成
           t.confirmation_required
             ? {
                 type: "button",
+                // 確認類保留 message 模式（它的處理在 cmdTaskRequestConfirm，後續可改 postback）
                 action: { type: "message", label: "🔐 請求確認", text: `/任務 ${shortId} 請求確認` },
-                style: "primary",
-                height: "sm",
-                color: "#8b5cf6",
+                style: "primary", height: "sm", color: "#8b5cf6",
               }
             : {
                 type: "button",
-                action: { type: "message", label: "✅ 標記完成", text: `/任務 #${shortId} 完成` },
-                style: "primary",
-                height: "sm",
-                color: "#27AE60",
+                action: { type: "postback", label: "✅ 標記完成", data: `action=complete&type=task&id=${t.id}` },
+                style: "primary", height: "sm", color: "#27AE60",
               },
+          // 兩顆並排：延 1 天 + 加備註
           {
-            type: "button",
-            action: { type: "message", label: "📝 更新備註", text: `/任務 #${shortId} 更新` },
-            style: "secondary",
-            height: "sm",
+            type: "box", layout: "horizontal", spacing: "xs",
+            contents: [
+              {
+                type: "button", flex: 1,
+                action: { type: "postback", label: "⏰ 延 1d", data: `action=postpone&type=task&id=${t.id}&days=1` },
+                style: "secondary", height: "sm",
+              },
+              {
+                type: "button", flex: 1,
+                action: { type: "postback", label: "📝 備註", data: `action=note&type=task&id=${t.id}` },
+                style: "secondary", height: "sm",
+              },
+            ],
           },
         ],
       },
@@ -448,17 +738,20 @@ export function flexGroupTaskList(tasks: any[]) {
             ? {
                 type: "button",
                 action: { type: "message", label: "🔐 請求確認", text: `/任務 ${shortId} 請求確認` },
-                style: "primary",
-                height: "sm",
-                color: "#8b5cf6",
+                style: "primary", height: "sm", color: "#8b5cf6",
               }
             : {
                 type: "button",
-                action: { type: "message", label: "✅ 標記完成", text: `/任務 #${shortId} 完成` },
-                style: "primary",
-                height: "sm",
-                color: "#27AE60",
+                action: { type: "postback", label: "✅ 標記完成", data: `action=complete&type=task&id=${t.id}` },
+                style: "primary", height: "sm", color: "#27AE60",
               },
+          {
+            type: "box", layout: "horizontal", spacing: "xs",
+            contents: [
+              { type: "button", flex: 1, action: { type: "postback", label: "⏰ 延 1d", data: `action=postpone&type=task&id=${t.id}&days=1` }, style: "secondary", height: "sm" },
+              { type: "button", flex: 1, action: { type: "postback", label: "📝 備註", data: `action=note&type=task&id=${t.id}` }, style: "secondary", height: "sm" },
+            ],
+          },
         ],
       },
     };
@@ -551,29 +844,84 @@ export function flexWorkflowStatus(instances: any[]) {
   }
 
   const bodyContents: any[] = [];
+  const now = Date.now();
   instances.forEach((wi: any, idx: number) => {
     const shortId = String(wi.id).slice(0, 6);
-    const date = wi.started_at ? (wi.started_at as string).slice(0, 10) : "";
+    const startDate = wi.started_at ? (wi.started_at as string).slice(0, 10) : "";
+    const startDays = wi.started_at ? Math.floor((now - new Date(wi.started_at).getTime()) / 86400000) : 0;
     const wiStatusLabel = wi.status === "paused" ? "⏸ 暫停" : "🔄 進行中";
+
+    const total: number = wi.effectiveTotal ?? wi.total ?? 0;
+    const completed: number = wi.completed ?? 0;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const stuckDays: number = wi.stuckDays ?? 0;
+    const isStuck = stuckDays >= 7;
+
+    // 進度條：橫向 box，flex 必須 INT，contents 不能空，用 filler 當填充
+    const pctInt = total > 0 ? Math.min(100, Math.max(0, pct)) : 0;
+    const barColor = pct >= 80 ? "#16a34a" : pct >= 40 ? "#f59e0b" : "#3b82f6";
+    const barChildren: any[] = [];
+    if (pctInt > 0) {
+      barChildren.push({
+        type: "box", layout: "vertical", flex: pctInt, backgroundColor: barColor,
+        contents: [{ type: "filler" }],  // 不能空 contents，塞個 filler
+      });
+    }
+    if (pctInt < 100) {
+      barChildren.push({ type: "filler", flex: 100 - pctInt });
+    }
+    if (barChildren.length === 0) barChildren.push({ type: "filler" }); // 雙重保險
 
     if (idx > 0) bodyContents.push({ type: "separator", margin: "md" });
 
     bodyContents.push({
-      type: "box", layout: "vertical", margin: idx === 0 ? "none" : "md",
+      type: "box", layout: "vertical", margin: idx === 0 ? "none" : "md", spacing: "xs",
       contents: [
-        { type: "text", text: wi.name ?? "—", weight: "bold", size: "sm", wrap: true },
-        { type: "text", text: `${wiStatusLabel}　開始：${date}`, color: "#AAAAAA", size: "xs", margin: "xs" },
+        // 流程名 + 狀態 chip
+        {
+          type: "box", layout: "horizontal",
+          contents: [
+            { type: "text", text: wi.name ?? "—", weight: "bold", size: "sm", wrap: true, flex: 6 },
+            { type: "text", text: wiStatusLabel, color: isStuck ? "#dc2626" : "#9CA3AF", size: "xxs", align: "end", gravity: "center", flex: 3 },
+          ],
+        },
+        // 進度條 + 百分比
+        {
+          type: "box", layout: "horizontal", spacing: "sm", margin: "xs", alignItems: "center",
+          contents: [
+            {
+              type: "box", layout: "horizontal", height: "6px", flex: 8,
+              backgroundColor: "#E5E7EB", cornerRadius: "3px",
+              contents: barChildren,
+            },
+            { type: "text", text: `${completed}/${total}`, size: "xxs", color: "#666666", align: "end", flex: 2 },
+          ],
+        },
+        // 當前 step + 負責人 + 卡關提示
+        ...(wi.currentStepName ? [{
+          type: "text",
+          text: `▸ ${wi.currentStepName}${wi.currentAssignee ? ` (${wi.currentAssignee})` : ""}${isStuck ? ` ⚠️卡關 ${stuckDays} 天` : ""}`,
+          color: isStuck ? "#dc2626" : "#666666",
+          size: "xxs", margin: "xs", wrap: true,
+        }] : []),
+        // 開始日 + 已啟動天數
+        {
+          type: "text",
+          text: `開始：${startDate}${startDays > 0 ? ` (${startDays} 天前)` : ""}`,
+          color: "#9CA3AF", size: "xxs", margin: "xs",
+        },
+        // 兩顆按鈕並排（仍用 message — 它去呼 cmdWorkflowTasks，那邊已 work）
         {
           type: "box", layout: "horizontal", spacing: "sm", margin: "sm",
           contents: [
             {
               type: "button",
-              action: { type: "message", label: "🔄 進行中", text: `/流程 任務 #${shortId}` },
+              action: { type: "message", label: "📋 看任務", text: `/流程 任務 #${shortId}` },
               style: "secondary", height: "sm", flex: 1,
             },
             {
               type: "button",
-              action: { type: "message", label: "📋 全部", text: `/流程 任務 #${shortId} 全部` },
+              action: { type: "message", label: "📊 全部", text: `/流程 任務 #${shortId} 全部` },
               style: "secondary", height: "sm", flex: 1,
             },
           ],

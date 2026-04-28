@@ -3,8 +3,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { PendingAction } from './types.ts';
 import { verifySignature, getLineProfile, getGroupSummary, text, replyAndLog, pushAndLog } from './line-api.ts';
 import { upsertLineUser, upsertLineGroup, upsertLineGroupMember, logMessage, logCommand, logError } from './db-helpers.ts';
-import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard } from './flex-builders.ts';
-import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus } from './command-handlers.ts';
+import { mkBtn, withQuickReplies, flexMenu, flexSuccess, flexManagerMenu, buildWorkflowSelectionFlex, flexLiffShortcut, flexAttendanceCard, flexResultOk, flexResultErr } from './flex-builders.ts';
+import { dispatchPostback } from './postback-handlers.ts';
+import './postback-approval.ts'; // side-effect: registers approve/reject/cancel/resend:request handlers
+import './postback-task.ts'; // side-effect: registers complete/postpone/note:task handlers
+import './postback-salary.ts'; // side-effect: registers unlock/setup:salary handlers
+import './postback-cover.ts';  // side-effect: registers claim:cover handler
+import { buildApprovalCardMessage } from './card-approval.ts';
+import { buildScheduleBriefMessage } from './card-schedule.ts';
+import { buildSalaryBriefMessage, buildSalaryFullMessage } from './card-salary.ts';
+import { buildClockTodayMessage } from './card-clock.ts';
+import { buildTodaySummaryBubble } from './card-summary.ts';
+import type { ApprovalRequestType } from './types.ts';
+import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus, cmdProjectTasks } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
 import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
 
@@ -24,7 +35,7 @@ const LIFF_SHORTCUTS: LiffShortcut[] = [
   { key: "approval_status",  match: ["簽核狀態", "/簽核狀態", "我的申請"],                title: "我的申請進度", subtitle: "查看送出單據的審批狀態",     buttonLabel: "📋 查看進度",   path: "/approval-status",  emoji: "📋" },
   { key: "dashboard",        match: ["儀表板", "儀錶板", "/儀表板", "/儀錶板"],           title: "營運儀表板",   subtitle: "流程進度 / 任務統計",        buttonLabel: "📊 開啟儀表板", path: "/dashboard",        emoji: "📊" },
   { key: "salary",           match: ["薪水", "/薪水", "查薪水", "薪資"],                   title: "薪資查詢",     subtitle: "查看歷月薪資單",             buttonLabel: "💰 查看薪資",   path: "/salary",           emoji: "💰" },
-  { key: "todo",             match: ["代辦", "代辦項目", "/代辦", "/代辦項目", "待辦"],     title: "代辦項目",     subtitle: "任務與簽核一覽",             buttonLabel: "📋 開啟代辦",   path: "/todo",             emoji: "📋" },
+  { key: "todo",             match: ["待辦", "待辦項目", "/待辦", "/待辦項目", "代辦", "代辦項目", "/代辦", "/代辦項目"],     title: "待辦項目",     subtitle: "任務與簽核一覽",             buttonLabel: "📋 開啟待辦",   path: "/todo",             emoji: "📋" },
 ];
 function matchLiffShortcut(text: string): LiffShortcut | null {
   for (const sc of LIFF_SHORTCUTS) if (sc.match.includes(text)) return sc;
@@ -147,6 +158,48 @@ serve(async (req) => {
       continue;
     }
 
+    // ── Postback events (button taps with data payload) ──────────────────────
+    if (event.type === "postback") {
+      const lineUserId: string = event.source?.userId ?? "";
+      if (!lineUserId) continue;
+      const data: string = event.postback?.data ?? "";
+      const sourceType = isGroup ? (event.source?.type ?? "group") : "user";
+
+      const profile = await getLineProfile(lineUserId, accessToken, groupId);
+      await logMessage(db, {
+        channelId, lineUserId,
+        displayName: profile.displayName,
+        messageText: `[postback] ${data}`,
+        sourceType, direction: "incoming", groupId,
+        eventType: "postback",
+      });
+
+      const { row: lineUser } = await upsertLineUser(lineUserId, profile.displayName, db, channelId);
+      if (!lineUser) continue;
+
+      const messages = await dispatchPostback(data, {
+        db, accessToken,
+        channelCode, channelId,
+        userId: lineUserId,
+        replyToken: event.replyToken,
+        lineUser: {
+          id: lineUser.id,
+          line_user_id: lineUser.line_user_id,
+          display_name: lineUser.display_name,
+          employee_id: lineUser.employee_id,
+          is_verified: lineUser.is_verified,
+        },
+        liffIds: { task: liffTaskId, newTask: liffNewTaskId, dashboard: liffDashboardId },
+      });
+
+      if (messages && messages.length > 0) {
+        await replyAndLog(event.replyToken, messages, accessToken, db, {
+          channelId, lineUserId, displayName: profile.displayName, sourceType, groupId,
+        });
+      }
+      continue;
+    }
+
     // ── Only text messages from here ─────────────────────────────────────────
     if (event.type !== "message" || event.message?.type !== "text") continue;
     if (!event.source?.userId) continue;
@@ -226,6 +279,117 @@ serve(async (req) => {
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
         await replyAndLog(event.replyToken, [responseMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
+      } else if (pending.action === "salary_pin") {
+        // 薪資 PIN 解鎖 / 設定
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const pin = rawText.trim();
+        let resultMsg: any;
+
+        if (!/^[0-9]{4,6}$/.test(pin)) {
+          resultMsg = text("⚠️ 密碼格式錯誤（請輸入 4-6 位數字）");
+        } else if (pending.mode === "setup") {
+          const { data, error } = await db.rpc("liff_card_set_line_pin", {
+            p_line_user_id: lineUserId,
+            p_pin: pin,
+          });
+          if (error || !(data as any)?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工，請先 /註冊 姓名",
+              "INVALID_PIN_FORMAT": "密碼格式錯誤",
+            };
+            resultMsg = text(`❌ 設定失敗：${errMap[(data as any)?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
+          } else {
+            resultMsg = text(`✅ 薪資密碼已設定。下次看「薪水」就能用這組密碼解鎖完整明細。`);
+          }
+        } else {
+          // unlock
+          const { data, error } = await db.rpc("liff_card_my_salary_unlock", {
+            p_line_user_id: lineUserId,
+            p_pin: pin,
+          });
+          if (error) {
+            resultMsg = text(`❌ 系統錯誤：${error.message}`);
+          } else if (!(data as any)?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工",
+              "PIN_NOT_SET": "尚未設定密碼，請先點 [🔧 設定密碼]",
+              "WRONG_PIN": "密碼錯誤，請重新點 [🔓 輸入密碼解鎖] 再試",
+            };
+            resultMsg = text(`❌ ${errMap[(data as any)?.error ?? ""] ?? "解鎖失敗"}`);
+          } else {
+            resultMsg = buildSalaryFullMessage(data);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: `pending_salary_pin_${pending.mode}`, rawInput: "[hidden]", sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
+      } else if (pending.action === "task_note_v2") {
+        // 任務加備註 v2 — postback note:task 觸發 → 等使用者打文字
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const note = rawText.trim();
+        let resultMsg: any;
+        if (!note) {
+          resultMsg = text("⚠️ 備註不能空白，請重新點 [📝 備註]");
+        } else {
+          const { data: t } = await db.from("tasks")
+            .select("id, title, notes")
+            .eq("id", pending.task_id).maybeSingle();
+          if (!t) {
+            resultMsg = text(`❌ 找不到任務「${pending.title}」`);
+          } else {
+            const ts = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+            const newNotes = `${t.notes ? t.notes + "\n" : ""}[${ts}] ${note}`;
+            const { error: e } = await db.from("tasks")
+              .update({ notes: newNotes, updated_at: new Date().toISOString() })
+              .eq("id", t.id);
+            resultMsg = e
+              ? text(`❌ 備註儲存失敗：${e.message}`)
+              : text(`📝 已加備註到「${t.title}」\n${note}`);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_task_note_v2", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
+      } else if (pending.action === "approval_reject_reason") {
+        // 簽核駁回 — 把使用者打的文字當駁回原因，呼叫 liff_approve_request reject
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const reason = rawText.trim();
+        let resultMsg: any;
+
+        if (!reason) {
+          resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
+        } else {
+          // off_request 走獨立 RPC liff_approve_off_request，其他走通用 liff_approve_request
+          let data: any, error: any;
+          if (pending.request_type === "off_request") {
+            ({ data, error } = await db.rpc("liff_approve_off_request", {
+              p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          } else {
+            ({ data, error } = await db.rpc("liff_approve_request", {
+              p_line_user_id: lineUserId, p_type: pending.request_type, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          }
+          if (error || !data?.ok) {
+            const errMap: Record<string, string> = {
+              "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工，請先 /註冊 姓名",
+              "NOT_FOUND_OR_ALREADY_PROCESSED": "此單不存在或已被處理",
+              "ALREADY_PROCESSED": "此單已被處理",
+              "NOT_FOUND": "找不到此單",
+              "ORG_MISMATCH": "跨組織不能簽核",
+              "NOT_YOUR_TURN": "不輪到你簽核",
+            };
+            resultMsg = text(`❌ 駁回失敗：${errMap[data?.error ?? ""] ?? error?.message ?? "未知錯誤"}`);
+          } else {
+            resultMsg = text(`❌ 已駁回 ${pending.title}（#${pending.request_id}）\n原因：${reason}`);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_approval_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
       } else if (pending.action === "create_task") {
         const cmdStart = Date.now();
         const stepResult = await handleCreateTaskStep(lineUser, rawText, db, accessToken);
@@ -249,8 +413,26 @@ serve(async (req) => {
         ? await checkManager(lineUser.employee_id, db)
         : false;
       const menu = flexMenu(isGroup, isManager, liffNewTaskId, liffDashboardId, liffTaskId);
-      // Append HR shortcut chips (max 13 items per LINE quick reply spec).
-      responseMsg = isGroup ? menu : withQuickReplies(menu, [
+
+      // 私訊時前面加一張「今日摘要」卡（待辦/待簽/班別/打卡），組成 carousel
+      // 防呆：如果 today_summary RPC 出問題，fallback 到只顯示 menu，不要整個指令爆掉
+      let combined: any = menu;
+      if (!isGroup) {
+        try {
+          const summary = await buildTodaySummaryBubble(db, lineUserId, liffNewTaskId || liffTaskId || liffDashboardId);
+          if (summary) {
+            combined = {
+              type: "flex",
+              altText: "👋 今日摘要 + 功能選單",
+              contents: { type: "carousel", contents: [summary, (menu as any).contents] },
+            };
+          }
+        } catch (sumErr) {
+          console.warn("[/說明] today summary build failed, fallback to menu only", sumErr);
+        }
+      }
+
+      responseMsg = isGroup ? combined : withQuickReplies(combined, [
         { label: "🗓 出勤", text: "出勤" },
         { label: "📍 打卡", text: "打卡" },
         { label: "📅 班表", text: "班表" },
@@ -263,6 +445,70 @@ serve(async (req) => {
     } else if (lower === "/出勤" || lower === "出勤" || lower === "attendance") {
       commandName = "attendance_card";
       responseMsg = flexAttendanceCard(liffTaskId, liffNewTaskId, liffDashboardId);
+
+    } else if (lower.startsWith("/卡測試")) {
+      // 用法：
+      //   /卡測試 請假        → 自動撈最新一筆待審
+      //   /卡測試 請假 42     → 指定 id
+      // 把指定申請單拉成新版簽核卡丟回來，方便視覺驗證 / debug。
+      commandName = "card_preview";
+      const parts = rawText.replace(/^\/卡測試\s*/, "").trim().split(/\s+/).filter(Boolean);
+      const typeAlias: Record<string, ApprovalRequestType> = {
+        leave: "leave", 請假: "leave",
+        overtime: "overtime", 加班: "overtime",
+        trip: "trip", 出差: "trip",
+        expense: "expense", 報帳: "expense",
+        expense_request: "expense_request", 經費: "expense_request", 申請: "expense_request",
+        correction: "correction", 補卡: "correction", 補打卡: "correction",
+        cover: "cover", 代班: "cover",
+        off_request: "off_request", 希望休: "off_request",
+      };
+      const tableMap: Record<ApprovalRequestType, string> = {
+        leave: "leave_requests", overtime: "overtime_requests", trip: "business_trips",
+        expense: "expenses", expense_request: "expense_requests",
+        correction: "clock_corrections", cover: "shift_cover_requests",
+        off_request: "off_requests",
+      };
+      const rt = typeAlias[parts[0] ?? ""] ?? null;
+      let id = Number(parts[1]);
+
+      if (!rt) {
+        responseMsg = flexResultErr({
+          title: "用法錯誤",
+          lines: [
+            "/卡測試 <類型> [id]",
+            "類型：請假 / 加班 / 出差 / 報帳 / 經費 / 補卡 / 代班 / 希望休",
+            "id 省略時自動撈最新一筆待審。",
+            "例：/卡測試 請假",
+          ],
+        });
+      } else {
+        // 沒給 id → 自動撈最新一筆待審
+        if (!id) {
+          const { data: latest } = await db
+            .from(tableMap[rt])
+            .select("id, status")
+            .in("status", ["待審核", "申請中"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latest?.id) {
+            id = Number(latest.id);
+          }
+        }
+        if (!id) {
+          responseMsg = flexResultErr({
+            title: `沒有待審的${typeAlias[parts[0]] === "expense_request" ? "經費申請" : parts[0]}`,
+            lines: [
+              `${tableMap[rt]} 找不到「待審核」或「申請中」的單。`,
+              "請先用 LIFF 送一張，或指定 id：",
+              `/卡測試 ${parts[0]} <id>`,
+            ],
+          });
+        } else {
+          responseMsg = await buildApprovalCardMessage(db, rt, id, liffTaskId || liffDashboardId);
+        }
+      }
 
     } else if (lower === "/帳號連結" || lower === "帳號連結" || lower === "帳號連結說明") {
       commandName = "account_help";
@@ -283,9 +529,15 @@ serve(async (req) => {
       }
 
     // ── Project task commands (/專案) ──────────────────────────────────────
-    } else if (lower === "/專案 列表" || lower === "/專案列表" || lower === "/project list" || lower === "專案") {
+    } else if (lower === "/專案 列表" || lower === "/專案列表" || lower === "/project list" || lower === "專案" || lower === "/專案") {
       commandName = "project_list";
       responseMsg = await cmdProjectList(db);
+
+    } else if (lower.match(/^\/專案\s+任務\s+#?(\d+)/)) {
+      commandName = "project_tasks";
+      const m = rawText.match(/\/專案\s+任務\s+#?(\d+)/);
+      const projectId = m ? parseInt(m[1], 10) : 0;
+      responseMsg = await cmdProjectTasks(projectId, db);
 
     } else if (lower.match(/^\/專案\s+#?(\d+)\s+完成/)) {
       commandName = "project_done";
@@ -317,7 +569,7 @@ serve(async (req) => {
 
     } else if (lower === "/任務 列表" || lower === "/task list" || lower === "任務" || lower === "tasks"
       || lower.replace(/\s+/g, ' ') === "/任務 列表"
-      || lower === "/任務列表") {
+      || lower === "/任務列表" || lower === "/任務") {
       commandName = "task_list";
       console.log("[ROUTE] matched /任務 列表 branch");
       if (!lineUser.is_verified || !lineUser.employee_id) {
@@ -466,7 +718,7 @@ serve(async (req) => {
         responseMsg = await cmdNotes(lineUser.employee_id, db);
       }
 
-    } else if (lower === "/流程 狀態" || lower === "/workflow status" || lower === "流程" || lower === "workflows") {
+    } else if (lower === "/流程 狀態" || lower === "/workflow status" || lower === "流程" || lower === "workflows" || lower === "/流程") {
       commandName = "workflow_status";
       responseMsg = await cmdWorkflowStatus(db);
 
@@ -854,7 +1106,15 @@ serve(async (req) => {
       const sc = matchLiffShortcut(lower)!;
       commandName = `liff_shortcut_${sc.key}`;
       const liffId = liffNewTaskId || liffTaskId;
-      if (!liffId) {
+
+      // 升級型：班表 / 薪水 / 打卡 都改顯示 preview，主動作再開 LIFF
+      if (sc.key === "schedule") {
+        responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
+      } else if (sc.key === "salary") {
+        responseMsg = await buildSalaryBriefMessage(db, lineUserId, liffId);
+      } else if (sc.key === "clock") {
+        responseMsg = await buildClockTodayMessage(db, lineUserId, liffId);
+      } else if (!liffId) {
         responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
       } else {
         responseMsg = flexLiffShortcut({

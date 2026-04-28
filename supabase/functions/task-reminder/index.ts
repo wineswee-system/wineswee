@@ -275,11 +275,97 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── 4. Approval SLA: 簽核者待審 > 24h，每日推 summary 卡（D9）──
+    let slaCount = 0;
+    if (mode === "all" || mode === "approval_sla") {
+      const { data: linkedEmps } = await sb.from("v_employee_line_resolved")
+        .select("employee_id, line_user_id")
+        .not("line_user_id", "is", null);
+
+      const dayMs = 24 * 60 * 60 * 1000;
+      for (const row of (linkedEmps || []) as Array<{ employee_id: number; line_user_id: string }>) {
+        if (!row.line_user_id) continue;
+        const { data: pa } = await sb.rpc("liff_list_pending_approvals", { p_line_user_id: row.line_user_id });
+        if (!pa) continue;
+
+        const buckets: Array<{ key: string; label: string; emoji: string }> = [
+          { key: "leaves",           label: "請假",   emoji: "🏖" },
+          { key: "overtimes",        label: "加班",   emoji: "⏰" },
+          { key: "trips",            label: "出差",   emoji: "✈️" },
+          { key: "corrections",      label: "補打卡", emoji: "🔧" },
+          { key: "expenses",         label: "報帳",   emoji: "💰" },
+          { key: "expense_requests", label: "經費",   emoji: "💳" },
+          { key: "off_requests",     label: "希望休", emoji: "🌴" },
+        ];
+
+        const overdue: Array<{ label: string; emoji: string; id: number; applicant: string; days: number }> = [];
+        for (const b of buckets) {
+          const list = ((pa as any)[b.key] || []) as Array<any>;
+          for (const item of list) {
+            if (!item.created_at) continue;
+            const days = Math.floor((Date.now() - new Date(item.created_at).getTime()) / dayMs);
+            if (days >= 1) {
+              overdue.push({
+                label: b.label, emoji: b.emoji, id: item.id,
+                applicant: item.employee ?? "—", days,
+              });
+            }
+          }
+        }
+
+        if (overdue.length === 0) continue;
+
+        // Build SLA reminder card
+        const top5 = overdue
+          .sort((a, b) => b.days - a.days)
+          .slice(0, 8);
+        const flex = {
+          type: "flex",
+          altText: `⚠️ 你有 ${overdue.length} 件簽核超過 24h 未處理`,
+          contents: {
+            type: "bubble", size: "kilo",
+            header: {
+              type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: "#dc2626",
+              contents: [
+                { type: "text", text: "⏰ 簽核逾期提醒", color: "#FFFFFF", weight: "bold", size: "lg" },
+                { type: "text", text: `共 ${overdue.length} 件超過 24h 未處理`, color: "#FECACA", size: "xs", margin: "xs" },
+              ],
+            },
+            body: {
+              type: "box", layout: "vertical", spacing: "xs", paddingAll: "12px",
+              contents: top5.map((o) => ({
+                type: "box", layout: "horizontal", spacing: "sm", margin: "xs",
+                contents: [
+                  { type: "text", text: `${o.emoji} ${o.applicant}`, size: "sm", color: "#333", flex: 5, wrap: true },
+                  { type: "text", text: `${o.label} ${o.days}d`, size: "xs", color: "#dc2626", flex: 4, weight: "bold", align: "end" },
+                ],
+              })).concat(overdue.length > 8 ? [{
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: `... 還有 ${overdue.length - 8} 件`, size: "xs", color: "#9CA3AF", align: "center" },
+                ],
+              }] : [] as any),
+            },
+            footer: {
+              type: "box", layout: "vertical", paddingAll: "10px",
+              contents: [{
+                type: "button", style: "primary", color: "#dc2626", height: "sm",
+                action: { type: "message", label: "✅ 立即處理", text: "簽核" },
+              }],
+            },
+          },
+        };
+
+        const sent = await pushLine(row.line_user_id, [flex], lineToken);
+        if (sent) slaCount++;
+      }
+    }
+
     return new Response(JSON.stringify({
       ok: true, mode,
       reminders_sent: reminderCount,
       overdue_sent: overdueCount,
       due_soon_sent: dueSoonCount,
+      sla_sent: slaCount,
       skipped_no_line_id: skippedCount,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

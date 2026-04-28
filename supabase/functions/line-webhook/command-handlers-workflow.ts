@@ -20,7 +20,35 @@ export async function cmdWorkflowStatus(db: SupabaseClient) {
     .limit(8);
 
   if (error) console.error("cmdWorkflowStatus error:", error.message);
-  return flexWorkflowStatus(instances ?? []);
+
+  // 為每個流程抓任務進度（current step、總數、卡關天數）讓 flex 顯示更詳細
+  const enriched = await Promise.all((instances ?? []).map(async (wi: any) => {
+    const { data: tasks } = await db
+      .from("tasks")
+      .select("id, title, status, updated_at, assignee:employees!tasks_assignee_id_fkey(name)")
+      .eq("workflow_instance_id", wi.id)
+      .order("sort_order", { ascending: true });
+
+    const total = tasks?.length ?? 0;
+    const completed = tasks?.filter((t: any) => t.status === "completed").length ?? 0;
+    const cancelled = tasks?.filter((t: any) => t.status === "cancelled").length ?? 0;
+    const currentTask = tasks?.find((t: any) => t.status !== "completed" && t.status !== "cancelled");
+    const stuckDays = currentTask?.updated_at
+      ? Math.floor((Date.now() - new Date(currentTask.updated_at).getTime()) / 86400000)
+      : 0;
+
+    return {
+      ...wi,
+      total,
+      completed,
+      effectiveTotal: Math.max(total - cancelled, 1),
+      currentStepName: currentTask?.title ?? null,
+      currentAssignee: (currentTask as any)?.assignee?.name ?? null,
+      stuckDays,
+    };
+  }));
+
+  return flexWorkflowStatus(enriched);
 }
 
 // ── Workflow Tasks Command ───────────────────────────────────────────────────
@@ -115,20 +143,41 @@ export async function cmdWorkflowTasks(shortId: string, db: SupabaseClient, show
       });
     }
 
-    const footerBtns: any[] = [
-      {
-        type: "button",
-        action: liffTaskId
-          ? { type: "uri", label: "✏️ 更新任務", uri: `https://liff.line.me/${liffTaskId}?to=${encodeURIComponent(`/tasks?task=${t.id}`)}` }
-          : { type: "message", label: "✏️ 更新任務", text: `/任務 #${shortTaskId} 更新` },
-        style: "secondary", height: "sm", flex: 1,
-      },
-    ];
+    // Footer：完成 + 延 1d + 備註 全部 postback；更新任務改開 LIFF
+    const footerRows: any[] = [];
     if (!isDone) {
-      footerBtns.push({
+      footerRows.push({
         type: "button",
-        action: { type: "message", label: "✅ 完成任務", text: `/任務 #${shortTaskId} 完成` },
-        style: "primary", height: "sm", flex: 1, color: "#27AE60",
+        action: { type: "postback", label: "✅ 完成任務", data: `action=complete&type=task&id=${t.id}` },
+        style: "primary", height: "sm", color: "#27AE60",
+      });
+      footerRows.push({
+        type: "box", layout: "horizontal", spacing: "xs",
+        contents: [
+          {
+            type: "button", flex: 1,
+            action: { type: "postback", label: "⏰ 延 1d", data: `action=postpone&type=task&id=${t.id}&days=1` },
+            style: "secondary", height: "sm",
+          },
+          {
+            type: "button", flex: 1,
+            action: { type: "postback", label: "📝 備註", data: `action=note&type=task&id=${t.id}` },
+            style: "secondary", height: "sm",
+          },
+        ],
+      });
+    } else {
+      footerRows.push({
+        type: "button",
+        action: { type: "postback", label: "📝 加備註", data: `action=note&type=task&id=${t.id}` },
+        style: "secondary", height: "sm",
+      });
+    }
+    if (liffTaskId) {
+      footerRows.push({
+        type: "button",
+        action: { type: "uri", label: "✏️ 開 LIFF 編輯", uri: `https://liff.line.me/${liffTaskId}?to=${encodeURIComponent(`/tasks?task=${t.id}`)}` },
+        style: "link", height: "sm",
       });
     }
 
@@ -143,7 +192,7 @@ export async function cmdWorkflowTasks(shortId: string, db: SupabaseClient, show
         ],
       },
       body: { type: "box", layout: "vertical", paddingAll: "12px", contents: bodyItems },
-      footer: { type: "box", layout: "horizontal", paddingAll: "8px", spacing: "sm", contents: footerBtns },
+      footer: { type: "box", layout: "vertical", paddingAll: "8px", spacing: "xs", contents: footerRows },
     };
   });
 

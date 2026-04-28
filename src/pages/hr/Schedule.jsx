@@ -18,7 +18,7 @@ import AnalyticsTab from './components/AnalyticsTab'
 import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import CoverShiftModal from './components/CoverShiftModal'
-import { notifySchedulePublished } from '../../lib/lineNotify'
+import { notifySchedulePublished, notifyCoverInvitationFromWeb } from '../../lib/lineNotify'
 import { exportScheduleCalendarPdf } from '../../lib/exportPdf'
 import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
@@ -348,6 +348,7 @@ export default function Schedule() {
   }
 
   const handleAssignCover = async (coverEmpName, date, shift) => {
+    if (!confirm(`強制指派 ${coverEmpName} 代班 ${shift}？\n\n（被指派者沒有同意機會。建議優先用「發出代班邀請」讓員工自願接班）`)) return
     const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' }).select().single()
     if (data) {
       setSchedules(prev => {
@@ -357,7 +358,58 @@ export default function Schedule() {
       })
     }
     setCoverModal(null)
-    alert(`已指派 ${coverEmpName} 代班 ${shift}`)
+    alert(`已強制指派 ${coverEmpName} 代班 ${shift}`)
+  }
+
+  // 邀請式代班 — 主管發出邀請，所有候選人收 LINE，先搶先贏
+  const handlePostCoverRequest = async (reason) => {
+    if (!coverModal) return
+    const { employee: absentEmpName, date, shift } = coverModal
+    const eligibleCandidates = coverCandidates.filter(c => c.isOff && c.valid11h)
+    if (eligibleCandidates.length === 0) {
+      alert('沒有可邀請的候選人')
+      return
+    }
+
+    // 抓缺勤者 ID + 班別 snapshot
+    const absentEmp = employees.find(e => e.name === absentEmpName)
+    const absentSched = schedules.find(s => s.employee === absentEmpName && s.date === date)
+    if (!absentEmp) { alert('找不到缺勤員工'); return }
+
+    const storeRow = locations.find(l => l.name === (absentSched?.store || absentEmp.store))
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+
+    const invitedIds = eligibleCandidates.map(c => employees.find(e => e.name === c.name)?.id).filter(Boolean)
+
+    const { data, error } = await supabase.from('shift_cover_requests').insert({
+      organization_id: tenantId,
+      store: absentSched?.store || absentEmp.store,
+      store_id: storeRow?.id || null,
+      requester_id: authProfile?.id || null,
+      requester_name: authProfile?.name || '主管(Web)',
+      absent_emp_id: absentEmp.id,
+      absent_emp_name: absentEmp.name,
+      shift_date: date,
+      shift_label: shift,
+      actual_start: absentSched?.actual_start || null,
+      actual_end: absentSched?.actual_end || null,
+      actual_hours: absentSched?.actual_hours || null,
+      invited_emp_ids: invitedIds,
+      reason: reason?.trim() || null,
+      status: '招募中',
+      expires_at: expiresAt,
+    }).select().single()
+
+    if (error) { alert('發出失敗：' + error.message); return }
+
+    // 推 LINE 給候選人
+    notifyCoverInvitationFromWeb(
+      eligibleCandidates.map(c => ({ empId: employees.find(e => e.name === c.name)?.id, name: c.name })),
+      { shift_date: date, shift_label: shift, absent_emp_name: absentEmp.name, reason: reason?.trim() }
+    ).catch(err => console.warn('LINE 推播失敗', err))
+
+    setCoverModal(null)
+    alert(`✅ 已發出代班邀請給 ${eligibleCandidates.length} 位候選人，等待先搶先贏（24h 過期）`)
   }
 
   // ── AI Auto-Schedule (LLM-based, 6-phase framework) ──
@@ -1040,6 +1092,7 @@ export default function Schedule() {
         coverModal={coverModal} setCoverModal={setCoverModal}
         coverLoading={coverLoading} coverCandidates={coverCandidates}
         handleAssignCover={handleAssignCover}
+        handlePostCoverRequest={handlePostCoverRequest}
       />
     </div>
   )

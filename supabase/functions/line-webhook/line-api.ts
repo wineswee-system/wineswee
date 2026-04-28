@@ -124,7 +124,7 @@ export async function pushAndLog(
   }
 }
 
-export async function getLineProfile(lineUserId: string, accessToken: string, groupId?: string | null): Promise<{ displayName: string }> {
+export async function getLineProfile(lineUserId: string, accessToken: string, groupId?: string | null): Promise<{ displayName: string; pictureUrl?: string; userId?: string }> {
   // In group chats, use group member profile endpoint (direct profile only works for bot friends)
   const url = groupId
     ? `https://api.line.me/v2/bot/group/${groupId}/member/${lineUserId}`

@@ -75,53 +75,67 @@ export function getLiffTaskUrl(taskId, liffId) {
 
 /**
  * Notify a task assignee via LINE.
+ * Card layout matches the cascade-drain card built by task-reminder Edge Function
+ * (drain_task_started_notifications RPC), so step 1 and step 2+ look identical.
+ *
  * @param {string} assigneeName
  * @param {string} taskTitle
- * @param {string} instanceName
+ * @param {string} instanceName     — workflow template / store, shown under header
  * @param {number} taskId
- * @param {string} [channelCode] - specific OA to use, or auto-resolve
+ * @param {string} [channelCode]    — specific OA to use, or auto-resolve
+ * @param {object} [extras]         — { dueDate, description, notes, store }
  */
-export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, channelCode) {
+export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, channelCode, extras = {}) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
 
   const account = await resolveLineAccount(assigneeName, channelCode)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+  const { dueDate, description, notes, store } = extras
+  const dueLabel = dueDate
+    ? new Date(dueDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '未設定'
+
+  const bodyContents = [
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'md', wrap: true },
+    { type: 'text', text: `到期：${dueLabel}`, size: 'xs', color: '#666666' },
+    { type: 'text', text: `負責人：${assigneeName}`, size: 'xs', color: '#666666' },
+  ]
+  if (description && String(description).trim()) {
+    bodyContents.push({ type: 'separator', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: '#444444', wrap: true, margin: 'sm' })
+  }
+  if (notes && String(notes).trim()) {
+    bodyContents.push({ type: 'separator', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: '📌 備註', size: 'xxs', color: '#8c8c8c', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: '#444444', wrap: true })
+  }
+  if (store) {
+    bodyContents.push({ type: 'text', text: `門市：${store}`, size: 'xs', color: '#666666', margin: 'sm' })
+  }
 
   const messages = [{
     type: 'flex',
-    altText: `📋 新任務：${taskTitle}`,
+    altText: `📋 任務通知：${taskTitle}`,
     contents: {
-      type: 'bubble',
-      size: 'kilo',
+      type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical',
-        backgroundColor: '#06b6d4',
-        paddingAll: '14px',
-        contents: [{ type: 'text', text: '📋 任務通知', color: '#ffffff', weight: 'bold', size: 'md' }],
-      },
-      body: {
-        type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
+        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
         contents: [
-          { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
-          { type: 'text', text: instanceName || '', size: 'sm', color: '#8c8c8c' },
-          { type: 'separator', margin: 'md' },
-          {
-            type: 'box', layout: 'horizontal', margin: 'md',
-            contents: [
-              { type: 'text', text: '負責人', size: 'sm', color: '#8c8c8c', flex: 0 },
-              { type: 'text', text: assigneeName, size: 'sm', align: 'end', weight: 'bold' },
-            ],
-          },
+          { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+          ...(instanceName ? [{ type: 'text', text: instanceName, color: '#FFFFFFCC', size: 'xxs', margin: 'xs', wrap: true }] : []),
         ],
       },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: bodyContents,
+      },
       footer: {
-        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
         contents: [{
-          type: 'button',
-          action: { type: 'uri', label: '查看任務', uri: liffUrl },
-          style: 'primary', color: '#06b6d4', height: 'sm',
+          type: 'button', style: 'primary', color: '#06b6d4', height: 'sm',
+          action: { type: 'uri', label: '📋 查看任務', uri: liffUrl },
         }],
       },
     },
@@ -252,6 +266,61 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
  */
 export async function sendDirectPush(lineUserId, messages, channelCode) {
   return sendLinePush(lineUserId, messages, channelCode)
+}
+
+/**
+ * 任務確認結果通知執行人（主管按完核准/駁回後推給原任務負責人）
+ * @param {string} assigneeName - 任務的 assignee（原執行人）
+ * @param {string} taskTitle
+ * @param {'approved' | 'rejected'} action
+ * @param {string|null} notes - 駁回理由（rejected 時必填）
+ * @param {number} taskId
+ * @param {string} [channelCode]
+ */
+export async function notifyTaskConfirmationResult(assigneeName, taskTitle, action, notes, taskId, channelCode) {
+  if (!assigneeName) return { ok: false, reason: 'no_assignee' }
+
+  const account = await resolveLineAccount(assigneeName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+
+  const isApproved = action === 'approved'
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+
+  const messages = [{
+    type: 'flex',
+    altText: isApproved ? `✅ 任務通過：${taskTitle}` : `🔄 任務退回：${taskTitle}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical',
+        backgroundColor: isApproved ? '#10b981' : '#ef4444',
+        paddingAll: '14px',
+        contents: [
+          { type: 'text', text: isApproved ? '✅ 任務通過' : '🔄 任務退回', color: '#ffffff', weight: 'bold', size: 'md' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
+        contents: [
+          { type: 'text', text: `任務「${taskTitle}」${isApproved ? '已通過審核' : '被退回'}`, weight: 'bold', size: 'md', wrap: true },
+          ...(isApproved
+            ? []
+            : [{ type: 'text', text: `原因：${notes || '（未填）'}`, size: 'sm', color: '#666666', wrap: true, margin: 'md' }]),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '查看任務', uri: liffUrl },
+          style: 'primary', color: isApproved ? '#10b981' : '#ef4444', height: 'sm',
+        }],
+      },
+    },
+  }]
+
+  return sendLinePush(account.lineUserId, messages, account.channelCode)
 }
 
 /**

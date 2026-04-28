@@ -424,8 +424,8 @@ export function flexMenu(
     ?? mkBtn("📊 儀表板", "/流程 狀態", "primary");
   const newTaskBtn = liffDeepLinkBtn("➕ 新增任務", newId, "/tasks/new")
     ?? mkBtn("➕ 新增任務", "/任務 新增", "secondary");
-  const updateTaskBtn = liffDeepLinkBtn("⚙️ 更新任務", listId, "/tasks")
-    ?? mkBtn("⚙️ 更新任務", "/任務 列表", "secondary");
+  const updateTaskBtn = liffDeepLinkBtn("📋 我的任務", listId, "/tasks")
+    ?? mkBtn("📋 我的任務", "/任務 列表", "secondary");
   const todoBtn = liffDeepLinkBtn("📋 待辦項目", listId, "/todo")
     ?? mkBtn("📋 待辦項目", "/待辦", "secondary");
 

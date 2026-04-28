@@ -243,7 +243,7 @@ export async function cmdTaskCreate(userId: string, title: string, db: SupabaseC
   }
 
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { error } = await db.from("tasks").insert({
     title,
@@ -259,154 +259,66 @@ export async function cmdTaskCreate(userId: string, title: string, db: SupabaseC
 // ── Task Done Command ────────────────────────────────────────────────────────
 
 export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseClient, accessToken: string, groupId?: string | null, displayName?: string) {
-  const shortId = rawId.replace(/[[\]#\s]/g, "").toLowerCase();
-  if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 完成");
+  const idStr = rawId.replace(/[[\]#\s]/g, "");
+  const taskId = parseInt(idStr, 10);
+  if (!taskId || Number.isNaN(taskId)) return text("請提供任務 ID。例如：/任務 #198 完成");
 
-  const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  // userId here is actually employee_id (passed from index.ts as lineUser.employee_id).
+  // Param name is legacy — fix in caller later.
+  const employeeId = typeof userId === "number" ? userId : parseInt(String(userId), 10);
+  if (!employeeId || Number.isNaN(employeeId)) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
-  // Fetch only tasks assigned to this user (not completed)
-  const { data: allTasks } = await db
+  // Fetch the task and verify the user is the assignee
+  const { data: task } = await db
     .from("tasks")
-    .select("id, title, metadata, workflow_instance_id, sort_order")
-    .eq("assignee_id", employeeId)
-    .neq("status", "completed")
-    .limit(300);
+    .select("id, title, status, assignee_id, approval_chain_id")
+    .eq("id", taskId)
+    .maybeSingle();
 
-  const task = allTasks?.find((t: any) => t.id.startsWith(shortId));
-  if (!task) return text(`❌ 此任務不存在或您不是負責人，無法完成。`);
+  if (!task) return text(`❌ 找不到任務 #${taskId}。`);
+  if (task.assignee_id !== employeeId) return text(`❌ 此任務不是指派給您，無法完成。`);
+  if (task.status === "已完成") return text(`✅ 任務「${task.title}」已經是完成狀態。`);
+  if (task.status === "已取消") return text(`❌ 任務「${task.title}」已被取消。`);
 
-  await db.from("tasks")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
-    .eq("id", task.id);
-
-  // Start triggered tasks and notify their assignees
-  const triggerActions: string[] = (task.metadata as any)?.trigger_actions ?? [];
-  let triggeredCount = 0;
-
-  for (const triggeredId of triggerActions) {
-    // Fetch the triggered task with its assignee
-    const { data: triggered } = await db
-      .from("tasks")
-      .select("id, title, priority, due_date, assignee_id")
-      .eq("id", triggeredId)
-      .eq("status", "pending")
-      .maybeSingle();
-
-    if (!triggered) continue;
-
-    // Update triggered task to in_progress
-    await db.from("tasks").update({ status: "in_progress" }).eq("id", triggeredId);
-    triggeredCount++;
-
-    // Look up the assignee's LINE user ID
-    if (!triggered.assignee_id) continue;
-    const { data: lineUser } = await db
-      .from("line_users")
-      .select("line_user_id")
-      .eq("employee_id", triggered.assignee_id)
-      .eq("is_verified", true)
-      .maybeSingle();
-
-    if (!lineUser?.line_user_id) continue;
-
-    // Push notification to assignee
-    const due = triggered.due_date ? triggered.due_date.slice(0, 10) : "無截止日";
-    const pColor = PRIORITY_COLOR[triggered.priority] ?? "#95A5A6";
-    const shortTriggeredId = String(triggered.id).slice(0, 6);
-
-    await pushAndLog(lineUser.line_user_id, [
-      withQuickReplies(
-        {
-          type: "flex",
-          altText: `🔔 新任務已指派：${triggered.title}`,
-          contents: {
-            type: "bubble",
-            header: {
-              type: "box",
-              layout: "vertical",
-              paddingAll: "12px",
-              backgroundColor: pColor,
-              contents: [
-                { type: "text", text: "🔔 您有新任務開始了", color: "#FFFFFF", weight: "bold", size: "md" },
-                { type: "text", text: `由「${task.title}」完成後觸發`, color: "#FFFFFF", size: "xs", margin: "xs", wrap: true },
-              ],
-            },
-            body: {
-              type: "box",
-              layout: "vertical",
-              paddingAll: "14px",
-              contents: [
-                { type: "text", text: triggered.title, weight: "bold", size: "lg", wrap: true },
-                { type: "separator", margin: "md" },
-                infoRow("優先", priorityLabel(triggered.priority), pColor),
-                infoRow("截止", due),
-                { type: "text", text: `#${shortTriggeredId}`, color: "#CCCCCC", size: "xxs", margin: "sm" },
-              ],
-            },
-            footer: {
-              type: "box",
-              layout: "vertical",
-              spacing: "xs",
-              paddingAll: "8px",
-              contents: [
-                {
-                  type: "button",
-                  action: { type: "message", label: "✅ 標記完成", text: `/任務 #${shortTriggeredId} 完成` },
-                  style: "primary",
-                  height: "sm",
-                  color: "#27AE60",
-                },
-                {
-                  type: "button",
-                  action: { type: "message", label: "📋 查看所有任務", text: "/任務 列表" },
-                  style: "secondary",
-                  height: "sm",
-                },
-              ],
-            },
-          },
-        },
-        [
-          { label: "✅ 完成", text: `/任務 #${shortTriggeredId} 完成` },
-          { label: "📋 任務列表", text: "/任務 列表" },
-        ],
-      ),
-    ], accessToken, db, { sourceType: "user" });
+  // If task has an approval chain, completion needs to go through liff_complete_task_v2
+  // which sets it to 待確認 and creates task_confirmations rows
+  if (task.approval_chain_id) {
+    return text(`⚠️ 此任務需要簽核審核，請至 LIFF 任務頁完成（會建立簽核流程）。\n/任務 ${taskId}`);
   }
 
-  // Look up the next pending/in_progress task in the same workflow instance
+  // Simple completion — DB trigger _task_cascade_on_complete handles the next step
+  // (auto-progress dependents + enqueue LINE notification for the next assignee)
+  const { error: updateErr } = await db
+    .from("tasks")
+    .update({ status: "已完成", completed_at: new Date().toISOString() })
+    .eq("id", task.id);
+
+  if (updateErr) return text(`❌ 完成失敗：${updateErr.message}`);
+
+  // Cascade is now handled by DB trigger _task_cascade_on_complete
+  // (auto-progresses dependents to 進行中, enqueues LINE for next assignees).
+  // Just report what comes next as UX confirmation.
+
+  // Look up the next-up task in the same workflow instance (any status that's still active)
   let nextTask: { title: string; assigneeName: string } | null = null;
   if (task.workflow_instance_id) {
     const { data: nextTasks } = await db
       .from("tasks")
-      .select("id, title, sort_order, assignee:employees!tasks_assignee_id_fkey(name)")
+      .select("id, title, step_order, assignee")
       .eq("workflow_instance_id", task.workflow_instance_id)
-      .in("status", ["pending", "in_progress"])
+      .in("status", ["待處理", "進行中"])
       .neq("id", task.id)
-      .order("sort_order", { ascending: true })
+      .order("step_order", { ascending: true })
       .limit(1);
     if (nextTasks && nextTasks.length > 0) {
-      const nt = nextTasks[0];
-      nextTask = { title: nt.title, assigneeName: nt.assignee?.name ?? "—" };
-    } else {
-      // No more tasks → check if entire workflow is complete
-      await checkWorkflowCompletion(task.workflow_instance_id, db, accessToken);
+      const nt: any = nextTasks[0];
+      nextTask = { title: nt.title, assigneeName: nt.assignee ?? "—" };
     }
   }
 
-  // Build single completion reply
   const bodyContents: any[] = [
     { type: "text", text: `✅ 「${task.title}」已標記為完成`, size: "sm", wrap: true, color: "#27AE60", weight: "bold" },
   ];
-
-  if (triggeredCount > 0) {
-    bodyContents.push({
-      type: "text", text: `🔔 已通知 ${triggeredCount} 個後續任務負責人`,
-      size: "xs", color: "#E67E22", margin: "sm",
-    });
-  }
-
   if (nextTask) {
     bodyContents.push({ type: "separator", margin: "md" });
     bodyContents.push({ type: "text", text: "下一個任務是", size: "xs", color: "#AAAAAA", margin: "md" });
@@ -440,23 +352,26 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
 // ── Task Update Command ──────────────────────────────────────────────────────
 
 export async function cmdTaskUpdate(rawId: string, note: string, db: SupabaseClient, lineUserRowId?: string, userId?: string) {
-  const shortId = rawId.replace(/[[\]#\s]/g, "");
-  if (!shortId) return text("請提供任務 ID。");
+  const idStr = rawId.replace(/[[\]#\s]/g, "");
+  const taskId = parseInt(idStr, 10);
+  if (!taskId || Number.isNaN(taskId)) return text("請提供任務 ID。例如：/任務 #198 更新");
+
+  // userId arg is actually employee_id (passed from index.ts); param name is legacy.
+  const employeeId = userId
+    ? (typeof userId === "number" ? userId : parseInt(String(userId), 10))
+    : null;
 
   let query = db
     .from("tasks")
     .select("id, title, notes")
-    .neq("status", "completed");
-  if (userId) {
-    const employeeId = await resolveLineUserToEmployeeId(db, userId);
-    if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+    .eq("id", taskId)
+    .neq("status", "已完成");
+  if (employeeId && !Number.isNaN(employeeId)) {
     query = query.eq("assignee_id", employeeId);
   }
-  const { data: allTasks2 } = await query.limit(300);
+  const { data: task } = await query.maybeSingle();
 
-  const tasks = allTasks2?.filter((t: any) => t.id.startsWith(shortId));
-  if (!tasks || tasks.length === 0) return text(`❌ 找不到 ID 為 ${shortId} 的任務。`);
-  const task = tasks![0];
+  if (!task) return text(`❌ 找不到任務 #${taskId}，或您不是負責人。`);
 
   if (!note) {
     // Save pending action and ask user to type note
@@ -483,7 +398,7 @@ export async function cmdTaskRequestConfirm(rawId: string, userId: string, db: S
   if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 請求確認");
 
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { data: allTasks } = await db
     .from("tasks")
@@ -848,7 +763,7 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
 
 export async function cmdNotes(userId: string, db: SupabaseClient) {
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { data: tasks } = await db
     .from("tasks")

@@ -17,7 +17,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyTaskConfirmationResult } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 
 import InstanceDetailView from './components/InstanceDetailView'
@@ -148,7 +148,9 @@ export default function Workflows() {
       // Notify assignee on any transition to 進行中
       if (newStatus === '進行中' && data.assignee) {
         const inst = instances.find(i => i.id === data.workflow_instance_id)
-        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id).catch(() => {})
+        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, undefined, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        }).catch(() => {})
       }
 
       // Auto-progression: when a task completes, check if dependent tasks can start
@@ -232,11 +234,14 @@ export default function Workflows() {
       })
       const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
       if (createdTasks?.[0]?.assignee) {
+        const t0 = createdTasks[0]
         notifyTaskAssignee(
-          createdTasks[0].assignee,
-          `🚀 [自動觸發] ${createdTasks[0].title}`,
+          t0.assignee,
+          `🚀 [自動觸發] ${t0.title}`,
           `由「${sourceInst?.template_name}」觸發`,
-          createdTasks[0].id
+          t0.id,
+          undefined,
+          { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store }
         ).catch(() => {})
       }
     }
@@ -271,7 +276,9 @@ export default function Workflows() {
           setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
           if (started.assignee) {
             const inst = instances.find(i => i.id === instanceId)
-            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id)
+            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, undefined, {
+              dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
+            })
           }
         }
       }
@@ -289,7 +296,14 @@ export default function Workflows() {
       confirmed_at: now,
       confirmation_rejected_reason: action === 'rejected' ? reason : null,
     })
-    if (data) setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
+    if (data) {
+      setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
+
+      // ★ 推 LINE 給原執行人（核准 / 駁回都推，跟 LIFF TaskConfirmations.jsx 行為對齊）
+      if (data.assignee) {
+        notifyTaskConfirmationResult(data.assignee, data.title, action, reason, data.id).catch(() => {})
+      }
+    }
   }
 
   const handleSaveNotes = async () => {
@@ -297,6 +311,85 @@ export default function Workflows() {
     const { data } = await updateTask(notesStep.id, { notes: notesText })
     if (data) setAllTasks(prev => prev.map(t => t.id === notesStep.id ? data : t))
     setShowNotesModal(false)
+  }
+
+  // 複製任務 — 把現有任務（含負責人/審批/簽核鏈/checklist/審批人員）複製一份，
+  // 加到流程最後一步，自動掛 task_dependencies 跟前一步串接。
+  const handleDuplicateTask = async (origTask) => {
+    if (!origTask || !origTask.workflow_instance_id) return
+    const instId = origTask.workflow_instance_id
+    const instTasks = getInstanceTasks(instId)
+    const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
+
+    // 1. 建新 task（status 一律 '待處理'，避免複製到 '進行中'/'已完成' 等狀態）
+    const { data: newTask, error } = await createTask({
+      workflow_instance_id: instId,
+      step_order: maxOrder + 1,
+      title: `${origTask.title}（複本）`,
+      description: origTask.description || null,
+      assignee: origTask.assignee || null,
+      assignee_id: origTask.assignee_id || null,
+      store: origTask.store || null,
+      planned_start: origTask.planned_start || null,
+      due_date: origTask.due_date || null,
+      due_time: origTask.due_time || '17:00',
+      priority: origTask.priority || '中',
+      role: origTask.role || null,
+      status: '待處理',
+      bucket: origTask.bucket || 'Workflow',
+      category: origTask.category || 'Workflow',
+      organization_id: profile?.organization_id || null,
+      approval_chain_id: origTask.approval_chain_id || null,
+      confirmation_required: origTask.confirmation_required || false,
+      confirmation_mode: origTask.confirmation_mode || null,
+      trigger_template_id_on_complete: origTask.trigger_template_id_on_complete || null,
+    })
+    if (error || !newTask) {
+      alert('複製失敗：' + (error?.message || '未知錯誤'))
+      return
+    }
+
+    setAllTasks(prev => [...prev, newTask])
+
+    // 2. 掛 task_dependencies — 依賴前一個 step
+    if (instTasks.length > 0) {
+      const prevTask = instTasks
+        .filter(t => (t.step_order || 0) <= maxOrder)
+        .sort((a, b) => (b.step_order || 0) - (a.step_order || 0))[0]
+      if (prevTask) {
+        await supabase.from('task_dependencies').insert({
+          task_id: newTask.id,
+          depends_on_task_id: prevTask.id,
+          dep_type: 'prerequisite',
+        })
+      }
+    }
+
+    // 3. 複製 task_checklists
+    const { data: srcChecklists } = await supabase.from('task_checklists')
+      .select('checklist_id').eq('task_id', origTask.id)
+    if (srcChecklists && srcChecklists.length > 0) {
+      await supabase.from('task_checklists').insert(
+        srcChecklists.map(c => ({ task_id: newTask.id, checklist_id: c.checklist_id }))
+      )
+    }
+
+    // 4. 複製 task_confirmations（指定人員模式的審批人員清單）
+    const { data: srcConfs } = await supabase.from('task_confirmations')
+      .select('approver, step_order').eq('task_id', origTask.id)
+    if (srcConfs && srcConfs.length > 0) {
+      await supabase.from('task_confirmations').insert(
+        srcConfs.map(c => ({
+          task_id: newTask.id,
+          approver: c.approver,
+          step_order: c.step_order || 0,
+          status: 'pending',
+          organization_id: profile?.organization_id || null,
+        }))
+      )
+    }
+
+    alert(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
   }
 
   const handleAddTask = async () => {
@@ -334,6 +427,21 @@ export default function Workflows() {
     if (data) {
       setAllTasks(prev => [...prev, data])
 
+      // ★ 自動掛 task_dependencies：依賴前一個 step（如果有）
+      //   這樣第 1 步完成時，autoProgressDependents 才會把第 2 步從 '待處理' 推進 '進行中' + 通知
+      if (instTasks.length > 0) {
+        const prevTask = instTasks
+          .filter(t => (t.step_order || 0) < (maxOrder + 1))
+          .sort((a, b) => (b.step_order || 0) - (a.step_order || 0))[0]
+        if (prevTask) {
+          await supabase.from('task_dependencies').insert({
+            task_id: data.id,
+            depends_on_task_id: prevTask.id,
+            dep_type: 'prerequisite',
+          })
+        }
+      }
+
       // ★ 掛清單
       const subFailures = []
       if (taskForm.checklist_id) {
@@ -368,8 +476,16 @@ export default function Workflows() {
         alert(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
       }
 
-      if (taskForm.assignee) {
-        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id).catch(() => {})
+      // 只在「沒有未完成前置步驟」時才推 LINE
+      // → 第一個任務（step 1）正常推；後續步驟要等前面完成才會由 cascade 推
+      const hasIncompletePrev = instTasks.some(t =>
+        (t.step_order || 0) < (maxOrder + 1) &&
+        t.status !== '已完成' && t.status !== 'completed'
+      )
+      if (taskForm.assignee && !hasIncompletePrev) {
+        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, undefined, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        }).catch(() => {})
       }
     }
   }
@@ -611,7 +727,19 @@ export default function Workflows() {
             trigger_template_id_on_complete: extras.trigger_template_id || null,
           }
         })
-        const { data: insertedTasks } = await createTasksBatch(taskRows)
+        const { data: insertedTasks, error: tasksErr } = await createTasksBatch(taskRows)
+        if (tasksErr) {
+          console.error('[deploy] task insert failed', tasksErr, 'rows=', taskRows)
+          alert(`❌ 任務建立失敗：${tasksErr.message}\n\n部署中斷，請檢查 console。`)
+          setDeploying(false)
+          return
+        }
+        if (!insertedTasks || insertedTasks.length === 0) {
+          console.error('[deploy] insertedTasks empty', taskRows)
+          alert('❌ 任務沒有任何被建立（可能 RLS 擋住或欄位錯誤）。請看 console。')
+          setDeploying(false)
+          return
+        }
         if (insertedTasks) {
           setAllTasks(prev => [...prev, ...insertedTasks])
 
@@ -636,10 +764,13 @@ export default function Workflows() {
           const firstStepAssignee = insertedTasks[0]?.assignee
           if (firstStepAssignee) {
             const totalSteps = insertedTasks.length
+            const t0 = insertedTasks[0]
             const title = totalSteps > 1
-              ? `🚀 [立即行動] ${insertedTasks[0].title}（流程共 ${totalSteps} 步，後續會接力通知）`
-              : `🚀 [立即行動] ${insertedTasks[0].title}`
-            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, insertedTasks[0].id).catch(() => {})
+              ? `🚀 [立即行動] ${t0.title}（流程共 ${totalSteps} 步，後續會接力通知）`
+              : `🚀 [立即行動] ${t0.title}`
+            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, undefined, {
+              dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
+            }).catch(() => {})
           }
 
           // ★ 掛查核清單 + 確認審批人員（部署時 extras > 範本內建）
@@ -783,6 +914,7 @@ export default function Workflows() {
         onEditInstance={handleEditInstance}
         onStepUpdate={d => { setAllTasks(prev => prev.map(t => t.id === d.id ? d : t)); setSelectedStep(d) }}
         onStepDelete={id => { setAllTasks(prev => prev.filter(t => t.id !== id)); setSelectedStep(null) }}
+        onStepDuplicate={handleDuplicateTask}
       />
     )
   }

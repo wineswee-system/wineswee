@@ -43,25 +43,26 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function actionFooter(taskId: number) {
+function actionFooter(taskId: number, liffId?: string | null) {
+  // Single primary LIFF button — user completes / updates notes inside LIFF UI
+  // (not via BOT text commands). Matches the inline-web card.
+  const liffUrl = liffId
+    ? `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/tasks?task=${taskId}`)}`
+    : null;
   return {
-    type: "box", layout: "horizontal", spacing: "sm", paddingAll: "14px",
-    contents: [
-      {
-        type: "button", style: "secondary", height: "sm",
-        action: { type: "message", label: "📝 更新備註", text: `/任務 #${taskId} 更新` },
-      },
-      {
-        type: "button", style: "primary", height: "sm", color: "#16a34a",
-        action: { type: "message", label: "✅ 完成", text: `/任務 #${taskId} 完成` },
-      },
-    ],
+    type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+    contents: liffUrl
+      ? [{
+          type: "button", style: "primary", color: "#06b6d4", height: "sm",
+          action: { type: "uri", label: "📋 查看任務", uri: liffUrl },
+        }]
+      : [],
   };
 }
 
 // ── Flex Builders ──────────────────────────────────────────────
 
-function buildReminderFlex(task: any) {
+function buildReminderFlex(task: any, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -81,12 +82,12 @@ function buildReminderFlex(task: any) {
           { type: "text", text: `到期時間：${dueLabel}`, size: "sm", color: "#666666" },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
 
-function buildOverdueFlex(task: any, daysOverdue: number) {
+function buildOverdueFlex(task: any, daysOverdue: number, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -107,12 +108,12 @@ function buildOverdueFlex(task: any, daysOverdue: number) {
           { type: "text", text: `已逾期 ${daysOverdue} 天，請盡快處理。`, size: "sm", color: "#EF4444", wrap: true },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
 
-function buildDueSoonFlex(task: any, label: string) {
+function buildDueSoonFlex(task: any, label: string, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -132,7 +133,7 @@ function buildDueSoonFlex(task: any, label: string) {
           { type: "text", text: `到期時間：${dueLabel}`, size: "sm", color: "#666666" },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
@@ -149,7 +150,25 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lineToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") || "";
+    // line_user_id is channel-scoped — pick the token matching the channel the
+    // assignee is bound to. Fallback to legacy generic token for old reminders.
+    const tokenByChannel: Record<string, string> = {
+      workflow: Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "",
+    };
+    const fallbackToken =
+      Deno.env.get("LINE_CHANNEL_TOKEN") ||
+      Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ||
+      "";
+    const tokenFor = (channelCode: string | null | undefined): string =>
+      (channelCode && tokenByChannel[channelCode]) || fallbackToken;
+    // LIFF deep-link target for the "查看詳情" button on every flex card
+    const taskLiffId =
+      Deno.env.get("LIFF_TASK_ID_WORKFLOW") ||
+      Deno.env.get("LIFF_NEW_TASK_ID_WORKFLOW") ||
+      Deno.env.get("LIFF_TASK_ID") ||
+      "";
+    // Legacy reminder/overdue/due_soon paths still use the fallback
+    const lineToken = fallbackToken;
     const sb = createClient(supabaseUrl, serviceKey);
 
     let mode = "all";
@@ -188,7 +207,7 @@ serve(async (req: Request) => {
         const lineId = await resolveLineId(sb, task.assignee_id);
         if (!lineId) { skippedCount++; continue; }
 
-        const sent = await pushLine(lineId, [buildReminderFlex(task)], lineToken);
+        const sent = await pushLine(lineId, [buildReminderFlex(task, taskLiffId)], lineToken);
         if (sent) {
           await sb.from("tasks").update({ metadata: { ...meta, reminder_sent: true } }).eq("id", task.id);
           reminderCount++;
@@ -216,7 +235,7 @@ serve(async (req: Request) => {
           const dueDate = new Date(task.due_date);
           const daysOverdue = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
-          const sent = await pushLine(lineId, [buildOverdueFlex(task, daysOverdue)], lineToken);
+          const sent = await pushLine(lineId, [buildOverdueFlex(task, daysOverdue, taskLiffId)], lineToken);
           if (sent) {
             await sb.from("tasks").update({
               metadata: { ...meta, last_overdue_date: today },
@@ -264,7 +283,7 @@ serve(async (req: Request) => {
           const lineId = await resolveLineId(sb, task.assignee_id);
           if (!lineId) { skippedCount++; continue; }
 
-          const sent = await pushLine(lineId, [buildDueSoonFlex(task, label)], lineToken);
+          const sent = await pushLine(lineId, [buildDueSoonFlex(task, label, taskLiffId)], lineToken);
           if (sent) {
             await sb.from("tasks").update({
               metadata: { ...meta, [metaKey]: todayStr },
@@ -360,13 +379,109 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── 5. Drain task_pending_notifications：cascade 啟動的任務推 LINE ──
+    // service_role can't read RLS-scoped tables (tasks/workflow_instances/employee_line_accounts
+    // policies are 'TO authenticated' only). Use SECURITY DEFINER RPC that joins everything.
+    let startedNotifyCount = 0;
+    let drainDebug: Record<string, unknown> = {};
+    if (mode === "all" || mode === "task_started" || mode === "drain_queue") {
+      const { data: pending, error: pendingErr } = await sb.rpc("drain_task_started_notifications");
+
+      drainDebug = {
+        query_error: pendingErr ? { message: pendingErr.message, code: pendingErr.code, details: pendingErr.details, hint: pendingErr.hint } : null,
+        rows_fetched: Array.isArray(pending) ? pending.length : null,
+        first_row: Array.isArray(pending) ? pending[0] ?? null : null,
+      };
+
+      if (Array.isArray(pending)) {
+        for (const p of pending as Array<{
+          queue_id: number;
+          task_id: number | null;
+          task_title: string | null;
+          task_description: string | null;
+          task_notes: string | null;
+          task_priority: string | null;
+          task_due_date: string | null;
+          task_store: string | null;
+          task_assignee: string | null;
+          task_assignee_id: number | null;
+          task_workflow_instance_id: number | null;
+          instance_template_name: string | null;
+          line_user_id: string | null;
+          channel_code: string | null;
+        }>) {
+          // task 不見了或沒人 → 標記已處理免得重抓
+          if (!p.task_id || !p.task_assignee_id) {
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
+            continue;
+          }
+
+          // 沒 LINE 綁定 → 標記已處理 + skipped
+          if (!p.line_user_id) {
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
+            skippedCount++;
+            continue;
+          }
+
+          // Use the token matching the channel the assignee is bound to
+          const channelToken = tokenFor(p.channel_code);
+          if (!channelToken) continue;
+
+          const dueLabel = p.task_due_date ? formatDate(p.task_due_date) : "未設定";
+          const instanceName = p.instance_template_name || "";
+
+          const flex = {
+            type: "flex",
+            altText: `📋 任務通知：${p.task_title}`,
+            contents: {
+              type: "bubble", size: "kilo",
+              header: {
+                type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: "#06b6d4",
+                contents: [
+                  { type: "text", text: "📋 任務通知", color: "#FFFFFF", weight: "bold", size: "md" },
+                  ...(instanceName ? [{ type: "text", text: instanceName, color: "#FFFFFFCC", size: "xxs", margin: "xs", wrap: true }] : []),
+                ],
+              },
+              body: {
+                type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+                contents: [
+                  { type: "text", text: p.task_title ?? "", weight: "bold", size: "md", wrap: true },
+                  { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
+                  ...(p.task_assignee ? [{ type: "text", text: `負責人：${p.task_assignee}`, size: "xs", color: "#666666" }] : []),
+                  ...(p.task_description?.trim() ? [
+                    { type: "separator", margin: "sm" },
+                    { type: "text", text: p.task_description.trim(), size: "sm", color: "#444444", wrap: true, margin: "sm" },
+                  ] : []),
+                  ...(p.task_notes?.trim() ? [
+                    { type: "separator", margin: "sm" },
+                    { type: "text", text: "📌 備註", size: "xxs", color: "#8c8c8c", margin: "sm" },
+                    { type: "text", text: p.task_notes.trim(), size: "sm", color: "#444444", wrap: true },
+                  ] : []),
+                  ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "xs", color: "#666666", margin: "sm" }] : []),
+                ],
+              },
+              footer: actionFooter(p.task_id, taskLiffId),
+            },
+          };
+
+          const sent = await pushLine(p.line_user_id, [flex], channelToken);
+          if (sent) {
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
+            startedNotifyCount++;
+          }
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       ok: true, mode,
       reminders_sent: reminderCount,
       overdue_sent: overdueCount,
       due_soon_sent: dueSoonCount,
       sla_sent: slaCount,
+      task_started_sent: startedNotifyCount,
       skipped_no_line_id: skippedCount,
+      drain_debug: drainDebug,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

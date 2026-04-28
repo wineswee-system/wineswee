@@ -525,7 +525,7 @@ serve(async (req) => {
         responseMsg = text(`帳號連結請私訊機器人：\n/註冊 您的姓名\n\n例如：/註冊 張小明`);
       } else {
         const namePart = rawText.replace(/^\/?(註冊)\s*/i, "").trim();
-        responseMsg = await cmdRegister(lineUser.id, namePart, db, channelId, lineUserId, profile.displayName);
+        responseMsg = await cmdRegister(lineUser.id, namePart, db, channelId, lineUserId, profile.displayName, profile.pictureUrl ?? null);
       }
 
     // ── Project task commands (/專案) ──────────────────────────────────────

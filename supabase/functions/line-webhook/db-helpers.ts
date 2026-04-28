@@ -216,22 +216,24 @@ export async function resolveLineUserToEmployeeId(
   db: SupabaseClient,
   lineUserId: string,
 ): Promise<number | null> {
-  const { data: ela } = await db
+  const { data: ela, error: elaErr } = await db
     .from("employee_line_accounts")
-    .select("employee_id")
+    .select("employee_id, is_verified, is_primary, channel_id")
     .eq("line_user_id", lineUserId)
     .eq("is_verified", true)
     .order("is_primary", { ascending: false })
     .limit(1)
     .maybeSingle();
+  console.log(`[resolveLine] lineUserId=${lineUserId} ela=${JSON.stringify(ela)} err=${elaErr?.message ?? "null"}`);
   if (ela?.employee_id) return ela.employee_id as number;
 
-  const { data: lu } = await db
+  const { data: lu, error: luErr } = await db
     .from("line_users")
     .select("employee_id")
     .eq("line_user_id", lineUserId)
     .not("employee_id", "is", null)
     .limit(1)
     .maybeSingle();
+  console.log(`[resolveLine] fallback lu=${JSON.stringify(lu)} err=${luErr?.message ?? "null"}`);
   return (lu?.employee_id as number | undefined) ?? null;
 }

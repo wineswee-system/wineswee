@@ -43,25 +43,38 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function actionFooter(taskId: number) {
+function actionFooter(taskId: number, liffId?: string | null) {
+  const rows: unknown[] = [
+    {
+      type: "box", layout: "horizontal", spacing: "sm",
+      contents: [
+        {
+          type: "button", style: "secondary", height: "sm",
+          action: { type: "message", label: "📝 更新備註", text: `/任務 #${taskId} 更新` },
+        },
+        {
+          type: "button", style: "primary", height: "sm", color: "#16a34a",
+          action: { type: "message", label: "✅ 完成", text: `/任務 #${taskId} 完成` },
+        },
+      ],
+    },
+  ];
+  if (liffId) {
+    const liffUrl = `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/tasks?task=${taskId}`)}`;
+    rows.push({
+      type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: "🔍 查看詳情", uri: liffUrl },
+    });
+  }
   return {
-    type: "box", layout: "horizontal", spacing: "sm", paddingAll: "14px",
-    contents: [
-      {
-        type: "button", style: "secondary", height: "sm",
-        action: { type: "message", label: "📝 更新備註", text: `/任務 #${taskId} 更新` },
-      },
-      {
-        type: "button", style: "primary", height: "sm", color: "#16a34a",
-        action: { type: "message", label: "✅ 完成", text: `/任務 #${taskId} 完成` },
-      },
-    ],
+    type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+    contents: rows,
   };
 }
 
 // ── Flex Builders ──────────────────────────────────────────────
 
-function buildReminderFlex(task: any) {
+function buildReminderFlex(task: any, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -81,12 +94,12 @@ function buildReminderFlex(task: any) {
           { type: "text", text: `到期時間：${dueLabel}`, size: "sm", color: "#666666" },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
 
-function buildOverdueFlex(task: any, daysOverdue: number) {
+function buildOverdueFlex(task: any, daysOverdue: number, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -107,12 +120,12 @@ function buildOverdueFlex(task: any, daysOverdue: number) {
           { type: "text", text: `已逾期 ${daysOverdue} 天，請盡快處理。`, size: "sm", color: "#EF4444", wrap: true },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
 
-function buildDueSoonFlex(task: any, label: string) {
+function buildDueSoonFlex(task: any, label: string, liffId?: string | null) {
   const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
   return {
     type: "flex",
@@ -132,7 +145,7 @@ function buildDueSoonFlex(task: any, label: string) {
           { type: "text", text: `到期時間：${dueLabel}`, size: "sm", color: "#666666" },
         ],
       },
-      footer: actionFooter(task.id),
+      footer: actionFooter(task.id, liffId),
     },
   };
 }
@@ -160,6 +173,12 @@ serve(async (req: Request) => {
       "";
     const tokenFor = (channelCode: string | null | undefined): string =>
       (channelCode && tokenByChannel[channelCode]) || fallbackToken;
+    // LIFF deep-link target for the "查看詳情" button on every flex card
+    const taskLiffId =
+      Deno.env.get("LIFF_TASK_ID_WORKFLOW") ||
+      Deno.env.get("LIFF_NEW_TASK_ID_WORKFLOW") ||
+      Deno.env.get("LIFF_TASK_ID") ||
+      "";
     // Legacy reminder/overdue/due_soon paths still use the fallback
     const lineToken = fallbackToken;
     const sb = createClient(supabaseUrl, serviceKey);
@@ -200,7 +219,7 @@ serve(async (req: Request) => {
         const lineId = await resolveLineId(sb, task.assignee_id);
         if (!lineId) { skippedCount++; continue; }
 
-        const sent = await pushLine(lineId, [buildReminderFlex(task)], lineToken);
+        const sent = await pushLine(lineId, [buildReminderFlex(task, taskLiffId)], lineToken);
         if (sent) {
           await sb.from("tasks").update({ metadata: { ...meta, reminder_sent: true } }).eq("id", task.id);
           reminderCount++;
@@ -228,7 +247,7 @@ serve(async (req: Request) => {
           const dueDate = new Date(task.due_date);
           const daysOverdue = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
-          const sent = await pushLine(lineId, [buildOverdueFlex(task, daysOverdue)], lineToken);
+          const sent = await pushLine(lineId, [buildOverdueFlex(task, daysOverdue, taskLiffId)], lineToken);
           if (sent) {
             await sb.from("tasks").update({
               metadata: { ...meta, last_overdue_date: today },
@@ -276,7 +295,7 @@ serve(async (req: Request) => {
           const lineId = await resolveLineId(sb, task.assignee_id);
           if (!lineId) { skippedCount++; continue; }
 
-          const sent = await pushLine(lineId, [buildDueSoonFlex(task, label)], lineToken);
+          const sent = await pushLine(lineId, [buildDueSoonFlex(task, label, taskLiffId)], lineToken);
           if (sent) {
             await sb.from("tasks").update({
               metadata: { ...meta, [metaKey]: todayStr },
@@ -442,7 +461,7 @@ serve(async (req: Request) => {
                   ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "xs", color: "#666666" }] : []),
                 ],
               },
-              footer: actionFooter(p.task_id),
+              footer: actionFooter(p.task_id, taskLiffId),
             },
           };
 

@@ -26,7 +26,7 @@ export default function InstanceDetailView({
   selectedStep, setSelectedStep,
   // Handlers
   onClose, onStatusChange, onConfirmTask, onSaveNotes, onAddTask, onEditInstance,
-  onStepUpdate, onStepDelete,
+  onStepUpdate, onStepDelete, onStepDuplicate,
 }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
   const currentProject = projects.find(p => p.id === inst.project_id)
@@ -403,6 +403,7 @@ export default function InstanceDetailView({
         <TaskDetailPanel step={selectedStep} instance={inst} allSteps={instSteps} employees={employees} stores={stores} checklists={checklists}
           onUpdate={onStepUpdate}
           onDelete={onStepDelete}
+          onDuplicate={onStepDuplicate}
           onClose={() => setSelectedStep(null)} />
       )}
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { empLabel } from '../lib/empLabel'
 import {
@@ -25,7 +25,7 @@ const PRIORITY_LIST = ['低', '中', '高']
 
 export default function TaskDetailPanel({
   step: task, instance, allSteps, employees, stores, checklists,
-  onUpdate, onDelete, onClose,
+  onUpdate, onDelete, onDuplicate, onClose,
 }) {
   const [form, setForm] = useState({})
   const [editingTitle, setEditingTitle] = useState(false)
@@ -498,6 +498,14 @@ export default function TaskDetailPanel({
             <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 13 }}>
               <Save size={13} /> {saving ? '...' : '更新'}
             </button>
+            {onDuplicate && (
+              <button className="btn btn-sm btn-secondary"
+                title="複製此任務（含負責人/審批/簽核鏈/清單，加到流程最後）"
+                onClick={async () => { await onDuplicate(task); handleClose(); }}
+                style={{ color: 'var(--accent-cyan)', padding: '6px 8px' }}>
+                <Copy size={15} />
+              </button>
+            )}
             <button className="btn btn-sm btn-secondary" onClick={handleDelete}
               style={{ color: 'var(--accent-red)', padding: '6px 8px' }}>
               <Trash2 size={15} />

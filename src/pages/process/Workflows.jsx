@@ -306,6 +306,85 @@ export default function Workflows() {
     setShowNotesModal(false)
   }
 
+  // 複製任務 — 把現有任務（含負責人/審批/簽核鏈/checklist/審批人員）複製一份，
+  // 加到流程最後一步，自動掛 task_dependencies 跟前一步串接。
+  const handleDuplicateTask = async (origTask) => {
+    if (!origTask || !origTask.workflow_instance_id) return
+    const instId = origTask.workflow_instance_id
+    const instTasks = getInstanceTasks(instId)
+    const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
+
+    // 1. 建新 task（status 一律 '待處理'，避免複製到 '進行中'/'已完成' 等狀態）
+    const { data: newTask, error } = await createTask({
+      workflow_instance_id: instId,
+      step_order: maxOrder + 1,
+      title: `${origTask.title}（複本）`,
+      description: origTask.description || null,
+      assignee: origTask.assignee || null,
+      assignee_id: origTask.assignee_id || null,
+      store: origTask.store || null,
+      planned_start: origTask.planned_start || null,
+      due_date: origTask.due_date || null,
+      due_time: origTask.due_time || '17:00',
+      priority: origTask.priority || '中',
+      role: origTask.role || null,
+      status: '待處理',
+      bucket: origTask.bucket || 'Workflow',
+      category: origTask.category || 'Workflow',
+      organization_id: profile?.organization_id || null,
+      approval_chain_id: origTask.approval_chain_id || null,
+      confirmation_required: origTask.confirmation_required || false,
+      confirmation_mode: origTask.confirmation_mode || null,
+      trigger_template_id_on_complete: origTask.trigger_template_id_on_complete || null,
+    })
+    if (error || !newTask) {
+      alert('複製失敗：' + (error?.message || '未知錯誤'))
+      return
+    }
+
+    setAllTasks(prev => [...prev, newTask])
+
+    // 2. 掛 task_dependencies — 依賴前一個 step
+    if (instTasks.length > 0) {
+      const prevTask = instTasks
+        .filter(t => (t.step_order || 0) <= maxOrder)
+        .sort((a, b) => (b.step_order || 0) - (a.step_order || 0))[0]
+      if (prevTask) {
+        await supabase.from('task_dependencies').insert({
+          task_id: newTask.id,
+          depends_on_task_id: prevTask.id,
+          dep_type: 'prerequisite',
+        })
+      }
+    }
+
+    // 3. 複製 task_checklists
+    const { data: srcChecklists } = await supabase.from('task_checklists')
+      .select('checklist_id').eq('task_id', origTask.id)
+    if (srcChecklists && srcChecklists.length > 0) {
+      await supabase.from('task_checklists').insert(
+        srcChecklists.map(c => ({ task_id: newTask.id, checklist_id: c.checklist_id }))
+      )
+    }
+
+    // 4. 複製 task_confirmations（指定人員模式的審批人員清單）
+    const { data: srcConfs } = await supabase.from('task_confirmations')
+      .select('approver, step_order').eq('task_id', origTask.id)
+    if (srcConfs && srcConfs.length > 0) {
+      await supabase.from('task_confirmations').insert(
+        srcConfs.map(c => ({
+          task_id: newTask.id,
+          approver: c.approver,
+          step_order: c.step_order || 0,
+          status: 'pending',
+          organization_id: profile?.organization_id || null,
+        }))
+      )
+    }
+
+    alert(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
+  }
+
   const handleAddTask = async () => {
     if (!taskForm.title || !selectedInstance) return
     const instTasks = getInstanceTasks(selectedInstance.id)
@@ -823,6 +902,7 @@ export default function Workflows() {
         onEditInstance={handleEditInstance}
         onStepUpdate={d => { setAllTasks(prev => prev.map(t => t.id === d.id ? d : t)); setSelectedStep(d) }}
         onStepDelete={id => { setAllTasks(prev => prev.filter(t => t.id !== id)); setSelectedStep(null) }}
+        onStepDuplicate={handleDuplicateTask}
       />
     )
   }

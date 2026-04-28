@@ -44,31 +44,19 @@ function formatDate(dateStr: string): string {
 }
 
 function actionFooter(taskId: number, liffId?: string | null) {
-  const rows: unknown[] = [
-    {
-      type: "box", layout: "horizontal", spacing: "sm",
-      contents: [
-        {
-          type: "button", style: "secondary", height: "sm",
-          action: { type: "message", label: "📝 更新備註", text: `/任務 #${taskId} 更新` },
-        },
-        {
-          type: "button", style: "primary", height: "sm", color: "#16a34a",
-          action: { type: "message", label: "✅ 完成", text: `/任務 #${taskId} 完成` },
-        },
-      ],
-    },
-  ];
-  if (liffId) {
-    const liffUrl = `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/tasks?task=${taskId}`)}`;
-    rows.push({
-      type: "button", style: "link", height: "sm",
-      action: { type: "uri", label: "🔍 查看詳情", uri: liffUrl },
-    });
-  }
+  // Single primary LIFF button — user completes / updates notes inside LIFF UI
+  // (not via BOT text commands). Matches the inline-web card.
+  const liffUrl = liffId
+    ? `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/tasks?task=${taskId}`)}`
+    : null;
   return {
     type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
-    contents: rows,
+    contents: liffUrl
+      ? [{
+          type: "button", style: "primary", color: "#06b6d4", height: "sm",
+          action: { type: "uri", label: "📋 查看任務", uri: liffUrl },
+        }]
+      : [],
   };
 }
 

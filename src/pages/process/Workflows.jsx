@@ -17,7 +17,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyTaskConfirmationResult } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 
 import InstanceDetailView from './components/InstanceDetailView'
@@ -289,7 +289,14 @@ export default function Workflows() {
       confirmed_at: now,
       confirmation_rejected_reason: action === 'rejected' ? reason : null,
     })
-    if (data) setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
+    if (data) {
+      setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
+
+      // ★ 推 LINE 給原執行人（核准 / 駁回都推，跟 LIFF TaskConfirmations.jsx 行為對齊）
+      if (data.assignee) {
+        notifyTaskConfirmationResult(data.assignee, data.title, action, reason, data.id).catch(() => {})
+      }
+    }
   }
 
   const handleSaveNotes = async () => {

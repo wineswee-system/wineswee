@@ -255,6 +255,61 @@ export async function sendDirectPush(lineUserId, messages, channelCode) {
 }
 
 /**
+ * 任務確認結果通知執行人（主管按完核准/駁回後推給原任務負責人）
+ * @param {string} assigneeName - 任務的 assignee（原執行人）
+ * @param {string} taskTitle
+ * @param {'approved' | 'rejected'} action
+ * @param {string|null} notes - 駁回理由（rejected 時必填）
+ * @param {number} taskId
+ * @param {string} [channelCode]
+ */
+export async function notifyTaskConfirmationResult(assigneeName, taskTitle, action, notes, taskId, channelCode) {
+  if (!assigneeName) return { ok: false, reason: 'no_assignee' }
+
+  const account = await resolveLineAccount(assigneeName, channelCode)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+
+  const isApproved = action === 'approved'
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+
+  const messages = [{
+    type: 'flex',
+    altText: isApproved ? `✅ 任務通過：${taskTitle}` : `🔄 任務退回：${taskTitle}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical',
+        backgroundColor: isApproved ? '#10b981' : '#ef4444',
+        paddingAll: '14px',
+        contents: [
+          { type: 'text', text: isApproved ? '✅ 任務通過' : '🔄 任務退回', color: '#ffffff', weight: 'bold', size: 'md' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
+        contents: [
+          { type: 'text', text: `任務「${taskTitle}」${isApproved ? '已通過審核' : '被退回'}`, weight: 'bold', size: 'md', wrap: true },
+          ...(isApproved
+            ? []
+            : [{ type: 'text', text: `原因：${notes || '（未填）'}`, size: 'sm', color: '#666666', wrap: true, margin: 'md' }]),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '查看任務', uri: liffUrl },
+          style: 'primary', color: isApproved ? '#10b981' : '#ef4444', height: 'sm',
+        }],
+      },
+    },
+  }]
+
+  return sendLinePush(account.lineUserId, messages, account.channelCode)
+}
+
+/**
  * 代班邀請 — Web 端發出後推 LINE flex card 給所有候選人
  * @param {Array<{empId:number, name:string}>} candidates
  * @param {{ shift_date:string, shift_label:string, absent_emp_name:string, reason?:string }} info

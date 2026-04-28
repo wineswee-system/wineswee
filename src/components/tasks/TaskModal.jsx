@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Repeat, Calendar, Trash2, Activity as ActivityIcon } from 'lucide-react'
+import { X, Repeat, Calendar, Trash2, Activity as ActivityIcon, Copy } from 'lucide-react'
 import {
   updateTask, deleteTask,
   getTaskComments, createTaskComment,
@@ -24,7 +24,7 @@ const RECURRENCE_PRESETS = [
   { value: 'FREQ=MONTHLY', label: '每月' },
 ]
 
-export default function TaskModal({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete }) {
+export default function TaskModal({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete, onDuplicate }) {
   const [form, setForm] = useState({})
   const [comments, setComments] = useState([])
   const [commentDraft, setCommentDraft] = useState('')
@@ -125,6 +125,15 @@ export default function TaskModal({ task, employees = [], sections = [], current
             onBlur={() => form.title !== task.title && saveField({ title: form.title })}
             style={{ flex: 1, fontSize: 15, fontWeight: 700, border: 'none', background: 'transparent', color: 'var(--text-primary)', outline: 'none' }}
           />
+          {onDuplicate && (
+            <button
+              onClick={async () => { await onDuplicate(task); onClose?.() }}
+              className="btn btn-secondary"
+              title="複製此任務"
+              style={{ padding: '4px 8px', color: 'var(--accent-cyan)' }}>
+              <Copy size={14} />
+            </button>
+          )}
           <button onClick={handleDelete} className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }}><Trash2 size={14} /></button>
           <button onClick={onClose} className="btn btn-secondary" style={{ padding: '4px 8px' }}><X size={14} /></button>
         </div>

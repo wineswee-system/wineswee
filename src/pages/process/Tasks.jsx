@@ -284,6 +284,54 @@ export default function Tasks() {
             setSelectedTask(updated)
           }}
           onDelete={(id) => setTasks(prev => prev.filter(x => x.id !== id))}
+          onDuplicate={async (orig) => {
+            // 複製任務（一般任務或專案/流程任務都行）
+            const { data: dup, error } = await createTask({
+              workflow_instance_id: orig.workflow_instance_id || null,
+              project_id: orig.project_id || null,
+              section_id: orig.section_id || null,
+              step_order: orig.step_order ? (orig.step_order + 100) : null, // 排到最後
+              title: `${orig.title}（複本）`,
+              description: orig.description || null,
+              assignee: orig.assignee || null,
+              assignee_id: orig.assignee_id || null,
+              store: orig.store || null,
+              planned_start: orig.planned_start || null,
+              due_date: orig.due_date || null,
+              due_time: orig.due_time || '17:00',
+              priority: orig.priority || '中',
+              role: orig.role || null,
+              status: '待處理',
+              bucket: orig.bucket || null,
+              category: orig.category || null,
+              workflow: orig.workflow || null,
+              recurrence_rule: orig.recurrence_rule || null,
+              organization_id: profile?.organization_id || null,
+              approval_chain_id: orig.approval_chain_id || null,
+              confirmation_required: orig.confirmation_required || false,
+              confirmation_mode: orig.confirmation_mode || null,
+              trigger_template_id_on_complete: orig.trigger_template_id_on_complete || null,
+            })
+            if (error || !dup) {
+              alert('複製失敗：' + (error?.message || '未知錯誤'))
+              return
+            }
+            // 複製 task_checklists
+            const { data: cls } = await supabase.from('task_checklists').select('checklist_id').eq('task_id', orig.id)
+            if (cls && cls.length > 0) {
+              await supabase.from('task_checklists').insert(cls.map(c => ({ task_id: dup.id, checklist_id: c.checklist_id })))
+            }
+            // 複製 task_confirmations
+            const { data: confs } = await supabase.from('task_confirmations').select('approver, step_order').eq('task_id', orig.id)
+            if (confs && confs.length > 0) {
+              await supabase.from('task_confirmations').insert(confs.map(c => ({
+                task_id: dup.id, approver: c.approver, step_order: c.step_order || 0,
+                status: 'pending', organization_id: profile?.organization_id || null,
+              })))
+            }
+            setTasks(prev => [...prev, dup])
+            alert(`已複製「${orig.title}」`)
+          }}
         />
       )}
 

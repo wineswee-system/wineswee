@@ -415,6 +415,7 @@ serve(async (req: Request) => {
           task_priority: string | null;
           task_due_date: string | null;
           task_store: string | null;
+          task_assignee: string | null;
           task_assignee_id: number | null;
           task_workflow_instance_id: number | null;
           instance_template_name: string | null;
@@ -439,19 +440,17 @@ serve(async (req: Request) => {
           if (!channelToken) continue;
 
           const dueLabel = p.task_due_date ? formatDate(p.task_due_date) : "未設定";
-          const priorityColor: Record<string, string> = { 低: "#4CAF50", 中: "#E67E22", 高: "#E74C3C" };
-          const pColor = priorityColor[p.task_priority ?? ""] ?? "#06b6d4";
           const instanceName = p.instance_template_name || "";
 
           const flex = {
             type: "flex",
-            altText: `🚀 新任務：${p.task_title}`,
+            altText: `📋 任務通知：${p.task_title}`,
             contents: {
               type: "bubble", size: "kilo",
               header: {
-                type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: pColor,
+                type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: "#06b6d4",
                 contents: [
-                  { type: "text", text: "🚀 新任務啟動", color: "#FFFFFF", weight: "bold", size: "md" },
+                  { type: "text", text: "📋 任務通知", color: "#FFFFFF", weight: "bold", size: "md" },
                   ...(instanceName ? [{ type: "text", text: instanceName, color: "#FFFFFFCC", size: "xxs", margin: "xs", wrap: true }] : []),
                 ],
               },
@@ -460,6 +459,7 @@ serve(async (req: Request) => {
                 contents: [
                   { type: "text", text: p.task_title ?? "", weight: "bold", size: "md", wrap: true },
                   { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
+                  ...(p.task_assignee ? [{ type: "text", text: `負責人：${p.task_assignee}`, size: "xs", color: "#666666" }] : []),
                   ...(p.task_description?.trim() ? [
                     { type: "separator", margin: "sm" },
                     { type: "text", text: p.task_description.trim(), size: "sm", color: "#444444", wrap: true, margin: "sm" },

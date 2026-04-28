@@ -148,7 +148,9 @@ export default function Workflows() {
       // Notify assignee on any transition to 進行中
       if (newStatus === '進行中' && data.assignee) {
         const inst = instances.find(i => i.id === data.workflow_instance_id)
-        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id).catch(() => {})
+        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, undefined, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        }).catch(() => {})
       }
 
       // Auto-progression: when a task completes, check if dependent tasks can start
@@ -232,11 +234,14 @@ export default function Workflows() {
       })
       const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
       if (createdTasks?.[0]?.assignee) {
+        const t0 = createdTasks[0]
         notifyTaskAssignee(
-          createdTasks[0].assignee,
-          `🚀 [自動觸發] ${createdTasks[0].title}`,
+          t0.assignee,
+          `🚀 [自動觸發] ${t0.title}`,
           `由「${sourceInst?.template_name}」觸發`,
-          createdTasks[0].id
+          t0.id,
+          undefined,
+          { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store }
         ).catch(() => {})
       }
     }
@@ -271,7 +276,9 @@ export default function Workflows() {
           setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
           if (started.assignee) {
             const inst = instances.find(i => i.id === instanceId)
-            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id)
+            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, undefined, {
+              dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
+            })
           }
         }
       }
@@ -476,7 +483,9 @@ export default function Workflows() {
         t.status !== '已完成' && t.status !== 'completed'
       )
       if (taskForm.assignee && !hasIncompletePrev) {
-        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id).catch(() => {})
+        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, undefined, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        }).catch(() => {})
       }
     }
   }
@@ -755,10 +764,13 @@ export default function Workflows() {
           const firstStepAssignee = insertedTasks[0]?.assignee
           if (firstStepAssignee) {
             const totalSteps = insertedTasks.length
+            const t0 = insertedTasks[0]
             const title = totalSteps > 1
-              ? `🚀 [立即行動] ${insertedTasks[0].title}（流程共 ${totalSteps} 步，後續會接力通知）`
-              : `🚀 [立即行動] ${insertedTasks[0].title}`
-            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, insertedTasks[0].id).catch(() => {})
+              ? `🚀 [立即行動] ${t0.title}（流程共 ${totalSteps} 步，後續會接力通知）`
+              : `🚀 [立即行動] ${t0.title}`
+            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, undefined, {
+              dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
+            }).catch(() => {})
           }
 
           // ★ 掛查核清單 + 確認審批人員（部署時 extras > 範本內建）

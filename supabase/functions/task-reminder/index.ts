@@ -149,7 +149,11 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lineToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") || "";
+    // Secrets list has LINE_CHANNEL_TOKEN (workflow OA) — fallback to legacy name for safety
+    const lineToken = Deno.env.get("LINE_CHANNEL_TOKEN")
+      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW")
+      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")
+      || "";
     const sb = createClient(supabaseUrl, serviceKey);
 
     let mode = "all";
@@ -361,48 +365,55 @@ serve(async (req: Request) => {
     }
 
     // ── 5. Drain task_pending_notifications：cascade 啟動的任務推 LINE ──
+    // service_role can't read RLS-scoped tables (tasks/workflow_instances/employee_line_accounts
+    // policies are 'TO authenticated' only). Use SECURITY DEFINER RPC that joins everything.
     let startedNotifyCount = 0;
+    let drainDebug: Record<string, unknown> = {};
     if (mode === "all" || mode === "task_started" || mode === "drain_queue") {
-      const { data: pending } = await sb.from("task_pending_notifications")
-        .select("id, task_id, notif_type")
-        .is("sent_at", null)
-        .eq("notif_type", "task_started")
-        .limit(50);
+      const { data: pending, error: pendingErr } = await sb.rpc("drain_task_started_notifications");
 
-      if (pending) {
-        for (const p of pending as Array<{ id: number; task_id: number; notif_type: string }>) {
-          // 抓 task 詳情
-          const { data: task } = await sb.from("tasks")
-            .select("id, title, priority, due_date, assignee_id, workflow_instance_id, store")
-            .eq("id", p.task_id).maybeSingle();
-          if (!task || !task.assignee_id) {
-            // task 不見了或沒人，標記已處理免得重抓
-            await sb.from("task_pending_notifications").update({ sent_at: new Date().toISOString() }).eq("id", p.id);
+      drainDebug = {
+        query_error: pendingErr ? { message: pendingErr.message, code: pendingErr.code, details: pendingErr.details, hint: pendingErr.hint } : null,
+        rows_fetched: Array.isArray(pending) ? pending.length : null,
+        first_row: Array.isArray(pending) ? pending[0] ?? null : null,
+      };
+
+      if (Array.isArray(pending)) {
+        for (const p of pending as Array<{
+          queue_id: number;
+          task_id: number | null;
+          task_title: string | null;
+          task_priority: string | null;
+          task_due_date: string | null;
+          task_store: string | null;
+          task_assignee_id: number | null;
+          task_workflow_instance_id: number | null;
+          instance_template_name: string | null;
+          line_user_id: string | null;
+        }>) {
+          // task 不見了或沒人 → 標記已處理免得重抓
+          if (!p.task_id || !p.task_assignee_id) {
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
             continue;
           }
 
-          // 抓 instance 名（給 subtitle）
-          let instanceName = "";
-          if (task.workflow_instance_id) {
-            const { data: inst } = await sb.from("workflow_instances")
-              .select("template_name, store").eq("id", task.workflow_instance_id).maybeSingle();
-            instanceName = inst?.template_name || inst?.store || "";
-          }
-
-          // 解析 LINE id
-          const lineId = await resolveLineId(sb, task.assignee_id);
-          if (!lineId) {
-            await sb.from("task_pending_notifications").update({ sent_at: new Date().toISOString() }).eq("id", p.id);
+          // 沒 LINE 綁定 → 標記已處理 + skipped
+          if (!p.line_user_id) {
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
+            skippedCount++;
             continue;
           }
 
-          const dueLabel = task.due_date ? formatDate(task.due_date) : "未設定";
+          if (!lineToken) continue;
+
+          const dueLabel = p.task_due_date ? formatDate(p.task_due_date) : "未設定";
           const priorityColor: Record<string, string> = { 低: "#4CAF50", 中: "#E67E22", 高: "#E74C3C" };
-          const pColor = priorityColor[task.priority ?? ""] ?? "#06b6d4";
+          const pColor = priorityColor[p.task_priority ?? ""] ?? "#06b6d4";
+          const instanceName = p.instance_template_name || "";
 
           const flex = {
             type: "flex",
-            altText: `🚀 新任務：${task.title}`,
+            altText: `🚀 新任務：${p.task_title}`,
             contents: {
               type: "bubble", size: "kilo",
               header: {
@@ -415,20 +426,18 @@ serve(async (req: Request) => {
               body: {
                 type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
                 contents: [
-                  { type: "text", text: task.title, weight: "bold", size: "md", wrap: true },
+                  { type: "text", text: p.task_title ?? "", weight: "bold", size: "md", wrap: true },
                   { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
-                  ...(task.store ? [{ type: "text", text: `門市：${task.store}`, size: "xs", color: "#666666" }] : []),
+                  ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "xs", color: "#666666" }] : []),
                 ],
               },
-              footer: actionFooter(task.id),
+              footer: actionFooter(p.task_id),
             },
           };
 
-          const sent = await pushLine(lineId, [flex], lineToken);
+          const sent = await pushLine(p.line_user_id, [flex], lineToken);
           if (sent) {
-            await sb.from("task_pending_notifications")
-              .update({ sent_at: new Date().toISOString() })
-              .eq("id", p.id);
+            await sb.rpc("mark_task_notification_sent", { p_queue_id: p.queue_id });
             startedNotifyCount++;
           }
         }
@@ -443,6 +452,7 @@ serve(async (req: Request) => {
       sla_sent: slaCount,
       task_started_sent: startedNotifyCount,
       skipped_no_line_id: skippedCount,
+      drain_debug: drainDebug,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

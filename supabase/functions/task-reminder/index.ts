@@ -410,6 +410,8 @@ serve(async (req: Request) => {
           queue_id: number;
           task_id: number | null;
           task_title: string | null;
+          task_description: string | null;
+          task_notes: string | null;
           task_priority: string | null;
           task_due_date: string | null;
           task_store: string | null;
@@ -458,7 +460,16 @@ serve(async (req: Request) => {
                 contents: [
                   { type: "text", text: p.task_title ?? "", weight: "bold", size: "md", wrap: true },
                   { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
-                  ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "xs", color: "#666666" }] : []),
+                  ...(p.task_description?.trim() ? [
+                    { type: "separator", margin: "sm" },
+                    { type: "text", text: p.task_description.trim(), size: "sm", color: "#444444", wrap: true, margin: "sm" },
+                  ] : []),
+                  ...(p.task_notes?.trim() ? [
+                    { type: "separator", margin: "sm" },
+                    { type: "text", text: "📌 備註", size: "xxs", color: "#8c8c8c", margin: "sm" },
+                    { type: "text", text: p.task_notes.trim(), size: "sm", color: "#444444", wrap: true },
+                  ] : []),
+                  ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "xs", color: "#666666", margin: "sm" }] : []),
                 ],
               },
               footer: actionFooter(p.task_id, taskLiffId),

@@ -334,6 +334,21 @@ export default function Workflows() {
     if (data) {
       setAllTasks(prev => [...prev, data])
 
+      // ★ 自動掛 task_dependencies：依賴前一個 step（如果有）
+      //   這樣第 1 步完成時，autoProgressDependents 才會把第 2 步從 '待處理' 推進 '進行中' + 通知
+      if (instTasks.length > 0) {
+        const prevTask = instTasks
+          .filter(t => (t.step_order || 0) < (maxOrder + 1))
+          .sort((a, b) => (b.step_order || 0) - (a.step_order || 0))[0]
+        if (prevTask) {
+          await supabase.from('task_dependencies').insert({
+            task_id: data.id,
+            depends_on_task_id: prevTask.id,
+            dep_type: 'prerequisite',
+          })
+        }
+      }
+
       // ★ 掛清單
       const subFailures = []
       if (taskForm.checklist_id) {

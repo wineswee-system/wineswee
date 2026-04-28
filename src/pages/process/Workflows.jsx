@@ -368,7 +368,13 @@ export default function Workflows() {
         alert(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
       }
 
-      if (taskForm.assignee) {
+      // 只在「沒有未完成前置步驟」時才推 LINE
+      // → 第一個任務（step 1）正常推；後續步驟要等前面完成才會由 cascade 推
+      const hasIncompletePrev = instTasks.some(t =>
+        (t.step_order || 0) < (maxOrder + 1) &&
+        t.status !== '已完成' && t.status !== 'completed'
+      )
+      if (taskForm.assignee && !hasIncompletePrev) {
         notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id).catch(() => {})
       }
     }

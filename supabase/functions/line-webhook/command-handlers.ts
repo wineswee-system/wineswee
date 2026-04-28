@@ -243,7 +243,7 @@ export async function cmdTaskCreate(userId: string, title: string, db: SupabaseC
   }
 
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { error } = await db.from("tasks").insert({
     title,
@@ -263,7 +263,7 @@ export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseCli
   if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 完成");
 
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   // Fetch only tasks assigned to this user (not completed)
   const { data: allTasks } = await db
@@ -449,7 +449,7 @@ export async function cmdTaskUpdate(rawId: string, note: string, db: SupabaseCli
     .neq("status", "completed");
   if (userId) {
     const employeeId = await resolveLineUserToEmployeeId(db, userId);
-    if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+    if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
     query = query.eq("assignee_id", employeeId);
   }
   const { data: allTasks2 } = await query.limit(300);
@@ -483,7 +483,7 @@ export async function cmdTaskRequestConfirm(rawId: string, userId: string, db: S
   if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 請求確認");
 
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { data: allTasks } = await db
     .from("tasks")
@@ -848,7 +848,7 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
 
 export async function cmdNotes(userId: string, db: SupabaseClient) {
   const employeeId = await resolveLineUserToEmployeeId(db, userId);
-  if (!employeeId) return text("❌ 找不到您的員工資料，請先綁定 LINE 帳號。");
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
 
   const { data: tasks } = await db
     .from("tasks")

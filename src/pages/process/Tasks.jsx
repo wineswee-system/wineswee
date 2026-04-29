@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
 import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories } from '../../lib/db'
-import { notifyTaskStarted } from '../../lib/lineNotify'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -73,9 +72,6 @@ export default function Tasks() {
     const { data } = await updateTask(id, { status, completed_at: completedAt })
     if (data) {
       setTasks(prev => prev.map(t => t.id === id ? data : t))
-      if (status === '進行中' && data.assignee) {
-        notifyTaskStarted(data.assignee, data.title, data.workflow || null, data.id).catch(() => {})
-      }
     }
   }
 

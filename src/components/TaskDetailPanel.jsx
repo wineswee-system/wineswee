@@ -18,7 +18,7 @@ import {
   createWorkflowInstance,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { notifyApproval, notifyTaskAssignee, notifyTaskStarted, drainNotificationQueue } from '../lib/lineNotify'
+import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -167,10 +167,6 @@ export default function TaskDetailPanel({
     if (data) {
       onUpdate(data)
       setIsDirty(false)
-      // Task started manually — notify assignee directly
-      if (form.status === '進行中' && prevStatus !== '進行中' && data.assignee) {
-        notifyTaskStarted(data.assignee, data.title, instance?.store || instance?.template_name, data.id).catch(() => {})
-      }
       // Task completed — cascade next tasks and notify their assignees
       if (form.status === '已完成' && prevStatus !== '已完成') {
         // trigger-type: frontend activates the next task + notifies
@@ -183,11 +179,8 @@ export default function TaskDetailPanel({
             .eq('status', '待處理')
             .select('id, title, assignee')
             .maybeSingle()
-          if (next?.assignee) {
-            notifyTaskStarted(next.assignee, next.title, instance?.store || instance?.template_name, next.id).catch(() => {})
-          }
         }
-        // prerequisite-type: DB trigger already cascaded them — read back and notify directly
+        // prerequisite-type: DB trigger already cascaded them — notification fired by DB trigger
         const prereqNextIds = dependencies
           .filter(d => d.depends_on_task_id === task.id && d.dep_type === 'prerequisite')
           .map(d => d.task_id)
@@ -197,9 +190,6 @@ export default function TaskDetailPanel({
             .select('id, title, assignee, status')
             .eq('id', nextId)
             .maybeSingle()
-          if (next?.status === '進行中' && next?.assignee) {
-            notifyTaskStarted(next.assignee, next.title, instance?.store || instance?.template_name, next.id).catch(() => {})
-          }
         }
       }
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
-import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -12,6 +13,7 @@ const STATUS_STYLES = {
 }
 
 export default function Payroll() {
+  const { profile } = useAuth()
   const [runs, setRuns] = useState([])
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
@@ -23,6 +25,7 @@ export default function Payroll() {
   const [newPeriod, setNewPeriod] = useState(() => new Date().toISOString().slice(0, 7))
   const [sendingPayslips, setSendingPayslips] = useState(false)
   const [loadingRecords, setLoadingRecords] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
 
   const loadData = () => {
     setLoading(true)
@@ -85,6 +88,7 @@ export default function Payroll() {
       // Call Postgres function to generate payroll run + records
       const { data, error } = await supabase.rpc('generate_payroll', {
         p_pay_period: newPeriod,
+        p_created_by: profile?.id ?? null,
       })
       if (error) throw error
       const result = data?.[0] || data
@@ -122,6 +126,29 @@ export default function Payroll() {
       alert('發送失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSendingPayslips(false)
+    }
+  }
+
+  // Finalize payroll run (draft → finalized)
+  const handleFinalizeRun = async () => {
+    if (!selectedRunId) return
+    if (!confirm('確定定案此薪資作業？定案後無法重新計算。')) return
+    setFinalizing(true)
+    try {
+      const { error } = await supabase
+        .from('payroll_runs')
+        .update({ status: 'finalized', finalized_at: new Date().toISOString() })
+        .eq('id', selectedRunId)
+      if (error) throw error
+      setRuns(prev => prev.map(r => r.id === selectedRunId
+        ? { ...r, status: 'finalized', finalized_at: new Date().toISOString() }
+        : r
+      ))
+    } catch (err) {
+      console.error('Finalize failed:', err)
+      alert('定案失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setFinalizing(false)
     }
   }
 
@@ -247,6 +274,16 @@ export default function Payroll() {
                         >
                           <Send size={14} /> {sendingPayslips ? '發送中...' : '發送薪資單'}
                         </button>
+                        {selectedRun?.status === 'draft' && (
+                          <button
+                            className="btn btn-secondary"
+                            onClick={handleFinalizeRun}
+                            disabled={finalizing || records.length === 0}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                          >
+                            <CheckCircle size={14} /> {finalizing ? '定案中...' : '定案'}
+                          </button>
+                        )}
                       </div>
 
                       {/* Records Table */}
@@ -300,6 +337,8 @@ export default function Payroll() {
                                               <DetailRow label="交通津貼" value={fmt(rec.transport_allowance)} />
                                               <DetailRow label="全勤獎金" value={fmt(rec.attendance_bonus_earned)} />
                                               <DetailRow label="加班費" value={fmt(rec.overtime_pay)} />
+                                              {rec.other_bonus > 0 && <DetailRow label="其他獎金" value={fmt(rec.other_bonus)} />}
+                                              {rec.year_end_bonus > 0 && <DetailRow label="年終獎金" value={fmt(rec.year_end_bonus)} />}
                                               {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
                                                 <>
                                                   {rec.custom_allowances_breakdown.map((c, i) => (
@@ -314,9 +353,11 @@ export default function Payroll() {
                                             <div>
                                               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-red)' }}>扣除項目</div>
                                               <DetailRow label="請假扣款" value={fmt(rec.leave_deduction)} />
+                                              {rec.late_deduction > 0 && <DetailRow label="遲到扣款" value={fmt(rec.late_deduction)} />}
                                               <DetailRow label="勞保（個人）" value={fmt(rec.labor_ins_employee)} />
                                               <DetailRow label="健保（個人）" value={fmt(rec.health_ins_employee)} />
                                               <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
+                                              <DetailRow label="代扣所得稅" value={fmt(rec.income_tax_withheld)} />
                                               {Array.isArray(rec.legal_deduction_breakdown) && rec.legal_deduction_breakdown.length > 0 && (
                                                 <>
                                                   {rec.legal_deduction_breakdown.map((d, i) => (

@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask } from '../../lib/db'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
 import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
@@ -280,11 +280,17 @@ export default function Projects() {
   }
 
   const handleTaskStatusChange = async (taskId, newStatus) => {
+    const prevTask = tasks.find(t => t.id === taskId)
     const { data } = await updateTask(taskId, {
       status: newStatus,
       completed_at: newStatus === '已完成' ? new Date().toISOString() : null,
     })
-    if (data) setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+    if (data) {
+      setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+      if (newStatus === '進行中' && prevTask?.status !== '進行中' && data.assignee) {
+        notifyTaskStarted(data.assignee, data.title, '', data.id).catch(() => {})
+      }
+    }
   }
 
   const handleAddTaskToWorkflow = async (wfId) => {

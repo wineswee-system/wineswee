@@ -26,7 +26,8 @@ export default function Login() {
     }
     const params = new URLSearchParams(window.location.search)
     const lineError = params.get('line_error')
-    const lineErrorMsg = lineError ? (LINE_ERROR_MESSAGES[lineError] || 'LINE 登入發生錯誤') : null
+    // Edge function sends full error messages — show them directly as fallback
+    const lineErrorMsg = lineError ? (LINE_ERROR_MESSAGES[lineError] || lineError) : null
     if (lineErrorMsg) {
       setError(lineErrorMsg)
       window.history.replaceState({}, '', '/login')
@@ -38,12 +39,15 @@ export default function Login() {
     setError('')
     setLoading(true)
     const { error: err } = await signIn(email, password)
-    if (err) setError('帳號或密碼錯誤')
+    if (err) setError(err.message || '帳號或密碼錯誤')
     setLoading(false)
   }
 
   const handleLineLogin = () => {
-    window.location.href = `${SUPABASE_URL}/functions/v1/line-login?action=authorize`
+    setLoading(true)
+    // Pass current origin so the edge function redirects back here, not the hardcoded Vercel URL
+    const qs = new URLSearchParams({ action: 'authorize', site_url: window.location.origin })
+    window.location.href = `${SUPABASE_URL}/functions/v1/line-login?${qs}`
   }
 
   return (

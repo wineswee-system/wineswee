@@ -43,6 +43,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [lineChannels, setLineChannels] = useState([])
   const [newLineUserId, setNewLineUserId] = useState('')
   const [newLineChannel, setNewLineChannel] = useState('')
+  const [unboundLineUsers, setUnboundLineUsers] = useState([])
+  const [manualLineInput, setManualLineInput] = useState(false)
 
   // InputModal state (replaces window.prompt calls)
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
@@ -109,6 +111,20 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (ch.data?.[0]) setNewLineChannel(String(ch.data[0].id))
     }).catch(() => {})
   }, [employee?.id])
+
+  useEffect(() => {
+    setNewLineUserId('')
+    setManualLineInput(false)
+    if (!newLineChannel) { setUnboundLineUsers([]); return }
+    supabase.from('line_users')
+      .select('line_user_id, display_name')
+      .eq('channel_id', parseInt(newLineChannel))
+      .is('employee_id', null)
+      .order('display_name')
+      .limit(100)
+      .then(({ data }) => setUnboundLineUsers(data || []))
+      .catch(() => {})
+  }, [newLineChannel])
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -682,26 +698,52 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               ))}
 
               {/* 新增綁定 */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' }}>
                 <select className="form-input" style={{ flex: '0 0 140px', fontSize: 12 }}
                   value={newLineChannel} onChange={e => setNewLineChannel(e.target.value)}>
                   <option value="">選擇頻道</option>
                   {lineChannels.map(ch => <option key={ch.id} value={String(ch.id)}>{ch.name}</option>)}
                 </select>
-                <input className="form-input" type="text" style={{ flex: 1, fontSize: 12 }}
-                  placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {!manualLineInput && unboundLineUsers.length > 0 ? (
+                    <select className="form-input" style={{ fontSize: 12 }}
+                      value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)}>
+                      <option value="">從系統選擇 LINE 使用者…</option>
+                      {unboundLineUsers.map(u => (
+                        <option key={u.line_user_id} value={u.line_user_id}>
+                          {u.display_name || u.line_user_id.slice(0, 14) + '…'}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input className="form-input" type="text" style={{ fontSize: 12 }}
+                      placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />
+                  )}
+                  {newLineChannel && unboundLineUsers.length > 0 && (
+                    <button type="button" onClick={() => { setManualLineInput(m => !m); setNewLineUserId('') }}
+                      style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 10, textAlign: 'left', padding: 0 }}>
+                      {manualLineInput ? '← 從系統已知名單選擇' : '✏️ 手動輸入 LINE ID'}
+                    </button>
+                  )}
+                </div>
                 <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap' }}
                   disabled={!newLineUserId || !newLineChannel}
                   onClick={async () => {
+                    const uid = newLineUserId.trim()
+                    const chId = parseInt(newLineChannel)
                     const { data, error } = await supabase.from('employee_line_accounts').insert({
                       employee_id: employee.id,
-                      channel_id: parseInt(newLineChannel),
-                      line_user_id: newLineUserId.trim(),
+                      channel_id: chId,
+                      line_user_id: uid,
                       is_primary: lineAccounts.length === 0,
                       is_verified: true,
                     }).select('*, line_channels(id, code, name)').single()
                     if (error) { console.error('Save failed:', error); alert('儲存失敗，請稍後再試'); return }
+                    // Sync line_users so the webhook recognises this user going forward
+                    await supabase.from('line_users').update({ employee_id: employee.id, is_verified: true })
+                      .eq('channel_id', chId).eq('line_user_id', uid).catch(() => {})
                     setLineAccounts(prev => [...prev, data])
+                    setUnboundLineUsers(prev => prev.filter(u => u.line_user_id !== uid))
                     setNewLineUserId('')
                   }}>
                   <Plus size={12} /> 綁定

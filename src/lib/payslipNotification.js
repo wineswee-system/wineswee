@@ -93,7 +93,7 @@ function makeRow(label, value, color) {
  * Send a payslip notification to a single employee.
  * Requires the employee to have a LINE user_id linked.
  */
-export async function sendPayslipNotification(employeeNameOrId, payslipData, channelCode) {
+export async function sendPayslipNotification(employeeNameOrId, payslipData) {
   const isId = typeof employeeNameOrId === 'number'
   let { data: emp } = await (isId
     ? supabase.from('employees').select('id, name').eq('id', employeeNameOrId).maybeSingle()
@@ -101,7 +101,7 @@ export async function sendPayslipNotification(employeeNameOrId, payslipData, cha
 
   if (!emp) return { sent: false, reason: 'no_employee' }
 
-  const account = await resolveLineAccount(emp.id, channelCode)
+  const account = await resolveLineAccount(emp.id)
   if (!account.lineUserId) {
     console.warn(`[Payslip] No LINE account for ${emp.name}, skipping notification`)
     return { sent: false, reason: 'no_line_id' }
@@ -117,7 +117,7 @@ export async function sendPayslipNotification(employeeNameOrId, payslipData, cha
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'apikey': SUPABASE_KEY,
       },
-      body: JSON.stringify({ to: account.lineUserId, messages: [message], channelCode: account.channelCode }),
+      body: JSON.stringify({ to: account.lineUserId, messages: [message] }),
     })
     const data = await res.json()
     if (!data.ok) return { sent: false, reason: data.error || 'push_failed' }

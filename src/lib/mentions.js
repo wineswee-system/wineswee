@@ -112,7 +112,7 @@ async function sendMentionNotification({ employeeName, taskId, taskTitle, mentio
 
   try {
     const { data, error } = await supabase.functions.invoke('line-push', {
-      body: { to: account.lineUserId, messages, channelCode: account.channelCode },
+      body: { to: account.lineUserId, messages },
     })
     if (error) throw error
     return !!data?.ok
@@ -143,7 +143,7 @@ export async function notifyWatchers(taskId, { taskTitle, action, actor }) {
     }]
     try {
       const { data } = await supabase.functions.invoke('line-push', {
-        body: { to: account.lineUserId, messages, channelCode: account.channelCode },
+        body: { to: account.lineUserId, messages },
       })
       if (data?.ok) sent++
     } catch { /* swallow */ }

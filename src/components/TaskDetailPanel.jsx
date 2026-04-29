@@ -18,7 +18,7 @@ import {
   createWorkflowInstance,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
+import { notifyApproval, notifyTaskAssignee, notifyTaskStarted, drainNotificationQueue } from '../lib/lineNotify'
 
 const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -162,8 +162,16 @@ export default function TaskDetailPanel({
       confirmation_mode: form.confirmation_mode || 'parallel',
       completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
     }
+    const prevStatus = task.status
     const { data } = await updateTask(task.id, payload)
-    if (data) { onUpdate(data); setIsDirty(false) }
+    if (data) {
+      onUpdate(data)
+      setIsDirty(false)
+      if (form.status === '進行中' && prevStatus !== '進行中' && data.assignee) {
+        notifyTaskStarted(data.assignee, data.title, instance?.store || instance?.template_name, data.id).catch(() => {})
+        drainNotificationQueue()
+      }
+    }
     setSaving(false)
   }
 

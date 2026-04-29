@@ -12,6 +12,19 @@ import BatchPayrollModal from './components/BatchPayrollModal'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
+const CHINESE_MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
+
+function genMonthOptions(count = 24) {
+  const opts = []
+  const now = new Date()
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    opts.push({ val, label: `${d.getFullYear()} ${CHINESE_MONTHS[d.getMonth()]}` })
+  }
+  return opts
+}
+
 // ── Real-time payroll deduction calculator ──
 function computeDeductions(f) {
   const baseSalary = Number(f.base_salary) || 0
@@ -245,15 +258,19 @@ export default function Salary() {
       employee: r.employee || '',
       month: r.month || new Date().toISOString().slice(0, 7),
       base_salary: String(r.base_salary || ''),
-      overtime_pay: String(r.overtime || ''),
-      allowances: String(r.allowance || ''),
+      overtime_pay: String(r.overtime_pay ?? r.overtime ?? ''),
       bonus: String(r.bonus || ''),
-      dependents: String(r.dependents || '0'),
-      voluntary_pension_rate: String(r.voluntary_pension_rate || '0'),
+      role_allowance: String(r.role_allowance || ''),
+      meal_allowance: String(r.meal_allowance || ''),
+      transport_allowance: String(r.transport_allowance || ''),
+      attendance_bonus: String(r.attendance_bonus || ''),
+      custom_allowances: Array.isArray(r.custom_allowances) ? r.custom_allowances : [],
+      dependents: String(r.health_ins_dependents ?? r.dependents ?? '0'),
+      voluntary_pension_rate: String(r.pension_self_pct ?? r.voluntary_pension_rate ?? '0'),
       absence_deduction: String(r.absence_deduction || ''),
       late_deduction: String(r.late_deduction || ''),
       other_deduction: String(r.other_deduction || ''),
-      deduction_note: r.deduction_note || '',
+      deduction_note: r.other_deduction_note || r.deduction_note || '',
     })
     setShowModal(true)
   }
@@ -261,78 +278,155 @@ export default function Salary() {
   // ── Batch payroll run ──
   const handleBatchPayroll = async () => {
     try {
-    // Pull attendance data for the month
-    const monthStart = month + '-01'
-    const monthEnd = month + '-31'
-    const { data: attendance } = await supabase.from('attendance_records')
-      .select('employee, hours, status').gte('date', monthStart).lte('date', monthEnd)
-    const { data: overtime } = await supabase.from('overtime_requests')
-      .select('employee, hours').eq('status', '已核准').gte('date', monthStart).lte('date', monthEnd)
-    const { data: leaves } = await supabase.from('leave_requests')
-      .select('employee, days, type').eq('status', '已核准').gte('start_date', monthStart).lte('start_date', monthEnd)
+      const monthStart = month + '-01'
+      const monthEnd   = month + '-31'
 
-    const attMap = {}
-    for (const a of (attendance || [])) {
-      if (!attMap[a.employee]) attMap[a.employee] = { hours: 0, late: 0, days: 0 }
-      attMap[a.employee].hours += Number(a.hours || 0)
-      attMap[a.employee].days++
-      if (a.status === '遲到') attMap[a.employee].late++
-    }
-    const otMap = {}
-    for (const o of (overtime || [])) {
-      otMap[o.employee] = (otMap[o.employee] || 0) + Number(o.hours || 0)
-    }
-    const lvMap = {}
-    for (const l of (leaves || [])) {
-      if (!lvMap[l.employee]) lvMap[l.employee] = { absence: 0 }
-      if (l.type === '事假') lvMap[l.employee].absence += (l.days || 0)
-    }
+      // Fetch all data in parallel (correct field names)
+      const [attRes, otRes, lvRes, ssRes] = await Promise.all([
+        supabase.from('attendance_records')
+          .select('employee_id, total_hours, is_late, late_minutes')
+          .gte('date', monthStart).lte('date', monthEnd),
+        supabase.from('overtime_requests')
+          .select('employee_id, ot_hours, ot_type')
+          .eq('status', '已核准')
+          .gte('request_date', monthStart).lte('request_date', monthEnd),
+        supabase.from('leave_requests')
+          .select('employee_id, days, leave_type')
+          .eq('status', '已核准')
+          .gte('start_date', monthStart).lte('start_date', monthEnd),
+        supabase.from('salary_structures')
+          .select('*')
+          .in('employee_id', employees.map(e => e.id)),
+      ])
 
-    // 批次查詢門市 ID + 獎金政策
-    const storeNames = [...new Set(employees.map(e => e.store).filter(Boolean))]
-    const storeIdMap = {}
-    for (const name of storeNames) {
-      storeIdMap[name] = await getStoreIdByName(name)
-    }
-    const bonusMap = {}
-    await Promise.all(employees.map(async (emp) => {
-      const storeId = storeIdMap[emp.store] || null
-      const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
-      let totalBonus = 0
-      for (const [, config] of Object.entries(bonusBenefits)) {
-        totalBonus += calculateBonus(config, { sales: 0, attendance_rate: 1 })
+      // attendance map: employee_id → { hours, lateMins, days }
+      const attMap = {}
+      for (const a of (attRes.data || [])) {
+        const id = a.employee_id
+        if (!attMap[id]) attMap[id] = { hours: 0, lateMins: 0, days: 0 }
+        attMap[id].hours    += Number(a.total_hours || 0)
+        attMap[id].days     += 1
+        if (a.is_late) attMap[id].lateMins += Number(a.late_minutes || 0)
       }
-      bonusMap[emp.name] = totalBonus
-    }))
 
-    const preview = employees.map(emp => {
-      const baseSalary = emp.base_salary || 0
-      const att = attMap[emp.name] || { hours: 0, late: 0, days: 0 }
-      const otHours = otMap[emp.name] || 0
-      const absenceDays = lvMap[emp.name]?.absence || 0
-      const policyBonus = bonusMap[emp.name] || 0
-      // Tiered OT: first 2h = 1.34x, 3h+ = 1.67x (勞基法 §24)
-      const hourlyRate = baseSalary / 30 / 8
-      const overtimePay = otHours <= 2
-        ? Math.round(otHours * hourlyRate * 1.34)
-        : Math.round(2 * hourlyRate * 1.34 + (otHours - 2) * hourlyRate * 1.67)
-      const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
-      const lateDeduction = att.late * 100
+      // overtime map: employee_id → { weekday, restday }
+      const otMap = {}
+      for (const o of (otRes.data || [])) {
+        const id = o.employee_id
+        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0 }
+        const isRestday = ['restday', 'holiday'].includes(o.ot_type)
+        if (isRestday) otMap[id].restday += Number(o.ot_hours || 0)
+        else           otMap[id].weekday += Number(o.ot_hours || 0)
+      }
 
-      const result = calculateNetSalary(baseSalary, {
-        dependents: 0, voluntaryPensionRate: 0,
-        overtimePay, bonus: policyBonus,
-        otherDeductions: absenceDeduction + lateDeduction,
+      // leave map: employee_id → { absence days }
+      const lvMap = {}
+      for (const l of (lvRes.data || [])) {
+        const id = l.employee_id
+        if (!lvMap[id]) lvMap[id] = { absence: 0 }
+        if (['事假', 'personal', '無薪假', 'unpaid'].includes(l.leave_type)) {
+          lvMap[id].absence += (Number(l.days) || 0)
+        }
+      }
+
+      // salary structures map: employee_id → record
+      const ssMap = {}
+      for (const ss of (ssRes.data || [])) ssMap[ss.employee_id] = ss
+
+      // bonus policies
+      const storeNames = [...new Set(employees.map(e => e.store).filter(Boolean))]
+      const storeIdMap = {}
+      for (const name of storeNames) storeIdMap[name] = await getStoreIdByName(name)
+
+      const bonusMap = {}
+      await Promise.all(employees.map(async (emp) => {
+        const storeId = storeIdMap[emp.store] || null
+        const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
+        let total = 0
+        for (const [, config] of Object.entries(bonusBenefits))
+          total += calculateBonus(config, { sales: 0, attendance_rate: 1 })
+        bonusMap[emp.id] = total
+      }))
+
+      const preview = employees.map(emp => {
+        const ss              = ssMap[emp.id] || {}
+        const baseSalary      = ss.base_salary      || emp.base_salary || 0
+        const roleAllowance   = ss.role_allowance    || 0
+        const mealAllowance   = ss.meal_allowance    || 0
+        const transportAllow  = ss.transport_allowance || 0
+        const attendanceBonusBase = ss.attendance_bonus || 0
+        const customAllowances = Array.isArray(ss.custom_allowances) ? ss.custom_allowances : []
+        const customTotal      = customAllowances.reduce((s, c) => s + (Number(c.amount) || 0), 0)
+        const dependents       = ss.health_ins_dependents || 0
+        const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
+
+        const att          = attMap[emp.id] || { hours: 0, lateMins: 0, days: 0 }
+        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0 }
+        const absenceDays  = lvMap[emp.id]?.absence || 0
+        const policyBonus  = bonusMap[emp.id] || 0
+
+        const hourlyRate = Math.round(baseSalary / 30 / 8)
+
+        // Weekday OT: tiered 1.34 / 1.67
+        const otPayWeekday = ot.weekday <= 2
+          ? Math.round(ot.weekday * hourlyRate * 1.34)
+          : Math.round(2 * hourlyRate * 1.34 + (ot.weekday - 2) * hourlyRate * 1.67)
+
+        // Rest-day OT: tiered 1.34 / 1.67 / 2.67
+        const rd1 = Math.min(ot.restday, 2)
+        const rd2 = Math.min(Math.max(ot.restday - 2, 0), 6)
+        const rd3 = Math.max(ot.restday - 8, 0)
+        const otPayRestday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+
+        const overtimePay = otPayWeekday + otPayRestday
+
+        // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5
+        const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
+        const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
+
+        // Attendance bonus: zero if late or absent
+        const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
+
+        // Pass all allowances + OT as "overtimePay" so calculateNetSalary bases insurance
+        // on baseSalary (correct for bracket matching) and tax on total gross
+        const result = calculateNetSalary(baseSalary, {
+          dependents,
+          voluntaryPensionRate: voluntaryRate,
+          overtimePay: overtimePay + roleAllowance + mealAllowance + transportAllow + attendanceBonus + customTotal,
+          bonus: policyBonus,
+          otherDeductions: absenceDeduction + lateDeduction,
+        })
+
+        return {
+          employee:         emp.name,
+          employee_id:      emp.id,
+          dept:             emp.dept || emp.departments?.name || '',
+          department_id:    emp.department_id,
+          base_salary:      baseSalary,
+          role_allowance:   roleAllowance,
+          meal_allowance:   mealAllowance,
+          transport_allowance: transportAllow,
+          attendance_bonus: attendanceBonus,
+          custom_allowances: customAllowances,
+          custom_allowances_total: customTotal,
+          health_ins_dependents: dependents,
+          pension_self_pct: ss.voluntary_pension_rate || 0,
+          workDays:         att.days,
+          workHours:        att.hours,
+          otWeekday:        ot.weekday,
+          otRestday:        ot.restday,
+          absenceDays,
+          lateMins:         att.lateMins,
+          overtimePay,
+          absenceDeduction,
+          lateDeduction,
+          policyBonus,
+          ...result,
+        }
       })
-      return {
-        employee_id: emp.id, employee_name: emp.name, department_id: emp.department_id, base_salary: baseSalary,
-        workDays: att.days, workHours: att.hours, otHours, absenceDays, lateCount: att.late,
-        overtimePay, absenceDeduction, lateDeduction, policyBonus,
-        ...result,
-      }
-    })
-    setBatchPreview(preview)
-    setShowBatchModal(true)
+
+      setBatchPreview(preview)
+      setShowBatchModal(true)
     } catch (err) {
       console.error('Batch payroll failed:', err)
       alert('計薪失敗：' + (err.message || '未知錯誤'))
@@ -343,35 +437,31 @@ export default function Salary() {
     setBatchSaving(true)
     try {
       const payloads = batchPreview.map(p => ({
-        employee: p.employee,
+        employee:             p.employee,
         month,
-        base_salary: p.base_salary,
-        allowance: (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.housing_allowance || 0),
-        overtime: p.overtimePay || 0,
-        bonus: p.policyBonus || 0,
-        dependents: 0,
-        voluntary_pension_rate: 0,
-        labor_insurance: p.laborInsurance,
-        health_insurance: p.healthInsurance,
-        pension_self: p.pension,
-        income_tax: p.incomeTax,
-        absence_deduction: p.absenceDeduction || 0,
-        late_deduction: p.lateDeduction || 0,
-        other_deduction: 0,
-        deduction_note: '',
-        insurance: p.laborInsurance + p.healthInsurance,
-        deductions: p.totalDeductions,
-        net_salary: p.netSalary,
+        base_salary:          p.base_salary,
+        role_allowance:       p.role_allowance       || 0,
+        meal_allowance:       p.meal_allowance        || 0,
+        transport_allowance:  p.transport_allowance   || 0,
+        attendance_bonus:     p.attendance_bonus      || 0,
+        custom_allowances:    p.custom_allowances     || [],
+        overtime_pay:         p.overtimePay           || 0,
+        bonus:                p.policyBonus           || 0,
+        health_ins_dependents: p.health_ins_dependents || 0,
+        pension_self_pct:     p.pension_self_pct      || 0,
+        absence_deduction:    p.absenceDeduction      || 0,
+        late_deduction:       p.lateDeduction         || 0,
+        other_deduction:      0,
+        other_deduction_note: '',
+        allowances_total:     (p.role_allowance || 0) + (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.attendance_bonus || 0) + (p.custom_allowances_total || 0),
+        insurance:            (p.laborInsurance || 0) + (p.healthInsurance || 0),
+        deductions_total:     p.totalDeductions       || 0,
+        net_salary:           p.netSalary             || 0,
       }))
-      // 批次薪資：逐筆走 secure_upsert_salary
+      // 批次薪資：逐筆走 secure_upsert_salary_v2（支援拆分津貼）
       const results = []
       for (const p of payloads) {
-        const { data: row } = await supabase.rpc('secure_upsert_salary', {
-          p_employee: p.employee, p_month: p.month,
-          p_base_salary: p.base_salary, p_allowance: p.allowance ?? 0,
-          p_overtime: p.overtime ?? 0, p_deductions: p.deductions ?? 0,
-          p_insurance: p.insurance ?? 0, p_net_salary: p.net_salary ?? null,
-        })
+        const { data: row } = await supabase.rpc('secure_upsert_salary_v2', { p_data: p })
         if (row) results.push(row)
       }
       const data = results
@@ -428,7 +518,6 @@ export default function Salary() {
             <p>員工薪資計算與發放管理（整合勞健保 / 所得稅自動計算）</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ fontSize: 13 }} />
             {!isStaff && <>
               <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
                 <Plus size={14} /> 新增薪資
@@ -444,21 +533,41 @@ export default function Salary() {
         </div>
       </div>
 
-      {/* ── Store filter — store_staff 不顯示 ── */}
-      {!isStaff && (
-        <div style={{
-          display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
-          background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-          alignItems: 'center',
-        }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
-            disabled={isManager}>
-            <option value="">全部門市</option>
-            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+      {/* ── Filter bar: month | store ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0, marginBottom: 16,
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        overflow: 'hidden',
+      }}>
+        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select
+            className="form-input"
+            style={{ fontSize: 13, minWidth: 130, border: 'none', background: 'transparent', padding: '2px 4px' }}
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+          >
+            {genMonthOptions().map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
           </select>
         </div>
-      )}
+        {!isStaff && (
+          <>
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border-medium)' }} />
+            <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>門市</span>
+              <select
+                className="form-input"
+                style={{ fontSize: 13, minWidth: 140, border: 'none', background: 'transparent', padding: '2px 4px' }}
+                value={storeFilter}
+                onChange={e => setStoreFilter(e.target.value)}
+                disabled={isManager}
+              >
+                <option value="">全部門市</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Stats cards ── */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

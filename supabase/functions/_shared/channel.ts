@@ -1,5 +1,5 @@
 // Shared LINE channel resolution for edge functions.
-// Used by line-webhook, line-login, line-push (messaging/login channels).
+// Single-channel setup: resolveEnv always uses global env vars (no per-channel suffix).
 
 export interface LineChannelRow {
   id: number;
@@ -12,43 +12,22 @@ export interface LineChannelRow {
   status: string;
 }
 
-export function envKey(prefix: string, code: string): string {
-  return `${prefix}_${code.toUpperCase().replace(/-/g, "_")}`;
-}
-
-export function resolveEnv(prefix: string, code: string | null | undefined): string | null {
-  if (code) {
-    const v = Deno.env.get(envKey(prefix, code));
-    if (v) return v;
-  }
+export function resolveEnv(prefix: string): string | null {
   return Deno.env.get(prefix) ?? null;
 }
 
 export interface ResolveOpts {
-  queryCode?: string | null;       // from ?channel=XXX
-  destinationId?: string | null;   // from LINE webhook payload `destination`
+  destinationId?: string | null; // from LINE webhook payload `destination`
 }
 
 /**
- * Resolve a LINE channel row by:
- * 1. explicit `?channel=code` (by line_channels.code)
- * 2. LINE `destination` (bot userId → line_channels.channel_id)
- * 3. `is_default = true`
- * 4. first active row
+ * Resolve the active LINE channel row.
+ * Tries destination match first, then default, then first active.
  */
 export async function resolveChannel(
   db: { from: (t: string) => any },
-  opts: ResolveOpts,
+  opts: ResolveOpts = {},
 ): Promise<LineChannelRow | null> {
-  if (opts.queryCode) {
-    const { data } = await db
-      .from("line_channels")
-      .select("*")
-      .eq("code", opts.queryCode)
-      .maybeSingle();
-    if (data) return data as LineChannelRow;
-  }
-
   if (opts.destinationId) {
     const { data } = await db
       .from("line_channels")
@@ -66,12 +45,12 @@ export async function resolveChannel(
     .maybeSingle();
   if (def) return def as LineChannelRow;
 
-  const { data: any } = await db
+  const { data: first } = await db
     .from("line_channels")
     .select("*")
     .eq("status", "active")
     .order("id", { ascending: true })
     .limit(1)
     .maybeSingle();
-  return (any as LineChannelRow) ?? null;
+  return (first as LineChannelRow) ?? null;
 }

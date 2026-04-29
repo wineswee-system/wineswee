@@ -115,13 +115,12 @@ async function pushCardToApprovers(
     try {
       const { data: target } = await ctx.db.rpc("liff_resolve_line_target", { p_emp_id: ap.emp_id });
       const lineUserId = (target as any)?.line_user_id;
-      const channelCode = (target as any)?.channel_code;
       if (!lineUserId) continue;
 
       await fetch(`${supabaseUrl}/functions/v1/line-push`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-        body: JSON.stringify({ to: lineUserId, messages: [card], channelCode }),
+        body: JSON.stringify({ to: lineUserId, messages: [card] }),
       });
     } catch (err) {
       console.warn(`[postback-approval] push to approver ${ap.emp_id} failed`, err);

@@ -148,7 +148,7 @@ export default function Workflows() {
       // Notify assignee on any transition to 進行中
       if (newStatus === '進行中' && data.assignee) {
         const inst = instances.find(i => i.id === data.workflow_instance_id)
-        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, undefined, {
+        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, {
           dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
         }).catch(() => {})
       }
@@ -240,7 +240,6 @@ export default function Workflows() {
           `🚀 [自動觸發] ${t0.title}`,
           `由「${sourceInst?.template_name}」觸發`,
           t0.id,
-          undefined,
           { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store }
         ).catch(() => {})
       }
@@ -276,7 +275,7 @@ export default function Workflows() {
           setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
           if (started.assignee) {
             const inst = instances.find(i => i.id === instanceId)
-            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, undefined, {
+            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
               dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
             })
           }
@@ -483,7 +482,7 @@ export default function Workflows() {
         t.status !== '已完成' && t.status !== 'completed'
       )
       if (taskForm.assignee && !hasIncompletePrev) {
-        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, undefined, {
+        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, {
           dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
         }).catch(() => {})
       }
@@ -768,7 +767,7 @@ export default function Workflows() {
             const title = totalSteps > 1
               ? `🚀 [立即行動] ${t0.title}（流程共 ${totalSteps} 步，後續會接力通知）`
               : `🚀 [立即行動] ${t0.title}`
-            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, undefined, {
+            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, {
               dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
             }).catch(() => {})
           }

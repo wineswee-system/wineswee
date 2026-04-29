@@ -30,14 +30,14 @@ serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
   const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
+  const DEFAULT_SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
   const LINE_CHANNEL_ID = Deno.env.get('LINE_LOGIN_CHANNEL_ID') || ''
   const LINE_CHANNEL_SECRET = Deno.env.get('LINE_LOGIN_CHANNEL_SECRET') || ''
 
   if (!LINE_CHANNEL_ID || !LINE_CHANNEL_SECRET) {
     return new Response(null, {
       status: 302,
-      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('LINE Login 憑證未設定 (LINE_LOGIN_CHANNEL_ID / LINE_LOGIN_CHANNEL_SECRET)')}`, ...corsHeaders },
+      headers: { Location: `${DEFAULT_SITE_URL}/login?line_error=${encodeURIComponent('LINE Login 憑證未設定 (LINE_LOGIN_CHANNEL_ID / LINE_LOGIN_CHANNEL_SECRET)')}`, ...corsHeaders },
     })
   }
 
@@ -56,7 +56,7 @@ serve(async (req) => {
   if (!channelRow) {
     return new Response(null, {
       status: 302,
-      headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent('未設定 LINE 官方帳號')}`, ...corsHeaders },
+      headers: { Location: `${DEFAULT_SITE_URL}/login?line_error=${encodeURIComponent('未設定 LINE 官方帳號')}`, ...corsHeaders },
     })
   }
 
@@ -64,7 +64,9 @@ serve(async (req) => {
 
   // ── Step 1: Redirect to LINE Login ──
   if (action === 'authorize') {
-    const state = crypto.randomUUID()
+    // Embed the caller's origin in state so callback can redirect back to the right host
+    const siteUrlParam = url.searchParams.get('site_url') || DEFAULT_SITE_URL
+    const state = btoa(JSON.stringify({ nonce: crypto.randomUUID(), site_url: siteUrlParam }))
     const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
       `response_type=code` +
       `&client_id=${LINE_CHANNEL_ID}` +
@@ -81,6 +83,14 @@ serve(async (req) => {
   // ── Step 2: Callback — exchange code for token ──
   if (action === 'callback') {
     const code = url.searchParams.get('code')
+    const stateParam = url.searchParams.get('state') || ''
+    // Recover the caller's origin from state; fall back to the env-configured SITE_URL
+    let SITE_URL = DEFAULT_SITE_URL
+    try {
+      const stateData = JSON.parse(atob(stateParam))
+      if (stateData.site_url) SITE_URL = stateData.site_url
+    } catch { /* use DEFAULT_SITE_URL */ }
+
     if (!code) {
       return new Response(null, {
         status: 302,
@@ -134,6 +144,7 @@ serve(async (req) => {
         .from('employee_line_accounts')
         .select('employees:employee_id (*)')
         .eq('line_user_id', lineUserId)
+        .limit(1)
         .maybeSingle()
       employee = ela?.employees || null
 
@@ -145,8 +156,17 @@ serve(async (req) => {
         const { data } = await supabase.from('employees').select('*').eq('name', displayName).maybeSingle()
         employee = data
       }
+      if (!employee) {
+        const { data } = await supabase.from('employees').select('*').eq('name_en', displayName).maybeSingle()
+        employee = data
+      }
 
       if (!employee) {
+        // Save this LINE user so HR can discover and manually link them via the backtrack scan
+        await supabase.from('line_users').upsert(
+          { channel_id: channelRow.id, line_user_id: lineUserId, display_name: displayName, is_verified: false },
+          { onConflict: 'channel_id,line_user_id' },
+        ).catch(() => {})
         return new Response(null, {
           status: 302,
           headers: { Location: `${SITE_URL}/login?line_error=${encodeURIComponent(`找不到員工帳號（${displayName}），請聯繫HR`)}`, ...corsHeaders },
@@ -184,7 +204,7 @@ serve(async (req) => {
       // ── Create Supabase auth user (idempotent) then issue magic link ──
       const authEmail = employee.email || `line_${lineUserId}@sme-ops.local`
 
-      const { error: createErr } = await supabase.auth.admin.createUser({
+      const { data: createData, error: createErr } = await supabase.auth.admin.createUser({
         email: authEmail,
         email_confirm: true,
         user_metadata: { full_name: employee.name, line_user_id: lineUserId },
@@ -198,6 +218,13 @@ serve(async (req) => {
       })
       if (linkError || !linkData?.properties?.action_link) {
         throw new Error(linkError?.message || '無法產生登入連結')
+      }
+
+      // Write auth_user_id back so AuthContext can resolve the employee profile on every login.
+      // generateLink returns the user object for both new and existing auth users.
+      const authUserId = createData?.user?.id ?? (linkData as any)?.user?.id
+      if (authUserId && !employee.auth_user_id) {
+        await supabase.from('employees').update({ auth_user_id: authUserId }).eq('id', employee.id)
       }
 
       return new Response(null, {

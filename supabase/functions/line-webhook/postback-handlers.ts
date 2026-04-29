@@ -13,7 +13,6 @@ import { flexResultOk, flexResultErr } from './flex-builders.ts';
 export interface PostbackContext {
   db: SupabaseClient;
   accessToken: string;
-  channelCode: string;
   channelId: number | null;
   userId: string;          // LINE userId of the sender
   replyToken: string;

@@ -3,13 +3,12 @@ import { supabase } from './supabase'
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
 
 /**
- * Resolve a LINE user ID + channel for an employee via employee_line_accounts.
+ * Resolve a LINE user ID for an employee via employee_line_accounts.
  * @param {string|number} employeeNameOrId
- * @param {string} [channelCode] - e.g. 'workflow'. If omitted, picks primary.
- * @returns {{ lineUserId: string|null, channelCode: string|null, liffId: string|null }}
+ * @returns {{ lineUserId: string|null, liffId: string|null }}
  */
-export async function resolveLineAccount(employeeNameOrId, channelCode) {
-  if (!employeeNameOrId) return { lineUserId: null, channelCode: null, liffId: null }
+export async function resolveLineAccount(employeeNameOrId) {
+  if (!employeeNameOrId) return { lineUserId: null, liffId: null }
 
   const isId = typeof employeeNameOrId === 'number'
   let query = supabase.from('v_employee_line_resolved').select('*')
@@ -17,78 +16,72 @@ export async function resolveLineAccount(employeeNameOrId, channelCode) {
   if (isId) query = query.eq('employee_id', employeeNameOrId)
   else query = query.eq('employee_name', employeeNameOrId)
 
-  if (channelCode) query = query.eq('channel_code', channelCode)
-  else query = query.order('is_primary', { ascending: false })
+  query = query.order('is_primary', { ascending: false })
 
   const { data: account } = await query.limit(1).maybeSingle()
 
   if (account?.line_user_id) {
     return {
       lineUserId: account.line_user_id,
-      channelCode: account.channel_code,
       liffId: account.liff_id || LIFF_ID,
     }
   }
 
-  return { lineUserId: null, channelCode: null, liffId: LIFF_ID }
+  return { lineUserId: null, liffId: LIFF_ID }
 }
 
 /**
- * Send a LINE push message via Supabase Edge Function.
- * If channelCode is provided, the Edge Function routes to the correct channel token.
+ * Drain the task_pending_notifications queue immediately.
+ * Call this after any action that may insert into that table
+ * (task status change, workflow deploy, cascade step trigger).
+ * Fire-and-forget — errors are swallowed so they never block the UI.
  */
-async function sendLinePush(lineUserId, messages, channelCode) {
+export async function drainNotificationQueue() {
+  supabase.functions.invoke('task-reminder', { body: { mode: 'drain_queue' } }).catch(() => {})
+}
+
+async function sendLinePush(lineUserId, messages) {
   if (!lineUserId) return { ok: false, reason: 'no_user_id' }
 
   try {
     const { data, error } = await supabase.functions.invoke('line-push', {
-      body: { to: lineUserId, messages, channelCode },
+      body: { to: lineUserId, messages },
     })
     if (error) throw error
-    await logMessage(lineUserId, messages, data?.ok ? 'sent' : 'failed', channelCode)
+    await logMessage(lineUserId, messages, data?.ok ? 'sent' : 'failed')
     return data || { ok: false }
   } catch (err) {
     console.error('[LINE] Push error:', err)
-    await logMessage(lineUserId, messages, 'failed', channelCode)
+    await logMessage(lineUserId, messages, 'failed')
     return { ok: false, error: err.message }
   }
 }
 
-/**
- * LIFF task page URL — uses the channel's LIFF ID if available.
- */
 // LINE rejects LIFF URIs with sub-paths, so we pass the SPA route via ?to=...
 // and let the LIFF's LiffDeepLinkRedirect forward to /tasks (preserving ?task=<id>).
 export function getLiffTaskUrl(taskId, liffId) {
   const lid = liffId || LIFF_ID
   if (!lid) {
-    // Dev / preview fallback — local SPA build under /liff/...
     return taskId
       ? `${window.location.origin}/liff/tasks?task=${taskId}`
       : `${window.location.origin}/liff/tasks`
   }
-  const toParam = taskId
-    ? `/tasks?task=${taskId}`
-    : `/tasks`
+  const toParam = taskId ? `/tasks?task=${taskId}` : `/tasks`
   return `https://liff.line.me/${lid}?to=${encodeURIComponent(toParam)}`
 }
 
 /**
  * Notify a task assignee via LINE.
- * Card layout matches the cascade-drain card built by task-reminder Edge Function
- * (drain_task_started_notifications RPC), so step 1 and step 2+ look identical.
- *
  * @param {string} assigneeName
  * @param {string} taskTitle
- * @param {string} instanceName     — workflow template / store, shown under header
+ * @param {string} instanceName
  * @param {number} taskId
- * @param {string} [channelCode]    — specific OA to use, or auto-resolve
- * @param {object} [extras]         — { dueDate, description, notes, store }
+ * @param {object} [extras] - { dueDate, description, notes, store }
  */
-export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, channelCode, extras = {}) {
+export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, extras = {}) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
 
-  const account = await resolveLineAccount(assigneeName, channelCode)
+  const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
@@ -141,16 +134,65 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
     },
   }]
 
-  return sendLinePush(account.lineUserId, messages, account.channelCode)
+  return sendLinePush(account.lineUserId, messages)
+}
+
+/**
+ * Notify assignee that their task has started (status → 進行中).
+ */
+export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, taskId) {
+  if (!assigneeName) return { ok: false, reason: 'no_assignee' }
+
+  const account = await resolveLineAccount(assigneeName)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+
+  const messages = [{
+    type: 'flex',
+    altText: `🚀 任務開始：${taskTitle}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#10b981', paddingAll: '14px',
+        contents: [{ type: 'text', text: '🚀 任務開始', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
+        contents: [
+          { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
+          { type: 'text', text: instanceName || '', size: 'sm', color: '#8c8c8c' },
+          { type: 'separator', margin: 'md' },
+          {
+            type: 'box', layout: 'horizontal', margin: 'md',
+            contents: [
+              { type: 'text', text: '負責人', size: 'sm', color: '#8c8c8c', flex: 0 },
+              { type: 'text', text: assigneeName, size: 'sm', align: 'end', weight: 'bold' },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '查看任務', uri: liffUrl },
+          style: 'primary', color: '#10b981', height: 'sm',
+        }],
+      },
+    },
+  }]
+
+  return sendLinePush(account.lineUserId, messages)
 }
 
 /**
  * Notify for approval request.
  */
-export async function notifyApproval(approverName, taskTitle, stepLabel, channelCode) {
+export async function notifyApproval(approverName, taskTitle, stepLabel) {
   if (!approverName) return { ok: false }
 
-  const account = await resolveLineAccount(approverName, channelCode)
+  const account = await resolveLineAccount(approverName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(null, account.liffId)
@@ -159,12 +201,9 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, channel
     type: 'flex',
     altText: `🔏 簽核請求：${taskTitle}`,
     contents: {
-      type: 'bubble',
-      size: 'kilo',
+      type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical',
-        backgroundColor: '#8b5cf6',
-        paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: '#8b5cf6', paddingAll: '14px',
         contents: [{ type: 'text', text: '🔏 簽核請求', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
@@ -185,31 +224,31 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, channel
     },
   }]
 
-  return sendLinePush(account.lineUserId, messages, account.channelCode)
+  return sendLinePush(account.lineUserId, messages)
 }
 
 /**
  * Notify task due reminder.
  */
-export async function notifyTaskDue(assigneeName, taskTitle, dueDate, channelCode) {
+export async function notifyTaskDue(assigneeName, taskTitle, dueDate) {
   if (!assigneeName) return { ok: false }
 
-  const account = await resolveLineAccount(assigneeName, channelCode)
+  const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   return sendLinePush(account.lineUserId, [{
     type: 'text',
     text: `⏰ 提醒：「${taskTitle}」即將到期\n截止日期：${dueDate}\n\n請儘速處理！`,
-  }], account.channelCode)
+  }])
 }
 
 /**
  * Notify employee about published schedule via LINE.
  */
-export async function notifySchedulePublished(employeeName, dateRange, assignments, channelCode) {
+export async function notifySchedulePublished(employeeName, dateRange, assignments) {
   if (!employeeName) return { ok: false, reason: 'no_employee' }
 
-  const account = await resolveLineAccount(employeeName, channelCode)
+  const account = await resolveLineAccount(employeeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六']
@@ -230,12 +269,9 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
     type: 'flex',
     altText: `📋 班表已發布：${dateRange}`,
     contents: {
-      type: 'bubble',
-      size: 'kilo',
+      type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical',
-        backgroundColor: '#06b6d4',
-        paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
         contents: [{ type: 'text', text: '📋 班表通知', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
@@ -258,29 +294,23 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
     },
   }]
 
-  return sendLinePush(account.lineUserId, messages, account.channelCode)
+  return sendLinePush(account.lineUserId, messages)
 }
 
 /**
- * Send to a specific LINE user ID on a specific channel (bypass employee lookup).
+ * Send to a specific LINE user ID (bypass employee lookup).
  */
-export async function sendDirectPush(lineUserId, messages, channelCode) {
-  return sendLinePush(lineUserId, messages, channelCode)
+export async function sendDirectPush(lineUserId, messages) {
+  return sendLinePush(lineUserId, messages)
 }
 
 /**
  * 任務確認結果通知執行人（主管按完核准/駁回後推給原任務負責人）
- * @param {string} assigneeName - 任務的 assignee（原執行人）
- * @param {string} taskTitle
- * @param {'approved' | 'rejected'} action
- * @param {string|null} notes - 駁回理由（rejected 時必填）
- * @param {number} taskId
- * @param {string} [channelCode]
  */
-export async function notifyTaskConfirmationResult(assigneeName, taskTitle, action, notes, taskId, channelCode) {
+export async function notifyTaskConfirmationResult(assigneeName, taskTitle, action, notes, taskId) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
 
-  const account = await resolveLineAccount(assigneeName, channelCode)
+  const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const isApproved = action === 'approved'
@@ -290,8 +320,7 @@ export async function notifyTaskConfirmationResult(assigneeName, taskTitle, acti
     type: 'flex',
     altText: isApproved ? `✅ 任務通過：${taskTitle}` : `🔄 任務退回：${taskTitle}`,
     contents: {
-      type: 'bubble',
-      size: 'kilo',
+      type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical',
         backgroundColor: isApproved ? '#10b981' : '#ef4444',
@@ -320,13 +349,11 @@ export async function notifyTaskConfirmationResult(assigneeName, taskTitle, acti
     },
   }]
 
-  return sendLinePush(account.lineUserId, messages, account.channelCode)
+  return sendLinePush(account.lineUserId, messages)
 }
 
 /**
  * 代班邀請 — Web 端發出後推 LINE flex card 給所有候選人
- * @param {Array<{empId:number, name:string}>} candidates
- * @param {{ shift_date:string, shift_label:string, absent_emp_name:string, reason?:string }} info
  */
 export async function notifyCoverInvitationFromWeb(candidates, info) {
   const liffBase = LIFF_ID ? `https://liff.line.me/${LIFF_ID}` : ''
@@ -358,7 +385,7 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
   for (const c of candidates) {
     const account = await resolveLineAccount(c.empId || c.name)
     if (!account.lineUserId) continue
-    await sendLinePush(account.lineUserId, [{ type: 'flex', altText: '代班邀請', contents: bubble }], account.channelCode)
+    await sendLinePush(account.lineUserId, [{ type: 'flex', altText: '代班邀請', contents: bubble }])
   }
 }
 
@@ -379,7 +406,7 @@ export async function getEmployeeLineAccounts(employeeNameOrId) {
   return data || []
 }
 
-async function logMessage(recipient, messages, status = 'logged', channelCode) {
+async function logMessage(recipient, messages, status = 'logged') {
   try {
     await supabase.from('message_logs').insert({
       channel: 'LINE',
@@ -387,7 +414,6 @@ async function logMessage(recipient, messages, status = 'logged', channelCode) {
       subject: messages?.[0]?.altText || messages?.[0]?.text || 'LINE push',
       body: JSON.stringify(messages),
       status,
-      metadata: channelCode ? { line_channel: channelCode } : undefined,
     })
   } catch (e) { /* silent */ }
 }

@@ -69,7 +69,6 @@ async function pushNewTaskNotification(
   try {
     const { data: target } = await ctx.db.rpc("liff_resolve_line_target", { p_emp_id: newTask.assignee_id });
     const lineUserId = (target as any)?.line_user_id;
-    const channelCode = (target as any)?.channel_code;
     if (!lineUserId) return false;
 
     const due = newTask.due_date ? newTask.due_date.slice(0, 10) : "無截止日";
@@ -135,7 +134,6 @@ async function pushNewTaskNotification(
       body: JSON.stringify({
         to: lineUserId,
         messages: [{ type: "flex", altText: `🔔 新任務：${newTask.title}`, contents: bubble }],
-        channelCode,
       }),
     });
     return res.ok;

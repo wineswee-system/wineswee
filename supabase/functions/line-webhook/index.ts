@@ -17,7 +17,7 @@ import { buildTodaySummaryBubble } from './card-summary.ts';
 import type { ApprovalRequestType } from './types.ts';
 import { cmdTaskList, cmdTaskCreate, cmdTaskDone, cmdTaskUpdate, cmdTaskRequestConfirm, cmdTaskConfirmRespond, cmdNotes, cmdProjectList, cmdProjectDone, cmdProjectNote, cmdProjectStatus, cmdProjectTasks } from './command-handlers.ts';
 import { cmdWorkflowStatus, cmdWorkflowTasks, checkManager, cmdManagerOverview, cmdManagerAssign, cmdManagerLeaveReview, cmdRegister, handleCreateTaskStep } from './command-handlers-workflow.ts';
-import { resolveChannel, resolveEnv } from '../_shared/channel.ts';
+import { resolveChannel } from '../_shared/channel.ts';
 
 // LIFF deeplink shortcuts — text command → LIFF page on sme-ops-liff
 type LiffShortcut = { key: string; match: string[]; title: string; subtitle: string; buttonLabel: string; path: string; emoji: string };
@@ -49,8 +49,6 @@ serve(async (req) => {
     });
   }
 
-  const url = new URL(req.url);
-  const queryCode = url.searchParams.get("channel");
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -60,31 +58,30 @@ serve(async (req) => {
 
   const db = createClient(supabaseUrl, supabaseKey);
 
-  const channelRow = await resolveChannel(db, { queryCode, destinationId });
+  const channelRow = await resolveChannel(db, { destinationId });
   if (!channelRow) {
-    console.error("[webhook] No LINE channel could be resolved", { queryCode, destinationId });
+    console.error("[webhook] No active LINE channel found");
     return new Response("Unknown channel", { status: 400 });
   }
-  const channelCode = channelRow.code;
   const channelId = channelRow.id;
 
-  const channelSecret = resolveEnv("LINE_CHANNEL_SECRET", channelCode);
+  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET");
   const accessToken =
-    resolveEnv("LINE_CHANNEL_ACCESS_TOKEN", channelCode) ??
-    resolveEnv("LINE_CHANNEL_TOKEN", channelCode);
+    Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ??
+    Deno.env.get("LINE_CHANNEL_TOKEN");
   const liffTaskId =
-    resolveEnv("LIFF_TASK_ID", channelCode) ??
+    Deno.env.get("LIFF_TASK_ID") ??
     channelRow.liff_id ??
     "";
   const liffNewTaskId =
-    resolveEnv("LIFF_NEW_TASK_ID", channelCode) ??
+    Deno.env.get("LIFF_NEW_TASK_ID") ??
     channelRow.liff_id ??
     "";
   const liffDashboardId =
-    resolveEnv("LIFF_DASHBOARD_ID", channelCode) ?? "";
+    Deno.env.get("LIFF_DASHBOARD_ID") ?? "";
 
   if (!channelSecret || !accessToken) {
-    console.error(`[webhook] Missing credentials for channel=${channelCode}`);
+    console.error("[webhook] Missing LINE credentials (LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN)");
     return new Response("Missing LINE credentials", { status: 500 });
   }
 
@@ -179,7 +176,7 @@ serve(async (req) => {
 
       const messages = await dispatchPostback(data, {
         db, accessToken,
-        channelCode, channelId,
+        channelId,
         userId: lineUserId,
         replyToken: event.replyToken,
         lineUser: {

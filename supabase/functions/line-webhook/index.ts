@@ -65,12 +65,8 @@ serve(async (req) => {
   }
   const channelId = channelRow.id;
 
-  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET_WORKFLOW")
-    ?? Deno.env.get("LINE_CHANNEL_SECRET");
-  const accessToken =
-    Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") ??
-    Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ??
-    Deno.env.get("LINE_CHANNEL_TOKEN");
+  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET_WORKFLOW");
+  const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW");
   const liffTaskId =
     Deno.env.get("LIFF_TASK_ID_WORKFLOW") ??
     Deno.env.get("LIFF_TASK_ID") ??

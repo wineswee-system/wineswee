@@ -303,8 +303,7 @@ serve(async (req) => {
   }
 
   try {
-    const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW")
-      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+    const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 

@@ -155,11 +155,7 @@ serve(async (req: Request) => {
     const tokenByChannel: Record<string, string> = {
       workflow: Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "",
     };
-    const fallbackToken =
-      Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") ||
-      Deno.env.get("LINE_CHANNEL_TOKEN") ||
-      Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ||
-      "";
+    const fallbackToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "";
     const tokenFor = (channelCode: string | null | undefined): string =>
       (channelCode && tokenByChannel[channelCode]) || fallbackToken;
     // LIFF deep-link target for the "查看詳情" button on every flex card

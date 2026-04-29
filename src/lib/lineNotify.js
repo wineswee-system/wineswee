@@ -11,20 +11,21 @@ export async function resolveLineAccount(employeeNameOrId) {
   if (!employeeNameOrId) return { lineUserId: null, liffId: null }
 
   const isId = typeof employeeNameOrId === 'number'
-  let query = supabase.from('v_employee_line_resolved').select('*')
+  const col = isId ? 'employee_id' : 'employee_name'
+  const { data: rows } = await supabase
+    .from('v_employee_line_resolved')
+    .select('*')
+    .eq(col, employeeNameOrId)
 
-  if (isId) query = query.eq('employee_id', employeeNameOrId)
-  else query = query.eq('employee_name', employeeNameOrId)
+  if (!rows?.length) return { lineUserId: null, liffId: LIFF_ID }
 
-  query = query.order('is_primary', { ascending: false })
-
-  const { data: account } = await query.limit(1).maybeSingle()
+  const account =
+    rows.find(r => r.channel_code === 'workflow' && r.line_user_id) ||
+    rows.find(r => r.is_primary && r.line_user_id) ||
+    rows.find(r => r.line_user_id)
 
   if (account?.line_user_id) {
-    return {
-      lineUserId: account.line_user_id,
-      liffId: account.liff_id || LIFF_ID,
-    }
+    return { lineUserId: account.line_user_id, liffId: account.liff_id || LIFF_ID }
   }
 
   return { lineUserId: null, liffId: LIFF_ID }

@@ -277,7 +277,7 @@ export default function Workflows() {
             const inst = instances.find(i => i.id === instanceId)
             notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
               dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
-            })
+            }).catch(() => {})
           }
         }
       }

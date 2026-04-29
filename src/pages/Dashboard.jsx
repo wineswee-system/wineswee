@@ -351,7 +351,7 @@ function AdminDashboard() {
       supabase.from('accounts_receivable').select('amount, paid_amount, status, due_date'),
       supabase.from('accounts_payable').select('amount, paid_amount, status'),
       supabase.from('opportunities').select('stage, amount'),
-      supabase.from('stock_levels').select('quantity, min_qty'),
+      supabase.from('stock_levels').select('*'),
       supabase.from('workflow_instances').select('id, status').eq('status', '進行中'),
       supabase.from('tasks').select('id, status, assignee, due_date').not('workflow_instance_id', 'is', null).in('status', ['待處理', '進行中']),
       supabase.from('clock_corrections').select('id').eq('status', '待審核'),

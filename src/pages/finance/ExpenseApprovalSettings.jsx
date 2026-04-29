@@ -8,7 +8,7 @@ import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '無上限'
 
-const emptyForm = { name: '', description: '', min_amount: '0', max_amount: '', is_active: true, steps: [{ role: '', label: '' }] }
+const emptyForm = { name: '', description: '', min_amount: '0', max_amount: '', is_active: true, steps: [{ role: '', label: '', target_type: 'label', target_emp_id: null }] }
 
 export default function ExpenseApprovalSettings() {
   const [chains, setChains] = useState([])
@@ -86,11 +86,11 @@ export default function ExpenseApprovalSettings() {
     load()
   }
 
-  const addStep = () => setForm(f => ({ ...f, steps: [...f.steps, { role: '', label: '' }] }))
+  const addStep = () => setForm(f => ({ ...f, steps: [...f.steps, { role: '', label: '', target_type: 'label', target_emp_id: null }] }))
   const removeStep = (i) => setForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))
-  const updateStep = (i, k, v) => setForm(f => {
+  const updateStep = (i, fields) => setForm(f => {
     const steps = [...f.steps]
-    steps[i] = { ...steps[i], [k]: v }
+    steps[i] = { ...steps[i], ...fields }
     return { ...f, steps }
   })
 
@@ -250,7 +250,11 @@ export default function ExpenseApprovalSettings() {
                 <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>簽核步驟（申請人 → ...）</label>
                 {form.steps.map((s, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                    <select value={s.role} onChange={e => updateStep(i, 'role', e.target.value)}
+                    <select value={s.role} onChange={e => {
+                        const name = e.target.value
+                        const emp = employees.find(em => em.name === name)
+                        updateStep(i, { role: name, target_type: name ? 'employee' : 'label', target_emp_id: emp?.id ?? null })
+                      }}
                       style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                       <option value="">選擇簽核人</option>
                       {employees.filter(e => e.is_manager || e.position?.includes('主管') || e.position?.includes('經理') || e.position?.includes('財務')).map(emp => (
@@ -262,7 +266,7 @@ export default function ExpenseApprovalSettings() {
                         ))}
                       </optgroup>
                     </select>
-                    <input type="text" placeholder="步驟標籤（例：主管審核）" value={s.label} onChange={e => updateStep(i, 'label', e.target.value)}
+                    <input type="text" placeholder="步驟標籤（例：主管審核）" value={s.label} onChange={e => updateStep(i, { label: e.target.value })}
                       style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                     {form.steps.length > 1 && (
                       <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => removeStep(i)}><Trash2 size={14} /></button>

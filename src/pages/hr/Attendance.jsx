@@ -5,7 +5,7 @@ import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useVirtualList, VirtualRow } from '../../lib/useVirtualList'
+import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
 export default function Attendance() {
   const { profile, role } = useAuth()

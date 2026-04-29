@@ -1063,7 +1063,7 @@ export default function Workflows() {
 
       {/* ══ Archived ══ */}
       {tab === 'archived' && (
-        <ArchivedInstancesList instances={archivedInstances} getStats={getStats} onSelect={setSelectedInstance} />
+        <ArchivedInstancesList instances={archivedInstances} getStats={getStats} onSelect={setSelectedInstance} onDelete={handleDeleteInstance} />
       )}
 
       {/* ══ Deploy Modal ══ */}

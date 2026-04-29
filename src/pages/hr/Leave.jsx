@@ -10,7 +10,7 @@ import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '.
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
-import { useVirtualList, VirtualRow } from '../../lib/useVirtualList'
+import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
 export default function Leave() {
   const { profile } = useAuth()

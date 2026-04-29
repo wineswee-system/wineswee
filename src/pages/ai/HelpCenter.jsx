@@ -45,6 +45,7 @@ const helpCategories = [
       { title: '促銷活動與價格規則', views: 132 },
       { title: '業務佣金計算說明', views: 98 },
       { title: '退貨與退款流程', views: 87 },
+      { title: '一鍵建立出貨並自動標記已出貨', views: 142 },
       { title: '物流追蹤與出貨管理', views: 79 },
     ]
   },
@@ -108,6 +109,9 @@ const helpCategories = [
       { title: '銀行對帳操作說明', views: 132 },
       { title: '試算表與財務報表', views: 121 },
       { title: '損益表與現金流量表', views: 108 },
+      { title: '費用申請與核銷流程', views: 178 },
+      { title: '費用核銷簽核鏈設定', views: 165 },
+      { title: '費用申請駁回與重新送審', views: 143 },
       { title: '預算管理與成本中心', views: 95 },
       { title: '固定資產管理', views: 82 },
       { title: '匯率管理與多幣別操作', views: 74 },
@@ -135,10 +139,15 @@ const helpCategories = [
   {
     icon: '👥', title: '人資管理', articles: [
       { title: '打卡設定與追蹤', views: 198 },
+      { title: '未打卡員工即時查看', views: 176 },
+      { title: '管理者一鍵代打卡', views: 154 },
       { title: '請假申請與審核流程', views: 178 },
+      { title: '請假工作流程整合（多層簽核）', views: 167 },
+      { title: '駁回原因內嵌顯示', views: 134 },
       { title: '加班申請說明', views: 145 },
       { title: '排班管理與規則設定', views: 132 },
       { title: '薪資計算與勞健保', views: 126 },
+      { title: '薪資結算鎖定（Finalize）說明', views: 112 },
       { title: '績效考核流程', views: 108 },
       { title: '績效獎金計算', views: 95 },
       { title: '招募管理使用說明', views: 87 },
@@ -149,6 +158,14 @@ const helpCategories = [
   {
     icon: '🔄', title: '流程管理', articles: [
       { title: '如何建立自訂流程', views: 145 },
+      { title: 'AI 助理語音建立工作流程', views: 223 },
+      { title: 'AI 逐步確認生成流程步驟', views: 198 },
+      { title: '步驟優先級（高/中/低）設定', views: 167 },
+      { title: '工作流程封存（Archive）作業', views: 143 },
+      { title: '費用申請簽核鏈設定', views: 186 },
+      { title: '費用申請金額區間與審核人設定', views: 172 },
+      { title: '簽核路徑視覺化預覽', views: 158 },
+      { title: '多層簽核自動推進說明', views: 145 },
       { title: '任務指派與追蹤', views: 128 },
       { title: '查核清單使用教學', views: 112 },
       { title: 'SOP 範本管理', views: 96 },
@@ -171,7 +188,9 @@ const helpCategories = [
   {
     icon: '⚡', title: '自動化與整合', articles: [
       { title: '觸發器設定教學', views: 134 },
-      { title: 'LINE 通知整合', views: 156 },
+      { title: 'LINE 通知整合（Wineswe 員工機器人）', views: 198 },
+      { title: 'LINE 帳號綁定與 OA 設定', views: 176 },
+      { title: 'DB 觸發器自動推播說明', views: 145 },
       { title: '排程任務設定', views: 98 },
       { title: '簽核規則與通知', views: 87 },
       { title: '電商平台串接', views: 76 },
@@ -183,9 +202,16 @@ const helpCategories = [
     icon: '🤖', title: 'AI 功能', articles: [
       { title: 'Agent 控制台使用指南', views: 178 },
       { title: 'AI 助理功能介紹', views: 156 },
+      { title: 'AI 語音輸入建立工作流程（中文）', views: 234 },
+      { title: 'AI 逐步確認生成工作流程步驟', views: 212 },
+      { title: '步驟優先級與角色指派設定', views: 187 },
       { title: '智能報表生成', views: 132 },
       { title: 'AI 排程建議', views: 98 },
       { title: '智能異常偵測', views: 87 },
+      { title: 'AI 行銷文案生成（Email/LINE/SMS）', views: 212 },
+      { title: 'AI 智慧客服回覆草稿', views: 187 },
+      { title: 'AI 增強線索評分', views: 165 },
+      { title: '自然語言轉客戶分群規則', views: 143 },
     ]
   },
   {
@@ -204,8 +230,14 @@ const FAQ_ITEMS = [
   { q: '忘記密碼怎麼辦？', a: '請在登入頁面點選「忘記密碼」，系統將寄送重設連結至您的註冊信箱。' },
   { q: '如何切換多家公司/租戶？', a: '點選右上角的公司名稱，即可在已授權的租戶之間切換。' },
   { q: '如何匯出報表為 PDF？', a: '在各報表頁面右上方點選「匯出」按鈕，選擇 PDF 格式即可下載。' },
-  { q: '員工如何用 LINE 打卡？', a: '請先至「組織架構 > LINE」完成帳號綁定，綁定後即可透過 LINE 官方帳號進行打卡。' },
+  { q: '員工如何用 LINE 打卡？', a: '請先至「組織架構 > LINE」完成帳號綁定，綁定後即可透過 LINE 官方帳號（Wineswe 員工機器人）進行打卡。' },
   { q: '電子發票開立失敗如何處理？', a: '請確認統一編號與買受人資料正確，並檢查 Turnkey/MIG 連線狀態。如持續失敗請至稽核紀錄查看錯誤訊息。' },
+  { q: '如何設定費用申請的簽核鏈？', a: '前往「財務 > 費用核銷簽核設定」，可依申請金額區間設定不同審核人與多層步驟。啟用/停用規則無需刪除。' },
+  { q: '費用申請送出後如何追蹤進度？', a: '在「費用核銷」列表中可看到目前所在簽核步驟，被駁回時會顯示駁回原因，可直接修改後重新送審。' },
+  { q: '如何用 AI 建立工作流程？', a: '在「流程管理 > 工作流程」點選「AI 助理」，可用語音或文字描述需求，AI 會逐步產出每個步驟供確認，可調整角色、優先級後再儲存。' },
+  { q: '主管如何幫員工補打卡？', a: '在「人資 > 打卡追蹤」可看到「未打卡」員工清單，點選員工名稱後即可代為補登今日打卡紀錄。' },
+  { q: '薪資結算後還能修改嗎？', a: '薪資結算執行「Finalize（結算鎖定）」後即鎖定，無法重新計算。需聯絡系統管理員解鎖後才可重算。' },
+  { q: 'LINE 通知沒有收到怎麼辦？', a: '請確認員工已在「組織架構 > LINE」完成帳號綁定，且使用的是 Wineswe 員工機器人官方帳號。通知由資料庫觸發器直接推送，無需手動操作。' },
   { q: '如何設定簽核流程？', a: '前往「系統管理 > 簽核規則」，可依模組、金額、部門等條件設定多層簽核鏈。' },
 ]
 

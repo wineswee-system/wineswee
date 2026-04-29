@@ -16,8 +16,9 @@ const log = logger.forModule('cqrs')
  * Read operations use this service for fast, pre-computed data.
  */
 
-// In-memory cache with TTL
+// In-memory cache with TTL. Capped at MAX_CACHE_SIZE entries; oldest evicted when full (LRU).
 const _cache = new Map()
+const MAX_CACHE_SIZE = 200
 
 function getCached(key, ttlMs) {
   const entry = _cache.get(key)
@@ -26,10 +27,16 @@ function getCached(key, ttlMs) {
     _cache.delete(key)
     return null
   }
+  // Re-insert to refresh LRU position
+  _cache.delete(key)
+  _cache.set(key, entry)
   return entry.data
 }
 
 function setCache(key, data) {
+  if (_cache.size >= MAX_CACHE_SIZE) {
+    _cache.delete(_cache.keys().next().value)
+  }
   _cache.set(key, { data, timestamp: Date.now() })
 }
 

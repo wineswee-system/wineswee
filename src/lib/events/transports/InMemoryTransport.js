@@ -7,18 +7,19 @@ import { TransportInterface } from './TransportInterface.js'
  */
 export class InMemoryTransport extends TransportInterface {
   async send(event, subscribers) {
-    const errors = []
+    const tasks = []
 
     for (const [pattern, handlers] of subscribers) {
       if (!matchPattern(pattern, event.type)) continue
       for (const handler of handlers) {
-        try {
-          await handler(event)
-        } catch (err) {
-          errors.push({ handler: handler.name || 'anonymous', error: err })
-        }
+        tasks.push({ name: handler.name || 'anonymous', fn: handler })
       }
     }
+
+    const results = await Promise.allSettled(tasks.map(t => t.fn(event)))
+    const errors = results
+      .map((r, i) => r.status === 'rejected' ? { handler: tasks[i].name, error: r.reason } : null)
+      .filter(Boolean)
 
     if (errors.length > 0) {
       event._handlerErrors = errors

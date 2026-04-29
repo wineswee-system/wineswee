@@ -81,8 +81,10 @@ export async function checkMissedClockout(date) {
 }
 
 // ── Leave Requests ─────────────────────────────────────────
-export const getLeaveRequests = () =>
-  supabase.from('leave_requests').select('*').order('id')
+export const getLeaveRequests = (options = {}) => {
+  let q = supabase.from('leave_requests').select('*').order('id')
+  return q.limit(options.limit ?? 500)
+}
 
 export const createLeaveRequest = (data) =>
   supabase.from('leave_requests').insert(data).select().single()
@@ -99,8 +101,10 @@ export const deleteLeaveRequest = (id) =>
   supabase.from('leave_requests').delete().eq('id', id)
 
 // ── Overtime ───────────────────────────────────────────────
-export const getOvertimeRequests = () =>
-  supabase.from('overtime_requests').select('*').order('id')
+export const getOvertimeRequests = (options = {}) => {
+  let q = supabase.from('overtime_requests').select('*').order('id')
+  return q.limit(options.limit ?? 500)
+}
 
 export const createOvertimeRequest = (data) =>
   supabase.from('overtime_requests').insert(data).select().single()
@@ -155,15 +159,19 @@ export const upsertSalaryRecord = (data) =>
   })
 
 // ── Schedule ───────────────────────────────────────────────
-export const getScheduleData = () =>
-  supabase.from('schedule_data').select('*').order('id')
+export const getScheduleData = (options = {}) => {
+  let q = supabase.from('schedule_data').select('*').order('id')
+  return q.limit(options.limit ?? 500)
+}
 
 export const updateSchedule = (id, data) =>
   supabase.from('schedule_data').update(data).eq('id', id).select().single()
 
 // ── Holidays ───────────────────────────────────────────────
-export const getHolidays = () =>
-  supabase.from('holidays').select('*').order('date')
+export const getHolidays = (options = {}) => {
+  let q = supabase.from('holidays').select('*').order('date')
+  return q.limit(options.limit ?? 500)
+}
 
 export const createHoliday = (data) =>
   supabase.from('holidays').insert(data).select().single()
@@ -239,8 +247,10 @@ export const updateExpenseStatus = (id, status, rejectReason) =>
   supabase.from('expenses').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
 
 // ── Workflows ──────────────────────────────────────────────
-export const getWorkflows = () =>
-  supabase.from('workflows').select('*').order('id')
+export const getWorkflows = (options = {}) => {
+  let q = supabase.from('workflows').select('*').order('id')
+  return q.limit(options.limit ?? 200)
+}
 
 export const createWorkflow = (data) =>
   supabase.from('workflows').insert(data).select().single()
@@ -249,8 +259,10 @@ export const updateWorkflow = (id, data) =>
   supabase.from('workflows').update(data).eq('id', id).select().single()
 
 // ── Workflow Instances ────────────────────────────────────
-export const getWorkflowInstances = () =>
-  supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+export const getWorkflowInstances = (options = {}) => {
+  let q = supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+  return q.limit(options.limit ?? 200)
+}
 
 export const createWorkflowInstance = (data) =>
   supabase.from('workflow_instances').insert(data).select().single()
@@ -756,10 +768,12 @@ export const setRolePermissions = async (roleId, permissionIds) => {
 }
 
 export const getEmployeePermissions = async (employeeId) => {
-  const { data: emp } = await supabase.from('employees').select('role_id').eq('id', employeeId).single()
-  if (!emp?.role_id) return []
-  const { data } = await supabase.from('role_permissions').select('permissions(code)').eq('role_id', emp.role_id)
-  return (data || []).map(p => p.permissions?.code).filter(Boolean)
+  const { data } = await supabase
+    .from('employees')
+    .select('roles(role_permissions(permissions(code)))')
+    .eq('id', employeeId)
+    .single()
+  return (data?.roles?.role_permissions || []).map(p => p.permissions?.code).filter(Boolean)
 }
 
 // ── LINE Groups ───────────────────────────────────────────

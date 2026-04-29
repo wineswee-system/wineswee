@@ -32,9 +32,10 @@ export default function PurchaseRequests() {
       const supervisor = await getSupervisor(form.requester)
       if (supervisor) {
         await supabase.from('notifications').insert({
+          recipient_emp_id: supervisor.id,
           type: '採購簽核',
           title: `${form.requester} 提交採購申請 ${form.pr_number}（NT$ ${(parseFloat(form.total_amount) || 0).toLocaleString()}），請審核`,
-          user_id: supervisor.name,
+          read: false,
         })
       }
     }

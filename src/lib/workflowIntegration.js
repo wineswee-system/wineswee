@@ -142,10 +142,10 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   // 建立通知給第一關審核人
   if (supervisor) {
     await supabase.from('notifications').insert({
-      recipient: supervisor.name,
-      type: `${template.name}`,
+      recipient_emp_id: supervisor.id,
+      organization_id: orgId ?? null,
+      type: template.name,
       title: `${requesterName} 提交${template.name}，請審核`,
-      link: `/process/workflows`,
       read: false,
     })
 
@@ -203,9 +203,10 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
     await writeBackStatus(instance, '已拒絕')
 
     // 通知申請人
-    if (instance?.started_by) {
+    if (instance?.started_by_id) {
       await supabase.from('notifications').insert({
-        recipient: instance.started_by,
+        recipient_emp_id: instance.started_by_id,
+        organization_id: instance.organization_id ?? null,
         type: '簽核退回',
         title: `您的${instance.template_name}已被${approverName}退回：${comment}`,
         read: false,
@@ -246,7 +247,8 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
       const { data: empRow } = await supabase.from('employees').select('id').eq('name', nextAssignee).eq('status', '在職').maybeSingle()
       await supabase.from('tasks').update({ assignee: nextAssignee, assignee_id: empRow?.id ?? null }).eq('id', nextStep.id)
       await supabase.from('notifications').insert({
-        recipient: nextAssignee,
+        recipient_emp_id: empRow?.id ?? null,
+        organization_id: instance?.organization_id ?? null,
         type: '簽核待辦',
         title: `${instance?.template_name}：${nextStep.title}，請審核`,
         read: false,
@@ -269,9 +271,10 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
   await writeBackStatus(instance, '已核准')
 
   // 通知申請人
-  if (instance?.started_by) {
+  if (instance?.started_by_id) {
     await supabase.from('notifications').insert({
-      recipient: instance.started_by,
+      recipient_emp_id: instance.started_by_id,
+      organization_id: instance.organization_id ?? null,
       type: '簽核完成',
       title: `您的${instance.template_name}已全數核准`,
       read: false,

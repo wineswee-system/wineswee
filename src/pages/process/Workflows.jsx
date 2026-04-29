@@ -17,7 +17,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
-import { notifyTaskAssignee, notifyTaskConfirmationResult } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 
 import InstanceDetailView from './components/InstanceDetailView'
@@ -192,7 +192,8 @@ export default function Workflows() {
       console.warn(`[triggerSopOnComplete] depth ${parentDepth} 已達上限 ${TRIGGER_DEPTH_LIMIT}，停止 cascade`)
       // 寫一筆通知讓管理員知道（避免悄悄停止）
       await supabase.from('notifications').insert({
-        recipient: sourceInst?.started_by || '系統',
+        recipient_emp_id: sourceInst?.started_by_id ?? null,
+        organization_id: sourceInst?.organization_id ?? null,
         type: '流程觸發中止',
         title: `「${tpl.name}」未自動觸發：cascade 深度已達 ${TRIGGER_DEPTH_LIMIT}，疑似觸發迴圈`,
         read: false,
@@ -465,6 +466,10 @@ export default function Workflows() {
         if (error) {
           console.error('[addTask] task_confirmations 失敗:', error)
           subFailures.push(`審批人員未掛上：${error.message}`)
+        } else {
+          for (const name of (taskForm.confirmation_approvers || [])) {
+            notifyApproval(name, taskForm.title, '請求審批').catch(() => {})
+          }
         }
       }
 
@@ -848,15 +853,21 @@ export default function Workflows() {
   // ── Archive / Delete instance ──
   const handleArchiveInstance = async (inst) => {
     if (!confirm(`確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「封存流程」分頁查看。`)) return
+    const archivedAt = new Date().toISOString()
     const { data, error } = await supabase.from('workflow_instances')
       .update({
         status: '已完成',
-        archived_at: new Date().toISOString(),
-        completed_at: inst.completed_at || new Date().toISOString(),
+        archived_at: archivedAt,
+        completed_at: inst.completed_at || archivedAt,
       })
       .eq('id', inst.id).select().single()
     if (error) { alert('封存失敗：' + error.message); return }
-    if (data) setInstances(prev => prev.map(i => i.id === inst.id ? data : i))
+    // cascade archive to all tasks belonging to this workflow instance
+    await supabase.from('tasks').update({ archived_at: archivedAt }).eq('workflow_instance_id', inst.id)
+    if (data) {
+      setInstances(prev => prev.map(i => i.id === inst.id ? data : i))
+      setAllTasks(prev => prev.map(t => t.workflow_instance_id === inst.id ? { ...t, archived_at: archivedAt } : t))
+    }
   }
 
   const handleDeleteInstance = async (inst) => {

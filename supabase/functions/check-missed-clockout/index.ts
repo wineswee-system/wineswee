@@ -91,7 +91,10 @@ serve(async (req) => {
         const legacy = Deno.env.get(`LINE_CHANNEL_TOKEN_${suffix}`)
         if (legacy) return legacy
       }
-      return Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') || Deno.env.get('LINE_CHANNEL_TOKEN') || null
+      return Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW')
+        || Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN')
+        || Deno.env.get('LINE_CHANNEL_TOKEN')
+        || null
     }
     const notified: string[] = []
     const failed: string[] = []

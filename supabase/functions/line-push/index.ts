@@ -19,9 +19,11 @@ serve(async (req) => {
       })
     }
 
-    const token = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') || Deno.env.get('LINE_CHANNEL_TOKEN')
+    const token = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW')
+      || Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN')
+      || Deno.env.get('LINE_CHANNEL_TOKEN')
     if (!token) {
-      return new Response(JSON.stringify({ error: 'LINE_CHANNEL_ACCESS_TOKEN not configured' }), {
+      return new Response(JSON.stringify({ error: 'LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW not configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }

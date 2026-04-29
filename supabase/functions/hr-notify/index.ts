@@ -303,12 +303,13 @@ serve(async (req) => {
   }
 
   try {
-    const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+    const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW")
+      || Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     if (!accessToken) {
-      return new Response(JSON.stringify({ error: "Missing LINE_CHANNEL_ACCESS_TOKEN" }), {
+      return new Response(JSON.stringify({ error: "Missing LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

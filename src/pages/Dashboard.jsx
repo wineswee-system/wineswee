@@ -308,6 +308,7 @@ function StaffDashboard({ profile }) {
 }
 
 function AdminDashboard() {
+  const monthStart = new Date().toISOString().slice(0, 7) + '-01'
   const [employees, setEmployees] = useState([])
   const [tasks, setTasks] = useState([])
   const [workflows, setWorkflows] = useState([])

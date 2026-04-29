@@ -307,15 +307,7 @@ function StaffDashboard({ profile }) {
   )
 }
 
-export default function Dashboard() {
-  const { profile, role } = useAuth()
-  const userRole = role?.name || profile?.role || 'store_staff'
-
-  // store_staff → 精簡版個人儀表板
-  if (userRole === 'store_staff' && profile) {
-    return <StaffDashboard profile={profile} />
-  }
-
+function AdminDashboard() {
   const [employees, setEmployees] = useState([])
   const [tasks, setTasks] = useState([])
   const [workflows, setWorkflows] = useState([])
@@ -836,4 +828,11 @@ export default function Dashboard() {
 
     </div>
   )
+}
+
+export default function Dashboard() {
+  const { profile, role } = useAuth()
+  const userRole = role?.name || profile?.role || 'store_staff'
+  if (userRole === 'store_staff' && profile) return <StaffDashboard profile={profile} />
+  return <AdminDashboard />
 }

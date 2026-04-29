@@ -16,8 +16,14 @@ export function TenantProvider({ children }) {
   const getAuthorizedOrgId = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return null
-    const { data: emp } = await supabase
-      .from('employees').select('organization_id').eq('email', session.user.email).maybeSingle()
+    // Try auth_user_id first (LINE-login users have synthetic auth email)
+    let { data: emp } = await supabase
+      .from('employees').select('organization_id').eq('auth_user_id', session.user.id).maybeSingle()
+    if (!emp) {
+      const { data: byEmail } = await supabase
+        .from('employees').select('organization_id').eq('email', session.user.email).maybeSingle()
+      emp = byEmail
+    }
     return emp?.organization_id ?? null
   }
 

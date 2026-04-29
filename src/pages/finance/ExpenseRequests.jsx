@@ -5,7 +5,7 @@ import { Plus, X, Check, Upload, FileText, Image, Trash2, Eye, Send, Download } 
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
-import { createApprovalWorkflow } from '../../lib/workflowIntegration'
+import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 
@@ -178,32 +178,49 @@ export default function ExpenseRequests() {
   }
 
   const handleApprove = async (req) => {
+    const instId = await resolveLinkedInstanceId(req)
+    if (instId) {
+      const { data: pendingSteps } = await supabase.from('tasks')
+        .select('*').eq('workflow_instance_id', instId).eq('status', '待處理')
+        .order('step_order').limit(1)
+      const pendingStep = pendingSteps?.[0]
+      if (pendingStep) {
+        const result = await advanceWorkflow(pendingStep.id, profile?.name || '管理員', '核准')
+        if (result?.error) { setError(result.error); return }
+        // advanceWorkflow handles writeBackStatus (expense approved) and workflow_instance update
+        load()
+        return
+      }
+    }
+    // Fallback: no linked workflow — direct approve
     const { error } = await supabase.from('expense_requests')
       .update({ status: '已核准', approved_by: profile?.name || '管理員', approved_at: new Date().toISOString() })
       .eq('id', req.id)
     if (error) { setError(error.message); return }
-    const instId = await resolveLinkedInstanceId(req)
-    if (instId) {
-      await supabase.from('workflow_instances')
-        .update({ status: '已完成', completed_at: new Date().toISOString() })
-        .eq('id', instId)
-    }
     load()
   }
 
   const handleReject = async (req) => {
     const reason = prompt('駁回原因：')
     if (!reason) return
+    const instId = await resolveLinkedInstanceId(req)
+    if (instId) {
+      const { data: pendingSteps } = await supabase.from('tasks')
+        .select('*').eq('workflow_instance_id', instId).eq('status', '待處理')
+        .order('step_order').limit(1)
+      const pendingStep = pendingSteps?.[0]
+      if (pendingStep) {
+        const result = await advanceWorkflow(pendingStep.id, profile?.name || '管理員', '退回', reason)
+        if (result?.error) { setError(result.error); return }
+        load()
+        return
+      }
+    }
+    // Fallback: no linked workflow — direct reject
     const { error } = await supabase.from('expense_requests')
       .update({ status: '已駁回', reject_reason: reason })
       .eq('id', req.id)
     if (error) { setError(error.message); return }
-    const instId = await resolveLinkedInstanceId(req)
-    if (instId) {
-      await supabase.from('workflow_instances')
-        .update({ status: '已退回', completed_at: new Date().toISOString() })
-        .eq('id', instId)
-    }
     load()
   }
 

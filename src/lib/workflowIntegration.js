@@ -243,13 +243,17 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
     }
 
     if (nextAssignee) {
-      await supabase.from('tasks').update({ assignee: nextAssignee }).eq('id', nextStep.id)
+      const { data: empRow } = await supabase.from('employees').select('id').eq('name', nextAssignee).eq('status', '在職').maybeSingle()
+      await supabase.from('tasks').update({ assignee: nextAssignee, assignee_id: empRow?.id ?? null }).eq('id', nextStep.id)
       await supabase.from('notifications').insert({
         recipient: nextAssignee,
         type: '簽核待辦',
         title: `${instance?.template_name}：${nextStep.title}，請審核`,
         read: false,
       })
+      try {
+        await notifyTaskAssignee(nextAssignee, `${instance?.started_by} 的${instance?.template_name}，請審核`)
+      } catch (e) { /* LINE 推播失敗不阻擋流程 */ }
     }
 
     return { action: 'advanced', instance, step, nextStep }

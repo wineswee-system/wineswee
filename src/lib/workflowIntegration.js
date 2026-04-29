@@ -65,9 +65,10 @@ export async function createApprovalWorkflow(type, record, requesterName) {
     ? [...(chain.approval_chain_steps || [])].sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
     : null
 
+  // Always use the default template name (not chain.name) so writeBackStatus can map it back
   const template = chain
     ? {
-        name: chain.name,
+        name: defaultTpl.name,
         steps: (sortedChainSteps || []).map(s => s.label || s.role_name || '審核'),
       }
     : defaultTpl

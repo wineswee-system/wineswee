@@ -145,12 +145,13 @@ export default function ExpenseRequests() {
     if (data) {
       try {
         const wfResult = await createApprovalWorkflow('expense_request', data, form.employee)
+        if (wfResult?.error) console.error('[createApprovalWorkflow] error:', wfResult.error)
         if (wfResult?.instance?.id) {
           await supabase.from('expense_requests')
             .update({ workflow_instance_id: wfResult.instance.id })
             .eq('id', data.id)
         }
-      } catch (e) { /* workflow 建立失敗不阻擋主流程 */ }
+      } catch (e) { console.error('[createApprovalWorkflow] failed:', e) }
     }
 
     setSaving(false)

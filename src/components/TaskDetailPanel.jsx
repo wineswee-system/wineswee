@@ -171,6 +171,23 @@ export default function TaskDetailPanel({
         notifyTaskStarted(data.assignee, data.title, instance?.store || instance?.template_name, data.id).catch(() => {})
         drainNotificationQueue()
       }
+      // Cascade: when task is completed, activate trigger tasks and notify assignees via LINE
+      if (form.status === '已完成' && prevStatus !== '已完成') {
+        const triggerDeps = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
+        for (const dep of triggerDeps) {
+          const { data: next } = await supabase
+            .from('tasks')
+            .update({ status: '進行中' })
+            .eq('id', dep.depends_on_task_id)
+            .eq('status', '待處理')
+            .select('id, title, assignee')
+            .maybeSingle()
+          if (next?.assignee) {
+            notifyTaskStarted(next.assignee, next.title, instance?.store || instance?.template_name, next.id).catch(() => {})
+          }
+        }
+        if (triggerDeps.length > 0) drainNotificationQueue()
+      }
     }
     setSaving(false)
   }

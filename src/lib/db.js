@@ -1,5 +1,17 @@
 import { supabase } from './supabase'
 
+// ── Request deduplication ──────────────────────────────────
+// Concurrent identical reads share one in-flight network request.
+// Cache entry is removed as soon as the promise settles.
+const _inflight = new Map()
+function dedup(key, fn) {
+  if (_inflight.has(key)) return _inflight.get(key)
+  const p = Promise.resolve(fn())
+  _inflight.set(key, p)
+  p.finally(() => _inflight.delete(key))
+  return p
+}
+
 // ── Employees ──────────────────────────────────────────────
 // 多租戶：呼叫端應傳 orgId（從 useAuth().profile.organization_id 拿）
 // 不傳 orgId 時 fallback 全域查（給尚未升級的 caller 暫時相容，但會被 RLS 擋）
@@ -28,9 +40,13 @@ export const inviteEmployee = (email, name) =>
   supabase.functions.invoke('invite-employee', { body: { email, name } })
 
 // ── Attendance ─────────────────────────────────────────────
-export const getAttendance = (date) => {
-  const q = supabase.from('attendance_records').select('*').order('id')
-  return date ? q.eq('date', date) : q
+export const getAttendance = (date, options = {}) => {
+  const cols = options.columns || '*'
+  let q = supabase.from('attendance_records').select(cols).order('date', { ascending: false })
+  if (date) q = q.eq('date', date)
+  if (options.from) q = q.gte('date', options.from)
+  if (options.limit) q = q.limit(options.limit)
+  return q
 }
 
 export const upsertAttendance = (data) =>
@@ -95,6 +111,30 @@ export const updateOvertimeStatus = (id, status, rejectReason) =>
     p_status: status,
     p_reject_reason: rejectReason || null,
   })
+
+// ── Active Employees (shared HR query with dedup) ──────────
+export const getActiveEmployees = (select = 'id, name, department_id, store_id, departments(name), stores(name)') =>
+  dedup(`activeEmployees:${select}`, () =>
+    supabase.from('employees').select(select).eq('status', '在職').order('name')
+  )
+
+// ── Payroll Runs & Records ─────────────────────────────────
+export const getPayrollRuns = () =>
+  dedup('payrollRuns', () =>
+    supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false })
+  )
+
+export const getPayrollRecords = (runId) =>
+  supabase.from('payroll_records').select('*').eq('payroll_run_id', runId).order('id')
+
+export const updatePayrollRun = (id, data) =>
+  supabase.from('payroll_runs').update(data).eq('id', id).select().single()
+
+// ── Leave Step Settings ────────────────────────────────────
+export const getLeaveStepSettings = () =>
+  dedup('leaveStepSettings', () =>
+    supabase.from('leave_step_settings').select('*')
+  )
 
 // ── Salary ─────────────────────────────────────────────────
 export const getSalaryRecords = (month) => {

@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment, memo } from 'react'
 import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -30,8 +31,8 @@ export default function Payroll() {
   const loadData = () => {
     setLoading(true)
     Promise.all([
-      supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false }),
-      supabase.from('employees').select('id, name, department_id, store_id, departments(name), stores(name)').eq('status', '在職').order('name'),
+      getPayrollRuns(),
+      getActiveEmployees('id, name, department_id, store_id, departments(name), stores(name)'),
     ]).then(([r, e]) => {
       setRuns(r.data || [])
       setEmployees(e.data || [])
@@ -64,11 +65,7 @@ export default function Payroll() {
     setExpandedRecord(null)
     setLoadingRecords(true)
     try {
-      const { data, error } = await supabase
-        .from('payroll_records')
-        .select('*')
-        .eq('payroll_run_id', runId)
-        .order('id')
+      const { data, error } = await getPayrollRecords(runId)
       if (error) throw error
       setRecords(data || [])
     } catch (err) {
@@ -93,8 +90,7 @@ export default function Payroll() {
       if (error) throw error
       const result = data?.[0] || data
       alert(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
-      // Reload runs
-      const { data: freshRuns } = await supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false })
+      const { data: freshRuns } = await getPayrollRuns()
       setRuns(freshRuns || [])
       setShowCreateModal(false)
     } catch (err) {
@@ -135,10 +131,7 @@ export default function Payroll() {
     if (!confirm('確定定案此薪資作業？定案後無法重新計算。')) return
     setFinalizing(true)
     try {
-      const { error } = await supabase
-        .from('payroll_runs')
-        .update({ status: 'finalized', finalized_at: new Date().toISOString() })
-        .eq('id', selectedRunId)
+      const { error } = await updatePayrollRun(selectedRunId, { status: 'finalized', finalized_at: new Date().toISOString() })
       if (error) throw error
       setRuns(prev => prev.map(r => r.id === selectedRunId
         ? { ...r, status: 'finalized', finalized_at: new Date().toISOString() }
@@ -424,11 +417,11 @@ export default function Payroll() {
   )
 }
 
-function DetailRow({ label, value, bold }) {
+const DetailRow = memo(function DetailRow({ label, value, bold }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13 }}>
       <span style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ fontWeight: bold ? 700 : 400, color: 'var(--text-primary)' }}>{value}</span>
     </div>
   )
-}
+})

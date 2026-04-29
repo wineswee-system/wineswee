@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Overview from '../pages/finance/Overview'
 import JournalEntries from '../pages/finance/JournalEntries'
@@ -21,7 +22,7 @@ import ChartOfAccounts from '../pages/finance/ChartOfAccounts'
 import ExpenseRequests from '../pages/finance/ExpenseRequests'
 import ExpenseApprovalSettings from '../pages/finance/ExpenseApprovalSettings'
 
-export default function FinanceModule() {
+export default memo(function FinanceModule() {
   return (
     <Routes>
       <Route path="overview" element={<Overview />} />
@@ -47,4 +48,4 @@ export default function FinanceModule() {
       <Route path="period-close" element={<PeriodClose />} />
     </Routes>
   )
-}
+})

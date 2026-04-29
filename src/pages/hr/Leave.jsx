@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Search, Info, Paperclip } from 'lucide-react'
-import { getLeaveRequests, createLeaveRequest, updateLeaveStatus } from '../../lib/db'
+import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
 import { useAuth } from '../../contexts/AuthContext'
@@ -10,6 +10,7 @@ import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '.
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
+import { useVirtualList, VirtualRow } from '../../lib/useVirtualList'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -31,9 +32,9 @@ export default function Leave() {
   useEffect(() => {
     Promise.all([
       getLeaveRequests(),
-      supabase.from('employees').select('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)').eq('status', '在職').order('name'),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('leave_step_settings').select('*'),
+      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)'),
+      getDepartments(),
+      getLeaveStepSettings(),
     ]).then(([l, e, d, ls]) => {
       const emps = e.data || []
       setLeaves(l.data || [])
@@ -214,14 +215,17 @@ export default function Leave() {
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 
-  if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+  const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
-  const filtered = leaves.filter(l =>
+  const filtered = useMemo(() => leaves.filter(l =>
     (deptFilter === '' || getEmpDept(l.employee) === deptFilter) &&
     (search === '' || l.employee.includes(search))
-  )
+  ), [leaves, deptFilter, search, getEmpDept])
+
+  const { virtualItems, containerRef, containerStyle } = useVirtualList({ items: filtered, itemHeight: 52, overscan: 8 })
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
 
   return (
@@ -280,62 +284,60 @@ export default function Leave() {
             <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr><th>員工</th><th>部門</th><th>假別</th><th>期間</th><th>天數/時數</th><th>事由</th><th>附件</th><th>狀態</th><th>操作</th></tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無假單</td></tr>}
-              {filtered.map(l => (
-                <tr key={l.id}>
-                  <td style={{ fontWeight: 600 }}>{l.employee}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</td>
-                  <td><span className="badge badge-info"><span className="badge-dot"></span>{l.type}</span></td>
-                  <td style={{ fontSize: 12 }}>
+        <div>
+          {filtered.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無假單</div>
+          )}
+          {/* Virtual table header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '假別', '期間', '天數/時數', '事由', '附件', '狀態', '操作'].map(h => (
+              <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
+            ))}
+          </div>
+          {/* Virtual scroll body */}
+          <div ref={containerRef} style={{ height: 480, overflowY: 'auto', overflowX: 'hidden' }}>
+            <div style={containerStyle}>
+              {virtualItems.map(({ item: l, style }) => (
+                <VirtualRow key={l.id} style={{ ...style, display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
+                  <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
+                  <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{l.type}</span></div>
+                  <div style={{ padding: '4px 8px', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {l.start_date}{l.start_time ? ` ${l.start_time}` : ''}
                     {l.end_date !== l.start_date ? ` ~ ${l.end_date}` : ''}
                     {l.end_time ? ` ${l.end_time}` : ''}
-                  </td>
-                  <td>{l.hours && l.hours < 8 ? `${l.hours}h` : `${l.days}天`}</td>
-                  <td style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</td>
-                  <td>
+                  </div>
+                  <div style={{ padding: '4px 8px', fontSize: 13 }}>{l.hours && l.hours < 8 ? `${l.hours}h` : `${l.days}天`}</div>
+                  <div style={{ padding: '4px 8px', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</div>
+                  <div style={{ padding: '4px 8px' }}>
                     {l.attachments?.length > 0 ? (
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {l.attachments.map((url, i) => (
-                          <a key={i} href={url} target="_blank" rel="noreferrer" style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                            background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', textDecoration: 'none',
-                          }}>
+                          <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', textDecoration: 'none' }}>
                             <Paperclip size={10} /> {i + 1}
                           </a>
                         ))}
                       </div>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
-                    )}
-                  </td>
-                  <td>
+                    ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                  </div>
+                  <div style={{ padding: '4px 8px' }}>
                     <span className={`badge ${l.status === '已核准' ? 'badge-success' : l.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}
                     </span>
-                    {l.reject_reason && (
-                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{l.reject_reason}</div>
-                    )}
-                  </td>
-                  <td>
+                    {l.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>原因：{l.reject_reason}</div>}
+                  </div>
+                  <div style={{ padding: '4px 8px' }}>
                     {l.status === '待審核' && (
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)}>核准</button>
                         <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
                       </div>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </VirtualRow>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       </div>
 

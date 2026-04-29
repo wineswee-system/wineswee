@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Search, Download, MapPin, Wifi, Clock, CalendarCheck } from 'lucide-react'
-import { getAttendance, serverClockIn } from '../../lib/db'
-import { supabase } from '../../lib/supabase'
+import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useVirtualList, VirtualRow } from '../../lib/useVirtualList'
 
 export default function Attendance() {
   const { profile, role } = useAuth()
@@ -29,9 +29,9 @@ export default function Attendance() {
   useEffect(() => {
     Promise.all([
       getAttendance(),
-      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('*'),
+      getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)'),
+      getDepartments(),
+      getStores(),
     ]).then(([r, e, d, s]) => {
       let recs = r.data || []
       // store_staff: 只顯示自己的紀錄
@@ -53,20 +53,41 @@ export default function Attendance() {
     })
   }, [])
 
-  if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+  const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
+  const getEmpStore = useCallback((name) => employees.find(e => e.name === name)?.store || '', [employees])
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
-  const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
+  const today = new Date().toISOString().slice(0, 10)
 
-  const filtered = records.filter(r =>
+  const filtered = useMemo(() => records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
     (storeFilter === '' || getEmpStore(r.employee) === storeFilter) &&
     (search === '' || r.employee?.includes(search))
+  ), [records, deptFilter, storeFilter, search, getEmpDept, getEmpStore])
+
+  const avgHours = useMemo(() =>
+    filtered.filter(r => r.hours > 0).reduce((s, r) => s + Number(r.hours), 0) /
+    (filtered.filter(r => r.hours > 0).length || 1),
+    [filtered]
   )
 
-  const avgHours = filtered.filter(r => r.hours > 0).reduce((s, r) => s + Number(r.hours), 0) /
-    (filtered.filter(r => r.hours > 0).length || 1)
+  const allRows = useMemo(() => {
+    const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
+    const recordRows = filtered.map(r => ({ ...r, _rowType: 'record' }))
+    const notClockedRows = employees
+      .filter(e =>
+        !todayEmpNames.has(e.name) &&
+        (storeFilter === '' || e.store === storeFilter) &&
+        (deptFilter === '' || e.dept === deptFilter) &&
+        (search === '' || e.name.includes(search))
+      )
+      .map(e => ({ _rowType: 'notClocked', id: `nc-${e.id}`, employee: e.name, dept: e.dept, store: e.store, date: today }))
+    return [...recordRows, ...notClockedRows]
+  }, [filtered, records, employees, storeFilter, deptFilter, search, today])
+
+  const { virtualItems, containerRef, containerStyle } = useVirtualList({ items: allRows, itemHeight: 48, overscan: 8 })
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const handleClockIn = async (employeeName) => {
     setClockingIn(true)
@@ -205,85 +226,54 @@ export default function Attendance() {
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>員工</th><th>部門</th><th>日期</th><th>上班打卡</th><th>下班打卡</th>
-                <th>工時</th><th>打卡地點</th><th>IP 位址</th><th>狀態</th><th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無出勤紀錄</td></tr>}
-              {filtered.map(r => {
-                const today = new Date().toISOString().slice(0, 10)
+        <div>
+          {allRows.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無出勤紀錄</div>
+          )}
+          {/* Virtual table header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', 'IP 位址', '狀態', '操作'].map(h => (
+              <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
+            ))}
+          </div>
+          {/* Virtual scroll body */}
+          <div ref={containerRef} style={{ height: 480, overflowY: 'auto', overflowX: 'hidden' }}>
+            <div style={containerStyle}>
+              {virtualItems.map(({ item: r, style }) => {
                 const isToday = r.date === today
-                const canClockOut = isToday && r.clock_in && !r.clock_out
-                const canClockIn = isToday && !r.clock_in
+                const isNotClocked = r._rowType === 'notClocked'
+                const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
+                const canClockIn = !isNotClocked && isToday && !r.clock_in
                 return (
-                  <tr key={r.id}>
-                    <td style={{ fontWeight: 600 }}>{r.employee}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
-                    <td>{r.date}</td>
-                    <td>{r.clock_in || '-'}</td>
-                    <td>{r.clock_out || '-'}</td>
-                    <td>{r.hours > 0 ? `${r.hours}h` : '-'}</td>
-                    <td>{locationBadge(r)}</td>
-                    <td style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-                      {r.clock_in_ip ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Wifi size={10} /> {r.clock_in_ip}
-                        </span>
-                      ) : '-'}
-                    </td>
-                    <td>
-                      <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : 'badge-danger'}`}>
-                        <span className="badge-dot"></span>{r.status}
-                      </span>
-                    </td>
-                    <td>
-                      {(canClockIn || canClockOut) && (
-                        <button
-                          className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`}
-                          style={{ fontSize: 11, padding: '3px 10px' }}
-                          disabled={clockingIn}
-                          onClick={() => handleClockIn(r.employee)}
-                        >
+                  <VirtualRow key={r.id} style={{ ...style, display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
+                    <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
+                    <div style={{ padding: '4px 8px' }}>{isNotClocked ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span> : locationBadge(r)}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {!isNotClocked && r.clock_in_ip ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Wifi size={10} /> {r.clock_in_ip}</span> : '-'}
+                    </div>
+                    <div style={{ padding: '4px 8px' }}>
+                      {isNotClocked
+                        ? <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
+                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                      }
+                    </div>
+                    <div style={{ padding: '4px 8px' }}>
+                      {(isNotClocked || canClockIn || canClockOut) && (
+                        <button className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`} style={{ fontSize: 11, padding: '3px 10px' }} disabled={clockingIn} onClick={() => handleClockIn(r.employee)}>
                           <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
                         </button>
                       )}
-                    </td>
-                  </tr>
+                    </div>
+                  </VirtualRow>
                 )
               })}
-              {/* Quick clock-in for employees not yet in today's records */}
-              {(() => {
-                const today = new Date().toISOString().slice(0, 10)
-                const todayEmployees = records.filter(r => r.date === today).map(r => r.employee)
-                const notClocked = employees.filter(e =>
-                  !todayEmployees.includes(e.name) &&
-                  (storeFilter === '' || e.store === storeFilter) &&
-                  (deptFilter === '' || e.dept === deptFilter) &&
-                  (search === '' || e.name.includes(search))
-                )
-                return notClocked.map(e => (
-                  <tr key={`new-${e.id}`} style={{ opacity: 0.7 }}>
-                    <td style={{ fontWeight: 600 }}>{e.name}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.dept || '-'}</td>
-                    <td>{today}</td>
-                    <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                    <td><span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span></td>
-                    <td>
-                      <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}
-                        disabled={clockingIn} onClick={() => handleClockIn(e.name)}>
-                        <Clock size={10} /> 上班打卡
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              })()}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       </div>
       </>}

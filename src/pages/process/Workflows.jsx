@@ -78,6 +78,9 @@ export default function Workflows() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState(null)
   const [aiMessages, setAiMessages] = useState([])
+  const [aiPhase, setAiPhase] = useState('idle') // 'idle' | 'collecting' | 'done'
+  const [aiStepIndex, setAiStepIndex] = useState(0)
+  const [aiDraftSteps, setAiDraftSteps] = useState([])
 
   // New workflow menu
   const [showNewWorkflowMenu, setShowNewWorkflowMenu] = useState(false)
@@ -516,6 +519,7 @@ export default function Workflows() {
     setAiMessages(prev => [...prev, { role: 'user', text: userMsg }])
     setAiLoading(true)
     setAiResult(null)
+    setAiPhase('idle')
 
     // Simulate thinking delay
     await new Promise(r => setTimeout(r, 800 + Math.random() * 700))
@@ -542,22 +546,52 @@ export default function Workflows() {
       }
 
       setAiResult(json)
-      setAiMessages(prev => [...prev, { role: 'ai', text: `已生成「${json.name}」，共 ${json.steps?.length || 0} 個步驟`, data: json }])
+      setAiDraftSteps(json.steps || [])
+      setAiStepIndex(0)
+      setAiPhase('collecting')
+      setAiMessages(prev => [...prev, {
+        role: 'ai',
+        text: `已生成「${json.name}」，共 ${json.steps?.length || 0} 個步驟。請逐步確認每個步驟的細節：`,
+        data: json,
+      }])
     } catch (err) {
       setAiMessages(prev => [...prev, { role: 'ai', text: `❌ ${err.message}`, error: true }])
     }
     setAiLoading(false)
   }
 
+  const handleAiStepConfirm = (stepIndex, updatedStep) => {
+    const newSteps = aiDraftSteps.map((s, i) => i === stepIndex ? updatedStep : s)
+    setAiDraftSteps(newSteps)
+    if (stepIndex + 1 < aiDraftSteps.length) {
+      setAiStepIndex(stepIndex + 1)
+      setAiMessages(prev => [...prev, {
+        role: 'ai',
+        text: `✓ 第 ${stepIndex + 1} 步「${updatedStep.title}」已確認。請填寫第 ${stepIndex + 2} 步：`,
+      }])
+    } else {
+      setAiResult(prev => ({ ...prev, steps: newSteps }))
+      setAiPhase('done')
+      setAiMessages(prev => [...prev, {
+        role: 'ai',
+        text: `✅ 所有 ${newSteps.length} 個步驟均已確認！點擊「儲存到流程範本」即可建立。`,
+      }])
+    }
+  }
+
   const handleSaveAiResult = async () => {
     if (!aiResult) return
+    const stepsToSave = aiDraftSteps.length > 0 ? aiDraftSteps : (aiResult.steps || [])
     const { data } = await supabase.from('sop_templates').insert({
       name: aiResult.name, category: aiResult.category || '營運',
-      description: aiResult.description, steps: aiResult.steps || [],
+      description: aiResult.description, steps: stepsToSave,
     }).select().single()
     if (data) {
       setTemplates(prev => [...prev, data])
       setAiResult(null)
+      setAiPhase('idle')
+      setAiDraftSteps([])
+      setAiStepIndex(0)
       setAiMessages(prev => [...prev, { role: 'ai', text: `✅「${data.name}」已儲存到流程範本！` }])
     }
   }
@@ -1018,7 +1052,12 @@ export default function Workflows() {
           aiLoading={aiLoading} aiMessages={aiMessages} aiResult={aiResult}
           onGenerate={handleAiGenerate}
           onSaveResult={handleSaveAiResult}
-          onSkipResult={() => setAiResult(null)}
+          onSkipResult={() => { setAiResult(null); setAiPhase('idle'); setAiDraftSteps([]); setAiStepIndex(0) }}
+          aiPhase={aiPhase}
+          aiStepIndex={aiStepIndex}
+          aiDraftSteps={aiDraftSteps}
+          onStepConfirm={handleAiStepConfirm}
+          employees={employees}
         />
       )}
 

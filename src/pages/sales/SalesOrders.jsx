@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { Plus, Search, Trash2, ChevronDown, ChevronRight, Save, Loader } from 'lucide-react'
 import {
   getSalesOrders, createSalesOrder, createShipment, updateSalesOrder,
   getSalesOrderLines, createSalesOrderLine, updateSalesOrderLine, deleteSalesOrderLine,
   batchCreateSalesOrderLines, getSKUs
 } from '../../lib/db'
-import { supabase } from '../../lib/supabase'
 import { calculateInvoiceTax } from '../../lib/einvoice'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -158,7 +157,7 @@ export default function SalesOrders() {
         items: order.items || [],
         status: '待出貨',
       })
-      const { data } = await supabase.from('sales_orders').update({ shipping_status: '已出貨' }).eq('id', order.id).select().single()
+      const { data } = await updateSalesOrder(order.id, { shipping_status: '已出貨' })
       if (data) setItems(prev => prev.map(i => i.id === order.id ? data : i))
       setActionMsg(`已建立出貨單 ${shipNum}`)
       setTimeout(() => setActionMsg(''), 4000)
@@ -239,20 +238,24 @@ export default function SalesOrders() {
     }
   }
 
+  const filtered = useMemo(() => items.filter(s =>
+    search === '' || s.order_number?.includes(search) || s.customer?.includes(search)
+  ), [items, search])
+
+  const { pendingShip, shipped, unpaid, monthRevenue } = useMemo(() => {
+    const now = new Date()
+    return {
+      pendingShip: filtered.filter(s => s.shipping_status === '待出貨').length,
+      shipped: filtered.filter(s => s.shipping_status === '已出貨').length,
+      unpaid: filtered.filter(s => s.payment_status === '未付款').length,
+      monthRevenue: filtered
+        .filter(s => { const d = new Date(s.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() })
+        .reduce((sum, s) => sum + (s.total || 0), 0),
+    }
+  }, [filtered])
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
-
-  const filtered = items.filter(s =>
-    search === '' || s.order_number?.includes(search) || s.customer?.includes(search)
-  )
-
-  const pendingShip = filtered.filter(s => s.shipping_status === '待出貨').length
-  const shipped = filtered.filter(s => s.shipping_status === '已出貨').length
-  const unpaid = filtered.filter(s => s.payment_status === '未付款').length
-  const now = new Date()
-  const monthRevenue = filtered
-    .filter(s => { const d = new Date(s.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() })
-    .reduce((sum, s) => sum + (s.total || 0), 0)
 
   const renderDbLines = (lines) => {
     if (!lines.length) return <em style={{ color: 'var(--text-muted)' }}>無明細</em>

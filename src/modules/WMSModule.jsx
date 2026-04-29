@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Overview from '../pages/wms/Overview'
 import SKUs from '../pages/wms/SKUs'
@@ -15,7 +16,7 @@ import Returns from '../pages/wms/Returns'
 import Kitting from '../pages/wms/Kitting'
 import AIInventory from '../pages/wms/AIInventory'
 
-export default function WMSModule() {
+export default memo(function WMSModule() {
   return (
     <Routes>
       <Route path="overview" element={<Overview />} />
@@ -35,4 +36,4 @@ export default function WMSModule() {
       <Route path="ai" element={<AIInventory />} />
     </Routes>
   )
-}
+})

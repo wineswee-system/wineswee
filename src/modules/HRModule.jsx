@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import HRReport from '../pages/hr/HRReport'
 import Attendance from '../pages/hr/Attendance'
@@ -33,7 +34,7 @@ import Payroll from '../pages/hr/Payroll'
 import LegalDeductions from '../pages/hr/LegalDeductions'
 import WorkUnitSettings from '../pages/hr/WorkUnitSettings'
 
-export default function HRModule() {
+export default memo(function HRModule() {
   return (
     <Routes>
       <Route path="report" element={<HRReport />} />
@@ -71,4 +72,4 @@ export default function HRModule() {
       <Route path="work-unit-settings" element={<WorkUnitSettings />} />
     </Routes>
   )
-}
+})

@@ -30,6 +30,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
             marginBottom: 12, padding: '14px 16px', cursor: 'pointer',
             borderColor: isComplete ? 'var(--accent-green)' : undefined,
             transition: 'border-color 0.2s',
+            overflow: 'visible',
           }}
             onClick={() => onSelect(inst)}
             onMouseEnter={e => !isComplete && (e.currentTarget.style.borderColor = 'var(--accent-cyan)')}

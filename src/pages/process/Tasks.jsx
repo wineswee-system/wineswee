@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
 import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories } from '../../lib/db'
+import { notifyTaskStarted } from '../../lib/lineNotify'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -70,7 +71,12 @@ export default function Tasks() {
   const handleStatusChange = async (id, status) => {
     const completedAt = status === '已完成' ? new Date().toISOString() : null
     const { data } = await updateTask(id, { status, completed_at: completedAt })
-    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+    if (data) {
+      setTasks(prev => prev.map(t => t.id === id ? data : t))
+      if (status === '進行中' && data.assignee) {
+        notifyTaskStarted(data.assignee, data.title, data.workflow || null, data.id).catch(() => {})
+      }
+    }
   }
 
   const handleSubmit = async () => {
@@ -86,8 +92,8 @@ export default function Tasks() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
-  // Unified items — all from tasks table
-  const allItems = tasks.map(t => ({
+  // Unified items — workflow tasks hidden until they become in-progress
+  const allItems = tasks.filter(t => !(t.workflow_instance_id && t.status === '待處理')).map(t => ({
     id: t.id,
     title: t.title,
     assignee: t.assignee,

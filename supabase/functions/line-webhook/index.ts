@@ -65,23 +65,28 @@ serve(async (req) => {
   }
   const channelId = channelRow.id;
 
-  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET");
+  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET_WORKFLOW")
+    ?? Deno.env.get("LINE_CHANNEL_SECRET");
   const accessToken =
+    Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") ??
     Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ??
     Deno.env.get("LINE_CHANNEL_TOKEN");
   const liffTaskId =
+    Deno.env.get("LIFF_TASK_ID_WORKFLOW") ??
     Deno.env.get("LIFF_TASK_ID") ??
     channelRow.liff_id ??
     "";
   const liffNewTaskId =
+    Deno.env.get("LIFF_NEW_TASK_ID_WORKFLOW") ??
     Deno.env.get("LIFF_NEW_TASK_ID") ??
     channelRow.liff_id ??
     "";
   const liffDashboardId =
+    Deno.env.get("LIFF_DASHBOARD_ID_WORKFLOW") ??
     Deno.env.get("LIFF_DASHBOARD_ID") ?? "";
 
   if (!channelSecret || !accessToken) {
-    console.error("[webhook] Missing LINE credentials (LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN)");
+    console.error("[webhook] Missing LINE credentials (LINE_CHANNEL_SECRET_WORKFLOW / LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW)");
     return new Response("Missing LINE credentials", { status: 500 });
   }
 

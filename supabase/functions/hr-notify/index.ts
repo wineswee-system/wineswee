@@ -12,6 +12,7 @@ async function pushLine(to: string, messages: object[], accessToken: string) {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ to, messages }),
+    signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) {
     const body = await res.text();

@@ -33,6 +33,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ to, messages }),
+      signal: AbortSignal.timeout(8000),
     })
 
     const status = res.status

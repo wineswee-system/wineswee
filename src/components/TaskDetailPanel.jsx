@@ -186,7 +186,7 @@ export default function TaskDetailPanel({
             notifyTaskStarted(next.assignee, next.title, instance?.store || instance?.template_name, next.id).catch(() => {})
           }
         }
-        if (triggerDeps.length > 0) drainNotificationQueue()
+        drainNotificationQueue()
       }
     }
     setSaving(false)

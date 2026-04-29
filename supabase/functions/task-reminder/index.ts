@@ -12,6 +12,7 @@ async function pushLine(to: string, messages: object[], accessToken: string): Pr
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ to, messages }),
+    signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -152,12 +153,8 @@ serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     // line_user_id is channel-scoped — pick the token matching the channel the
     // assignee is bound to. Fallback to legacy generic token for old reminders.
-    const tokenByChannel: Record<string, string> = {
-      workflow: Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "",
-    };
     const fallbackToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW") || "";
-    const tokenFor = (channelCode: string | null | undefined): string =>
-      (channelCode && tokenByChannel[channelCode]) || fallbackToken;
+    const tokenFor = (_channelCode: string | null | undefined): string => fallbackToken;
     // LIFF deep-link target for the "查看詳情" button on every flex card
     const taskLiffId =
       Deno.env.get("LIFF_TASK_ID_WORKFLOW") ||

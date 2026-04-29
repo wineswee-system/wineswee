@@ -773,8 +773,7 @@ serve(async (req) => {
         responseMsg = text("🔒 您沒有權限審核請假。");
       } else {
         const isApprove = lower.startsWith('/管理 核准請假');
-        const prefixLength = isApprove ? 8 : 8; // "/管理 核准請假 " length
-        const leaveId = rawText.substring(prefixLength).trim();
+        const leaveId = rawText.substring(8).trim(); // both "/管理 核准請假" and "/管理 退回請假" are 8 chars
         responseMsg = await cmdManagerLeaveReview(leaveId, isApprove, db, lineUser.employee_id);
       }
 
@@ -831,7 +830,7 @@ serve(async (req) => {
         responseMsg = text('請先連結您的員工帳號。\n輸入：/註冊 您的姓名');
       } else {
         const currentYear = new Date().getFullYear();
-        const { data: balances } = await db
+        const { data: balances, error: balanceErr } = await db
           .from('leave_balances')
           .select('leave_type, total_days, used_days, carry_over_days')
           .eq('employee_id', lineUser.employee_id)
@@ -848,7 +847,9 @@ serve(async (req) => {
           unpaid: '無薪假',
         };
 
-        if (!balances || balances.length === 0) {
+        if (balanceErr) {
+          responseMsg = text(`❌ 查詢假期餘額失敗：${balanceErr.message}`);
+        } else if (!balances || balances.length === 0) {
           responseMsg = text(`📋 ${currentYear} 年假期餘額尚未設定。\n請聯繫 HR 確認假期配額。`);
         } else {
           const rows = balances.map((b: any) => {
@@ -947,7 +948,7 @@ serve(async (req) => {
         const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
         const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
-        const { data: otRecords } = await db
+        const { data: otRecords, error: otErr } = await db
           .from('overtime_requests')
           .select('request_date, ot_hours, ot_type, filing_type, status')
           .eq('employee_id', lineUser.employee_id)
@@ -955,7 +956,9 @@ serve(async (req) => {
           .lt('request_date', nextMonth)
           .order('request_date', { ascending: false });
 
-        if (!otRecords || otRecords.length === 0) {
+        if (otErr) {
+          responseMsg = text(`❌ 查詢加班記錄失敗：${otErr.message}`);
+        } else if (!otRecords || otRecords.length === 0) {
           responseMsg = text(`📋 ${year}年${month}月 尚無加班記錄。`);
         } else {
           const approvedHours = otRecords.filter((r: any) => r.status === 'approved')
@@ -1100,43 +1103,45 @@ serve(async (req) => {
         }
       }
 
-    } else if (matchLiffShortcut(lower)) {
-      const sc = matchLiffShortcut(lower)!;
-      commandName = `liff_shortcut_${sc.key}`;
-      const liffId = liffNewTaskId || liffTaskId;
-
-      // 升級型：班表 / 薪水 / 打卡 都改顯示 preview，主動作再開 LIFF
-      if (sc.key === "schedule") {
-        responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
-      } else if (sc.key === "salary") {
-        responseMsg = await buildSalaryBriefMessage(db, lineUserId, liffId);
-      } else if (sc.key === "clock") {
-        responseMsg = await buildClockTodayMessage(db, lineUserId, liffId);
-      } else if (!liffId) {
-        responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
-      } else {
-        responseMsg = flexLiffShortcut({
-          title: sc.title,
-          subtitle: sc.subtitle,
-          buttonLabel: sc.buttonLabel,
-          liffId,
-          liffPath: sc.path,
-          emoji: sc.emoji,
-        });
-      }
-
-    } else if (!isGroup) {
-      commandName = "unrecognized";
-      responseMsg = withQuickReplies(
-        text(`❓ 未識別的指令「${rawText}」`),
-        [
-          { label: "📖 查看說明", text: "/說明" },
-          { label: "📋 任務列表", text: "/任務 列表" },
-        ],
-      );
-
     } else {
-      continue; // Ignore unknown commands in groups
+      const sc = matchLiffShortcut(lower);
+      if (sc) {
+        commandName = `liff_shortcut_${sc.key}`;
+        const liffId = liffNewTaskId || liffTaskId;
+
+        // 升級型：班表 / 薪水 / 打卡 都改顯示 preview，主動作再開 LIFF
+        if (sc.key === "schedule") {
+          responseMsg = await buildScheduleBriefMessage(db, lineUserId, liffId);
+        } else if (sc.key === "salary") {
+          responseMsg = await buildSalaryBriefMessage(db, lineUserId, liffId);
+        } else if (sc.key === "clock") {
+          responseMsg = await buildClockTodayMessage(db, lineUserId, liffId);
+        } else if (!liffId) {
+          responseMsg = text(`⚠️ ${sc.title} 無法開啟：管理員尚未設定 LIFF_TASK_ID。`);
+        } else {
+          responseMsg = flexLiffShortcut({
+            title: sc.title,
+            subtitle: sc.subtitle,
+            buttonLabel: sc.buttonLabel,
+            liffId,
+            liffPath: sc.path,
+            emoji: sc.emoji,
+          });
+        }
+
+      } else if (!isGroup) {
+        commandName = "unrecognized";
+        responseMsg = withQuickReplies(
+          text(`❓ 未識別的指令「${rawText}」`),
+          [
+            { label: "📖 查看說明", text: "/說明" },
+            { label: "📋 任務列表", text: "/任務 列表" },
+          ],
+        );
+
+      } else {
+        continue; // Ignore unknown commands in groups
+      }
     }
 
     // ── Log command execution ───────────────────────────────────────────────

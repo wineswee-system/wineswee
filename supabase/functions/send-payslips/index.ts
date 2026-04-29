@@ -30,6 +30,7 @@ async function pushLineMessage(lineUserId: string, messages: unknown[], channelC
       'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({ to: lineUserId, messages }),
+    signal: AbortSignal.timeout(8000),
   })
 
   if (!res.ok) {

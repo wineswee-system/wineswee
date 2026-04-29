@@ -146,6 +146,7 @@ serve(async (req) => {
             'Authorization': `Bearer ${lineToken}`,
           },
           body: JSON.stringify({ to: lineUserId, messages }),
+          signal: AbortSignal.timeout(8000),
         })
 
         if (res.ok) {

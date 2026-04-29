@@ -22,6 +22,7 @@ export async function reply(replyToken: string, messages: object[], accessToken:
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: payload,
+      signal: AbortSignal.timeout(8000),
     });
     const body = await res.text();
     if (!res.ok) {
@@ -42,6 +43,7 @@ export async function push(to: string, messages: object[], accessToken: string):
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ to, messages }),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -131,12 +133,14 @@ export async function getLineProfile(lineUserId: string, accessToken: string, gr
     : `https://api.line.me/v2/bot/profile/${lineUserId}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8000),
   });
   if (res.ok) return await res.json();
   // Fallback: try direct profile if group endpoint failed
   if (groupId) {
     const res2 = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(8000),
     });
     if (res2.ok) return await res2.json();
   }
@@ -146,6 +150,7 @@ export async function getLineProfile(lineUserId: string, accessToken: string, gr
 export async function getGroupSummary(groupId: string, accessToken: string): Promise<{ groupName: string }> {
   const res = await fetch(`https://api.line.me/v2/bot/group/${groupId}/summary`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8000),
   });
   return res.ok ? await res.json() : { groupName: "" };
 }

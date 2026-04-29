@@ -50,11 +50,10 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>
         <h2>系統發生錯誤</h2>
-        {import.meta.env.PROD ? (
-          <p style={{ color: 'var(--text-secondary)' }}>系統發生錯誤，請聯繫系統管理員</p>
-        ) : (
-          <pre style={{ color: 'var(--text-secondary)', textAlign: 'left', fontSize: 12, overflowX: 'auto' }}>{this.state.error.stack}</pre>
-        )}
+        <pre style={{ color: 'var(--text-secondary)', textAlign: 'left', fontSize: 12, overflowX: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap', margin: '12px auto', maxWidth: 600 }}>
+          {this.state.error.message}
+          {import.meta.env.PROD ? '' : '\n\n' + this.state.error.stack}
+        </pre>
         <button onClick={() => window.location.reload()} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', cursor: 'pointer' }}>重新載入</button>
       </div>
     )

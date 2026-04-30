@@ -444,7 +444,6 @@ serve(async (req: Request) => {
                       }] : []),
                     ],
                   },
-                  ...(instanceName ? [{ type: "text", text: instanceName, color: "#FFFFFFCC", size: "xxs", margin: "xs", wrap: true }] : []),
                 ],
               },
               body: {

@@ -132,7 +132,6 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
               }] : []),
             ],
           },
-          ...(instanceName ? [{ type: 'text', text: instanceName, color: '#FFFFFFCC', size: 'xxs', margin: 'xs', wrap: true }] : []),
         ],
       },
       body: {

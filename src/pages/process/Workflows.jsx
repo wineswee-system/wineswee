@@ -396,7 +396,8 @@ export default function Workflows() {
   }
 
   const handleAddTask = async () => {
-    if (!taskForm.title || !selectedInstance) return
+    if (!taskForm.title) { alert('請填寫任務名稱'); return }
+    if (!selectedInstance) { alert('找不到流程實例，請重新整理後再試'); return }
     const instTasks = getInstanceTasks(selectedInstance.id)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
 
@@ -409,7 +410,7 @@ export default function Workflows() {
     const useChain   = taskForm.approval_mode === 'chain' && taskForm.approval_chain_id
     const usePeople  = taskForm.approval_mode === 'people' && (taskForm.confirmation_approvers || []).length > 0
 
-    const { data } = await createTask({
+    const { data, error: taskError } = await createTask({
       workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,
       title: taskForm.title,
       description: taskForm.description || null,
@@ -424,9 +425,13 @@ export default function Workflows() {
       status: '待處理', bucket: 'Workflow', category: 'Workflow',
       organization_id: profile?.organization_id || null,
       approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
-      confirmation_required: useChain || usePeople,
+      confirmation_required: !!(useChain || usePeople),
       confirmation_mode: usePeople ? (taskForm.confirmation_mode || 'parallel') : null,
     })
+    if (taskError || !data) {
+      alert(`新增任務失敗：${taskError?.message || '未知錯誤'}`)
+      return
+    }
     if (data) {
       setAllTasks(prev => [...prev, data])
 

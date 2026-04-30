@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
-import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories } from '../../lib/db'
+import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories, getWorkflows } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -32,6 +32,7 @@ export default function Tasks() {
   const [filterBucket, setFilterBucket] = useState('')
   const [filterProject, setFilterProject] = useState('')
   const [filterWorkflow, setFilterWorkflow] = useState('')
+  const [workflowDefs, setWorkflowDefs] = useState([])
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
@@ -44,7 +45,8 @@ export default function Tasks() {
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),
-    ]).then(([t, e, s, d, p, cat]) => {
+      getWorkflows(),
+    ]).then(([t, e, s, d, p, cat, wf]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
@@ -52,6 +54,7 @@ export default function Tasks() {
       setDepartments(d.data || [])
       setProjects(p.data || [])
       setTaskCategories(cat.data || [])
+      setWorkflowDefs(wf.data || [])
       const ids = rows.map(r => r.id)
       if (ids.length) {
         getTaskDependenciesByInstance(ids).then(({ data }) => setDependencies(data || []))
@@ -341,7 +344,12 @@ export default function Tasks() {
         <Modal title="新增任務" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="任務名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="所屬流程"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="流程名稱" value={form.workflow} onChange={e => set('workflow', e.target.value)} /></Field>
+            <Field label="所屬流程">
+              <select className="form-input" style={{ width: '100%' }} value={form.workflow} onChange={e => set('workflow', e.target.value)}>
+                <option value="">— 選擇流程 —</option>
+                {workflowDefs.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
+              </select>
+            </Field>
             <Field label="負責人">
               <select className="form-input" style={{ width: '100%' }} value={form.assignee} onChange={e => set('assignee', e.target.value)}>
                 <option value="">請選擇</option>

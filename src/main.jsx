@@ -5,8 +5,12 @@ import App from './App'
 import './index.css'
 import { getEventBus, registerAllHandlers } from './lib/events/index.js'
 import { logger } from './lib/logger.js'
+import { applyFontScale, getFontScale } from './lib/fontScale.js'
 
 const log = logger.forModule('app')
+
+// 套用使用者偏好的字體大小（從 localStorage）
+applyFontScale(getFontScale())
 
 // Initialize event bus with all domain handlers
 registerAllHandlers(getEventBus())

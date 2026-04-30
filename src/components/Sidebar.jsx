@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'
+import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 
 // Init theme from localStorage (default to light)
@@ -815,6 +816,11 @@ export default function Sidebar() {
             <span>系統設定</span>
           </button>
         )}
+
+        {/* 字體大小調整 */}
+        <div style={{ padding: '0 12px 8px' }}>
+          <FontSizeControl />
+        </div>
 
         {/* User profile */}
         <div className="sidebar-user">

@@ -142,6 +142,19 @@ export default function Workflows() {
 
   // ── Handlers ──
   const handleStatusChange = async (taskId, newStatus) => {
+    // ★ Block direct completion if task has an approval chain and it hasn't passed yet
+    if (newStatus === '已完成') {
+      const task = tasks.find(t => t.id === taskId)
+      if (task?.approval_chain_id) {
+        const { data: forms } = await supabase
+          .from('approval_forms').select('id')
+          .eq('ref_task_id', taskId).eq('status', '已通過').limit(1)
+        if (!forms?.length) {
+          alert('此任務需完成簽核才能標記為已完成\n請開啟任務詳細頁啟動並完成簽核流程')
+          return
+        }
+      }
+    }
     const completedAt = newStatus === '已完成' ? new Date().toISOString() : null
     const { data } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
     if (data) {

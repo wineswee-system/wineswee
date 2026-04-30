@@ -152,6 +152,27 @@ export default function TaskDetailPanel({
 
   const handleSave = async () => {
     setSaving(true)
+    const prevStatus = task.status
+
+    // ★ If task has an approval chain, block direct completion until chain passes
+    if (form.status === '已完成' && prevStatus !== '已完成' && task.approval_chain_id) {
+      if (!approvalForm) {
+        await handleStartApproval(task.approval_chain_id)
+        setForm(f => ({ ...f, status: prevStatus }))
+        setSaving(false)
+        alert('已自動啟動簽核流程，完成所有簽核後任務將自動標記為已完成')
+        return
+      }
+      if (approvalForm.status !== '已通過') {
+        setForm(f => ({ ...f, status: prevStatus }))
+        setSaving(false)
+        alert(approvalForm.status === '已退回'
+          ? '簽核已退回，請重新啟動簽核流程'
+          : '請等待簽核完成後，任務將自動標記為已完成')
+        return
+      }
+    }
+
     const payload = {
       ...form,
       title: titleDraft,
@@ -162,7 +183,6 @@ export default function TaskDetailPanel({
       confirmation_mode: form.confirmation_mode || 'parallel',
       completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
     }
-    const prevStatus = task.status
     const { data } = await updateTask(task.id, payload)
     if (data) {
       onUpdate(data)
@@ -270,6 +290,11 @@ export default function TaskDetailPanel({
           status: '已通過', completed_at: new Date().toISOString(),
         })
         if (f) setApprovalForm(f)
+        // ★ Chain complete — auto-complete the task
+        const { data: completedTask } = await updateTask(task.id, {
+          status: '已完成', completed_at: new Date().toISOString(),
+        })
+        if (completedTask) onUpdate(completedTask)
       }
     } else {
       const nextStep = updated.find(s => s.status === '等待中')
@@ -289,6 +314,11 @@ export default function TaskDetailPanel({
           status: '已通過', completed_at: new Date().toISOString(),
         })
         if (f) setApprovalForm(f)
+        // ★ Chain complete — auto-complete the task
+        const { data: completedTask } = await updateTask(task.id, {
+          status: '已完成', completed_at: new Date().toISOString(),
+        })
+        if (completedTask) onUpdate(completedTask)
       }
     }
   }

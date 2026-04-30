@@ -295,10 +295,26 @@ export default function ApprovalChains() {
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 8 }}>簽核步驟（申請人 → ...）</div>
           {chainForm.steps.map((s, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-              <select className="form-input" value={s.role} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], role: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }}>
+              <select
+                className="form-input"
+                value={s.target_emp_id || ''}
+                onChange={e => {
+                  const empId = e.target.value ? Number(e.target.value) : null
+                  const emp = empId ? employees.find(em => em.id === empId) : null
+                  const n = [...chainForm.steps]
+                  n[i] = {
+                    ...n[i],
+                    target_type: empId ? 'employee' : 'label',
+                    target_emp_id: empId,
+                    role: emp?.name || '',
+                    role_name: emp?.name || '',
+                  }
+                  setChainForm(f => ({ ...f, steps: n }))
+                }}
+              >
                 <option value="">選擇簽核人</option>
                 {employees.map(emp => (
-                  <option key={emp.id} value={emp.name}>
+                  <option key={emp.id} value={emp.id}>
                     {empLabel(emp)}{(emp.position || emp.dept) ? ` - ${emp.position || emp.dept}` : ''}
                   </option>
                 ))}
@@ -307,7 +323,7 @@ export default function ApprovalChains() {
               <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => setChainForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
             </div>
           ))}
-          <button className="btn btn-secondary btn-sm" onClick={() => setChainForm(f => ({ ...f, steps: [...f.steps, { role: '', label: '' }] }))}><Plus size={12} /> 新增步驟</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setChainForm(f => ({ ...f, steps: [...f.steps, { role: '', label: '', target_type: 'label', target_emp_id: null }] }))}><Plus size={12} /> 新增步驟</button>
         </Modal>
       )}
 

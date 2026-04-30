@@ -443,7 +443,9 @@ export default function TaskDetailPanel({
         }))
         const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
         if (createdTasks?.[0]?.assignee) {
-          notifyTaskAssignee(createdTasks[0].assignee, createdTasks[0].title, tpl.name, createdTasks[0].id).catch(() => {})
+          notifyTaskAssignee(createdTasks[0].assignee, createdTasks[0].title, tpl.name, createdTasks[0].id, {
+            dueDate: createdTasks[0].due_date, description: createdTasks[0].description, notes: createdTasks[0].notes, store: createdTasks[0].store,
+          }).catch(() => {})
         }
       }
 

@@ -90,12 +90,16 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
   const dueLabel = dueDate
     ? new Date(dueDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '未設定'
+  const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
 
   const bodyContents = [
     { type: 'text', text: taskTitle, weight: 'bold', size: 'md', wrap: true },
-    { type: 'text', text: `到期：${dueLabel}`, size: 'xs', color: '#666666' },
+    { type: 'text', text: `到期：${dueLabel}`, size: 'xs', color: isOverdue ? '#ef4444' : '#666666', weight: isOverdue ? 'bold' : 'regular' },
     { type: 'text', text: `負責人：${assigneeName}`, size: 'xs', color: '#666666' },
   ]
+  if (instanceName) {
+    bodyContents.push({ type: 'text', text: `流程：${instanceName}`, size: 'xs', color: '#666666' })
+  }
   if (description && String(description).trim()) {
     bodyContents.push({ type: 'separator', margin: 'sm' })
     bodyContents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: '#444444', wrap: true, margin: 'sm' })
@@ -111,13 +115,23 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
 
   const messages = [{
     type: 'flex',
-    altText: `📋 任務通知：${taskTitle}`,
+    altText: `${isOverdue ? '⚠️ [逾期] ' : ''}📋 任務通知：${taskTitle}`,
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
         contents: [
-          { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+          {
+            type: 'box', layout: 'horizontal', alignItems: 'center',
+            contents: [
+              { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
+              ...(isOverdue ? [{
+                type: 'box', layout: 'vertical', backgroundColor: '#ef4444', cornerRadius: '4px',
+                paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
+                contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
+              }] : []),
+            ],
+          },
           ...(instanceName ? [{ type: 'text', text: instanceName, color: '#FFFFFFCC', size: 'xxs', margin: 'xs', wrap: true }] : []),
         ],
       },

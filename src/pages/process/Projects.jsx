@@ -314,7 +314,9 @@ export default function Projects() {
       setTasks(prev => [...prev, data])
       setAddTaskForm({ title: '', assignee: '', due_date: '' })
       setAddingTaskWfId(null)
-      if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id).catch(() => {})
+      if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
+        dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+      }).catch(() => {})
     }
   }
 

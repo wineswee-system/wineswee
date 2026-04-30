@@ -115,7 +115,7 @@ export default function Tasks() {
     if (tab === 'pending') return t.status === '未開始' || t.status === '待處理'
     if (tab === 'active') return t.status === '進行中'
     if (tab === 'done') return t.status === '已完成'
-    return true
+    return t.status !== '已完成'
   })
 
   const pendingCount = allItems.filter(t => t.status === '未開始' || t.status === '待處理').length

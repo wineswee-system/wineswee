@@ -20,6 +20,7 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
 
   useEffect(() => {
@@ -45,7 +46,26 @@ export default function Expenses() {
 
   const handleSubmit = async () => {
     if (!form.amount || !form.date || !form.employee) return
-    const { data } = await createExpense({ ...form, amount: Number(form.amount), status: '待審核' })
+    const payload = { ...form, amount: Number(form.amount) }
+
+    // ── 編輯重送路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('expenses')
+        .update({ ...payload, status: '待審核', reject_reason: null })
+        .eq('id', editingId)
+      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'expense', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setExpenses(prev => prev.map(x => x.id === editingId ? { ...x, ...payload, status: '待審核', reject_reason: null } : x))
+      setShowModal(false)
+      setEditingId(null)
+      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      return
+    }
+
+    // ── 新增路徑 ──
+    const { data } = await createExpense({ ...payload, status: '待審核' })
     if (data) {
       setExpenses(prev => [...prev, data])
       setShowModal(false)
@@ -99,7 +119,7 @@ export default function Expenses() {
             <h2><span className="header-icon">🧾</span> 費用核銷</h2>
             <p>報銷申請與審核</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增報銷</button>
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增報銷</button>
         </div>
       </div>
 
@@ -161,6 +181,20 @@ export default function Expenses() {
                         <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
                       </div>
                     )}
+                    {(e.status === '已駁回' || e.status === '已退回') && e.employee === profile?.name && (
+                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                        setEditingId(e.id)
+                        setForm({
+                          employee: e.employee,
+                          category: e.category || CATEGORIES[0],
+                          amount: e.amount?.toString() || '',
+                          date: e.date || '',
+                          description: e.description || '',
+                          receipt: e.receipt ?? true,
+                        })
+                        setShowModal(true)
+                      }}>✏️ 編輯重送</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -170,7 +204,7 @@ export default function Expenses() {
       </div>
 
       {showModal && (
-        <Modal title="新增報銷申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
             <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
               <option value="">請選擇員工</option>

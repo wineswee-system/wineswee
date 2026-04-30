@@ -16,6 +16,7 @@ export default function Overtime() {
   const [deptFilter, setDeptFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '' })
   const [error, setError] = useState(null)
 
@@ -50,6 +51,24 @@ export default function Overtime() {
   const handleSubmit = async () => {
     try {
       if (!form.date || !form.employee) return
+
+      // ── 編輯重送路徑 ──
+      if (editingId) {
+        const { error: updErr } = await supabase.from('overtime_requests')
+          .update({ ...form, status: '待審核', reject_reason: null })
+          .eq('id', editingId)
+        if (updErr) throw updErr
+        try {
+          await supabase.rpc('resume_workflow_for_request', { p_type: 'overtime', p_id: editingId })
+        } catch (e) { console.error('[resume_workflow] failed:', e) }
+        setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
+        setShowModal(false)
+        setEditingId(null)
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '' })
+        return
+      }
+
+      // ── 新增路徑 ──
       const { data, error } = await createOvertimeRequest({ ...form, status: '待審核' })
       if (error) throw error
       if (data) {
@@ -160,7 +179,7 @@ export default function Overtime() {
             <h2><span className="header-icon">🕐</span> 加班申請</h2>
             <p>加班時數申請與審核</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增加班</button>
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增加班</button>
         </div>
       </div>
 
@@ -223,6 +242,13 @@ export default function Overtime() {
                         <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
                       </div>
                     )}
+                    {(o.status === '已拒絕' || o.status === '已退回') && o.employee === profile?.name && (
+                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                        setEditingId(o.id)
+                        setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '' })
+                        setShowModal(true)
+                      }}>✏️ 編輯重送</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -232,7 +258,7 @@ export default function Overtime() {
       </div>
 
       {showModal && (
-        <Modal title="新增加班申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
             <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
               <option value="">請選擇員工</option>

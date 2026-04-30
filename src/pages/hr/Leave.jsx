@@ -21,6 +21,7 @@ export default function Leave() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [form, setForm] = useState({ employee: '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
   const [validationMsg, setValidationMsg] = useState('')
@@ -119,7 +120,7 @@ export default function Leave() {
 
     // ★ 解析 employee_id（強型別 FK）+ org_id 多租戶
     const empRow = employees.find(e2 => e2.name === form.employee)
-    const { data } = await createLeaveRequest({
+    const payload = {
       employee: form.employee,
       employee_id: empRow?.id || null,
       type: selectedPolicy?.shortName || form.type,
@@ -130,10 +131,28 @@ export default function Leave() {
       days,
       hours,
       reason: form.reason,
-      status: '待審核',
-      approver: '-',
       organization_id: profile?.organization_id || null,
-    })
+    }
+
+    // ── 編輯重送路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('leave_requests')
+        .update({ ...payload, status: '待審核', reject_reason: null })
+        .eq('id', editingId)
+      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'leave', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setLeaves(prev => prev.map(l => l.id === editingId ? { ...l, ...payload, status: '待審核', reject_reason: null } : l))
+      setShowModal(false)
+      setEditingId(null)
+      setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
+      setValidationMsg('')
+      return
+    }
+
+    // ── 新增路徑（原邏輯）──
+    const { data } = await createLeaveRequest({ ...payload, status: '待審核', approver: '-' })
     if (data) {
       setLeaves(prev => [data, ...prev])
       setShowModal(false)
@@ -238,7 +257,7 @@ export default function Leave() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowPolicyModal(true)}><Info size={14} /> 法規說明</button>
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增假單</button>
+            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增假單</button>
           </div>
         </div>
       </div>
@@ -333,6 +352,24 @@ export default function Leave() {
                         <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
                       </div>
                     )}
+                    {(l.status === '已拒絕' || l.status === '已退回') && l.employee === profile?.name && (
+                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                        setEditingId(l.id)
+                        setForm({
+                          employee: l.employee || '',
+                          type: l.type || 'annual',
+                          start_date: l.start_date || '',
+                          end_date: l.end_date || '',
+                          start_time: l.start_time || '09:00',
+                          end_time: l.end_time || '18:00',
+                          unit: l.start_time ? 'hour' : 'day',
+                          hours: l.hours || 0,
+                          days: l.days || 1,
+                          reason: l.reason || '',
+                        })
+                        setShowModal(true)
+                      }}>✏️ 編輯重送</button>
+                    )}
                   </div>
                 </VirtualRow>
               ))}
@@ -343,7 +380,7 @@ export default function Leave() {
 
       {/* New Leave Modal */}
       {showModal && (
-        <Modal title="新增假單" onClose={() => { setShowModal(false); setValidationMsg('') }} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'} onClose={() => { setShowModal(false); setValidationMsg(''); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
             <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
               <option value="">請選擇</option>

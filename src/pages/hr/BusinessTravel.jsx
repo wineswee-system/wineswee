@@ -17,6 +17,7 @@ export default function BusinessTravel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
 
   useEffect(() => {
@@ -42,7 +43,26 @@ export default function BusinessTravel() {
 
   const handleSubmit = async () => {
     if (!form.destination || !form.start_date || !form.employee) return
-    const { data } = await createBusinessTrip({ ...form, budget: Number(form.budget) || 0, status: '待審核' })
+    const payload = { ...form, budget: Number(form.budget) || 0 }
+
+    // ── 編輯重送路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('business_trips')
+        .update({ ...payload, status: '待審核', reject_reason: null })
+        .eq('id', editingId)
+      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'trip', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setTrips(prev => prev.map(t => t.id === editingId ? { ...t, ...payload, status: '待審核', reject_reason: null } : t))
+      setShowModal(false)
+      setEditingId(null)
+      setForm({ employee: profile?.name || employees[0]?.name || '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+      return
+    }
+
+    // ── 新增路徑 ──
+    const { data } = await createBusinessTrip({ ...payload, status: '待審核' })
     if (data) {
       setTrips(prev => [...prev, data])
       setShowModal(false)
@@ -82,7 +102,7 @@ export default function BusinessTravel() {
             <h2><span className="header-icon">✈️</span> 公出差旅</h2>
             <p>出差申請與核准管理</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增差旅</button>
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增差旅</button>
         </div>
       </div>
 
@@ -144,6 +164,20 @@ export default function BusinessTravel() {
                         <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
                       </div>
                     )}
+                    {(t.status === '已駁回' || t.status === '已退回') && t.employee === profile?.name && (
+                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                        setEditingId(t.id)
+                        setForm({
+                          employee: t.employee,
+                          destination: t.destination || '',
+                          start_date: t.start_date || '',
+                          end_date: t.end_date || '',
+                          purpose: t.purpose || '',
+                          budget: t.budget?.toString() || '',
+                        })
+                        setShowModal(true)
+                      }}>✏️ 編輯重送</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -153,7 +187,7 @@ export default function BusinessTravel() {
       </div>
 
       {showModal && (
-        <Modal title="新增差旅申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增差旅申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
             <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
               <option value="">請選擇員工</option>

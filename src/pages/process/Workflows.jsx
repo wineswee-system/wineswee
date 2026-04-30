@@ -471,7 +471,7 @@ export default function Workflows() {
           subFailures.push(`審批人員未掛上：${error.message}`)
         } else {
           for (const name of (taskForm.confirmation_approvers || [])) {
-            notifyApproval(name, taskForm.title, '請求審批').catch(() => {})
+            notifyApproval(name, taskForm.title, '請求審批', { store: taskForm.store || null }).catch(() => {})
           }
         }
       }

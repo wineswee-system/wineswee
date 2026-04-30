@@ -230,14 +230,15 @@ export default function TaskDetailPanel({
     const { data: steps } = await createApprovalFormSteps(stepRows)
     setApprovalSteps(steps || [])
     // Notify
+    const notifyExtras = { chainName: chain.name, category: chain.category, store: form.store || null, approvedSteps: [] }
     if (approvalMode === 'parallel') {
       chainSteps.forEach((s, i) => {
-        if (s.role) notifyApproval(s.role, task.title, `第 ${i + 1} 關：${s.label || s.role}（同時審核）`)
+        if (s.role) notifyApproval(s.role, task.title, `第 ${i + 1} 關：${s.label || s.role}（同時審核）`, notifyExtras)
       })
     } else {
       const firstStep = chainSteps[0]
       if (firstStep?.role) {
-        notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`)
+        notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`, notifyExtras)
       }
     }
   }
@@ -276,6 +277,13 @@ export default function TaskDetailPanel({
         const { data: ns } = await updateApprovalFormStep(nextStep.id, { status: '待簽' })
         if (ns) setApprovalSteps(prev => prev.map(s => s.id === ns.id ? ns : s))
         await updateApprovalForm(approvalForm.id, { current_step: nextStep.step_order })
+        const chain = approvalChains.find(c => c.id === approvalForm.chain_id)
+        const stepDef = chain?.steps?.[nextStep.step_order - 1]
+        if (nextStep.role) notifyApproval(nextStep.role, approvalForm.title, `第 ${nextStep.step_order} 關：${stepDef?.label || nextStep.role}`, {
+          chainName: chain?.name || null, category: chain?.category || null,
+          store: task.store || null,
+          approvedSteps: updated.filter(s => s.status === '已核准').map(s => ({ name: s.approver, actedAt: s.acted_at })),
+        }).catch(() => {})
       } else {
         const { data: f } = await updateApprovalForm(approvalForm.id, {
           status: '已通過', completed_at: new Date().toISOString(),
@@ -309,7 +317,7 @@ export default function TaskDetailPanel({
       setConfirmations(prev => [...prev, data])
       // 只有真的 pending 才立刻通知（排隊中的等前面回應再推播）
       if (initialStatus === 'pending') {
-        notifyApproval(newConfirmApprover, task.title, `請求審批（${newConfirmPriority}）`)
+        notifyApproval(newConfirmApprover, task.title, `請求審批（${newConfirmPriority}）`, { store: task.store || null })
       }
       setNewConfirmApprover('')
       setNewConfirmPriority('中')
@@ -339,7 +347,7 @@ export default function TaskDetailPanel({
           const { data: promoted } = await updateTaskConfirmation(nextWaiting.id, { status: 'pending' })
           if (promoted) {
             next = next.map(c => c.id === promoted.id ? promoted : c)
-            notifyApproval(promoted.approver, task.title, `請求審批（${promoted.priority || '中'}）`)
+            notifyApproval(promoted.approver, task.title, `請求審批（${promoted.priority || '中'}）`, { store: task.store || null })
           }
         }
       }

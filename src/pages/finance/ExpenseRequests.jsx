@@ -41,6 +41,7 @@ export default function ExpenseRequests() {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('all')
   const [isExpense, setIsExpense] = useState(true)
+  const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
@@ -105,7 +106,33 @@ export default function ExpenseRequests() {
     return results
   }
 
-  // Submit new request
+  // 進入「編輯重送」模式（駁回後申請人想改內容再送出）
+  const openEditResubmit = (req) => {
+    setEditingId(req.id)
+    setForm({
+      employee: req.employee || '',
+      account_code: req.account_code || '',
+      title: req.title || '',
+      description: req.description || '',
+      estimated_amount: req.estimated_amount?.toString() || '',
+      store: req.store || '',
+      supplier: req.supplier || '',
+    })
+    const items = Array.isArray(req.items) && req.items.length > 0
+      ? req.items.map(it => ({
+          name: it.name || '',
+          qty: it.qty?.toString() || '',
+          unit_price: it.unit_price?.toString() || '',
+          subtotal: Number(it.subtotal) || (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
+        }))
+      : [emptyItem()]
+    setLineItems(items)
+    setIsExpense(true)
+    setFiles([])
+    setShowModal(true)
+  }
+
+  // Submit new request OR re-submit edited request
   const handleSubmit = async () => {
     const validItems = lineItems.filter(li => li.name && li.qty > 0)
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
@@ -125,7 +152,6 @@ export default function ExpenseRequests() {
       supplier: form.supplier || null,
       items: validItems,
       store: form.store || null,
-      status: '申請中',
       organization_id: profile?.organization_id ?? null,
     }
     if (!payload.organization_id) {
@@ -133,6 +159,40 @@ export default function ExpenseRequests() {
       setSaving(false)
       return
     }
+
+    // ── 編輯重送路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('expense_requests')
+        .update({ ...payload, status: '申請中', reject_reason: null })
+        .eq('id', editingId)
+      if (updErr) { setError(updErr.message); setSaving(false); return }
+
+      if (files.length > 0) {
+        await uploadFiles(editingId, files, 'request')
+      }
+
+      // 重啟對應 workflow_instance 的駁回那關 → DB trigger 自動推 LINE
+      try {
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc('resume_workflow_for_request', {
+          p_type: 'expense_request',
+          p_id: editingId,
+        })
+        if (rpcErr) console.error('[resume_workflow] error:', rpcErr)
+        else console.log('[resume_workflow] result:', rpcResult)
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+
+      setSaving(false)
+      setShowModal(false)
+      setForm(emptyForm)
+      setLineItems([emptyItem()])
+      setFiles([])
+      setEditingId(null)
+      load()
+      return
+    }
+
+    // ── 新增路徑（原邏輯）──
+    payload.status = '申請中'
     const { data, error: insertErr } = await supabase.from('expense_requests').insert(payload).select().single()
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
 
@@ -320,7 +380,7 @@ export default function ExpenseRequests() {
             <h2><span className="header-icon">📝</span> 申請（申請與核銷）</h2>
             <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷入帳</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
+          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
             <Plus size={14} /> 新增申請
           </button>
         </div>
@@ -404,6 +464,11 @@ export default function ExpenseRequests() {
                           <Check size={12} /> 確認
                         </button>
                       )}
+                      {(r.status === '已駁回' || r.status === '已退回') && r.employee === profile?.name && (
+                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
+                          ✏️ 編輯重送
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -418,7 +483,7 @@ export default function ExpenseRequests() {
         <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0 }}>新增申請（事項 / 採購 / 預算）</h3>
+              <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

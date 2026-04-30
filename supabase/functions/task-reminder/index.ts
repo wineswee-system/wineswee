@@ -423,16 +423,27 @@ serve(async (req: Request) => {
 
           const dueLabel = p.task_due_date ? formatDate(p.task_due_date) : "未設定";
           const instanceName = p.instance_template_name || "";
+          const isOverdue = !!(p.task_due_date && new Date(p.task_due_date) < new Date());
 
           const flex = {
             type: "flex",
-            altText: `📋 任務通知：${p.task_title}`,
+            altText: `${isOverdue ? "⚠️ [逾期] " : ""}📋 任務通知：${p.task_title}`,
             contents: {
               type: "bubble", size: "kilo",
               header: {
                 type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: "#06b6d4",
                 contents: [
-                  { type: "text", text: "📋 任務通知", color: "#FFFFFF", weight: "bold", size: "md" },
+                  {
+                    type: "box", layout: "horizontal", alignItems: "center",
+                    contents: [
+                      { type: "text", text: "📋 任務通知", color: "#FFFFFF", weight: "bold", size: "md", flex: 1 },
+                      ...(isOverdue ? [{
+                        type: "box", layout: "vertical", backgroundColor: "#ef4444", cornerRadius: "4px",
+                        paddingTop: "3px", paddingBottom: "3px", paddingStart: "8px", paddingEnd: "8px",
+                        contents: [{ type: "text", text: "⚠️ 逾期", color: "#ffffff", size: "xxs", weight: "bold" }],
+                      }] : []),
+                    ],
+                  },
                   ...(instanceName ? [{ type: "text", text: instanceName, color: "#FFFFFFCC", size: "xxs", margin: "xs", wrap: true }] : []),
                 ],
               },
@@ -440,8 +451,9 @@ serve(async (req: Request) => {
                 type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
                 contents: [
                   { type: "text", text: p.task_title ?? "", weight: "bold", size: "md", wrap: true },
-                  { type: "text", text: `到期：${dueLabel}`, size: "xs", color: "#666666" },
+                  { type: "text", text: `到期：${dueLabel}`, size: "xs", color: isOverdue ? "#ef4444" : "#666666", weight: isOverdue ? "bold" : "regular" },
                   ...(p.task_assignee ? [{ type: "text", text: `負責人：${p.task_assignee}`, size: "xs", color: "#666666" }] : []),
+                  ...(instanceName ? [{ type: "text", text: `流程：${instanceName}`, size: "xs", color: "#666666" }] : []),
                   ...(p.task_description?.trim() ? [
                     { type: "separator", margin: "sm" },
                     { type: "text", text: p.task_description.trim(), size: "sm", color: "#444444", wrap: true, margin: "sm" },

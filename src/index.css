@@ -280,6 +280,8 @@ body {
   line-height: 1.6;
   overflow: hidden;
   min-height: 100vh;
+  /* 全站字體縮放：sidebar / main-content 用 calc 除回去補償 vh */
+  zoom: var(--app-font-scale, 1);
 }
 
 /* Outfit for display headings in light theme */
@@ -613,7 +615,8 @@ input, select, textarea {
 /* ---- Contextual Sidebar ---- */
 .sidebar {
   width: var(--sidebar-width);
-  height: calc(100vh - var(--topnav-height));
+  /* body zoom 會把 vh 乘 scale，這裡除回去確保 sidebar 不超出視窗 */
+  height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   background: var(--bg-sidebar);
   backdrop-filter: blur(24px) saturate(1.4);
   border-right: 1px solid var(--border-subtle);
@@ -851,12 +854,11 @@ input, select, textarea {
   flex: 1;
   margin-left: var(--sidebar-width);
   margin-top: var(--topnav-height);
-  min-height: calc(100vh - var(--topnav-height));
+  /* vh 在 body zoom 環境下會被乘上 scale，這裡除回去保持實際視窗大小 */
+  min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
+  max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   overflow-y: auto;
-  max-height: calc(100vh - var(--topnav-height));
   transition: margin-left var(--transition-normal);
-  /* 字體縮放：只縮主內容區，sidebar/topbar 不受影響（避免 vh 撐爆） */
-  zoom: var(--app-font-scale, 1);
 }
 
 /* When sidebar is hidden (dashboard), use full width */

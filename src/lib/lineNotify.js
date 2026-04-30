@@ -202,14 +202,47 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
 
 /**
  * Notify for approval request.
+ * @param {object} [extras] - { category, store, chainName, approvedSteps: [{name, actedAt}] }
  */
-export async function notifyApproval(approverName, taskTitle, stepLabel) {
+export async function notifyApproval(approverName, taskTitle, stepLabel, extras = {}) {
   if (!approverName) return { ok: false }
 
   const account = await resolveLineAccount(approverName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(null, account.liffId)
+  const { category, store, chainName, approvedSteps } = extras
+
+  const fmtTime = (iso) => iso
+    ? new Date(iso).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : ''
+
+  const infoLine = [category, store].filter(Boolean).join('  ·  ')
+
+  const bodyContents = [
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
+    { type: 'text', text: `等待您的審核：${stepLabel || ''}`, size: 'sm', color: '#8c8c8c', wrap: true },
+  ]
+  if (infoLine) {
+    bodyContents.push({ type: 'text', text: infoLine, size: 'xs', color: '#666666', margin: 'sm' })
+  }
+  if (chainName) {
+    bodyContents.push({ type: 'text', text: chainName, size: 'xs', color: '#666666' })
+  }
+  if (approvedSteps && approvedSteps.length > 0) {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    bodyContents.push({ type: 'text', text: '已核准', size: 'xxs', color: '#8c8c8c', weight: 'bold', margin: 'sm' })
+    for (const s of approvedSteps) {
+      bodyContents.push({
+        type: 'box', layout: 'horizontal', margin: 'xs',
+        contents: [
+          { type: 'text', text: '✅', size: 'xs', flex: 0 },
+          { type: 'text', text: s.name || '—', size: 'xs', color: '#10b981', weight: 'bold', flex: 3, margin: 'sm' },
+          { type: 'text', text: fmtTime(s.actedAt), size: 'xs', color: '#8c8c8c', align: 'end', flex: 4 },
+        ],
+      })
+    }
+  }
 
   const messages = [{
     type: 'flex',
@@ -222,10 +255,7 @@ export async function notifyApproval(approverName, taskTitle, stepLabel) {
       },
       body: {
         type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
-        contents: [
-          { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
-          { type: 'text', text: `等待您的審核：${stepLabel || ''}`, size: 'sm', color: '#8c8c8c', wrap: true },
-        ],
+        contents: bodyContents,
       },
       footer: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',

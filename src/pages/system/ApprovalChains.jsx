@@ -97,7 +97,9 @@ export default function ApprovalChains() {
       const { data: ns } = await supabase.from('approval_form_steps').insert(rows).select()
       if (ns) setFormSteps(prev => [...prev, ...ns])
       const first = chain.steps[0]
-      if (first?.role) notifyApproval(first.role, applyForm.title, `第 1 關：${first.label || first.role}`)
+      if (first?.role) notifyApproval(first.role, applyForm.title, `第 1 關：${first.label || first.role}`, {
+        category: chain.category, store: applyForm.store || null, chainName: chain.name, approvedSteps: [],
+      })
     }
     if (form) setForms(prev => [form, ...prev])
     setShowFormModal(false); setApplyForm({ chain_id: '', title: '', store: '', notes: '' })
@@ -122,7 +124,12 @@ export default function ApprovalChains() {
         const form = forms.find(x => x.id === formId)
         const chain = chains.find(c => c.id === form?.chain_id)
         const stepDef = chain?.steps?.[next.step_order - 1]
-        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order} 關：${stepDef?.label || next.role}`)
+        if (next.role) notifyApproval(next.role, form?.title || '簽核', `第 ${next.step_order} 關：${stepDef?.label || next.role}`, {
+        category: form?.category || null,
+        store: form?.store || null,
+        chainName: chain?.name || null,
+        approvedSteps: all.filter(s => s.status === '已核准').map(s => ({ name: s.approver, actedAt: s.acted_at })),
+      })
       } else {
         const { data: f } = await supabase.from('approval_forms').update({ status: '已通過', completed_at: new Date().toISOString() }).eq('id', formId).select().single()
         if (f) setForms(prev => prev.map(x => x.id === formId ? f : x))

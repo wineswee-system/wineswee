@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Type } from 'lucide-react'
+import { Minus, Plus } from 'lucide-react'
 import { getFontScale, setFontScale, FONT_SCALE_LIMITS } from '../lib/fontScale'
 
+// 緊湊版：2 顆小按鈕，塞進 sidebar 底部 user 列旁邊。
+// 雙擊 A 字 → 重設回預設
 export default function FontSizeControl() {
   const [scale, setScale] = useState(getFontScale())
 
@@ -19,43 +21,36 @@ export default function FontSizeControl() {
   const atMax = scale >= FONT_SCALE_LIMITS.MAX - 0.001
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 4,
-      padding: '6px 8px',
-      borderRadius: 8,
-      background: 'var(--bg-secondary)',
-      fontSize: 11,
-    }}>
-      <Type size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
       <button
         onClick={() => bump(-FONT_SCALE_LIMITS.STEP)}
+        onDoubleClick={reset}
         disabled={atMin}
-        title="縮小字體"
+        title={`縮小字體（目前 ${Math.round(scale * 100)}%，雙擊重設）`}
         style={btn(atMin)}
-      >A-</button>
-      <button
-        onClick={reset}
-        title="重設字體大小"
-        style={{ ...btn(false), minWidth: 36 }}
-      >{Math.round(scale * 100)}%</button>
+      >
+        <Minus size={12} />
+      </button>
       <button
         onClick={() => bump(FONT_SCALE_LIMITS.STEP)}
+        onDoubleClick={reset}
         disabled={atMax}
-        title="放大字體"
+        title={`放大字體（目前 ${Math.round(scale * 100)}%，雙擊重設）`}
         style={btn(atMax)}
-      >A+</button>
+      >
+        <Plus size={12} />
+      </button>
     </div>
   )
 }
 
 const btn = (disabled) => ({
-  padding: '3px 6px',
-  borderRadius: 6,
+  width: 22, height: 22, padding: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: 4,
   border: '1px solid var(--border-medium)',
   background: 'var(--bg-card)',
-  color: disabled ? 'var(--text-muted)' : 'var(--text-primary)',
-  fontSize: 11,
-  fontWeight: 600,
+  color: disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
   cursor: disabled ? 'not-allowed' : 'pointer',
   opacity: disabled ? 0.5 : 1,
 })

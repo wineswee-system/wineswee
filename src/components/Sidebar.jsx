@@ -817,11 +817,6 @@ export default function Sidebar() {
           </button>
         )}
 
-        {/* 字體大小調整 */}
-        <div style={{ padding: '0 12px 8px' }}>
-          <FontSizeControl />
-        </div>
-
         {/* User profile */}
         <div className="sidebar-user">
           <div className="sidebar-user-avatar" style={{ background: profile?.avatar || 'var(--accent-cyan)' }}>
@@ -831,6 +826,7 @@ export default function Sidebar() {
             <div className="sidebar-user-name">{profile?.name}</div>
             <div className="sidebar-user-role">{profile?.position}</div>
           </div>
+          <FontSizeControl />
           <button onClick={signOut} title="登出" className="sidebar-logout-btn">
             <LogOut size={14} />
           </button>

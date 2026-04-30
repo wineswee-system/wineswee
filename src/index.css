@@ -855,6 +855,8 @@ input, select, textarea {
   overflow-y: auto;
   max-height: calc(100vh - var(--topnav-height));
   transition: margin-left var(--transition-normal);
+  /* 字體縮放：只縮主內容區，sidebar/topbar 不受影響（避免 vh 撐爆） */
+  zoom: var(--app-font-scale, 1);
 }
 
 /* When sidebar is hidden (dashboard), use full width */

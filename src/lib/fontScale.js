@@ -22,7 +22,10 @@ export function setFontScale(scale) {
 
 export function applyFontScale(scale) {
   if (typeof document === 'undefined') return
-  document.body.style.zoom = String(scale || DEFAULT)
+  // 只改 CSS 變數；index.css 把它套到 .main-content 上，sidebar/topbar 不受影響。
+  // 也清掉舊版本可能殘留在 body 的 zoom。
+  document.documentElement.style.setProperty('--app-font-scale', String(scale || DEFAULT))
+  if (document.body.style.zoom) document.body.style.zoom = ''
 }
 
 export const FONT_SCALE_LIMITS = { MIN, MAX, STEP, DEFAULT }

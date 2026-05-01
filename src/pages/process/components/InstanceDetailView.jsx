@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  Plus, Pencil, X, Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
+  Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
@@ -27,8 +28,17 @@ export default function InstanceDetailView({
   // Handlers
   onClose, onStatusChange, onConfirmTask, onSaveNotes, onAddTask, onEditInstance,
   onStepUpdate, onStepDelete, onStepDuplicate,
+  onArchive, onDelete,
 }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = () => setMenuOpen(false)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [menuOpen])
   const currentProject = projects.find(p => p.id === inst.project_id)
 
   const canConfirm = (step) => {
@@ -39,10 +49,24 @@ export default function InstanceDetailView({
   return (
     <div className="fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, padding: '20px 24px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 14 }}>
+      <div style={{ marginBottom: 20 }}>
+        <button
+          onClick={onClose}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 13, fontWeight: 600,
+            padding: '6px 0', marginBottom: 12,
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+        >
+          <ChevronLeft size={16} /> 返回流程管理
+        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 14 }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{inst.store || inst.template_name}</h2>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.template_name} · {inst.started_at?.slice(0, 10)}</div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{inst.template_name}</h2>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.store} · {inst.started_at?.slice(0, 10)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>指派</span>
             <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: inst.groups || [], project_id: inst.project_id || '' }); setShowEditModal(true) }}>
@@ -61,7 +85,39 @@ export default function InstanceDetailView({
             </div>
           </div>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={22} /></button>
+
+        {/* ⋮ More menu */}
+        <div style={{ position: 'relative', flexShrink: 0, alignSelf: 'flex-start' }} onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+          >
+            <MoreVertical size={18} />
+          </button>
+          {menuOpen && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, padding: 4, minWidth: 130, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
+              <button
+                onClick={() => { setMenuOpen(false); onArchive?.(inst) }}
+                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', borderRadius: 6, textAlign: 'left' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <Archive size={14} /> 封存
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); onDelete?.(inst) }}
+                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent-red)', borderRadius: 6, textAlign: 'left' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-red-dim)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <Trash2 size={14} /> 刪除
+              </button>
+            </div>
+          )}
+        </div>
+        </div>
       </div>
 
       {/* Progress */}

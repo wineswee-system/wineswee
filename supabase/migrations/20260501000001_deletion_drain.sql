@@ -21,10 +21,14 @@ CREATE INDEX IF NOT EXISTS idx_deletion_drain_deleted  ON public.deletion_drain 
 
 ALTER TABLE public.deletion_drain ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "deletion_drain_insert" ON public.deletion_drain
-  FOR INSERT TO authenticated WITH CHECK (true);
-
+-- Members see only their org's audit trail.
 CREATE POLICY "deletion_drain_select" ON public.deletion_drain
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated
+  USING (organization_id = public.current_employee_org());
+
+-- Inserts must be stamped with the caller's own org to prevent cross-org pollution.
+CREATE POLICY "deletion_drain_insert" ON public.deletion_drain
+  FOR INSERT TO authenticated
+  WITH CHECK (organization_id = public.current_employee_org());
 
 NOTIFY pgrst, 'reload schema';

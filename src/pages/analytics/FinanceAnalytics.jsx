@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getAccountsReceivable, getAccountsPayable, getBudgets, getJournalEntries } from '../../lib/db'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DateRangePicker from '../../components/DateRangePicker'
@@ -62,10 +62,10 @@ export default function FinanceAnalytics() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('accounts_receivable').select('*').eq('organization_id', orgId),
-      supabase.from('accounts_payable').select('*').eq('organization_id', orgId),
-      supabase.from('budgets').select('*').eq('organization_id', orgId),
-      supabase.from('journal_entries').select('*').eq('organization_id', orgId),
+      getAccountsReceivable(orgId),
+      getAccountsPayable(orgId),
+      getBudgets(orgId),
+      getJournalEntries(orgId),
     ]).then(([ar, ap, budgets, journal]) => {
       setRaw({
         ar: ar.data || [], ap: ap.data || [],

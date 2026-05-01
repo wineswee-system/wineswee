@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { empLabel } from '../../lib/empLabel'
 import {
-  getWorkflows, createWorkflow, updateWorkflow,
+  getWorkflows, createWorkflow, updateWorkflow, deleteWorkflow,
   getWorkflowInstances, updateWorkflowInstance,
   getTasks, getTasksByInstance, createTask, createTasksBatch, updateTask,
   getWorkflowCategories, createWorkflowCategory, deleteWorkflowCategory,
@@ -667,6 +667,13 @@ export default function Workflows() {
     setCategories(prev => prev.filter(c => c.id !== cat.id))
   }
 
+  const handleDeleteTemplate = async (tpl) => {
+    if (!confirm(`確定刪除範本「${tpl.name}」？此操作無法復原。`)) return
+    const { error } = await deleteWorkflow(tpl.id)
+    if (error) { alert('刪除失敗：' + error.message); return }
+    setTemplates(prev => prev.filter(t => t.id !== tpl.id))
+  }
+
   // ── Blank Workflow ──
   const handleCreateBlankWorkflow = async () => {
     const name = blankWorkflowForm.name.trim()
@@ -919,6 +926,7 @@ export default function Workflows() {
     if (data) {
       setInstances(prev => prev.map(i => i.id === inst.id ? data : i))
       setAllTasks(prev => prev.map(t => t.workflow_instance_id === inst.id ? { ...t, archived_at: archivedAt } : t))
+      setSelectedInstance(null)
     }
   }
 
@@ -973,6 +981,7 @@ export default function Workflows() {
     if (error) { alert('刪除流程失敗：' + error.message); return }
     setInstances(prev => prev.filter(i => i.id !== inst.id))
     setAllTasks(prev => prev.filter(t => t.workflow_instance_id !== inst.id))
+    setSelectedInstance(null)
   }
 
   // ── Filtered instances ──
@@ -1016,6 +1025,8 @@ export default function Workflows() {
         onStepUpdate={d => { setAllTasks(prev => prev.map(t => t.id === d.id ? d : t)); setSelectedStep(d) }}
         onStepDelete={id => { setAllTasks(prev => prev.filter(t => t.id !== id)); setSelectedStep(null) }}
         onStepDuplicate={handleDuplicateTask}
+        onArchive={handleArchiveInstance}
+        onDelete={handleDeleteInstance}
       />
     )
   }
@@ -1097,6 +1108,7 @@ export default function Workflows() {
         <TemplatesList
           templates={templates}
           onDeploy={tpl => { setDeployTemplate(tpl); setDeployForm({ location: '', assignees: {} }); setDeployResult(null); setShowDeployModal(true) }}
+          onDelete={handleDeleteTemplate}
           onCreateNew={() => setShowCreateTplModal(true)}
           onManageCategories={() => setShowCategoryModal(true)}
         />

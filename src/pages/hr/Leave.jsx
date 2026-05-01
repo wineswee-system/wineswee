@@ -32,9 +32,9 @@ export default function Leave() {
   const [stepSettings, setStepSettings] = useState({ all: {} })
   useEffect(() => {
     Promise.all([
-      getLeaveRequests(),
-      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)'),
-      getDepartments(),
+      getLeaveRequests({ orgId: profile?.organization_id }),
+      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)', profile?.organization_id),
+      getDepartments(profile?.organization_id),
       getLeaveStepSettings(),
     ]).then(([l, e, d, ls]) => {
       const emps = e.data || []

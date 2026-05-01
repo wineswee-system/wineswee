@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Users, Clock, CalendarOff, DollarSign } from 'lucide-react'
 import { getEmployees, getAttendance, getLeaveRequests, getSalaryRecords } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 export default function HRReport() {
+  const { profile } = useAuth()
   const [employees, setEmployees] = useState([])
   const [attendance, setAttendance] = useState([])
   const [leaves, setLeaves] = useState([])
@@ -12,11 +14,13 @@ export default function HRReport() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      getEmployees(),
-      getAttendance(),
-      getLeaveRequests(),
-      getSalaryRecords(),
+      getEmployees(orgId),
+      getAttendance(null, { orgId }),
+      getLeaveRequests({ orgId }),
+      getSalaryRecords(null, orgId),
     ]).then(([e, a, l, s]) => {
       setEmployees(e.data || [])
       setAttendance(a.data || [])
@@ -28,7 +32,7 @@ export default function HRReport() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

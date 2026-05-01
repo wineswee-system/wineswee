@@ -30,8 +30,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
             marginBottom: 12, padding: '14px 16px', cursor: 'pointer',
             borderColor: isComplete ? 'var(--accent-green)' : undefined,
             transition: 'border-color 0.2s',
-            overflow: 'visible',
-            position: 'relative',
+            overflow: 'visible', position: 'relative',
             zIndex: menuOpenId === inst.id ? 50 : 1,
           }}
             onClick={() => onSelect(inst)}
@@ -145,6 +144,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   </div>
                 )}
               </div>
+
             </div>
 
             {/* 底部進度 bar */}

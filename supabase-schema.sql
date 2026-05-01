@@ -1,6 +1,13 @@
 -- ============================================================
 --  SME Ops System — Supabase Schema + Seed Data
 --  貼到 Supabase Dashboard > SQL Editor > New Query 執行
+--
+--  WARNING: STALE — DO NOT USE FOR RLS POLICY REFERENCE.
+--  This is a one-time schema dump. The authoritative source for all
+--  RLS policies and helper functions is supabase/migrations/.
+--  The tenant_isolation_* policies below reference
+--  current_setting('app.tenant_id') which was superseded by
+--  current_employee_org() in 20260420010200_phase1_3_org_scoped_rls.sql.
 -- ============================================================
 
 -- ============================================================

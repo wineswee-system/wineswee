@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getEmployees, getOvertimeRequests, getLeaveRequests, getRecruitmentJobs } from '../../lib/db'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DateRangePicker from '../../components/DateRangePicker'
@@ -32,10 +32,10 @@ export default function HRAnalytics() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('employees').select('*').eq('organization_id', orgId),
-      supabase.from('overtime_requests').select('*').eq('organization_id', orgId),
-      supabase.from('leave_requests').select('*').eq('organization_id', orgId),
-      supabase.from('recruitment_jobs').select('*').eq('organization_id', orgId),
+      getEmployees(orgId),
+      getOvertimeRequests({ orgId }),
+      getLeaveRequests({ orgId }),
+      getRecruitmentJobs(orgId),
     ]).then(([emp, ot, leave, recruit]) => {
       setData({
         employees: emp.data || [],

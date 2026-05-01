@@ -32,7 +32,7 @@ export default function Payroll() {
     setLoading(true)
     Promise.all([
       getPayrollRuns(),
-      getActiveEmployees('id, name, department_id, store_id, departments(name), stores(name)'),
+      getActiveEmployees('id, name, department_id, store_id, departments(name), stores(name)', profile?.organization_id),
     ]).then(([r, e]) => {
       setRuns(r.data || [])
       setEmployees(e.data || [])

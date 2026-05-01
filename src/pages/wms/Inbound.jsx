@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, ChevronDown, ChevronRight, ScanBarcode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getInboundOrders, getWarehouses } from '../../lib/db'
 import { addCostLayer } from '../../lib/inventoryCosting'
 import { playBeep } from '../../lib/barcodeScanner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -29,8 +30,8 @@ export default function Inbound() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('inbound_orders').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
-      supabase.from('warehouses').select('*').eq('organization_id', orgId),
+      getInboundOrders(orgId),
+      getWarehouses(orgId),
     ]).then(([o, w]) => {
       setOrders(o.data || [])
       setWarehouses(w.data || [])

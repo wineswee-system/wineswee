@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { DollarSign, Plus, Trash2, Edit2, Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getCompensationBands, createCompensationBand, updateCompensationBand, deleteCompensationBand } from '../../lib/db'
+import { getCompensationBands, createCompensationBand, updateCompensationBand, deleteCompensationBand, getDepartments } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -52,7 +52,7 @@ export default function CompensationBenchmark() {
       getCompensationBands(),
       supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('salary_records').select('employee_id, base_salary, allowance, month, employees(name)').eq('organization_id', orgId).order('month', { ascending: false }),
-      supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
+      getDepartments(orgId),
     ]).then(([b, e, s, d]) => {
       setBands(b.data || [])
       setEmployees(e.data || [])

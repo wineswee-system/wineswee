@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, ArrowRightLeft, AlertTriangle, ScanBarcode, Package, History, ArrowUpDown, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getInventoryAdjustments, getWarehouses } from '../../lib/db'
 import { getEventBus } from '../../lib/events/index.js'
 import { calculateFIFO, calculateWeightedAverage, valuateInventory } from '../../lib/inventoryCosting'
 import { playBeep } from '../../lib/barcodeScanner'
@@ -39,18 +40,21 @@ export default function Inventory() {
   const [scannedItem, setScannedItem] = useState(null)
   const barcodeRef = useRef(null)
 
+  const loadInventory = async (orgId) => {
+    const [s, a, w] = await Promise.all([
+      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),
+      getInventoryAdjustments(orgId),
+      getWarehouses(orgId),
+    ])
+    setStocks(s.data || [])
+    setAdjustments(a.data || [])
+    setWarehouses(w.data || [])
+  }
+
   useEffect(() => {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
-    Promise.all([
-      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),  // stock_levels schema 沒 org_id，靠 skus FK 連
-      supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('warehouses').select('*').eq('organization_id', orgId),
-    ]).then(([s, a, w]) => {
-      setStocks(s.data || [])
-      setAdjustments(a.data || [])
-      setWarehouses(w.data || [])
-    }).catch(err => {
+    loadInventory(orgId).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => {
@@ -97,14 +101,7 @@ export default function Inventory() {
       alert(msgMap[result?.error] || ('調整失敗：' + (rpcErr?.message || result?.error || '未知')))
       return
     }
-    // 重抓 stocks + adjustments
-    const orgId = profile.organization_id
-    const [s, a] = await Promise.all([
-      supabase.from('stock_levels').select('*, skus(code, name), bins(code, zone)').order('id'),
-      supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50),
-    ])
-    setStocks(s.data || [])
-    setAdjustments(a.data || [])
+    await loadInventory(profile.organization_id)
     setShowAdjModal(false)
     setAdjForm({ sku_code: '', sku_name: '', bin_code: '', warehouse: '', quantity: '', reason: '', operator: '' })
   }
@@ -135,8 +132,7 @@ export default function Inventory() {
       alert('移倉失敗（目標），已自動回滾源紀錄：' + toErr.message)
       return
     }
-    const { data } = await supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50)
-    setAdjustments(data || [])
+    await loadInventory(orgId)
     setShowTransferModal(false)
     setTransferForm({ sku_code: '', from_bin: '', to_bin: '', quantity: '' })
   }

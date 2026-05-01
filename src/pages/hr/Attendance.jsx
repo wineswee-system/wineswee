@@ -27,10 +27,11 @@ export default function Attendance() {
   const [tab, setTab] = useState('records') // records | hours
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
-      getAttendance(),
-      getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)'),
-      getDepartments(),
+      getAttendance(null, { orgId }),
+      getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
+      getDepartments(orgId),
       getStores(),
     ]).then(([r, e, d, s]) => {
       let recs = r.data || []

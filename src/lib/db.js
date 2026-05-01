@@ -44,6 +44,7 @@ export const getAttendance = (date, options = {}) => {
   const cols = options.columns || '*'
   let q = supabase.from('attendance_records').select(cols).order('date', { ascending: false })
   if (date) q = q.eq('date', date)
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   if (options.from) q = q.gte('date', options.from)
   if (options.limit) q = q.limit(options.limit)
   return q
@@ -119,10 +120,14 @@ export const updateOvertimeStatus = (id, status, rejectReason) =>
   })
 
 // ── Active Employees (shared HR query with dedup) ──────────
-export const getActiveEmployees = (select = 'id, name, department_id, store_id, departments(name), stores(name)') =>
-  dedup(`activeEmployees:${select}`, () =>
-    supabase.from('employees').select(select).eq('status', '在職').order('name')
-  )
+export const getActiveEmployees = (select = 'id, name, department_id, store_id, departments(name), stores(name)', orgId) => {
+  const key = orgId ? `activeEmployees:${select}:${orgId}` : `activeEmployees:${select}`
+  return dedup(key, () => {
+    let q = supabase.from('employees').select(select).eq('status', '在職').order('name')
+    if (orgId) q = q.eq('organization_id', orgId)
+    return q
+  })
+}
 
 // ── Payroll Runs & Records ─────────────────────────────────
 export const getPayrollRuns = () =>
@@ -267,6 +272,9 @@ export const createWorkflow = (data) =>
 
 export const updateWorkflow = (id, data) =>
   supabase.from('workflows').update(data).eq('id', id).select().single()
+
+export const deleteWorkflow = (id) =>
+  supabase.from('workflows').delete().eq('id', id)
 
 // ── Workflow Instances ────────────────────────────────────
 export const getWorkflowInstances = (options = {}) => {

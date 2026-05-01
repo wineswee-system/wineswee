@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, ChevronDown, ChevronRight, AlertTriangle, ScanBarcode, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getOutboundOrders, getWarehouses, getCustomers } from '../../lib/db'
 import { getEventBus } from '../../lib/events/index.js'
 import { playBeep } from '../../lib/barcodeScanner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -28,9 +29,9 @@ export default function Outbound() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('outbound_orders').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
-      supabase.from('warehouses').select('*').eq('organization_id', orgId),
-      supabase.from('customers').select('id, name, credit_limit, outstanding_amount').eq('organization_id', orgId),
+      getOutboundOrders(orgId),
+      getWarehouses(orgId),
+      getCustomers(orgId),
     ]).then(([o, w, c]) => {
       setOrders(o.data || [])
       setWarehouses(w.data || [])

@@ -347,7 +347,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      getEmployees(), getTasks(), getWorkflows(), getAttendance(null, { from: monthStart, columns: 'date, status, hours' }), getLeaveRequests(),
+      getEmployees(), getTasks(), getWorkflows(), getAttendance(null, { from: monthStart, columns: 'date, status, hours', orgId: profile?.organization_id }), getLeaveRequests(),
       supabase.from('accounts_receivable').select('amount, paid_amount, status, due_date'),
       supabase.from('accounts_payable').select('amount, paid_amount, status'),
       supabase.from('opportunities').select('stage, amount'),

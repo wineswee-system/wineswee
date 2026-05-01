@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Search, Pencil } from 'lucide-react'
 import Modal, { Field } from '../../components/Modal'
 import { supabase } from '../../lib/supabase'
-import { useTenant } from '../../contexts/TenantContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ROLE_MAP = {
   '門市人員':   { role: 'store_staff',  role_id: 5 },
@@ -31,8 +31,8 @@ const roleColor = {
 const toLabel = r => ROLE_LABEL[r] ?? r ?? '—'
 
 export default function Users() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id ?? 1
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)

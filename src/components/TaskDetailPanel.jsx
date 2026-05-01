@@ -258,7 +258,10 @@ export default function TaskDetailPanel({
     } else {
       const firstStep = chainSteps[0]
       if (firstStep?.role) {
-        notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`, notifyExtras)
+        notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`, {
+          ...notifyExtras,
+          pendingSteps: chainSteps.slice(1).map(s => ({ name: s.label || s.role })),
+        })
       }
     }
   }
@@ -308,6 +311,7 @@ export default function TaskDetailPanel({
           chainName: chain?.name || null, category: chain?.category || null,
           store: task.store || null,
           approvedSteps: updated.filter(s => s.status === '已核准').map(s => ({ name: s.approver, actedAt: s.acted_at })),
+          pendingSteps: updated.filter(s => s.status === '等待中').map(s => ({ name: s.role })),
         }).catch(() => {})
       } else {
         const { data: f } = await updateApprovalForm(approvalForm.id, {

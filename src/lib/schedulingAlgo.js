@@ -1248,6 +1248,7 @@ export function runProgrammaticSchedule(data) {
         if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
         if (sd.day_type === 'weekday' && isWeekend) return false
         if (sd.day_type === 'weekend' && !isWeekend) return false
+        if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
         return true
       })
       if (eligible.length > 0) {

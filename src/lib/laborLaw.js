@@ -353,13 +353,21 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
           gap = currStart + (24 - prevEnd)
         }
 
-        if (gap < 11) {
+        if (gap < LABOR_STANDARDS.shiftInterval.minHoursAgreed) {
           errors.push({
             employee: emp,
             constraint: 'H4',
             law: '勞基法 §34',
-            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），應至少11小時`,
+            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），低於協議最低8小時`,
             severity: 'error',
+          })
+        } else if (gap < LABOR_STANDARDS.shiftInterval.minHours) {
+          warnings.push({
+            employee: emp,
+            constraint: 'H4',
+            law: '勞基法 §34',
+            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），應至少11小時`,
+            severity: 'warning',
           })
         }
       }

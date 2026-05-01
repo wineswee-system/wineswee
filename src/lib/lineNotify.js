@@ -202,7 +202,7 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
 
 /**
  * Notify for approval request.
- * @param {object} [extras] - { category, store, chainName, approvedSteps: [{name, actedAt}] }
+ * @param {object} [extras] - { category, store, chainName, approvedSteps: [{name, actedAt}], pendingSteps: [{name}] }
  */
 export async function notifyApproval(approverName, taskTitle, stepLabel, extras = {}) {
   if (!approverName) return { ok: false }
@@ -211,7 +211,7 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(null, account.liffId)
-  const { category, store, chainName, approvedSteps } = extras
+  const { category, store, chainName, approvedSteps, pendingSteps } = extras
 
   const fmtTime = (iso) => iso
     ? new Date(iso).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -239,6 +239,19 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
           { type: 'text', text: '✅', size: 'xs', flex: 0 },
           { type: 'text', text: s.name || '—', size: 'xs', color: '#10b981', weight: 'bold', flex: 3, margin: 'sm' },
           { type: 'text', text: fmtTime(s.actedAt), size: 'xs', color: '#8c8c8c', align: 'end', flex: 4 },
+        ],
+      })
+    }
+  }
+  if (pendingSteps && pendingSteps.length > 0) {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    bodyContents.push({ type: 'text', text: '排隊待審', size: 'xxs', color: '#8c8c8c', weight: 'bold', margin: 'sm' })
+    for (const s of pendingSteps) {
+      bodyContents.push({
+        type: 'box', layout: 'horizontal', margin: 'xs',
+        contents: [
+          { type: 'text', text: '○', size: 'xs', flex: 0, color: '#cccccc' },
+          { type: 'text', text: s.name || '—', size: 'xs', color: '#aaaaaa', flex: 3, margin: 'sm' },
         ],
       })
     }

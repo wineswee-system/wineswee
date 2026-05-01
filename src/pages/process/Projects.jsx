@@ -7,7 +7,7 @@ import {
   Users, Settings, Columns
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask } from '../../lib/db'
+import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
 import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
@@ -232,7 +232,19 @@ export default function Projects() {
 
   const handleDelete = async (id, e) => {
     e?.stopPropagation()
-    if (!confirm('確定刪除此專案？')) return
+    if (!confirm('確定刪除此專案？資料會移入回收暫存區保留備份（可供復原）。')) return
+    const proj = projects.find(p => p.id === id)
+    if (proj) {
+      await drainEntity({
+        entityType: 'project',
+        entityId: id,
+        entityName: proj.name,
+        payload: proj,
+        relatedData: null,
+        deletedBy: profile?.name || '管理員',
+        organizationId: profile?.organization_id || null,
+      })
+    }
     await supabase.from('projects').delete().eq('id', id)
     setProjects(prev => prev.filter(p => p.id !== id))
     if (selected?.id === id) setSelected(null)

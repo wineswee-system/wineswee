@@ -16,7 +16,7 @@ export class InMemoryTransport extends TransportInterface {
       }
     }
 
-    const results = await Promise.allSettled(tasks.map(t => t.fn(event)))
+    const results = await Promise.allSettled(tasks.map(t => Promise.resolve().then(() => t.fn(event))))
     const errors = results
       .map((r, i) => r.status === 'rejected' ? { handler: tasks[i].name, error: r.reason } : null)
       .filter(Boolean)

@@ -11,7 +11,7 @@ import {
   getWorkflowInstances, updateWorkflowInstance,
   getTasks, getTasksByInstance, createTask, createTasksBatch, updateTask,
   getWorkflowCategories, createWorkflowCategory, deleteWorkflowCategory,
-  getApprovalChains,
+  getApprovalChains, drainEntity,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -925,13 +925,52 @@ export default function Workflows() {
   const handleDeleteInstance = async (inst) => {
     const stats = getStats(inst.id)
     const warning = stats.pct < 100
-      ? `⚠️ 此流程僅完成 ${stats.pct}%，刪除後無法復原（連同 ${stats.total} 筆任務一併刪除）。`
-      : `刪除後無法復原（連同 ${stats.total} 筆任務一併刪除）。建議改用「封存」保留紀錄。`
+      ? `⚠️ 此流程僅完成 ${stats.pct}%，資料會移入回收暫存區保留備份（可供復原）。`
+      : `資料會移入回收暫存區保留備份（可供復原）。建議改用「封存」保留進行中紀錄。`
     if (!confirm(`確定刪除「${inst.template_name}」？\n\n${warning}\n\n仍要刪除？`)) return
-    // 先刪 tasks（task_dependencies / task_checklists / task_confirmations 都 ON DELETE CASCADE）
-    await supabase.from('tasks').delete().eq('workflow_instance_id', inst.id)
+
+    const instTasks = getInstanceTasks(inst.id)
+    const taskIds = instTasks.map(t => t.id)
+
+    // Snapshot all related data before deletion
+    const [deps, comments, attachments, chklists, chklItems, confirmations, approvalForms] = await Promise.all([
+      taskIds.length ? supabase.from('task_dependencies').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('task_comments').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('task_attachments').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('task_checklists').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('task_checklist_items').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('task_confirmations').select('*').in('task_id', taskIds) : { data: [] },
+      taskIds.length ? supabase.from('approval_forms').select('*').in('ref_task_id', taskIds) : { data: [] },
+    ])
+
+    try {
+      await drainEntity({
+        entityType: 'workflow_instance',
+        entityId: inst.id,
+        entityName: inst.template_name,
+        payload: inst,
+        relatedData: {
+          tasks: instTasks,
+          dependencies: deps.data || [],
+          comments: comments.data || [],
+          attachments: attachments.data || [],
+          checklists: chklists.data || [],
+          checklist_items: chklItems.data || [],
+          confirmations: confirmations.data || [],
+          approval_forms: approvalForms.data || [],
+        },
+        deletedBy: currentUser,
+        organizationId: profile?.organization_id || null,
+      })
+    } catch (drainErr) {
+      console.error('[deletion_drain] snapshot failed:', drainErr)
+    }
+
+    // Hard delete tasks first, then instance
+    const { error: tasksErr } = await supabase.from('tasks').delete().eq('workflow_instance_id', inst.id)
+    if (tasksErr) { alert('刪除任務失敗：' + tasksErr.message); return }
     const { error } = await supabase.from('workflow_instances').delete().eq('id', inst.id)
-    if (error) { alert('刪除失敗：' + error.message); return }
+    if (error) { alert('刪除流程失敗：' + error.message); return }
     setInstances(prev => prev.filter(i => i.id !== inst.id))
     setAllTasks(prev => prev.filter(t => t.workflow_instance_id !== inst.id))
   }

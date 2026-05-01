@@ -83,6 +83,7 @@ export async function checkMissedClockout(date) {
 // ── Leave Requests ─────────────────────────────────────────
 export const getLeaveRequests = (options = {}) => {
   let q = supabase.from('leave_requests').select('*').order('id')
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 500)
 }
 
@@ -103,6 +104,7 @@ export const deleteLeaveRequest = (id) =>
 // ── Overtime ───────────────────────────────────────────────
 export const getOvertimeRequests = (options = {}) => {
   let q = supabase.from('overtime_requests').select('*').order('id')
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 500)
 }
 
@@ -141,9 +143,11 @@ export const getLeaveStepSettings = () =>
   )
 
 // ── Salary ─────────────────────────────────────────────────
-export const getSalaryRecords = (month) => {
-  const q = supabase.from('salary_records').select('*').order('id')
-  return month ? q.eq('month', month) : q
+export const getSalaryRecords = (month, orgId) => {
+  let q = supabase.from('salary_records').select('*').order('id')
+  if (month) q = q.eq('month', month)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
 }
 
 export const upsertSalaryRecord = (data) =>
@@ -197,15 +201,21 @@ export const getSchedulingRules = (year) =>
     .order('category')
 
 // ── Performance Reviews ────────────────────────────────────
-export const getPerformanceReviews = () =>
-  supabase.from('performance_reviews').select('*').order('id')
+export const getPerformanceReviews = (orgId) => {
+  let q = supabase.from('performance_reviews').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const updatePerformanceReview = (id, data) =>
   supabase.from('performance_reviews').update(data).eq('id', id).select().single()
 
 // ── Recruitment ────────────────────────────────────────────
-export const getRecruitmentJobs = () =>
-  supabase.from('recruitment_jobs').select('*').order('id')
+export const getRecruitmentJobs = (orgId) => {
+  let q = supabase.from('recruitment_jobs').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createRecruitmentJob = (data) =>
   supabase.from('recruitment_jobs').insert(data).select().single()
@@ -911,8 +921,11 @@ export const updateAccount = (id, data) =>
   supabase.from('accounts').update(data).eq('id', id).select().single()
 export const deleteAccount = (id) =>
   supabase.from('accounts').delete().eq('id', id)
-export const getJournalEntries = () =>
-  supabase.from('journal_entries').select('*').order('id', { ascending: false })
+export const getJournalEntries = (orgId) => {
+  let q = supabase.from('journal_entries').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const getJournalLines = (entryId) =>
   supabase.from('journal_lines').select('*').eq('entry_id', entryId).order('id')
 export const createJournalEntry = (data, lines = null) =>
@@ -943,12 +956,18 @@ export const createJournalLine = (data) =>
     p_memo: data.memo ?? null,
     p_cost_center: data.cost_center ?? null,
   })
-export const getAccountsReceivable = () =>
-  supabase.from('accounts_receivable').select('*').order('id', { ascending: false })
+export const getAccountsReceivable = (orgId) => {
+  let q = supabase.from('accounts_receivable').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const createAccountReceivable = (data) =>
   supabase.from('accounts_receivable').insert(data).select().single()
-export const getAccountsPayable = () =>
-  supabase.from('accounts_payable').select('*').order('id', { ascending: false })
+export const getAccountsPayable = (orgId) => {
+  let q = supabase.from('accounts_payable').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const createAccountPayable = (data) =>
   supabase.from('accounts_payable').insert(data).select().single()
 
@@ -971,8 +990,11 @@ export const getSupplierContracts = () =>
   supabase.from('supplier_contracts').select('*').order('id', { ascending: false })
 export const createSupplierContract = (data) =>
   supabase.from('supplier_contracts').insert(data).select().single()
-export const getBudgets = () =>
-  supabase.from('budgets').select('*').order('id')
+export const getBudgets = (orgId) => {
+  let q = supabase.from('budgets').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const createBudget = (data) =>
   supabase.from('budgets').insert(data).select().single()
 export const updateBudget = (id, data) =>
@@ -1362,10 +1384,44 @@ export const deleteTenantRecord = (id) =>
   supabase.from('organizations').delete().eq('id', id)
 
 // ── Warehouses ──
-export const getWarehouses = () =>
-  supabase.from('warehouses').select('*').order('code')
+export const getWarehouses = (orgId) => {
+  let q = supabase.from('warehouses').select('*').order('code')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const createWarehouse = (data) =>
   supabase.from('warehouses').insert(data).select().single()
+
+// ── Inventory Adjustments ──
+export const getInventoryAdjustments = (orgId, options = {}) => {
+  let q = supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.limit(options.limit ?? 50)
+}
+
+// ── Inbound / Outbound Orders ──
+export const getInboundOrders = (orgId) => {
+  let q = supabase.from('inbound_orders').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+export const getInboundItems = (orderId) =>
+  supabase.from('inbound_items').select('*').eq('inbound_order_id', orderId)
+
+export const getOutboundOrders = (orgId) => {
+  let q = supabase.from('outbound_orders').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+export const getOutboundItems = (orderId) =>
+  supabase.from('outbound_items').select('*').eq('outbound_order_id', orderId)
+
+// ── Customers ──
+export const getCustomers = (orgId) => {
+  let q = supabase.from('customers').select('id, name, credit_limit, outstanding_amount').order('name')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 export const updateWarehouse = (id, data) =>
   supabase.from('warehouses').update(data).eq('id', id).select().single()
 export const deleteWarehouse = (id) =>
@@ -1826,3 +1882,23 @@ export const updateBonusSetting = (id, data) =>
   supabase.from('bonus_settings').update(data).eq('id', id).select().single()
 export const deleteBonusSetting = (id) =>
   supabase.from('bonus_settings').delete().eq('id', id)
+
+// ── Deletion Drain (回收暫存區) ────────────────────────────
+// Snapshots the full entity + related data before any hard-delete.
+// entityType: 'workflow_instance' | 'task' | 'project' | 'checklist' | 'checklist_item'
+export const drainEntity = ({ entityType, entityId, entityName, payload, relatedData, deletedBy, organizationId }) =>
+  supabase.from('deletion_drain').insert({
+    entity_type:     entityType,
+    entity_id:       entityId,
+    entity_name:     entityName,
+    payload,
+    related_data:    relatedData || null,
+    deleted_by:      deletedBy,
+    organization_id: organizationId || null,
+  }).select().single()
+
+export const getDeletionDrain = (orgId) => {
+  let q = supabase.from('deletion_drain').select('*').order('deleted_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}

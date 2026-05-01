@@ -99,6 +99,7 @@ export default function ApprovalChains() {
       const first = chain.steps[0]
       if (first?.role) notifyApproval(first.role, applyForm.title, `第 1 關：${first.label || first.role}`, {
         category: chain.category, store: applyForm.store || null, chainName: chain.name, approvedSteps: [],
+        pendingSteps: chain.steps.slice(1).map(s => ({ name: s.label || s.role })),
       })
     }
     if (form) setForms(prev => [form, ...prev])
@@ -129,6 +130,7 @@ export default function ApprovalChains() {
         store: form?.store || null,
         chainName: chain?.name || null,
         approvedSteps: all.filter(s => s.status === '已核准').map(s => ({ name: s.approver, actedAt: s.acted_at })),
+        pendingSteps: all.filter(s => s.status === '等待中').map(s => ({ name: s.role })),
       })
       } else {
         const { data: f } = await supabase.from('approval_forms').update({ status: '已通過', completed_at: new Date().toISOString() }).eq('id', formId).select().single()

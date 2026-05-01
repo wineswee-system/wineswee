@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
-import { createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../../lib/db'
+import { createChecklist, deleteChecklist, updateChecklist, getChecklistItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, drainEntity } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function Checklists() {
+  const { profile } = useAuth()
   const [checklists, setChecklists] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -60,7 +62,20 @@ export default function Checklists() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此清單？')) return
+    if (!confirm('確定刪除此清單？資料會移入回收暫存區保留備份（可供復原）。')) return
+    const checklist = checklists.find(c => c.id === id)
+    const { data: clItems } = await getChecklistItems(id)
+    if (checklist) {
+      await drainEntity({
+        entityType: 'checklist',
+        entityId: id,
+        entityName: checklist.name,
+        payload: checklist,
+        relatedData: { items: clItems || [] },
+        deletedBy: profile?.name || '管理員',
+        organizationId: null,
+      })
+    }
     await deleteChecklist(id)
     setChecklists(prev => prev.filter(c => c.id !== id))
     if (expandedId === id) setExpandedId(null)
@@ -98,6 +113,18 @@ export default function Checklists() {
   }
 
   const handleDeleteItem = async (id) => {
+    const item = items.find(i => i.id === id)
+    if (item) {
+      await drainEntity({
+        entityType: 'checklist_item',
+        entityId: id,
+        entityName: item.title,
+        payload: item,
+        relatedData: null,
+        deletedBy: profile?.name || '管理員',
+        organizationId: null,
+      })
+    }
     await deleteChecklistItem(id)
     const newItems = items.filter(i => i.id !== id)
     setItems(newItems)

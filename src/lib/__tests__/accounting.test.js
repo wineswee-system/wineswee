@@ -143,6 +143,11 @@ describe('postJournalEntry', () => {
       update: () => ({
         eq: () => Promise.resolve({ error: updateError }),
       }),
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: { balance: 0 }, error: rpcError }),
+        }),
+      }),
     }),
     rpc: () => Promise.resolve({ error: rpcError }),
   })

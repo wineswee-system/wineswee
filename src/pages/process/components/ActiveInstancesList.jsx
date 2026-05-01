@@ -44,7 +44,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {inst.store || inst.template_name}
+                    {inst.template_name}
                   </span>
                   {isComplete && (
                     <span style={{
@@ -57,7 +57,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 22, marginBottom: hasMeta ? 6 : 0 }}>
-                  {inst.template_name} · {inst.started_at?.slice(0, 10)}
+                  {inst.store} · {inst.started_at?.slice(0, 10)}
                 </div>
                 {hasMeta && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginLeft: 22 }}>

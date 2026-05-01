@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch } from 'lucide-react'
-import { getTasks, createTask, updateTask, getTaskDependenciesByInstance, getCategories, getWorkflows } from '../../lib/db'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Pencil, Trash2 } from 'lucide-react'
+import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { empLabel } from '../../lib/empLabel'
 
 export default function Tasks() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const [tab, setTab] = useState('all')
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
   const [tasks, setTasks] = useState([])
@@ -78,6 +78,22 @@ export default function Tasks() {
     }
   }
 
+  const handleDeleteTask = async (id) => {
+    if (!confirm('確定刪除此任務？')) return
+    await deleteTask(id)
+    setTasks(prev => prev.filter(t => t.id !== id))
+  }
+
+  const handleProjectChange = async (id, projectId) => {
+    const { data } = await updateTask(id, { project_id: projectId ? Number(projectId) : null })
+    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+  }
+
+  const handleWorkflowChange = async (id, workflowName) => {
+    const { data } = await updateTask(id, { workflow: workflowName || null })
+    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+  }
+
   const handleSubmit = async () => {
     if (!form.title) return
     const { data } = await createTask({ ...form, status: '未開始' })
@@ -92,16 +108,17 @@ export default function Tasks() {
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
   // Unified items — workflow tasks hidden until they become in-progress
-  const allItems = tasks.filter(t => !(t.workflow_instance_id && t.status === '待處理')).map(t => ({
+  const allItems = tasks.filter(t => !(t.workflow_instance_id && t.status === '待簽核')).map(t => ({
     id: t.id,
     title: t.title,
     assignee: t.assignee,
     workflow: t.workflow || '',
+    project_id: t.project_id || null,
     projectName: projects.find(p => p.id === t.project_id)?.name || '',
     store: t.store || '',
     due_date: t.due_date,
     priority: t.priority || '中',
-    status: t.status === '待處理' ? '未開始' : t.status,
+    status: t.status,
     bucket: t.bucket || (t.workflow_instance_id ? 'Workflow' : 'General'),
   }))
 
@@ -109,23 +126,24 @@ export default function Tasks() {
 
   // Filter
   const filtered = allItems.filter(t => {
+    if (t.bucket === 'Personal' && !isSuperAdmin && t.assignee !== profile?.name) return false
     if (filterAssignee && t.assignee !== filterAssignee) return false
     if (filterStore && t.store !== filterStore) return false
     if (filterBucket && t.bucket !== filterBucket) return false
     if (filterProject && t.projectName !== filterProject) return false
     if (filterWorkflow && t.workflow !== filterWorkflow) return false
     if (search && !t.title?.toLowerCase().includes(search.toLowerCase()) && !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false
-    if (tab === 'pending') return t.status === '未開始' || t.status === '待處理'
+    if (tab === 'pending') return t.status === '未開始' || t.status === '待簽核'
     if (tab === 'active') return t.status === '進行中'
     if (tab === 'done') return t.status === '已完成'
     return t.status !== '已完成'
   })
 
-  const pendingCount = allItems.filter(t => t.status === '未開始' || t.status === '待處理').length
+  const pendingCount = allItems.filter(t => t.status === '未開始' || t.status === '待簽核').length
   const activeCount = allItems.filter(t => t.status === '進行中').length
   const doneCount = allItems.filter(t => t.status === '已完成').length
 
-  const statusOpts = ['未開始', '進行中', '已完成', '已擱置']
+  const statusOpts = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
   const buckets = [...new Set(allItems.map(t => t.bucket).filter(Boolean))]
 
   return (
@@ -242,39 +260,82 @@ export default function Tasks() {
       )}
 
       {view === 'list' && (
-      <div className="card">
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr><th>任務名稱</th><th>所屬專案</th><th>所屬流程</th><th>負責人</th><th>門市</th><th>截止日期</th><th>優先度</th><th>分類</th><th>狀態</th></tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無符合條件的任務</td></tr>}
-              {filtered.map(t => (
-                <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}>
-                  <td style={{ fontWeight: 600 }}>{t.title}</td>
-                  <td>{t.projectName ? <span className="badge badge-neutral" style={{ color: 'var(--accent-purple)', background: 'var(--accent-purple-dim)' }}>{t.projectName}</span> : '—'}</td>
-                  <td>{t.workflow ? <span className="badge badge-neutral">{t.workflow}</span> : '—'}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{t.assignee || '—'}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.store || '—'}</td>
-                  <td style={{ fontSize: 12 }}>{t.due_date || '—'}</td>
-                  <td>
+      <div>
+        {filtered.length === 0 && (
+          <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>無符合條件的任務</div>
+        )}
+        {filtered.map(t => {
+          const emp = employees.find(e => e.name === t.assignee)
+          const dept = emp ? (departments.find(d => d.id === emp.department_id)?.name || emp.dept || '') : ''
+          const iconBtnStyle = { background: 'none', border: 'none', cursor: 'pointer', padding: 5, borderRadius: 6, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', flexShrink: 0 }
+          return (
+            <div key={t.id} className="card" style={{ marginBottom: 10, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+                {/* Col 1: task info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.title}
+                  </div>
+                  {(t.assignee || dept || t.store) && (
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
+                      {t.assignee && <span>負責人：{t.assignee}</span>}
+                      {(dept || t.store) && (
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          {t.assignee ? '　' : ''}{[dept, t.store].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 5 }}>
                     <span className={`badge ${t.priority === '高' ? 'badge-danger' : t.priority === '中' ? 'badge-warning' : 'badge-neutral'}`}>
                       {t.priority}
                     </span>
-                  </td>
-                  <td><span className="badge badge-neutral" style={{ fontSize: 11 }}>{t.bucket}</span></td>
-                  <td onClick={e => e.stopPropagation()}>
-                    <select className="form-input" style={{ padding: '2px 8px', fontSize: 12 }} value={t.status}
-                      onChange={e => handleStatusChange(t.id, e.target.value === '未開始' ? '待處理' : e.target.value)}>
-                      {statusOpts.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    {t.bucket && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
+                        {t.bucket}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Col 2: controls */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <select className="form-input" style={{ padding: '2px 6px', fontSize: 12, minWidth: 0, maxWidth: 110 }}
+                    value={t.project_id || ''}
+                    onChange={e => handleProjectChange(t.id, e.target.value)}>
+                    <option value="">— 專案 —</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <select className="form-input" style={{ padding: '2px 6px', fontSize: 12, minWidth: 0, maxWidth: 110 }}
+                    value={t.workflow}
+                    onChange={e => handleWorkflowChange(t.id, e.target.value)}>
+                    <option value="">— 流程 —</option>
+                    {workflowDefs.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
+                  </select>
+                  <select className="form-input" style={{ padding: '2px 6px', fontSize: 12, minWidth: 0 }}
+                    value={t.status}
+                    onChange={e => handleStatusChange(t.id, e.target.value === '未開始' ? '待處理' : e.target.value)}>
+                    {statusOpts.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <button title="編輯" style={iconBtnStyle}
+                    onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--accent-cyan)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}>
+                    <Pencil size={14} />
+                  </button>
+                  <button title="刪除" style={iconBtnStyle}
+                    onClick={() => handleDeleteTask(t.id)}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-red-dim)'; e.currentTarget.style.color = 'var(--accent-red)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )
+        })}
       </div>
       )}
 

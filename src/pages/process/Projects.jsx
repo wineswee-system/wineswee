@@ -25,10 +25,10 @@ const STATUS_MAP = {
 }
 
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
-const TASK_STATUS_LIST = ['未開始', '待處理', '進行中', '已完成', '已擱置']
+const TASK_STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const TASK_STATUS_CONFIG = {
   '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
-  '待處理': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
+  '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
   '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },

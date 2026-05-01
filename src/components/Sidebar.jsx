@@ -309,6 +309,7 @@ const groupNav = {
         { icon: FolderOpen, label: '專案', path: '/process/projects' },
         { icon: Bot, label: '流程導覽助理', path: '/ai/nav-assistant' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
+        { icon: ClipboardCheck, label: '簽核', path: '/process/approvals' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
       ]

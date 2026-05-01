@@ -98,7 +98,7 @@ export default function NotificationCenter() {
       const { data: overdueSteps } = await supabase
         .from('tasks').select('id, title, assignee, due_date')
         .not('workflow_instance_id', 'is', null)
-        .in('status', ['待處理', '進行中']).lt('due_date', today).limit(5)
+        .in('status', ['待簽核', '進行中']).lt('due_date', today).limit(5)
       if (overdueSteps) {
         overdueSteps.forEach(s => items.push({
           id: `wfstep-${s.id}`, type: 'task', icon: AlertTriangle,

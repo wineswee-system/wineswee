@@ -89,7 +89,7 @@ export default function ProcessOverview() {
   const activeInstances = instances.filter(i => i.status === '進行中')
   const completedInstances = instances.filter(i => i.status === '已完成')
   const rejectedInstances = instances.filter(i => i.status === '已退回')
-  const pendingSteps = steps.filter(s => s.status === '待處理')
+  const pendingSteps = steps.filter(s => s.status === '待簽核')
   const completedTasks = tasks.filter(t => t.status === '已完成').length
   const checklistProgress = checklists.reduce((s, c) => s + (c.completed || 0), 0)
   const checklistTotal = checklists.reduce((s, c) => s + (c.items || 0), 0)
@@ -109,7 +109,7 @@ export default function ProcessOverview() {
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
           <div className="stat-card-icon"><AlertCircle size={16} /></div>
-          <div className="stat-card-label">待處理步驟</div>
+          <div className="stat-card-label">待簽核步驟</div>
           <div className="stat-card-value">{pendingSteps.length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
@@ -143,11 +143,11 @@ export default function ProcessOverview() {
                 const completed = instSteps.filter(s => s.status === '已完成').length
                 const inProgress = instSteps.filter(s => s.status === '進行中').length
                 const blocked = instSteps.filter(s => s.status === '已退回' || s.status === '已擱置').length
-                const notStarted = instSteps.filter(s => s.status === '未開始' || s.status === '待處理').length
+                const notStarted = instSteps.filter(s => s.status === '未開始' || s.status === '待簽核').length
                 const total = instSteps.length
                 const cfg = STATUS_CONFIG[inst.status] || STATUS_CONFIG['進行中']
                 const isExpanded = expandedId === inst.id
-                const currentStep = instSteps.find(s => s.status === '待處理')
+                const currentStep = instSteps.find(s => s.status === '待簽核')
                 return (
                   <React.Fragment key={inst.id}>
                     <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedId(isExpanded ? null : inst.id)}>
@@ -214,7 +214,7 @@ export default function ProcessOverview() {
                                 <span className={`badge ${s.status === '已完成' ? 'badge-success' : s.status === '已退回' ? 'badge-danger' : 'badge-warning'}`}>
                                   <span className="badge-dot"></span>{s.status}
                                 </span>
-                                {s.status === '待處理' && inst.status === '進行中' && (
+                                {s.status === '待簽核' && inst.status === '進行中' && (
                                   <div style={{ display: 'flex', gap: 4 }}>
                                     <button className="btn btn-sm btn-primary" disabled={actionLoading}
                                       onClick={e => { e.stopPropagation(); handleApprove(s.id) }}>
@@ -307,7 +307,7 @@ export default function ProcessOverview() {
   )
 }
 
-const STATUS_OPTIONS = ['待處理', '進行中', '已完成', '已退回', '已擱置']
+const STATUS_OPTIONS = ['待簽核', '進行中', '已完成', '已退回', '已擱置']
 const PRIORITY_OPTIONS = ['低', '中', '高']
 
 function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject, onSaved, actionLoading }) {
@@ -315,7 +315,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     title: task.title || '',
-    status: task.status || '待處理',
+    status: task.status || '待簽核',
     assignee: task.assignee || '',
     role: task.role || '',
     priority: task.priority || '中',
@@ -333,7 +333,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
 
   const inst = task._instance || {}
   const statusBadge = task.status === '已完成' ? 'badge-success' : task.status === '已退回' ? 'badge-danger' : task.status === '進行中' ? 'badge-info' : 'badge-warning'
-  const canAct = task.status === '待處理' && inst.status === '進行中'
+  const canAct = task.status === '待簽核' && inst.status === '進行中'
 
   const handleSave = async () => {
     setSaving(true)

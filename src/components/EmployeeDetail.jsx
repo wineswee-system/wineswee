@@ -69,7 +69,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_schedule_prefs').select('*').eq('employee_id', employee.id).order('id'),
       supabase.from('leave_requests').select('*').eq('employee_id', employee.id).order('id', { ascending: false }).limit(10),
       supabase.from('employee_availability').select('*').eq('employee', employee.name).order('day_of_week'),
-      supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待處理']).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待簽核']).order('created_at', { ascending: false }),
       supabase.from('employee_assignments').select('*, departments(name), stores(name), updated_by_emp:updated_by(name)').eq('employee_id', employee.id).order('start_date', { ascending: false }),
     ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn]) => {
       setSkills(sk.data || [])

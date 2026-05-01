@@ -26,7 +26,7 @@ export async function checkAndNotifyDueTasks() {
     .from('tasks')
     .select('id, title, assignee, due_date')
     .eq('due_date', today)
-    .in('status', ['待處理', '進行中'])
+    .in('status', ['待簽核', '進行中'])
     .not('assignee', 'is', null)
 
   if (!dueTasks?.length) return { sent: 0 }

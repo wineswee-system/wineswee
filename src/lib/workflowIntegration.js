@@ -127,7 +127,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       assignee:    assigneeName,
       assignee_id: assigneeId,  // ★ FK，LIFF 端必須
       role: cs?.role_name?.includes('HR') ? 'hr' : cs?.role_name?.includes('財務') ? 'finance' : (title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager'),
-      status: '待處理',
+      status: '待簽核',
       due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
       store: record?.store || null,
     }
@@ -218,7 +218,7 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
   }
 
   // 核准 → 找下一關
-  const nextStep = allSteps.find(s => s.step_order > step.step_order && s.status === '待處理')
+  const nextStep = allSteps.find(s => s.step_order > step.step_order && s.status === '待簽核')
 
   if (nextStep) {
     // 還有下一關 → 指派審核人

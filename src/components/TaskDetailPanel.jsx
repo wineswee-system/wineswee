@@ -20,7 +20,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
 
-const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
+const STATUS_LIST = ['待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
 export default function TaskDetailPanel({
@@ -66,7 +66,7 @@ export default function TaskDetailPanel({
   useEffect(() => {
     if (!task) return
     setForm({
-      status: task.status || '待處理',
+      status: task.status || '待簽核',
       priority: task.priority || '中',
       assignee: task.assignee || '',
       store: task.store || '',
@@ -196,7 +196,7 @@ export default function TaskDetailPanel({
             .from('tasks')
             .update({ status: '進行中' })
             .eq('id', dep.depends_on_task_id)
-            .eq('status', '待處理')
+            .eq('status', '待簽核')
             .select('id, title, assignee')
             .maybeSingle()
         }
@@ -478,7 +478,7 @@ export default function TaskDetailPanel({
           role: s.role || null,
           assignee: i === 0 ? (task.assignee || null) : null,
           store: task.store || null,
-          status: i === 0 ? '進行中' : '待處理',
+          status: i === 0 ? '進行中' : '待簽核',
           bucket: 'Workflow',
           category: 'Workflow',
           priority: s.priority || '中',

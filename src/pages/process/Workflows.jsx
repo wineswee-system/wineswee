@@ -132,7 +132,7 @@ export default function Workflows() {
   const getStats = (instId) => {
     const s = getInstanceTasks(instId)
     const total = s.length
-    const pending = s.filter(x => x.status === '待處理').length
+    const pending = s.filter(x => x.status === '待簽核').length
     const inProgress = s.filter(x => x.status === '進行中').length
     const completed = s.filter(x => x.status === '已完成').length
     const blocked = s.filter(x => x.status === '已擱置').length
@@ -150,7 +150,8 @@ export default function Workflows() {
           .from('approval_forms').select('id')
           .eq('ref_task_id', taskId).eq('status', '已通過').limit(1)
         if (!forms?.length) {
-          alert('此任務需完成簽核才能標記為已完成\n請開啟任務詳細頁啟動並完成簽核流程')
+          const { data: updated } = await updateTask(taskId, { status: '待簽核' })
+          if (updated) setAllTasks(prev => prev.map(t => t.id === taskId ? updated : t))
           return
         }
       }
@@ -242,7 +243,7 @@ export default function Workflows() {
           role: s.role || null,
           assignee: an, assignee_id: an ? (empByName.get(an) || null) : null,
           store: sourceTask.store || null,
-          status: i === 0 ? '進行中' : '待處理',
+          status: i === 0 ? '進行中' : '待簽核',
           started_at: i === 0 ? new Date().toISOString() : null,
           bucket: 'Workflow', category: 'Workflow',
           priority: s.priority || '中',
@@ -275,7 +276,7 @@ export default function Workflows() {
 
     for (const dep of deps) {
       const targetTask = instTasks.find(t => t.id === dep.task_id)
-      if (!targetTask || targetTask.status !== '待處理') continue
+      if (!targetTask || targetTask.status !== '待簽核') continue
 
       const { data: allPrereqs } = await supabase.from('task_dependencies')
         .select('depends_on_task_id').eq('task_id', dep.task_id).eq('dep_type', 'prerequisite')
@@ -337,7 +338,7 @@ export default function Workflows() {
     const instTasks = getInstanceTasks(instId)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
 
-    // 1. 建新 task（status 一律 '待處理'，避免複製到 '進行中'/'已完成' 等狀態）
+    // 1. 建新 task（status 一律 '待簽核'，避免複製到 '進行中'/'已完成' 等狀態）
     const { data: newTask, error } = await createTask({
       workflow_instance_id: instId,
       step_order: maxOrder + 1,
@@ -351,7 +352,7 @@ export default function Workflows() {
       due_time: origTask.due_time || '17:00',
       priority: origTask.priority || '中',
       role: origTask.role || null,
-      status: '待處理',
+      status: '待簽核',
       bucket: origTask.bucket || 'Workflow',
       category: origTask.category || 'Workflow',
       organization_id: profile?.organization_id || null,
@@ -435,7 +436,7 @@ export default function Workflows() {
       due_time: taskForm.due_time || '17:00',
       priority: taskForm.priority || '中',
       role: taskForm.role || null,
-      status: '待處理', bucket: 'Workflow', category: 'Workflow',
+      status: '待簽核', bucket: 'Workflow', category: 'Workflow',
       organization_id: profile?.organization_id || null,
       approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
       confirmation_required: !!(useChain || usePeople),
@@ -449,7 +450,7 @@ export default function Workflows() {
       setAllTasks(prev => [...prev, data])
 
       // ★ 自動掛 task_dependencies：依賴前一個 step（如果有）
-      //   這樣第 1 步完成時，autoProgressDependents 才會把第 2 步從 '待處理' 推進 '進行中' + 通知
+      //   這樣第 1 步完成時，autoProgressDependents 才會把第 2 步從 '待簽核' 推進 '進行中' + 通知
       if (instTasks.length > 0) {
         const prevTask = instTasks
           .filter(t => (t.step_order || 0) < (maxOrder + 1))
@@ -760,7 +761,7 @@ export default function Workflows() {
         const taskRows = tplSteps.map((step, i) => {
           const assigneeName = deployForm.assignees[i] || ''
           const offset = deployForm.step_offsets?.[i] ?? (i + 1)
-          const stepStatus = i === 0 ? '進行中' : '待處理'
+          const stepStatus = i === 0 ? '進行中' : '待簽核'
           const titleWithTarget = targetEmp
             ? `${step.title}（${targetEmp.name}）`
             : step.title
@@ -807,7 +808,7 @@ export default function Workflows() {
           setAllTasks(prev => [...prev, ...insertedTasks])
 
           // ★ Bug 修：建 task_dependencies — 每步依賴上一步
-          //   原本沒建 dep 導致第 1 步完成後第 2 步永遠停在「待處理」、流程永遠到不了 100% 也不會自動封存
+          //   原本沒建 dep 導致第 1 步完成後第 2 步永遠停在「待簽核」、流程永遠到不了 100% 也不會自動封存
           if (insertedTasks.length > 1) {
             const depRows = []
             for (let i = 1; i < insertedTasks.length; i++) {

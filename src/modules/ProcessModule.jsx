@@ -5,6 +5,7 @@ import Tasks from '../pages/process/Tasks'
 import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
 import ApprovalChains from '../pages/system/ApprovalChains'
+import Approvals from '../pages/process/Approvals'
 import Projects from '../pages/process/Projects'
 import ExpenseApprovalSettings from '../pages/finance/ExpenseApprovalSettings'
 import Categories from '../pages/process/settings/Categories'
@@ -19,6 +20,7 @@ export default function ProcessModule() {
       <Route path="tasks" element={<Tasks />} />
       <Route path="checklists" element={<Checklists />} />
       <Route path="sop" element={<SOPTemplates />} />
+      <Route path="approvals" element={<Approvals />} />
       <Route path="approval-chains" element={<ApprovalChains />} />
       <Route path="expense-approval" element={<ExpenseApprovalSettings />} />
       <Route path="settings/categories" element={<Categories />} />

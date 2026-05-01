@@ -7,10 +7,11 @@ import Modal, { Field } from '../../../components/Modal'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import { empLabel } from '../../../lib/empLabel'
 
-const STATUS_LIST = ['待處理', '進行中', '已完成', '已擱置']
+const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 
 const STATUS_CONFIG = {
-  '待處理': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
+  '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
+  '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
   '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },

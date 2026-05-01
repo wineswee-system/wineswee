@@ -25,7 +25,11 @@ const RECURRENCE_PRESETS = [
 ]
 
 export default function TaskModal({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete, onDuplicate }) {
-  const [form, setForm] = useState({})
+  const [form, setForm] = useState({
+    title: '', status: '未開始', priority: '中',
+    assignee: '', assignee_id: null,
+    due_date: '', section_id: '', recurrence_rule: '', description: '',
+  })
   const [comments, setComments] = useState([])
   const [commentDraft, setCommentDraft] = useState('')
   const [sending, setSending] = useState(false)

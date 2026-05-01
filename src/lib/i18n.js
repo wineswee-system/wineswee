@@ -111,7 +111,7 @@ export const translations = {
     // status
     'status.inProgress': '進行中',
     'status.completed': '已完成',
-    'status.pending': '待處理',
+    'status.pending': '待簽核',
     'status.cancelled': '已取消',
     'status.approved': '已核准',
     'status.rejected': '已駁回',

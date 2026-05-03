@@ -300,7 +300,10 @@ export default function Projects() {
     if (data) {
       setTasks(prev => prev.map(t => t.id === taskId ? data : t))
       if (newStatus === '進行中' && prevTask?.status !== '進行中' && data.assignee) {
-        notifyTaskStarted(data.assignee, data.title, '', data.id).catch(() => {})
+        notifyTaskStarted(data.assignee, data.title, '', data.id, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+          approvalRequired: data.status === '待簽核',
+        }).catch(() => {})
       }
     }
   }
@@ -328,6 +331,7 @@ export default function Projects() {
       setAddingTaskWfId(null)
       if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
         dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        approvalRequired: data.status === '待簽核',
       }).catch(() => {})
     }
   }

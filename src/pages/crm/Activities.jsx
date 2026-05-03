@@ -3,6 +3,7 @@ import { Plus, Phone, Video, CheckSquare, Mail, UserPlus, Calendar, Clock, Check
 import { getCRMActivities, createCRMActivity, updateCRMActivity, deleteCRMActivity } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const TYPES = [
   { value: 'call', label: '電話', icon: Phone, color: 'var(--accent-green)' },
@@ -99,6 +100,16 @@ export default function Activities() {
         const { data, error: err } = await createCRMActivity(payload)
         if (err) throw err
         setActivities(prev => [data, ...prev])
+        const bus = getEventBus()
+        await bus.publish('crm.activity.created', {
+          activity_id: String(data.id),
+          type: data.type,
+          subject: data.subject,
+          assignee: data.assignee || '',
+          due_date: data.due_date || null,
+          entity_type: data.entity_type || null,
+          entity_id: data.entity_id ? String(data.entity_id) : null,
+        })
       }
       closeModal()
     } catch (err) {

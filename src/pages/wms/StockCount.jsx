@@ -7,6 +7,7 @@ import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
+import { getEventBus } from '../../lib/events/index.js'
 
 const CYCLE_FREQUENCIES = [
   { value: 'daily', label: '每日' },
@@ -138,6 +139,14 @@ export default function StockCount() {
         reason: `盤點調整 (系統: ${item.system_qty}, 實盤: ${item.counted_qty})`,
         operator: selectedCount?.counter || '系統',
       })
+      const bus = getEventBus()
+      await bus.publish('wms.stock.adjusted', {
+        sku_code: item.sku,
+        adjustment: diff,
+        reason: '盤點差異調整',
+        warehouse: selectedCount?.warehouse || '',
+        count_id: String(selectedCount?.id || ''),
+      })
       alert(`已建立 ${item.sku} 庫存調整: ${diff > 0 ? '+' : ''}${diff}`)
     } catch (err) {
       alert('調整失敗: ' + (err.message || '未知錯誤'))
@@ -158,6 +167,17 @@ export default function StockCount() {
         quantity: diff,
         reason: `盤點調整 (系統: ${item.system_qty}, 實盤: ${item.counted_qty})`,
         operator: selectedCount?.counter || '系統',
+      })
+    }
+    const bus = getEventBus()
+    for (const item of itemsWithVariance) {
+      const diff = item.counted_qty - item.system_qty
+      await bus.publish('wms.stock.adjusted', {
+        sku_code: item.sku,
+        adjustment: diff,
+        reason: '盤點批次調整',
+        warehouse: selectedCount?.warehouse || '',
+        count_id: String(selectedCount?.id || ''),
       })
     }
     alert(`已建立 ${itemsWithVariance.length} 筆庫存調整`)

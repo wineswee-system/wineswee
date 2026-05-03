@@ -10,6 +10,7 @@ import { getCurrencies, getDbExchangeRate, formatCurrency as fmtCurrency, DEFAUL
 import LoadingSpinner from '../../components/LoadingSpinner'
 import InvoiceTable from './components/InvoiceTable'
 import InvoiceFormModal from './components/InvoiceFormModal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -182,6 +183,15 @@ export default function Invoices() {
         await batchCreateInvoiceLines(dbLines)
         setInvoices(prev => [...prev, data])
         setShowModal(false)
+        const bus = getEventBus()
+        await bus.publish('finance.ar.created', {
+          invoice_id: String(data.id),
+          invoice_number: data.invoice_number,
+          customer: data.buyer_name,
+          amount: data.total || 0,
+          tax: data.tax || 0,
+          currency: data.currency || 'NTD',
+        })
         setForm({ invoice_number: '', invoice_date: '', buyer_name: '', buyer_tax_id: '', carrier_type: '無', status: '已開立', order_ref: '', currency: 'NTD', exchange_rate: 1 })
         setLineItems([emptyLineItem()])
         setFormError('')

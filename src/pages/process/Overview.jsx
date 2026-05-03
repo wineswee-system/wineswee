@@ -4,7 +4,7 @@ import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCir
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists, updateTask, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
-import { checkAndNotifyDueTasks } from '../../lib/taskDueChecker'
+import { checkAndNotifyDailyTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 
@@ -47,8 +47,8 @@ export default function ProcessOverview() {
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => {
       setLoading(false)
-      // 每次 session 自動檢查今天到期的任務，發 LINE 提醒
-      checkAndNotifyDueTasks().catch(err => console.warn('[Overview] Task due check failed:', err))
+      // 每次 session 自動檢查今日到期及已逾期任務，依負責人發一則輪播提醒
+      checkAndNotifyDailyTasks().catch(err => console.warn('[Overview] Task daily check failed:', err))
     })
   }, [])
 

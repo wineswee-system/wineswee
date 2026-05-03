@@ -8,6 +8,7 @@ import {
 import { calculateInvoiceTax } from '../../lib/einvoice'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const PAYMENT_BADGE = { '已付款': 'badge-success', '未付款': 'badge-danger', '部分付款': 'badge-warning' }
@@ -137,6 +138,15 @@ export default function SalesOrders() {
         setShowModal(false)
         setForm({ order_number: '', customer: '', payment_status: '未付款', shipping_status: '待出貨', credit_check: '通過' })
         setLineItems([emptyLineItem()])
+        const bus = getEventBus()
+        await bus.publish('sales.order.created', {
+          order_id: String(data.id),
+          order_number: data.order_number,
+          customer: data.customer,
+          items: lineItems.map(li => ({ sku_id: li.sku_id || null, product: li.product, qty: li.qty, unit_price: li.unit_price })),
+          total_amount: totals.grandTotal,
+          source: 'direct',
+        })
       }
     } catch (err) {
       console.error('Failed to create sales order:', err)
@@ -159,6 +169,14 @@ export default function SalesOrders() {
       })
       const { data } = await updateSalesOrder(order.id, { shipping_status: '已出貨' })
       if (data) setItems(prev => prev.map(i => i.id === order.id ? data : i))
+      const bus = getEventBus()
+      await bus.publish('sales.order.confirmed', {
+        order_id: String(order.id),
+        order_number: order.order_number,
+        customer: order.customer,
+        shipment_number: shipNum,
+        total_amount: order.total || 0,
+      })
       setActionMsg(`已建立出貨單 ${shipNum}`)
       setTimeout(() => setActionMsg(''), 4000)
     } catch (err) {

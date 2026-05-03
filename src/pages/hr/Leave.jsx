@@ -11,6 +11,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
+import { getEventBus } from '../../lib/events/index.js'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -177,6 +178,17 @@ export default function Leave() {
         const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
         if (result.error) { alert('操作失敗：' + result.error); return }
         setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已核准' } : l))
+        const bus = getEventBus()
+        await bus.publish('hr.leave.approved', {
+          leave_id: String(id),
+          employee: leave.employee,
+          employee_id: String(leave.employee_id || ''),
+          type: leave.type,
+          days: leave.days || 0,
+          start_date: leave.start_date,
+          end_date: leave.end_date || leave.start_date,
+          approver: profile?.name || '',
+        })
         // Write leave to schedule
         if (leave.start_date && leave.days) {
           const totalDays = Math.ceil(leave.days)
@@ -199,6 +211,17 @@ export default function Leave() {
     if (rpcErr) { alert('操作失敗：' + rpcErr.message); return }
     if (data) {
       setLeaves(prev => prev.map(l => l.id === id ? data : l))
+      const bus = getEventBus()
+      await bus.publish('hr.leave.approved', {
+        leave_id: String(id),
+        employee: data.employee,
+        employee_id: String(data.employee_id || ''),
+        type: data.type,
+        days: data.days || 0,
+        start_date: data.start_date,
+        end_date: data.end_date || data.start_date,
+        approver: profile?.name || '',
+      })
       if (data.start_date && data.days) {
         const totalDays = Math.ceil(data.days)
         for (let i = 0; i < totalDays; i++) {

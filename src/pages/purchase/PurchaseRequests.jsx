@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 export default function PurchaseRequests() {
   const [requests, setRequests] = useState([])
@@ -27,6 +28,15 @@ export default function PurchaseRequests() {
       setRequests(prev => [...prev, data])
       setShowModal(false)
       setForm({ pr_number: '', requester: '', department: '', total_amount: '', reason: '' })
+      const bus = getEventBus()
+      await bus.publish('purchase.pr.created', {
+        pr_id: String(data.id),
+        pr_number: data.pr_number,
+        requester: data.requester,
+        department: data.department || '',
+        total_amount: data.total_amount || 0,
+        reason: data.reason || '',
+      })
 
       // 動態簽核：通知申請人的直屬主管
       const supervisor = await getSupervisor(form.requester)

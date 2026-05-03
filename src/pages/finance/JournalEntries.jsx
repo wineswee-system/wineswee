@@ -7,6 +7,7 @@ import { validateJournalEntry, validateJournalBalance, postJournalEntry, CHART_O
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -188,6 +189,15 @@ export default function JournalEntries() {
       setEntries(prev => prev.map(e =>
         e.id === entry.id ? { ...e, status: '已過帳' } : e
       ))
+      const bus = getEventBus()
+      const totalDebit = mappedLines.reduce((s, l) => s + l.debit, 0)
+      await bus.publish('finance.journal.posted', {
+        entry_id: String(entry.id),
+        entry_number: entry.entry_number,
+        description: entry.description || '',
+        entry_date: entry.entry_date,
+        total_debit: totalDebit,
+      })
     } catch (err) {
       alert(`過帳時發生錯誤：${err.message}`)
     } finally {

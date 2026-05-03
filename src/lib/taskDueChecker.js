@@ -6,40 +6,49 @@
  */
 
 import { supabase } from './supabase'
-import { notifyTaskDue } from './lineNotify'
+import { notifyTaskDailySummary } from './lineNotify'
 
-const SESSION_KEY = 'task_due_checked'
+const DAILY_SESSION_KEY = 'task_daily_notified'
 
 /**
- * 檢查今天到期的任務，發送 LINE 提醒給負責人。
- * 每個 session 只執行一次。
+ * 每 session 執行一次：將所有逾期及今日到期任務，
+ * 依負責人分組後，各發一則 LINE 輪播卡片。
  */
-export async function checkAndNotifyDueTasks() {
-  // 每個 session 只跑一次
-  if (sessionStorage.getItem(SESSION_KEY)) return { skipped: true }
-  sessionStorage.setItem(SESSION_KEY, new Date().toISOString())
+export async function checkAndNotifyDailyTasks() {
+  if (sessionStorage.getItem(DAILY_SESSION_KEY)) return { skipped: true }
+  sessionStorage.setItem(DAILY_SESSION_KEY, new Date().toISOString())
 
   const today = new Date().toISOString().slice(0, 10)
 
-  // 找今天到期、未完成、有負責人的任務
-  const { data: dueTasks } = await supabase
+  const { data: tasks } = await supabase
     .from('tasks')
-    .select('id, title, assignee, due_date')
-    .eq('due_date', today)
+    .select('id, title, assignee, due_date, description, notes, store, status')
+    .lte('due_date', today)
     .in('status', ['待簽核', '進行中'])
     .not('assignee', 'is', null)
+    .order('due_date')
 
-  if (!dueTasks?.length) return { sent: 0 }
+  if (!tasks?.length) return { sent: 0 }
+
+  const byAssignee = {}
+  for (const task of tasks) {
+    if (!byAssignee[task.assignee]) byAssignee[task.assignee] = []
+    byAssignee[task.assignee].push({
+      ...task,
+      isOverdue: task.due_date < today,
+      approvalRequired: task.status === '待簽核',
+    })
+  }
 
   let sent = 0
-  for (const task of dueTasks) {
+  for (const [assignee, assigneeTasks] of Object.entries(byAssignee)) {
     try {
-      const result = await notifyTaskDue(task.assignee, task.title, task.due_date)
+      const result = await notifyTaskDailySummary(assignee, assigneeTasks)
       if (result?.ok !== false) sent++
     } catch (err) {
-      console.warn(`[TaskDueChecker] Failed to notify ${task.assignee}:`, err)
+      console.warn(`[TaskDueChecker] Failed to notify ${assignee}:`, err)
     }
   }
 
-  return { sent, total: dueTasks.length }
+  return { sent, total: Object.keys(byAssignee).length }
 }

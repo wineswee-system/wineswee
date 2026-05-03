@@ -5,6 +5,7 @@ import { getCRMLeads, createCRMLead, updateCRMLead, deleteCRMLead } from '../../
 import { calculateLeadScore } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const STAGES = ['新線索', '已聯繫', '合格', '已轉換', '不合格']
 const SOURCES = ['官網', '展覽', '轉介', 'LINE', '廣告', '表單', '其他']
@@ -67,6 +68,15 @@ export default function Leads() {
       const { data, error: err } = await createCRMLead({ ...form, stage: '新線索', score: score?.total || 0 })
       if (err) throw err
       setLeads(prev => [data, ...prev])
+      const bus = getEventBus()
+      await bus.publish('crm.lead.created', {
+        lead_id: String(data.id),
+        name: data.name,
+        company: data.company || '',
+        source: data.source || '',
+        assigned_to: data.assigned_to || '',
+        score: data.score || 0,
+      })
       setShowModal(false)
       setForm(emptyForm)
     } catch (err) {
@@ -132,6 +142,14 @@ export default function Leads() {
         converted_deal_id: dealId,
       })
       if (data) setLeads(prev => prev.map(l => l.id === convertLead.id ? data : l))
+      const bus = getEventBus()
+      await bus.publish('crm.lead.converted', {
+        lead_id: String(convertLead.id),
+        customer_id: String(customer.id),
+        deal_id: dealId ? String(dealId) : null,
+        customer_name: customer.name,
+        source: convertLead.source || '',
+      })
       setConvertLead(null)
       alert(`線索已轉換為客戶！${dealId ? '商機也已建立。' : ''}`)
     } catch (err) {

@@ -167,6 +167,7 @@ export default function Workflows() {
         const inst = instances.find(i => i.id === data.workflow_instance_id)
         notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, {
           dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+          approvalRequired: data.status === '待簽核',
         }).catch(() => {})
       }
 
@@ -258,7 +259,7 @@ export default function Workflows() {
           `🚀 [自動觸發] ${t0.title}`,
           `由「${sourceInst?.template_name}」觸發`,
           t0.id,
-          { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store }
+          { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store, approvalRequired: t0.status === '待簽核' }
         ).catch(() => {})
       }
     }
@@ -295,6 +296,7 @@ export default function Workflows() {
             const inst = instances.find(i => i.id === instanceId)
             notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
               dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
+              approvalRequired: started.status === '待簽核',
             }).catch(() => {})
           }
         }
@@ -511,6 +513,7 @@ export default function Workflows() {
       if (taskForm.assignee && !hasIncompletePrev) {
         notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, {
           dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+          approvalRequired: data.status === '待簽核',
         }).catch(() => {})
       }
     }
@@ -834,6 +837,7 @@ export default function Workflows() {
               : `🚀 [立即行動] ${t0.title}`
             notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, {
               dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
+              approvalRequired: t0.status === '待簽核',
             }).catch(() => {})
           }
 

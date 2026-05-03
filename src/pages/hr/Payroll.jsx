@@ -5,6 +5,7 @@ import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -110,6 +111,13 @@ export default function Payroll() {
       })
       if (error) throw error
       alert(data?.message || '薪資單已發送')
+      const bus = getEventBus()
+      const sentRun = runs.find(r => r.id === selectedRunId)
+      await bus.publish('hr.payslip.sent', {
+        run_id: String(selectedRunId),
+        pay_period: sentRun?.pay_period || '',
+        recipients_count: records.length,
+      })
       // Refresh records to update payslip_sent_at
       const { data: updated } = await supabase
         .from('payroll_records')
@@ -137,6 +145,17 @@ export default function Payroll() {
         ? { ...r, status: 'finalized', finalized_at: new Date().toISOString() }
         : r
       ))
+      const bus = getEventBus()
+      const finalRun = runs.find(r => r.id === selectedRunId)
+      const totalGross = records.reduce((s, r) => s + (r.gross_salary || 0), 0)
+      const totalNet = records.reduce((s, r) => s + (r.net_salary || 0), 0)
+      await bus.publish('hr.salary.calculated', {
+        run_id: String(selectedRunId),
+        pay_period: finalRun?.pay_period || '',
+        total_gross: totalGross,
+        total_net: totalNet,
+        records_count: records.length,
+      })
     } catch (err) {
       console.error('Finalize failed:', err)
       alert('定案失敗：' + (err.message || '未知錯誤'))

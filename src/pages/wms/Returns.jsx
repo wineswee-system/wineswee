@@ -3,6 +3,7 @@ import { Plus, Search, CheckCircle, XCircle, Package, RotateCcw } from 'lucide-r
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { getEventBus } from '../../lib/events/index.js'
 
 const REASONS = [
   { value: 'defective', label: '瑕疵品' },
@@ -79,7 +80,17 @@ export default function Returns() {
     const { data } = await supabase.from('return_orders')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', id).select().single()
-    if (data) setReturns(prev => prev.map(r => r.id === id ? data : r))
+    if (data) {
+      setReturns(prev => prev.map(r => r.id === id ? data : r))
+      const bus = getEventBus()
+      if (newStatus === '已收貨') {
+        await bus.publish('wms.return.received', { return_id: String(id), return_number: data.return_number, customer: data.customer_name, reason: data.reason })
+      } else if (newStatus === '已入庫') {
+        await bus.publish('wms.return.restocked', { return_id: String(id), return_number: data.return_number, customer: data.customer_name })
+      } else if (newStatus === '已報廢') {
+        await bus.publish('wms.return.scrapped', { return_id: String(id), return_number: data.return_number, customer: data.customer_name })
+      }
+    }
   }
 
   const openInspection = (ret) => {
@@ -113,6 +124,12 @@ export default function Returns() {
     if (data) {
       setReturns(prev => prev.map(r => r.id === showInspect.id ? data : r))
       setShowInspect(null)
+      const bus = getEventBus()
+      if (nextStatus === '已入庫') {
+        await bus.publish('wms.return.restocked', { return_id: String(data.id), return_number: data.return_number, customer: data.customer_name })
+      } else if (nextStatus === '已報廢') {
+        await bus.publish('wms.return.scrapped', { return_id: String(data.id), return_number: data.return_number, customer: data.customer_name })
+      }
     }
   }
 

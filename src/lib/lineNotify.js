@@ -71,13 +71,75 @@ export function getLiffTaskUrl(taskId, liffId) {
   return `https://liff.line.me/${lid}?to=${encodeURIComponent(toParam)}`
 }
 
+function buildLiffTaskUrl(taskId, liffId, action) {
+  const lid = liffId || LIFF_ID
+  const toParam = taskId
+    ? `/tasks?task=${taskId}${action ? `&action=${action}` : ''}`
+    : `/tasks${action ? `?action=${action}` : ''}`
+  if (!lid) return `${window.location.origin}/liff${toParam}`
+  return `https://liff.line.me/${lid}?to=${encodeURIComponent(toParam)}`
+}
+
+async function resolveEmployeeDept(name) {
+  if (!name) return ''
+  const { data } = await supabase.from('employees').select('dept').eq('name', name).maybeSingle()
+  return data?.dept || ''
+}
+
+function buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue) {
+  const dueLabel = dueDate
+    ? new Date(dueDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '未設定'
+  const infoLine = [assigneeName, department, store].filter(Boolean).join('  |  ')
+
+  const contents = [
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'md', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'xs', wrap: true,
+      color: isOverdue ? '#ef4444' : '#666666',
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+    { type: 'text', text: infoLine, size: 'xs', color: '#666666', wrap: true },
+  ]
+  if (instanceName) {
+    contents.push({ type: 'text', text: `流程：${instanceName}`, size: 'xs', color: '#666666' })
+  }
+  if (description && String(description).trim()) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: '#444444', wrap: true, margin: 'sm' })
+  }
+  if (notes && String(notes).trim()) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: '📌 備註', size: 'xxs', color: '#8c8c8c', margin: 'sm' })
+    contents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: '#444444', wrap: true })
+  }
+  return contents
+}
+
+function buildTaskFooter(liffUrl, actionUrl, approvalRequired) {
+  return {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      {
+        type: 'button', style: 'primary', height: 'sm',
+        color: approvalRequired ? '#f59e0b' : '#10b981',
+        action: { type: 'uri', label: approvalRequired ? '請求簽核' : '回報完成', uri: actionUrl },
+      },
+      {
+        type: 'button', style: 'secondary', height: 'sm',
+        action: { type: 'uri', label: '查看任務', uri: liffUrl },
+      },
+    ],
+  }
+}
+
 /**
  * Notify a task assignee via LINE.
  * @param {string} assigneeName
  * @param {string} taskTitle
  * @param {string} instanceName
  * @param {number} taskId
- * @param {object} [extras] - { dueDate, description, notes, store }
+ * @param {object} [extras] - { dueDate, description, notes, store, department, approvalRequired }
  */
 export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, extras = {}) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
@@ -85,33 +147,11 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
   const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
-  const { dueDate, description, notes, store } = extras
-  const dueLabel = dueDate
-    ? new Date(dueDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : '未設定'
+  const { dueDate, description, notes, store, approvalRequired } = extras
+  const department = extras.department || await resolveEmployeeDept(assigneeName)
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
-
-  const bodyContents = [
-    { type: 'text', text: taskTitle, weight: 'bold', size: 'md', wrap: true },
-    { type: 'text', text: `到期：${dueLabel}`, size: 'xs', color: isOverdue ? '#ef4444' : '#666666', weight: isOverdue ? 'bold' : 'regular' },
-    { type: 'text', text: `負責人：${assigneeName}`, size: 'xs', color: '#666666' },
-  ]
-  if (instanceName) {
-    bodyContents.push({ type: 'text', text: `流程：${instanceName}`, size: 'xs', color: '#666666' })
-  }
-  if (description && String(description).trim()) {
-    bodyContents.push({ type: 'separator', margin: 'sm' })
-    bodyContents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: '#444444', wrap: true, margin: 'sm' })
-  }
-  if (notes && String(notes).trim()) {
-    bodyContents.push({ type: 'separator', margin: 'sm' })
-    bodyContents.push({ type: 'text', text: '📌 備註', size: 'xxs', color: '#8c8c8c', margin: 'sm' })
-    bodyContents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: '#444444', wrap: true })
-  }
-  if (store) {
-    bodyContents.push({ type: 'text', text: `門市：${store}`, size: 'xs', color: '#666666', margin: 'sm' })
-  }
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
 
   const messages = [{
     type: 'flex',
@@ -120,31 +160,23 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
-        contents: [
-          {
-            type: 'box', layout: 'horizontal', alignItems: 'center',
-            contents: [
-              { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
-              ...(isOverdue ? [{
-                type: 'box', layout: 'vertical', backgroundColor: '#ef4444', cornerRadius: '4px',
-                paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
-                contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
-              }] : []),
-            ],
-          },
-        ],
+        contents: [{
+          type: 'box', layout: 'horizontal', alignItems: 'center',
+          contents: [
+            { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
+            ...(isOverdue ? [{
+              type: 'box', layout: 'vertical', backgroundColor: '#ef4444', cornerRadius: '4px',
+              paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
+              contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
+            }] : []),
+          ],
+        }],
       },
       body: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-        contents: bodyContents,
+        contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
       },
-      footer: {
-        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-        contents: [{
-          type: 'button', style: 'primary', color: '#06b6d4', height: 'sm',
-          action: { type: 'uri', label: '📋 查看任務', uri: liffUrl },
-        }],
-      },
+      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
     },
   }]
 
@@ -153,14 +185,19 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
 
 /**
  * Notify assignee that their task has started (status → 進行中).
+ * @param {object} [extras] - { dueDate, description, notes, store, department, approvalRequired }
  */
-export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, taskId) {
+export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, taskId, extras = {}) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
 
   const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
+  const { dueDate, description, notes, store, approvalRequired } = extras
+  const department = extras.department || await resolveEmployeeDept(assigneeName)
+  const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
 
   const messages = [{
     type: 'flex',
@@ -168,33 +205,62 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#10b981', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
         contents: [{ type: 'text', text: '🚀 任務開始', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
-        type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
-        contents: [
-          { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
-          { type: 'text', text: instanceName || '', size: 'sm', color: '#8c8c8c' },
-          { type: 'separator', margin: 'md' },
-          {
-            type: 'box', layout: 'horizontal', margin: 'md',
-            contents: [
-              { type: 'text', text: '負責人', size: 'sm', color: '#8c8c8c', flex: 0 },
-              { type: 'text', text: assigneeName, size: 'sm', align: 'end', weight: 'bold' },
-            ],
-          },
-        ],
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
       },
-      footer: {
-        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
-        contents: [{
-          type: 'button',
-          action: { type: 'uri', label: '查看任務', uri: liffUrl },
-          style: 'primary', color: '#10b981', height: 'sm',
-        }],
-      },
+      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
     },
+  }]
+
+  return sendLinePush(account.lineUserId, messages)
+}
+
+/**
+ * Send a single carousel push to one assignee covering all their due/overdue tasks.
+ * @param {string} assigneeName
+ * @param {Array} tasks - each: { id, title, due_date, description, notes, store, isOverdue, approvalRequired, instanceName? }
+ */
+export async function notifyTaskDailySummary(assigneeName, tasks) {
+  if (!assigneeName || !tasks?.length) return { ok: false, reason: 'no_tasks' }
+
+  const account = await resolveLineAccount(assigneeName)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+
+  const department = await resolveEmployeeDept(assigneeName)
+  const overdueCount = tasks.filter(t => t.isOverdue).length
+  const dueCount = tasks.length - overdueCount
+
+  const parts = []
+  if (overdueCount) parts.push(`逾期 ${overdueCount} 個`)
+  if (dueCount) parts.push(`今日到期 ${dueCount} 個`)
+  const altText = `📋 待處理任務提醒：共 ${tasks.length} 筆${parts.length ? `（${parts.join('、')}）` : ''}`
+
+  const bubbles = tasks.slice(0, 10).map(task => {
+    const liffUrl = getLiffTaskUrl(task.id, account.liffId)
+    const actionUrl = buildLiffTaskUrl(task.id, account.liffId, task.approvalRequired ? 'request_approval' : 'complete')
+    return {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        backgroundColor: task.isOverdue ? '#ef4444' : '#f59e0b',
+        contents: [{ type: 'text', text: task.isOverdue ? '⚠️ 任務逾期' : '⏰ 今日到期', color: '#ffffff', weight: 'bold', size: 'sm' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: buildTaskBody(task.title, assigneeName, department, task.store, task.instanceName || '', task.due_date, task.description, task.notes, task.isOverdue),
+      },
+      footer: buildTaskFooter(liffUrl, actionUrl, task.approvalRequired),
+    }
+  })
+
+  const messages = [{
+    type: 'flex',
+    altText,
+    contents: { type: 'carousel', contents: bubbles },
   }]
 
   return sendLinePush(account.lineUserId, messages)
@@ -286,17 +352,38 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
 
 /**
  * Notify task due reminder.
+ * @param {object} [extras] - { taskId, description, notes, store, department, approvalRequired, instanceName }
  */
-export async function notifyTaskDue(assigneeName, taskTitle, dueDate) {
+export async function notifyTaskDue(assigneeName, taskTitle, dueDate, extras = {}) {
   if (!assigneeName) return { ok: false }
 
   const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  return sendLinePush(account.lineUserId, [{
-    type: 'text',
-    text: `⏰ 提醒：「${taskTitle}」即將到期\n截止日期：${dueDate}\n\n請儘速處理！`,
-  }])
+  const { taskId, description, notes, store, approvalRequired, instanceName } = extras
+  const department = extras.department || await resolveEmployeeDept(assigneeName)
+  const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
+  const liffUrl = getLiffTaskUrl(taskId, account.liffId)
+  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
+
+  const messages = [{
+    type: 'flex',
+    altText: `⏰ 任務即將到期：${taskTitle}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#f59e0b', paddingAll: '14px',
+        contents: [{ type: 'text', text: '⏰ 任務到期提醒', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
+      },
+      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
+    },
+  }]
+
+  return sendLinePush(account.lineUserId, messages)
 }
 
 /**

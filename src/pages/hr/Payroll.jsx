@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment, memo } from 'react'
-import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle, Download, Upload } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun } from '../../lib/db'
+import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun, upsertSalaryRecord } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -28,6 +28,13 @@ export default function Payroll() {
   const [sendingPayslips, setSendingPayslips] = useState(false)
   const [loadingRecords, setLoadingRecords] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
+  const [exportingBank, setExportingBank] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importPreview, setImportPreview] = useState([])
+  const [importHeaders, setImportHeaders] = useState([])
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   const loadData = () => {
     setLoading(true)
@@ -164,6 +171,111 @@ export default function Payroll() {
     }
   }
 
+  // 二代健保補充保費 (全民健保法第31條): 2.11% on single-payment bonus exceeding NT$2,000
+  // Regular overtime is part of monthly pay and not separately subject to supplementary NHI
+  const suppNhi = (rec) => {
+    const bonus = (rec.bonus_total || 0)
+    return Math.round(Math.max(0, bonus - 2000) * 0.0211)
+  }
+
+  // 銀行轉帳明細表匯出
+  const handleBankExport = async () => {
+    if (!selectedRunId || records.length === 0) return
+    setExportingBank(true)
+    try {
+      const empIds = records.map(r => r.employee_id)
+      const { data: bankData, error: bankErr } = await supabase
+        .from('employees')
+        .select('id, employee_number, name, bank_code, bank_account')
+        .in('id', empIds)
+      if (bankErr) throw bankErr
+      const bankMap = {}
+      ;(bankData || []).forEach(e => { bankMap[e.id] = e })
+      const rows = records.map(rec => {
+        const b = bankMap[rec.employee_id] || {}
+        return [
+          b.employee_number || '',
+          b.name || empMap[rec.employee_id]?.name || '',
+          b.bank_code || '',
+          b.bank_account || '',
+          rec.net_salary || 0,
+        ].join(',')
+      })
+      const csv = '員工編號,姓名,銀行代碼,帳號,轉帳金額\n' + rows.join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bankTransfer_${selectedRun?.pay_period || ''}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Bank export failed:', err)
+      alert('匯出失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setExportingBank(false)
+    }
+  }
+
+  // 薪資CSV匯入 — parse file on selection
+  const handleImportFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportFile(file)
+    setImportResult(null)
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const text = evt.target.result.replace(/^﻿/, '') // strip BOM
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) { setImportPreview([]); setImportHeaders([]); return }
+      const headers = lines[0].split(',')
+      setImportHeaders(headers)
+      const preview = lines.slice(1, 6).map(l => l.split(','))
+      setImportPreview(preview)
+    }
+    reader.readAsText(file, 'utf-8')
+  }
+
+  // 確認匯入
+  const handleConfirmImport = async () => {
+    if (!importFile) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const text = await importFile.text()
+      const clean = text.replace(/^﻿/, '')
+      const lines = clean.split(/\r?\n/).filter(l => l.trim())
+      const dataLines = lines.slice(1)
+      let success = 0, failed = 0
+      for (const line of dataLines) {
+        const cols = line.split(',')
+        const [employeeName, month, base_salary, allowance, overtime, deductions, insurance, net_salary] = cols
+        if (!employeeName || !month) { failed++; continue }
+        try {
+          await upsertSalaryRecord({
+            employee: employeeName.trim(),
+            month: month.trim(),
+            base_salary: Number(base_salary) || 0,
+            allowance: Number(allowance) || 0,
+            overtime: Number(overtime) || 0,
+            deductions: Number(deductions) || 0,
+            insurance: Number(insurance) || 0,
+            net_salary: Number(net_salary) || 0,
+          })
+          success++
+        } catch {
+          failed++
+        }
+      }
+      setImportResult({ success, failed })
+    } catch (err) {
+      console.error('Import failed:', err)
+      alert('匯入失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // Summary for selected run
   const summary = useMemo(() => {
     if (!records.length) return { totalGross: 0, totalNet: 0, count: 0 }
@@ -190,9 +302,14 @@ export default function Payroll() {
             <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>薪資作業</h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>管理每月薪資計算與發放</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={16} /> 新增薪資作業
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setShowImportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Upload size={16} /> 匯入薪資
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={16} /> 新增薪資作業
+            </button>
+          </div>
         </div>
       </div>
 
@@ -286,6 +403,14 @@ export default function Payroll() {
                         >
                           <Send size={14} /> {sendingPayslips ? '發送中...' : '發送薪資單'}
                         </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={handleBankExport}
+                          disabled={exportingBank || records.length === 0}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Download size={14} /> {exportingBank ? '匯出中...' : '銀行轉帳'}
+                        </button>
                         {selectedRun?.status === 'draft' && (
                           <button
                             className="btn btn-secondary"
@@ -370,6 +495,9 @@ export default function Payroll() {
                                               <DetailRow label="健保（個人）" value={fmt(rec.health_ins_employee)} />
                                               <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
                                               <DetailRow label="代扣所得稅" value={fmt(rec.income_tax_withheld)} />
+                                              {suppNhi(rec) > 0 && (
+                                                <DetailRow label="補充保費 (2.11%)" value={fmt(suppNhi(rec))} />
+                                              )}
                                               {Array.isArray(rec.legal_deduction_breakdown) && rec.legal_deduction_breakdown.length > 0 && (
                                                 <>
                                                   {rec.legal_deduction_breakdown.map((d, i) => (
@@ -430,6 +558,71 @@ export default function Payroll() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8 }}>
             建立後狀態為「草稿」，完成計算後可定案並發送薪資單。
           </div>
+        </Modal>
+      )}
+
+      {/* Import Payroll Modal */}
+      {showImportModal && (
+        <Modal
+          title="匯入薪資"
+          onClose={() => {
+            setShowImportModal(false)
+            setImportFile(null)
+            setImportPreview([])
+            setImportHeaders([])
+            setImportResult(null)
+          }}
+          onSubmit={importResult ? null : handleConfirmImport}
+          submitLabel={importing ? '匯入中...' : '確認匯入'}
+          submitDisabled={importing || !importFile || importPreview.length === 0}
+        >
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+            請上傳 CSV 格式（UTF-8 with BOM）<br />
+            欄位順序：<code style={{ fontSize: 12 }}>員工姓名,月份(YYYY-MM),基本薪資,津貼,加班費,扣除項,勞保,淨薪資</code>
+          </div>
+          <Field label="選擇檔案">
+            <input
+              className="form-input"
+              type="file"
+              accept=".csv"
+              onChange={handleImportFileChange}
+            />
+          </Field>
+          {importPreview.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>預覽（前 {importPreview.length} 筆）</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-tertiary)' }}>
+                      {importHeaders.map((h, i) => (
+                        <th key={i} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((row, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} style={{ padding: '5px 10px', color: 'var(--text-secondary)' }}>{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {importResult && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8,
+              background: importResult.failed === 0 ? 'rgba(0,200,150,0.1)' : 'rgba(251,146,60,0.1)',
+              color: importResult.failed === 0 ? 'var(--accent-green)' : 'var(--accent-orange)',
+              fontSize: 13, fontWeight: 600,
+            }}>
+              匯入完成：成功 {importResult.success} 筆{importResult.failed > 0 ? `，失敗 ${importResult.failed} 筆` : ''}
+            </div>
+          )}
         </Modal>
       )}
     </div>

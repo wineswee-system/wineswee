@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Search } from 'lucide-react'
+import { Plus, Edit2, Search, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -22,6 +22,10 @@ export default function LeaveBalances() {
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [showCashoutModal, setShowCashoutModal] = useState(false)
+  const [cashoutItems, setCashoutItems] = useState([])
+  const [cashoutLoading, setCashoutLoading] = useState(false)
+  const [cashoutSaving, setCashoutSaving] = useState(false)
   const [form, setForm] = useState({
     employee_id: '',
     year: currentYear,
@@ -35,16 +39,19 @@ export default function LeaveBalances() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      const orgId = profile?.organization_id
       const [balRes, empRes] = await Promise.all([
         supabase
           .from('leave_balances')
           .select('*')
           .eq('year', yearFilter)
+          .eq('organization_id', orgId)
           .order('id', { ascending: false }),
         supabase
           .from('employees')
           .select('id, name, dept, store, status')
           .eq('status', '在職')
+          .eq('organization_id', orgId)
           .order('name'),
       ])
       if (balRes.error) throw balRes.error
@@ -95,10 +102,85 @@ export default function LeaveBalances() {
     return 'var(--accent-red)'
   }
 
+  const openCashout = async () => {
+    try {
+      setCashoutLoading(true)
+      setShowCashoutModal(true)
+      // Filter balances for 特休 with remaining days > 0
+      const annualBals = balances.filter(b =>
+        b.leave_type === '特休' &&
+        (Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)) > 0
+      )
+      const uniqueEmpIds = [...new Set(annualBals.map(b => b.employee_id))]
+      let empSalaryMap = {}
+      if (uniqueEmpIds.length > 0) {
+        const { data: empData } = await supabase
+          .from('employees')
+          .select('id, name, base_salary')
+          .in('id', uniqueEmpIds)
+        if (empData) {
+          empData.forEach(e => { empSalaryMap[e.id] = e })
+        }
+      }
+      const items = annualBals.map(b => {
+        const unused = Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)
+        const emp = empSalaryMap[b.employee_id] || {}
+        const baseSalary = Number(emp.base_salary) || 0
+        const dailyRate = baseSalary > 0 ? baseSalary / 30 : 0
+        const cashoutAmount = Math.round(unused * dailyRate)
+        return { bal: b, unused, dailyRate, cashoutAmount, empName: emp.name || getEmpName(b.employee_id) }
+      })
+      setCashoutItems(items)
+    } catch (err) {
+      console.error('Failed to prepare cashout:', err)
+      alert('結算資料載入失敗：' + (err.message || '未知錯誤'))
+      setShowCashoutModal(false)
+    } finally {
+      setCashoutLoading(false)
+    }
+  }
+
+  const handleCashoutConfirm = async () => {
+    if (!cashoutItems.length) return
+    try {
+      setCashoutSaving(true)
+      const today = new Date().toISOString().split('T')[0]
+      const currentYear = new Date().getFullYear()
+      await Promise.all(
+        cashoutItems.map(async ({ bal, unused, cashoutAmount }) => {
+          // Create bonus record
+          const { error: bonusErr } = await supabase.from('bonus_records').insert({
+            employee_id: bal.employee_id,
+            category: '特休結清',
+            amount: cashoutAmount,
+            note: `特休結清 ${currentYear}`,
+            date: today,
+            organization_id: profile?.organization_id,
+          })
+          if (bonusErr) throw bonusErr
+          // Mark leave balance as fully used
+          const newUsed = Number(bal.total_days) + Number(bal.carry_over_days || 0)
+          await supabase
+            .from('leave_balances')
+            .update({ used_days: newUsed })
+            .eq('id', bal.id)
+        })
+      )
+      setShowCashoutModal(false)
+      setCashoutItems([])
+      fetchData()
+    } catch (err) {
+      console.error('Cashout failed:', err)
+      alert('結算失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setCashoutSaving(false)
+    }
+  }
+
   const openAdd = () => {
     setEditingId(null)
     setForm({
-      employee_id: employees[0]?.id || '',
+      employee_id: '',
       year: yearFilter,
       leave_type: '特休',
       total_days: '',
@@ -178,7 +260,14 @@ export default function LeaveBalances() {
             <h2><span className="header-icon">📊</span> 假別餘額管理</h2>
             <p>查看與管理員工各類假別剩餘天數</p>
           </div>
-          {!isStaff && <button className="btn btn-primary" onClick={openAdd}><Plus size={14} /> 新增餘額</button>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {!isStaff && (
+              <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Calculator size={14} /> 特休結算
+              </button>
+            )}
+            {!isStaff && <button className="btn btn-primary" onClick={openAdd}><Plus size={14} /> 新增餘額</button>}
+          </div>
         </div>
       </div>
 
@@ -273,6 +362,69 @@ export default function LeaveBalances() {
           </table>
         </div>
       </div>
+
+      {/* 特休結算 Modal */}
+      {showCashoutModal && (
+        <Modal
+          title="特休結算 — 未休年假結清"
+          onClose={() => setShowCashoutModal(false)}
+          onSubmit={handleCashoutConfirm}
+          submitLabel={cashoutSaving ? '結算中...' : '確認結算'}
+          submitDisabled={cashoutSaving || cashoutLoading || cashoutItems.length === 0}
+        >
+          {cashoutLoading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>載入結算資料中...</div>
+          ) : cashoutItems.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>目前無員工有未使用特休天數</div>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+                以下員工有未使用特休，確認後將依日薪計算結清金額並寫入獎金紀錄，同時將特休餘額歸零。
+              </p>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>員工</th>
+                      <th>未休天數</th>
+                      <th>日薪</th>
+                      <th>應結清金額</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashoutItems.map(({ bal, unused, dailyRate, cashoutAmount, empName }) => (
+                      <tr key={bal.id}>
+                        <td style={{ fontWeight: 600 }}>{empName}</td>
+                        <td>
+                          <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{unused} 天</span>
+                        </td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                          {dailyRate > 0 ? `NT$ ${Math.round(dailyRate).toLocaleString()}` : '—'}
+                        </td>
+                        <td>
+                          <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>
+                            {cashoutAmount > 0 ? `NT$ ${cashoutAmount.toLocaleString()}` : '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{
+                marginTop: 12,
+                padding: '10px 14px',
+                background: 'var(--accent-orange-dim)',
+                borderRadius: 8,
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+              }}>
+                結算後各員工特休餘額將設為 0，此操作無法復原，請確認後再送出。
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
 
       {/* Add/Edit Modal */}
       {showModal && (

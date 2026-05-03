@@ -35,7 +35,7 @@ const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
 // ── Route-level access control — 5 roles ──
 const ROLE_ROUTES = {
   store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances'],
-  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/process', '/org'],
+  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/hr/forms', '/hr/insurance-grade', '/hr/labor-law-rates', '/process', '/org'],
   manager:      ['/', '/hr', '/org', '/process'],
   admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
   super_admin:  null, // all

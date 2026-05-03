@@ -75,7 +75,7 @@ export default function Employees() {
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
   const [editForm, setEditForm] = useState({})
-  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', bank_code: '', bank_account: '' })
   const [detailEmp, setDetailEmp] = useState(null)
   const [detailClickY, setDetailClickY] = useState(null)
   const [showCsvImport, setShowCsvImport] = useState(false)
@@ -139,7 +139,7 @@ export default function Employees() {
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
-        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40' })
+        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', bank_code: '', bank_account: '' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
@@ -232,6 +232,14 @@ export default function Employees() {
       phone: emp.phone || '', join_date: emp.join_date || '',
       employment_type: emp.employment_type || '全職',
       system_role: emp.role || 'store_staff',
+      emergency_contact_name: emp.emergency_contact_name || '',
+      emergency_contact_phone: emp.emergency_contact_phone || '',
+      bank_code: emp.bank_code || '',
+      bank_account: emp.bank_account || '',
+      id_number: emp.id_number || '',
+      birth_date: emp.birth_date || '',
+      gender: emp.gender || '',
+      address: emp.address || '',
     })
     setShowEditModal(true)
   }
@@ -652,6 +660,27 @@ export default function Employees() {
             </Field>
           </div>
 
+          {/* 緊急聯絡人 & 薪轉帳戶 */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🆘 緊急聯絡人 &amp; 薪轉帳戶</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="緊急聯絡人">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={form.emergency_contact_name} onChange={e => set('emergency_contact_name', e.target.value)} />
+              </Field>
+              <Field label="緊急聯絡電話">
+                <input className="form-input" type="tel" style={{ width: '100%' }} placeholder="0912-345-678" value={form.emergency_contact_phone} onChange={e => set('emergency_contact_phone', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="銀行代碼">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="004" maxLength={7} value={form.bank_code} onChange={e => set('bank_code', e.target.value)} />
+              </Field>
+              <Field label="銀行帳號">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="帳戶號碼" value={form.bank_account} onChange={e => set('bank_account', e.target.value)} />
+              </Field>
+            </div>
+          </div>
+
           {/* 薪資區塊 */}
           <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 薪資資訊</div>
@@ -807,6 +836,47 @@ export default function Employees() {
               <option value="super_admin">超級管理員</option>
             </select>
           </Field>
+
+          {/* 緊急聯絡人 & 薪轉資訊 */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🆘 緊急聯絡人 &amp; 薪轉資訊</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="緊急聯絡人">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={editForm.emergency_contact_name} onChange={e => setE('emergency_contact_name', e.target.value)} />
+              </Field>
+              <Field label="緊急聯絡電話">
+                <input className="form-input" type="tel" style={{ width: '100%' }} placeholder="0912-345-678" value={editForm.emergency_contact_phone} onChange={e => setE('emergency_contact_phone', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="銀行代碼">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="004" maxLength={7} value={editForm.bank_code} onChange={e => setE('bank_code', e.target.value)} />
+              </Field>
+              <Field label="銀行帳號">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="帳戶號碼" value={editForm.bank_account} onChange={e => setE('bank_account', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="身分證字號">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="A123456789" value={editForm.id_number} onChange={e => setE('id_number', e.target.value)} />
+              </Field>
+              <Field label="出生日期">
+                <input className="form-input" type="date" style={{ width: '100%' }} value={editForm.birth_date} onChange={e => setE('birth_date', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="性別">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.gender} onChange={e => setE('gender', e.target.value)}>
+                  <option value="">— 不選 —</option>
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                </select>
+              </Field>
+              <Field label="地址">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="縣市區街道" value={editForm.address} onChange={e => setE('address', e.target.value)} />
+              </Field>
+            </div>
+          </div>
         </Modal>
       )}
 

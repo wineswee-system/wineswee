@@ -7,3 +7,4 @@ dist
 .vercel/
 graphify-out/
 src/graphify-out/
+.gitnexus

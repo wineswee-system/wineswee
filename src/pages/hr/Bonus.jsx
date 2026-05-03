@@ -26,20 +26,22 @@ export default function Bonus() {
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7))
   const [employees, setEmployees] = useState([])
   const [policyBonus, setPolicyBonus] = useState(0) // 從福利政策自動計算的獎金
+  const [perfReview, setPerfReview] = useState(null)
 
   const [recordForm, setRecordForm] = useState({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' })
   const [settingForm, setSettingForm] = useState({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' })
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
-      supabase.from('bonus_records').select('*').order('created_at', { ascending: false }),
-      supabase.from('bonus_settings').select('*').order('role_type'),
-      supabase.from('opportunities').select('*'),
-      supabase.from('service_tickets').select('*'),
-      supabase.from('customer_contacts').select('*').order('created_at', { ascending: false }),
-      supabase.from('inventory_adjustments').select('*').order('created_at', { ascending: false }),
-      supabase.from('outbound_orders').select('*'),
-      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').order('name'),
+      supabase.from('bonus_records').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('bonus_settings').select('*').eq('organization_id', orgId).order('role_type'),
+      supabase.from('opportunities').select('*').eq('organization_id', orgId),
+      supabase.from('service_tickets').select('*').eq('organization_id', orgId),
+      supabase.from('customer_contacts').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('outbound_orders').select('*').eq('organization_id', orgId),
+      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').eq('organization_id', orgId).order('name'),
     ]).then(([r, s, o, t, ct, adj, ob, emp]) => {
       setRecords(r.data || [])
       setSettings(s.data || [])
@@ -57,14 +59,32 @@ export default function Bonus() {
     })
   }, [])
 
-  // 選員工時自動查詢福利政策獎金
+  // 選員工時自動查詢福利政策獎金 + 績效評等
   const handleEmployeeSelect = async (name) => {
     setRecordForm(f => ({ ...f, employee_name: name }))
     setPolicyBonus(0)
+    setPerfReview(null)
     const emp = employees.find(e => e.name === name)
     if (!emp) return
     try {
-      const storeId = await getStoreIdByName(emp.store)
+      const [storeId, perfRes] = await Promise.all([
+        getStoreIdByName(emp.store),
+        supabase.from('performance_reviews')
+          .select('overall_score, rating, period')
+          .eq('employee', name)
+          .eq('status', '已完成')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
+      const pr = perfRes.data || null
+      setPerfReview(pr)
+      // Auto-suggest data_bonus from performance rating
+      if (pr?.rating) {
+        const PERF_BONUS = { 'S': 1500, 'A+': 1200, 'A': 1000, 'B+': 800, 'B': 500, 'C': 0 }
+        const suggested = PERF_BONUS[pr.rating] ?? 0
+        if (suggested > 0) setRecordForm(f => ({ ...f, data_bonus: String(suggested) }))
+      }
       const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
       let total = 0
       const labels = []
@@ -114,7 +134,8 @@ export default function Bonus() {
   }
 
   const toggleSetting = async (id, is_active) => {
-    const { data } = await supabase.from('bonus_settings').update({ is_active: !is_active }).eq('id', id).select().single()
+    const { data, error } = await supabase.from('bonus_settings').update({ is_active: !is_active }).eq('id', id).select().single()
+    if (error) { console.error('Toggle setting failed:', error); alert('更新失敗：' + (error.message || '未知錯誤')); return }
     if (data) setSettings(prev => prev.map(s => s.id === id ? data : s))
   }
 
@@ -463,7 +484,7 @@ export default function Bonus() {
       )}
 
       {showRecordModal && (
-        <Modal title="發放獎金紀錄" onClose={() => { setShowRecordModal(false); setPolicyBonus(0) }} onSubmit={handleAddRecord} submitLabel="確認發放">
+        <Modal title="發放獎金紀錄" onClose={() => { setShowRecordModal(false); setPolicyBonus(0); setPerfReview(null) }} onSubmit={handleAddRecord} submitLabel="確認發放">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工姓名 *">
               <select className="form-input" style={{ width: '100%' }} value={recordForm.employee_name} onChange={e => handleEmployeeSelect(e.target.value)}>
@@ -477,6 +498,12 @@ export default function Bonus() {
               </select>
             </Field>
           </div>
+          {perfReview && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)', marginBottom: 8 }}>
+              <span style={{ fontSize: 15 }}>📊</span>
+              <span style={{ fontSize: 13 }}>最近績效評等：<strong style={{ color: 'var(--accent-purple)' }}>{perfReview.rating}</strong>（{perfReview.period}，綜合分 {perfReview.overall_score}）— 已自動帶入建議數據達標獎</span>
+            </div>
+          )}
           {policyBonus > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', marginBottom: 8 }}>
               <Gift size={16} style={{ color: 'var(--accent-green)' }} />

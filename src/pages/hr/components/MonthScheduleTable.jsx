@@ -275,7 +275,8 @@ function EmployeeRow({
               </span>
             ) : shift ? (
               // 班別名是時段範圍（10:30-19:30）→ 上下分兩行顯示，省寬度但保留完整資訊
-              /^(\d{1,2}:?\d{0,2})\s*[-~]\s*(\d{1,2}:?\d{0,2})$/.test(shift) ? (
+              // 兩端都必須有完整時間（避免 "11~" 之類半成品被誤判）
+              /^(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})$/.test(shift) ? (
                 <span style={{
                   display: 'inline-block', padding: '1px 2px', borderRadius: 3,
                   fontSize: 9, fontWeight: 600, lineHeight: 1.15,

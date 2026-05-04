@@ -64,7 +64,7 @@ export default function PreferencesTab({
     await supabase.from('employees').update({ personal_hour_cap: cap }).eq('id', emp.id)
   }
 
-  const handleCyclePref = async (emp, shiftName, pref) => {
+  const rotateShiftPreference = async (emp, shiftName, pref) => {
     const isPreferred = pref?.preferred_shifts?.includes(shiftName)
     const isBlocked = pref?.avoid_shifts?.includes(shiftName)
     const level = isPreferred ? 'want' : isBlocked ? 'block' : 'ok'
@@ -196,7 +196,7 @@ export default function PreferencesTab({
                     }
 
                     return (
-                      <button key={d.id} onClick={() => handleCyclePref(emp, d.name, pref)} style={{
+                      <button key={d.id} onClick={() => rotateShiftPreference(emp, d.name, pref)} style={{
                         padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                         cursor: 'pointer', transition: 'all 0.15s', lineHeight: 1.3,
                         ...styles[level],

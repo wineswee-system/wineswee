@@ -108,8 +108,16 @@ export default function Schedule() {
   const monthStart = monthDates[0]
   const monthEnd = monthDates[monthDates.length - 1]
 
-  // 換月時 reset cycle probe（避免停在前個月計算過的 probe）
-  useEffect(() => { setCycleProbeDate(null) }, [selectedMonth])
+  // 換月 / 換店時 reset cycle probe，避免拿舊 anchor 算
+  useEffect(() => { setCycleProbeDate(null) }, [selectedMonth, storeFilter])
+
+  // 換到非變形工時店時，自動切回月視圖（不然 toggle 會消失但 viewMode 卡在 cycle）
+  useEffect(() => {
+    const ws = storeSettings?.work_hour_system
+    const anchor = storeSettings?.variable_period_start
+    const canCycle = ws && ws !== '標準工時' && !!anchor
+    if (!canCycle && viewMode === 'cycle') setViewMode('month')
+  }, [storeSettings, viewMode])
 
   // Cycle view: derive cycle from probe date (defaults to monthStart)
   const effectiveCycleProbe = cycleProbeDate || monthStart
@@ -882,9 +890,11 @@ export default function Schedule() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
               className="btn btn-secondary"
-              style={{ padding: '4px 10px', fontSize: 12 }}
-              title="上一個 cycle"
+              style={{ padding: '4px 10px', fontSize: 12, opacity: cycleInfo.cycleIndex <= 0 ? 0.4 : 1 }}
+              title={cycleInfo.cycleIndex <= 0 ? '已是第一個 cycle' : '上一個 cycle'}
+              disabled={cycleInfo.cycleIndex <= 0}
               onClick={() => {
+                if (cycleInfo.cycleIndex <= 0) return
                 // 當前 cycle 開始日 -1 天 → 拿到上一個 cycle 內的某天
                 const d = new Date(cycleInfo.start + 'T00:00:00Z')
                 d.setUTCDate(d.getUTCDate() - 1)

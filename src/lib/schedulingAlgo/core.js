@@ -951,9 +951,23 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const anchor = data.storeSettings?.variable_period_start || null
   const isCycleMode = ws !== '標準工時' && !!anchor
   // 每週對應的 cycleIndex（標準工時時都填 0，視為單一 cycle）
-  const weekCycleIdx = weeks.map(w =>
-    isCycleMode ? getCycleFor(w[0], ws, anchor).cycleIndex : 0
-  )
+  // 用「該週工作日數較多的那個 cycle」做歸屬，避免錯置
+  const weekCycleIdx = weeks.map(w => {
+    if (!isCycleMode) return 0
+    const counts = {}
+    for (const date of w) {
+      const idx = getCycleFor(date, ws, anchor).cycleIndex
+      counts[idx] = (counts[idx] || 0) + 1
+    }
+    let bestIdx = -1, bestCount = 0
+    for (const [idx, count] of Object.entries(counts)) {
+      if (count > bestCount) { bestIdx = parseInt(idx); bestCount = count }
+    }
+    if (Object.keys(counts).length > 1) {
+      console.warn(`[Monthly] Week ${w[0]}~${w[w.length-1]} 跨 cycle 邊界 (cycle ${Object.keys(counts).join(', ')}); 歸屬 cycle ${bestIdx}（多數天落點）。建議 anchor 設在週首日 (Sun) 以對齊。`)
+    }
+    return bestIdx
+  })
   if (isCycleMode) {
     console.log('[Monthly] Cycle-aware mode:', ws, 'anchor=', anchor)
     console.log('[Monthly] Week→cycle:', weekCycleIdx)

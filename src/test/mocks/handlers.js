@@ -11,7 +11,7 @@ const store = {
   employees: [
     { id: '1', name: '王小明', department: '工程部', role_id: 'admin', supervisor: '李經理', status: '在職', join_date: '2023-01-15', base_salary: 45000, email: 'wang@test.com' },
     { id: '2', name: '李經理', department: '工程部', role_id: 'manager', supervisor: null, status: '在職', join_date: '2020-06-01', base_salary: 65000, email: 'lee@test.com' },
-    { id: '3', name: '張小華', department: '業務部', role_id: 'employee', supervisor: '李經理', status: '在職', join_date: '2024-03-01', base_salary: 38000, email: 'zhang@test.com' },
+    { id: '3', name: '張小華', department: '營運部', role_id: 'employee', supervisor: '李經理', status: '在職', join_date: '2024-03-01', base_salary: 38000, email: 'zhang@test.com' },
   ],
   purchase_requests: [],
   purchase_orders: [],

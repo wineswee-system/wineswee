@@ -17,7 +17,7 @@ import {
 
 const employees = [
   { id: '1', name: '王小明', department: '工程部', position: '工程師', status: '在職', join_date: '2023-01-15', gender: '男', birth_date: '1990-05-20' },
-  { id: '2', name: '李小華', department: '業務部', position: '業務員', status: '在職', join_date: '2024-03-01', gender: '女', birth_date: '1995-08-10' },
+  { id: '2', name: '李小華', department: '營運部', position: '門市人員', status: '在職', join_date: '2024-03-01', gender: '女', birth_date: '1995-08-10' },
 ]
 
 describe('INSPECTION_ITEMS', () => {

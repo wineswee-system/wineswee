@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { parseTime, getShiftHours, isWeekendDay, isAbsence } from '../../../lib/scheduleUtils'
+import { parseTime, getShiftHours, isWeekendDay, isAbsence, getWorkSystemConstraints, getCycleFor, listCyclesInRange } from '../../../lib/scheduleUtils'
 
 export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs, storeSettings, holidays = [] }) {
   const [fatigueScores, setFatigueScores] = useState({})
@@ -10,18 +10,18 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
   const shiftDefMap = {}
   for (const d of (shiftDefs || [])) shiftDefMap[d.name] = d
 
-  // Load fatigue scores
+  // 用 month string 當 dep 而非 weekDates array reference，避免每 render 重 fetch
+  const monthKey = weekDates?.[0]?.slice(0, 7) || ''
   useEffect(() => {
-    const month = weekDates?.[0]?.slice(0, 7)
-    if (!month) return
+    if (!monthKey) return
     supabase.from('fatigue_scores').select('employee, total_score')
-      .eq('month', month)
+      .eq('month', monthKey)
       .then(({ data }) => {
         const map = {}
         for (const f of (data || [])) map[f.employee] = f.total_score || 0
         setFatigueScores(map)
       })
-  }, [weekDates])
+  }, [monthKey])
 
   // Calculate per-employee stats
   const empStats = filtered.map(e => {
@@ -110,17 +110,48 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
       </div>
 
       {/* Cycle Progress (only in variable mode) */}
-      {storeSettings?.work_hour_system && storeSettings.work_hour_system !== '標準工時' && storeSettings?.variable_period_start && (() => {
+      {storeSettings?.work_hour_system && storeSettings.work_hour_system !== '標準工時' && storeSettings?.variable_period_start && weekDates?.length > 0 && (() => {
         const ws = storeSettings.work_hour_system
-        const cycleMax = ws === '2週變形' ? 84 : ws === '4週變形' ? 168 : ws === '8週變形' ? 320 : 40
+        const anchor = storeSettings.variable_period_start
+        // 用 view 起點 probe cycle，cycleMax 從 getWorkSystemConstraints 拿（跟演算法用同一張表）
+        const cycle = getCycleFor(weekDates[0], ws, anchor)
+        const cycleMax = cycle.periodTotalHours
         const ftMax = storeSettings?.ft_monthly_hours_max ?? 175
         const ptMax = storeSettings?.pt_monthly_hours_max ?? 175
+
+        // 嚴格只算 cycle 範圍內的 schedules（避免月視圖跨 cycle 時加錯）
+        const cycleHours = {}
+        for (const s of schedules) {
+          if (!s.date || s.date < cycle.start || s.date > cycle.end) continue
+          if (!s.shift || isAbsence(s.shift)) continue
+          if (!cycleHours[s.employee]) cycleHours[s.employee] = 0
+          if (s.actual_hours) cycleHours[s.employee] += s.actual_hours
+          else {
+            const def = shiftDefMap[s.shift]
+            if (def) cycleHours[s.employee] += getShiftHours(def) - (def.break_minutes || 60) / 60
+            else cycleHours[s.employee] += 8
+          }
+        }
+
+        // 警示：當前 view 範圍是否完整覆蓋這個 cycle (月視圖跨 cycle 時，本月不一定看到完整 cycle)
+        const viewStart = weekDates[0]
+        const viewEnd = weekDates[weekDates.length - 1]
+        const cycleFullyVisible = viewStart <= cycle.start && viewEnd >= cycle.end
+        const partialNote = !cycleFullyVisible ? '（顯示日期未完整覆蓋此 cycle，數值為已載入區間累計）' : ''
+
         return (
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
               <div className="card-title"><span className="card-title-icon">📐</span> 本 Cycle 進度（{ws}）</div>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>法定上限 {cycleMax}h / cycle</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Cycle #{cycle.cycleIndex + 1}: {cycle.start} ~ {cycle.end} · 法定上限 {cycleMax}h
+              </span>
             </div>
+            {partialNote && (
+              <div style={{ padding: '6px 14px', fontSize: 11, color: 'var(--accent-orange)', background: 'rgba(251,146,60,0.06)' }}>
+                ⚠ {partialNote}
+              </div>
+            )}
             <div className="data-table-wrapper">
               <table className="data-table" style={{ fontSize: 13 }}>
                 <thead>
@@ -137,12 +168,12 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                 <tbody>
                   {empStats.map(es => {
                     const emp = filtered.find(f => f.name === es.name)
-                    // 個人 cap 蓋過店面預設，否則用店面 max（不能超過法定）
                     const storeMax = es.isPT ? ptMax : ftMax
                     const personalCap = emp?.personal_hour_cap
                     const effectiveCap = Math.min(cycleMax, personalCap ?? storeMax)
-                    const ratio = effectiveCap > 0 ? Math.round(es.totalHours / effectiveCap * 100) : 0
-                    const isOver = es.totalHours > effectiveCap
+                    const hours = Math.round((cycleHours[es.name] || 0) * 10) / 10
+                    const ratio = effectiveCap > 0 ? Math.round(hours / effectiveCap * 100) : 0
+                    const isOver = hours > effectiveCap
                     const isWarning = !isOver && ratio >= 90
                     const isLow = !isOver && ratio < 50
                     return (
@@ -157,7 +188,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                             {es.isPT ? '兼職' : '全職'}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{es.totalHours}h</td>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{hours}h</td>
                         <td style={{ textAlign: 'center', color: personalCap != null ? 'var(--accent-purple)' : 'var(--text-muted)' }}>
                           {personalCap != null ? `${personalCap}h` : `(店${storeMax})`}
                         </td>

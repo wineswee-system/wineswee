@@ -25,9 +25,9 @@ export default function OrgChart() {
   const colors = ['var(--accent-red)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-blue)', 'var(--accent-purple)']
   const dims = ['var(--accent-red-dim)', 'var(--accent-yellow-dim)', 'var(--accent-green-dim)', 'var(--accent-blue-dim)', 'var(--accent-purple-dim)']
 
-  // 兼總經理室：在 apex box 也要顯示（但部門列也保留）
-  const EXEC_BOARD_IDS = new Set([48, 52]) // 韓虎 Dave, 陳虹 Zoey
-  const execBoardMembers = employees.filter(e => EXEC_BOARD_IDS.has(e.id))
+  // 兼總經理室：讀 employees.is_executive_board 旗標 (DB 端標記)
+  // 之前硬寫 [48, 52] 員工 id，老闆換人就壞 → 改用旗標
+  const execBoardMembers = employees.filter(e => e.is_executive_board)
 
   // 顯示用：「中文 EN」如有英文名
   const labelOf = (emp) => emp ? `${emp.name}${emp.name_en ? ` ${emp.name_en}` : ''}` : '-'

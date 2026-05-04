@@ -274,11 +274,13 @@ function EmployeeRow({
                 {shift}
               </span>
             ) : shift ? (
-              <span style={{
+              <span title={shift} style={{
                 display: 'inline-block', padding: '1px 3px', borderRadius: 3,
                 fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
+                whiteSpace: 'nowrap',
               }}>
-                {shift}
+                {/* 班別名是時段範圍（10:30-19:30）→ 只顯示起始時間以節省欄寬 */}
+                {/^\d{1,2}:?\d{0,2}\s*[-~]\s*\d/.test(shift) ? shift.split(/[-~]/)[0].trim() : shift}
               </span>
             ) : offReq ? (
               <span style={{ fontSize: 9, color: 'var(--accent-orange)' }}>申</span>

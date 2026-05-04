@@ -109,6 +109,89 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
         </div>
       </div>
 
+      {/* Cycle Progress (only in variable mode) */}
+      {storeSettings?.work_hour_system && storeSettings.work_hour_system !== '標準工時' && storeSettings?.variable_period_start && (() => {
+        const ws = storeSettings.work_hour_system
+        const cycleMax = ws === '2週變形' ? 84 : ws === '4週變形' ? 168 : ws === '8週變形' ? 320 : 40
+        const ftMax = storeSettings?.ft_monthly_hours_max ?? 175
+        const ptMax = storeSettings?.pt_monthly_hours_max ?? 175
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <div className="card-title"><span className="card-title-icon">📐</span> 本 Cycle 進度（{ws}）</div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>法定上限 {cycleMax}h / cycle</span>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th>員工</th>
+                    <th>類型</th>
+                    <th style={{ textAlign: 'center' }}>已排時數</th>
+                    <th style={{ textAlign: 'center' }}>個人 cap</th>
+                    <th style={{ textAlign: 'center' }}>使用率</th>
+                    <th style={{ width: 200 }}>進度</th>
+                    <th style={{ textAlign: 'center' }}>狀態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {empStats.map(es => {
+                    const emp = filtered.find(f => f.name === es.name)
+                    // 個人 cap 蓋過店面預設，否則用店面 max（不能超過法定）
+                    const storeMax = es.isPT ? ptMax : ftMax
+                    const personalCap = emp?.personal_hour_cap
+                    const effectiveCap = Math.min(cycleMax, personalCap ?? storeMax)
+                    const ratio = effectiveCap > 0 ? Math.round(es.totalHours / effectiveCap * 100) : 0
+                    const isOver = es.totalHours > effectiveCap
+                    const isWarning = !isOver && ratio >= 90
+                    const isLow = !isOver && ratio < 50
+                    return (
+                      <tr key={es.name}>
+                        <td style={{ fontWeight: 600 }}>{es.name}</td>
+                        <td>
+                          <span style={{
+                            padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            background: es.isPT ? 'rgba(251,191,36,0.12)' : 'rgba(34,211,238,0.12)',
+                            color: es.isPT ? '#f59e0b' : 'var(--accent-cyan)',
+                          }}>
+                            {es.isPT ? '兼職' : '全職'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{es.totalHours}h</td>
+                        <td style={{ textAlign: 'center', color: personalCap != null ? 'var(--accent-purple)' : 'var(--text-muted)' }}>
+                          {personalCap != null ? `${personalCap}h` : `(店${storeMax})`}
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 700,
+                          color: isOver ? 'var(--accent-red)' : isWarning ? '#f59e0b' : isLow ? 'var(--text-muted)' : 'var(--accent-green)',
+                        }}>{ratio}%</td>
+                        <td>
+                          <div style={{ height: 8, borderRadius: 4, background: 'var(--border-medium)', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', borderRadius: 4,
+                              width: `${Math.min(ratio, 100)}%`,
+                              background: isOver ? 'var(--accent-red)' : isWarning ? '#f59e0b' : 'var(--accent-green)',
+                            }} />
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                            上限 {effectiveCap}h
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {isOver ? <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>⚠ 超</span>
+                            : isWarning ? <span style={{ color: '#f59e0b' }}>近上限</span>
+                            : isLow ? <span style={{ color: 'var(--text-muted)' }}>偏低</span>
+                            : <span style={{ color: 'var(--accent-green)' }}>✓</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Cost Breakdown */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">

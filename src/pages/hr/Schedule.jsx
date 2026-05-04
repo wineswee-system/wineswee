@@ -845,8 +845,8 @@ export default function Schedule() {
 
       {/* View mode toggle + Store selector + Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* Month navigator */}
-        {(
+        {/* Month navigator (cycle 模式時藏起來，避免兩種選擇器互相干擾) */}
+        {viewMode !== 'cycle' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
               onClick={() => {

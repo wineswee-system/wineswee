@@ -29,13 +29,17 @@ export default function OrgChart() {
   const EXEC_BOARD_IDS = new Set([48, 52]) // 韓虎 Dave, 陳虹 Zoey
   const execBoardMembers = employees.filter(e => EXEC_BOARD_IDS.has(e.id))
 
-  // Find department manager name
+  // 顯示用：「中文 EN」如有英文名
+  const labelOf = (emp) => emp ? `${emp.name}${emp.name_en ? ` ${emp.name_en}` : ''}` : '-'
+
+  // Find department manager (returns the employee object so caller can use labelOf)
+  const managerOf = (dept) => {
+    if (dept.manager_id) return employees.find(e => e.id === dept.manager_id) || null
+    return null
+  }
   const managerName = (dept) => {
-    if (dept.manager_id) {
-      const mgr = employees.find(e => e.id === dept.manager_id)
-      if (mgr) return mgr.name
-    }
-    return dept.head || '-'
+    const mgr = managerOf(dept)
+    return mgr ? labelOf(mgr) : (dept.head || '-')
   }
 
   // Get sub-managers (is_manager but not the dept manager_id)
@@ -138,7 +142,7 @@ export default function OrgChart() {
                 <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>兼任高管</div>
                 {execBoardMembers.map(emp => (
                   <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-red)', textAlign: 'center' }}>
-                    {emp.name}{emp.name_en ? ` ${emp.name_en}` : ''}
+                    {labelOf(emp)}
                   </div>
                 ))}
               </div>
@@ -203,7 +207,7 @@ export default function OrgChart() {
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{head}</div>
                         )}
                         {subs.map(s => (
-                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{s.name}</div>
+                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{labelOf(s)}</div>
                         ))}
                       </div>
                     </>
@@ -221,7 +225,7 @@ export default function OrgChart() {
                           textAlign: 'center',
                           fontSize: 12,
                         }}>
-                          <div style={{ fontWeight: 500 }}>{emp.name}</div>
+                          <div style={{ fontWeight: 500 }}>{labelOf(emp)}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.position}</div>
                         </div>
                       ))}
@@ -252,7 +256,7 @@ export default function OrgChart() {
                                       color: isStoreLead(emp) ? color : 'var(--text-secondary)',
                                       fontWeight: isStoreLead(emp) ? 600 : 400,
                                     }}>
-                                      {emp.name}
+                                      {labelOf(emp)}
                                       {emp.position && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>· {emp.position}</span>}
                                     </div>
                                   ))}
@@ -325,7 +329,7 @@ export default function OrgChart() {
                                 fontWeight: isStoreLead(emp) ? 700 : 500,
                                 lineHeight: 1.3,
                               }}>
-                                {emp.name}
+                                {labelOf(emp)}
                                 {emp.position && (
                                   <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
                                     {emp.position}
@@ -405,7 +409,7 @@ export default function OrgChart() {
                           <div style={{ fontWeight: 700, color, fontSize: 13 }}>{sec.name}</div>
                           {supe && (
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                              {supe.position || '督導'} · {supe.name}{supe.name_en ? ` ${supe.name_en}` : ''}
+                              {supe.position || '督導'} · {labelOf(supe)}
                             </div>
                           )}
                         </div>
@@ -463,7 +467,7 @@ export default function OrgChart() {
                                           minWidth: 80,
                                           textAlign: 'center',
                                         }}>
-                                          店長 {mgr.name}
+                                          店長 {labelOf(mgr)}
                                         </div>
                                       </>
                                     )}
@@ -485,7 +489,7 @@ export default function OrgChart() {
                                             color: emp.employment_type === '兼職' ? 'var(--accent-red)' : 'var(--text-secondary)',
                                             fontWeight: 500,
                                           }}>
-                                            {emp.name}
+                                            {labelOf(emp)}
                                           </div>
                                         ))}
                                       </div>

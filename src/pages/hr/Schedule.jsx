@@ -1104,7 +1104,7 @@ export default function Schedule() {
 
       {mainTab === 'schedule' && (
         <MonthScheduleTable
-          monthDates={monthDates}
+          monthDates={activeDates}
           filtered={filtered}
           employees={employees}
           locations={locations}

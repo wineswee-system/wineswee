@@ -60,9 +60,15 @@ export default function OrgChart() {
     employees
       .filter(e => e.store_id === store.id)
       .sort((a, b) => {
+        // 1. 店長 first
         const aLead = isStoreLead(a) ? 0 : 1
         const bLead = isStoreLead(b) ? 0 : 1
         if (aLead !== bLead) return aLead - bLead
+        // 2. 全職 group before 兼職 group
+        const aPart = a.employment_type === '兼職' ? 1 : 0
+        const bPart = b.employment_type === '兼職' ? 1 : 0
+        if (aPart !== bPart) return aPart - bPart
+        // 3. then by name (zh-Hant collation)
         return (a.name || '').localeCompare(b.name || '', 'zh-Hant')
       })
 

@@ -1,5 +1,5 @@
 import {
-  parseTime, getShiftHours, isAbsence,
+  parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   getCycleFor,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
@@ -470,7 +470,7 @@ export function runProgrammaticSchedule(data) {
           if (weekHours >= range.max) continue
         } else {
           const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && isAbsence(s)).length
+          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && countsAsMonthlyRest(s)).length
           const monthRestUsed = prevRestUsed + thisWeekRest
           const monthRestLimit = monthRestTarget[emp.name] || 15
 
@@ -478,7 +478,7 @@ export function runProgrammaticSchedule(data) {
             if (isPTEmp(e)) return false
             if (schedule[e.name]?.[date]) return false
             const ftPrevRest = monthlyCtx?.restDaysUsed?.[e.name] || 0
-            const ftThisWeekRest = Object.values(schedule[e.name]).filter(s => s && isAbsence(s)).length
+            const ftThisWeekRest = Object.values(schedule[e.name]).filter(s => s && countsAsMonthlyRest(s)).length
             const ftMonthRest = ftPrevRest + ftThisWeekRest
             return ftMonthRest < (monthRestTarget[e.name] || 10)
           })
@@ -576,7 +576,7 @@ export function runProgrammaticSchedule(data) {
 
     const getMonthRestUsed = (empName) => {
       const prev = monthlyCtx?.restDaysUsed?.[empName] || 0
-      const thisWeek = Object.values(schedule[empName]).filter(s => s && isAbsence(s)).length
+      const thisWeek = Object.values(schedule[empName]).filter(s => s && countsAsMonthlyRest(s)).length
       return prev + thisWeek
     }
 
@@ -1026,7 +1026,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
     for (const a of result.assignments) {
       if (isAbsence(a.shift)) {
-        monthRestDays[a.employee] = (monthRestDays[a.employee] || 0) + 1
+        // 只有公司給的休 (休/補休) 才算進月休配額
+        // 員工請的假 (特休/病/產等) 不算 → 不影響月休天數
+        if (countsAsMonthlyRest(a.shift)) {
+          monthRestDays[a.employee] = (monthRestDays[a.employee] || 0) + 1
+        }
       } else {
         monthHours[a.employee] = (monthHours[a.employee] || 0) + (a.actual_hours || 8)
         const def = data.shiftDefs.find(d => d.name === a.shift)

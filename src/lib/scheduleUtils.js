@@ -134,18 +134,31 @@ export const ABSENCE_TYPES = {
 }
 
 export const ABSENCE_CONFIG = {
-  '休':   { label: '休假', color: '#6b7280', icon: '😴', countsAsRest: true },
-  '補休': { label: '補休', color: '#3b82f6', icon: '🔄', countsAsRest: true },
+  // countsAsRest: 是否算進「月休配額」（公司給的法定例休/休息日）
+  //   true  = 公司排的休，吃月休配額
+  //   false = 員工請的假（特休/病/產等），另計，不影響月休配額
+  '休':   { label: '休假', color: '#6b7280', icon: '😴', countsAsRest: true  },
+  '補休': { label: '補休', color: '#3b82f6', icon: '🔄', countsAsRest: true  },
   '病':   { label: '病假', color: '#ef4444', icon: '🏥', countsAsRest: false },
-  '特休': { label: '特休', color: '#10b981', icon: '🌴', countsAsRest: true },
+  '特休': { label: '特休', color: '#10b981', icon: '🌴', countsAsRest: false },
   '會議': { label: '會議', color: '#8b5cf6', icon: '📋', countsAsRest: false },
-  '產':   { label: '產假', color: '#f59e0b', icon: '👶', countsAsRest: true },
+  '產':   { label: '產假', color: '#f59e0b', icon: '👶', countsAsRest: false },
 }
 
 /** Check if a shift value represents any type of absence */
 export function isAbsence(shift) {
   if (!shift) return false
   return Object.values(ABSENCE_TYPES).includes(shift)
+}
+
+/**
+ * 是否算進「月休配額」(公司給的休)
+ * 員工請的假 (特休/病/產/事假等) 不算 → 不影響月休天數
+ */
+export function countsAsMonthlyRest(shift) {
+  if (!shift) return false
+  const cfg = ABSENCE_CONFIG[shift]
+  return !!cfg?.countsAsRest
 }
 
 /** Get the display config for an absence type */

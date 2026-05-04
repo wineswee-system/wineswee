@@ -8,3 +8,7 @@ dist
 graphify-out/
 src/graphify-out/
 .gitnexus
+
+# Local snapshots / temp dumps from one-shot scripts
+.tmp_*.json
+.tmp_*.txt

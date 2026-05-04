@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -861,6 +861,42 @@ export default function Schedule() {
           ))}
         </div>
       </div>
+
+      {/* Cycle banner — 變形工時 + 有 anchor 時顯示本月跨幾個 cycle */}
+      {(() => {
+        const ws = storeSettings?.work_hour_system
+        const anchor = storeSettings?.variable_period_start
+        if (!storeFilter || !ws || ws === '標準工時' || !anchor) return null
+        const cycles = listCyclesInRange(monthStart, monthEnd, ws, anchor)
+        if (cycles.length === 0) return null
+        return (
+          <div style={{
+            marginBottom: 12, padding: '8px 14px', borderRadius: 10,
+            background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
+            fontSize: 13,
+          }}>
+            <span style={{ fontWeight: 700, color: 'var(--accent-purple)' }}>
+              📐 {ws}
+            </span>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              本月跨 {cycles.length} 個 cycle：
+            </span>
+            {cycles.map((c, i) => (
+              <span key={c.cycleIndex} style={{
+                padding: '2px 8px', borderRadius: 6,
+                background: 'var(--bg-card)', border: '1px solid var(--accent-purple)',
+                color: 'var(--accent-purple)', fontWeight: 600,
+              }}>
+                #{c.cycleIndex + 1}: {c.start} ~ {c.end}
+              </span>
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+              起算日 {anchor}
+            </span>
+          </div>
+        )
+      })()}
 
       {/* AI Draft Review Panel */}
       {aiDraft && mainTab === 'schedule' && (

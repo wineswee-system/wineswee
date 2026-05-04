@@ -1,6 +1,7 @@
 import {
   parseTime, getShiftHours, isAbsence,
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
+  getCycleFor,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
@@ -939,6 +940,22 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
   const weeks = splitIntoWeeks(monthDates)
   console.log('[Monthly] Split into', weeks.length, 'weeks:', weeks.map(w => w[0] + '~' + w[w.length - 1]))
+
+  // ── Cycle-aware mode detection ──
+  // 變形工時 + 有 anchor → 改成「按 cycle 累積/重置時數」而非按月
+  // 演算法核心邏輯不變，只是 monthHours/monthRestDays 在跨 cycle 時 reset
+  const ws = data.storeSettings?.work_hour_system || '標準工時'
+  const anchor = data.storeSettings?.variable_period_start || null
+  const isCycleMode = ws !== '標準工時' && !!anchor
+  // 每週對應的 cycleIndex（標準工時時都填 0，視為單一 cycle）
+  const weekCycleIdx = weeks.map(w =>
+    isCycleMode ? getCycleFor(w[0], ws, anchor).cycleIndex : 0
+  )
+  if (isCycleMode) {
+    console.log('[Monthly] Cycle-aware mode:', ws, 'anchor=', anchor)
+    console.log('[Monthly] Week→cycle:', weekCycleIdx)
+  }
+
   const allAssignments = []
   const allViolations = []
   let lastWeekContext = previousWeek || []
@@ -955,6 +972,15 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   for (let i = 0; i < weeks.length; i++) {
     const weekDates = weeks[i]
     onProgress?.(`程式排班中... 第 ${i + 1}/${weeks.length} 週`)
+
+    // Cycle 切換時 reset 累積（換新 cycle = 清零重算 168h cap）
+    if (isCycleMode && i > 0 && weekCycleIdx[i] !== weekCycleIdx[i - 1]) {
+      console.log(`[Monthly] Week ${i + 1}: entering new cycle ${weekCycleIdx[i]}, resetting accumulators`)
+      for (const emp of data.employees) {
+        monthHours[emp.name] = 0
+        monthRestDays[emp.name] = 0
+      }
+    }
 
     const mergedFatigue = (data.fatigueScores || []).map(f => ({
       ...f,
@@ -977,7 +1003,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       monthlyContext: {
         hoursAccumulated: { ...monthHours },
         restDaysUsed: { ...monthRestDays },
-        weeksRemaining: weeks.length - i - 1,
+        // weeksRemaining 改成 cycle-aware：cycle 內還剩幾週（不含本週）
+        weeksRemaining: isCycleMode
+          ? weekCycleIdx.slice(i + 1).filter(c => c === weekCycleIdx[i]).length
+          : (weeks.length - i - 1),
       },
     }
 

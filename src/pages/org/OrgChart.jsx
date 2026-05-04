@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
-import { getDepartments, getEmployees, getStores } from '../../lib/db'
+import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
 
 export default function OrgChart() {
   const [departments, setDepartments] = useState([])
+  const [sections, setSections] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getDepartments(), getEmployees(), getStores()])
-      .then(([dRes, eRes, sRes]) => {
+    Promise.all([getDepartments(), getDepartmentSections(), getEmployees(), getStores()])
+      .then(([dRes, secRes, eRes, sRes]) => {
         setDepartments(dRes.data || [])
+        setSections(secRes.data || [])
         setEmployees((eRes.data || []).filter(e => e.status === '在職'))
         setStores((sRes.data || []).filter(s => s.is_active !== false))
       })
@@ -19,8 +21,13 @@ export default function OrgChart() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
 
-  const colors = ['var(--accent-cyan)', 'var(--accent-blue)', 'var(--accent-green)', 'var(--accent-pink)', 'var(--accent-yellow)', 'var(--accent-purple)']
-  const dims = ['var(--accent-cyan-dim)', 'var(--accent-blue-dim)', 'var(--accent-green-dim)', 'var(--accent-pink-dim)', 'var(--accent-yellow-dim)', 'var(--accent-purple-dim)']
+  // 顏色順序：紅 → 黃 → 綠 → 藍 → 紫，5 色循環
+  const colors = ['var(--accent-red)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-blue)', 'var(--accent-purple)']
+  const dims = ['var(--accent-red-dim)', 'var(--accent-yellow-dim)', 'var(--accent-green-dim)', 'var(--accent-blue-dim)', 'var(--accent-purple-dim)']
+
+  // 兼總經理室：在 apex box 也要顯示（但部門列也保留）
+  const EXEC_BOARD_IDS = new Set([48, 52]) // 韓虎 Dave, 陳虹 Zoey
+  const execBoardMembers = employees.filter(e => EXEC_BOARD_IDS.has(e.id))
 
   // Find department manager name
   const managerName = (dept) => {
@@ -72,9 +79,23 @@ export default function OrgChart() {
   // Stores not assigned to any department
   const unassignedStores = stores.filter(s => !s.department_id)
 
+  // Sections (課) belonging to a department
+  const deptSections = (dept) => sections.filter(sec => sec.department_id === dept.id)
+  const sectionStores = (sec) => stores.filter(s => s.section_id === sec.id)
+  const supervisorOf = (sec) => sec.supervisor_id ? employees.find(e => e.id === sec.supervisor_id) : null
+  const storeManagerOf = (s) => s.manager_id ? employees.find(e => e.id === s.manager_id) : null
+
+  // Staff under a store excluding the store manager (manager rendered separately)
+  const storeStaffExcludingManager = (s) =>
+    storeEmployees(s).filter(e => e.id !== s.manager_id)
+
   // Separate depts with many stores (fan-out tree) vs few (inline)
+  // 但 sections-bearing dept (例如營運部) 走 section-tree，不走 fan-out
   const BIG_STORE_THRESHOLD = 3
-  const bigStoreDepts = departments.filter(d => deptStores(d).length > BIG_STORE_THRESHOLD)
+  const bigStoreDepts = departments.filter(d =>
+    deptStores(d).length > BIG_STORE_THRESHOLD && deptSections(d).length === 0
+  )
+  const sectionedDepts = departments.filter(d => deptSections(d).length > 0)
 
   return (
     <div className="fade-in">
@@ -85,8 +106,8 @@ export default function OrgChart() {
 
       <div className="card">
         <div className="card-body" style={{ padding: '32px 24px', overflowX: 'auto' }}>
-          {/* Top: 總經理室 */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 0 }}>
+          {/* Top: 總經理室 + 兼任高管 */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 16, marginBottom: 0 }}>
             <div style={{
               background: 'linear-gradient(135deg, var(--accent-cyan-dim), var(--accent-blue-dim))',
               border: '2px solid var(--accent-cyan)',
@@ -97,6 +118,25 @@ export default function OrgChart() {
             }}>
               <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent-cyan)' }}>總經理室</div>
             </div>
+            {execBoardMembers.length > 0 && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                background: 'var(--accent-red-dim)',
+                border: '2px solid var(--accent-red)',
+                borderRadius: 10,
+                padding: '8px 14px',
+                minWidth: 120,
+              }}>
+                <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>兼任高管</div>
+                {execBoardMembers.map(emp => (
+                  <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-red)', textAlign: 'center' }}>
+                    {emp.name}{emp.name_en ? ` ${emp.name_en}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Vertical line */}
@@ -109,17 +149,20 @@ export default function OrgChart() {
             <div style={{ width: '92%', height: 1, background: 'var(--border-strong)' }} />
           </div>
 
-          {/* Departments row */}
+          {/* Departments row（總經理室是 apex，不再列入） */}
           <div style={{ display: 'flex', justifyContent: 'space-around', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {departments.map((dept, i) => {
+            {departments.filter(d => d.name !== '總經理室').map((dept, i) => {
               const color = colors[i % colors.length]
               const dim = dims[i % dims.length]
               const head = managerName(dept)
-              const subs = subManagers(dept)
+              // sectioned dept (例如 營運部)：subManagers 會在課別 tree 顯示，不放在 dept 主管框
+              const hasSecs = deptSections(dept).length > 0
+              const subs = hasSecs ? [] : subManagers(dept)
               const mems = deptMembersExcludingStoreStaff(dept)
               const dStores = deptStores(dept)
               const hasMgr = head !== '-' || subs.length > 0
-              const isBigStoreDept = dStores.length > BIG_STORE_THRESHOLD
+              // sectioned dept 不顯示 inline store，等下面的 section tree 處理
+              const isBigStoreDept = dStores.length > BIG_STORE_THRESHOLD || hasSecs
 
               return (
                 <div key={dept.id} style={{ flex: '1 1 110px', maxWidth: 160, minWidth: 100, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -222,7 +265,8 @@ export default function OrgChart() {
 
           {/* Fan-out tree for depts with many stores (e.g. 營運部) */}
           {bigStoreDepts.map((dept, i) => {
-            const color = colors[departments.indexOf(dept) % colors.length]
+            const visibleDepts = departments.filter(d => d.name !== '總經理室')
+            const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dStores = deptStores(dept)
             return (
               <div key={dept.id} style={{ marginTop: 20 }}>
@@ -284,6 +328,126 @@ export default function OrgChart() {
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Section tree for sectioned depts (e.g. 營運部 → 4 課) */}
+          {sectionedDepts.map((dept) => {
+            const visibleDepts = departments.filter(d => d.name !== '總經理室')
+            const color = colors[visibleDepts.indexOf(dept) % colors.length]
+            const dim = dims[visibleDepts.indexOf(dept) % dims.length]
+            const secs = deptSections(dept)
+            return (
+              <div key={`sec-${dept.id}`} style={{ marginTop: 24 }}>
+                {/* connector */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: 1, height: 18, background: 'var(--border-strong)' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <div style={{
+                    fontSize: 12,
+                    color,
+                    fontWeight: 700,
+                    border: `1px dashed ${color}`,
+                    borderRadius: 6,
+                    padding: '4px 14px',
+                    background: 'var(--glass-light)',
+                  }}>
+                    {dept.name} 課別 ({secs.length})
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: '92%', height: 1, background: 'var(--border-strong)' }} />
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: 16,
+                  justifyContent: 'space-around',
+                  marginTop: 12,
+                  flexWrap: 'wrap',
+                  alignItems: 'flex-start',
+                }}>
+                  {secs.map((sec) => {
+                    const supe = supervisorOf(sec)
+                    const secStores = sectionStores(sec)
+                    return (
+                      <div key={sec.id} style={{
+                        flex: '1 1 220px',
+                        minWidth: 200,
+                        maxWidth: 320,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                      }}>
+                        {/* connector to bus */}
+                        <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
+                        {/* Section header (課別 + 督導) */}
+                        <div style={{
+                          background: dim,
+                          border: `1.5px solid ${color}`,
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          textAlign: 'center',
+                          width: '100%',
+                        }}>
+                          <div style={{ fontWeight: 700, color, fontSize: 13 }}>{sec.name}</div>
+                          {supe && (
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                              {supe.position || '督導'} · {supe.name}{supe.name_en ? ` ${supe.name_en}` : ''}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Stores under this section */}
+                        {secStores.length > 0 && (
+                          <>
+                            <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                              {secStores.map((s) => {
+                                const mgr = storeManagerOf(s)
+                                const staff = storeStaffExcludingManager(s)
+                                return (
+                                  <div key={s.id} style={{
+                                    background: 'var(--glass-light)',
+                                    border: '1.5px solid var(--border-strong)',
+                                    borderRadius: 8,
+                                    padding: '6px 8px',
+                                    textAlign: 'center',
+                                  }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700 }}>{s.name}</div>
+                                    {mgr && (
+                                      <div style={{
+                                        fontSize: 11, color, fontWeight: 600, marginTop: 4,
+                                        borderTop: '1px dashed var(--border-subtle)', paddingTop: 4,
+                                      }}>
+                                        店長 {mgr.name}{mgr.name_en ? ` ${mgr.name_en}` : ''}
+                                      </div>
+                                    )}
+                                    {staff.length > 0 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                                        {staff.map(emp => (
+                                          <div key={emp.id} style={{
+                                            fontSize: 11,
+                                            color: emp.employment_type === '兼職' ? 'var(--accent-red)' : 'var(--text-secondary)',
+                                            fontWeight: 500,
+                                          }}>
+                                            {emp.name}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </>
                         )}
                       </div>
                     )

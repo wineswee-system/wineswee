@@ -70,6 +70,13 @@ export const updateDepartment = (id, data) =>
 export const deleteDepartment = (id) =>
   supabase.from('departments').delete().eq('id', id)
 
+// ── Department Sections（部門下的「課」）────────────────────
+export const getDepartmentSections = (orgId) => {
+  let q = supabase.from('department_sections').select('*').eq('is_active', true).order('sort_order')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
 export const getDeptManagerHistory = (deptId) =>
   supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })
 

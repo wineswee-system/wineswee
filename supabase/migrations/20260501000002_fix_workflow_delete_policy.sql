@@ -8,6 +8,7 @@
 
 -- workflow_instances
 DROP POLICY IF EXISTS org_scope_delete_workflow_instances ON public.workflow_instances;
+
 CREATE POLICY org_scope_delete_workflow_instances ON public.workflow_instances
   FOR DELETE TO authenticated
   USING (
@@ -18,6 +19,7 @@ CREATE POLICY org_scope_delete_workflow_instances ON public.workflow_instances
 
 -- tasks
 DROP POLICY IF EXISTS org_scope_delete_tasks ON public.tasks;
+
 CREATE POLICY org_scope_delete_tasks ON public.tasks
   FOR DELETE TO authenticated
   USING (

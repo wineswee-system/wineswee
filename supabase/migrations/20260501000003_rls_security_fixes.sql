@@ -28,16 +28,23 @@ BEGIN;
 -- Payroll — security_hardening created self-or-admin / admin-only policies;
 -- phase 1.3 section 5 added these blanket reads which OR them into always-true.
 DROP POLICY IF EXISTS "auth_read_payroll_records"   ON public.payroll_records;
+
 DROP POLICY IF EXISTS "auth_read_payroll_runs"      ON public.payroll_runs;
+
 DROP POLICY IF EXISTS "auth_read_salary_structures" ON public.salary_structures;
+
 DROP POLICY IF EXISTS "auth_read_leave_balances"    ON public.leave_balances;
 
 -- LINE — security_hardening created admin-only SELECT policies;
 -- same OR-override problem applies.
 DROP POLICY IF EXISTS "auth_read_line_groups"        ON public.line_groups;
+
 DROP POLICY IF EXISTS "auth_read_line_group_members" ON public.line_group_members;
+
 DROP POLICY IF EXISTS "auth_read_line_messages"      ON public.line_messages;
+
 DROP POLICY IF EXISTS "auth_read_line_command_logs"  ON public.line_command_logs;
+
 DROP POLICY IF EXISTS "auth_read_line_error_logs"    ON public.line_error_logs;
 
 -- ─────────────────────────────────────────────────────────────
@@ -84,6 +91,7 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();

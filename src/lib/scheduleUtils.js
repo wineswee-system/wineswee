@@ -279,3 +279,103 @@ export const WEEKDAY_DAYS = [0, 1, 2, 3, 4]
 export function isWeekendDay(dayOfWeek) {
   return WEEKEND_DAYS.includes(dayOfWeek)
 }
+
+// ── Variable-period cycle helpers ──────────────────────────
+// 給定日期 + 變形工時 system + anchor，算出該日屬於哪個 cycle，
+// 以及該 cycle 的起迄、總時數上限、休假天數要求。
+//
+// system: '標準工時' | '2週變形' | '4週變形' | '8週變形'
+// anchorDate: 'YYYY-MM-DD' string or Date (變形週期起算日)
+// date: 'YYYY-MM-DD' string or Date (要查詢的日期)
+//
+// 回傳：
+//   標準工時 / 沒 anchor → { mode: 'monthly', label: '2026-05', start, end, ...constraints }
+//   變形工時 + 有 anchor → { mode: 'cycle', cycleIndex: 0, label: 'Cycle #1 (2026-05-01 ~ 2026-05-28)', start, end, ...constraints }
+
+// 所有日期都當作 UTC midnight 處理，避免時區跳日
+const _toDate = (d) => {
+  if (d instanceof Date) return d
+  // 'YYYY-MM-DD' → UTC midnight Date
+  const [y, m, day] = d.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, day))
+}
+const _addDays = (d, n) => {
+  const r = new Date(d.getTime())
+  r.setUTCDate(r.getUTCDate() + n)
+  return r
+}
+const _isoDate = (d) => {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const _msPerDay = 86400000
+
+export function getCycleFor(date, system, anchorDate) {
+  const constraints = getWorkSystemConstraints(system)
+  const d = _toDate(date)
+
+  // 標準工時 / 沒 anchor → 月制 fallback
+  if (system === '標準工時' || !anchorDate) {
+    const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
+    const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+    return {
+      mode: 'monthly',
+      cycleIndex: null,
+      label: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`,
+      start: _isoDate(start),
+      end: _isoDate(end),
+      ...constraints,
+    }
+  }
+
+  // 變形工時：以 anchor 為基準切 cycle
+  const anchor = _toDate(anchorDate)
+  const cycleLenDays = constraints.periodWeeks * 7
+  const diffDays = Math.floor((d.getTime() - anchor.getTime()) / _msPerDay)
+  const cycleIndex = Math.floor(diffDays / cycleLenDays)
+  const start = _addDays(anchor, cycleIndex * cycleLenDays)
+  const end = _addDays(start, cycleLenDays - 1)
+
+  return {
+    mode: 'cycle',
+    cycleIndex,
+    label: `Cycle #${cycleIndex + 1} (${_isoDate(start)} ~ ${_isoDate(end)})`,
+    start: _isoDate(start),
+    end: _isoDate(end),
+    ...constraints,
+  }
+}
+
+/**
+ * 列舉一段日期區間內所有 cycle 的邊界（給 UI 畫分界線用）
+ * 例：4週變形 anchor=2026-05-01，問 2026-05 月內的 cycle 邊界
+ *   → [{start:'2026-05-01', end:'2026-05-28', cycleIndex:0}]
+ *   （5/29~5/31 已屬下一 cycle，會也包含進來）
+ */
+export function listCyclesInRange(rangeStart, rangeEnd, system, anchorDate) {
+  if (system === '標準工時' || !anchorDate) return []
+  const result = []
+  const constraints = getWorkSystemConstraints(system)
+  const cycleLenDays = constraints.periodWeeks * 7
+  const anchor = _toDate(anchorDate)
+  const rs = _toDate(rangeStart)
+  const re = _toDate(rangeEnd)
+  // 找 rangeStart 所屬 cycle
+  const startDiff = Math.floor((rs.getTime() - anchor.getTime()) / _msPerDay)
+  let idx = Math.floor(startDiff / cycleLenDays)
+  while (true) {
+    const cs = _addDays(anchor, idx * cycleLenDays)
+    const ce = _addDays(cs, cycleLenDays - 1)
+    if (cs.getTime() > re.getTime()) break
+    result.push({
+      cycleIndex: idx,
+      start: _isoDate(cs),
+      end: _isoDate(ce),
+      label: `Cycle #${idx + 1}`,
+    })
+    idx += 1
+  }
+  return result
+}

@@ -546,7 +546,29 @@ export default function StoreSettingsTab({
           }}>
             {WORK_SYSTEMS.map(w => <option key={w.value} value={w.value}>{w.value}</option>)}
           </select>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{WORK_SYSTEMS.find(w => w.value === (storeSettings?.work_hour_system || '標準工時'))?.desc}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{WORK_SYSTEMS.find(w => w.value === (storeSettings?.work_hour_system || '標準工時'))?.desc}</div>
+
+          {/* 變形工時起算日（非標準工時時才出現） */}
+          {(storeSettings?.work_hour_system || '標準工時') !== '標準工時' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>變形工時起算日</label>
+              <input
+                className="form-input"
+                type="date"
+                style={{ width: '100%' }}
+                value={storeSettings?.variable_period_start || ''}
+                onChange={async e => {
+                  if (!selectedStore) return
+                  const val = e.target.value || null
+                  const { data } = await supabase.from('store_settings').upsert({ store_id: selectedStore.id, variable_period_start: val }, { onConflict: 'store_id' }).select().single()
+                  if (data) setStoreSettings(data)
+                }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                從這天開始往後切變形週期（每 {storeSettings?.work_hour_system === '2週變形' ? 2 : storeSettings?.work_hour_system === '4週變形' ? 4 : 8} 週一個 cycle）
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

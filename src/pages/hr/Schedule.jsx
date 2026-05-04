@@ -91,6 +91,8 @@ export default function Schedule() {
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // View mode: week or month
   const [viewMode, setViewMode] = useState('month') // 'month' | 'cycle'
+  // Cycle view 用的探測日期，null = 跟著 selectedMonth 的 1 號走
+  const [cycleProbeDate, setCycleProbeDate] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return formatYearMonth(now.getFullYear(), now.getMonth() + 1)
@@ -106,13 +108,17 @@ export default function Schedule() {
   const monthStart = monthDates[0]
   const monthEnd = monthDates[monthDates.length - 1]
 
-  // Cycle view: derive cycle from selectedMonth probe (1st of month)
+  // 換月時 reset cycle probe（避免停在前個月計算過的 probe）
+  useEffect(() => { setCycleProbeDate(null) }, [selectedMonth])
+
+  // Cycle view: derive cycle from probe date (defaults to monthStart)
+  const effectiveCycleProbe = cycleProbeDate || monthStart
   const cycleInfo = (() => {
     if (viewMode !== 'cycle') return null
     const ws = storeSettings?.work_hour_system
     const anchor = storeSettings?.variable_period_start
     if (!ws || ws === '標準工時' || !anchor) return null
-    return getCycleFor(monthStart, ws, anchor)
+    return getCycleFor(effectiveCycleProbe, ws, anchor)
   })()
   const cycleDates = (() => {
     if (!cycleInfo) return null
@@ -871,14 +877,39 @@ export default function Schedule() {
             ))}
           </div>
         )}
-        {/* Cycle label when in cycle mode */}
+        {/* Cycle navigator: prev / label / next（cycle 模式才出現） */}
         {viewMode === 'cycle' && cycleInfo && (
-          <div style={{
-            padding: '4px 12px', borderRadius: 8,
-            background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)',
-            fontSize: 12, fontWeight: 600, color: 'var(--accent-purple)',
-          }}>
-            Cycle #{cycleInfo.cycleIndex + 1}: {cycleInfo.start} ~ {cycleInfo.end}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '4px 10px', fontSize: 12 }}
+              title="上一個 cycle"
+              onClick={() => {
+                // 當前 cycle 開始日 -1 天 → 拿到上一個 cycle 內的某天
+                const d = new Date(cycleInfo.start + 'T00:00:00Z')
+                d.setUTCDate(d.getUTCDate() - 1)
+                setCycleProbeDate(d.toISOString().slice(0, 10))
+              }}
+            >◀</button>
+            <div style={{
+              padding: '4px 12px', borderRadius: 8,
+              background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)',
+              fontSize: 12, fontWeight: 600, color: 'var(--accent-purple)',
+              whiteSpace: 'nowrap',
+            }}>
+              Cycle #{cycleInfo.cycleIndex + 1}: {cycleInfo.start} ~ {cycleInfo.end}
+            </div>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '4px 10px', fontSize: 12 }}
+              title="下一個 cycle"
+              onClick={() => {
+                // 當前 cycle 結束日 +1 天 → 下一個 cycle 內的某天
+                const d = new Date(cycleInfo.end + 'T00:00:00Z')
+                d.setUTCDate(d.getUTCDate() + 1)
+                setCycleProbeDate(d.toISOString().slice(0, 10))
+              }}
+            >▶</button>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

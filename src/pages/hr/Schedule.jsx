@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor } from '../../lib/scheduleUtils'
 import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -90,7 +90,7 @@ export default function Schedule() {
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // View mode: week or month
-  const [viewMode] = useState('month') // only month view
+  const [viewMode, setViewMode] = useState('month') // 'month' | 'cycle'
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
     return formatYearMonth(now.getFullYear(), now.getMonth() + 1)
@@ -106,14 +106,34 @@ export default function Schedule() {
   const monthStart = monthDates[0]
   const monthEnd = monthDates[monthDates.length - 1]
 
-  // Active dates based on view mode
-  const activeDates = viewMode === 'month' ? monthDates : weekDates
-  const activeStart = viewMode === 'month' ? monthStart : weekStart
-  const activeEnd = viewMode === 'month' ? monthEnd : weekEnd
+  // Cycle view: derive cycle from selectedMonth probe (1st of month)
+  const cycleInfo = (() => {
+    if (viewMode !== 'cycle') return null
+    const ws = storeSettings?.work_hour_system
+    const anchor = storeSettings?.variable_period_start
+    if (!ws || ws === '標準工時' || !anchor) return null
+    return getCycleFor(monthStart, ws, anchor)
+  })()
+  const cycleDates = (() => {
+    if (!cycleInfo) return null
+    const out = []
+    const start = new Date(cycleInfo.start + 'T00:00:00Z')
+    const end = new Date(cycleInfo.end + 'T00:00:00Z')
+    for (let d = start; d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      out.push(d.toISOString().slice(0, 10))
+    }
+    return out
+  })()
+
+  // Active dates based on view mode (cycle 沒設定 anchor 時 fallback 到 month)
+  const useCycleView = viewMode === 'cycle' && cycleDates && cycleInfo
+  const activeDates = useCycleView ? cycleDates : monthDates
+  const activeStart = useCycleView ? cycleInfo.start : monthStart
+  const activeEnd = useCycleView ? cycleInfo.end : monthEnd
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -834,6 +854,31 @@ export default function Schedule() {
                 const d = new Date(monthYear, monthNum, 1)
                 setSelectedMonth(formatYearMonth(d.getFullYear(), d.getMonth() + 1))
               }}>▶</button>
+          </div>
+        )}
+        {/* View mode toggle (only show cycle option when store is variable + has anchor) */}
+        {storeSettings?.work_hour_system && storeSettings.work_hour_system !== '標準工時' && storeSettings?.variable_period_start && (
+          <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+            {[
+              { key: 'month', label: '📅 月' },
+              { key: 'cycle', label: '🔄 Cycle' },
+            ].map(v => (
+              <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+                padding: '4px 12px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: viewMode === v.key ? 'var(--accent-purple)' : 'var(--bg-card)',
+                color: viewMode === v.key ? '#fff' : 'var(--text-muted)',
+              }}>{v.label}</button>
+            ))}
+          </div>
+        )}
+        {/* Cycle label when in cycle mode */}
+        {viewMode === 'cycle' && cycleInfo && (
+          <div style={{
+            padding: '4px 12px', borderRadius: 8,
+            background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)',
+            fontSize: 12, fontWeight: 600, color: 'var(--accent-purple)',
+          }}>
+            Cycle #{cycleInfo.cycleIndex + 1}: {cycleInfo.start} ~ {cycleInfo.end}
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

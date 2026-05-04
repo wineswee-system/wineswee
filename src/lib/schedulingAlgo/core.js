@@ -79,8 +79,11 @@ export function runProgrammaticSchedule(data) {
   for (const emp of employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
-    const monthMax = isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX
-    monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT }
+    // personal_hour_cap (個人 cycle 時數上限) 蓋過店面預設
+    const monthMax = emp.personal_hour_cap != null
+      ? Math.min(emp.personal_hour_cap, isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX)
+      : (isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX)
+    monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT, personalCap: emp.personal_hour_cap }
     if (isPT) {
       const ptRestLimit = storeSettings?.pt_monthly_rest_days ?? 20
       const weeklyH = emp.weekly_target_hours || 20

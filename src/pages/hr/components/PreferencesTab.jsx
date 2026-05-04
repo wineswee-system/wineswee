@@ -59,6 +59,11 @@ export default function PreferencesTab({
     await supabase.from('employees').update({ weekly_target_hours: hours }).eq('id', emp.id)
   }
 
+  const handlePersonalCapChange = async (emp, value) => {
+    const cap = value === '' ? null : Math.max(0, Math.min(400, Number(value) || 0))
+    await supabase.from('employees').update({ personal_hour_cap: cap }).eq('id', emp.id)
+  }
+
   const handleCyclePref = async (emp, shiftName, pref) => {
     const isPreferred = pref?.preferred_shifts?.includes(shiftName)
     const isBlocked = pref?.avoid_shifts?.includes(shiftName)
@@ -145,15 +150,30 @@ export default function PreferencesTab({
                       background: 'rgba(251,191,36,0.12)', padding: '1px 6px', borderRadius: 4,
                     }}>PT</span>}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      className="form-input"
-                      type="number" min={4} max={48} step={1}
-                      style={{ width: 48, textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 4px' }}
-                      defaultValue={emp.weekly_target_hours || (isPT ? 20 : 40)}
-                      onBlur={e => handleTargetHoursChange(emp, e.target.value)}
-                    />
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h/週</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        className="form-input"
+                        type="number" min={4} max={48} step={1}
+                        style={{ width: 48, textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 4px' }}
+                        defaultValue={emp.weekly_target_hours || (isPT ? 20 : 40)}
+                        onBlur={e => handleTargetHoursChange(emp, e.target.value)}
+                        title="每週目標時數（給排班參考、預設用）"
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h/週</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="個人 cycle 時數上限（NULL = 用店面預設）">
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>cap</span>
+                      <input
+                        className="form-input"
+                        type="number" min={0} max={400} step={1}
+                        placeholder="-"
+                        style={{ width: 56, textAlign: 'center', fontSize: 12, padding: '3px 4px' }}
+                        defaultValue={emp.personal_hour_cap ?? ''}
+                        onBlur={e => handlePersonalCapChange(emp, e.target.value)}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h/cycle</span>
+                    </div>
                   </div>
                 </div>
 

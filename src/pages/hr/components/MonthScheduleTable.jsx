@@ -273,17 +273,16 @@ function EmployeeRow({
               }}>
                 {shift}
               </span>
-            ) : shift ? (() => {
+            ) : shift ? (
               // 班別名是時段範圍（10:30-19:30）→ 上下分兩行顯示，省寬度但保留完整資訊
-              const m = shift.match(/^(\d{1,2}:?\d{0,2})\s*[-~]\s*(\d{1,2}:?\d{0,2})$/)
-              return m ? (
+              /^(\d{1,2}:?\d{0,2})\s*[-~]\s*(\d{1,2}:?\d{0,2})$/.test(shift) ? (
                 <span style={{
                   display: 'inline-block', padding: '1px 2px', borderRadius: 3,
                   fontSize: 9, fontWeight: 600, lineHeight: 1.15,
                   ...getShiftStyle(shift),
                 }}>
-                  <div>{m[1]}</div>
-                  <div>{m[2]}</div>
+                  <div>{shift.split(/[-~]/)[0].trim()}</div>
+                  <div>{shift.split(/[-~]/)[1].trim()}</div>
                 </span>
               ) : (
                 <span style={{
@@ -294,7 +293,6 @@ function EmployeeRow({
                   {shift}
                 </span>
               )
-            })()
             ) : offReq ? (
               <span style={{ fontSize: 9, color: 'var(--accent-orange)' }}>申</span>
             ) : (

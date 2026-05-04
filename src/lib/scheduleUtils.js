@@ -125,24 +125,49 @@ export function parseYearMonth(ym) {
 // ══════════════════════════════════════════════════════════════
 
 export const ABSENCE_TYPES = {
-  REST: '休',
-  COMP_OFF: '補休',
-  SICK: '病',
-  ANNUAL: '特休',
-  MEETING: '會議',
-  MATERNITY: '產',
+  REST:        '休',
+  COMP_OFF:    '補休',
+  SICK:        '病',
+  ANNUAL:      '特休',
+  MEETING:     '會議',
+  MATERNITY:   '產',
+  PERSONAL:    '事',
+  WEDDING:     '婚',
+  FUNERAL:     '喪',
+  OFFICIAL:    '公',
+  MENSTRUAL:   '生',
+  WORK_INJURY: '工傷',
+  PATERNITY:   '陪產',
 }
 
 export const ABSENCE_CONFIG = {
   // countsAsRest: 是否算進「月休配額」（公司給的法定例休/休息日）
   //   true  = 公司排的休，吃月休配額
-  //   false = 員工請的假（特休/病/產等），另計，不影響月休配額
-  '休':   { label: '休假', color: '#6b7280', icon: '😴', countsAsRest: true  },
-  '補休': { label: '補休', color: '#3b82f6', icon: '🔄', countsAsRest: true  },
-  '病':   { label: '病假', color: '#ef4444', icon: '🏥', countsAsRest: false },
-  '特休': { label: '特休', color: '#10b981', icon: '🌴', countsAsRest: false },
-  '會議': { label: '會議', color: '#8b5cf6', icon: '📋', countsAsRest: false },
-  '產':   { label: '產假', color: '#f59e0b', icon: '👶', countsAsRest: false },
+  //   false = 員工請的假，另計，不影響月休配額
+  // payRate: 薪資比例 (1.0 全薪、0.5 半薪、0 無薪)
+  '休':   { label: '休假',     color: '#6b7280', icon: '😴', countsAsRest: true,  payRate: 1.0 },
+  '補休': { label: '補休',     color: '#3b82f6', icon: '🔄', countsAsRest: true,  payRate: 1.0 },
+  '病':   { label: '病假',     color: '#ef4444', icon: '🏥', countsAsRest: false, payRate: 0.5 }, // 勞基法：普通病假前 30 天半薪
+  '特休': { label: '特休',     color: '#10b981', icon: '🌴', countsAsRest: false, payRate: 1.0 },
+  '會議': { label: '會議',     color: '#8b5cf6', icon: '📋', countsAsRest: false, payRate: 1.0 },
+  '產':   { label: '產假',     color: '#f59e0b', icon: '👶', countsAsRest: false, payRate: 1.0 }, // 勞基法 §50：產假 8 週全薪
+  '事':   { label: '事假',     color: '#9ca3af', icon: '✈️',  countsAsRest: false, payRate: 0   }, // 勞基法 §43：事假無薪
+  '婚':   { label: '婚假',     color: '#ec4899', icon: '💍', countsAsRest: false, payRate: 1.0 },
+  '喪':   { label: '喪假',     color: '#1f2937', icon: '🕯️', countsAsRest: false, payRate: 1.0 },
+  '公':   { label: '公假',     color: '#0ea5e9', icon: '🏛️', countsAsRest: false, payRate: 1.0 }, // 公務指派全薪
+  '生':   { label: '生理假',   color: '#f43f5e', icon: '🌸', countsAsRest: false, payRate: 0.5 }, // 性平法：每月 1 天，超過併入病假
+  '工傷': { label: '公傷病假', color: '#dc2626', icon: '🚑', countsAsRest: false, payRate: 1.0 }, // 勞基法 §59：原領工資補償
+  '陪產': { label: '陪產假',   color: '#0891b2', icon: '👨‍👶', countsAsRest: false, payRate: 1.0 }, // 性平法：5 天全薪
+}
+
+/**
+ * 取得假別薪資比例 (1.0=全薪, 0.5=半薪, 0=無薪)
+ * 上班日 / 不在 ABSENCE_CONFIG 內 → 1.0 (照算)
+ */
+export function getAbsencePayRate(shift) {
+  if (!shift) return 1.0
+  const cfg = ABSENCE_CONFIG[shift]
+  return cfg ? cfg.payRate : 1.0
 }
 
 /** Check if a shift value represents any type of absence */

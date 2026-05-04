@@ -366,25 +366,24 @@ export default function OrgChart() {
                   <div style={{ width: '92%', height: 1, background: 'var(--border-strong)' }} />
                 </div>
 
+                {/* 4 課並排，每課內部「橫向」展開門市，再縱向疊員工 */}
                 <div style={{
                   display: 'flex',
-                  gap: 16,
-                  justifyContent: 'space-around',
+                  gap: 24,
                   marginTop: 12,
-                  flexWrap: 'wrap',
                   alignItems: 'flex-start',
+                  justifyContent: 'flex-start',
+                  paddingBottom: 8,
                 }}>
                   {secs.map((sec) => {
                     const supe = supervisorOf(sec)
                     const secStores = sectionStores(sec)
                     return (
                       <div key={sec.id} style={{
-                        flex: '1 1 220px',
-                        minWidth: 200,
-                        maxWidth: 320,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
+                        gap: 0,
                       }}>
                         {/* connector to bus */}
                         <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
@@ -393,9 +392,9 @@ export default function OrgChart() {
                           background: dim,
                           border: `1.5px solid ${color}`,
                           borderRadius: 8,
-                          padding: '8px 12px',
+                          padding: '8px 16px',
                           textAlign: 'center',
-                          width: '100%',
+                          minWidth: 160,
                         }}>
                           <div style={{ fontWeight: 700, color, fontSize: 13 }}>{sec.name}</div>
                           {supe && (
@@ -405,36 +404,78 @@ export default function OrgChart() {
                           )}
                         </div>
 
-                        {/* Stores under this section */}
+                        {/* connector + horizontal store row */}
                         {secStores.length > 0 && (
                           <>
                             <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                            {/* horizontal bus line spanning all stores */}
+                            {secStores.length > 1 && (
+                              <div style={{
+                                width: `calc(100% - ${100 / secStores.length}%)`,
+                                height: 1,
+                                background: 'var(--border-strong)',
+                              }} />
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
                               {secStores.map((s) => {
                                 const mgr = storeManagerOf(s)
                                 const staff = storeStaffExcludingManager(s)
                                 return (
                                   <div key={s.id} style={{
-                                    background: 'var(--glass-light)',
-                                    border: '1.5px solid var(--border-strong)',
-                                    borderRadius: 8,
-                                    padding: '6px 8px',
-                                    textAlign: 'center',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
                                   }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700 }}>{s.name}</div>
-                                    {mgr && (
-                                      <div style={{
-                                        fontSize: 11, color, fontWeight: 600, marginTop: 4,
-                                        borderTop: '1px dashed var(--border-subtle)', paddingTop: 4,
-                                      }}>
-                                        店長 {mgr.name}{mgr.name_en ? ` ${mgr.name_en}` : ''}
-                                      </div>
+                                    {/* connector down to this store */}
+                                    {secStores.length > 1 && (
+                                      <div style={{ width: 1, height: 10, background: 'var(--border-strong)' }} />
                                     )}
+                                    {/* Store header box (just name) */}
+                                    <div style={{
+                                      background: 'var(--glass-light)',
+                                      border: '1.5px solid var(--border-strong)',
+                                      borderRadius: 6,
+                                      padding: '6px 10px',
+                                      minWidth: 90,
+                                      maxWidth: 90,
+                                      textAlign: 'center',
+                                    }}>
+                                      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.25 }}>{s.name}</div>
+                                    </div>
+                                    {/* Manager box */}
+                                    {mgr && (
+                                      <>
+                                        <div style={{ width: 1, height: 8, background: 'var(--border-subtle)' }} />
+                                        <div style={{
+                                          background: 'var(--glass-light)',
+                                          border: `1px dashed ${color}`,
+                                          borderRadius: 6,
+                                          padding: '4px 8px',
+                                          fontSize: 11,
+                                          color,
+                                          fontWeight: 600,
+                                          minWidth: 80,
+                                          textAlign: 'center',
+                                        }}>
+                                          店長 {mgr.name}
+                                        </div>
+                                      </>
+                                    )}
+                                    {/* Staff list (vertical) */}
                                     {staff.length > 0 && (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                                      <div style={{
+                                        display: 'flex', flexDirection: 'column', gap: 2,
+                                        marginTop: 4,
+                                        minWidth: 80,
+                                      }}>
                                         {staff.map(emp => (
                                           <div key={emp.id} style={{
                                             fontSize: 11,
+                                            background: 'var(--glass-light)',
+                                            border: '1px solid var(--border-subtle)',
+                                            borderRadius: 5,
+                                            padding: '3px 8px',
+                                            textAlign: 'center',
                                             color: emp.employment_type === '兼職' ? 'var(--accent-red)' : 'var(--text-secondary)',
                                             fontWeight: 500,
                                           }}>

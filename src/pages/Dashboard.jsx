@@ -307,7 +307,7 @@ function StaffDashboard({ profile }) {
   )
 }
 
-function AdminDashboard() {
+function AdminDashboard({ profile }) {
   const monthStart = new Date().toISOString().slice(0, 7) + '-01'
   const [employees, setEmployees] = useState([])
   const [tasks, setTasks] = useState([])
@@ -835,5 +835,5 @@ export default function Dashboard() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
   if (userRole === 'store_staff' && profile) return <StaffDashboard profile={profile} />
-  return <AdminDashboard />
+  return <AdminDashboard profile={profile} />
 }

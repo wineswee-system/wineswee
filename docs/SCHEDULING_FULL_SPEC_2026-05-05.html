@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>排班系統完整規格（2026-05-05）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.5cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 17cm; margin: 0 auto; color: #222; font-size: 10pt; line-height: 1.45; }
+  h1 { font-size: 15pt; color: #6b21a8; border-bottom: 2.5px solid #6b21a8; padding-bottom: 5px; margin: 0 0 8px 0; }
+  h2 { font-size: 11.5pt; color: #6b21a8; margin: 16px 0 5px 0; padding-left: 7px; border-left: 4px solid #6b21a8; }
+  h3 { font-size: 10pt; color: #444; margin: 9px 0 4px 0; padding-left: 4px; border-left: 2px solid #888; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 8px; table-layout: fixed; }
+  th, td { border: 1px solid #888; padding: 4px 6px; vertical-align: top; word-wrap: break-word; font-size: 9pt; line-height: 1.35; }
+  th { background: #6b21a8; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #faf5ff; }
+  .ok { background: #d4edda !important; color: #155724; font-weight: 600; }
+  .warn { background: #fff3cd !important; color: #856404; font-weight: 600; }
+  .err { background: #f8d7da !important; color: #721c24; font-weight: 600; }
+  .meta { color: #777; font-size: 8.5pt; margin: 0 0 8px 0; }
+  .flow { background: #faf5ff; border-left: 4px solid #6b21a8; padding: 9px 13px; margin: 9px 0; font-family: Consolas, monospace; font-size: 8.5pt; line-height: 1.55; white-space: pre-wrap; }
+  .small { font-size: 8.5pt; color: #555; }
+  code { background: #eef; padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<h1>SME Ops System — 排班系統完整規格</h1>
+<p class="meta">產出 2026-05-05　·　核心：程式演算法 + AI 雙引擎，支援週/月/Cycle 三種視圖、班別制 + 時段覆蓋制兩種模式、勞基法 H1–H17 硬性約束</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>A. 系統定位</h2>
+<p>排班是 HR 模組最複雜的部分，涉及：</p>
+<ul>
+<li><b>勞基法合規</b>：每日上限、連續工時、間隔、月加班上限、變形工時等 17 條硬性規則（H1–H17）</li>
+<li><b>營運需求</b>：每時段必有開店/關店人員、最低人力、跨店支援</li>
+<li><b>員工偏好</b>：希望休日、可上班時段、避開的班別</li>
+<li><b>數學最佳化</b>：在以上限制下找滿意所有人的解（NP-hard 問題）</li>
+</ul>
+
+<p>本系統採<b>雙引擎</b>策略：</p>
+<table>
+<colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup>
+<thead><tr><th>引擎</th><th>程式排班 (Programmatic)</th><th>AI 排班 (Gemini)</th></tr></thead>
+<tbody>
+<tr><td>速度</td><td>1–3 秒</td><td>10–30 秒（含 retry）</td></tr>
+<tr><td>結果穩定</td><td>每次相同輸入 = 同結果</td><td>有變異性</td></tr>
+<tr><td>邏輯可解釋</td><td>步驟透明可 debug</td><td>黑盒，需 retry 機制</td></tr>
+<tr><td>適用</td><td>常規排班、batch、無網路</td><td>創意排班、複雜偏好</td></tr>
+<tr><td>成本</td><td>免費</td><td>每次呼叫 API 費用</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>B. 三種視圖模式</h2>
+<table>
+<colgroup><col style="width:18%"><col style="width:25%"><col style="width:25%"><col style="width:32%"></colgroup>
+<thead><tr><th>模式</th><th>範圍</th><th>適用工時制</th><th>排班策略</th></tr></thead>
+<tbody>
+<tr><td>週視圖</td><td>7 天（週一~週日）</td><td>標準工時</td><td>單週獨立排班</td></tr>
+<tr><td>月視圖</td><td>整個月（28–31 天）</td><td>月制工時目標</td><td>切成 4–5 週，跨週累積工時/休假</td></tr>
+<tr><td>Cycle 視圖</td><td>2 / 4 / 8 週</td><td>變形工時</td><td>以變形週期為單位（從 anchor date 起算），切週後跨週累積</td></tr>
+</tbody>
+</table>
+<p class="small">store_settings.work_hour_system 決定 cycle 是 2 週 / 4 週 / 8 週。anchor 由 variable_period_start 設定（必須是週首日）。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>C. 變形工時規則（勞基法 §30 / §30-1）</h2>
+<table>
+<colgroup><col style="width:18%"><col style="width:20%"><col style="width:20%"><col style="width:42%"></colgroup>
+<thead><tr><th>制度</th><th>單週上限</th><th>週期總時上限</th><th>週期休息天數</th></tr></thead>
+<tbody>
+<tr><td>標準工時</td><td>40h</td><td>—</td><td>每 7 天 1 例假 + 1 休息日</td></tr>
+<tr><td>2 週變形</td><td>48h（單週）</td><td>2 週 84h</td><td>2 週 4 天</td></tr>
+<tr><td>4 週變形</td><td>48h（單週）</td><td>4 週 168h</td><td>4 週 8 天</td></tr>
+<tr><td>8 週變形</td><td>48h（單週）</td><td>8 週 336h</td><td>8 週 16 天（每 7 天 1 例假）</td></tr>
+<tr><td>月制（自訂）</td><td>—</td><td>168h × (月份天數 / 28)</td><td>每 7 天 1 例假；月制目標休假天數依員工類別</td></tr>
+</tbody>
+</table>
+<p class="small">每日工作上限 §32：8h（一般）、12h（加班含原 8h）。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>D. 兩種排班模式</h2>
+
+<h3>D1. 班別制（Shift-based）— 預設模式</h3>
+<p>有預設班別（如 11–20 早班、15–24 晚班），員工指派整段班別。</p>
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<thead><tr><th>欄位</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>shift_definitions</td><td>store 的可用班別清單（name / start_time / end_time / break_minutes / employee_type / day_type）</td></tr>
+<tr><td>store_staffing</td><td>每班別所需人數（依平日/假日）</td></tr>
+<tr><td>schedules.shift</td><td>員工當日班別名稱（'11-20'、'休'、'特休' 等）</td></tr>
+</tbody>
+</table>
+
+<h3>D2. 時段覆蓋制（Time Slot Coverage）— v2 新</h3>
+<p>不限定固定班別，員工只需「覆蓋」門市需求時段（如 11:00–14:00 需 2 人、19:00–22:00 需 3 人）。系統自動算每人最佳起訖時間。</p>
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<thead><tr><th>欄位</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>store_time_slots</td><td>每 store 一組時段 (start_time, end_time, required_count, day_type)</td></tr>
+<tr><td>schedules.actual_start / actual_end</td><td>系統自動算出的起訖時間（不再對應 shift_definitions）</td></tr>
+</tbody>
+</table>
+<p class="small">啟用條件：store_time_slots 有資料 → useTimeSlotMode=true。否則用班別制。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>E. 完整資料表（共 12 張）</h2>
+
+<h3>E1. 主檔（Master）</h3>
+<table>
+<colgroup><col style="width:25%"><col style="width:30%"><col style="width:45%"></colgroup>
+<thead><tr><th>表名</th><th>用途</th><th>關鍵欄位</th></tr></thead>
+<tbody>
+<tr><td>store_settings</td><td>每門市排班設定</td><td>store_id, work_hour_system, variable_period_start (anchor), operating_hours (JSONB), ft_monthly_rest_days, pt_monthly_rest_days, min_staff, min_staff_weekend</td></tr>
+<tr><td>shift_definitions</td><td>班別定義</td><td>name, start_time, end_time, break_minutes, employee_type ('all'/'full_time'/'pt'), day_type ('all'/'weekday'/'weekend'), store_id</td></tr>
+<tr><td>store_time_slots</td><td>時段覆蓋需求（v2）</td><td>store_id, start_time, end_time, required_count, day_type, year_month</td></tr>
+<tr><td>store_staffing</td><td>班別最低人力</td><td>store_id, shift_name, required_count_weekday, required_count_weekend</td></tr>
+<tr><td>holidays</td><td>國定假日</td><td>date, is_workday (false=放假)</td></tr>
+<tr><td>store_events</td><td>門市特殊活動</td><td>store_id, date, event_name, additional_staff_needed</td></tr>
+<tr><td>employees</td><td>員工排班屬性</td><td>employment_type ('正職'/'兼職'/'PT'), can_open, can_close, additional_stores (跨店支援), weekly_target_hours, personal_hour_cap (個人月上限), schedule_priority, is_pregnant, is_nursing</td></tr>
+<tr><td>employee_shift_preferences</td><td>員工偏好</td><td>employee, preferred_shifts (Array), neutral_shifts, avoid_shifts, available_days_of_week (JSONB)</td></tr>
+</tbody>
+</table>
+
+<h3>E2. 交易（Transactional）</h3>
+<table>
+<colgroup><col style="width:25%"><col style="width:30%"><col style="width:45%"></colgroup>
+<thead><tr><th>表名</th><th>用途</th><th>關鍵欄位</th></tr></thead>
+<tbody>
+<tr><td>schedules</td><td>實際班表</td><td>employee, date, shift, actual_start, actual_end, actual_hours, store_id, is_published</td></tr>
+<tr><td>off_requests</td><td>休假申請</td><td>employee, date, reason, status (pending/approved/rejected)</td></tr>
+<tr><td>shift_swaps</td><td>換班申請（兩階段）</td><td>requester, target, original_date, target_date, status</td></tr>
+<tr><td>schedule_publish_status</td><td>發布狀態</td><td>store_id, year_month, published_at, published_by</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>F. 核心演算法（runProgrammaticSchedule 步驟）</h2>
+
+<div class="flow">輸入：data {employees, shiftDefs, timeSlots, weekDates, offRequests, preferences, storeSettings, ...}
+    ↓
+Step 0：解析 store_settings.work_hour_system → 取得 wsConstraints (週上限/週期總時/休假天數)
+    ↓
+Step 1：planRestDays
+  · 依 employee_type 算月休目標 (FT 10 / PT 20)
+  · 抓 off_requests 已申請的休 → 直接放
+  · 套用 weekly_target_hours 計算還需排幾天工作
+    ↓
+Step 2：sortShifts by start_time（先排早班再排晚班）
+    ↓
+分支判斷：useTimeSlotMode = (timeSlots.length > 0)
+    ↓
+═══ IF useTimeSlotMode ═══ (時段覆蓋制)
+  Step 3：對每天每員工：
+    · 計算所需 grossH（粗工時 = 含休息時間）
+    · 列舉所有可能的 [起時, grossH] 窗口
+    · 對每窗口算 score（時段覆蓋分 + 開關店分 + 工時偏好分 − 疲勞）
+    · 選最佳窗口指派
+═══ ELSE ═══ (班別制)
+  Step 3：兩段式班別指派
+    第一輪：員工依 schedule_priority 排序，貪婪選 score 最高的班別
+    第二輪：補齊未滿員班別（required_count 還有缺）
+  Step 3b：開店/關店人員修補
+    · 找 can_open=true 的員工頂替 isOpening 班
+    · 找 can_close=true 的員工頂替 isClosing 班
+  Step 3c：跨店借調 (Cross-store)
+    · 若仍缺人 → 從 additional_stores 包含本店的他店員工調入
+    ↓
+Step 3b（共用）：補空缺 — FT 員工沒排到 → 給最早班別塞進去
+    ↓
+Step 4：Build assignments 物件陣列
+    ↓
+Step 5：validateResult — 套 H1-H17 + S1-S10 規則檢查
+  · 每筆違反 → 紀錄 violation { severity: 'error'/'warning', constraint, message }
+    ↓
+Step 6：computeStats — 算每員工本週工時 / 排班滿意度 / 疲勞度
+    ↓
+回傳 { assignments, violations, stats, reasoning, meta }</div>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>G. 月排班 / Cycle 排班的多週迴圈（runMonthlyProgrammaticSchedule）</h2>
+<div class="flow">輸入：data { monthDates, ..., storeSettings.work_hour_system }
+    ↓
+splitIntoWeeks(monthDates) → weeks[][]
+    ↓
+若 cycle 模式：
+  weekCycleIdx[i] = weeks[i] 屬於第幾個 cycle（用 anchor 推算）
+  跨 cycle 邊界的週標記為「歸屬多數天的 cycle」
+    ↓
+allAssignments = []
+monthHours, monthRestDays, monthFatigue = {}
+    ↓
+FOR i = 0 to weeks.length:
+  IF cycle 切換（weekCycleIdx[i] 比上週大）→ reset accumulators
+  weekData = { ...data, weekDates: weeks[i],
+               previousWeek: 上週 assignments,
+               monthlyContext: { hoursAccumulated, restDaysUsed,
+                                 weeksRemaining: cycle 內剩幾週 } }
+  result = runProgrammaticSchedule(weekData)   ← 內部迴圈
+  allAssignments.push(...result.assignments)
+  累加 monthHours, monthRestDays, monthFatigue
+    ↓
+最終校正：強制月休精確到目標天數（多排的休轉成班）
+    ↓
+validateMonthlyResult — 套 H6 (月加班 ≤46h)、H17 (月休 ≥X 天)、H11 (週期總時)
+    ↓
+回傳 { assignments: allAssignments, violations, stats, monthFatigue }</div>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>H. 勞基法硬性約束（H1–H17 — 違反即為 error）</h2>
+<table>
+<colgroup><col style="width:8%"><col style="width:32%"><col style="width:60%"></colgroup>
+<thead><tr><th>編號</th><th>規則</th><th>法源 / 說明</th></tr></thead>
+<tbody>
+<tr><td>H1</td><td>有 off_request 就不能被排班</td><td>排班規則：員工請假已批准的日子，被排成上班 = 違反</td></tr>
+<tr><td>H2</td><td>每日工時 ≤ 12 小時</td><td>勞基法 §32：含加班最多 12h</td></tr>
+<tr><td>H3</td><td>連續工作天數 ≤ 12（FT）/ 6（PT）</td><td>勞基法 §36：每 7 天 1 例假</td></tr>
+<tr><td>H4</td><td>跨日工時間隔 ≥ 11 小時</td><td>勞基法 §34：輪班制 11h 休息</td></tr>
+<tr><td>H6</td><td>月加班 ≤ 46h</td><td>勞基法 §32：含變形 54h</td></tr>
+<tr><td>H7</td><td>每週工時不超過 wsConstraints.weeklyMax + buffer</td><td>動態依工時制計算</td></tr>
+<tr><td>H8</td><td>每週至少 1 例假</td><td>勞基法 §36</td></tr>
+<tr><td>H9</td><td>can_open / can_close 員工排班限制</td><td>非開店員工不得排早於 9 點開店班</td></tr>
+<tr><td>H10</td><td>未成年員工不得排夜班</td><td>勞基法 §48</td></tr>
+<tr><td>H11</td><td>變形工時週期總時不超過 168h（4 週）/336h（8 週）</td><td>勞基法 §30-1</td></tr>
+<tr><td>H13</td><td>孕婦/哺乳員工不得排夜班</td><td>性平法 §15、勞基法 §49</td></tr>
+<tr><td>H14</td><td>員工不能排到非自己門市的班</td><td>除非該店在 employees.additional_stores 內</td></tr>
+<tr><td>H15</td><td>員工類型須與班別 employee_type 匹配</td><td>FT 不能排 PT-only 班；反之亦然</td></tr>
+<tr><td>H16</td><td>day_type 須與該日類型匹配</td><td>weekday-only 班別不可排假日；反之亦然</td></tr>
+<tr><td>H17</td><td>月休天數須符合 store_settings 設定</td><td>FT ≥10 天、PT ≤20 天</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>I. 軟性約束（S1–S10 — 違反為 warning）</h2>
+<table>
+<colgroup><col style="width:8%"><col style="width:32%"><col style="width:60%"></colgroup>
+<thead><tr><th>編號</th><th>規則</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>S1</td><td>每天每班別人數 ≥ store_staffing.required_count</td><td>低於需求 = warning（不阻擋發布）</td></tr>
+<tr><td>S5</td><td>月工時介於 monthlyMin / monthlyMax</td><td>正職 150–175h、PT 80–175h（依日數比例）</td></tr>
+<tr><td>S8</td><td>每天有開店資格者 + 關店資格者</td><td>否則上班/打烊無人交接</td></tr>
+<tr><td>S9</td><td>連續週末工作 ≤ 2 週</td><td>公平性原則</td></tr>
+<tr><td>S10</td><td>時段覆蓋制：每時段覆蓋人數 ≥ required_count</td><td>v2 新</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>J. 員工屬性詳解（影響排班決策）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>欄位</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>employment_type</td><td>'正職' / '兼職' / 'PT' — 影響月休目標、工時上限、可排班別</td></tr>
+<tr><td>can_open</td><td>是否能開店（開貨、開機台）— 影響早班指派</td></tr>
+<tr><td>can_close</td><td>是否能關店（盤點、結帳、上鎖）— 影響晚班指派</td></tr>
+<tr><td>additional_stores</td><td>可支援的其他 store_id 陣列 — 跨店借調基礎</td></tr>
+<tr><td>weekly_target_hours</td><td>該員工每週目標工時（FT 預設 40，可個別調整）</td></tr>
+<tr><td>personal_hour_cap</td><td>個人月工時上限（如孕婦不得超過 160h）</td></tr>
+<tr><td>schedule_priority</td><td>排班優先序（數字小者優先排）— 用於有衝突時的 tiebreak</td></tr>
+<tr><td>is_pregnant / is_nursing</td><td>觸發 H13（不得排夜班）</td></tr>
+<tr><td>store_id</td><td>主要門市 — 班別會優先排在此店</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>K. 與薪資的連動</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>排班端</th><th>薪資端如何使用</th></tr></thead>
+<tbody>
+<tr><td>schedules.actual_hours</td><td>generate_payroll 累加為當月總工時 → 時薪員工底薪計算</td></tr>
+<tr><td>shift 類型（休/特休/事假...）</td><td>查 ABSENCE_CONFIG payRate → 算扣薪</td></tr>
+<tr><td>休假是否「公司休」</td><td>countsAsRest=true 才吃月休配額；員工請的假另計</td></tr>
+<tr><td>跨日班別（夜班）</td><td>影響加班費級距判定（平日 vs 例假）</td></tr>
+<tr><td>off_requests 已批准</td><td>排班會跳過該日；薪資依假別 type 算</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>L. 換班 / 代班流程（shift_swaps）</h2>
+<div class="flow">A 員工想跟 B 換班
+    ↓
+A 進「換班申請」→ 選 original_date (我的班)、target (B)、target_date (B 的班)
+    ↓
+INSERT shift_swaps (status='待 B 同意')
+    ↓
+B 收 LINE 通知 → 點同意 / 拒絕
+    ↓
+若 B 同意 → status='待 admin 核可'
+    ↓
+admin 進「換班申請」頁面 → 點核准
+    ↓
+update schedules：A↔B 互換 shift / actual_start / actual_end
+    ↓
+推 LINE 通知雙方排班已調整</div>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>M. 跨店調度（Cross-store Borrowing）</h2>
+<p>當本店人力不足，從其他門市借調員工的機制。</p>
+<ol>
+<li>找出本店缺人時段（current 員工數 &lt; required_count）</li>
+<li>掃 employees WHERE additional_stores 包含本店 ID（且非本店 store_id）</li>
+<li>檢查該員工：(a) 該日未排其他店；(b) 通過 H1–H17 法規；(c) 週/月工時還有配額</li>
+<li>排入 schedules，標記 is_cross_store=true、home_store=原店</li>
+<li>通知該員工本月有跨店班</li>
+</ol>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>N. 操作流程</h2>
+<ol>
+<li><b>準備</b>：確認門市設定（工時制、營業時間、人力規則）→ 確認班別定義或時段覆蓋設好</li>
+<li><b>進排班頁</b> [/hr/schedule]：選門市、選月份/週/cycle</li>
+<li><b>員工排休</b>：員工自行進 LIFF 提希望休 → off_requests 累積</li>
+<li><b>產生草稿</b>：點「AI 自動排班」(Gemini) 或「排班代碼」(程式) → 等 1–30 秒</li>
+<li><b>審閱草稿</b>：上方顯示 「程式排班 V2 / X 位員工 / Y 天」與是否合規。下方表格逐人逐日</li>
+<li><b>調整</b>：手動拉動單格修改、或重跑演算法</li>
+<li><b>發布</b>：點「發布草稿」→ schedule_publish_status 寫入、員工 LINE 通知</li>
+<li><b>事後變更</b>：員工申請換班、調休、補登 → 走簽核流程</li>
+</ol>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>O. 關鍵檔案清單</h2>
+<table>
+<colgroup><col style="width:55%"><col style="width:45%"></colgroup>
+<thead><tr><th>路徑</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>src/lib/schedulingAlgo/core.js</td><td>核心演算法 runProgrammaticSchedule + runMonthlyProgrammaticSchedule</td></tr>
+<tr><td>src/lib/schedulingAlgo/validation.js</td><td>H1–H17 / S1–S10 約束檢查</td></tr>
+<tr><td>src/lib/schedulingAlgo/scoring.js</td><td>窗口評分（覆蓋分 + 偏好 + 疲勞）</td></tr>
+<tr><td>src/lib/schedulingAlgo/stats.js</td><td>排班結果統計（工時、滿意度）</td></tr>
+<tr><td>src/lib/schedulingAlgo/history.js</td><td>跨週 context 傳遞</td></tr>
+<tr><td>src/lib/schedulingAi.js</td><td>AI 排班（Gemini 6-phase + 2 次 retry）</td></tr>
+<tr><td>src/lib/scheduleUtils.js</td><td>共用工具（getCycleFor / splitIntoWeeks / ABSENCE_CONFIG / countsAsMonthlyRest）</td></tr>
+<tr><td>src/pages/hr/Schedule.jsx</td><td>排班主頁 UI（月/週/cycle 切換、AI/程式按鈕、表格渲染）</td></tr>
+<tr><td>src/pages/hr/MySchedule.jsx</td><td>員工自己的班表</td></tr>
+<tr><td>src/pages/hr/ScheduleRules.jsx</td><td>排班規則設定（人力 / 偏好 / 工時）</td></tr>
+<tr><td>src/pages/hr/components/MonthScheduleTable.jsx</td><td>月度班表格（欄=日、列=員工、儲存格=班別）</td></tr>
+<tr><td>src/pages/hr/components/AnalyticsTab.jsx</td><td>分析報表（每人工時、休假分佈、疲勞圖）</td></tr>
+<tr><td>src/pages/hr/components/StoreSettingsTab.jsx</td><td>門市設定 — 營業時間、工時制、anchor</td></tr>
+<tr><td>src/pages/hr/components/PreferencesTab.jsx</td><td>員工偏好設定</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>P. 完整度評估</h2>
+<table>
+<colgroup><col style="width:30%"><col style="width:15%"><col style="width:55%"></colgroup>
+<thead><tr><th>功能項</th><th>狀態</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>週/月/Cycle 視圖</td><td class="ok">完整</td><td>三種模式都正常運作（cycle 模式 bug 今日已修）</td></tr>
+<tr><td>2/4/8 週變形工時</td><td class="ok">完整</td><td>wsConstraints 動態應用</td></tr>
+<tr><td>班別制</td><td class="ok">完整</td><td>含開關店資格、跨店、員工類型、平假日</td></tr>
+<tr><td>時段覆蓋制</td><td class="ok">完整</td><td>v2 新增，依時段需求動態算窗口</td></tr>
+<tr><td>勞基法 H1–H17</td><td class="ok">完整</td><td>17 條全套，含孕婦/哺乳保護</td></tr>
+<tr><td>軟性約束 S1–S10</td><td class="ok">完整</td><td>warnings 不阻擋發布</td></tr>
+<tr><td>跨店借調</td><td class="ok">完整</td><td>additional_stores 機制</td></tr>
+<tr><td>員工偏好（3 級）</td><td class="ok">完整</td><td>preferred / neutral / avoid</td></tr>
+<tr><td>程式排班引擎</td><td class="ok">完整</td><td>v2 升級，含 cycle-aware</td></tr>
+<tr><td>AI 排班引擎</td><td class="ok">完整</td><td>Gemini 6-phase + retry</td></tr>
+<tr><td>換班 shift_swap 兩階段</td><td class="ok">完整</td><td>對方同意 → admin 核准</td></tr>
+<tr><td>LINE 排班通知</td><td class="ok">完整</td><td>flex card 推送</td></tr>
+<tr><td>個人月工時上限</td><td class="ok">完整</td><td>personal_hour_cap 欄位</td></tr>
+<tr><td>排班 → 薪資連動</td><td class="ok">完整</td><td>actual_hours / shift 直接給 generate_payroll 用</td></tr>
+<tr><td>AI 排班 LLM retry</td><td class="ok">完整</td><td>2 次 retry，含修復 prompt</td></tr>
+<tr><td>排班規則 UI 設定</td><td class="ok">完整</td><td>ScheduleRules.jsx 提供完整視覺化編輯</td></tr>
+<tr><td>排班發布權限</td><td class="ok">完整</td><td>RBAC：admin/manager 可發布；store_staff 只能看</td></tr>
+<tr><td>多 cycle 跨月顯示</td><td class="ok">完整</td><td>月跨 2 個 cycle 時自動顯示兩個範圍</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>Q. 後續優化（依優先級）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:15%"><col style="width:60%"></colgroup>
+<thead><tr><th>項目</th><th>優先級</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>排班結果歷史比對</td><td>P2</td><td>同期同店 last 3 個月排班滿意度比較</td></tr>
+<tr><td>員工排班疲勞預警</td><td>P2</td><td>monthFatigue 累積過高 → 自動避開連假班</td></tr>
+<tr><td>多店連動排班最佳化</td><td>P3</td><td>同人多店時，總工時最佳化</td></tr>
+<tr><td>排班自動發布 cron</td><td>P3</td><td>每月 25 號自動跑下個月排班並發布</td></tr>
+<tr><td>移動端拖拉編輯</td><td>P3</td><td>LIFF 上手機可調整自己班別</td></tr>
+</tbody>
+</table>
+
+<p class="meta" style="margin-top:18px">— 文件結束 —　檔案：docs/SCHEDULING_FULL_SPEC_2026-05-05.html</p>
+
+</body>
+</html>

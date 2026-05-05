@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>HR 表單系統完整規格（2026-05-05）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.3cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 18cm; margin: 0 auto; color: #222; font-size: 9.5pt; line-height: 1.4; }
+  h1 { font-size: 15pt; color: #c2410c; border-bottom: 2.5px solid #c2410c; padding-bottom: 5px; margin: 0 0 8px 0; }
+  h2 { font-size: 11.5pt; color: #c2410c; margin: 14px 0 5px 0; padding-left: 7px; border-left: 4px solid #c2410c; }
+  h3 { font-size: 10pt; color: #444; margin: 8px 0 3px 0; padding: 3px 6px; background: #fef3e7; border-left: 3px solid #fb923c; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 8px; table-layout: fixed; }
+  th, td { border: 1px solid #888; padding: 4px 6px; vertical-align: top; word-wrap: break-word; font-size: 9pt; line-height: 1.35; }
+  th { background: #c2410c; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fff7ed; }
+  .ok { background: #d4edda !important; color: #155724; font-weight: 600; }
+  .new { background: #ffe8cc !important; color: #c2410c; font-weight: 700; }
+  .builder { background: #e0e7ff !important; color: #3730a3; font-weight: 600; }
+  .auto { background: #fce7f3 !important; color: #9d174d; font-weight: 600; }
+  .chain { background: #ddd6fe !important; color: #5b21b6; font-weight: 600; }
+  .meta { color: #777; font-size: 8.5pt; margin: 0 0 8px 0; }
+  .legend { font-size: 8.5pt; color: #555; margin: 6px 0; padding: 6px 10px; background: #f4f4f5; border-radius: 4px; }
+  code { background: #eef; padding: 1px 4px; border-radius: 3px; font-size: 8.5pt; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .form-card { background: #fff; border: 1.5px solid #c2410c; border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+  .form-card h4 { color: #c2410c; margin: 0 0 6px 0; font-size: 10.5pt; display: flex; gap: 8px; align-items: center; }
+  .form-card .tag { font-size: 9pt; padding: 1px 8px; border-radius: 3px; font-weight: 600; }
+  .field-list { font-family: Consolas, monospace; font-size: 8.5pt; background: #fef9f3; padding: 6px 9px; border-radius: 4px; margin: 4px 0; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<h1>SME Ops System — HR 表單系統完整規格</h1>
+<p class="meta">產出 2026-05-05　·　共 18 種主要表單 + 自訂表單 (form-builder) 機制　·　依「表單中心」分 4 大類整理</p>
+
+<div class="legend">
+  <b>核准方式標籤：</b>
+  <span class="auto" style="padding:1px 6px">自動解析</span>（HR 類，依組織圖找直屬主管）
+  <span class="chain" style="padding:1px 6px">簽核鏈</span>（依預設步驟逐關推進）
+  <span class="new" style="padding:1px 6px">v2 新</span>（今日新增）
+  <span class="builder" style="padding:1px 6px">Builder 自訂</span>（用 form-builder 拉欄位）
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>A. 表單系統架構</h2>
+<p>HR 表單分兩種架構：</p>
+<ol>
+<li><b>專屬頁面</b>：每張表單一個 React 頁面（如 [Resignation.jsx](src/pages/hr/Resignation.jsx)）+ 一張 DB 表。適合複雜邏輯與 DB trigger 連動。</li>
+<li><b>自訂表單（form-builder）</b>：admin 在 /hr/form-builder 拉欄位 → 存 form_templates → 員工填表 → 存 form_submissions。適合輕量級、彈性需求高的表單。</li>
+</ol>
+<p>核准方式分兩種：</p>
+<ul>
+<li><b>自動解析</b>：員工送單後，DB function <code>_resolve_hr_approver_ids</code> 找：店長 → 直屬主管 → 部門主管 → 部門樹往上。適用於請假/加班等 HR 類。</li>
+<li><b>簽核鏈</b>：預先在 [/process/approval-chains](/process/approval-chains) 設定固定 N 關步驟，每關指定簽核人/部門/角色。適用於離職/異動/費用報銷等重大決策。</li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>B. 表單入口</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:30%"><col style="width:45%"></colgroup>
+<thead><tr><th>頁面</th><th>路由</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>HR 表單中心</td><td>/hr/forms</td><td>所有表單入口（4 大類分組顯示），每張表單一個卡片，點「申請」進入</td></tr>
+<tr><td>我的提交</td><td>/hr/forms/submissions</td><td>看自己送出的所有表單（已通過 / 待簽核 / 駁回）</td></tr>
+<tr><td>表單建立器</td><td>/hr/form-builder</td><td>admin 建自訂表單模板（7 種欄位類型 + 簽核鏈指定）</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>C. 假勤類表單（5 種）</h2>
+
+<h3>C1. 請假申請</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/leave</td></tr>
+<tr><td><b>DB 表</b></td><td>leave_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span> _resolve_hr_approver_ids</td></tr>
+<tr><td><b>欄位</b></td><td>employee_id、leave_type（13 種，見薪資文件 E 區）、start_date、end_date、days、reason、status（待審核/已核准/已駁回/已退回）</td></tr>
+<tr><td><b>連動</b></td><td>批准後 → 影響排班（不被排該日）→ 影響薪資（半薪/無薪扣薪）→ 扣 leave_balances.used_days</td></tr>
+<tr><td><b>備註</b></td><td>事假無薪、病假前 30 天半薪、特休全薪。員工餘額不足時前端會擋下</td></tr>
+</tbody>
+</table>
+
+<h3>C2. 加班申請（事後補登）</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/overtime</td></tr>
+<tr><td><b>DB 表</b></td><td>overtime_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span></td></tr>
+<tr><td><b>欄位</b></td><td>employee_id、request_date、start_time、end_time、ot_hours、reason、ot_type（pay/comp）、is_pre_approval=false</td></tr>
+<tr><td><b>連動</b></td><td>批准後 → generate_payroll 累加加班費 → 觸發二代健保補充保費判定（若超月投保金額）</td></tr>
+</tbody>
+</table>
+
+<h3>C3. 加班申請（事前預先）<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td><span class="builder" style="padding:1px 6px">Builder 自訂</span> 用 form-builder 建立（DB 已有 is_pre_approval flag）</td></tr>
+<tr><td><b>DB 表</b></td><td>overtime_requests（is_pre_approval=true）</td></tr>
+<tr><td><b>欄位</b></td><td>同 C2，多 is_pre_approval=true，並要求事前送單（勞檢必查）</td></tr>
+<tr><td><b>備註</b></td><td>勞基法 §32 要求加班需事先取得員工同意，事前申請是合規證明</td></tr>
+</tbody>
+</table>
+
+<h3>C4. 忘刷補登</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/punch-correction</td></tr>
+<tr><td><b>DB 表</b></td><td>clock_corrections</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span></td></tr>
+<tr><td><b>欄位</b></td><td>employee（搜尋下拉，v2 升級）、date、correction_type（clock_in / clock_out）、corrected_time、reason</td></tr>
+<tr><td><b>連動</b></td><td>批准後 → INSERT/UPDATE attendance_records.clock_in 或 clock_out → 影響遲到計算 / 工時 / 薪資</td></tr>
+</tbody>
+</table>
+
+<h3>C5. 銷假<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td><span class="builder" style="padding:1px 6px">Builder 自訂</span>（DB 已建表 leave_cancellation_requests，UI 待 builder 建）</td></tr>
+<tr><td><b>DB 表</b></td><td>leave_cancellation_requests</td></tr>
+<tr><td><b>欄位</b></td><td>employee_id、original_leave_id（FK 到既有的 leave_requests）、reason、status</td></tr>
+<tr><td><b>連動</b></td><td>批准後 → leave_balances.used_days 扣回 → 還原該員工特休餘額</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>D. 人事異動類表單（5 種）</h2>
+
+<h3>D1. 離職申請<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/forms/resignation</td></tr>
+<tr><td><b>DB 表</b></td><td>resignation_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="chain" style="padding:1px 6px">簽核鏈</span> category='離職'（建議：直屬主管 → HR → 執行長）</td></tr>
+<tr><td><b>欄位</b></td><td>employee_id（搜尋下拉）、planned_resign_date、reason（個人/家庭/健康/另謀高就/進修/退休/其他）、reason_detail、handover_notes（交接事項）、approval_chain_id、current_step（0-indexed）</td></tr>
+<tr><td><b>連動</b></td><td>最後一關核准 → DB trigger trg_resign_cascade 自動：UPDATE employees status='離職', resign_date, resign_reason → 下個月薪資自動進入「離職結算」（含未休特休折現）</td></tr>
+<tr><td><b>權限</b></td><td>非 admin 只能看自己的申請（隱私保護）。admin 可看全部</td></tr>
+<tr><td><b>取消</b></td><td>申請中可由本人或 admin 點「取消」改 status='已取消'</td></tr>
+</tbody>
+</table>
+
+<h3>D2. 留職停薪<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td><span class="builder" style="padding:1px 6px">Builder 自訂</span>（DB 已建表，UI 待 builder 建）</td></tr>
+<tr><td><b>DB 表</b></td><td>leave_of_absence_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="chain" style="padding:1px 6px">簽核鏈</span> category='留停'</td></tr>
+<tr><td><b>欄位</b></td><td>employee_id、start_date、planned_end_date、actual_return_date（實際回任日）、reason_type（產假/育嬰/兵役/進修/家庭/其他）、reason_detail、attachment_url</td></tr>
+<tr><td><b>連動</b></td><td>核准 → trg_loa_cascade trigger 自動 status='留停'。設定 actual_return_date 後 → 自動改回 '在職'</td></tr>
+<tr><td><b>備註</b></td><td>育嬰留停依性平法為法定權利，HR 不可拒</td></tr>
+</tbody>
+</table>
+
+<h3>D3. 人事異動<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/forms/transfer</td></tr>
+<tr><td><b>DB 表</b></td><td>personnel_transfer_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="chain" style="padding:1px 6px">簽核鏈</span> category='異動'</td></tr>
+<tr><td><b>欄位</b></td><td>
+  <b>基本：</b>employee_id、transfer_type（調職/升遷/降調/部門調動/跨店調動/調薪）、effective_date、reason<br>
+  <b>異動前 (snapshot)：</b>old_department_id、old_store_id、old_position、old_base_salary、old_role<br>
+  <b>異動後：</b>new_department_id、new_store_id、new_position、new_base_salary、new_role
+</td></tr>
+<tr><td><b>連動</b></td><td>最後一關核准 → DB trigger trg_transfer_cascade 自動：(a) 寫 position_history（保留歷史）；(b) UPDATE employees 主檔（含 base_salary）；(c) 下月薪資自動套新薪資數字</td></tr>
+<tr><td><b>UI 特色</b></td><td>表單顯示 DiffRow（前 → 後對比，劃掉舊值、紅字顯示新值）</td></tr>
+</tbody>
+</table>
+
+<h3>D4. 試用期評核</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/probation</td></tr>
+<tr><td><b>DB 表</b></td><td>probation_records</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span></td></tr>
+<tr><td><b>欄位</b></td><td>employee（搜尋下拉）、mentor（指導人，搜尋下拉）、start_date、end_date（試用結束日，預設 90 天）、ratings（評分項目）、status（試用中/已通過/未通過/延長試用）、comments</td></tr>
+<tr><td><b>連動</b></td><td>未通過 → 提示 HR 啟動離職流程；已通過 → 員工正式入職、加入正常排班輪</td></tr>
+<tr><td><b>備註</b></td><td>新員工 join_date 後系統自動建立 90 天試用記錄</td></tr>
+</tbody>
+</table>
+
+<h3>D5. 績效考核</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/performance</td></tr>
+<tr><td><b>DB 表</b></td><td>performance_reviews</td></tr>
+<tr><td><b>核准方式</b></td><td>主管 → HR 雙簽</td></tr>
+<tr><td><b>欄位</b></td><td>employee、period（YYYY-Q1 之類）、self_rating（自評）、manager_rating（主管評）、overall_score、kpi_items（JSONB）、improvement_areas、next_period_goals</td></tr>
+<tr><td><b>連動</b></td><td>結果可帶入績效獎金計算（/hr/bonus）；連續 2 期低分 → AttritionPrediction 加分</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>E. 費用 / 出差類表單（3 種）</h2>
+
+<h3>E1. 出差申請</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/travel</td></tr>
+<tr><td><b>DB 表</b></td><td>business_trips</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span></td></tr>
+<tr><td><b>欄位</b></td><td>employee、destination（地點）、start_date、end_date、purpose、estimated_cost、transportation_mode</td></tr>
+<tr><td><b>連動</b></td><td>批准後 → 影響排班（出差日不被排店內班）→ 可申請費用報銷</td></tr>
+</tbody>
+</table>
+
+<h3>E2. 費用報銷（差旅費等）</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/expenses</td></tr>
+<tr><td><b>DB 表</b></td><td>expenses</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="auto" style="padding:1px 6px">自動解析</span></td></tr>
+<tr><td><b>欄位</b></td><td>employee、category（交通/住宿/餐費/雜支）、amount、receipt_url（上傳收據）、business_trip_id（FK 出差單，可選）、description</td></tr>
+<tr><td><b>連動</b></td><td>批准後 status='已核銷' → 進入會計流程（accounts_payable）</td></tr>
+</tbody>
+</table>
+
+<h3>E3. 費用申請（採購類，走簽核鏈）</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/finance/expense-requests</td></tr>
+<tr><td><b>DB 表</b></td><td>expense_requests</td></tr>
+<tr><td><b>核准方式</b></td><td><span class="chain" style="padding:1px 6px">簽核鏈</span> category='費用申請'（依金額分流，見備註）</td></tr>
+<tr><td><b>欄位</b></td><td>employee（搜尋下拉，v2 升級）、title、description、estimated_amount、account_code、account_name、store、attachments</td></tr>
+<tr><td><b>金額分流</b></td><td>
+  · 小額 ≤ 3,000：直屬主管 1 關<br>
+  · 中額 3,001–10,000：主管 + 部門主管 2 關<br>
+  · 大額 ≥ 10,001：主管 + 部門主管 + 財務 3 關
+</td></tr>
+<tr><td><b>連動</b></td><td>核准後 → 進入採購流程（purchase_orders）；可實際撥款後核銷</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>F. 其他類表單（5 種）</h2>
+
+<h3>F1. 招募職缺申請</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/recruitment</td></tr>
+<tr><td><b>DB 表</b></td><td>recruitment_requests</td></tr>
+<tr><td><b>核准方式</b></td><td>部門主管 → HR → 執行長（重大人力增加）</td></tr>
+<tr><td><b>欄位</b></td><td>requester、department_id、position_title、headcount、salary_range、urgency、reason、qualifications</td></tr>
+<tr><td><b>連動</b></td><td>核准後 → 啟動招募流程（外發 104 / 接收履歷）</td></tr>
+</tbody>
+</table>
+
+<h3>F2. 教育訓練</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/training</td></tr>
+<tr><td><b>DB 表</b></td><td>training_records</td></tr>
+<tr><td><b>核准方式</b></td><td>主管核准 + HR 報名</td></tr>
+<tr><td><b>欄位</b></td><td>employee、course_name、provider（內訓/外訓單位）、start_date、end_date、cost、reimbursement_pct（補助比例）、completion_status</td></tr>
+<tr><td><b>連動</b></td><td>結業後 → 寫 employees.certifications；費用核銷走費用報銷</td></tr>
+</tbody>
+</table>
+
+<h3>F3. 文件簽核</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/documents</td></tr>
+<tr><td><b>DB 表</b></td><td>documents</td></tr>
+<tr><td><b>核准方式</b></td><td>視文件類型而定（合約走法務、政策走 HR）</td></tr>
+<tr><td><b>欄位</b></td><td>title、document_type（合約/政策/協議書/通知）、file_url、related_employees、effective_date、expires_at</td></tr>
+<tr><td><b>連動</b></td><td>員工簽核後 → 寫 document_signatures（個人簽收記錄）</td></tr>
+</tbody>
+</table>
+
+<h3>F4. 工傷通報</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/labor-inspection</td></tr>
+<tr><td><b>DB 表</b></td><td>labor_inspection_records</td></tr>
+<tr><td><b>核准方式</b></td><td>主管 → HR 立即處理（24h 內）</td></tr>
+<tr><td><b>欄位</b></td><td>employee、incident_date、location、incident_type（職災/通勤/其他）、description、injury_severity、medical_treatment、reported_to_authority（是否已通報勞工局）</td></tr>
+<tr><td><b>連動</b></td><td>嚴重案件 → 自動產生勞工局通報書（PDF）；薪資算公傷病假全薪</td></tr>
+<tr><td><b>備註</b></td><td>勞基法 §59：職災原領工資補償</td></tr>
+</tbody>
+</table>
+
+<h3>F5. 員工意見反映 / 滿意度調查</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/surveys</td></tr>
+<tr><td><b>DB 表</b></td><td>engagement_surveys（題目）+ engagement_responses（回應）</td></tr>
+<tr><td><b>核准方式</b></td><td>無（匿名收集）</td></tr>
+<tr><td><b>欄位</b></td><td>survey_title、questions（JSONB 題型陣列）、target_employees、response_overall_score、comments</td></tr>
+<tr><td><b>連動</b></td><td>低分 → 推 HR；連續多期低分員工 → AttritionPrediction 加權重</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>G. 表單建立器（Form Builder）<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h2>
+
+<h3>G1. 架構</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td><b>路由</b></td><td>/hr/form-builder（admin 建模板）<br>/hr/forms/custom/:templateId（員工填表）</td></tr>
+<tr><td><b>DB 表</b></td><td>form_templates（模板）+ form_submissions（提交紀錄）</td></tr>
+<tr><td><b>用途</b></td><td>讓 admin 不用寫程式就能新增表單。適合輕量級需求（如：員工健康申報、設備領用、活動報名）</td></tr>
+</tbody>
+</table>
+
+<h3>G2. 欄位類型（7 種）</h3>
+<table>
+<colgroup><col style="width:18%"><col style="width:30%"><col style="width:52%"></colgroup>
+<thead><tr><th>類型</th><th>表現方式</th><th>適用</th></tr></thead>
+<tbody>
+<tr><td>text</td><td>單行輸入</td><td>姓名、項目名稱、簡短描述</td></tr>
+<tr><td>textarea</td><td>多行輸入</td><td>說明、原因、備註</td></tr>
+<tr><td>number</td><td>數字輸入</td><td>金額、數量、天數</td></tr>
+<tr><td>date</td><td>日期選擇器</td><td>申請日、生效日、截止日</td></tr>
+<tr><td>select</td><td>下拉單選</td><td>類別、狀態、優先級</td></tr>
+<tr><td>checkbox</td><td>多選勾選</td><td>多項目選擇</td></tr>
+<tr><td>file</td><td>檔案上傳</td><td>診斷書、合約、收據</td></tr>
+</tbody>
+</table>
+
+<h3>G3. 模板資料結構（form_templates.fields JSONB）</h3>
+<div class="field-list">[
+  { "key": "leave_type",  "label": "假別",     "type": "select", "options": ["特休","事假"], "required": true },
+  { "key": "start_date",  "label": "開始日",   "type": "date",   "required": true },
+  { "key": "reason",      "label": "原因",     "type": "textarea" },
+  { "key": "attachment",  "label": "附件",     "type": "file" }
+]</div>
+
+<h3>G4. 模板可設定的選項</h3>
+<ul>
+<li><b>name</b>：表單名稱（顯示在 HR 表單中心）</li>
+<li><b>description</b>：簡短說明</li>
+<li><b>category</b>：歸類（attendance / personnel / expense / other）→ 影響在哪一類顯示</li>
+<li><b>color</b>：圖示顏色（cyan/blue/green/orange/red/purple/yellow）</li>
+<li><b>fields</b>：上述 JSONB 欄位陣列</li>
+<li><b>approval_chain_id</b>：指定走哪條簽核鏈（可空 = 不簽核直接通過）</li>
+<li><b>is_active</b>：啟用/停用</li>
+<li><b>sort_order</b>：在類別內的排序</li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>H. 簽核鏈定義（共 4 條 HR 範本，今日新建）</h2>
+<p>進 [/process/approval-chains](/process/approval-chains) 點「✨ HR 範本」一鍵建立 4 條範本鏈：</p>
+<table>
+<colgroup><col style="width:18%"><col style="width:14%"><col style="width:68%"></colgroup>
+<thead><tr><th>鏈名</th><th>category</th><th>步驟（建立後請編輯填具體簽核人）</th></tr></thead>
+<tbody>
+<tr><td>離職申請</td><td>離職</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>留停申請</td><td>留停</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>人事異動</td><td>異動</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>預先加班</td><td>預先加班</td><td>申請人 → 直屬主管 → 部門主管 → ✓</td></tr>
+</tbody>
+</table>
+<p class="small">建立後預設 step.target_type='label'，每步只有標籤沒有指定簽核人。請逐條編輯、用搜尋下拉指派具體員工，否則送單會卡在「找不到第一關簽核人」。</p>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>I. 簽核流程通用機制</h2>
+
+<h3>I1. 送單時（自動推第一審）</h3>
+<ol>
+<li>前端 INSERT 表單 record（含 approval_chain_id, current_step=0）</li>
+<li>呼叫 RPC <code>hr_chain_resolve_first_approvers(table, id)</code> 找第一關合法簽核人</li>
+<li>寫 notifications 表（recipient_emp_id 給每位簽核人）→ 出現在通知中心</li>
+<li>未來：可加 LINE 推播</li>
+</ol>
+
+<h3>I2. 核准 / 駁回（hr_chain_approve RPC）</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tbody>
+<tr><td>核准</td><td>step+1 → 推下一關通知；最後一關 → status='已核准' + 觸發 DB trigger cascade</td></tr>
+<tr><td>駁回</td><td>status='已駁回'，記 reject_reason，員工可看到原因。current_step 保留（B2 模式：員工修改後從這關繼續）</td></tr>
+<tr><td>取消</td><td>申請中可由本人或 admin 取消，status='已取消'</td></tr>
+</tbody>
+</table>
+
+<h3>I3. UI 顯示</h3>
+<ul>
+<li>列表頁：每筆顯示「簽核進度」欄 → 各 step 用顏色區分（綠=已過、橘=當前、灰=等待）</li>
+<li>表單上方顯示「· 簽核鏈：XX（N 關）」或「⚠ 無簽核鏈」警示</li>
+<li>只有當前 step 的合法簽核人才看得到「核准 / 駁回」按鈕</li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>J. 角色權限矩陣</h2>
+<table>
+<colgroup><col style="width:18%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:13%"><col style="width:13%"></colgroup>
+<thead><tr><th>表單操作</th><th>store_staff</th><th>office_staff</th><th>manager</th><th>admin</th><th>super_admin</th><th>boss</th></tr></thead>
+<tbody>
+<tr><td>送請假/加班/補登</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅（自動核准）</td></tr>
+<tr><td>送離職/留停/異動</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>看自己提交</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>看其他人提交</td><td>❌</td><td>❌</td><td>部分（部門內）</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>核准（自動解析）</td><td>❌</td><td>部分</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>核准（簽核鏈）</td><td>❌</td><td>視 chain step 設定</td><td>視</td><td>視</td><td>✅</td><td>✅</td></tr>
+<tr><td>進表單建立器</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>編輯簽核鏈</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>K. 通知中心整合<span class="new" style="padding:1px 6px;margin-left:6px">v2 新</span></h2>
+<p>所有表單送出 / 待我簽核 / 通過 / 駁回 → 自動寫 notifications 表 → 員工點右上鈴鐺即可看到清單，點擊跳到對應頁面。</p>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>type</th><th>觸發場景</th></tr></thead>
+<tbody>
+<tr><td>form_submission</td><td>表單送出 → 推給簽核人</td></tr>
+<tr><td>law_update_reminder</td><td>每年 12/01 cron 提醒 admin 更新法令工資</td></tr>
+<tr><td>leave / overtime / correction</td><td>HR 類自動解析的待簽核 → 推主管</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>L. 完整度評估</h2>
+<table>
+<colgroup><col style="width:30%"><col style="width:15%"><col style="width:55%"></colgroup>
+<thead><tr><th>表單</th><th>狀態</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>請假申請</td><td class="ok">完整</td><td>13 種假別齊全，連動薪資</td></tr>
+<tr><td>加班申請（事後）</td><td class="ok">完整</td><td>連動加班費 + 二代健保</td></tr>
+<tr><td>加班申請（預先）</td><td class="builder">Builder 待建</td><td>DB has is_pre_approval flag，UI 用表單建立器拉</td></tr>
+<tr><td>忘刷補登</td><td class="ok">完整</td><td>批准後自動寫 attendance_records</td></tr>
+<tr><td>銷假</td><td class="builder">Builder 待建</td><td>DB 已備</td></tr>
+<tr><td>離職申請</td><td class="new">v2 完整</td><td>含 trigger cascade 員工狀態</td></tr>
+<tr><td>留職停薪</td><td class="builder">Builder 待建</td><td>DB 已備 + trigger 已建</td></tr>
+<tr><td>人事異動</td><td class="new">v2 完整</td><td>含 trigger cascade position_history + employees</td></tr>
+<tr><td>試用期評核</td><td class="ok">完整</td><td>含 90 天自動建立</td></tr>
+<tr><td>績效考核</td><td class="ok">完整</td><td>結果連動獎金</td></tr>
+<tr><td>出差申請</td><td class="ok">完整</td><td>連動排班 + 費用報銷</td></tr>
+<tr><td>費用報銷</td><td class="ok">完整</td><td>連動會計流程</td></tr>
+<tr><td>費用申請（採購）</td><td class="ok">完整</td><td>金額分流 3 級</td></tr>
+<tr><td>招募職缺</td><td class="ok">完整</td><td>連動 104 招募</td></tr>
+<tr><td>教育訓練</td><td class="ok">完整</td><td>連動證照 + 費用</td></tr>
+<tr><td>文件簽核</td><td class="ok">完整</td><td>含個人簽收記錄</td></tr>
+<tr><td>工傷通報</td><td class="ok">完整</td><td>嚴重案件自動產 PDF</td></tr>
+<tr><td>員工意見反映</td><td class="ok">完整</td><td>匿名收集 + 連動 AttritionPrediction</td></tr>
+<tr><td>表單建立器</td><td class="new">v2 完整</td><td>7 種欄位類型 + 簽核鏈整合</td></tr>
+<tr><td>HR 範本鏈一鍵建立</td><td class="new">v2 新</td><td>4 條 (離職/留停/異動/預先加班)</td></tr>
+<tr><td>通知中心整合</td><td class="new">v2 完整</td><td>所有表單送出 / 待簽 / 結果都寫 notifications</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>M. 操作建議（給 admin）</h2>
+<ol>
+<li><b>第一步</b>：進 [/process/approval-chains](/process/approval-chains) 點「✨ HR 範本」建立 4 條範本鏈</li>
+<li><b>第二步</b>：逐條編輯，把每個 step 的「簽核人」用搜尋下拉指派具體員工</li>
+<li><b>第三步</b>：進 [/hr/forms](/hr/forms) 確認 4 大類顯示正確</li>
+<li><b>第四步</b>：用 admin 帳號送一筆假離職單測試流程是否從頭跑到尾</li>
+<li><b>第五步</b>：依公司需求，進 [/hr/form-builder](/hr/form-builder) 建立額外表單（如：員工健康申報、設備領用）</li>
+<li><b>第六步</b>：員工教育訓練 — 帶員工看「HR 表單中心」入口、講解送單流程、示範 LINE 通知怎麼點</li>
+</ol>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>N. 關鍵檔案清單</h2>
+<table>
+<colgroup><col style="width:55%"><col style="width:45%"></colgroup>
+<thead><tr><th>路徑</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>src/pages/hr/HRForms.jsx</td><td>HR 表單中心首頁（4 大類分組）</td></tr>
+<tr><td>src/pages/hr/Resignation.jsx</td><td>離職申請（v2，接 chain）</td></tr>
+<tr><td>src/pages/hr/TransferRequest.jsx</td><td>人事異動（v2，接 chain）</td></tr>
+<tr><td>src/pages/hr/FormBuilder.jsx</td><td>表單建立器</td></tr>
+<tr><td>src/pages/hr/CustomFormFill.jsx</td><td>自訂表單填寫頁</td></tr>
+<tr><td>src/pages/hr/FormSubmissions.jsx</td><td>我的提交</td></tr>
+<tr><td>src/pages/hr/Leave.jsx</td><td>請假申請</td></tr>
+<tr><td>src/pages/hr/Overtime.jsx</td><td>加班申請</td></tr>
+<tr><td>src/pages/hr/PunchCorrection.jsx</td><td>忘刷補登</td></tr>
+<tr><td>src/pages/system/ApprovalChains.jsx</td><td>簽核鏈設定（含分類篩選 + HR 範本一鍵建）</td></tr>
+<tr><td>src/lib/hrChain.js</td><td>HR 簽核鏈整合 helper（findActiveChainByCategory / approveChainStep / notifyApprovers）</td></tr>
+<tr><td>src/components/SearchableSelect.jsx</td><td>共用搜尋下拉（員工/部門/門市選擇）</td></tr>
+<tr><td>supabase/migrations/20260505200000_hr_forms_5_new_tables.sql</td><td>5 張新表 schema (resignation/loa/leave_cancel/transfer/position_history)</td></tr>
+<tr><td>supabase/migrations/20260505210000_form_builder.sql</td><td>form_templates + form_submissions</td></tr>
+<tr><td>supabase/migrations/20260505230000_hr_forms_chain_integration.sql</td><td>chain triggers + RPC（current_step + cascade）</td></tr>
+<tr><td>supabase/migrations/20260426010000_approval_system_redesign.sql</td><td>核心簽核系統（自動解析 + chain）</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>O. 後續優化（依優先級）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:15%"><col style="width:60%"></colgroup>
+<thead><tr><th>項目</th><th>優先級</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>銷假 / 留停 / 預先加班 用 builder 建</td><td>P1</td><td>1.5 hr，admin 自己拉欄位即可，不用寫程式</td></tr>
+<tr><td>條件分流（簽核鏈進階）</td><td>P2</td><td>同一張單依金額/天數走不同路徑，建鏈時設條件節點</td></tr>
+<tr><td>簽核代理人（delegation）</td><td>P2</td><td>主管請假時自動轉給代理人簽</td></tr>
+<tr><td>逾時自動 escalation</td><td>P2</td><td>3 天沒簽 → 自動推給上級</td></tr>
+<tr><td>LINE 簽核 flex card 統一介面</td><td>P3</td><td>目前每張單的 LINE 卡片格式略有差異</td></tr>
+<tr><td>簽核儀表板</td><td>P3</td><td>待我簽 / 已過 / 平均處理時間 / 最久案件</td></tr>
+<tr><td>退回上一步（不全部否決）</td><td>P3</td><td>目前駁回會回到申請人；增加「只退一步」選項</td></tr>
+<tr><td>加簽 / 知會（非審核）</td><td>P3</td><td>副本給 HR 看不審</td></tr>
+</tbody>
+</table>
+
+<p class="meta" style="margin-top:18px">— 文件結束 —　檔案：docs/HR_FORMS_SPEC_2026-05-05.html</p>
+
+</body>
+</html>

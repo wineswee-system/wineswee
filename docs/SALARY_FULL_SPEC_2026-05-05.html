@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>薪資系統完整規格（2026-05-05 v3）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.5cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 17cm; margin: 0 auto; color: #222; font-size: 10pt; line-height: 1.45; }
+  h1 { font-size: 15pt; color: #0b5cad; border-bottom: 2.5px solid #0b5cad; padding-bottom: 5px; margin: 0 0 8px 0; }
+  h2 { font-size: 11.5pt; color: #0b5cad; margin: 16px 0 5px 0; padding-left: 7px; border-left: 4px solid #0b5cad; }
+  h3 { font-size: 10pt; color: #444; margin: 9px 0 4px 0; padding-left: 4px; border-left: 2px solid #888; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 8px; table-layout: fixed; }
+  th, td { border: 1px solid #888; padding: 4px 6px; vertical-align: top; word-wrap: break-word; font-size: 9pt; line-height: 1.35; }
+  th { background: #0b5cad; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #f4f8fc; }
+  .ok { background: #d4edda !important; color: #155724; font-weight: 600; }
+  .half { background: #fff3cd !important; color: #856404; font-weight: 600; }
+  .miss { background: #f8d7da !important; color: #721c24; font-weight: 600; }
+  .meta { color: #777; font-size: 8.5pt; margin: 0 0 8px 0; }
+  .flow { background: #f4f8fc; border-left: 4px solid #0b5cad; padding: 9px 13px; margin: 9px 0; font-family: Consolas, monospace; font-size: 8.5pt; line-height: 1.55; white-space: pre-wrap; }
+  .formula { background: #fffbe6; border: 1px dashed #d4a017; padding: 5px 9px; font-family: Consolas, monospace; font-size: 8.5pt; line-height: 1.5; white-space: pre-wrap; }
+  .small { font-size: 8.5pt; color: #555; }
+  code { background: #eef; padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<h1>SME Ops System — 薪資系統完整規格</h1>
+<p class="meta">v3（補強完成版）　·　產出 2026-05-05　·　核心原則：所有計算邏輯在 DB function generate_payroll，前端只觸發/顯示</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>A. 系統定位</h2>
+<p>SME Ops System 薪資模組以 PostgreSQL function 為計算核心，遵循三條設計原則：</p>
+<ol>
+<li><b>單一事實來源（SSoT）</b>：薪資結構、級距、法令率全部存在 DB master tables，前端不複寫邏輯</li>
+<li><b>計算集中</b>：每月一個 function 呼叫做完所有計算 → 寫入 payroll_records → 前端讀</li>
+<li><b>稽核可追溯</b>：每筆計算的 breakdown（自訂津貼、法扣、二代健保） 都用 JSONB 保留明細</li>
+</ol>
+<p>對外連動：勞保局（提繳清冊）、健保署（補充保費申報）、國稅局（扣繳憑單）。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>B. 資料表完整清單（共 14 張表 + 2 張視圖）</h2>
+
+<h3>B1. 主檔（Master Data）— 6 張</h3>
+<table>
+<colgroup><col style="width:24%"><col style="width:26%"><col style="width:50%"></colgroup>
+<thead><tr><th>表名</th><th>用途</th><th>關鍵欄位</th></tr></thead>
+<tbody>
+<tr><td>employees</td><td>員工主檔</td><td>id, name, status (在職/離職/留停), resign_date, labor_ins_grade, health_ins_grade, labor_pension_enrolled, labor_pension_self_rate (0–6%), id_number, address</td></tr>
+<tr><td>salary_structures</td><td>每員工薪資組成（1:1）</td><td>base_salary, role_allowance, meal_allowance, transport_allowance, attendance_bonus, custom_allowances (JSONB), salary_type ('monthly'/'hourly'), hourly_rate, year_end_bonus_months, health_ins_dependents</td></tr>
+<tr><td>labor_ins_brackets</td><td>勞保 15 級（多年度）</td><td>year, grade, min_salary, insured_salary, employee_premium, employer_premium</td></tr>
+<tr><td>health_ins_brackets</td><td>健保 15 級（多年度）</td><td>同上</td></tr>
+<tr><td>legal_deductions</td><td>法院強制扣薪紀錄</td><td>employee_id, title, total_amount, deduction_type ('fixed'/'percent'), monthly_amount, monthly_percent (0–100), paid_amount, paid_months, started_month, status</td></tr>
+<tr><td>annual_bonus_tracker</td><td>年度獎金累計（v2 新）</td><td>employee_id, year, cumulative_bonus, insured_salary, threshold (=insured × 4), exceeded_at</td></tr>
+</tbody>
+</table>
+
+<h3>B2. 交易資料（Transactional）— 5 張</h3>
+<table>
+<colgroup><col style="width:24%"><col style="width:26%"><col style="width:50%"></colgroup>
+<thead><tr><th>表名</th><th>用途</th><th>關鍵欄位</th></tr></thead>
+<tbody>
+<tr><td>payroll_runs</td><td>月度薪資批次</td><td>pay_period (CHAR(7) e.g. '2026-05', '2026-13' 表年終), status (draft/finalized), finalized_at</td></tr>
+<tr><td>payroll_records</td><td>每人每月明細</td><td>base_salary, role/meal/transport_allowance, attendance_bonus_earned, overtime_pay, ot_hours_weekday/holiday, custom_allowances_total/breakdown, year_end_bonus, unused_leave_payout, gross_salary, leave_deduction, late_deduction, labor_ins_employee, health_ins_employee, labor_pension_employee, income_tax_withheld, nhi_supplementary, nhi_supplementary_breakdown, legal_deduction_total/breakdown, total_deductions, labor_ins_employer, health_ins_employer, labor_pension_employer, net_salary, is_final_settlement</td></tr>
+<tr><td>nhi_supplementary_records</td><td>二代健保補充保費明細（v2 新）</td><td>payroll_record_id, income_category, income_amount, exempt_amount, taxable_amount, rate (0.0211), premium_amount, filed</td></tr>
+<tr><td>leave_requests</td><td>請假紀錄（外部模組）</td><td>employee_id, leave_type, start_date, end_date, status</td></tr>
+<tr><td>overtime_requests</td><td>加班時數（外部模組）</td><td>employee_id, request_date, ot_hours, ot_type, is_pre_approval, status</td></tr>
+</tbody>
+</table>
+
+<h3>B3. 申報視圖（Views）— 3 張（v2 新增）</h3>
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<thead><tr><th>視圖</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>v_labor_pension_filing_monthly</td><td>勞退月提繳清冊（雇主 6% + 員工自提）→ 給勞保局申報</td></tr>
+<tr><td>v_nhi_supplementary_filing</td><td>二代健保補充保費申報明細 → 給健保署申報</td></tr>
+<tr><td>v_payroll_summary_monthly</td><td>月度薪資總表（含全部欄位）→ 會計/審計用</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>C. GROSS 計算（收入項）</h2>
+
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>項目</th><th>計算方式</th></tr></thead>
+<tbody>
+<tr><td>底薪 base_salary</td><td>月薪：salary_structures.base_salary 直接帶入<br>時薪：hourly_rate × attendance_records.total_hours 累加</td></tr>
+<tr><td>固定加給</td><td>role_allowance + meal_allowance + transport_allowance（直接帶入）</td></tr>
+<tr><td>自訂津貼 custom_allowances</td><td>SUM(JSONB 陣列中所有 amount)　例：[{"name":"夜班","amount":3000}, {"name":"證照","amount":500}] → 3500</td></tr>
+<tr><td>全勤獎金 attendance_bonus</td><td>salary_structures.attendance_bonus，<b>但</b>該月遲到分鐘 &gt; 0 OR 請假天數 &gt; 0 → 直接清零</td></tr>
+<tr><td>加班費 overtime_pay</td><td>見 D 區（勞基法分級）</td></tr>
+<tr><td>未休特休折現 unused_leave_payout</td><td>僅離職員工：抓 leave_balances 未休特休天數 × daily_rate（base_salary / 工作天數）</td></tr>
+<tr><td>年終獎金 year_end_bonus</td><td>獨立 function generate_year_end_bonus 觸發，pay_period='YYYY-13'</td></tr>
+<tr class="ok"><td><b>GROSS</b></td><td><b>= 底薪 + 加給 + 自訂津貼 + 全勤 + 加班費 + 未休假折現</b></td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>D. 加班費分級（勞基法 §24/§32 完整級距）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:30%"><col style="width:45%"></colgroup>
+<thead><tr><th>類型</th><th>時段</th><th>倍率（時薪 = 底薪 ÷ 工作天 ÷ 8）</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">平日加班 §24-1</td><td>前 2 小時</td><td>時薪 × 1.34（4/3 加給）</td></tr>
+<tr><td>第 3 小時起</td><td>時薪 × 1.67（5/3 加給）</td></tr>
+<tr><td rowspan="3">休息日加班 §24-2</td><td>0–2 小時</td><td>時薪 × 1.34</td></tr>
+<tr><td>第 3–8 小時</td><td>時薪 × 1.67</td></tr>
+<tr><td>第 9 小時起</td><td>時薪 × 2.67（8/3 加給）</td></tr>
+</tbody>
+</table>
+<p class="small">每月加班上限 §32：一般 46 小時、有變形協議者 54 小時、3 個月不超過 138 小時。本系統 MONTHLY_OVERTIME_CAP = 46 hours。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>E. 假別配置（13 種，與請假/排班連動）</h2>
+<table>
+<colgroup><col style="width:14%"><col style="width:8%"><col style="width:14%"><col style="width:64%"></colgroup>
+<thead><tr><th>假別</th><th>payRate</th><th>countsAsRest</th><th>法令依據 / 備註</th></tr></thead>
+<tbody>
+<tr class="ok"><td>休假 / 補休</td><td>1.0</td><td>true</td><td>公司排休（吃月休配額）</td></tr>
+<tr class="ok"><td>特休</td><td>1.0</td><td>false</td><td>勞基法 §38：年資 6 月起每年 3–30 天</td></tr>
+<tr class="ok"><td>婚假</td><td>1.0</td><td>false</td><td>勞工請假規則：8 天</td></tr>
+<tr class="ok"><td>喪假</td><td>1.0</td><td>false</td><td>勞工請假規則：1–8 天（依親屬關係）</td></tr>
+<tr class="ok"><td>公假</td><td>1.0</td><td>false</td><td>因公務指派全薪</td></tr>
+<tr class="ok"><td>產假</td><td>1.0</td><td>false</td><td>勞基法 §50：8 週全薪</td></tr>
+<tr class="ok"><td>陪產假</td><td>1.0</td><td>false</td><td>性平法：5 天全薪</td></tr>
+<tr class="ok"><td>公傷病假</td><td>1.0</td><td>false</td><td>勞基法 §59：原領工資補償</td></tr>
+<tr class="ok"><td>會議</td><td>1.0</td><td>false</td><td>視同上班</td></tr>
+<tr class="half"><td>病假</td><td>0.5</td><td>false</td><td>普通病假前 30 天半薪（之後申請可改用特休抵）</td></tr>
+<tr class="half"><td>生理假</td><td>0.5</td><td>false</td><td>性平法：每月 1 天，超過併入病假計算</td></tr>
+<tr class="miss"><td>事假</td><td>0</td><td>false</td><td>勞基法 §43：事假無薪</td></tr>
+<tr class="miss"><td>無薪假</td><td>0</td><td>false</td><td>個人因素，無薪</td></tr>
+</tbody>
+</table>
+<p class="small">payRate 定義在 src/lib/scheduleUtils.js ABSENCE_CONFIG。請假扣款公式：扣款 = 天數 × daily_rate × (1 − payRate)</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>F. 扣項計算</h2>
+
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>項目</th><th>計算方式</th></tr></thead>
+<tbody>
+<tr><td>請假扣薪</td><td>無薪假 = 天數 × daily_rate；半薪假 = 天數 × daily_rate × 0.5；全薪不扣</td></tr>
+<tr><td>遲到扣薪</td><td>FLOOR(累計遲到分鐘 / 30) × (hourly_rate × 0.5)</td></tr>
+<tr><td>勞保員工自付</td><td>從 labor_ins_brackets 抓 employee_premium（按 employees.labor_ins_grade 與年度）</td></tr>
+<tr><td>健保員工自付</td><td>從 health_ins_brackets 抓 employee_premium × (1 + 眷屬數)</td></tr>
+<tr><td>勞退員工自願自提</td><td>LEAST(base, 150000) × (employees.labor_pension_self_rate / 100)</td></tr>
+<tr><td>所得稅扣繳</td><td>呼叫 _calc_monthly_withholding(gross)：5 級累進（見 G）</td></tr>
+<tr><td>二代健保補充保費</td><td>2 種觸發：① 加班費 &gt; 月投保金額 → 超出部分 × 2.11%；② 年累計獎金 &gt; 投保 × 4 → 超出部分 × 2.11%</td></tr>
+<tr><td>法扣 fixed 模式</td><td>每月固定 monthly_amount</td></tr>
+<tr><td>法扣 percent 模式</td><td>每月 GROSS × monthly_percent / 100</td></tr>
+<tr class="ok"><td><b>NET 實領</b></td><td><b>= GROSS − 所有扣項</b>　如扣前餘額 &lt; 法扣應扣，部分扣 + 自動延後到下月</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>G. 所得稅扣繳級距（_calc_monthly_withholding）</h2>
+<table>
+<colgroup><col style="width:30%"><col style="width:20%"><col style="width:50%"></colgroup>
+<thead><tr><th>月薪總額</th><th>稅率</th><th>計算公式</th></tr></thead>
+<tbody>
+<tr><td>≤ 40,020</td><td>0%</td><td>免扣</td></tr>
+<tr><td>40,021 – 60,000</td><td>5%</td><td>(gross − 40,020) × 5%</td></tr>
+<tr><td>60,001 – 80,000</td><td>12%</td><td>999 + (gross − 60,000) × 12%</td></tr>
+<tr><td>80,001 – 120,000</td><td>20%</td><td>3,399 + (gross − 80,000) × 20%</td></tr>
+<tr><td>≥ 120,001</td><td>30%</td><td>11,399 + (gross − 120,000) × 30%</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>H. 勞健保級距（2026 年，已 seed 入庫，共 15 級）</h2>
+<table>
+<colgroup><col style="width:18%"><col style="width:22%"><col style="width:25%"><col style="width:35%"></colgroup>
+<thead><tr><th></th><th>級距範圍</th><th>費率（2026）</th><th>分擔比例</th></tr></thead>
+<tbody>
+<tr><td>勞保</td><td>NT$27,470 ~ 45,800</td><td>13%（普通 12% + 就業險 1%）</td><td>員工 20%（2.6%）／雇主 70%（9.1%）／政府 10%</td></tr>
+<tr><td>健保</td><td>NT$27,470 ~ 53,000</td><td>5.17%</td><td>員工 30%（× (1 + 眷屬)）／雇主 60%（含平均眷口 0.58）</td></tr>
+</tbody>
+</table>
+<p class="small">級距資料：supabase/migrations/20260418000003_insurance_calc_functions.sql 第 104–147 行。HR → 法令工資設定 提供 CSV 匯入下年度級距。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>I. 法扣兩種模式（v2 新）</h2>
+<table>
+<colgroup><col style="width:18%"><col style="width:32%"><col style="width:50%"></colgroup>
+<thead><tr><th>模式</th><th>欄位</th><th>說明 / 適用場景</th></tr></thead>
+<tbody>
+<tr><td>fixed 固定金額</td><td>monthly_amount NUMERIC</td><td>每月固定扣 X 元，扣到 paid_amount=total_amount 為止。<br>適用：信用卡欠款、養育費固定金額。</td></tr>
+<tr><td>percent 月薪百分比</td><td>monthly_percent NUMERIC(5,2)</td><td>每月扣 GROSS × X%，金額隨月薪浮動。<br>適用：法院強制扣薪「薪資 1/3」(33.33%)、25% 之類。</td></tr>
+</tbody>
+</table>
+<p class="small">DB 用 CHECK constraint 強制兩種模式互斥（fixed 必填 monthly_amount、percent 必填 monthly_percent）。</p>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>J. 完整計算流程圖</h2>
+<div class="flow">每月 admin 進 [HR → 薪資發放] 點「新增薪資作業」（YYYY-MM）
+    ↓
+DB 端 generate_payroll('2026-05', created_by) 觸發
+    ↓
+INSERT payroll_runs (status='draft')
+    ↓
+FOR 每位 (status='在職' OR (status='離職' AND resign_date 在當月)) DO
+    ↓
+讀 master：salary_structures, employees, labor_ins_brackets, health_ins_brackets
+讀 transactional：attendance_records, leave_requests, overtime_requests, leave_balances
+    ↓
+【收入項】
+  base_salary（月/時薪）+ allowances + custom_allowances
+  + attendance_bonus（遲到/請假則 0）
+  + overtime_pay（平日 1.34/1.67、例假 1.34/1.67/2.67）
+  + unused_leave_payout（僅離職員工）
+  → GROSS
+    ↓
+【二代健保補充保費】
+  IF 加班費 > 月投保金額 → 超額 × 2.11%
+  IF 年累計獎金 > 投保 × 4 → 超額 × 2.11%
+  → 寫 nhi_supplementary_records 明細表
+    ↓
+【扣項】
+  - 請假扣（payRate 0/0.5）
+  - 遲到扣（30 分鐘 × 半小時時薪）
+  - 勞保自付 / 健保自付 (× 眷屬乘數)
+  - 勞退員工自願自提（base × self_rate / 100）
+  - 所得稅 5 級累進
+  - 二代健保補充保費
+  - 法扣（fixed 或 percent，按進行中順序扣到餘額用完）
+    ↓
+INSERT payroll_records（含全部 breakdown JSONB）
+    ↓
+END LOOP
+    ↓
+admin 審閱 → 「定案」按鈕 → status='finalized'
+    ↓
+觸發 hr.salary.calculated 事件 → 推 LINE 通知 → 員工查薪資單</div>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>K. 計算範例（5 個典型情境）</h2>
+
+<h3>K1. 一般月薪員工</h3>
+<div class="formula">員工 A：base 30,000、role 2,000、meal 500、夜班自訂 3,000、全勤 1,000
+本月狀況：請 2 天事假、遲到 60 分鐘、平日加班 4h、例假加班 6h
+hourly_rate = 30,000 / 30 / 8 = 125
+
+【GROSS】
+  base + 加給 + 自訂          = 35,500
+  全勤                          =      0  (有遲到/請假清零)
+  平日 OT  2×1.34×125 + 2×1.67×125 = 752.5
+  例假 OT  2×1.34×125 + 4×1.67×125 = 1,170
+  GROSS                       = 37,422
+
+【扣項】
+  事假扣  2 × 1,000           = 2,000
+  遲到扣  FLOOR(60/30)×62.5    = 125
+  勞保    grade 14            = 714
+  健保    452 × (1 + 0)        = 452
+  勞退自提 0%                  = 0
+  所得稅  37,422 ≤ 40,020       = 0
+  二代健保 OT 1,170 ≤ 投保金額   = 0
+  法扣                         = 0
+  扣項合計                     = 3,291
+
+【NET】= 37,422 − 3,291 = 34,131</div>
+
+<h3>K2. 高所得 + 觸發二代健保（加班費）</h3>
+<div class="formula">員工 B：base 50,000、grade 21（投保 50,600）
+本月平日加班 60h（極端範例）
+hourly_rate = 50,000 / 30 / 8 ≈ 208
+
+平日 OT  2×1.34×208 + 58×1.67×208 = 557.4 + 20,142.9 ≈ 20,700
+GROSS = 50,000 + 加給 + 20,700 ≈ 72,000
+
+【二代健保補充保費】
+  OT 20,700 < 50,600  → 0   （未觸發，因加班費未超月投保）
+
+但若 OT = 60,000：
+  超額 60,000 − 50,600 = 9,400
+  扣繳    9,400 × 2.11% = 198 元
+  → 寫 nhi_supplementary_records (category='加班費超額')</div>
+
+<h3>K3. 離職結算</h3>
+<div class="formula">員工 C：5 月底離職，當月特休餘額 8 天未休
+base 36,000，工作天 22 天 → daily_rate = 1,636
+
+generate_payroll('2026-05') 對象擴大：
+  status='離職' AND resign_date IN [05-01, 05-31]
+
+【加項】
+  unused_leave_payout = 8 × 1,636 ≈ 13,088
+  → 加進 GROSS
+
+DB trigger trg_resign_cascade 不觸發（已是離職狀態）
+但 payroll_records.is_final_settlement = true 標記</div>
+
+<h3>K4. 年終獎金 + 觸發二代健保（4 倍累計）</h3>
+<div class="formula">員工 D：base 60,000、grade 23（投保 60,800）
+年度累計獎金已達 200,000（前 11 個月 attendance_bonus 累計）
+
+generate_year_end_bonus(2026, NULL) 跑：
+  年終 = 60,000 × 2 個月 = 120,000
+
+【4 倍門檻】= 60,800 × 4 = 243,200
+新累計 = 200,000 + 120,000 = 320,000
+超出 = 320,000 − 243,200 = 76,800
+補充保費 = 76,800 × 2.11% = 1,621
+
+【NET 年終】= 120,000 − 所得稅 − 1,621 = ?
+  所得稅 = 11,399 + (120,000 − 120,000) × 30% = 11,399
+  NET = 120,000 − 11,399 − 1,621 = 106,980</div>
+
+<h3>K5. 法扣 percent 模式</h3>
+<div class="formula">員工 E：法院強制扣薪「薪資 1/3」上限
+deduction_type='percent', monthly_percent=33.33
+
+5 月 GROSS = 50,000 → 應扣 50,000 × 33.33% = 16,665
+6 月 GROSS = 60,000 → 應扣 60,000 × 33.33% = 19,998
+扣到 paid_amount = total_amount 才停止
+（用月薪百分比讓扣款隨薪資波動，員工生活仍有保障）</div>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>L. 系統間互動（薪資不是孤島）</h2>
+<table>
+<colgroup><col style="width:22%"><col style="width:20%"><col style="width:58%"></colgroup>
+<thead><tr><th>來源</th><th>影響</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>排班 schedules</td><td>工時、加班費</td><td>實際打卡時數→attendance_records→generate_payroll 計算 OT</td></tr>
+<tr><td>請假 leave_requests</td><td>扣薪、全勤</td><td>狀態='已核准' 才會被計入扣薪。type 對應 payRate 0/0.5/1.0</td></tr>
+<tr><td>打卡 attendance_records</td><td>遲到扣、實際工時</td><td>is_late=true + late_minutes 累加扣薪。time slot 模式下 total_hours 算時薪</td></tr>
+<tr><td>員工狀態 employees.status</td><td>是否參與結算</td><td>在職 + 當月離職都納入；留停不結算</td></tr>
+<tr><td>異動 personnel_transfer</td><td>底薪變動</td><td>status='已核准' → DB trigger 改 employees.base_salary。下月薪資自動套新數字</td></tr>
+<tr><td>離職 resignation</td><td>結算 + 特休折現</td><td>status='已核准' → DB trigger 改 status='離職'。當月薪資 is_final_settlement=true</td></tr>
+<tr><td>法令更新 LaborLawRates</td><td>級距重算</td><td>每年 12/01 cron 提醒、CSV 匯入下年度級距。InsuranceGradeMonitor 偵測員工薪資 vs 投保級距落差</td></tr>
+<tr><td>通知中心 NotificationCenter</td><td>薪資單發送</td><td>定案後觸發 hr.payslip.sent 事件 → 寫 notifications → 員工 LIFF 收連結</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>M. 前端頁面 + 操作流程</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:30%"><col style="width:45%"></colgroup>
+<thead><tr><th>頁面</th><th>路由</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>HR → 薪資發放</td><td>/hr/payroll</td><td>月度結算入口、年終獎金結算、勞退提繳清冊匯出、二代健保申報匯出、薪資單發送</td></tr>
+<tr><td>HR → 薪資結構</td><td>/hr/salary-structures</td><td>批次維護員工薪資組成（自訂津貼、年終月數）</td></tr>
+<tr><td>HR → 薪資管理</td><td>/hr/salary</td><td>單員工薪資編輯（含 13 種預設津貼勾選）</td></tr>
+<tr><td>HR → 法扣管理</td><td>/hr/legal-deductions</td><td>fixed/percent 兩種模式新增/編輯/暫停</td></tr>
+<tr><td>HR → 法令工資設定</td><td>/hr/labor-law-rates</td><td>勞健保級距 CSV 匯入、年度法令更新</td></tr>
+<tr><td>HR → 健保級距監控</td><td>/hr/insurance-grade</td><td>偵測員工實際薪資 vs 投保級距落差，一鍵批次同步</td></tr>
+<tr><td>HR → 扣繳憑單</td><td>/hr/tax-forms</td><td>50/52/54 號 PDF 列印（HTML 列印版）</td></tr>
+<tr><td>HR → 福利政策</td><td>/hr/benefit-settings</td><td>津貼樣板（夜班/證照/主管加給）設定</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>N. 關鍵檔案清單（給工程師）</h2>
+<table>
+<colgroup><col style="width:60%"><col style="width:40%"></colgroup>
+<thead><tr><th>路徑</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>supabase/migrations/20260506010000_payroll_enhancement_calc.sql</td><td>generate_payroll 主函式（v2 重寫）</td></tr>
+<tr><td>supabase/migrations/20260506020000_year_end_bonus.sql</td><td>generate_year_end_bonus 函式</td></tr>
+<tr><td>supabase/migrations/20260506030000_labor_pension_filing_views.sql</td><td>3 張申報視圖</td></tr>
+<tr><td>supabase/migrations/20260506100000_legal_deductions_percent_mode.sql</td><td>法扣 percent 模式 + 重整 generate_payroll</td></tr>
+<tr><td>supabase/migrations/20260427000000_fix_payroll_calc.sql</td><td>_calc_monthly_withholding 所得稅</td></tr>
+<tr><td>supabase/migrations/20260418000003_insurance_calc_functions.sql</td><td>勞健保級距 seed + 計算函式</td></tr>
+<tr><td>src/pages/hr/Payroll.jsx</td><td>月度結算前端</td></tr>
+<tr><td>src/pages/hr/Salary.jsx / SalaryStructures.jsx</td><td>薪資結構編輯</td></tr>
+<tr><td>src/pages/hr/LegalDeductions.jsx</td><td>法扣管理</td></tr>
+<tr><td>src/pages/hr/InsuranceGradeMonitor.jsx</td><td>級距同步</td></tr>
+<tr><td>src/pages/hr/LaborLawRates.jsx</td><td>法令工資設定</td></tr>
+<tr><td>src/pages/hr/TaxForms.jsx</td><td>扣繳憑單</td></tr>
+<tr><td>src/lib/withholdingCertificate.js</td><td>50/52/54 號 PDF 列印 helper</td></tr>
+<tr><td>src/lib/scheduleUtils.js (ABSENCE_CONFIG)</td><td>13 種假別 payRate 定義</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>O. 完整度評估表（v3 = 約 99%）</h2>
+<table>
+<colgroup><col style="width:30%"><col style="width:15%"><col style="width:55%"></colgroup>
+<thead><tr><th>功能項</th><th>狀態</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>底薪 + 加給結構</td><td class="ok">完整</td><td>含 JSONB 自訂津貼任意加項</td></tr>
+<tr><td>勞保自付計算</td><td class="ok">完整</td><td>2026 級距 seeded</td></tr>
+<tr><td>健保自付（含眷屬）</td><td class="ok">完整</td><td>× (1 + n)</td></tr>
+<tr><td>加班費分級</td><td class="ok">完整</td><td>平日 1.34/1.67、例假 1.34/1.67/2.67</td></tr>
+<tr><td>13 種假別扣薪</td><td class="ok">完整</td><td>payRate 0/0.5/1.0</td></tr>
+<tr><td>遲到扣薪</td><td class="ok">完整</td><td>30 分鐘 1 單位</td></tr>
+<tr><td>所得稅 5 級扣繳</td><td class="ok">完整</td><td>累進稅率</td></tr>
+<tr><td>勞退員工自願自提</td><td class="ok">完整 (v2)</td><td>0–6%</td></tr>
+<tr><td>二代健保補充保費</td><td class="ok">完整 (v2)</td><td>加班費超額 + 獎金 4 倍累計</td></tr>
+<tr><td>離職結算 + 特休折現</td><td class="ok">完整 (v2)</td><td>當月離職納入結算</td></tr>
+<tr><td>年終獎金獨立流程</td><td class="ok">完整 (v2)</td><td>pay_period='YYYY-13'</td></tr>
+<tr><td>法扣 fixed / percent</td><td class="ok">完整 (v2)</td><td>兩種模式互斥</td></tr>
+<tr><td>勞退提繳清冊匯出</td><td class="ok">完整 (v2)</td><td>CSV 給勞保局</td></tr>
+<tr><td>二代健保申報匯出</td><td class="ok">完整 (v2)</td><td>CSV 給健保署</td></tr>
+<tr><td>扣繳憑單 50/52/54 PDF</td><td class="ok">完整 (v2)</td><td>HTML 列印另存 PDF</td></tr>
+<tr><td>級距自動同步</td><td class="ok">完整</td><td>InsuranceGradeMonitor</td></tr>
+<tr><td>二代健保其他 4 類所得</td><td class="half">部分</td><td>目前只算加班費 + 獎金兩類；股利、利息、兼職、租金尚未</td></tr>
+<tr><td>媒體申報 dat 檔</td><td class="miss">未做</td><td>每年 1 月電子申報前年度，目前需手動到國稅局網站逐筆輸入</td></tr>
+<tr><td>多年度比對視圖</td><td class="miss">未做</td><td>v_payroll_summary_yearly</td></tr>
+<tr><td>薪資單 LINE 推播自動化</td><td class="half">部分</td><td>事件已發但 LIFF 薪資頁面未做</td></tr>
+</tbody>
+</table>
+
+<!-- ────────────────────────────────────────────────────── -->
+<h2>P. 後續優化（依優先級）</h2>
+<table>
+<colgroup><col style="width:20%"><col style="width:15%"><col style="width:65%"></colgroup>
+<thead><tr><th>項目</th><th>優先級</th><th>說明 / 估時</th></tr></thead>
+<tbody>
+<tr><td>二代健保 4 類補強</td><td>P1</td><td>股利/利息/兼職/租金扣繳。需新增 6 類分類欄位 + 計算邏輯，預估 1 天</td></tr>
+<tr><td>媒體申報 dat 檔產出</td><td>P2</td><td>每年 1 月用一次。國稅局電子申報格式，預估 2–3 天（含格式測試）</td></tr>
+<tr><td>LIFF 薪資頁面</td><td>P2</td><td>員工手機看當月薪資單，預估 1 天</td></tr>
+<tr><td>多年度比對視圖</td><td>P3</td><td>v_payroll_summary_yearly，預估 2 小時</td></tr>
+<tr><td>勞退申報 dat 檔</td><td>P3</td><td>勞保局媒體申報，預估 1 天</td></tr>
+</tbody>
+</table>
+
+<p class="meta" style="margin-top:18px">— 文件結束 —　檔案：docs/SALARY_FULL_SPEC_2026-05-05.html</p>
+
+</body>
+</html>

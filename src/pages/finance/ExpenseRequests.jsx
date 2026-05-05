@@ -7,6 +7,7 @@ import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_COLORS = {
@@ -489,11 +490,16 @@ export default function ExpenseRequests() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
-                <select value={form.employee} onChange={e => set('employee', e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                  <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept}) {e.store ? `- ${e.store}` : ''}</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.employee}
+                  onChange={(v) => set('employee', v || '')}
+                  options={employees.map(e => ({
+                    value: e.name,
+                    label: empLabel(e),
+                    sublabel: [e.dept, e.store].filter(Boolean).join(' · '),
+                  }))}
+                  placeholder="搜尋申請人姓名/部門/門市..."
+                />
               </div>
               {/* Expense / Non-expense toggle */}
               <div>

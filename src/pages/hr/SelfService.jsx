@@ -3,6 +3,7 @@ import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight } from 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function SelfService() {
@@ -76,10 +77,18 @@ export default function SelfService() {
             <p>查看個人資料、出勤、薪資、請假紀錄</p>
           </div>
           {(isSuperAdmin || isAdmin) && (
-            <div>
-              <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={selectedEmpName} onChange={e => setSelectedEmpName(e.target.value)}>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} — {e.dept}</option>)}
-              </select>
+            <div style={{ minWidth: 220 }}>
+              <SearchableSelect
+                value={selectedEmpName}
+                onChange={(v) => setSelectedEmpName(v || '')}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                  sublabel: e.dept || '',
+                }))}
+                placeholder="切換員工..."
+                clearable={false}
+              />
             </div>
           )}
         </div>

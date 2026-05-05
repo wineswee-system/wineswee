@@ -5,6 +5,7 @@ import { getLineGroups, getLineMessages } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function LineIntegration() {
@@ -726,11 +727,16 @@ export default function LineIntegration() {
       {showLinkModal && (
         <Modal title="綁定員工到 LINE 官方帳號" onClose={() => setShowLinkModal(false)} onSubmit={handleLinkEmployee}>
           <Field label="員工 *">
-            <select className="form-input" style={{ width: '100%' }} value={linkForm.employee_id}
-              onChange={e => setLinkForm(f => ({ ...f, employee_id: e.target.value }))}>
-              <option value="">請選擇員工</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)} ({e.dept} · {e.position})</option>)}
-            </select>
+            <SearchableSelect
+              value={linkForm.employee_id}
+              onChange={(v) => setLinkForm(f => ({ ...f, employee_id: v || '' }))}
+              options={employees.map(e => ({
+                value: e.id,
+                label: empLabel(e),
+                sublabel: [e.dept, e.position].filter(Boolean).join(' · '),
+              }))}
+              placeholder="搜尋員工..."
+            />
           </Field>
           <Field label="官方帳號 *">
             <select className="form-input" style={{ width: '100%' }} value={linkForm.channel_id}

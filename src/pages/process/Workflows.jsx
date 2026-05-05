@@ -16,6 +16,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
@@ -1070,10 +1071,14 @@ export default function Workflows() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>👤 負責人</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
-            <option value="">全部人員</option>
-            {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-          </select>
+          <div style={{ minWidth: 200 }}>
+            <SearchableSelect
+              value={filterAssignee}
+              onChange={(v) => setFilterAssignee(v || '')}
+              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              placeholder="全部人員"
+            />
+          </div>
         </div>
       </div>
 
@@ -1197,10 +1202,12 @@ export default function Workflows() {
             </select>
           </Field>
           <Field label="負責人">
-            <select className="form-input" value={blankWorkflowForm.assignee} onChange={e => setBlankWorkflowForm(p => ({ ...p, assignee: e.target.value }))}>
-              <option value="">— 選擇人員 —</option>
-              {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-            </select>
+            <SearchableSelect
+              value={blankWorkflowForm.assignee}
+              onChange={(v) => setBlankWorkflowForm(p => ({ ...p, assignee: v || '' }))}
+              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              placeholder="搜尋負責人..."
+            />
           </Field>
           <Field label="截止日期">
             <input className="form-input" type="date"

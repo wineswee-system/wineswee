@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function PunchCorrection() {
@@ -207,10 +208,16 @@ export default function PunchCorrection() {
         <Modal title="新增補登申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工 *">
-              <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
-                <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.employee}
+                onChange={(v) => set('employee', v || '')}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                  sublabel: e.departments?.name || '',
+                }))}
+                placeholder="搜尋員工姓名..."
+              />
             </Field>
             <Field label="日期 *">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />

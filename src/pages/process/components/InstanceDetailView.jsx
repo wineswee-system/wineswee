@@ -4,6 +4,7 @@ import {
   Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import SearchableSelect from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import { empLabel } from '../../../lib/empLabel'
 
@@ -241,12 +242,12 @@ export default function InstanceDetailView({
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="負責人">
-              <select className="form-input" style={{ width: '100%' }}
+              <SearchableSelect
                 value={taskForm.assignee}
-                onChange={e => setTaskForm(f => ({ ...f, assignee: e.target.value }))}>
-                <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-              </select>
+                onChange={(v) => setTaskForm(f => ({ ...f, assignee: v || '' }))}
+                options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                placeholder="搜尋負責人..."
+              />
             </Field>
             <Field label="門市">
               <select className="form-input" style={{ width: '100%' }}
@@ -421,7 +422,14 @@ export default function InstanceDetailView({
       )}
       {showEditModal && (
         <Modal title="編輯指派" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
-          <Field label="負責人"><select className="form-input" style={{ width: '100%' }} value={editForm.assignee} onChange={e => setEditForm(f => ({ ...f, assignee: e.target.value }))}><option value="">未指定</option>{employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}</select></Field>
+          <Field label="負責人">
+            <SearchableSelect
+              value={editForm.assignee}
+              onChange={(v) => setEditForm(f => ({ ...f, assignee: v || '' }))}
+              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              placeholder="未指定"
+            />
+          </Field>
           <Field label="群組">
             {lineGroups.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無 LINE 群組（由 LINE Webhook 自動建立）</div>

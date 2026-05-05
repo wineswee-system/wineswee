@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getProbationRecords, createProbationRecord, updateProbationRecord } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_STYLES = {
@@ -248,25 +249,36 @@ export default function ProbationTracker() {
         <Modal title="新增試用紀錄" onClose={() => setShowModal(false)} onSubmit={handleCreate}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工 *">
-              <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => {
-                setF('employee', e.target.value)
-                const emp = employees.find(em => em.name === e.target.value)
-                if (emp?.join_date) {
-                  setF('start_date', emp.join_date)
-                  const end = new Date(emp.join_date)
-                  end.setMonth(end.getMonth() + 3)
-                  setF('end_date', end.toISOString().slice(0, 10))
-                }
-              }}>
-                <option value="">選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept})</option>)}
-              </select>
+              <SearchableSelect
+                value={form.employee}
+                onChange={(v) => {
+                  setF('employee', v || '')
+                  const emp = employees.find(em => em.name === v)
+                  if (emp?.join_date) {
+                    setF('start_date', emp.join_date)
+                    const end = new Date(emp.join_date)
+                    end.setMonth(end.getMonth() + 3)
+                    setF('end_date', end.toISOString().slice(0, 10))
+                  }
+                }}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                  sublabel: e.dept || '',
+                }))}
+                placeholder="搜尋員工姓名..."
+              />
             </Field>
             <Field label="指導人">
-              <select className="form-input" style={{ width: '100%' }} value={form.mentor} onChange={e => setF('mentor', e.target.value)}>
-                <option value="">選擇指導人</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.mentor}
+                onChange={(v) => setF('mentor', v || '')}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                }))}
+                placeholder="搜尋指導人..."
+              />
             </Field>
             <Field label="開始日期 *">
               <input type="date" className="form-input" style={{ width: '100%' }} value={form.start_date} onChange={e => setF('start_date', e.target.value)} />

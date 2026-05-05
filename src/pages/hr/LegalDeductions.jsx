@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
@@ -315,10 +316,17 @@ export default function LegalDeductions() {
       {showModal && (
         <Modal title={editingId ? '編輯法扣' : '新增法扣'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="員工 *">
-            <select className="form-input" value={form.employee_id} onChange={e => set('employee_id', e.target.value)} disabled={!!editingId}>
-              <option value="">請選擇員工</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)}（{e.dept || '-'}）</option>)}
-            </select>
+            <SearchableSelect
+              value={form.employee_id}
+              onChange={(v) => set('employee_id', v || '')}
+              options={employees.map(e => ({
+                value: e.id,
+                label: empLabel(e),
+                sublabel: e.dept || '',
+              }))}
+              placeholder="搜尋員工姓名/部門..."
+              disabled={!!editingId}
+            />
           </Field>
           <Field label="標題 *">
             <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：養育費 / 信用卡欠款扣薪 / 法院強制執行" />

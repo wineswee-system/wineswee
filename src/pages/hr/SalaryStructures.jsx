@@ -3,6 +3,7 @@ import { Plus, Edit2, DollarSign, Users, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
@@ -278,10 +279,17 @@ export default function SalaryStructures() {
       {showModal && (
         <Modal title={editingId ? '編輯薪資結構' : '新增薪資結構'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="員工">
-            <select className="form-input" value={form.employee_id} onChange={e => set('employee_id', e.target.value)} disabled={!!editingId}>
-              <option value="">請選擇員工</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)}（{e.dept || '-'} / {e.store || '-'}）</option>)}
-            </select>
+            <SearchableSelect
+              value={form.employee_id}
+              onChange={(v) => set('employee_id', v || '')}
+              options={employees.map(e => ({
+                value: e.id,
+                label: empLabel(e),
+                sublabel: [e.dept, e.store].filter(Boolean).join(' / '),
+              }))}
+              placeholder="搜尋員工姓名/部門/門市..."
+              disabled={!!editingId}
+            />
           </Field>
           <Field label="薪資類型">
             <select className="form-input" value={form.salary_type} onChange={e => set('salary_type', e.target.value)}>

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
 
@@ -487,10 +488,16 @@ export default function Bonus() {
         <Modal title="發放獎金紀錄" onClose={() => { setShowRecordModal(false); setPolicyBonus(0); setPerfReview(null) }} onSubmit={handleAddRecord} submitLabel="確認發放">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工姓名 *">
-              <select className="form-input" style={{ width: '100%' }} value={recordForm.employee_name} onChange={e => handleEmployeeSelect(e.target.value)}>
-                <option value="">請選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}{e.store ? ` (${e.store})` : ''}</option>)}
-              </select>
+              <SearchableSelect
+                value={recordForm.employee_name}
+                onChange={(v) => handleEmployeeSelect(v || '')}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                  sublabel: e.store || '',
+                }))}
+                placeholder="搜尋員工姓名/門市..."
+              />
             </Field>
             <Field label="職類">
               <select className="form-input" style={{ width: '100%' }} value={recordForm.role_type} onChange={e => setR('role_type', e.target.value)}>

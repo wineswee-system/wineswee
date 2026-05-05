@@ -15,6 +15,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
 import ChangelogPanel from '../../components/ChangelogPanel'
 import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
@@ -755,11 +756,14 @@ export default function Projects() {
                       onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
                     />
-                    <select className="form-input" style={{ flex: '0 0 110px', fontSize: 12 }}
-                      value={addTaskForm.assignee} onChange={e => setAddTaskForm(f => ({ ...f, assignee: e.target.value }))}>
-                      <option value="">負責人</option>
-                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                    </select>
+                    <div style={{ flex: '0 0 130px' }}>
+                      <SearchableSelect
+                        value={addTaskForm.assignee}
+                        onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
+                        options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                        placeholder="負責人"
+                      />
+                    </div>
                     <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
                       value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
                     <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
@@ -825,11 +829,14 @@ export default function Projects() {
                       onChange={e => setDirectTaskForm(f => ({ ...f, title: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && handleAddDirectTask()}
                     />
-                    <select className="form-input" style={{ flex: '0 0 110px', fontSize: 12 }}
-                      value={directTaskForm.assignee} onChange={e => setDirectTaskForm(f => ({ ...f, assignee: e.target.value }))}>
-                      <option value="">負責人</option>
-                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                    </select>
+                    <div style={{ flex: '0 0 130px' }}>
+                      <SearchableSelect
+                        value={directTaskForm.assignee}
+                        onChange={(v) => setDirectTaskForm(f => ({ ...f, assignee: v || '' }))}
+                        options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                        placeholder="負責人"
+                      />
+                    </div>
                     <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
                       value={directTaskForm.due_date} onChange={e => setDirectTaskForm(f => ({ ...f, due_date: e.target.value }))} />
                     <select className="form-input" style={{ flex: '0 0 70px', fontSize: 12 }}
@@ -936,10 +943,12 @@ export default function Projects() {
                 </Field>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <Field label="負責人">
-                    <select className="form-input" style={{ width: '100%' }} value={newWfForm.assignee} onChange={e => setNewWfForm(f => ({ ...f, assignee: e.target.value }))}>
-                      <option value="">請選擇</option>
-                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={newWfForm.assignee}
+                      onChange={(v) => setNewWfForm(f => ({ ...f, assignee: v || '' }))}
+                      options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                      placeholder="請選擇負責人"
+                    />
                   </Field>
                   <Field label="門市">
                     <select className="form-input" style={{ width: '100%' }} value={newWfForm.store} onChange={e => setNewWfForm(f => ({ ...f, store: e.target.value }))}>
@@ -979,10 +988,12 @@ export default function Projects() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="負責人">
-                <select className="form-input" style={{ width: '100%' }} value={form.owner} onChange={e => set('owner', e.target.value)}>
-                  <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}（{e.dept || e.position}）</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.owner}
+                  onChange={(v) => set('owner', v || '')}
+                  options={employees.map(e => ({ value: e.name, label: empLabel(e), sublabel: e.dept || e.position || '' }))}
+                  placeholder="搜尋專案負責人..."
+                />
               </Field>
               <Field label="門市">
                 <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
@@ -1117,10 +1128,12 @@ export default function Projects() {
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="負責人">
-              <select className="form-input" style={{ width: '100%' }} value={deployForm.owner} onChange={e => setDeployForm(f => ({ ...f, owner: e.target.value }))}>
-                <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-              </select>
+              <SearchableSelect
+                value={deployForm.owner}
+                onChange={(v) => setDeployForm(f => ({ ...f, owner: v || '' }))}
+                options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                placeholder="搜尋負責人..."
+              />
             </Field>
             <Field label="門市">
               <select className="form-input" style={{ width: '100%' }} value={deployForm.store} onChange={e => setDeployForm(f => ({ ...f, store: e.target.value }))}>
@@ -1332,10 +1345,12 @@ export default function Projects() {
                   <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="任務名稱 *"
                     value={inlineTask.title} onChange={e => setInlineTask(f => ({ ...f, title: e.target.value }))} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.assignee} onChange={e => setInlineTask(f => ({ ...f, assignee: e.target.value }))}>
-                      <option value="">負責人</option>
-                      {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={inlineTask.assignee}
+                      onChange={(v) => setInlineTask(f => ({ ...f, assignee: v || '' }))}
+                      options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                      placeholder="負責人"
+                    />
                     <input className="form-input" type="date" style={{ fontSize: 13 }} value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
                     <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
                       <option>高</option><option>中</option><option>低</option>

@@ -6,6 +6,7 @@ import { generateSurveyInsights, isConfigured as aiReady } from '../../lib/ai/hr
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
@@ -575,10 +576,16 @@ export default function EngagementSurveys() {
         <Modal title={`填寫：${selectedSurvey.title}`} onClose={() => setShowFillModal(false)} onSubmit={handleSubmitResponse}>
           {!selectedSurvey.is_anonymous && (
             <Field label="員工 *">
-              <select className="form-input" style={{ width: '100%' }} value={fillEmployee} onChange={e => setFillEmployee(e.target.value)}>
-                <option value="">選擇員工</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)} ({e.dept})</option>)}
-              </select>
+              <SearchableSelect
+                value={fillEmployee}
+                onChange={(v) => setFillEmployee(v || '')}
+                options={employees.map(e => ({
+                  value: e.name,
+                  label: empLabel(e),
+                  sublabel: e.dept || '',
+                }))}
+                placeholder="搜尋員工姓名..."
+              />
             </Field>
           )}
           {(selectedSurvey.questions || []).map((q, idx) => (

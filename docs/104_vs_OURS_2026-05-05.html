@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>104 企業大師 vs 自有系統 功能對照</title>
+<style>
+  body { font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; padding: 30px; max-width: 1100px; margin: 0 auto; color: #222; }
+  h1 { color: #0b5cad; border-bottom: 3px solid #0b5cad; padding-bottom: 8px; }
+  h2 { color: #0b5cad; margin-top: 36px; border-left: 5px solid #0b5cad; padding-left: 10px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; margin-bottom: 24px; }
+  th, td { border: 1px solid #999; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #0b5cad; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #f4f8fc; }
+  .ours-win { background: #e8f5e9 !important; color: #1b5e20; }
+  .their-win { background: #fff3e0 !important; color: #bf360c; }
+  .tie { color: #555; }
+  .meta { color: #777; font-size: 13px; }
+  ul { margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<h1>104 企業大師 vs 自有系統 功能對照</h1>
+<p class="meta">資料來源：104 官方 FAQ 與 marketing 頁面公開內容、自有系統實際 DB schema 與程式碼。生成時間：2026-05-05。</p>
+
+<h2>A. 員工資料卡欄位</h2>
+<table>
+  <thead><tr><th style="width:30%">欄位</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>員工編號</td><td>有</td><td>有</td></tr>
+    <tr><td>姓名</td><td>有</td><td>有</td></tr>
+    <tr><td>英文名</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>姓 / 名拆分</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>性別</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>生日</td><td>有</td><td>有</td></tr>
+    <tr><td>身份證字號</td><td>有</td><td>有</td></tr>
+    <tr><td>國籍</td><td>有</td><td>有</td></tr>
+    <tr><td>E-mail</td><td>有</td><td>有</td></tr>
+    <tr><td>電話</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>地址</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>所屬公司</td><td>有</td><td>有</td></tr>
+    <tr><td>所屬部門</td><td>有</td><td>有</td></tr>
+    <tr><td>所屬門市</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>主職位</td><td>有</td><td>有</td></tr>
+    <tr><td>副職位 / 第三職位</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>職等 / 職級</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>到職日</td><td>有</td><td>有</td></tr>
+    <tr><td>離職日</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>離職原因</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>試用期到期日</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>在職狀態</td><td>有</td><td>有</td></tr>
+    <tr><td>員工類型（全 / 兼職）</td><td>有</td><td>有</td></tr>
+    <tr><td>主管 / 報告對象</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>是否主管 / 是否兼任高管</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>能開店 / 能關店</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>排班優先級</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>每週目標時數</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>個人 cycle 時數上限</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>可支援其他門市</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>緊急聯絡人姓名 + 電話</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>銀行代號 + 帳號</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>工作許可號碼 + 到期日</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>基本薪資</td><td>有（薪資模組分開存）</td><td>有</td></tr>
+    <tr><td>薪資類型（月 / 時薪）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>各種津貼（伙食 / 交通 / 住房）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>勞保級距 + 起訖日</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>健保級距 + 起日</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>退休金提繳率</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>LINE 管理員旗標</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>頭像</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td><b>合計欄位數</b></td><td><b>11（公開揭露）</b></td><td class="ours-win"><b>84</b></td></tr>
+  </tbody>
+</table>
+
+<h2>B. 員工自助維護權限</h2>
+<table>
+  <thead><tr><th style="width:30%">動作</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>員工自己改基本資料</td><td class="their-win">有（除身份證、生日、員工編號、國籍、姓名外都可開放）</td><td>沒有（admin / manager 才能改）</td></tr>
+  </tbody>
+</table>
+
+<h2>C. 電子表單清單</h2>
+<table>
+  <thead><tr><th style="width:30%">表單名稱</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>請假單</td><td>有</td><td>有</td></tr>
+    <tr><td>加班單</td><td>有</td><td>有</td></tr>
+    <tr><td>預先加班單</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>銷假單（取消已核准請假）</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>時數申請單</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>忘刷申請單</td><td>有</td><td>有</td></tr>
+    <tr><td>出差申請</td><td>有</td><td>有</td></tr>
+    <tr><td>出差費用申請單</td><td>有</td><td>有</td></tr>
+    <tr><td>費用申請（依金額分流）</td><td>需自訂</td><td class="ours-win">有（小 / 中 / 大三條 chain 自動分）</td></tr>
+    <tr><td>補休</td><td>有</td><td>有</td></tr>
+    <tr><td>調班 / 換班申請</td><td>有</td><td>有</td></tr>
+    <tr><td>跨店支援申請</td><td>有</td><td>有</td></tr>
+    <tr><td>找代班（同事接手）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>人事異動單（調職、升遷）</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>薪資異動單</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>離職申請單</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>留職停薪申請單</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>在職 / 離職證明申請</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>勞健保證明申請</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>自訂表單建立</td><td class="their-win">有（18 張範本 + 自訂）</td><td>沒有（每張表單 hardcoded）</td></tr>
+  </tbody>
+</table>
+
+<h2>D. 出勤打卡</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>電腦線上打卡</td><td>有</td><td>有</td></tr>
+    <tr><td>手機 App / LIFF 打卡</td><td>有</td><td>有</td></tr>
+    <tr><td>GPS 定位打卡</td><td>有</td><td>有</td></tr>
+    <tr><td>Wi-Fi 打卡（網卡號驗證）</td><td>有</td><td>有</td></tr>
+    <tr><td>藍芽打卡</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>人臉辨識打卡</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>門禁系統匯入</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>手機綁定（防代打）</td><td>有</td><td>部分（員工帳號綁定）</td></tr>
+    <tr><td>多套工時設定（按部門）</td><td>有</td><td>有（每店設變形工時）</td></tr>
+    <tr><td>多套特休規則（按職級 / 部門）</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>自訂假別</td><td>有</td><td>部分（13 種 hardcoded）</td></tr>
+    <tr><td>遲到 / 早退 / 未打卡 提醒</td><td>有</td><td>有</td></tr>
+    <tr><td>上下班時間推播</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>打卡超時跳對話框</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>超時原因記錄</td><td>有</td><td>部分</td></tr>
+    <tr><td>跨店打卡</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>打卡半徑可調</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>提早 N 分鐘容許打卡</td><td>未提及</td><td class="ours-win">有</td></tr>
+  </tbody>
+</table>
+
+<h2>E. 排班</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>班別建立</td><td>有</td><td>有</td></tr>
+    <tr><td>排班標籤（如值日生）</td><td>有</td><td>部分</td></tr>
+    <tr><td>標準工時</td><td>有</td><td>有</td></tr>
+    <tr><td>2 週變形</td><td>有</td><td>有</td></tr>
+    <tr><td>4 週變形</td><td>有</td><td>有</td></tr>
+    <tr><td>8 週變形</td><td>有</td><td>有</td></tr>
+    <tr><td>變形工時起算日</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>月視圖 / Cycle 視圖切換</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>排休方式選擇</td><td class="their-win">4 種</td><td>2 種（月休配額 + 演算法分配）</td></tr>
+    <tr><td>欠班處理（不處理 / 扣款 / 補班）</td><td class="their-win">有</td><td>沒有明確機制</td></tr>
+    <tr><td>Excel 班表匯入</td><td>有</td><td>部分</td></tr>
+    <tr><td><b>自動排班</b></td><td><b>沒有（官方明文）</b></td><td class="ours-win"><b>有（程式 + AI 兩套）</b></td></tr>
+    <tr><td>AI 排班</td><td>沒有</td><td class="ours-win">有（Gemini）</td></tr>
+    <tr><td>員工偏好（三段：偏好 / 中性 / 迴避）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>員工可上班時段（每週幾）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>個人 cycle 時數上限</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>跨店借調自動</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>11 法定驗證（連續 6 天、間隔 11 小時等）</td><td>部分</td><td class="ours-win">有（L1 ~ L8 完整）</td></tr>
+    <tr><td>開店 / 關店人員自動換班</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>Cycle 進度卡（時數使用率）</td><td>未提及</td><td class="ours-win">有</td></tr>
+  </tbody>
+</table>
+
+<h2>F. 薪資結算</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>自動月結算</td><td>有</td><td>有</td></tr>
+    <tr><td>加班費（平日階梯）</td><td>有</td><td>有（前 2h × 1.34、之後 × 1.67）</td></tr>
+    <tr><td>加班費（休息日階梯）</td><td>有</td><td>有（0-2h × 1.34、3-8h × 1.67、9h+ × 2.67）</td></tr>
+    <tr><td>特休結算</td><td>有</td><td>有</td></tr>
+    <tr><td>勞健保自動帶級距</td><td>有</td><td>有</td></tr>
+    <tr><td>退休金提繳 6%</td><td>有</td><td>有</td></tr>
+    <tr><td>所得稅扣繳</td><td>有</td><td>有</td></tr>
+    <tr><td>法令自動更新</td><td class="their-win">有</td><td>沒有（手動跟）</td></tr>
+    <tr><td>電子薪資袋</td><td>有</td><td>有</td></tr>
+    <tr><td>薪資單 LINE 推送</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>員工自助查詢</td><td>有</td><td>有</td></tr>
+    <tr><td>全勤獎金（請假歸零）</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>半薪假薪資（病 / 生理）</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>全薪假（特休 / 婚 / 喪 / 公 / 產 / 陪產 / 公傷）</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>無薪假（事假）</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>法令扣款（強制執行）</td><td>未提及</td><td class="ours-win">有（月分期）</td></tr>
+    <tr><td>客製津貼</td><td>有</td><td>有</td></tr>
+    <tr><td>遲到扣薪</td><td>未明說</td><td class="ours-win">有</td></tr>
+    <tr><td>欠班扣款</td><td>有</td><td>有（透過工時不足）</td></tr>
+  </tbody>
+</table>
+
+<h2>G. 招募 / 報到</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>104 徵才資料整合</td><td class="their-win">有（自家平台優勢）</td><td>沒有</td></tr>
+    <tr><td>履歷一鍵匯入</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>招募職缺管理</td><td>有</td><td>有</td></tr>
+    <tr><td>任用流程</td><td>有</td><td>部分</td></tr>
+    <tr><td>報到作業（信件通知）</td><td>有</td><td>部分</td></tr>
+    <tr><td>敘薪管理</td><td>有</td><td>有</td></tr>
+  </tbody>
+</table>
+
+<h2>H. 學習 / 績效</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>企業學習平台 LMS</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>課程自建</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>教育訓練報名</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>員工學習進度追蹤</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>績效考核</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>員工敬業度調查</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>流失預測（AI）</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>薪酬基準比對</td><td>未提及</td><td class="ours-win">有</td></tr>
+  </tbody>
+</table>
+
+<h2>I. 其他 / 進階</h2>
+<table>
+  <thead><tr><th style="width:30%">功能</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>AI 小夥伴</td><td>有</td><td>有（HR Assistant + Nav Assistant）</td></tr>
+    <tr><td>自主勞檢</td><td>有</td><td>有</td></tr>
+    <tr><td>一休一例</td><td>有</td><td>有</td></tr>
+    <tr><td>智能溫測考勤</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>投保級距監控</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>自訂簽核流程</td><td>有</td><td>有</td></tr>
+    <tr><td>簽核 LINE 卡片</td><td>未提及</td><td class="ours-win">有</td></tr>
+    <tr><td>API 第三方串接</td><td>有</td><td>有</td></tr>
+    <tr><td>ERP / CRM 串接</td><td class="their-win">有</td><td>沒有</td></tr>
+    <tr><td>多家公司 / 多店</td><td>有</td><td>有</td></tr>
+    <tr><td>行動 App</td><td class="their-win">原生 App（iOS + Android）</td><td>LIFF + Web</td></tr>
+    <tr><td>組織圖</td><td>有</td><td>有（含兼任高管 + 課別 + 跨店）</td></tr>
+    <tr><td>視覺化儀表板</td><td>有</td><td>有</td></tr>
+  </tbody>
+</table>
+
+<h2>J. 報表</h2>
+<table>
+  <thead><tr><th style="width:30%">報表</th><th style="width:35%">104 企業大師</th><th style="width:35%">自有系統</th></tr></thead>
+  <tbody>
+    <tr><td>人事報表</td><td>有</td><td>有</td></tr>
+    <tr><td>出勤報表</td><td>有</td><td>有</td></tr>
+    <tr><td>薪資報表</td><td>有</td><td>有</td></tr>
+    <tr><td>加班報表</td><td>有</td><td>有</td></tr>
+    <tr><td>排班報表</td><td>有</td><td>有</td></tr>
+    <tr><td>特休報表</td><td>有</td><td>有</td></tr>
+    <tr><td>Cycle 時數使用率報表</td><td>沒有</td><td class="ours-win">有</td></tr>
+    <tr><td>法定合規檢核報表</td><td>有</td><td>有</td></tr>
+    <tr><td>流失風險報表</td><td>沒有</td><td class="ours-win">有</td></tr>
+  </tbody>
+</table>
+
+<h2>K. 總結對比</h2>
+<table>
+  <thead><tr><th style="width:25%">模組</th><th style="width:25%">領先方</th><th style="width:50%">差距</th></tr></thead>
+  <tbody>
+    <tr><td>員工資料欄位</td><td class="ours-win">自有系統</td><td>大（11 vs 84）</td></tr>
+    <tr><td>員工自助維護</td><td class="their-win">104</td><td>中（你沒做員工端維護）</td></tr>
+    <tr><td>電子表單種類</td><td class="their-win">104</td><td>中（多 5 ~ 7 張 HR 類）</td></tr>
+    <tr><td>自訂表單能力</td><td class="their-win">104</td><td>大（你 hardcoded）</td></tr>
+    <tr><td>出勤打卡</td><td class="their-win">104</td><td>小（少 3 種辨識方式 + 門禁整合）</td></tr>
+    <tr><td>排班</td><td class="ours-win">自有系統</td><td>大（104 沒自動排班）</td></tr>
+    <tr><td>薪資結算</td><td class="ours-win">自有系統</td><td>小（半薪、cycle 整合略勝）</td></tr>
+    <tr><td>招募</td><td class="their-win">104</td><td>大（104 自家平台優勢）</td></tr>
+    <tr><td>學習 / LMS</td><td class="their-win">104</td><td>大（你完全沒做）</td></tr>
+    <tr><td>績效 / AI 分析</td><td class="ours-win">自有系統</td><td>中（你做了 4 個 AI 模組）</td></tr>
+    <tr><td>行動體驗</td><td class="their-win">104</td><td>小（原生 App vs LIFF）</td></tr>
+  </tbody>
+</table>
+
+<p class="meta" style="margin-top: 40px;">綠色 = 自有系統領先；橘色 = 104 領先；無底色 = 持平或雙方都有。</p>
+
+</body>
+</html>

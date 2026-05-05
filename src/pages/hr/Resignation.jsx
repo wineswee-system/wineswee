@@ -33,23 +33,28 @@ export default function Resignation() {
 
   const load = async () => {
     setLoading(true)
+    // 非 admin 只能看自己的申請（隱私）
+    let q = supabase.from('resignation_requests')
+      .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name)')
+      .order('id', { ascending: false })
+    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const [{ data: r }, { data: e }] = await Promise.all([
-      supabase.from('resignation_requests')
-        .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name)')
-        .order('id', { ascending: false }),
+      q,
       supabase.from('employees').select('id,name,name_en,position').eq('status','在職').order('name'),
     ])
     setList(r || [])
     setEmployees(e || [])
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.id, isAdmin])
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return alert('請選擇員工')
+    // 非 admin 強制鎖到自己 id
+    const empId = isAdmin ? form.employee_id : profile?.id
+    if (!empId) return alert('請選擇員工')
     if (!form.planned_resign_date) return alert('請填預計離職日')
     const payload = {
-      employee_id: Number(form.employee_id),
+      employee_id: Number(empId),
       planned_resign_date: form.planned_resign_date,
       reason: form.reason,
       reason_detail: form.reason_detail || null,
@@ -173,10 +178,14 @@ export default function Resignation() {
       {showForm && (
         <Modal title="新增離職申請" onClose={() => setShowForm(false)} onSubmit={handleSubmit} submitLabel="送出申請">
           <Field label="員工">
-            <select className="form-input" style={{ width: '100%' }} value={form.employee_id} onChange={e => setForm(f => ({ ...f, employee_id: e.target.value }))}>
-              <option value="">請選擇</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name}{e.name_en ? ` ${e.name_en}` : ''} - {e.position || ''}</option>)}
-            </select>
+            {isAdmin ? (
+              <select className="form-input" style={{ width: '100%' }} value={form.employee_id} onChange={e => setForm(f => ({ ...f, employee_id: e.target.value }))}>
+                <option value="">請選擇</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name}{e.name_en ? ` ${e.name_en}` : ''} - {e.position || ''}</option>)}
+              </select>
+            ) : (
+              <input className="form-input" style={{ width: '100%' }} value={`${profile?.name || ''}${profile?.name_en ? ' ' + profile.name_en : ''}`} disabled />
+            )}
           </Field>
           <Field label="預計離職日">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_resign_date} onChange={e => setForm(f => ({ ...f, planned_resign_date: e.target.value }))} />

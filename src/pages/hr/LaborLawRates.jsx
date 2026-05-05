@@ -244,9 +244,9 @@ function ImportModal({ modal, year, onClose, onApplied }) {
       const lines = csvText.trim().split(/\r?\n/).filter(Boolean)
       const headerLine = lines[0].toLowerCase()
       const cols = headerLine.split(',').map(s => s.trim())
-      const required = ['grade', 'insured_salary', 'employee_premium', 'employer_premium']
+      const required = ['grade', 'insured_salary', 'min_salary', 'employee_premium', 'employer_premium']
       for (const r of required) {
-        if (!cols.includes(r)) throw new Error(`缺欄位：${r}`)
+        if (!cols.includes(r)) throw new Error(`缺欄位：${r}（min_salary 為必填，影響薪資計算 RPC 的級距查找）`)
       }
       const rows = []
       for (let i = 1; i < lines.length; i++) {
@@ -254,11 +254,14 @@ function ImportModal({ modal, year, onClose, onApplied }) {
         const r = {}
         cols.forEach((c, idx) => { r[c] = cells[idx] })
         if (!r.grade) continue
+        if (r.min_salary === '' || r.min_salary == null) {
+          throw new Error(`級距 ${r.grade} 缺 min_salary（必填，否則薪資計算會抓錯級距）`)
+        }
         rows.push({
           year: targetYear,
           grade: parseInt(r.grade),
           insured_salary: Number(r.insured_salary),
-          min_salary: r.min_salary ? Number(r.min_salary) : 0,
+          min_salary: Number(r.min_salary),
           employee_premium: Number(r.employee_premium),
           employer_premium: Number(r.employer_premium),
         })

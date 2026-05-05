@@ -17,8 +17,7 @@ const CATEGORIES = [
     forms: [
       { icon: CalendarDays, name: '請假申請', desc: '年假、事假、病假等各類假別', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/leave' },
       { icon: Clock,        name: '加班申請（事後）', desc: '已加完班的補登申請', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/overtime' },
-      { icon: AlarmClock,   name: '預先加班申請', desc: '事前申請加班、避免先做後請', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/overtime?pre=1', tag: '新' },
-      { icon: RotateCcw,    name: '銷假申請', desc: '取消已核准的請假', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/forms/leave-cancellation', tag: '新' },
+      // 預先加班、銷假 — 透過 builder 自訂建立（admin 進 /hr/form-builder 拉欄位即可）
       { icon: Fingerprint,  name: '忘刷補登', desc: '補登忘刷打卡紀錄', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/punch-correction' },
     ],
   },
@@ -28,7 +27,7 @@ const CATEGORIES = [
     desc: '離職、留停、調職、升遷等人事變動',
     forms: [
       { icon: LogOut,         name: '離職申請', desc: '員工離職申請與交接', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)', action: '/hr/forms/resignation', tag: '新' },
-      { icon: Pause,          name: '留職停薪', desc: '產假/育嬰/兵役/進修留停申請', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/forms/leave-of-absence', tag: '新' },
+      // 留職停薪 — 透過 builder 自訂建立
       { icon: ArrowLeftRight, name: '人事異動', desc: '調職、升遷、調薪、跨部門調動', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/forms/transfer', tag: '新' },
       { icon: UserCheck,      name: '試用期評核', desc: '新進員工試用期滿考核', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', action: '/hr/probation' },
       { icon: BarChart2,      name: '績效考核', desc: '定期績效評核與目標設定', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/performance' },

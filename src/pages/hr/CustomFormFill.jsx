@@ -63,7 +63,7 @@ export default function CustomFormFill() {
       })
       if (error) throw error
       alert('已送出申請！')
-      navigate('/hr/forms/my-submissions')
+      navigate('/hr/forms/submissions')
     } catch (err) {
       alert('送出失敗：' + (err.message || '未知錯誤'))
     } finally {

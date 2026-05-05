@@ -42,16 +42,18 @@ export default function TransferRequest() {
 
   const load = async () => {
     setLoading(true)
+    let q = supabase.from('personnel_transfer_requests')
+      .select(`*,
+        employee:employees(id,name,name_en,department_id,store_id,position,role),
+        approver:employees!approver_id(id,name),
+        old_dept:departments!old_department_id(id,name),
+        new_dept:departments!new_department_id(id,name),
+        old_store:stores!old_store_id(id,name),
+        new_store:stores!new_store_id(id,name)`)
+      .order('id', { ascending: false })
+    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const [{ data: r }, { data: e }, { data: d }, { data: s }] = await Promise.all([
-      supabase.from('personnel_transfer_requests')
-        .select(`*,
-          employee:employees(id,name,name_en,department_id,store_id,position,role),
-          approver:employees!approver_id(id,name),
-          old_dept:departments!old_department_id(id,name),
-          new_dept:departments!new_department_id(id,name),
-          old_store:stores!old_store_id(id,name),
-          new_store:stores!new_store_id(id,name)`)
-        .order('id', { ascending: false }),
+      q,
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').order('name'),
       supabase.from('stores').select('id,name').eq('is_active', true).order('name'),
@@ -62,15 +64,16 @@ export default function TransferRequest() {
     setStores(s || [])
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.id, isAdmin])
 
   const selectedEmp = employees.find(e => String(e.id) === String(form.employee_id))
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return alert('請選擇員工')
+    const empId = isAdmin ? form.employee_id : profile?.id
+    if (!empId) return alert('請選擇員工')
     if (!form.effective_date) return alert('請填生效日')
     const payload = {
-      employee_id: Number(form.employee_id),
+      employee_id: Number(empId),
       organization_id: profile?.organization_id || 1,
       transfer_type: form.transfer_type,
       effective_date: form.effective_date,

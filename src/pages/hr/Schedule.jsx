@@ -450,21 +450,27 @@ export default function Schedule() {
   const handleAutoSchedule = async () => {
     if (!canUseAISchedule) { alert('您沒有使用 AI 排班的權限'); return }
     const isMonthly = viewMode === 'month'
-    const rangeLabel = isMonthly ? `${selectedMonth} 月排班` : `${weekStart} ~ ${weekEnd}`
+    const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
+    const isMulti = isMonthly || isCycle  // 月制 + cycle 都要走多週邏輯
+    const rangeLabel = isCycle
+      ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
+      : isMonthly ? `${selectedMonth} 月排班`
+      : `${weekStart} ~ ${weekEnd}`
     if (!confirm(`將使用 AI (Gemini 2.5) 為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n已有的排班會保留。AI 產出為草稿，您可以審閱後再發布。`)) return
     setAutoScheduling(true)
     setAiDraft(null)
     setAiProgress('正在收集排班資料...')
 
     try {
-      const dateStart = isMonthly ? monthStart : weekStart
-      const dateEnd = isMonthly ? monthEnd : weekEnd
+      const dateStart = isCycle ? cycleInfo.start : isMonthly ? monthStart : weekStart
+      const dateEnd   = isCycle ? cycleInfo.end   : isMonthly ? monthEnd   : weekEnd
+      const multiDates = isCycle ? cycleDates : isMonthly ? monthDates : null
       const selectedStoreObj2 = locations.find(l => l.name === storeFilter)
       const aiStoreShifts = shiftDefs.filter(d => !d.store_id || d.store_id === selectedStoreObj2?.id)
 
       let schedulingData = await gatherSchedulingData({
-        weekDates: isMonthly ? null : weekDates,
-        monthDates: isMonthly ? monthDates : null,
+        weekDates: isMulti ? null : weekDates,
+        monthDates: multiDates,
         employees: filtered, shiftDefs: aiStoreShifts,
         storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
@@ -472,8 +478,8 @@ export default function Schedule() {
       // 自動讀取現有班表的休假，合併為 offRequests
       schedulingData = mergeRestDaysAsOffRequests(schedulingData, dateStart, dateEnd)
 
-      if (isMonthly) {
-        setAiProgress('AI 月排班中...')
+      if (isMulti) {
+        setAiProgress(isCycle ? 'AI cycle 排班中...' : 'AI 月排班中...')
         const result = await runMonthlyAiSchedule(schedulingData, setAiProgress)
         if (!result.success) throw new Error(result.error || 'AI 排班失敗')
         setAiDraft({ ...result, schedulingData })
@@ -621,7 +627,12 @@ export default function Schedule() {
   const handleCodeSchedule = async () => {
     if (!canUseAISchedule) { alert('您沒有使用排班功能的權限'); return }
     const isMonthly = viewMode === 'month'
-    const rangeLabel = isMonthly ? `${selectedMonth} 月排班` : `${weekStart} ~ ${weekEnd}`
+    const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
+    const isMulti = isMonthly || isCycle  // 月制 + cycle 都要走多週邏輯
+    const rangeLabel = isCycle
+      ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
+      : isMonthly ? `${selectedMonth} 月排班`
+      : `${weekStart} ~ ${weekEnd}`
     // Guard: check shift definitions exist for this store (ignore employee_type filter)
     const selectedStoreObj = locations.find(l => l.name === storeFilter)
     const storeShifts = shiftDefs.filter(d => !d.store_id || d.store_id === selectedStoreObj?.id)
@@ -635,12 +646,14 @@ export default function Schedule() {
     setAiProgress('程式排班計算中...')
 
     try {
-      const dateStart = isMonthly ? monthStart : weekStart
-      const dateEnd = isMonthly ? monthEnd : weekEnd
+      const dateStart = isCycle ? cycleInfo.start : isMonthly ? monthStart : weekStart
+      const dateEnd   = isCycle ? cycleInfo.end   : isMonthly ? monthEnd   : weekEnd
+      // cycle / monthly 都把整段日期當 monthDates 傳（演算法以 monthDates 切週迴圈）
+      const multiDates = isCycle ? cycleDates : isMonthly ? monthDates : null
 
       let schedulingData = await gatherSchedulingData({
-        weekDates: isMonthly ? null : weekDates,
-        monthDates: isMonthly ? monthDates : null,
+        weekDates: isMulti ? null : weekDates,
+        monthDates: multiDates,
         employees: filtered, shiftDefs: storeShifts,
         storeFilter, locations, minStaff, minStaffWeekend, tenantId,
       })
@@ -648,7 +661,7 @@ export default function Schedule() {
       // 自動讀取現有班表的休假，合併為 offRequests
       schedulingData = mergeRestDaysAsOffRequests(schedulingData, dateStart, dateEnd)
 
-      const result = isMonthly
+      const result = isMulti
         ? runMonthlyProgrammaticSchedule(schedulingData, setAiProgress)
         : runProgrammaticSchedule(schedulingData)
 

@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check } from 'lucide-react'
+import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check, FileText, Scale } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 // Each notification type maps to a route
 const ROUTES = {
@@ -13,6 +14,15 @@ const ROUTES = {
   late: '/hr/attendance',
   correction: '/hr/punch-correction',
   overtime: '/hr/overtime',
+  law_update_reminder: '/hr/labor-law-rates',
+  form_submission: '/hr/forms/submissions',
+}
+
+// 從 notifications 表 type 對應的 icon / 顏色
+const DB_TYPE_META = {
+  law_update_reminder: { icon: Scale,    color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
+  form_submission:     { icon: FileText, color: 'var(--accent-cyan)',   dim: 'var(--accent-cyan-dim)'   },
+  default:             { icon: Bell,     color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)'   },
 }
 
 function getReadIds() {
@@ -34,6 +44,7 @@ function markAllAsRead(ids) {
 
 export default function NotificationCenter() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [readIds, setReadIds] = useState(getReadIds)
@@ -45,6 +56,33 @@ export default function NotificationCenter() {
     const today = new Date().toISOString().slice(0, 10)
 
     try {
+      // 0. 從 notifications 表撈我自己的（cron / system 寄的，例如年度法令提醒）
+      if (profile?.id) {
+        const { data: dbNotifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('recipient_emp_id', profile.id)
+          .eq('read', false)
+          .order('created_at', { ascending: false })
+          .limit(20)
+        for (const n of (dbNotifs || [])) {
+          const meta = DB_TYPE_META[n.type] || DB_TYPE_META.default
+          items.push({
+            id: `db-${n.id}`,
+            dbId: n.id,
+            type: n.type,
+            icon: meta.icon,
+            color: meta.color,
+            dim: meta.dim,
+            title: n.title,
+            desc: n.payload?.message || '',
+            time: n.created_at?.slice(0, 10),
+            actionUrl: n.payload?.action_url,
+            isDbRecord: true,
+          })
+        }
+      }
+
       const { data: leaves } = await supabase
         .from('leave_requests').select('*').eq('status', '待審核')
         .order('id', { ascending: false }).limit(5)
@@ -138,7 +176,7 @@ export default function NotificationCenter() {
 
     setNotifications(items)
     setLoading(false)
-  }, [])
+  }, [profile?.id])
 
   useEffect(() => {
     fetchNotifications()
@@ -148,11 +186,17 @@ export default function NotificationCenter() {
 
   const unreadCount = notifications.filter(n => !readIds.includes(n.id)).length
 
-  const handleClickItem = (n) => {
+  const handleClickItem = async (n) => {
     markAsRead(n.id)
     setReadIds(getReadIds())
+    // DB-backed notifications: also flip read=true in DB
+    if (n.isDbRecord && n.dbId) {
+      supabase.from('notifications').update({ read: true }).eq('id', n.dbId).then(() => {
+        setNotifications(prev => prev.filter(x => x.id !== n.id))
+      })
+    }
     setOpen(false)
-    const route = ROUTES[n.type]
+    const route = n.actionUrl || ROUTES[n.type]
     if (route) navigate(route)
   }
 

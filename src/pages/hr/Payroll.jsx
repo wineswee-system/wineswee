@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, Fragment, memo } from 'react'
-import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle, Download, Upload } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle, Download, Upload, Gift, Receipt, Shield } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun, upsertSalaryRecord } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
@@ -35,6 +35,10 @@ export default function Payroll() {
   const [importHeaders, setImportHeaders] = useState([])
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [showYearEndModal, setShowYearEndModal] = useState(false)
+  const [yearEndYear, setYearEndYear] = useState(new Date().getFullYear())
+  const [yearEndMonths, setYearEndMonths] = useState('')  // 空字串=用 salary_structures 預設
+  const [generatingYearEnd, setGeneratingYearEnd] = useState(false)
 
   const loadData = () => {
     setLoading(true)
@@ -171,11 +175,94 @@ export default function Payroll() {
     }
   }
 
-  // 二代健保補充保費 (全民健保法第31條): 2.11% on single-payment bonus exceeding NT$2,000
-  // Regular overtime is part of monthly pay and not separately subject to supplementary NHI
+  // 二代健保補充保費（now stored in DB, fallback to legacy calc if not set）
   const suppNhi = (rec) => {
+    if (rec.nhi_supplementary != null) return rec.nhi_supplementary
     const bonus = (rec.bonus_total || 0)
     return Math.round(Math.max(0, bonus - 2000) * 0.0211)
+  }
+
+  // 年終獎金結算
+  const handleGenerateYearEnd = async () => {
+    if (!yearEndYear) return
+    if (!confirm(`確定產生 ${yearEndYear} 年度年終獎金結算？\n${yearEndMonths ? `所有員工統一給 ${yearEndMonths} 個月` : '依員工 salary_structures 各自的設定計算'}\n\n注意：同年度只能跑一次，重跑需先刪除既有 run。`)) return
+    setGeneratingYearEnd(true)
+    try {
+      const { data, error } = await supabase.rpc('generate_year_end_bonus', {
+        p_year: yearEndYear,
+        p_months_override: yearEndMonths ? Number(yearEndMonths) : null,
+        p_created_by: profile?.id ?? null,
+      })
+      if (error) throw error
+      const result = data?.[0] || data
+      alert(`年終獎金結算完成！\n發放 ${result?.records_created || 0} 人，總金額 NT$ ${(result?.total_amount || 0).toLocaleString()}`)
+      const { data: freshRuns } = await getPayrollRuns()
+      setRuns(freshRuns || [])
+      setShowYearEndModal(false)
+    } catch (err) {
+      console.error('Year-end bonus failed:', err)
+      alert('結算失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setGeneratingYearEnd(false)
+    }
+  }
+
+  // 勞退提繳清冊匯出（CSV）
+  const handleExportPensionFiling = async () => {
+    if (!selectedRun) return
+    try {
+      const { data, error } = await supabase
+        .from('v_labor_pension_filing_monthly')
+        .select('*')
+        .eq('pay_period', selectedRun.pay_period)
+        .order('employee_name')
+      if (error) throw error
+      if (!data?.length) return alert('查無此期勞退提繳資料')
+      const headers = '員工編號,姓名,身份證,提繳基礎,雇主提繳(6%),員工自提,自提率,合計'
+      const rows = data.map(r => [
+        r.employee_id, r.employee_name, r.id_number || '',
+        r.capped_pension_base, r.employer_contribution,
+        r.employee_contribution, `${r.employee_rate_pct || 0}%`,
+        r.total_contribution,
+      ].join(','))
+      const csv = '﻿' + headers + '\n' + rows.join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `勞退提繳清冊_${selectedRun.pay_period}.csv`
+      a.click()
+    } catch (err) {
+      alert('匯出失敗：' + err.message)
+    }
+  }
+
+  // 二代健保補充保費申報匯出
+  const handleExportNhiSupp = async () => {
+    if (!selectedRun) return
+    try {
+      const { data, error } = await supabase
+        .from('v_nhi_supplementary_filing')
+        .select('*')
+        .eq('pay_period', selectedRun.pay_period)
+        .order('category')
+      if (error) throw error
+      if (!data?.length) return alert('該期無補充保費紀錄（沒有員工觸發 2.11% 扣繳）')
+      const headers = '員工編號,姓名,身份證,所得類別,所得金額,免扣額,應扣額,費率,補充保費,已申報'
+      const rows = data.map(r => [
+        r.employee_id, r.employee_name, r.id_number || '',
+        r.category, r.gross_income, r.exempt_amount, r.taxable_amount,
+        `${(r.premium_rate * 100).toFixed(2)}%`, r.premium,
+        r.filed ? '是' : '否',
+      ].join(','))
+      const csv = '﻿' + headers + '\n' + rows.join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `二代健保補充保費_${selectedRun.pay_period}.csv`
+      a.click()
+    } catch (err) {
+      alert('匯出失敗：' + err.message)
+    }
   }
 
   // 銀行轉帳明細表匯出
@@ -303,6 +390,9 @@ export default function Payroll() {
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>管理每月薪資計算與發放</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setShowYearEndModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Gift size={16} /> 年終獎金結算
+            </button>
             <button className="btn btn-secondary" onClick={() => setShowImportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Upload size={16} /> 匯入薪資
             </button>
@@ -411,6 +501,24 @@ export default function Payroll() {
                         >
                           <Download size={14} /> {exportingBank ? '匯出中...' : '銀行轉帳'}
                         </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={handleExportPensionFiling}
+                          disabled={records.length === 0}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                          title="匯出當月雇主 6% + 員工自提明細，給勞保局申報用"
+                        >
+                          <Receipt size={14} /> 勞退提繳清冊
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={handleExportNhiSupp}
+                          disabled={records.length === 0}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                          title="匯出當月二代健保補充保費明細，給健保署申報用"
+                        >
+                          <Shield size={14} /> 二代健保申報
+                        </button>
                         {selectedRun?.status === 'draft' && (
                           <button
                             className="btn btn-secondary"
@@ -449,7 +557,12 @@ export default function Payroll() {
                                       <td style={{ padding: '10px 14px', width: 30 }}>
                                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                       </td>
-                                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>{emp?.name || `#${rec.employee_id}`}</td>
+                                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>
+                                        {emp?.name || `#${rec.employee_id}`}
+                                        {rec.is_final_settlement && (
+                                          <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 10, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職結算</span>
+                                        )}
+                                      </td>
                                       <td style={{ padding: '10px 14px', color: 'var(--accent-green)' }}>{fmt(rec.gross_salary)}</td>
                                       <td style={{ padding: '10px 14px', color: 'var(--accent-red)' }}>{fmt(rec.total_deductions)}</td>
                                       <td style={{ padding: '10px 14px', fontWeight: 700 }}>{fmt(rec.net_salary)}</td>
@@ -476,6 +589,7 @@ export default function Payroll() {
                                               <DetailRow label="加班費" value={fmt(rec.overtime_pay)} />
                                               {rec.other_bonus > 0 && <DetailRow label="其他獎金" value={fmt(rec.other_bonus)} />}
                                               {rec.year_end_bonus > 0 && <DetailRow label="年終獎金" value={fmt(rec.year_end_bonus)} />}
+                                              {rec.unused_leave_payout > 0 && <DetailRow label={`未休特休折現（${rec.unused_leave_days || 0} 天）`} value={fmt(rec.unused_leave_payout)} />}
                                               {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
                                                 <>
                                                   {rec.custom_allowances_breakdown.map((c, i) => (
@@ -496,7 +610,12 @@ export default function Payroll() {
                                               <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
                                               <DetailRow label="代扣所得稅" value={fmt(rec.income_tax_withheld)} />
                                               {suppNhi(rec) > 0 && (
-                                                <DetailRow label="補充保費 (2.11%)" value={fmt(suppNhi(rec))} />
+                                                <DetailRow label="二代健保補充保費 (2.11%)" value={fmt(suppNhi(rec))} />
+                                              )}
+                                              {Array.isArray(rec.nhi_supplementary_breakdown) && rec.nhi_supplementary_breakdown.length > 0 && (
+                                                rec.nhi_supplementary_breakdown.map((n, i) => (
+                                                  <DetailRow key={`nhi-${i}`} label={`└ ${n.category}`} value={fmt(n.premium)} />
+                                                ))
                                               )}
                                               {Array.isArray(rec.legal_deduction_breakdown) && rec.legal_deduction_breakdown.length > 0 && (
                                                 <>
@@ -556,7 +675,27 @@ export default function Payroll() {
             <input className="form-input" type="month" value={newPeriod} onChange={e => setNewPeriod(e.target.value)} />
           </Field>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8 }}>
-            建立後狀態為「草稿」，完成計算後可定案並發送薪資單。
+            建立後狀態為「草稿」，完成計算後可定案並發送薪資單。<br />
+            <b style={{ color: 'var(--accent-green)' }}>新版增功能：</b>離職員工最後當月會自動結算未休完特休折現、扣繳二代健保補充保費（加班費超月投保金額部分）、員工自願自提勞退（從 employees.labor_pension_self_rate 抓）。
+          </div>
+        </Modal>
+      )}
+
+      {/* Year-End Bonus Modal */}
+      {showYearEndModal && (
+        <Modal title="年終獎金結算" onClose={() => setShowYearEndModal(false)} onSubmit={handleGenerateYearEnd} submitLabel={generatingYearEnd ? '結算中...' : '產生年終獎金'}>
+          <Field label="年度">
+            <input className="form-input" type="number" value={yearEndYear} onChange={e => setYearEndYear(Number(e.target.value))} min="2020" max="2099" />
+          </Field>
+          <Field label="統一月數覆寫（空白=用各員工 salary_structures 設定）">
+            <input className="form-input" type="number" step="0.5" value={yearEndMonths} onChange={e => setYearEndMonths(e.target.value)} placeholder="例：1.5" />
+          </Field>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8, lineHeight: 1.6 }}>
+            <b>計算方式：</b>每員工年終 = base_salary × 月數<br />
+            <b>稅務：</b>使用月度扣繳級距計算所得稅<br />
+            <b>二代健保：</b>累計年度獎金超過月投保 4 倍門檻時，超出部分扣 2.11%<br />
+            <b>注意：</b>同年度只能跑 1 次（pay_period='YYYY-13'），重跑需先刪除既有 run<br />
+            <b>對象：</b>當年度在職 + 當年度離職員工
           </div>
         </Modal>
       )}

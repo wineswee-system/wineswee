@@ -24,7 +24,9 @@ const emptyForm = {
   employee_id: '',
   title: '',
   total_amount: '',
-  monthly_amount: '',
+  deduction_type: 'fixed',     // 'fixed' = 固定金額；'percent' = 月薪百分比
+  monthly_amount: '',           // fixed 模式用
+  monthly_percent: '',          // percent 模式用
   started_month: currentMonth(),
   case_number: '',
   notes: '',
@@ -86,7 +88,11 @@ export default function LegalDeductions() {
     return {
       activeCount: active.length,
       totalRemaining: active.reduce((s, i) => s + ((Number(i.total_amount) || 0) - (Number(i.paid_amount) || 0)), 0),
-      monthlyTotal: active.reduce((s, i) => s + (Number(i.monthly_amount) || 0), 0),
+      // 固定金額類別才能合計，百分比類別依薪資而定無法預估
+      monthlyTotal: active
+        .filter(i => i.deduction_type !== 'percent')
+        .reduce((s, i) => s + (Number(i.monthly_amount) || 0), 0),
+      percentCount: active.filter(i => i.deduction_type === 'percent').length,
       affectedEmps: new Set(active.map(i => i.employee_id)).size,
     }
   }, [items])
@@ -104,7 +110,9 @@ export default function LegalDeductions() {
       employee_id: String(item.employee_id),
       title: item.title || '',
       total_amount: String(item.total_amount || ''),
-      monthly_amount: String(item.monthly_amount || ''),
+      deduction_type: item.deduction_type || 'fixed',
+      monthly_amount: item.monthly_amount != null ? String(item.monthly_amount) : '',
+      monthly_percent: item.monthly_percent != null ? String(item.monthly_percent) : '',
       started_month: item.started_month || currentMonth(),
       case_number: item.case_number || '',
       notes: item.notes || '',
@@ -116,9 +124,17 @@ export default function LegalDeductions() {
     if (!form.employee_id) return alert('請選擇員工')
     if (!form.title.trim()) return alert('請輸入標題')
     const totalAmt = Number(form.total_amount)
-    const monthlyAmt = Number(form.monthly_amount)
     if (!totalAmt || totalAmt <= 0) return alert('總額必須大於 0')
-    if (!monthlyAmt || monthlyAmt <= 0) return alert('每月金額必須大於 0')
+
+    const isPct = form.deduction_type === 'percent'
+    const monthlyAmt = Number(form.monthly_amount)
+    const monthlyPct = Number(form.monthly_percent)
+
+    if (isPct) {
+      if (!monthlyPct || monthlyPct <= 0 || monthlyPct > 100) return alert('百分比必須介於 0.01–100')
+    } else {
+      if (!monthlyAmt || monthlyAmt <= 0) return alert('每月金額必須大於 0')
+    }
     if (!/^\d{4}-\d{2}$/.test(form.started_month)) return alert('開始月份格式錯誤（應為 YYYY-MM）')
 
     if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
@@ -126,7 +142,9 @@ export default function LegalDeductions() {
       employee_id: Number(form.employee_id),
       title: form.title.trim(),
       total_amount: totalAmt,
-      monthly_amount: monthlyAmt,
+      deduction_type: form.deduction_type,
+      monthly_amount: isPct ? null : monthlyAmt,
+      monthly_percent: isPct ? monthlyPct : null,
       started_month: form.started_month,
       case_number: form.case_number || null,
       notes: form.notes || null,
@@ -174,8 +192,9 @@ export default function LegalDeductions() {
     </div>
   )
 
-  // 預估月數（編輯時用）
+  // 預估月數（編輯時用）— 百分比模式無法預估（依薪資而定）
   const estimatedMonths = (() => {
+    if (form.deduction_type === 'percent') return null
     const t = Number(form.total_amount)
     const m = Number(form.monthly_amount)
     if (!t || !m) return null
@@ -205,7 +224,7 @@ export default function LegalDeductions() {
         {[
           { label: '進行中筆數', value: stats.activeCount, color: 'var(--accent-cyan)' },
           { label: '影響員工', value: stats.affectedEmps, color: 'var(--accent-purple)' },
-          { label: '每月應扣總額', value: fmt(stats.monthlyTotal), color: 'var(--accent-orange)' },
+          { label: '固定每月扣總額', value: fmt(stats.monthlyTotal), color: 'var(--accent-orange)', sublabel: stats.percentCount > 0 ? `（另 ${stats.percentCount} 筆百分比）` : null },
           { label: '剩餘待扣總額', value: fmt(stats.totalRemaining), color: 'var(--accent-red)' },
         ].map(c => (
           <div key={c.label} style={{
@@ -214,6 +233,7 @@ export default function LegalDeductions() {
           }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{c.label}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: c.color }}>{c.value}</div>
+            {c.sublabel && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{c.sublabel}</div>}
           </div>
         ))}
       </div>
@@ -257,7 +277,16 @@ export default function LegalDeductions() {
                     <td style={{ padding: '10px 14px', fontWeight: 600 }}>{emp?.name || `#${item.employee_id}`}</td>
                     <td style={{ padding: '10px 14px' }}>{item.title}</td>
                     <td style={{ padding: '10px 14px' }}>{fmt(item.total_amount)}</td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(item.monthly_amount)}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      {item.deduction_type === 'percent' ? (
+                        <>
+                          <span style={{ fontWeight: 600, color: 'var(--accent-purple)' }}>{item.monthly_percent}%</span>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>月薪百分比</div>
+                        </>
+                      ) : (
+                        <span>{fmt(item.monthly_amount)}</span>
+                      )}
+                    </td>
                     <td style={{ padding: '10px 14px' }}>
                       <div>{fmt(paid)}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.paid_months || 0} 個月</div>
@@ -331,14 +360,57 @@ export default function LegalDeductions() {
           <Field label="標題 *">
             <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：養育費 / 信用卡欠款扣薪 / 法院強制執行" />
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="總額 *">
-              <input className="form-input" type="number" value={form.total_amount} onChange={e => set('total_amount', e.target.value)} placeholder="例：120000" />
+          <Field label="總額 *">
+            <input className="form-input" type="number" value={form.total_amount} onChange={e => set('total_amount', e.target.value)} placeholder="例：120000" />
+          </Field>
+
+          <Field label="扣款方式 *">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => set('deduction_type', 'fixed')}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer',
+                  background: form.deduction_type === 'fixed' ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                  color: form.deduction_type === 'fixed' ? '#fff' : 'var(--text-secondary)',
+                  border: `1px solid ${form.deduction_type === 'fixed' ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                }}
+              >固定金額</button>
+              <button
+                type="button"
+                onClick={() => set('deduction_type', 'percent')}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer',
+                  background: form.deduction_type === 'percent' ? 'var(--accent-purple)' : 'var(--bg-card)',
+                  color: form.deduction_type === 'percent' ? '#fff' : 'var(--text-secondary)',
+                  border: `1px solid ${form.deduction_type === 'percent' ? 'var(--accent-purple)' : 'var(--border-medium)'}`,
+                }}
+              >月薪百分比</button>
+            </div>
+          </Field>
+
+          {form.deduction_type === 'fixed' ? (
+            <Field label="每月扣款金額 *">
+              <input className="form-input" type="number" value={form.monthly_amount}
+                onChange={e => set('monthly_amount', e.target.value)} placeholder="例：10000" />
             </Field>
-            <Field label="每月扣款 *">
-              <input className="form-input" type="number" value={form.monthly_amount} onChange={e => set('monthly_amount', e.target.value)} placeholder="例：10000" />
+          ) : (
+            <Field label="每月扣款比例 *">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input className="form-input" type="number" step="0.01" value={form.monthly_percent}
+                  onChange={e => set('monthly_percent', e.target.value)}
+                  placeholder="例：33.33（薪資 1/3）"
+                  style={{ flex: 1 }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-purple)' }}>%</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                計算基礎：當月 GROSS 總薪。例 33.33% 為法院強制扣薪「薪資 1/3」上限。
+              </div>
             </Field>
-          </div>
+          )}
+
           {estimatedMonths && (
             <div style={{
               padding: '8px 12px', background: 'rgba(34,211,238,0.08)',
@@ -346,6 +418,15 @@ export default function LegalDeductions() {
               marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <AlertCircle size={14} /> 預估扣款 <b>{estimatedMonths}</b> 個月扣完
+            </div>
+          )}
+          {form.deduction_type === 'percent' && form.monthly_percent && (
+            <div style={{
+              padding: '8px 12px', background: 'rgba(168,85,247,0.08)',
+              borderRadius: 8, fontSize: 12, color: 'var(--accent-purple)',
+              marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <AlertCircle size={14} /> 百分比模式下實際扣款月數依當月薪資而定（薪資高扣得多、扣完即停）
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FolderOpen } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { createAssignment, rotatePrimary, closeActivePrimary } from '../../lib/assignments'
@@ -8,7 +8,7 @@ import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
 import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
-import EmployeeDetailsModal from './components/EmployeeDetailsModal'
+import EmployeeChildTableEditor from './components/EmployeeChildTableEditor'
 import { empLabel } from '../../lib/empLabel'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
@@ -72,7 +72,7 @@ export default function Employees() {
   const [showResignModal, setShowResignModal] = useState(false)
   const [showRehireModal, setShowRehireModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [detailsModalEmp, setDetailsModalEmp] = useState(null)
+  const [editTab, setEditTab] = useState('basic')
   const [selectedEmp, setSelectedEmp] = useState(null)
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
@@ -256,6 +256,7 @@ export default function Employees() {
       staffing_status: emp.staffing_status || '',
       reinstatement_date: emp.reinstatement_date || '',
     })
+    setEditTab('basic')
     setShowEditModal(true)
   }
   const setE = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
@@ -560,11 +561,6 @@ export default function Employees() {
                         onClick={ev => { ev.stopPropagation(); openEdit(e) }}>
                         <Pencil size={12} /> 編輯
                       </button>
-                      <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}
-                        onClick={ev => { ev.stopPropagation(); setDetailsModalEmp(e) }}
-                        title="家庭 / 學歷 / 經歷 / 證照 / 技能">
-                        <FolderOpen size={12} /> 詳細
-                      </button>
                       {e.email && e.status === '在職' && (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-cyan)' }}
                           onClick={ev => { ev.stopPropagation(); handleInvite(e) }}>
@@ -765,7 +761,27 @@ export default function Employees() {
       )}
       {/* 編輯員工 Modal */}
       {showEditModal && selectedEmp && (
-        <Modal title={`編輯員工 — ${selectedEmp.name}`} onClose={() => setShowEditModal(false)} onSubmit={handleEdit} submitText="儲存變更">
+        <Modal title={`編輯員工 — ${selectedEmp.name}`} onClose={() => setShowEditModal(false)} onSubmit={editTab === 'basic' ? handleEdit : null} submitLabel="儲存變更">
+          {/* Tab 列 */}
+          <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden', marginBottom: 14 }}>
+            {[
+              { key: 'basic',     label: '📋 基本' },
+              { key: 'family',    label: '👪 家庭' },
+              { key: 'education', label: '🎓 學歷' },
+              { key: 'work',      label: '💼 經歷' },
+              { key: 'cert',      label: '📜 證照' },
+              { key: 'skills',    label: '🛠 技能' },
+            ].map(t => (
+              <button key={t.key} type="button" onClick={() => setEditTab(t.key)} style={{
+                padding: '7px 12px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: editTab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                color: editTab === t.key ? '#fff' : 'var(--text-muted)',
+                flex: 1,
+              }}>{t.label}</button>
+            ))}
+          </div>
+
+          {editTab === 'basic' && (<>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="姓名">
               <input className="form-input" type="text" style={{ width: '100%' }} value={editForm.name} onChange={e => setE('name', e.target.value)} />
@@ -979,14 +995,27 @@ export default function Employees() {
               </Field>
             </div>
             <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--accent-cyan-dim)', borderRadius: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
-              💡 家庭關係、學歷、經歷、證照、技能 → 點員工列表上的「📁 詳細資料」按鈕管理
+              💡 家庭、學歷、經歷、證照、技能 → 切換上方 tab 管理
             </div>
           </div>
-        </Modal>
-      )}
+          </>)}
 
-      {detailsModalEmp && (
-        <EmployeeDetailsModal employee={detailsModalEmp} onClose={() => setDetailsModalEmp(null)} />
+          {editTab === 'family' && (
+            <EmployeeChildTableEditor employeeId={selectedEmp.id} table="family_members" />
+          )}
+          {editTab === 'education' && (
+            <EmployeeChildTableEditor employeeId={selectedEmp.id} table="education_records" />
+          )}
+          {editTab === 'work' && (
+            <EmployeeChildTableEditor employeeId={selectedEmp.id} table="work_experiences" />
+          )}
+          {editTab === 'cert' && (
+            <EmployeeChildTableEditor employeeId={selectedEmp.id} table="certifications" />
+          )}
+          {editTab === 'skills' && (
+            <EmployeeChildTableEditor employeeId={selectedEmp.id} table="employee_skills" />
+          )}
+        </Modal>
       )}
 
       {showCsvImport && (

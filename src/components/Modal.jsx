@@ -62,11 +62,13 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
           {children}
         </div>
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
-          <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={onSubmit} disabled={submitDisabled}
-            style={submitDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
-            {submitLabel}
-          </button>
+          <button className="btn btn-secondary" onClick={onClose}>{onSubmit ? '取消' : '關閉'}</button>
+          {onSubmit && (
+            <button className="btn btn-primary" onClick={onSubmit} disabled={submitDisabled}
+              style={submitDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+              {submitLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>,

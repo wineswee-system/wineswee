@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, X, ChevronDown, Check } from 'lucide-react'
 
 /**
@@ -30,7 +31,10 @@ export default function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, width: 0 })
   const wrapperRef = useRef(null)
+  const triggerRef = useRef(null)
+  const popupRef = useRef(null)
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
@@ -48,17 +52,41 @@ export default function SearchableSelect({
     })
   }, [options, query])
 
-  // Close on outside click
+  // Close on outside click (popup is portaled — check both wrapper and popup)
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+      const inWrapper = wrapperRef.current?.contains(e.target)
+      const inPopup = popupRef.current?.contains(e.target)
+      if (!inWrapper && !inPopup) {
         setOpen(false)
         setQuery('')
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Compute popup position when opened, and reposition on scroll/resize
+  useEffect(() => {
+    if (!open) return
+    const updatePos = () => {
+      const el = triggerRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      setPopupPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      })
+    }
+    updatePos()
+    window.addEventListener('scroll', updatePos, true)
+    window.addEventListener('resize', updatePos)
+    return () => {
+      window.removeEventListener('scroll', updatePos, true)
+      window.removeEventListener('resize', updatePos)
+    }
   }, [open])
 
   // Reset highlight when filter changes
@@ -99,6 +127,7 @@ export default function SearchableSelect({
     >
       {/* Trigger */}
       <div
+        ref={triggerRef}
         onClick={() => { if (!disabled) { setOpen(o => !o); setTimeout(() => inputRef.current?.focus(), 0) } }}
         className="form-input"
         style={{
@@ -133,14 +162,19 @@ export default function SearchableSelect({
         <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </div>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Dropdown — portaled to body so parent overflow:hidden doesn't clip */}
+      {open && createPortal(
         <div
+          ref={popupRef}
           style={{
-            position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 1000,
+            position: 'fixed',
+            top: popupPos.top,
+            left: popupPos.left,
+            width: Math.max(popupPos.width, 240),
+            zIndex: 11000,
             background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
-            borderRadius: 10, boxShadow: 'var(--shadow-lg)',
-            maxHeight: 320, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            borderRadius: 10, boxShadow: 'var(--shadow-xl)',
+            maxHeight: 360, display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}
         >
           {/* Search input */}
@@ -198,7 +232,8 @@ export default function SearchableSelect({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

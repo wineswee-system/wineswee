@@ -254,6 +254,15 @@ const groupNav = {
       ]
     },
     {
+      label: 'HR 表單',
+      icon: FileText,
+      children: [
+        { icon: FileText, label: 'HR 表單中心', path: '/hr/forms' },
+        { icon: ClipboardCheck, label: '我的提交', path: '/hr/forms/submissions' },
+        { icon: Settings, label: '表單建立器', path: '/hr/form-builder' },
+      ]
+    },
+    {
       label: '薪酬績效',
       icon: DollarSign,
       children: [
@@ -266,6 +275,8 @@ const groupNav = {
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
         { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
+        { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },
+        { icon: FileBarChart, label: '健保級距監控', path: '/hr/insurance-grade' },
       ]
     },
     {
@@ -530,11 +541,13 @@ export default function Sidebar() {
     store_staff: [
       '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
       '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
+      '/hr/forms', '/hr/forms/submissions',
     ],
     office_staff: [
       '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
       '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
       '/hr/schedule', '/hr/holidays', '/hr/salary', '/hr/salary-structures', '/hr/payroll',
+      '/hr/forms', '/hr/forms/submissions', '/hr/labor-law-rates', '/hr/insurance-grade',
       '/org/employees', '/org/locations', '/org/departments',
       '/process/overview', '/process/tasks', '/process/workflows',
     ],

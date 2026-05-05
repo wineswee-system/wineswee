@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CalendarDays, Clock, Fingerprint, Briefcase, Receipt,
   TrendingUp, ArrowLeftRight, BarChart2, UserCheck, GraduationCap,
   LogOut, Users, AlertTriangle, MessageSquare, FileSignature,
-  XCircle, AlarmClock, RotateCcw, Pause,
+  XCircle, AlarmClock, RotateCcw, Pause, FileText, Settings,
 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 // 4 大類分類，每類底下列出可申請的表單
 const CATEGORIES = [
@@ -55,9 +57,42 @@ const CATEGORIES = [
   },
 ]
 
+// 自訂表單顏色 → CSS variable
+const COLOR_MAP = {
+  cyan:   { color: 'var(--accent-cyan)',   dim: 'var(--accent-cyan-dim)' },
+  blue:   { color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)' },
+  green:  { color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
+  orange: { color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
+  red:    { color: 'var(--accent-red)',    dim: 'var(--accent-red-dim)' },
+  purple: { color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
+  yellow: { color: 'var(--accent-yellow)', dim: 'var(--accent-yellow-dim)' },
+}
+
 export default function HRForms() {
   const navigate = useNavigate()
+  const [customByCategory, setCustomByCategory] = useState({})
+  useEffect(() => {
+    supabase.from('form_templates').select('*').eq('is_active', true).order('sort_order').then(({ data }) => {
+      const grouped = {}
+      for (const t of (data || [])) {
+        if (!grouped[t.category]) grouped[t.category] = []
+        const c = COLOR_MAP[t.color] || COLOR_MAP.cyan
+        grouped[t.category].push({
+          icon: FileText,
+          name: t.name,
+          desc: t.description || '自訂表單',
+          color: c.color,
+          dim: c.dim,
+          action: `/hr/forms/custom/${t.id}`,
+          tag: '自訂',
+        })
+      }
+      setCustomByCategory(grouped)
+    })
+  }, [])
+
   const totalForms = CATEGORIES.reduce((s, c) => s + c.forms.length, 0)
+    + Object.values(customByCategory).reduce((s, arr) => s + arr.length, 0)
 
   return (
     <div className="fade-in">
@@ -66,6 +101,14 @@ export default function HRForms() {
           <div>
             <h2>HR 表單中心</h2>
             <p>{totalForms} 種人資表單，依類別分組</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => navigate('/hr/forms/submissions')} style={{ width: 'auto', fontSize: 12 }}>
+              <FileText size={12} /> 我的提交
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate('/hr/form-builder')} style={{ width: 'auto', fontSize: 12 }}>
+              <Settings size={12} /> 表單建立器
+            </button>
           </div>
         </div>
       </div>
@@ -77,7 +120,7 @@ export default function HRForms() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
           </div>
           <div className="hr-forms-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {cat.forms.map((f) => {
+            {[...cat.forms, ...(customByCategory[cat.key] || [])].map((f) => {
               const Icon = f.icon
               return (
                 <div key={f.name} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16 }}>

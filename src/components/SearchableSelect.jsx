@@ -1,0 +1,214 @@
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { Search, X, ChevronDown, Check } from 'lucide-react'
+
+/**
+ * SearchableSelect — drop-in replacement for <select> with built-in search.
+ *
+ * Props:
+ *   value      — current selected value (string|number|null)
+ *   onChange   — (value, option) => void
+ *   options    — Array<{ value, label, sublabel?, disabled? }>
+ *   placeholder — string, default '請選擇'
+ *   disabled   — bool
+ *   clearable  — bool, show ✕ to clear (default true)
+ *   style      — wrapper style
+ *   emptyText  — string when no match
+ *
+ * Use empOptions(employees) helper to map employees → options shape.
+ */
+export default function SearchableSelect({
+  value,
+  onChange,
+  options = [],
+  placeholder = '請選擇',
+  disabled = false,
+  clearable = true,
+  style = {},
+  emptyText = '找不到符合的項目',
+  className = '',
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [highlight, setHighlight] = useState(0)
+  const wrapperRef = useRef(null)
+  const inputRef = useRef(null)
+  const listRef = useRef(null)
+
+  const selected = useMemo(
+    () => options.find(o => String(o.value) === String(value)) || null,
+    [options, value]
+  )
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return options
+    return options.filter(o => {
+      const hay = `${o.label || ''} ${o.sublabel || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [options, query])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Reset highlight when filter changes
+  useEffect(() => { setHighlight(0) }, [query, open])
+
+  // Scroll highlighted into view
+  useEffect(() => {
+    if (!open || !listRef.current) return
+    const el = listRef.current.children[highlight]
+    if (el?.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
+  }, [highlight, open])
+
+  const choose = (opt) => {
+    if (opt?.disabled) return
+    onChange?.(opt ? opt.value : null, opt)
+    setOpen(false)
+    setQuery('')
+  }
+
+  const handleKeyDown = (e) => {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
+      setOpen(true)
+      e.preventDefault()
+      return
+    }
+    if (!open) return
+    if (e.key === 'ArrowDown') { setHighlight(h => Math.min(h + 1, filtered.length - 1)); e.preventDefault() }
+    else if (e.key === 'ArrowUp') { setHighlight(h => Math.max(h - 1, 0)); e.preventDefault() }
+    else if (e.key === 'Enter') { if (filtered[highlight]) choose(filtered[highlight]); e.preventDefault() }
+    else if (e.key === 'Escape') { setOpen(false); setQuery('') }
+  }
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={`searchable-select ${className}`}
+      style={{ position: 'relative', width: '100%', ...style }}
+    >
+      {/* Trigger */}
+      <div
+        onClick={() => { if (!disabled) { setOpen(o => !o); setTimeout(() => inputRef.current?.focus(), 0) } }}
+        className="form-input"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.6 : 1, paddingRight: 8, minHeight: 36,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {selected ? (
+            <>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.label}</span>
+              {selected.sublabel && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selected.sublabel}
+                </span>
+              )}
+            </>
+          ) : (
+            <span style={{ color: 'var(--text-muted)' }}>{placeholder}</span>
+          )}
+        </div>
+        {clearable && selected && !disabled && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); choose(null) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-muted)' }}
+            title="清除"
+          >
+            <X size={14} />
+          </button>
+        )}
+        <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div
+          style={{
+            position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 1000,
+            background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+            borderRadius: 10, boxShadow: 'var(--shadow-lg)',
+            maxHeight: 320, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}
+        >
+          {/* Search input */}
+          <div style={{ padding: 8, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              ref={inputRef}
+              autoFocus
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="搜尋..."
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                color: 'var(--text-primary)', fontSize: 13,
+              }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{filtered.length}/{options.length}</span>
+          </div>
+
+          {/* List */}
+          <div ref={listRef} style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{emptyText}</div>
+            ) : (
+              filtered.map((opt, idx) => {
+                const isSel = String(opt.value) === String(value)
+                const isHi = idx === highlight
+                return (
+                  <div
+                    key={opt.value ?? `i${idx}`}
+                    onClick={() => choose(opt)}
+                    onMouseEnter={() => setHighlight(idx)}
+                    style={{
+                      padding: '8px 12px', cursor: opt.disabled ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: isHi ? 'var(--glass-light)' : 'transparent',
+                      opacity: opt.disabled ? 0.5 : 1,
+                      borderLeft: isSel ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {opt.label}
+                      </div>
+                      {opt.sublabel && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                          {opt.sublabel}
+                        </div>
+                      )}
+                    </div>
+                    {isSel && <Check size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Helper: 把 employees 陣列轉成 SearchableSelect 的 options 格式 */
+export function empOptions(employees = []) {
+  return employees.map(e => ({
+    value: e.id,
+    label: e.name + (e.name_en ? ` ${e.name_en}` : ''),
+    sublabel: [e.position, e.dept || e.departments?.name].filter(Boolean).join(' · '),
+  }))
+}

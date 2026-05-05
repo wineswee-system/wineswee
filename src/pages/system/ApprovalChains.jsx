@@ -6,7 +6,7 @@ import { notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 export default function ApprovalChains() {
   const { profile } = useAuth()
@@ -294,46 +294,112 @@ export default function ApprovalChains() {
               </label>
             </Field>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 8 }}>簽核步驟（申請人 → ...）</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>簽核步驟（申請人 → ...）</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>共 {chainForm.steps.length} 關</span>
+          </div>
           {chainForm.steps.map((s, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
-              <select
-                className="form-input"
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1.4fr 1fr 60px 32px', gap: 8, alignItems: 'center' }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan-dim)',
+                color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700,
+              }}>{i + 1}</div>
+              <SearchableSelect
                 value={s.target_emp_id || ''}
-                onChange={e => {
-                  const empId = e.target.value ? Number(e.target.value) : null
-                  const emp = empId ? employees.find(em => em.id === empId) : null
+                onChange={(empId) => {
+                  const emp = empId ? employees.find(em => em.id === Number(empId)) : null
                   const n = [...chainForm.steps]
                   n[i] = {
                     ...n[i],
                     target_type: empId ? 'employee' : 'label',
-                    target_emp_id: empId,
+                    target_emp_id: empId ? Number(empId) : null,
                     role: emp?.name || '',
                     role_name: emp?.name || '',
                   }
                   setChainForm(f => ({ ...f, steps: n }))
                 }}
-              >
-                <option value="">選擇簽核人</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {empLabel(emp)}{(emp.position || emp.dept) ? ` - ${emp.position || emp.dept}` : ''}
-                  </option>
-                ))}
-              </select>
+                options={empOptions(employees)}
+                placeholder="選擇簽核人（可搜尋姓名/職稱/部門）"
+              />
               <input className="form-input" placeholder="步驟標籤（例：主管審核）" value={s.label} onChange={e => { const n = [...chainForm.steps]; n[i] = { ...n[i], label: e.target.value }; setChainForm(f => ({ ...f, steps: n })) }} />
-              <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => setChainForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))}><Trash2 size={14} /></button>
+              <div style={{ display: 'flex', gap: 2 }}>
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  onClick={() => {
+                    if (i === 0) return
+                    const n = [...chainForm.steps]
+                    ;[n[i - 1], n[i]] = [n[i], n[i - 1]]
+                    setChainForm(f => ({ ...f, steps: n }))
+                  }}
+                  style={{ background: 'none', border: '1px solid var(--border-medium)', borderRadius: 6, padding: '4px 6px', cursor: i === 0 ? 'not-allowed' : 'pointer', opacity: i === 0 ? 0.4 : 1, fontSize: 11 }}
+                  title="上移"
+                >↑</button>
+                <button
+                  type="button"
+                  disabled={i === chainForm.steps.length - 1}
+                  onClick={() => {
+                    if (i === chainForm.steps.length - 1) return
+                    const n = [...chainForm.steps]
+                    ;[n[i + 1], n[i]] = [n[i], n[i + 1]]
+                    setChainForm(f => ({ ...f, steps: n }))
+                  }}
+                  style={{ background: 'none', border: '1px solid var(--border-medium)', borderRadius: 6, padding: '4px 6px', cursor: i === chainForm.steps.length - 1 ? 'not-allowed' : 'pointer', opacity: i === chainForm.steps.length - 1 ? 0.4 : 1, fontSize: 11 }}
+                  title="下移"
+                >↓</button>
+              </div>
+              <button style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer' }} onClick={() => setChainForm(f => ({ ...f, steps: f.steps.filter((_, j) => j !== i) }))} title="刪除"><Trash2 size={14} /></button>
             </div>
           ))}
           <button className="btn btn-secondary btn-sm" onClick={() => setChainForm(f => ({ ...f, steps: [...f.steps, { role: '', label: '', target_type: 'label', target_emp_id: null }] }))}><Plus size={12} /> 新增步驟</button>
+
+          {/* Live preview */}
+          {chainForm.steps.length > 0 && chainForm.steps.some(s => s.role || s.label) && (
+            <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, background: 'var(--glass-light)', fontSize: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>流程預覽</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>申請人</span>
+                {chainForm.steps.filter(s => s.role || s.label).map((s, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <ArrowRight size={11} style={{ color: 'var(--text-muted)' }} />
+                    <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }}>
+                      {s.label || s.role}
+                      {s.label && s.role && s.label !== s.role && <span style={{ color: 'var(--text-muted)' }}>（{s.role}）</span>}
+                    </span>
+                  </span>
+                ))}
+                <ArrowRight size={11} style={{ color: 'var(--text-muted)' }} />
+                <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>✓ 完成</span>
+              </div>
+            </div>
+          )}
         </Modal>
       )}
 
       {showFormModal && (
         <Modal title="提交簽核表單" onClose={() => setShowFormModal(false)} onSubmit={handleApplySubmit}>
-          <Field label="簽核鏈 *"><select className="form-input" style={{ width: '100%' }} value={applyForm.chain_id} onChange={e => setApplyForm(f => ({ ...f, chain_id: e.target.value }))}><option value="">請選擇</option>{chains.filter(c => c.is_active).map(c => <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>)}</select></Field>
+          <Field label="簽核鏈 *">
+            <SearchableSelect
+              value={applyForm.chain_id}
+              onChange={(v) => setApplyForm(f => ({ ...f, chain_id: v || '' }))}
+              options={chains.filter(c => c.is_active).map(c => ({
+                value: c.id,
+                label: c.name,
+                sublabel: `${c.category || ''} · ${c.steps?.length || 0} 關`,
+              }))}
+              placeholder="搜尋簽核鏈名稱..."
+            />
+          </Field>
           <Field label="標題 *"><input className="form-input" style={{ width: '100%' }} value={applyForm.title} onChange={e => setApplyForm(f => ({ ...f, title: e.target.value }))} placeholder="例：4月請假申請" /></Field>
-          <Field label="門市"><select className="form-input" style={{ width: '100%' }} value={applyForm.store} onChange={e => setApplyForm(f => ({ ...f, store: e.target.value }))}><option value="">—</option>{stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></Field>
+          <Field label="門市">
+            <SearchableSelect
+              value={applyForm.store}
+              onChange={(v) => setApplyForm(f => ({ ...f, store: v || '' }))}
+              options={stores.map(s => ({ value: s.name, label: s.name }))}
+              placeholder="—"
+            />
+          </Field>
           <Field label="備註"><textarea className="form-input" style={{ width: '100%' }} rows={3} value={applyForm.notes} onChange={e => setApplyForm(f => ({ ...f, notes: e.target.value }))} /></Field>
           {applyForm.chain_id && (() => { const ch = chains.find(c => c.id === Number(applyForm.chain_id)); return ch ? (
             <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--glass-light)', fontSize: 12 }}>

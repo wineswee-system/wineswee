@@ -761,34 +761,36 @@ export default function Employees() {
       )}
       {/* 編輯員工 Modal */}
       {showEditModal && selectedEmp && (
-        <Modal title={`編輯員工 — ${selectedEmp.name}`} onClose={() => setShowEditModal(false)} onSubmit={editTab === 'basic' ? handleEdit : null} submitLabel="儲存變更" maxWidth={900}>
-          {/* Tab 列（黏在 modal body 頂端） */}
-          <div style={{
-            display: 'flex', gap: 0,
-            border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden',
-            marginBottom: 14,
-            position: 'sticky', top: 0, zIndex: 5,
-            background: 'var(--bg-card)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}>
-            {[
-              { key: 'basic',     label: '📋 基本' },
-              { key: 'family',    label: '👪 家庭' },
-              { key: 'education', label: '🎓 學歷' },
-              { key: 'work',      label: '💼 經歷' },
-              { key: 'cert',      label: '📜 證照' },
-              { key: 'skills',    label: '🛠 技能' },
-            ].map(t => (
-              <button key={t.key} type="button" onClick={() => setEditTab(t.key)} style={{
-                padding: '10px 12px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: editTab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
-                color: editTab === t.key ? '#fff' : 'var(--text-muted)',
-                flex: 1,
-                whiteSpace: 'nowrap',
-              }}>{t.label}</button>
-            ))}
-          </div>
-
+        <Modal
+          title={`編輯員工 — ${selectedEmp.name}`}
+          onClose={() => setShowEditModal(false)}
+          onSubmit={editTab === 'basic' ? handleEdit : null}
+          submitLabel="儲存變更"
+          maxWidth={900}
+          headerExtra={
+            <div style={{
+              display: 'flex', gap: 0,
+              border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden',
+            }}>
+              {[
+                { key: 'basic',     label: '📋 基本' },
+                { key: 'family',    label: '👪 家庭' },
+                { key: 'education', label: '🎓 學歷' },
+                { key: 'work',      label: '💼 經歷' },
+                { key: 'cert',      label: '📜 證照' },
+                { key: 'skills',    label: '🛠 技能' },
+              ].map(t => (
+                <button key={t.key} type="button" onClick={() => setEditTab(t.key)} style={{
+                  padding: '10px 12px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  background: editTab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                  color: editTab === t.key ? '#fff' : 'var(--text-muted)',
+                  flex: 1,
+                  whiteSpace: 'nowrap',
+                }}>{t.label}</button>
+              ))}
+            </div>
+          }
+        >
           {editTab === 'basic' && (<>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="姓名">

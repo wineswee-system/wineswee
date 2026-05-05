@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowRight, Sparkles, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getApprovalChains, createApprovalChain, updateApprovalChain, deleteApprovalChain } from '../../lib/db'
 import { notifyApproval } from '../../lib/lineNotify'
@@ -24,6 +24,9 @@ export default function ApprovalChains() {
   const [editingChain, setEditingChain] = useState(null)
   const [chainForm, setChainForm] = useState({ name: '', description: '', category: 'HR', min_amount: '', max_amount: '', is_active: true, steps: [{ role: '', label: '' }] })
   const [applyForm, setApplyForm] = useState({ chain_id: '', title: '', store: '', notes: '' })
+  const [filterCategory, setFilterCategory] = useState('')   // '' = 全部
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [creatingTemplates, setCreatingTemplates] = useState(false)
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -145,6 +148,53 @@ export default function ApprovalChains() {
   const getFS = (id) => formSteps.filter(s => s.form_id === id).sort((a, b) => a.step_order - b.step_order)
   const stColor = (s) => s === '已通過' || s === '已核准' ? 'badge-success' : s === '已退回' ? 'badge-danger' : s === '待簽' ? 'badge-warning' : 'badge-info'
 
+  // 所有 category 集合（用於篩選下拉）
+  const allCategories = [...new Set(chains.map(c => c.category).filter(Boolean))].sort()
+
+  // 套用篩選 + 關鍵字
+  const filteredChains = chains.filter(c => {
+    if (filterCategory && c.category !== filterCategory) return false
+    if (searchKeyword) {
+      const q = searchKeyword.toLowerCase()
+      const hay = `${c.name || ''} ${c.description || ''} ${c.category || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+
+  // 快速建立 HR 標準範本（離職/留停/異動/預先加班）
+  const handleCreateHRTemplates = async () => {
+    if (!profile?.organization_id) return alert('身份未載入')
+    if (!confirm('將建立 4 條 HR 範本鏈：\n· 離職申請 (3 步)\n· 留停申請 (3 步)\n· 異動申請 (3 步)\n· 預先加班 (2 步)\n\n建好後請進去編輯，把每一步的「簽核人」選上。')) return
+    setCreatingTemplates(true)
+    const TEMPLATES = [
+      { name: '離職申請', category: '離職', description: 'HR 5 表 — 離職單核准流程',
+        steps: [{ label: '直屬主管' }, { label: 'HR 確認' }, { label: '執行長核准' }] },
+      { name: '留停申請', category: '留停', description: '留職停薪申請核准流程',
+        steps: [{ label: '直屬主管' }, { label: 'HR 確認' }, { label: '執行長核准' }] },
+      { name: '人事異動', category: '異動', description: '調職/升遷/調薪核准流程',
+        steps: [{ label: '直屬主管' }, { label: 'HR 確認' }, { label: '執行長核准' }] },
+      { name: '預先加班', category: '預先加班', description: '事前加班申請（勞檢必查）',
+        steps: [{ label: '直屬主管' }, { label: '部門主管' }] },
+    ]
+    let created = 0, skipped = 0
+    for (const t of TEMPLATES) {
+      // 已存在同 category 啟用的鏈就跳過
+      if (chains.some(c => c.category === t.category && c.is_active)) { skipped++; continue }
+      const payload = {
+        name: t.name, description: t.description, category: t.category,
+        min_amount: 0, max_amount: null, is_active: true,
+        organization_id: profile.organization_id,
+        steps: t.steps.map(s => ({ role: '', label: s.label, target_type: 'label', target_emp_id: null })),
+      }
+      const { data, error } = await createApprovalChain(payload)
+      if (error) { console.error('Template create failed:', error); continue }
+      if (data) { setChains(prev => [...prev, data]); created++ }
+    }
+    setCreatingTemplates(false)
+    alert(`建立完成：新增 ${created} 條${skipped > 0 ? `，跳過 ${skipped} 條（已存在）` : ''}。\n請逐一進「編輯」把每步的簽核人選上！`)
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -156,6 +206,14 @@ export default function ApprovalChains() {
             <p>定義多步驟審批流程（如：主管→HR→財務），可手動提交簽核表單</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-secondary"
+              disabled={creatingTemplates}
+              onClick={handleCreateHRTemplates}
+              title="一次建好 HR 5 表所需的範本（離職/留停/異動/預先加班）"
+            >
+              <Sparkles size={14} /> {creatingTemplates ? '建立中...' : 'HR 範本'}
+            </button>
             <button className="btn btn-secondary" onClick={() => { setEditingChain(null); setChainForm({ name: '', description: '', category: 'HR', steps: [{ role: '', label: '' }] }); setShowChainModal(true) }}><Plus size={14} /> 新增簽核鏈</button>
             <button className="btn btn-primary" onClick={() => setShowFormModal(true)}><Plus size={14} /> 提交簽核</button>
           </div>
@@ -232,12 +290,73 @@ export default function ApprovalChains() {
       )}
 
       {tab === 'chains' && (
-        <div className="card">
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>簽核鏈</th><th>分類</th><th>金額範圍</th><th>步驟</th><th>流程</th><th>狀態</th><th>操作</th></tr></thead>
+        <>
+          {/* 篩選 + 搜尋列 */}
+          <div className="card" style={{ marginBottom: 12, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 280px', minWidth: 240, position: 'relative' }}>
+                <Search size={13} style={{ position: 'absolute', left: 10, color: 'var(--text-muted)' }} />
+                <input
+                  className="form-input"
+                  style={{ paddingLeft: 32, width: '100%' }}
+                  placeholder="搜尋鏈名稱/說明/分類..."
+                  value={searchKeyword}
+                  onChange={e => setSearchKeyword(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>分類：</span>
+                <button
+                  onClick={() => setFilterCategory('')}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer', border: '1px solid var(--border-medium)',
+                    background: filterCategory === '' ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                    color: filterCategory === '' ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >全部 ({chains.length})</button>
+                {allCategories.map(cat => {
+                  const count = chains.filter(c => c.category === cat).length
+                  const active = filterCategory === cat
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setFilterCategory(active ? '' : cat)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        cursor: 'pointer', border: '1px solid var(--border-medium)',
+                        background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                        color: active ? '#fff' : 'var(--text-secondary)',
+                      }}
+                    >{cat} ({count})</button>
+                  )
+                })}
+              </div>
+              {(filterCategory || searchKeyword) && (
+                <button
+                  onClick={() => { setFilterCategory(''); setSearchKeyword('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', fontSize: 12, fontWeight: 600 }}
+                >
+                  <X size={11} /> 清除篩選
+                </button>
+              )}
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                顯示 {filteredChains.length} / {chains.length} 條
+              </span>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>簽核鏈</th><th>分類</th><th>金額範圍</th><th>步驟</th><th>流程</th><th>狀態</th><th>操作</th></tr></thead>
               <tbody>
-                {chains.map(c => (
+                {filteredChains.length === 0 && (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                    {chains.length === 0 ? '尚無簽核鏈，點右上「HR 範本」一鍵建立常用範本。' : '無符合篩選條件的鏈'}
+                  </td></tr>
+                )}
+                {filteredChains.map(c => (
                   <tr key={c.id}>
                     <td><div style={{ fontWeight: 600 }}>{c.name}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.description}</div></td>
                     <td><span className="badge badge-cyan">{c.category}</span></td>
@@ -270,7 +389,8 @@ export default function ApprovalChains() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       {showChainModal && (

@@ -36,6 +36,8 @@ import WorkUnitSettings from '../pages/hr/WorkUnitSettings'
 import HRForms from '../pages/hr/HRForms'
 import InsuranceGradeMonitor from '../pages/hr/InsuranceGradeMonitor'
 import LaborLawRates from '../pages/hr/LaborLawRates'
+import Resignation from '../pages/hr/Resignation'
+import TransferRequest from '../pages/hr/TransferRequest'
 
 export default memo(function HRModule() {
   return (
@@ -74,6 +76,8 @@ export default memo(function HRModule() {
       <Route path="legal-deductions" element={<LegalDeductions />} />
       <Route path="work-unit-settings" element={<WorkUnitSettings />} />
       <Route path="forms" element={<HRForms />} />
+      <Route path="forms/resignation" element={<Resignation />} />
+      <Route path="forms/transfer" element={<TransferRequest />} />
       <Route path="insurance-grade" element={<InsuranceGradeMonitor />} />
       <Route path="labor-law-rates" element={<LaborLawRates />} />
     </Routes>

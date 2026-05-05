@@ -304,33 +304,20 @@ export default function ApprovalChains() {
                   onChange={e => setSearchKeyword(e.target.value)}
                 />
               </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>分類：</span>
-                <button
-                  onClick={() => setFilterCategory('')}
-                  style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                    cursor: 'pointer', border: '1px solid var(--border-medium)',
-                    background: filterCategory === '' ? 'var(--accent-cyan)' : 'var(--bg-card)',
-                    color: filterCategory === '' ? '#fff' : 'var(--text-secondary)',
-                  }}
-                >全部 ({chains.length})</button>
-                {allCategories.map(cat => {
-                  const count = chains.filter(c => c.category === cat).length
-                  const active = filterCategory === cat
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setFilterCategory(active ? '' : cat)}
-                      style={{
-                        padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                        cursor: 'pointer', border: '1px solid var(--border-medium)',
-                        background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-                        color: active ? '#fff' : 'var(--text-secondary)',
-                      }}
-                    >{cat} ({count})</button>
-                  )
-                })}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 220 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>分類：</span>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <SearchableSelect
+                    value={filterCategory}
+                    onChange={(v) => setFilterCategory(v || '')}
+                    options={allCategories.map(cat => ({
+                      value: cat,
+                      label: cat,
+                      sublabel: `${chains.filter(c => c.category === cat).length} 條`,
+                    }))}
+                    placeholder={`全部分類 (${chains.length} 條)`}
+                  />
+                </div>
               </div>
               {(filterCategory || searchKeyword) && (
                 <button

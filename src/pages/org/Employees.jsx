@@ -761,13 +761,13 @@ export default function Employees() {
       )}
       {/* 編輯員工 Modal */}
       {showEditModal && selectedEmp && (
-        <Modal title={`編輯員工 — ${selectedEmp.name}`} onClose={() => setShowEditModal(false)} onSubmit={editTab === 'basic' ? handleEdit : null} submitLabel="儲存變更">
+        <Modal title={`編輯員工 — ${selectedEmp.name}`} onClose={() => setShowEditModal(false)} onSubmit={editTab === 'basic' ? handleEdit : null} submitLabel="儲存變更" maxWidth={900}>
           {/* Tab 列（黏在 modal body 頂端） */}
           <div style={{
             display: 'flex', gap: 0,
             border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden',
             marginBottom: 14,
-            position: 'sticky', top: -20, zIndex: 5,
+            position: 'sticky', top: 0, zIndex: 5,
             background: 'var(--bg-card)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           }}>

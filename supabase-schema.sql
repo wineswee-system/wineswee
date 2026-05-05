@@ -347,7 +347,8 @@ create table audit_logs (
   old_value text,
   new_value text,
   time timestamptz default now(),
-  ip text
+  ip text,
+  organization_id int references organizations(id)
 );
 
 -- KPI Data
@@ -1397,13 +1398,25 @@ ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenan
 ALTER TABLE cost_centers ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
 ALTER TABLE workflows ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
+-- organization_id is defined in the CREATE TABLE above; no alter needed
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id);
 
 -- ── RLS Policies (Row-Level Security) ──
 -- Enable RLS on key tables. The policy uses a custom claim `tenant_id`
 -- set via Supabase auth.users metadata: auth.jwt()->'app_metadata'->>'tenant_id'
 -- For tables without RLS enabled yet, enable and add policy:
+
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation_audit_logs ON audit_logs
+  USING (organization_id::text = coalesce(current_setting('app.tenant_id', true), ''));
+CREATE POLICY super_admin_audit_logs ON audit_logs AS PERMISSIVE FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM employees e
+      JOIN roles r ON r.id = e.role_id
+      WHERE e.auth_user_id = auth.uid() AND r.name = 'super_admin'
+    )
+  );
 
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_employees ON employees

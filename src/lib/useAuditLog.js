@@ -9,41 +9,46 @@
  */
 import { useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { logAudit, logChanges } from './auditLogger'
+import { logAudit } from './auditLogger'
+import { logger } from './logger'
 
 export function useAuditLog() {
   const { profile } = useAuth()
   const userName = profile?.name || '系統'
+  const orgId = profile?.organization_id
 
   const logAction = useCallback(async (action, targetTable, targetId, description) => {
     try {
       await logAudit({
         user: userName,
         action,
-        target: description || `${targetTable}#${targetId}`,
-        target_table: targetTable,
-        target_id: targetId,
+        target: description || (targetId != null ? `${targetTable}#${targetId}` : targetTable),
+        targetTable,
+        targetId,
+        orgId,
       })
     } catch (err) {
-      console.warn('Audit log failed:', err)
+      logger.warn('Audit log failed', { module: 'useAuditLog', err: err?.message })
     }
-  }, [userName])
+  }, [userName, orgId])
 
-  const logFieldChange = useCallback(async (targetTable, targetId, fieldName, oldValue, newValue) => {
+  const logFieldChange = useCallback(async (targetTable, targetId, fieldName, oldValue, newValue, description) => {
     try {
-      await logChanges({
+      await logAudit({
         user: userName,
         action: '修改',
-        target_table: targetTable,
-        target_id: targetId,
-        field_name: fieldName,
-        old_value: String(oldValue ?? ''),
-        new_value: String(newValue ?? ''),
+        target: description || (targetId != null ? `${targetTable}#${targetId}` : targetTable),
+        targetTable,
+        targetId,
+        fieldName,
+        oldValue: String(oldValue ?? ''),
+        newValue: String(newValue ?? ''),
+        orgId,
       })
     } catch (err) {
-      console.warn('Audit log failed:', err)
+      logger.warn('Audit log failed', { module: 'useAuditLog', err: err?.message })
     }
-  }, [userName])
+  }, [userName, orgId])
 
   return { logAction, logFieldChange }
 }

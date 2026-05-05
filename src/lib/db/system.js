@@ -17,14 +17,43 @@ export const markNotificationRead = (id) =>
 export const markAllNotificationsRead = () =>
   supabase.from('notifications').update({ read: true }).eq('read', false)
 
-export const getAuditLogs = (orgId) => {
-  let q = supabase.from('audit_logs').select('*').order('time', { ascending: false })
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
+export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action, tables, targetId, from, to, search } = {}) => {
+  if (!orgId) return Promise.resolve({ data: [], count: 0, error: null })
+  let q = supabase.from('audit_logs').select('*', { count: 'exact' }).order('time', { ascending: false })
+  q = q.eq('organization_id', orgId)
+  if (userName) q = q.eq('user', userName)
+  if (action) q = q.eq('action', action)
+  if (tables?.length) q = q.in('target_table', tables)
+  if (targetId != null) q = q.eq('target_id', targetId)
+  if (from) q = q.gte('time', from)
+  if (to) q = q.lte('time', to)
+  if (search) {
+    const s = search.replace(/[^\w\s\-一-鿿]/g, '').trim()
+    if (s) q = q.or(`action.ilike.%${s}%,target.ilike.%${s}%`)
+  }
+  return q.range(offset, offset + limit - 1)
 }
 
-export const createAuditLog = (data) =>
-  supabase.from('audit_logs').insert(data)
+export const getAuditLogsAll = ({ limit = 100, offset = 0, orgId, userName, action, tables, targetId, from, to, search } = {}) => {
+  let q = supabase.from('audit_logs').select('*, organizations(name)', { count: 'exact' }).order('time', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  if (userName) q = q.eq('user', userName)
+  if (action) q = q.eq('action', action)
+  if (tables?.length) q = q.in('target_table', tables)
+  if (targetId != null) q = q.eq('target_id', targetId)
+  if (from) q = q.gte('time', from)
+  if (to) q = q.lte('time', to)
+  if (search) {
+    const s = search.replace(/[^\w\s\-一-鿿]/g, '').trim()
+    if (s) q = q.or(`action.ilike.%${s}%,target.ilike.%${s}%`)
+  }
+  return q.range(offset, offset + limit - 1)
+}
+
+export const createAuditLog = (data) => {
+  if (!data?.organization_id) return Promise.resolve({ data: null, error: 'organization_id required' })
+  return supabase.from('audit_logs').insert(data)
+}
 
 export const getKpiData = () =>
   supabase.from('kpi_data').select('*').order('id')

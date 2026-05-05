@@ -6,6 +6,7 @@ import SystemLogs from '../pages/super-admin/SystemLogs'
 import ErrorLogs from '../pages/super-admin/ErrorLogs'
 import UserActivity from '../pages/super-admin/UserActivity'
 import AIUsage from '../pages/super-admin/AIUsage'
+import Changelog from '../pages/super-admin/Changelog'
 
 export default function SuperAdminModule() {
   return (
@@ -17,6 +18,7 @@ export default function SuperAdminModule() {
       <Route path="error-logs" element={<ErrorLogs />} />
       <Route path="user-activity" element={<UserActivity />} />
       <Route path="ai-usage" element={<AIUsage />} />
+      <Route path="changelog" element={<Changelog />} />
     </Routes>
   )
 }

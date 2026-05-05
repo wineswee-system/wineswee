@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import PersonalityTab from './employee/PersonalityTab'
 import DevelopmentTab from './employee/DevelopmentTab'
 import { empLabel } from '../lib/empLabel'
+import ChangelogPanel from './ChangelogPanel'
 
 // Mask sensitive fields for non-admin users
 const maskId = (v) => v ? v.slice(0, 3) + '****' + v.slice(-2) : ''
@@ -18,9 +19,11 @@ const SPECIAL_CATEGORIES = ['身心障礙者', '中低收入戶', '原住民', '
 
 // Hex literal needed for 8-digit alpha-suffix concat in boxShadow; mirrors --accent-purple
 const AVATAR_FALLBACK = '#8b5cf6'
+// LINE brand green — not a CSS token, defined by LINE's brand guidelines
+const LINE_BRAND_GREEN = '#06C755'
 
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
-  const { isAdmin } = useAuth()
+  const { isAdmin, profile } = useAuth()
   const [tab, setTab] = useState('personal')
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -81,7 +84,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setAvailability(av.data || [])
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
-    }).catch(err => console.warn('Failed to load employee sub-data:', err))
+    }).catch(() => {})
     // 載入「以此員工為對象」的流程實例 + 任務
     supabase.from('workflow_instances')
       .select('*')
@@ -161,7 +164,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     }
 
     const { data, error } = await updateEmployee(employee.id, dataToSave)
-    if (error) { console.error('Save failed:', error); alert('儲存失敗：' + (error.message || '請稍後再試')); setSaving(false); return }
+    if (error) { alert('儲存失敗，請稍後再試'); setSaving(false); return }
     if (data) {
       onUpdate(data); setIsDirty(false)
       // If store changed, remove future schedules (shifts may not exist at new store)
@@ -228,7 +231,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         try {
           const { data } = await supabase.from('employee_reviews').insert({
             employee_id: employee.id, review_date: new Date().toISOString().slice(0, 10),
-            reviewer: '管理員', score: Number(score), notes,
+            reviewer: profile?.name || '管理員', score: Number(score), notes,
           }).select().single()
           if (data) setReviews(prev => [data, ...prev])
         } catch (e) { alert('新增失敗') }
@@ -264,7 +267,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   }
 
   const deleteSchedPref = async (id) => {
-    await supabase.from('employee_schedule_prefs').delete().eq('id', id)
+    const { error } = await supabase.from('employee_schedule_prefs').delete().eq('id', id)
+    if (error) { alert('刪除失敗，請稍後再試'); return }
     setSchedPrefs(prev => prev.filter(p => p.id !== id))
   }
 
@@ -305,19 +309,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   )
 
   const TABS = [
-    { key: 'personal', label: '個人資訊', icon: '👤' },
-    { key: 'org', label: '組織', icon: '🏢' },
-    { key: 'workflows', label: '進行中流程', icon: '🚀' },
-    { key: 'assignments', label: '指派歷史', icon: '📜' },
-    { key: 'skills', label: '技能', icon: '🏷️' },
-    { key: 'personality', label: '性格分析', icon: '🧬' },
-    { key: 'development', label: '能力發展', icon: '📚' },
-    { key: 'schedule', label: '排班', icon: '📅' },
-    { key: 'records', label: '紀錄', icon: '📋' },
+    { key: 'personal',   label: '個人資訊', icon: '👤' },
+    { key: 'org',        label: '組織',     icon: '🏢' },
+    { key: 'workflows',  label: '進行中流程', icon: '🚀' },
+    { key: 'assignments',label: '指派歷史', icon: '📜' },
+    { key: 'skills',     label: '技能',     icon: '🏷️' },
+    { key: 'personality',label: '性格分析', icon: '🧬' },
+    { key: 'development',label: '能力發展', icon: '📚' },
+    { key: 'schedule',   label: '排班',     icon: '📅' },
+    { key: 'records',    label: '紀錄',     icon: '📋' },
+    ...(isAdmin ? [{ key: 'changelog', label: '變更日誌', icon: '📝' }] : []),
   ]
 
   const empTypeColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green)' : 'var(--accent-orange)'
+  const empTypeDimColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)'
   const statusColor = (form.status || '在職') === '在職' ? 'var(--accent-green)' : form.status === '留職停薪' ? 'var(--accent-orange)' : 'var(--accent-red)'
+  const statusDimColor = (form.status || '在職') === '在職' ? 'var(--accent-green-dim)' : form.status === '留職停薪' ? 'var(--accent-orange-dim)' : 'var(--accent-red-dim)'
 
   const QuickInfo = ({ icon, label, value }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -377,8 +384,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700 }}>EMP-{String(employee.id).padStart(3, '0')}</span>
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeColor + '18', color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '全職'}</span>
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: statusColor + '18', color: statusColor, fontWeight: 700 }}>{form.status || '在職'}</span>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeDimColor, color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '全職'}</span>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: statusDimColor, color: statusColor, fontWeight: 700 }}>{form.status || '在職'}</span>
               </div>
             </div>
           </div>
@@ -675,7 +682,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                     {la.picture_url ? (
                       <img src={la.picture_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
                     ) : (
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#06C755', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>L</div>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: LINE_BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>L</div>
                     )}
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{la.display_name || 'LINE 使用者'}</div>
@@ -730,6 +737,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   disabled={!newLineUserId || !newLineChannel}
                   onClick={async () => {
                     const uid = newLineUserId.trim()
+                    if (!uid.startsWith('U') || uid.length < 20) { alert('LINE User ID 格式錯誤（應以 U 開頭且至少 20 字元）'); return }
                     const chId = parseInt(newLineChannel)
                     const { data, error } = await supabase.from('employee_line_accounts').insert({
                       employee_id: employee.id,
@@ -738,7 +746,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                       is_primary: lineAccounts.length === 0,
                       is_verified: true,
                     }).select('*, line_channels(id, code, name)').single()
-                    if (error) { console.error('Save failed:', error); alert('儲存失敗，請稍後再試'); return }
+                    if (error) { alert('儲存失敗，請稍後再試'); return }
                     // Sync line_users so the webhook recognises this user going forward
                     await supabase.from('line_users').update({ employee_id: employee.id, is_verified: true })
                       .eq('channel_id', chId).eq('line_user_id', uid).catch(() => {})
@@ -1167,6 +1175,14 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 </div>
               ))}
             </>
+          )}
+
+          {tab === 'changelog' && isAdmin && (
+            <ChangelogPanel
+              tables={['employees']}
+              targetId={employee?.id}
+              orgId={employee?.organization_id}
+            />
           )}
         </div>
       </div>

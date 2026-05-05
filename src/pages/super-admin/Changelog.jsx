@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, Download, User, Filter, X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
-import { getAuditLogs } from '../../lib/db'
+import { Shield, Search, Download, Filter, X, ChevronLeft, ChevronRight, RefreshCw, User } from 'lucide-react'
+import { getAuditLogsAll, getTenants } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { SECTIONS, ACTION_TYPES, getActionStyle, formatTime, timeAgo, DiffBadge } from '../../lib/auditLogUtils'
@@ -8,41 +8,50 @@ import { useDebouncedValue } from '../../lib/performanceUtils'
 
 const PAGE_SIZE = 50
 
-export default function AuditLog() {
-  const { profile, isAdmin } = useAuth()
+export default function Changelog() {
+  const { isSuperAdmin } = useAuth()
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
+  const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [section, setSection] = useState('all')
-  const [view, setView] = useState('timeline')
+  const [view, setView] = useState('table')
   const [page, setPage] = useState(0)
   const [expanded, setExpanded] = useState(new Set())
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({ action: '', from: '', to: '' })
+  const [filters, setFilters] = useState({ orgId: '', action: '', from: '', to: '' })
 
   const debouncedSearch = useDebouncedValue(search, 300)
 
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    getTenants().then(({ data, error: err }) => {
+      if (!err && data) setTenants(data)
+    }).catch(() => {})
+  }, [isSuperAdmin])
+
   const fetchLogs = useCallback(async () => {
-    if (!profile?.organization_id || !isAdmin) { setLoading(false); return }
+    if (!isSuperAdmin) { setLoading(false); return }
     setLoading(true)
     setError(null)
     const currentSection = SECTIONS.find(s => s.key === section)
-    const params = { orgId: profile.organization_id, limit: PAGE_SIZE, offset: page * PAGE_SIZE }
+    const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE }
+    if (filters.orgId) params.orgId = Number(filters.orgId)
     if (currentSection?.tables) params.tables = currentSection.tables
     if (filters.action) params.action = filters.action
     if (filters.from) params.from = new Date(filters.from).toISOString()
     if (filters.to) params.to = filters.to + 'T23:59:59Z'
     if (debouncedSearch) params.search = debouncedSearch
-    const { data, count, error: err } = await getAuditLogs(params)
+    const { data, count, error: err } = await getAuditLogsAll(params)
     if (err) setError('資料載入失敗，請重新整理頁面')
     else { setLogs(data || []); setTotal(count || 0) }
     setLoading(false)
-  }, [profile?.organization_id, isAdmin, page, section, filters.action, filters.from, filters.to, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSuperAdmin, page, section, filters.orgId, filters.action, filters.from, filters.to, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchLogs() }, [fetchLogs])
-  useEffect(() => { setPage(0); setExpanded(new Set()) }, [section, filters.action, filters.from, filters.to, debouncedSearch])
+  useEffect(() => { setPage(0); setExpanded(new Set()) }, [section, filters.orgId, filters.action, filters.from, filters.to, debouncedSearch])
 
   const toggleExpand = (id) => setExpanded(prev => {
     const next = new Set(prev)
@@ -69,14 +78,14 @@ export default function AuditLog() {
   }), [logs])
 
   const exportCSV = () => {
-    const header = '時間,操作者,動作,對象,資料表,欄位,原值,新值,IP'
+    const header = '時間,組織,操作者,動作,對象,資料表,欄位,原值,新值,IP'
     const rows = logs.map(l =>
-      `"${formatTime(l.time).replace(/"/g, '""')}","${(l.user || '').replace(/"/g, '""')}","${(l.action || '').replace(/"/g, '""')}","${(l.target || '').replace(/"/g, '""')}","${(l.target_table || '').replace(/"/g, '""')}","${(l.field_name || '').replace(/"/g, '""')}","${(l.old_value || '').replace(/"/g, '""')}","${(l.new_value || '').replace(/"/g, '""')}","${(l.ip || '').replace(/"/g, '""')}"`
+      `"${formatTime(l.time).replace(/"/g, '""')}","${(l.organizations?.name || '').replace(/"/g, '""')}","${(l.user || '').replace(/"/g, '""')}","${(l.action || '').replace(/"/g, '""')}","${(l.target || '').replace(/"/g, '""')}","${(l.target_table || '').replace(/"/g, '""')}","${(l.field_name || '').replace(/"/g, '""')}","${(l.old_value || '').replace(/"/g, '""')}","${(l.new_value || '').replace(/"/g, '""')}","${(l.ip || '').replace(/"/g, '""')}"`
     )
     const blob = new Blob(['﻿' + header + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `changelog-${section}-${new Date().toISOString().slice(0, 10)}-p${page + 1}.csv`
+    a.download = `changelog-all-orgs-${new Date().toISOString().slice(0, 10)}-p${page + 1}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -84,10 +93,11 @@ export default function AuditLog() {
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
-  if (!isAdmin) return (
+  if (!isSuperAdmin) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 12 }}>
-      <h2>權限不足</h2>
-      <p style={{ color: 'var(--text-secondary)' }}>此頁面僅限管理員存取</p>
+      <Shield size={48} style={{ color: 'var(--accent-red)' }} />
+      <h2>超級管理員專屬</h2>
+      <p style={{ color: 'var(--text-secondary)' }}>此頁面僅限超級管理員存取</p>
     </div>
   )
 
@@ -103,8 +113,8 @@ export default function AuditLog() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📋</span> 變更日誌</h2>
-            <p>全系統操作稽核與欄位級變更追蹤</p>
+            <h2><span className="header-icon">📋</span> 跨組織變更日誌</h2>
+            <p>所有組織操作稽核與欄位級變更追蹤</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-medium)' }}>
@@ -122,6 +132,7 @@ export default function AuditLog() {
         </div>
       </div>
 
+      {/* Stats */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
           <div className="stat-card-label">總變更數</div>
@@ -141,6 +152,7 @@ export default function AuditLog() {
         </div>
       </div>
 
+      {/* Section tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
         {SECTIONS.map(s => (
           <button key={s.key} onClick={() => setSection(s.key)} style={{
@@ -153,6 +165,7 @@ export default function AuditLog() {
         ))}
       </div>
 
+      {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
@@ -163,7 +176,7 @@ export default function AuditLog() {
           <Filter size={14} /> 篩選{activeFilterCount > 0 && ` (${activeFilterCount})`}
         </button>
         {activeFilterCount > 0 && (
-          <button className="btn btn-secondary" onClick={() => setFilters({ action: '', from: '', to: '' })}>
+          <button className="btn btn-secondary" onClick={() => setFilters({ orgId: '', action: '', from: '', to: '' })}>
             <X size={14} /> 清除
           </button>
         )}
@@ -171,6 +184,13 @@ export default function AuditLog() {
 
       {showFilters && (
         <div className="card" style={{ padding: 16, marginBottom: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>組織</label>
+            <select className="form-input" value={filters.orgId} onChange={e => setFilters(f => ({ ...f, orgId: e.target.value }))}>
+              <option value="">全部組織</option>
+              {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>動作類型</label>
             <select className="form-input" value={filters.action} onChange={e => setFilters(f => ({ ...f, action: e.target.value }))}>
@@ -189,6 +209,7 @@ export default function AuditLog() {
         </div>
       )}
 
+      {/* Content */}
       {loading ? <LoadingSpinner /> : view === 'timeline' ? (
         <div>
           {Object.entries(grouped).map(([date, items]) => (
@@ -202,7 +223,6 @@ export default function AuditLog() {
                 {date}
                 <span style={{ fontSize: 11, fontWeight: 400 }}>({items.length} 筆)</span>
               </div>
-
               <div style={{ position: 'relative', paddingLeft: 32 }}>
                 <div style={{ position: 'absolute', left: 13, top: 0, bottom: 0, width: 2, background: 'var(--border-subtle)', borderRadius: 1 }} />
                 {items.map(log => {
@@ -226,6 +246,11 @@ export default function AuditLog() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{log.user}</span>
                             <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: cfg.dim, color: cfg.color }}>{log.action}</span>
+                            {log.organizations?.name && (
+                              <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>
+                                {log.organizations.name}
+                              </span>
+                            )}
                             {log.target_table && (
                               <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>
                                 {log.target_table}
@@ -262,9 +287,7 @@ export default function AuditLog() {
             </div>
           ))}
           {logs.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>
-              沒有符合條件的變更紀錄
-            </div>
+            <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>沒有符合條件的變更紀錄</div>
           )}
         </div>
       ) : (
@@ -273,7 +296,14 @@ export default function AuditLog() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>資料表</th><th>欄位變更</th><th>IP</th>
+                  <th>時間</th>
+                  <th>組織</th>
+                  <th>操作者</th>
+                  <th>動作</th>
+                  <th>對象</th>
+                  <th>資料表</th>
+                  <th>欄位變更</th>
+                  <th>IP</th>
                 </tr>
               </thead>
               <tbody>
@@ -287,14 +317,21 @@ export default function AuditLog() {
                         <div style={{ fontSize: 12 }}>{formatTime(log.time)}</div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo(log.time)}</div>
                       </td>
+                      <td>
+                        {log.organizations?.name
+                          ? <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>{log.organizations.name}</span>
+                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      </td>
                       <td style={{ fontWeight: 600 }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <User size={14} style={{ color: 'var(--text-muted)' }} />
                           {log.user}
                         </span>
                       </td>
-                      <td><span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: cfg.dim, color: cfg.color }}>{log.action}</span></td>
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.target}</td>
+                      <td>
+                        <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: cfg.dim, color: cfg.color }}>{log.action}</span>
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.target}</td>
                       <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{log.target_table || '-'}</td>
                       <td>
                         {hasDiff && (
@@ -309,7 +346,7 @@ export default function AuditLog() {
                   )
                 })}
                 {logs.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>沒有符合條件的變更紀錄</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>沒有符合條件的變更紀錄</td></tr>
                 )}
               </tbody>
             </table>
@@ -317,6 +354,7 @@ export default function AuditLog() {
         </div>
       )}
 
+      {/* Pagination */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>共 {total} 筆，第 {page + 1} / {totalPages} 頁</span>

@@ -1,6 +1,19 @@
 import { supabase } from './supabase'
+import { logger } from './logger'
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID
+
+// Hex colors for LINE Flex Message payloads — cannot use CSS vars in external API JSON
+const LC = {
+  brand:    '#06b6d4',
+  success:  '#10b981',
+  warning:  '#f59e0b',
+  danger:   '#ef4444',
+  approval: '#8b5cf6',
+  muted:    '#666666',
+  dark:     '#444444',
+  soft:     '#8c8c8c',
+}
 
 /**
  * Resolve a LINE user ID for an employee via employee_line_accounts.
@@ -52,7 +65,7 @@ async function sendLinePush(lineUserId, messages) {
     await logMessage(lineUserId, messages, data?.ok ? 'sent' : 'failed')
     return data || { ok: false }
   } catch (err) {
-    console.error('[LINE] Push error:', err)
+    logger.error('[LINE] Push error', { module: 'lineNotify', err: err?.message })
     await logMessage(lineUserId, messages, 'failed')
     return { ok: false, error: err.message }
   }
@@ -93,25 +106,25 @@ function buildTaskBody(taskTitle, assigneeName, department, store, instanceName,
   const infoLine = [assigneeName, department, store].filter(Boolean).join('  |  ')
 
   const contents = [
-    { type: 'text', text: taskTitle, weight: 'bold', size: 'md', wrap: true },
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'sm', wrap: true },
     {
-      type: 'text', text: `到期：${dueLabel}`, size: 'xs', wrap: true,
-      color: isOverdue ? '#ef4444' : '#666666',
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
       weight: isOverdue ? 'bold' : 'regular',
     },
-    { type: 'text', text: infoLine, size: 'xs', color: '#666666', wrap: true },
+    { type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true },
   ]
   if (instanceName) {
-    contents.push({ type: 'text', text: `流程：${instanceName}`, size: 'xs', color: '#666666' })
+    contents.push({ type: 'text', text: `流程：${instanceName}`, size: 'sm', color: LC.muted })
   }
   if (description && String(description).trim()) {
     contents.push({ type: 'separator', margin: 'sm' })
-    contents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: '#444444', wrap: true, margin: 'sm' })
+    contents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: LC.dark, wrap: true, margin: 'sm' })
   }
   if (notes && String(notes).trim()) {
     contents.push({ type: 'separator', margin: 'sm' })
-    contents.push({ type: 'text', text: '📌 備註', size: 'xxs', color: '#8c8c8c', margin: 'sm' })
-    contents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: '#444444', wrap: true })
+    contents.push({ type: 'text', text: '📌 備註', size: 'sm', color: LC.soft, margin: 'sm' })
+    contents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: LC.dark, wrap: true })
   }
   return contents
 }
@@ -122,7 +135,7 @@ function buildTaskFooter(liffUrl, actionUrl, approvalRequired) {
     contents: [
       {
         type: 'button', style: 'primary', height: 'sm',
-        color: approvalRequired ? '#f59e0b' : '#10b981',
+        color: approvalRequired ? LC.warning : LC.success,
         action: { type: 'uri', label: approvalRequired ? '請求簽核' : '回報完成', uri: actionUrl },
       },
       {
@@ -159,13 +172,13 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
         contents: [{
           type: 'box', layout: 'horizontal', alignItems: 'center',
           contents: [
             { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
             ...(isOverdue ? [{
-              type: 'box', layout: 'vertical', backgroundColor: '#ef4444', cornerRadius: '4px',
+              type: 'box', layout: 'vertical', backgroundColor: LC.danger, cornerRadius: '4px',
               paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
               contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
             }] : []),
@@ -205,7 +218,7 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
         contents: [{ type: 'text', text: '🚀 任務開始', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
@@ -246,7 +259,7 @@ export async function notifyTaskDailySummary(assigneeName, tasks) {
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical', paddingAll: '12px',
-        backgroundColor: task.isOverdue ? '#ef4444' : '#f59e0b',
+        backgroundColor: task.isOverdue ? LC.danger : LC.warning,
         contents: [{ type: 'text', text: task.isOverdue ? '⚠️ 任務逾期' : '⏰ 今日到期', color: '#ffffff', weight: 'bold', size: 'sm' }],
       },
       body: {
@@ -277,47 +290,54 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
   const liffUrl = getLiffTaskUrl(null, account.liffId)
-  const { category, store, chainName, approvedSteps, pendingSteps } = extras
+  const { category, store, department, workflow, project, chainName, description, approvedSteps, pendingSteps } = extras
 
   const fmtTime = (iso) => iso
     ? new Date(iso).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : ''
 
-  const infoLine = [category, store].filter(Boolean).join('  ·  ')
+  const infoLine = [category, store, department].filter(Boolean).join('  ·  ')
+  const projectLine = [workflow, project].filter(Boolean).join('  ·  ')
 
   const bodyContents = [
-    { type: 'text', text: taskTitle, weight: 'bold', size: 'lg', wrap: true },
-    { type: 'text', text: `等待您的審核：${stepLabel || ''}`, size: 'sm', color: '#8c8c8c', wrap: true },
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'sm', wrap: true },
+    { type: 'text', text: `等待您的審核：${stepLabel || ''}`, size: 'sm', color: LC.soft, wrap: true },
   ]
   if (infoLine) {
-    bodyContents.push({ type: 'text', text: infoLine, size: 'xs', color: '#666666', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: infoLine, size: 'sm', color: LC.muted, margin: 'sm' })
+  }
+  if (projectLine) {
+    bodyContents.push({ type: 'text', text: projectLine, size: 'sm', color: LC.muted })
   }
   if (chainName) {
-    bodyContents.push({ type: 'text', text: chainName, size: 'xs', color: '#666666' })
+    bodyContents.push({ type: 'text', text: chainName, size: 'sm', color: LC.muted })
+  }
+  if (description?.trim()) {
+    bodyContents.push({ type: 'text', text: description.trim(), size: 'sm', color: LC.dark, wrap: true, margin: 'xs' })
   }
   if (approvedSteps && approvedSteps.length > 0) {
     bodyContents.push({ type: 'separator', margin: 'md' })
-    bodyContents.push({ type: 'text', text: '已核准', size: 'xxs', color: '#8c8c8c', weight: 'bold', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: '已核准', size: 'sm', color: LC.soft, weight: 'bold', margin: 'sm' })
     for (const s of approvedSteps) {
       bodyContents.push({
         type: 'box', layout: 'horizontal', margin: 'xs',
         contents: [
-          { type: 'text', text: '✅', size: 'xs', flex: 0 },
-          { type: 'text', text: s.name || '—', size: 'xs', color: '#10b981', weight: 'bold', flex: 3, margin: 'sm' },
-          { type: 'text', text: fmtTime(s.actedAt), size: 'xs', color: '#8c8c8c', align: 'end', flex: 4 },
+          { type: 'text', text: '✅', size: 'sm', flex: 0 },
+          { type: 'text', text: s.name || '—', size: 'sm', color: LC.success, weight: 'bold', flex: 3, margin: 'sm' },
+          { type: 'text', text: fmtTime(s.actedAt), size: 'sm', color: LC.soft, align: 'end', flex: 4 },
         ],
       })
     }
   }
   if (pendingSteps && pendingSteps.length > 0) {
     bodyContents.push({ type: 'separator', margin: 'md' })
-    bodyContents.push({ type: 'text', text: '排隊待審', size: 'xxs', color: '#8c8c8c', weight: 'bold', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: '排隊待審', size: 'sm', color: LC.soft, weight: 'bold', margin: 'sm' })
     for (const s of pendingSteps) {
       bodyContents.push({
         type: 'box', layout: 'horizontal', margin: 'xs',
         contents: [
-          { type: 'text', text: '○', size: 'xs', flex: 0, color: '#cccccc' },
-          { type: 'text', text: s.name || '—', size: 'xs', color: '#aaaaaa', flex: 3, margin: 'sm' },
+          { type: 'text', text: '○', size: 'sm', flex: 0, color: LC.soft },
+          { type: 'text', text: s.name || '—', size: 'sm', color: LC.soft, flex: 3, margin: 'sm' },
         ],
       })
     }
@@ -329,7 +349,7 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#8b5cf6', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: LC.approval, paddingAll: '14px',
         contents: [{ type: 'text', text: '🔏 簽核請求', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
@@ -341,7 +361,7 @@ export async function notifyApproval(approverName, taskTitle, stepLabel, extras 
         contents: [{
           type: 'button',
           action: { type: 'uri', label: '前往審核', uri: liffUrl },
-          style: 'primary', color: '#8b5cf6', height: 'sm',
+          style: 'primary', color: LC.approval, height: 'sm',
         }],
       },
     },
@@ -372,7 +392,7 @@ export async function notifyTaskDue(assigneeName, taskTitle, dueDate, extras = {
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#f59e0b', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: LC.warning, paddingAll: '14px',
         contents: [{ type: 'text', text: '⏰ 任務到期提醒', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
@@ -415,16 +435,16 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
-        type: 'box', layout: 'vertical', backgroundColor: '#06b6d4', paddingAll: '14px',
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
         contents: [{ type: 'text', text: '📋 班表通知', color: '#ffffff', weight: 'bold', size: 'md' }],
       },
       body: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
         contents: [
-          { type: 'text', text: `${dateRange} 班表已發布`, weight: 'bold', size: 'md', wrap: true },
+          { type: 'text', text: `${dateRange} 班表已發布`, weight: 'bold', size: 'sm', wrap: true },
           { type: 'separator', margin: 'md' },
-          ...lines.map(line => ({ type: 'text', text: line, size: 'sm', color: '#555555', margin: 'sm' })),
-          ...(assignments.length > 7 ? [{ type: 'text', text: `...共 ${assignments.length} 天`, size: 'xs', color: '#aaaaaa', margin: 'sm' }] : []),
+          ...lines.map(line => ({ type: 'text', text: line, size: 'sm', color: LC.dark, margin: 'sm' })),
+          ...(assignments.length > 7 ? [{ type: 'text', text: `...共 ${assignments.length} 天`, size: 'sm', color: LC.soft, margin: 'sm' }] : []),
         ],
       },
       footer: {
@@ -432,7 +452,7 @@ export async function notifySchedulePublished(employeeName, dateRange, assignmen
         contents: [{
           type: 'button',
           action: { type: 'uri', label: '查看完整班表', uri: liffUrl },
-          style: 'primary', color: '#06b6d4', height: 'sm',
+          style: 'primary', color: LC.brand, height: 'sm',
         }],
       },
     },
@@ -467,7 +487,7 @@ export async function notifyTaskConfirmationResult(assigneeName, taskTitle, acti
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical',
-        backgroundColor: isApproved ? '#10b981' : '#ef4444',
+        backgroundColor: isApproved ? LC.success : LC.danger,
         paddingAll: '14px',
         contents: [
           { type: 'text', text: isApproved ? '✅ 任務通過' : '🔄 任務退回', color: '#ffffff', weight: 'bold', size: 'md' },
@@ -476,10 +496,10 @@ export async function notifyTaskConfirmationResult(assigneeName, taskTitle, acti
       body: {
         type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
         contents: [
-          { type: 'text', text: `任務「${taskTitle}」${isApproved ? '已通過審核' : '被退回'}`, weight: 'bold', size: 'md', wrap: true },
+          { type: 'text', text: `任務「${taskTitle}」${isApproved ? '已通過審核' : '被退回'}`, weight: 'bold', size: 'sm', wrap: true },
           ...(isApproved
             ? []
-            : [{ type: 'text', text: `原因：${notes || '（未填）'}`, size: 'sm', color: '#666666', wrap: true, margin: 'md' }]),
+            : [{ type: 'text', text: `原因：${notes || '（未填）'}`, size: 'sm', color: LC.muted, wrap: true, margin: 'md' }]),
         ],
       },
       footer: {
@@ -487,7 +507,7 @@ export async function notifyTaskConfirmationResult(assigneeName, taskTitle, acti
         contents: [{
           type: 'button',
           action: { type: 'uri', label: '查看任務', uri: liffUrl },
-          style: 'primary', color: isApproved ? '#10b981' : '#ef4444', height: 'sm',
+          style: 'primary', color: isApproved ? LC.success : LC.danger, height: 'sm',
         }],
       },
     },
@@ -505,16 +525,16 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
   const bubble = {
     type: 'bubble', size: 'kilo',
     header: {
-      type: 'box', layout: 'vertical', backgroundColor: '#f59e0b', paddingAll: '14px',
+      type: 'box', layout: 'vertical', backgroundColor: LC.warning, paddingAll: '14px',
       contents: [{ type: 'text', text: '🆘 代班邀請', color: '#ffffff', weight: 'bold', size: 'md' }],
     },
     body: {
       type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
       contents: [
-        { type: 'text', text: `${info.shift_date} ${info.shift_label}`, weight: 'bold', size: 'lg', wrap: true },
-        { type: 'text', text: `代 ${info.absent_emp_name || '同事'} 的班`, size: 'sm', color: '#8c8c8c', wrap: true },
-        ...(info.reason ? [{ type: 'text', text: info.reason, size: 'xs', color: '#a8a8a8', wrap: true, margin: 'sm' }] : []),
-        { type: 'text', text: '先搶先贏！', size: 'xs', color: '#f59e0b', weight: 'bold', margin: 'sm' },
+        { type: 'text', text: `${info.shift_date} ${info.shift_label}`, weight: 'bold', size: 'sm', wrap: true },
+        { type: 'text', text: `代 ${info.absent_emp_name || '同事'} 的班`, size: 'sm', color: LC.soft, wrap: true },
+        ...(info.reason ? [{ type: 'text', text: info.reason, size: 'sm', color: LC.soft, wrap: true, margin: 'sm' }] : []),
+        { type: 'text', text: '先搶先贏！', size: 'sm', color: LC.warning, weight: 'bold', margin: 'sm' },
       ],
     },
     footer: {
@@ -522,7 +542,7 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
       contents: [{
         type: 'button',
         action: { type: 'uri', label: '我可以接', uri: url },
-        style: 'primary', color: '#f59e0b', height: 'sm',
+        style: 'primary', color: LC.warning, height: 'sm',
       }],
     },
   }

@@ -22,9 +22,11 @@ import NotificationCenter from './NotificationCenter'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 
-// Init theme from localStorage (default to light)
+// Init theme from localStorage (default to light) — runs at module load to prevent FOUC
 const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('theme') : null
-document.documentElement.setAttribute('data-theme', savedTheme || 'light')
+if (typeof window !== 'undefined') {
+  document.documentElement.setAttribute('data-theme', savedTheme || 'light')
+}
 
 // ── Major Groups for top bar ──
 const majorGroups = [
@@ -393,6 +395,7 @@ const superAdminItems = [
   { icon: Monitor, label: '系統日誌', path: '/super-admin/system-logs' },
   { icon: AlertOctagon, label: '錯誤日誌', path: '/super-admin/error-logs' },
   { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
+  { icon: GitBranch, label: '變更日誌', path: '/super-admin/changelog' },
   { icon: Sparkles, label: 'AI 使用量', path: '/super-admin/ai-usage' },
 ]
 
@@ -635,15 +638,15 @@ export default function Sidebar() {
             {openDropdown === 'super-admin' ? (
               <div className="mega-col">
                 <div className="mega-col-header">
-                  <Shield size={14} className="mega-col-icon" style={{ color: '#ef4444' }} />
+                  <Shield size={14} className="mega-col-icon" style={{ color: 'var(--accent-red)' }} />
                   <span>超級管理員</span>
                 </div>
                 <div className="mega-col-items">
-                  {superAdminItems.map((item, i) => {
+                  {superAdminItems.map((item) => {
                     const Icon = item.icon
                     return (
                       <button
-                        key={i}
+                        key={item.path}
                         className={`mega-item ${isPathActive(item.path) ? 'active' : ''}`}
                         onClick={() => handleMegaItemClick(item.path)}
                       >
@@ -763,12 +766,12 @@ export default function Sidebar() {
         {isSystemGroup && (
           <div className="nav-section">
             <div className="nav-section-label">系統與整合</div>
-            {systemItems.map((item, i) => {
+            {systemItems.map((item) => {
               const Icon = item.icon
               return (
                 <NavLink
                   to={item.path}
-                  key={i}
+                  key={item.path}
                   className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''}`}
                   onClick={handleNavClick}
                 >
@@ -787,12 +790,12 @@ export default function Sidebar() {
               <Shield size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
               超級管理員
             </div>
-            {superAdminItems.map((item, i) => {
+            {superAdminItems.map((item) => {
               const Icon = item.icon
               return (
                 <NavLink
                   to={item.path}
-                  key={i}
+                  key={item.path}
                   className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''}`}
                   onClick={handleNavClick}
                 >

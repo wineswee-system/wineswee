@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Building2, Users, Settings, Shield, Plus, Edit, Trash2, Globe, Database, RefreshCw } from 'lucide-react'
 import Modal, { Field } from '../../components/Modal'
 import { useTenant } from '../../contexts/TenantContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { getTenants, createTenantRecord, updateTenantRecord, deleteTenantRecord } from '../../lib/db'
 
 const PLANS = ['免費', '標準', '專業', '企業']
@@ -15,6 +16,7 @@ const emptyForm = { name: '', tax_id: '', plan: '標準', max_users: 25, admin_e
 
 export default function TenantAdmin() {
   const { tenant: activeTenant, switchTenant } = useTenant()
+  const { isSuperAdmin } = useAuth()
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -24,11 +26,12 @@ export default function TenantAdmin() {
   const [saving, setSaving] = useState(false)
 
   const fetchTenants = useCallback(async () => {
+    if (!isSuperAdmin) return
     setLoading(true)
     const { data, error } = await getTenants()
     if (!error && data) setTenants(data)
     setLoading(false)
-  }, [])
+  }, [isSuperAdmin])
 
   useEffect(() => { fetchTenants() }, [fetchTenants])
 
@@ -71,10 +74,10 @@ export default function TenantAdmin() {
 
     if (editId) {
       const { error } = await updateTenantRecord(editId, payload)
-      if (error) { console.error('Update tenant error:', error); setSaving(false); return }
+      if (error) { alert('儲存失敗，請稍後再試'); setSaving(false); return }
     } else {
       const { error } = await createTenantRecord(payload)
-      if (error) { console.error('Create tenant error:', error); setSaving(false); return }
+      if (error) { alert('新增失敗，請稍後再試'); setSaving(false); return }
     }
     setSaving(false)
     setShowModal(false)
@@ -84,11 +87,20 @@ export default function TenantAdmin() {
   }
 
   const handleDelete = async (id) => {
+    if (activeTenant?.id === id) { alert('無法刪除目前使用中的租戶，請先切換租戶後再操作。'); return }
     if (!confirm('確定要刪除此租戶？此操作無法復原。')) return
     const { error } = await deleteTenantRecord(id)
-    if (error) { console.error('Delete tenant error:', error); return }
+    if (error) { alert('刪除失敗，請稍後再試'); return }
     fetchTenants()
   }
+
+  if (!isSuperAdmin) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 12 }}>
+      <Shield size={48} style={{ color: 'var(--accent-red)' }} />
+      <h2>超級管理員專屬</h2>
+      <p style={{ color: 'var(--text-secondary)' }}>此頁面僅限超級管理員存取</p>
+    </div>
+  )
 
   const filtered = tenants.filter(t =>
     (t.name || '').includes(search) || (t.tax_id || '').includes(search)
@@ -128,7 +140,7 @@ export default function TenantAdmin() {
           <div className="stat-card-label"><Users size={14} /> 使用者上限合計</div>
           <div className="stat-card-value">{tenants.reduce((s, t) => s + (t.max_users || 0), 0)}</div>
         </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-amber)', '--card-accent-dim': 'var(--accent-amber-dim)' }}>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-yellow)', '--card-accent-dim': 'var(--accent-yellow-dim)' }}>
           <div className="stat-card-label"><Database size={14} /> 方案分佈</div>
           <div className="stat-card-value" style={{ fontSize: 14 }}>
             {PLANS.map(p => {

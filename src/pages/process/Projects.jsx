@@ -4,7 +4,7 @@ import Modal, { Field } from '../../components/Modal'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns
+  Users, Settings, Columns, GitBranch
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
@@ -13,6 +13,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
+import ChangelogPanel from '../../components/ChangelogPanel'
 import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
 import { empLabel } from '../../lib/empLabel'
 
@@ -31,7 +32,7 @@ const TASK_STATUS_CONFIG = {
   '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
-  '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },
+  '已擱置': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
 }
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
@@ -176,7 +177,7 @@ export default function Projects() {
     if (profile?.organization_id) payload.organization_id = profile.organization_id
     if (editingId) {
       const { data, error } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
-      if (error) { alert('更新失敗：' + error.message); return }
+      if (error) { alert('更新失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => prev.map(p => p.id === editingId ? data : p))
         if (selected?.id === editingId) setSelected(data)
@@ -184,7 +185,7 @@ export default function Projects() {
     } else {
       payload.owner = payload.owner || profile?.name || ''
       const { data, error } = await supabase.from('projects').insert(payload).select().single()
-      if (error) { alert('建立失敗：' + error.message); return }
+      if (error) { alert('建立失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => [data, ...prev])
         let sortOrder = 1
@@ -263,19 +264,22 @@ export default function Projects() {
     if (!selectedAttachId || !selected) return
     setWorkflowSaving(true)
     const { error } = await supabase.from('workflow_instances').update({ project_id: selected.id }).eq('id', selectedAttachId)
-    if (error) { alert('連結失敗：' + error.message); setWorkflowSaving(false); return }
+    if (error) { alert('連結失敗，請稍後再試'); setWorkflowSaving(false); return }
     const maxOrder = workflows.filter(w => w.project_id === selected.id).reduce((m, w) => Math.max(m, w.sort_order || 0), 0)
     await supabase.from('workflow_instances').update({ sort_order: maxOrder + 1 }).eq('id', selectedAttachId)
+    const { data: updatedWf } = await supabase.from('workflow_instances').select('*').eq('id', selectedAttachId).single()
+    if (updatedWf) setWorkflows(prev => [...prev, { ...updatedWf, sort_order: maxOrder + 1 }])
+    const { data: wfTasks } = await supabase.from('tasks').select('*').eq('workflow_instance_id', selectedAttachId).order('step_order')
+    if (wfTasks?.length) setTasks(prev => [...prev, ...wfTasks])
     setShowWorkflowModal(false)
     setWorkflowSaving(false)
-    load()
   }
 
   const createWorkflow = async () => {
     if (!newWfForm.template_name || !selected) return
     setWorkflowSaving(true)
     const maxOrder = workflows.filter(w => w.project_id === selected.id).reduce((m, w) => Math.max(m, w.sort_order || 0), 0)
-    const { error } = await createWorkflowInstance({
+    const { data: newWf, error } = await createWorkflowInstance({
       template_name: newWfForm.template_name,
       status: '進行中',
       started_by: newWfForm.assignee || profile?.name || '',
@@ -285,10 +289,10 @@ export default function Projects() {
       sort_order: maxOrder + 1,
       started_at: new Date().toISOString(),
     })
-    if (error) { alert('建立失敗：' + error.message); setWorkflowSaving(false); return }
+    if (error) { alert('建立失敗，請稍後再試'); setWorkflowSaving(false); return }
+    if (newWf) setWorkflows(prev => [...prev, newWf])
     setShowWorkflowModal(false)
     setWorkflowSaving(false)
-    load()
   }
 
   const handleTaskStatusChange = async (taskId, newStatus) => {
@@ -443,7 +447,7 @@ export default function Projects() {
       setDeployTpl(null)
       load()
     } catch (err) {
-      alert('部署失敗：' + err.message)
+      alert('部署失敗，請稍後再試')
     }
     setDeploying(false)
   }
@@ -533,10 +537,11 @@ export default function Projects() {
         {/* Detail tabs */}
         <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
           {[
-            { k: 'overview', label: '總覽',      icon: FolderOpen },
-            { k: 'members',  label: '成員',      icon: Users },
-            { k: 'sections', label: '欄位',      icon: Columns },
-            { k: 'fields',   label: '自訂欄位',  icon: Settings },
+            { k: 'overview',  label: '總覽',     icon: FolderOpen },
+            { k: 'members',   label: '成員',     icon: Users },
+            { k: 'sections',  label: '欄位',     icon: Columns },
+            { k: 'fields',    label: '自訂欄位', icon: Settings },
+            { k: 'changelog', label: '變更日誌', icon: GitBranch },
           ].map(t => {
             const Icon = t.icon
             const active = detailTab === t.k
@@ -582,6 +587,15 @@ export default function Projects() {
 
         {detailTab === 'fields' && (
           <ProjectCustomFieldsAdmin projectId={p.id} />
+        )}
+
+        {detailTab === 'changelog' && (
+          <ChangelogPanel
+            tables={['projects', 'project_comments', 'project_sections']}
+            targetId={p.id}
+            orgId={profile?.organization_id}
+            currentUser={profile?.name}
+          />
         )}
 
         {detailTab === 'sections' && (

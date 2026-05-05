@@ -19,6 +19,8 @@ import {
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
+import { useAuth } from '../contexts/AuthContext'
+import ChangelogPanel from './ChangelogPanel'
 
 const STATUS_LIST = ['待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -27,6 +29,7 @@ export default function TaskDetailPanel({
   step: task, instance, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
 }) {
+  const { profile } = useAuth()
   const [form, setForm] = useState({})
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -192,25 +195,13 @@ export default function TaskDetailPanel({
         // trigger-type: frontend activates the next task + notifies
         const triggerDeps = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
         for (const dep of triggerDeps) {
-          const { data: next } = await supabase
+          await supabase
             .from('tasks')
             .update({ status: '進行中' })
             .eq('id', dep.depends_on_task_id)
             .eq('status', '待簽核')
-            .select('id, title, assignee')
-            .maybeSingle()
         }
         // prerequisite-type: DB trigger already cascaded them — notification fired by DB trigger
-        const prereqNextIds = dependencies
-          .filter(d => d.depends_on_task_id === task.id && d.dep_type === 'prerequisite')
-          .map(d => d.task_id)
-        for (const nextId of prereqNextIds) {
-          const { data: next } = await supabase
-            .from('tasks')
-            .select('id, title, assignee, status')
-            .eq('id', nextId)
-            .maybeSingle()
-        }
       }
     }
     setSaving(false)
@@ -227,9 +218,9 @@ export default function TaskDetailPanel({
     if (!chainId) return
     const chain = approvalChains.find(c => c.id === Number(chainId))
     if (!chain) return
-    const { data: form } = await createApprovalForm({
+    const { data: approvalFormData } = await createApprovalForm({
       title: `${task.title} — 簽核`,
-      applicant: task.assignee || '系統',
+      applicant: profile?.name || task.assignee || '系統',
       chain_id: chain.id,
       ref_task_id: task.id,
       status: '簽核中',
@@ -237,12 +228,12 @@ export default function TaskDetailPanel({
       priority: approvalPriority,
       mode: approvalMode,
     })
-    if (!form) return
-    setApprovalForm(form)
+    if (!approvalFormData) return
+    setApprovalForm(approvalFormData)
     // Create steps from chain — parallel: all 待簽; sequential: only first 待簽
     const chainSteps = chain.steps || []
     const stepRows = chainSteps.map((s, i) => ({
-      form_id: form.id,
+      form_id: approvalFormData.id,
       step_order: i + 1,
       role: s.role,
       status: approvalMode === 'parallel' ? '待簽' : (i === 0 ? '待簽' : '等待中'),
@@ -250,7 +241,7 @@ export default function TaskDetailPanel({
     const { data: steps } = await createApprovalFormSteps(stepRows)
     setApprovalSteps(steps || [])
     // Notify
-    const notifyExtras = { chainName: chain.name, category: chain.category, store: form.store || null, approvedSteps: [] }
+    const notifyExtras = { chainName: chain.name, category: chain.category, store: approvalFormData.store || null, approvedSteps: [] }
     if (approvalMode === 'parallel') {
       chainSteps.forEach((s, i) => {
         if (s.role) notifyApproval(s.role, task.title, `第 ${i + 1} 關：${s.label || s.role}（同時審核）`, notifyExtras)
@@ -268,7 +259,7 @@ export default function TaskDetailPanel({
 
   const handleApprovalAction = async (formStepId, action, comment) => {
     const newStatus = action === 'approve' ? '已核准' : '已退回'
-    const currentUser = task.assignee || instance?.assignee || '系統'
+    const currentUser = profile?.name || task.assignee || instance?.assignee || '系統'
     const { data } = await updateApprovalFormStep(formStepId, {
       status: newStatus,
       approver: currentUser,
@@ -397,7 +388,7 @@ export default function TaskDetailPanel({
   // Comments
   const handleSendComment = async () => {
     if (!commentText.trim()) return
-    const { data } = await createTaskComment({ task_id: task.id, author: '使用者', content: commentText.trim() })
+    const { data } = await createTaskComment({ task_id: task.id, author: profile?.name || '使用者', content: commentText.trim() })
     if (data) {
       setComments(prev => [...prev, data])
       requestAnimationFrame(() => {
@@ -495,7 +486,7 @@ export default function TaskDetailPanel({
       setTriggeredInstances(prev => [inst, ...prev])
       setTriggerTemplateId('')
     } catch (err) {
-      alert('觸發失敗：' + err.message)
+      alert('觸發失敗，請稍後再試')
     }
     setTriggering(false)
   }
@@ -597,10 +588,11 @@ export default function TaskDetailPanel({
           background: 'var(--bg-secondary)', flexShrink: 0,
         }}>
           {[
-            { id: 'basic', label: '基本' },
-            { id: 'relations', label: '關聯' },
-            { id: 'approval', label: '簽核' },
+            { id: 'basic',      label: '基本' },
+            { id: 'relations',  label: '關聯' },
+            { id: 'approval',   label: '簽核' },
             { id: 'discussion', label: '討論' },
+            { id: 'changelog',  label: '變更日誌' },
           ].map(t => {
             const active = activeTab === t.id
             return (
@@ -772,7 +764,7 @@ export default function TaskDetailPanel({
                 : isWaiting ? '🕐 排隊中'
                 : '⏳ 待審批'
               const badgeBg = isDone ? 'var(--accent-green-dim)'
-                : isRejected ? 'rgba(239,68,68,0.1)'
+                : isRejected ? 'var(--accent-red-dim)'
                 : isWaiting ? 'var(--glass-light)'
                 : 'var(--accent-orange-dim)'
               const badgeColor = isDone ? 'var(--accent-green)'
@@ -990,7 +982,7 @@ export default function TaskDetailPanel({
                       <Workflow size={11} style={{ color: iColor, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontWeight: 600 }}>{inst.template_name}</span>
                       {inst.store && <span style={{ color: 'var(--text-muted)' }}>{inst.store}</span>}
-                      <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 700, color: iColor, background: `color-mix(in srgb, ${iColor} 15%, transparent)` }}>{inst.status}</span>
+                      <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 700, color: iColor, background: inst.status === '已完成' ? 'var(--accent-green-dim)' : 'var(--accent-cyan-dim)' }}>{inst.status}</span>
                       <span style={{ color: 'var(--text-muted)' }}>{inst.started_at?.slice(0, 10)}</span>
                     </div>
                   )
@@ -1164,11 +1156,11 @@ export default function TaskDetailPanel({
                       <span style={{
                         padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
                         background: approvalForm.status === '已通過' ? 'var(--accent-green-dim)' :
-                          approvalForm.status === '已退回' ? 'rgba(239,68,68,0.1)' : 'var(--accent-purple-dim, rgba(139,92,246,0.15))',
+                          approvalForm.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-purple-dim)',
                         color: approvalForm.status === '已通過' ? 'var(--accent-green)' :
-                          approvalForm.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-purple, #8b5cf6)',
-                        border: `1px solid ${approvalForm.status === '已通過' ? 'rgba(52,211,153,0.3)' :
-                          approvalForm.status === '已退回' ? 'rgba(239,68,68,0.3)' : 'rgba(139,92,246,0.3)'}`,
+                          approvalForm.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-purple)',
+                        border: `1px solid ${approvalForm.status === '已通過' ? 'var(--accent-green-dim)' :
+                          approvalForm.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-purple-dim)'}`,
                       }}>
                         {approvalForm.status === '已通過' ? '✅ 已通過' : approvalForm.status === '已退回' ? '❌ 已退回' : '⏳ 簽核中'}
                       </span>
@@ -1217,8 +1209,8 @@ export default function TaskDetailPanel({
                           position: 'absolute', left: -24, top: 2,
                           width: 18, height: 18, borderRadius: '50%',
                           background: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
-                            isActive ? 'var(--accent-purple, #8b5cf6)' : 'var(--border-medium)',
-                          border: isActive ? '3px solid rgba(139,92,246,0.3)' : 'none',
+                            isActive ? 'var(--accent-purple)' : 'var(--border-medium)',
+                          border: isActive ? '3px solid var(--accent-purple-dim)' : 'none',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           color: '#fff', fontSize: 10, zIndex: 1,
                         }}>
@@ -1228,8 +1220,8 @@ export default function TaskDetailPanel({
                         {/* Content */}
                         <div style={{
                           padding: '10px 14px', borderRadius: 10,
-                          background: isActive ? 'rgba(139,92,246,0.08)' : 'var(--glass-light)',
-                          border: `1px solid ${isActive ? 'rgba(139,92,246,0.3)' : 'var(--border-subtle)'}`,
+                          background: isActive ? 'var(--accent-purple-dim)' : 'var(--glass-light)',
+                          border: `1px solid ${isActive ? 'var(--accent-purple-dim)' : 'var(--border-subtle)'}`,
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
@@ -1246,7 +1238,7 @@ export default function TaskDetailPanel({
                                   </span>
                                 </div>
                               ) : isActive ? (
-                                <div style={{ fontSize: 11, color: 'var(--accent-purple, #8b5cf6)', marginTop: 4, fontWeight: 600 }}>
+                                <div style={{ fontSize: 11, color: 'var(--accent-purple)', marginTop: 4, fontWeight: 600 }}>
                                   ⏳ 等待回應中
                                 </div>
                               ) : (
@@ -1262,10 +1254,10 @@ export default function TaskDetailPanel({
                             </div>
                             <span style={{
                               fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                              background: isDone ? 'var(--accent-green-dim)' : isRejected ? 'rgba(239,68,68,0.1)' :
-                                isActive ? 'rgba(139,92,246,0.15)' : 'var(--glass-light)',
+                              background: isDone ? 'var(--accent-green-dim)' : isRejected ? 'var(--accent-red-dim)' :
+                                isActive ? 'var(--accent-purple-dim)' : 'var(--glass-light)',
                               color: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
-                                isActive ? 'var(--accent-purple, #8b5cf6)' : 'var(--text-muted)',
+                                isActive ? 'var(--accent-purple)' : 'var(--text-muted)',
                             }}>
                               {as.status}
                             </span>
@@ -1348,6 +1340,17 @@ export default function TaskDetailPanel({
               </button>
             </div>
           </div>
+          )}
+
+          {activeTab === 'changelog' && (
+            <div style={{ padding: '4px 0' }}>
+              <ChangelogPanel
+                tables={['tasks']}
+                targetId={task?.id}
+                orgId={profile?.organization_id}
+                currentUser={profile?.name}
+              />
+            </div>
           )}
 
         </div>

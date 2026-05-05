@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FolderOpen } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { createAssignment, rotatePrimary, closeActivePrimary } from '../../lib/assignments'
@@ -8,6 +8,7 @@ import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
 import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
+import EmployeeDetailsModal from './components/EmployeeDetailsModal'
 import { empLabel } from '../../lib/empLabel'
 
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
@@ -71,6 +72,7 @@ export default function Employees() {
   const [showResignModal, setShowResignModal] = useState(false)
   const [showRehireModal, setShowRehireModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [detailsModalEmp, setDetailsModalEmp] = useState(null)
   const [selectedEmp, setSelectedEmp] = useState(null)
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
@@ -240,6 +242,19 @@ export default function Employees() {
       birth_date: emp.birth_date || '',
       gender: emp.gender || '',
       address: emp.address || '',
+      // ── 104 對齊新欄位 ──
+      marital_status: emp.marital_status || '',
+      ethnic_group: emp.ethnic_group || '',
+      disability_type: emp.disability_type || '',
+      military_status: emp.military_status || '',
+      work_phone: emp.work_phone || '',
+      personal_email: emp.personal_email || '',
+      registered_address: emp.registered_address || '',
+      job_category: emp.job_category || '',
+      responsibility_type: emp.responsibility_type || '',
+      is_direct_staff: emp.is_direct_staff,
+      staffing_status: emp.staffing_status || '',
+      reinstatement_date: emp.reinstatement_date || '',
     })
     setShowEditModal(true)
   }
@@ -544,6 +559,11 @@ export default function Employees() {
                       <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}
                         onClick={ev => { ev.stopPropagation(); openEdit(e) }}>
                         <Pencil size={12} /> 編輯
+                      </button>
+                      <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}
+                        onClick={ev => { ev.stopPropagation(); setDetailsModalEmp(e) }}
+                        title="家庭 / 學歷 / 經歷 / 證照 / 技能">
+                        <FolderOpen size={12} /> 詳細
                       </button>
                       {e.email && e.status === '在職' && (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-cyan)' }}
@@ -872,12 +892,101 @@ export default function Employees() {
                   <option value="female">女</option>
                 </select>
               </Field>
-              <Field label="地址">
+              <Field label="通訊地址">
                 <input className="form-input" type="text" style={{ width: '100%' }} placeholder="縣市區街道" value={editForm.address} onChange={e => setE('address', e.target.value)} />
               </Field>
             </div>
           </div>
+
+          {/* 人事細節（104 對齊欄位） */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>📋 人事細節</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="婚姻狀況">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.marital_status} onChange={e => setE('marital_status', e.target.value)}>
+                  <option value="">— 不選 —</option>
+                  <option value="未婚">未婚</option>
+                  <option value="已婚">已婚</option>
+                  <option value="離婚">離婚</option>
+                  <option value="喪偶">喪偶</option>
+                </select>
+              </Field>
+              <Field label="兵役狀況">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.military_status} onChange={e => setE('military_status', e.target.value)}>
+                  <option value="">— 不選 —</option>
+                  <option value="役畢">役畢</option>
+                  <option value="免役">免役</option>
+                  <option value="未役">未役</option>
+                  <option value="服役中">服役中</option>
+                  <option value="不適用">不適用</option>
+                </select>
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="身份族群">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="本國 / 原住民 / 新住民 等" value={editForm.ethnic_group} onChange={e => setE('ethnic_group', e.target.value)} />
+              </Field>
+              <Field label="身心障礙類別">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="無 / 視障 / 肢障 等" value={editForm.disability_type} onChange={e => setE('disability_type', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="公司電話">
+                <input className="form-input" type="tel" style={{ width: '100%' }} placeholder="02-1234-5678 #100" value={editForm.work_phone} onChange={e => setE('work_phone', e.target.value)} />
+              </Field>
+              <Field label="個人 email">
+                <input className="form-input" type="email" style={{ width: '100%' }} value={editForm.personal_email} onChange={e => setE('personal_email', e.target.value)} />
+              </Field>
+            </div>
+            <Field label="戶籍地址">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="縣市區街道（與通訊地址不同時填）" value={editForm.registered_address} onChange={e => setE('registered_address', e.target.value)} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="職務類別">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：行政、業務、技術" value={editForm.job_category} onChange={e => setE('job_category', e.target.value)} />
+              </Field>
+              <Field label="責任區分">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.responsibility_type} onChange={e => setE('responsibility_type', e.target.value)}>
+                  <option value="">— 不選 —</option>
+                  <option value="主管">主管</option>
+                  <option value="非主管">非主管</option>
+                </select>
+              </Field>
+              <Field label="編制狀態">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.staffing_status} onChange={e => setE('staffing_status', e.target.value)}>
+                  <option value="">— 不選 —</option>
+                  <option value="正式">正式</option>
+                  <option value="契約">契約</option>
+                  <option value="工讀">工讀</option>
+                  <option value="外包">外包</option>
+                  <option value="實習">實習</option>
+                </select>
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="直/間接人員">
+                <select className="form-input" style={{ width: '100%' }} value={editForm.is_direct_staff === true ? 'true' : editForm.is_direct_staff === false ? 'false' : ''} onChange={e => {
+                  const v = e.target.value
+                  setE('is_direct_staff', v === '' ? null : v === 'true')
+                }}>
+                  <option value="">— 不選 —</option>
+                  <option value="true">直接人員（業務 / 生產）</option>
+                  <option value="false">間接人員（管理 / 支援）</option>
+                </select>
+              </Field>
+              <Field label="復職日期">
+                <input className="form-input" type="date" style={{ width: '100%' }} value={editForm.reinstatement_date} onChange={e => setE('reinstatement_date', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--accent-cyan-dim)', borderRadius: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
+              💡 家庭關係、學歷、經歷、證照、技能 → 點員工列表上的「📁 詳細資料」按鈕管理
+            </div>
+          </div>
         </Modal>
+      )}
+
+      {detailsModalEmp && (
+        <EmployeeDetailsModal employee={detailsModalEmp} onClose={() => setDetailsModalEmp(null)} />
       )}
 
       {showCsvImport && (

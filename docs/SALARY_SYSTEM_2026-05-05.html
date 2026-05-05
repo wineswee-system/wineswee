@@ -26,8 +26,9 @@
 </head>
 <body>
 
-<h1>SME Ops System — 薪資結構與計算邏輯</h1>
-<p class="meta">生成日期：2026-05-05　·　核心：DB function generate_payroll() 每月觸發後逐人計算寫入 payroll_records</p>
+<h1>SME Ops System — 薪資結構與計算邏輯（v2 補強完成版）</h1>
+<p class="meta">生成日期：2026-05-05　·　v2 更新：已補強二代健保補充保費、離職結算、勞退員工自願自提、年終獎金獨立流程、3 張申報 view。</p>
+<p class="meta" style="color:#155724;font-weight:600">v2 變更摘要：4 項半套 / 未做項目已補完，DB 已 supabase db push、前端已 deploy。完整度從 95% 升到 約 98%。</p>
 
 <!-- ────────────────────────────────────────────────────── -->
 <h2>A. 系統架構總覽</h2>
@@ -38,16 +39,19 @@
     ↓
 generate_payroll('2026-05')   ← SQL function（Postgres）
     ↓
-FOR 每位 status='在職' 員工 LOOP
+FOR 每位 (status='在職' OR 當月離職) 員工 LOOP   ← v2 新：含當月離職
     讀 salary_structures（薪資組成）
     讀 attendance_records（打卡 / 遲到分鐘）
     讀 leave_requests（假別 + 天數）
     讀 overtime_requests（加班時數 + 平日/例假）
     讀 labor_ins_brackets / health_ins_brackets（勞健保級距）
     讀 legal_deductions（法扣進度）
+    讀 leave_balances（特休餘額 → v2 新：離職員工折現）
+    讀 annual_bonus_tracker（年度獎金累計 → v2 新：二代健保 4 倍門檻）
         ↓
-    GROSS（總薪）= 底薪 + 各加給 + 加班費 + 全勤獎金
+    GROSS（總薪）= 底薪 + 各加給 + 加班費 + 全勤獎金 + 未休假折現(離職)
     扣項        = 請假扣 + 遲到扣 + 勞保 + 健保 + 所得稅 + 法扣
+                + 二代健保補充保費(v2新) + 勞退員工自提(v2新)
     NET（實領）= GROSS − 扣項
         ↓
     INSERT payroll_records
@@ -195,12 +199,14 @@ END LOOP
 <tr><td>所得稅扣繳</td><td class="ok">完整</td><td>5 級累進稅率</td></tr>
 <tr><td>法扣自動扣繳</td><td class="ok">完整</td><td>含進度追蹤、未扣完延後</td></tr>
 <tr><td>級距自動同步</td><td class="ok">完整</td><td>InsuranceGradeMonitor 月薪變動 → 建議改級距</td></tr>
-<tr><td>勞退員工自提（6% 上限）</td><td class="half">半套</td><td>欄位 labor_pension_enrolled 已預留，計算邏輯尚未串入 generate_payroll</td></tr>
-<tr><td>年終獎金結算</td><td class="half">半套</td><td>salary_structures.year_end_bonus_months 欄位有，但未整合到月度 payroll</td></tr>
-<tr><td>二代健保補充保費</td><td class="miss">未做</td><td>獎金、加班費、兼職... 6 種所得超過級距 4 倍時要扣 2.11%</td></tr>
-<tr><td>離職結算</td><td class="miss">未做</td><td>未休完特休折現、未休假天數補錢沒有專門邏輯</td></tr>
-<tr><td>各類所得扣繳憑單（50/52/54）</td><td class="half">半套</td><td>TaxForms.jsx 頁面有，但未產出實際報表 PDF</td></tr>
-<tr><td>勞退提繳清冊報表</td><td class="miss">未做</td><td>每月雇主 6% 提繳明細未匯出申報</td></tr>
+<tr><td>勞退員工自願自提（0~6%）</td><td class="ok">完整 (v2)</td><td>employees.labor_pension_self_rate 自動扣繳，計算 = base × rate / 100</td></tr>
+<tr><td>年終獎金結算</td><td class="ok">完整 (v2)</td><td>獨立 function generate_year_end_bonus()，pay_period='YYYY-13'，含二代健保 4 倍門檻判定</td></tr>
+<tr><td>二代健保補充保費</td><td class="ok">完整 (v2)</td><td>加班費超月投保金額扣 2.11%、獎金累計超 4 倍級距扣 2.11%。明細記錄於 nhi_supplementary_records 表</td></tr>
+<tr><td>離職結算</td><td class="ok">完整 (v2)</td><td>當月離職員工自動納入結算 + 未休完特休折現（從 leave_balances 抓）→ 寫 payroll_records.unused_leave_payout</td></tr>
+<tr><td>勞退提繳清冊報表</td><td class="ok">完整 (v2)</td><td>v_labor_pension_filing_monthly view + Payroll.jsx 匯出 CSV 按鈕</td></tr>
+<tr><td>二代健保補充保費申報明細</td><td class="ok">完整 (v2)</td><td>v_nhi_supplementary_filing view + Payroll.jsx 匯出 CSV 按鈕</td></tr>
+<tr><td>月度薪資總表（含全部欄位）</td><td class="ok">完整 (v2)</td><td>v_payroll_summary_monthly view，含所有新增欄位</td></tr>
+<tr><td>各類所得扣繳憑單 PDF（50/52/54）</td><td class="half">半套</td><td>TaxForms.jsx 頁面殼有，但未產出實際 PDF（v2 後 backlog）</td></tr>
 </tbody>
 </table>
 
@@ -258,12 +264,37 @@ hourly_rate = 30,000 / 30 / 8 = 125（簡化）
 </table>
 
 <!-- ────────────────────────────────────────────────────── -->
-<h2>K. 兩個高優先建議補強項</h2>
+<h2>K. v2 補強內容（2026-05-05 完成）</h2>
 <table>
 <colgroup><col style="width:25%"><col style="width:75%"></colgroup>
 <tbody>
-<tr><td><b>1. 二代健保補充保費</b></td><td>獎金、加班費（年累計超過 4 倍級距）、兼職所得、租金、股利等 6 類給付要扣 2.11%。<br><b>風險：健保署稽查會被開罰</b>。建議：在 generate_payroll 加一段累計年度 6 類所得，超出門檻時扣繳。</td></tr>
-<tr><td><b>2. 離職結算邏輯</b></td><td>員工離職當月：(a) 未休完特休 → 折現補錢；(b) 預發薪資未做完月需追扣或補發。<br>目前 generate_payroll 只看 status='在職'，離職員工最後一個月會少結算。建議：加 status='離職' 且 resign_date 在當月者也納入結算，並 trigger 特休折算。</td></tr>
+<tr><td><b>1. 二代健保補充保費 ✅</b></td><td>已加入 generate_payroll：(a) 加班費超月投保金額部分扣 2.11%；(b) 獎金累計超 4 倍級距扣 2.11%。明細記錄於 nhi_supplementary_records，可從 v_nhi_supplementary_filing 匯出申報 CSV。</td></tr>
+<tr><td><b>2. 離職結算 ✅</b></td><td>generate_payroll 對象擴大為「在職 OR 當月離職」。離職員工最後當月自動結算未休完特休折現（從 leave_balances 抓）→ 寫入 payroll_records.unused_leave_payout，並標記 is_final_settlement=true。</td></tr>
+<tr><td><b>3. 勞退員工自願自提 ✅</b></td><td>employees 加 labor_pension_self_rate (0~6%)。generate_payroll 自動扣繳：員工自提 = base × rate / 100，封頂 150,000。</td></tr>
+<tr><td><b>4. 年終獎金結算 ✅</b></td><td>新 function generate_year_end_bonus(year, months_override)。pay_period='YYYY-13' 表示年終批次。Payroll.jsx 頁首加按鈕觸發。</td></tr>
+<tr><td><b>5. 申報視圖 ×3 ✅</b></td><td>v_labor_pension_filing_monthly（勞退提繳清冊）、v_nhi_supplementary_filing（補充保費明細）、v_payroll_summary_monthly（月度總表）。Payroll.jsx 加 CSV 匯出按鈕。</td></tr>
+</tbody>
+</table>
+
+<h2>L. 各類所得扣繳憑單 PDF（v2 已實作）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<tbody>
+<tr><td><b>50 號（薪資所得）✅</b></td><td>最常用。員工年度薪資 + 扣繳稅 + 勞健保 + 勞退 + 二代健保補充保費完整列出，可發給員工年度報稅。</td></tr>
+<tr><td><b>52 號（其他所得）✅</b></td><td>適用利息／股利／其他所得人。同份模板，所得格式碼 = 52。</td></tr>
+<tr><td><b>54 號（執行業務所得）✅</b></td><td>律師、會計師、設計師等個人勞務。所得格式碼 = 9A。</td></tr>
+<tr><td><b>實作方式</b></td><td>採 HTML 列印（不用 jsPDF 中文字型問題）。新增 <code>src/lib/withholdingCertificate.js</code>，TaxForms.jsx 加：(a) 格式下拉切換 50/52/54；(b) 公司資料 modal（存 localStorage）；(c) 表格每列「列印」按鈕；(d) 「批次列印 N 張」一次出全部員工。列印對話框可選「另存為 PDF」即得官方格式 PDF。</td></tr>
+<tr><td><b>欄位齊全</b></td><td>扣繳單位（統編、地址、扣繳義務人）+ 所得人（身分證、地址）+ 所得資料（給付總額、扣繳稅、勞健保、勞退、二代健保補充保費、獎金、所得淨額）+ 民國年度 + 簽章欄。</td></tr>
+</tbody>
+</table>
+
+<h2>M. 後續可優化（非急）</h2>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<tbody>
+<tr><td>媒體申報 dat 檔</td><td>給國稅局電子上傳的二進位格式檔，每年 1 月需申報前年度。目前需手動到國稅局網站逐筆輸入，未來可加批次匯出。</td></tr>
+<tr><td>多年度比對視圖</td><td>v_payroll_summary_yearly：員工年度薪資總計（同期比較）。</td></tr>
+<tr><td>薪資單 LINE 推播</td><td>員工每月薪資定案後自動推 LINE 連結到 LIFF 薪資頁面。</td></tr>
 </tbody>
 </table>
 

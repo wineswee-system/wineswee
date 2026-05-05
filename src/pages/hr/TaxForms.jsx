@@ -1,10 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
-import { FileText, Download, RefreshCw, Calculator } from 'lucide-react'
+import { FileText, Download, RefreshCw, Calculator, Printer, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getTaxWithholdingRecords, upsertTaxWithholding } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
+import { printWithholdingCertificate, printBatchCertificates } from '../../lib/withholdingCertificate'
+
+// 扣繳單位（公司）資料 — 存 localStorage，每次列印帶入
+const COMPANY_KEY = 'sme_withholding_company'
+const loadCompany = () => {
+  try { return JSON.parse(localStorage.getItem(COMPANY_KEY) || '{}') } catch { return {} }
+}
+const saveCompany = (c) => localStorage.setItem(COMPANY_KEY, JSON.stringify(c || {}))
 
 export default function TaxForms() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [records, setRecords] = useState([])
@@ -13,11 +24,14 @@ export default function TaxForms() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [computing, setComputing] = useState(false)
   const [selectedEmp, setSelectedEmp] = useState(null)
+  const [format, setFormat] = useState('50')   // 50/52/54
+  const [showCompanyModal, setShowCompanyModal] = useState(false)
+  const [company, setCompany] = useState(loadCompany)
 
   useEffect(() => {
     Promise.all([
       getTaxWithholdingRecords(year),
-      supabase.from('employees').select('id, name, department_id, position, status, join_date, departments(name)').order('name'),
+      supabase.from('employees').select('id, name, id_number, address, department_id, position, status, join_date, departments(name)').order('name'),
       supabase.from('salary_records').select('*').like('month', `${year}-%`).order('month'),
     ]).then(([r, e, s]) => {
       setRecords(r.data || [])
@@ -28,6 +42,34 @@ export default function TaxForms() {
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
   }, [year])
+
+  // 列印單張憑單
+  const handlePrintOne = (record) => {
+    if (!company?.name) {
+      if (!confirm('尚未設定扣繳單位（公司）資料，要先設定嗎？')) return
+      setShowCompanyModal(true)
+      return
+    }
+    const emp = employees.find(e => e.name === record.employee)
+    printWithholdingCertificate({ record, employee: emp, company, format })
+  }
+
+  // 批次列印
+  const handlePrintBatch = () => {
+    if (!company?.name) {
+      if (!confirm('尚未設定扣繳單位（公司）資料，要先設定嗎？')) return
+      setShowCompanyModal(true)
+      return
+    }
+    if (records.length === 0) return alert('尚無資料可列印')
+    printBatchCertificates({ records, employees, company, format })
+  }
+
+  const handleSaveCompany = () => {
+    saveCompany(company)
+    setShowCompanyModal(false)
+    alert('扣繳單位資料已儲存（瀏覽器本機）')
+  }
 
   const handleCompute = async () => {
     setComputing(true)
@@ -115,12 +157,23 @@ export default function TaxForms() {
             <h2><span className="header-icon">🧾</span> 扣繳憑單</h2>
             <p>年度薪資所得扣繳暨免扣繳憑單產製</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select className="form-input" style={{ fontSize: 13, width: 100 }} value={year} onChange={e => setYear(Number(e.target.value))}>
               {[2026, 2025, 2024].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
+            <select className="form-input" style={{ fontSize: 13, width: 200 }} value={format} onChange={e => setFormat(e.target.value)} title="所得格式">
+              <option value="50">50 號 — 薪資所得</option>
+              <option value="52">52 號 — 其他所得</option>
+              <option value="54">54 號 — 執行業務所得</option>
+            </select>
+            <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定扣繳單位資料">
+              <Settings size={14} /> 公司資料
+            </button>
             <button className="btn btn-secondary" onClick={handleCompute} disabled={computing}>
               <Calculator size={14} /> {computing ? '計算中...' : '重新計算'}
+            </button>
+            <button className="btn btn-secondary" onClick={handlePrintBatch} disabled={!records.length}>
+              <Printer size={14} /> 批次列印 ({records.length})
             </button>
             <button className="btn btn-primary" onClick={handleExportCSV} disabled={!records.length}>
               <Download size={14} /> 匯出 CSV
@@ -167,6 +220,7 @@ export default function TaxForms() {
                 <th>勞退(雇提)</th>
                 <th>獎金</th>
                 <th>狀態</th>
+                <th>列印</th>
               </tr>
             </thead>
             <tbody>
@@ -186,15 +240,60 @@ export default function TaxForms() {
                       {r.status}
                     </span>
                   </td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => handlePrintOne(r)}
+                      title={`列印 ${format} 號扣繳憑單`}
+                    >
+                      <Printer size={11} /> 列印
+                    </button>
+                  </td>
                 </tr>
               ))}
               {records.length === 0 && (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無資料，請點擊「重新計算」產生扣繳憑單</td></tr>
+                <tr><td colSpan={11} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無資料，請點擊「重新計算」產生扣繳憑單</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* 扣繳單位（公司）資料 Modal — 存 localStorage */}
+      {showCompanyModal && (
+        <Modal title="扣繳單位（公司）資料" onClose={() => setShowCompanyModal(false)} onSubmit={handleSaveCompany} submitLabel="儲存">
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 10, borderRadius: 6, marginBottom: 12 }}>
+            列印扣繳憑單時會自動帶入這些資料。儲存於瀏覽器本機（每台電腦各自設定）。
+          </div>
+          <Field label="公司名稱 *">
+            <input className="form-input" style={{ width: '100%' }} value={company.name || ''}
+              onChange={e => setCompany(c => ({ ...c, name: e.target.value }))}
+              placeholder="例：○○有限公司" />
+          </Field>
+          <Field label="統一編號 *">
+            <input className="form-input" style={{ width: '100%' }} value={company.tax_id || ''}
+              onChange={e => setCompany(c => ({ ...c, tax_id: e.target.value }))}
+              placeholder="8 位數" maxLength={8} />
+          </Field>
+          <Field label="公司地址">
+            <input className="form-input" style={{ width: '100%' }} value={company.address || ''}
+              onChange={e => setCompany(c => ({ ...c, address: e.target.value }))} />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="扣繳義務人姓名">
+              <input className="form-input" style={{ width: '100%' }} value={company.withholder_name || ''}
+                onChange={e => setCompany(c => ({ ...c, withholder_name: e.target.value }))}
+                placeholder="通常是負責人或 HR 主管" />
+            </Field>
+            <Field label="扣繳義務人身分證">
+              <input className="form-input" style={{ width: '100%' }} value={company.withholder_id || ''}
+                onChange={e => setCompany(c => ({ ...c, withholder_id: e.target.value }))}
+                maxLength={10} />
+            </Field>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

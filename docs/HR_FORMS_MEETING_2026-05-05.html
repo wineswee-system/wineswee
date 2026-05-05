@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>HR 表單系統說明（開會用）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.4cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 17.5cm; margin: 0 auto; color: #1a1a1a; font-size: 11pt; line-height: 1.55; }
+  h1 { font-size: 18pt; color: #fff; background: linear-gradient(90deg, #c2410c, #ea580c); padding: 12px 18px; margin: 0 0 14px 0; border-radius: 8px; }
+  h1 .sub { font-size: 11pt; font-weight: 400; opacity: 0.85; display: block; margin-top: 4px; }
+  h2 { font-size: 14pt; color: #c2410c; margin: 22px 0 8px 0; padding: 8px 12px; background: #fef3e7; border-radius: 6px; border-left: 5px solid #c2410c; }
+  h3 { font-size: 11.5pt; color: #ea580c; margin: 14px 0 6px 0; padding-left: 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+  th, td { border: 1px solid #fdba74; padding: 7px 10px; vertical-align: middle; font-size: 10.5pt; }
+  th { background: #c2410c; color: white; font-weight: 600; text-align: left; }
+  tr:nth-child(even) td { background: #fff7ed; }
+  .ok { background: #d4f4dd !important; color: #166534; font-weight: 600; }
+  .warn { background: #fff4cc !important; color: #92400e; font-weight: 600; }
+  .meta { color: #555; font-size: 9.5pt; margin: 4px 0 12px 0; }
+
+  .form-card {
+    background: #fff;
+    border: 2px solid #fdba74;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+  }
+  .form-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 12pt;
+    color: #c2410c;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #fef3e7;
+    padding-bottom: 6px;
+  }
+  .form-card .icon { font-size: 16pt; }
+  .form-row { display: flex; gap: 8px; margin: 4px 0; align-items: flex-start; }
+  .form-row .label { background: #fef3e7; color: #c2410c; padding: 2px 9px; border-radius: 4px; font-size: 10pt; font-weight: 600; min-width: 70px; flex-shrink: 0; }
+  .form-row .value { font-size: 10.5pt; line-height: 1.5; flex: 1; }
+
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 9.5pt; font-weight: 600; margin: 0 2px; }
+  .tag-auto { background: #fce7f3; color: #9d174d; }
+  .tag-chain { background: #ddd6fe; color: #5b21b6; }
+  .tag-builder { background: #e0e7ff; color: #3730a3; }
+  .tag-orange { background: #fed7aa; color: #9a3412; }
+
+  .summary-card {
+    background: #fff;
+    border: 2px solid #c2410c;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 14px 0;
+  }
+  .summary-card .big { font-size: 22pt; color: #c2410c; font-weight: 700; line-height: 1; }
+  .summary-card .label { color: #555; font-size: 10pt; margin-top: 4px; }
+
+  .key-point {
+    background: #fef3c7;
+    border-left: 4px solid #d97706;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .flow-box {
+    background: #fff7ed;
+    border: 2px solid #c2410c;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .flow-step {
+    background: #fff;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .flow-step .num {
+    background: #c2410c;
+    color: white;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .arrow-down { text-align: center; color: #c2410c; font-size: 18pt; line-height: 1; margin: 0; }
+
+  .category-header {
+    background: linear-gradient(90deg, #c2410c, #ea580c);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 6px;
+    margin: 18px 0 8px 0;
+    font-size: 12.5pt;
+    font-weight: 700;
+  }
+
+  ul { margin: 4px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<h1>HR 表單系統說明
+<span class="sub">SME Ops System · 開會用簡報　·　2026-05-05</span>
+</h1>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>📌 一句話總結</h2>
+<div class="key-point">
+員工進「HR 表單中心」一站式申請所有 HR 流程，分 4 大類共 18 種表單；admin 可在「表單建立器」拉欄位自建新表單。送單後依設定走簽核鏈或自動推給直屬主管，全程通知中心 + LINE 推播。
+</div>
+
+<table>
+<colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
+<tbody><tr>
+<td>
+  <div class="summary-card">
+    <div class="big">18 種</div>
+    <div class="label">內建表單</div>
+  </div>
+</td>
+<td>
+  <div class="summary-card">
+    <div class="big">4 大類</div>
+    <div class="label">分類整理</div>
+  </div>
+</td>
+<td>
+  <div class="summary-card">
+    <div class="big">2 種</div>
+    <div class="label">核准方式</div>
+  </div>
+</td>
+<td>
+  <div class="summary-card">
+    <div class="big">7 種</div>
+    <div class="label">建立器欄位類型</div>
+  </div>
+</td>
+</tr></tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🚪 表單入口</h2>
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<thead><tr><th>頁面</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>HR 表單中心</td><td>所有表單入口（4 大類分組顯示），點卡片進入填寫</td></tr>
+<tr><td>我的提交</td><td>看自己送出的所有表單（已通過 / 待簽核 / 駁回）</td></tr>
+<tr><td>表單建立器</td><td>admin 建自訂表單（拉欄位、設簽核鏈）</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔀 兩種核准方式</h2>
+
+<table>
+<colgroup><col style="width:50%"><col style="width:50%"></colgroup>
+<thead><tr><th><span class="tag tag-auto">自動解析</span> 適合日常 HR</th><th><span class="tag tag-chain">簽核鏈</span> 適合重大決策</th></tr></thead>
+<tbody>
+<tr><td>系統自動找：店長 → 直屬主管 → 部門主管 → 部門樹往上</td><td>預先設定 N 關步驟，每關指定簽核人</td></tr>
+<tr><td>申請人是店長本人 → 走 HR 權限者</td><td>跑完所有關才算通過</td></tr>
+<tr><td>用於：請假、加班、補登、出差、報帳等</td><td>用於：離職、留停、異動、費用申請等</td></tr>
+<tr><td>不用 admin 預先設定</td><td>需 admin 進「簽核鏈設定」建立</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="category-header">📅 第一類：假勤申請（5 種）</div>
+
+<div class="form-card">
+<h4><span class="icon">📝</span>請假申請　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">假別（13 種）、起訖日、原因、附件（診斷書等）</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 → 排班跳過該日 → 薪資依假別自動扣（全薪/半薪/無薪）→ 扣特休餘額</span></div>
+<div class="form-row"><span class="label">特色</span><span class="value">員工餘額不足前端會擋下；事假無薪、病假前 30 天半薪、特休全薪</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">⏰</span>加班申請（事後補登）　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">加班日、起訖時間、加班時數、原因、補休 or 加班費</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 → 加班費自動進入薪資計算 → 觸發二代健保補充保費判定</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">📋</span>加班申請（事前預先）　<span class="tag tag-auto">自動解析</span> <span class="tag tag-builder">表單建立器自訂</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">同事後加班，但需「預先」申請</span></div>
+<div class="form-row"><span class="label">為什麼</span><span class="value">勞基法 §32 要求加班需事先取得員工同意，事前申請是合規證明</span></div>
+<div class="form-row"><span class="label">勞檢</span><span class="value">勞工局稽查必查項目，沒做會被開單</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">🕐</span>忘刷補登　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、日期、補登類型（上班/下班）、實際打卡時間、原因</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 → 自動補進打卡紀錄 → 影響遲到計算 / 工時 / 薪資</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">↩️</span>銷假申請　<span class="tag tag-auto">自動解析</span> <span class="tag tag-builder">表單建立器自訂</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">原假單、銷假原因</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 → 還原該員工特休餘額、薪資扣薪自動調整</span></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="category-header">🏃 第二類：人事異動（5 種）</div>
+
+<div class="form-card">
+<h4><span class="icon">🚪</span>離職申請　<span class="tag tag-chain">簽核鏈</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、預計離職日、原因（個人/家庭/健康/另謀高就/退休）、原因說明、交接事項</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管 → HR 確認 → 執行長核准（3 關）</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">最後一關核准 → 員工狀態自動改「離職」+ 寫離職日 → 下個月薪資自動進入「離職結算」（含未休特休折現）</span></div>
+<div class="form-row"><span class="label">隱私</span><span class="value">非 admin 只能看自己的申請</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">⏸️</span>留職停薪　<span class="tag tag-chain">簽核鏈</span> <span class="tag tag-builder">表單建立器自訂</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、起迄日、預計回任日、原因類型（產假/育嬰/兵役/進修/家庭）、附件</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管 → HR 確認 → 執行長核准（3 關）</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">核准 → 員工狀態自動改「留停」；填回任日後 → 自動改回「在職」</span></div>
+<div class="form-row"><span class="label">備註</span><span class="value">育嬰留停依性平法為法定權利，HR 不可拒</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">🔄</span>人事異動申請　<span class="tag tag-chain">簽核鏈</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、異動類型（調職/升遷/降調/部門調動/跨店調動/調薪）、生效日、新部門、新門市、新職位、新薪資、原因</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管 → HR 確認 → 執行長核准（3 關）</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">最後一關核准 → 自動寫異動軌跡 + 更新員工主檔（含底薪）→ 下月薪資套新數字</span></div>
+<div class="form-row"><span class="label">UI 特色</span><span class="value">顯示異動前 / 後對比（劃掉舊值、紅字顯示新值）</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">⏳</span>試用期評核　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、指導人、起訖日、評分項目、結果（試用中/已通過/未通過/延長）、評語</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">未通過 → 啟動離職流程；已通過 → 員工正式入職、加入正常排班輪</span></div>
+<div class="form-row"><span class="label">特色</span><span class="value">新員工到職後 90 天系統自動建立試用記錄</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">⭐</span>績效考核　<span class="tag tag-chain">簽核鏈</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">員工、評核期間、自評、主管評、整體分數、KPI 項目、改進方向、下期目標</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">主管 → HR 雙簽</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">結果可帶入績效獎金計算；連續 2 期低分 → AI 離職預測加權重</span></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="category-header">💰 第三類：費用 / 出差（3 種）</div>
+
+<div class="form-card">
+<h4><span class="icon">✈️</span>出差申請　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">出差地點、起訖日、目的、預估費用、交通方式</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 → 排班跳過該日（不被排店內班） → 可申請費用報銷</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">🧾</span>費用報銷　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">類別（交通/住宿/餐費/雜支）、金額、收據（上傳）、關聯出差單、說明</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">直屬主管 → 財務</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">批准後 status='已核銷' → 進入會計流程</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">📑</span>費用申請（採購類）　<span class="tag tag-chain">簽核鏈（金額分流）</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">標題、說明、預估金額、會計科目、門市、附件</span></div>
+<div class="form-row"><span class="label">金額分流</span><span class="value">
+  <b>≤ 3,000</b>：直屬主管 1 關<br>
+  <b>3,001–10,000</b>：主管 + 部門主管 2 關<br>
+  <b>≥ 10,001</b>：主管 + 部門主管 + 財務 3 關
+</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">核准後 → 進入採購流程；可實際撥款後核銷</span></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="category-header">📋 第四類：其他（5 種）</div>
+
+<div class="form-card">
+<h4><span class="icon">👥</span>招募職缺申請　<span class="tag tag-chain">簽核鏈</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">部門、職稱、人數、薪資範圍、急迫性、原因、應徵資格</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">部門主管 → HR → 執行長</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">核准後 → 可外發 104 / 開始接收履歷</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">🎓</span>教育訓練　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">課程名稱、單位（內訓/外訓）、起訖日、費用、補助比例、結業狀態</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">主管核准 + HR 報名</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">結業後 → 寫入員工證照清單；費用核銷走費用報銷流程</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">📄</span>文件簽核　<span class="tag tag-chain">簽核鏈（依文件類型）</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">標題、文件類型（合約/政策/協議書/通知）、檔案、相關員工、生效日、到期日</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">合約走法務、政策走 HR、其他依設定</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">員工簽核後 → 寫個人簽收記錄</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">🚑</span>工傷通報　<span class="tag tag-auto">自動解析</span></h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">事故日、地點、類型（職災/通勤/其他）、傷勢、就醫情況、是否已通報勞工局</span></div>
+<div class="form-row"><span class="label">核准</span><span class="value">主管 → HR 立即處理（24h 內）</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">嚴重案件 → 自動產勞工局通報書 PDF；薪資算「公傷病假」全薪</span></div>
+<div class="form-row"><span class="label">法令</span><span class="value">勞基法 §59：職災原領工資補償</span></div>
+</div>
+
+<div class="form-card">
+<h4><span class="icon">💬</span>員工意見反映 / 滿意度調查　無核准</h4>
+<div class="form-row"><span class="label">填什麼</span><span class="value">調查題目（題型多樣）、回應內容、整體分數、評論</span></div>
+<div class="form-row"><span class="label">特色</span><span class="value">匿名收集（無需核准）</span></div>
+<div class="form-row"><span class="label">影響</span><span class="value">低分 → 推 HR；連續低分員工 → AI 離職預測加權重</span></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🛠️ 表單建立器（Form Builder）</h2>
+
+<div class="key-point">
+admin 不用寫程式就能新增表單。適合輕量級需求（如：員工健康申報、設備領用、活動報名）。
+</div>
+
+<h3>7 種欄位類型</h3>
+<table>
+<colgroup><col style="width:18%"><col style="width:32%"><col style="width:50%"></colgroup>
+<thead><tr><th>類型</th><th>表現方式</th><th>適用</th></tr></thead>
+<tbody>
+<tr><td>單行文字</td><td>單行輸入框</td><td>姓名、項目名稱、簡短描述</td></tr>
+<tr><td>多行文字</td><td>多行輸入框</td><td>說明、原因、備註</td></tr>
+<tr><td>數字</td><td>數字輸入</td><td>金額、數量、天數</td></tr>
+<tr><td>日期</td><td>日期選擇器</td><td>申請日、生效日、截止日</td></tr>
+<tr><td>下拉選擇</td><td>單選下拉</td><td>類別、狀態、優先級</td></tr>
+<tr><td>多選勾選</td><td>多選 checkbox</td><td>多項目選擇</td></tr>
+<tr><td>檔案上傳</td><td>檔案附件</td><td>診斷書、合約、收據</td></tr>
+</tbody>
+</table>
+
+<h3>建表單時可以設</h3>
+<ul>
+<li><b>表單名稱</b>　顯示在 HR 表單中心的卡片</li>
+<li><b>分類</b>　歸入哪一大類（假勤/人事異動/費用/其他）</li>
+<li><b>顏色</b>　卡片圖示顏色（7 色可選）</li>
+<li><b>欄位</b>　拉幾個欄位都行（每個可設必填、預設值、選項）</li>
+<li><b>簽核鏈</b>　指定走哪條簽核鏈（可空 = 不簽核直接通過）</li>
+<li><b>啟用 / 停用</b>　不啟用就不顯示在表單中心</li>
+<li><b>排序</b>　在類別內的顯示順序</li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔗 簽核鏈範本（4 條 HR 標準鏈）</h2>
+
+<p>進「簽核鏈設定」點「✨ HR 範本」一鍵建立：</p>
+
+<table>
+<colgroup><col style="width:18%"><col style="width:14%"><col style="width:68%"></colgroup>
+<thead><tr><th>鏈名</th><th>類別</th><th>步驟</th></tr></thead>
+<tbody>
+<tr><td>離職申請</td><td>離職</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>留停申請</td><td>留停</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>人事異動</td><td>異動</td><td>申請人 → 直屬主管 → HR 確認 → 執行長核准 → ✓</td></tr>
+<tr><td>預先加班</td><td>預先加班</td><td>申請人 → 直屬主管 → 部門主管 → ✓</td></tr>
+</tbody>
+</table>
+
+<div class="key-point">
+建立後請逐條編輯，把每個 step 的「簽核人」用搜尋下拉指派具體員工。否則送單會卡在「找不到第一關簽核人」。
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔄 簽核流程（通用機制）</h2>
+
+<div class="flow-box">
+  <div class="flow-step"><span class="num">1</span><b>員工送單</b>　→ 系統自動找第一關簽核人</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">2</span><b>通知簽核人</b>　→ 寫進通知中心 + LINE 推播</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">3</span><b>簽核人決定</b>　→ 核准 / 駁回（需填原因）</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">4</span><b>核准 → 推下一關</b>，駁回 → 退回申請人改後重送</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">5</span><b>最後一關通過</b>　→ 觸發後續動作（員工狀態改、薪資調整、寫軌跡）</div>
+</div>
+
+<h3>UI 顯示</h3>
+<ul>
+<li>列表頁顯示「簽核進度」：<span class="tag" style="background:#d4f4dd;color:#166534">綠 = 已過</span> <span class="tag" style="background:#fed7aa;color:#9a3412">橘 = 當前</span> <span class="tag" style="background:#e5e7eb;color:#525252">灰 = 等待</span></li>
+<li>表單上方顯示「· 簽核鏈：xxx（N 關）」或「⚠ 無簽核鏈」警示</li>
+<li>只有當前 step 的合法簽核人才看得到「核准 / 駁回」按鈕</li>
+</ul>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>👤 角色權限矩陣</h2>
+
+<table>
+<colgroup><col style="width:25%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:10%"></colgroup>
+<thead><tr><th>動作</th><th>門市員工</th><th>內勤</th><th>主管</th><th>admin</th><th>super_admin</th><th>老闆</th></tr></thead>
+<tbody>
+<tr><td>送請假/加班/補登</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>自動核准</td></tr>
+<tr><td>送離職/留停/異動</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>看自己提交</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>看其他人提交</td><td>❌</td><td>❌</td><td>部分</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>核准（自動解析）</td><td>❌</td><td>部分</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>核准（簽核鏈）</td><td>❌</td><td>視 chain</td><td>視</td><td>視</td><td>✅</td><td>✅</td></tr>
+<tr><td>進表單建立器</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>編輯簽核鏈</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔔 通知中心整合</h2>
+
+<div class="key-point">
+所有表單送出 / 待我簽核 / 通過 / 駁回都會出現在右上角鈴鐺通知，點擊跳到對應頁面。
+</div>
+
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<thead><tr><th>類型</th><th>觸發場景</th></tr></thead>
+<tbody>
+<tr><td>表單送出待簽核</td><td>員工送單後 → 推給簽核人</td></tr>
+<tr><td>法令更新提醒</td><td>每年 12/01 提醒 admin 更新勞健保級距</td></tr>
+<tr><td>HR 類待簽核</td><td>請假 / 加班 / 補登 → 推主管</td></tr>
+<tr><td>核准結果</td><td>申請人收到通過 / 駁回通知</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>📋 操作流程（給 admin）</h2>
+
+<table>
+<colgroup><col style="width:8%"><col style="width:35%"><col style="width:57%"></colgroup>
+<thead><tr><th>步</th><th>動作</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>建立 HR 範本鏈</td><td>進「簽核鏈設定」點「HR 範本」按鈕一鍵建立 4 條</td></tr>
+<tr><td>2</td><td>指派每步簽核人</td><td>逐條編輯，把 step 的「標籤」換成具體員工（搜尋下拉）</td></tr>
+<tr><td>3</td><td>確認 4 大類顯示</td><td>進「HR 表單中心」確認所有表單都正常顯示</td></tr>
+<tr><td>4</td><td>送一筆假單測試</td><td>用 admin 帳號送離職單測試從頭跑到尾</td></tr>
+<tr><td>5</td><td>用建立器補表單</td><td>銷假、留停、預先加班用拉欄位的方式建</td></tr>
+<tr><td>6</td><td>員工教育</td><td>帶員工看入口、講解送單流程、示範 LINE 通知怎麼點</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>✅ 系統完整度</h2>
+
+<table>
+<colgroup><col style="width:35%"><col style="width:15%"><col style="width:50%"></colgroup>
+<thead><tr><th>表單</th><th>狀態</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>請假申請</td><td class="ok">✅</td><td>13 種假別齊全，連動薪資</td></tr>
+<tr><td>加班申請（事後）</td><td class="ok">✅</td><td>連動加班費 + 二代健保</td></tr>
+<tr><td>加班申請（預先）</td><td class="warn">建立器待建</td><td>後端已備、admin 可拉欄位建立</td></tr>
+<tr><td>忘刷補登</td><td class="ok">✅</td><td>批准後自動補進打卡紀錄</td></tr>
+<tr><td>銷假申請</td><td class="warn">建立器待建</td><td>後端已備、admin 可拉欄位建立</td></tr>
+<tr><td>離職申請</td><td class="ok">✅</td><td>含自動觸發員工狀態改變</td></tr>
+<tr><td>留職停薪</td><td class="warn">建立器待建</td><td>後端已備</td></tr>
+<tr><td>人事異動</td><td class="ok">✅</td><td>含自動寫異動軌跡 + 更新員工檔</td></tr>
+<tr><td>試用期評核</td><td class="ok">✅</td><td>含 90 天自動建立</td></tr>
+<tr><td>績效考核</td><td class="ok">✅</td><td>結果連動獎金</td></tr>
+<tr><td>出差申請</td><td class="ok">✅</td><td>連動排班 + 費用報銷</td></tr>
+<tr><td>費用報銷</td><td class="ok">✅</td><td>連動會計流程</td></tr>
+<tr><td>費用申請（採購）</td><td class="ok">✅</td><td>金額分流 3 級</td></tr>
+<tr><td>招募職缺</td><td class="ok">✅</td><td>連動 104 招募</td></tr>
+<tr><td>教育訓練</td><td class="ok">✅</td><td>連動證照 + 費用</td></tr>
+<tr><td>文件簽核</td><td class="ok">✅</td><td>含個人簽收記錄</td></tr>
+<tr><td>工傷通報</td><td class="ok">✅</td><td>嚴重案件自動產 PDF</td></tr>
+<tr><td>員工意見反映</td><td class="ok">✅</td><td>匿名 + 連動 AI 離職預測</td></tr>
+<tr><td>表單建立器</td><td class="ok">✅</td><td>7 種欄位類型 + 簽核鏈整合</td></tr>
+<tr><td>HR 範本鏈一鍵建立</td><td class="ok">✅</td><td>4 條（離職/留停/異動/預先加班）</td></tr>
+<tr><td>通知中心整合</td><td class="ok">✅</td><td>所有表單事件都會通知</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🎯 後續優化（非急迫）</h2>
+
+<table>
+<colgroup><col style="width:30%"><col style="width:15%"><col style="width:55%"></colgroup>
+<thead><tr><th>項目</th><th>優先級</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>銷假 / 留停 / 預先加班 用建立器補</td><td>P1</td><td>1.5 hr，admin 自己拉欄位即可</td></tr>
+<tr><td>條件分流（簽核鏈進階）</td><td>P2</td><td>同表單依金額/天數走不同路徑</td></tr>
+<tr><td>簽核代理人</td><td>P2</td><td>主管請假時自動轉給代理人</td></tr>
+<tr><td>逾時自動 escalation</td><td>P2</td><td>3 天沒簽 → 自動推給上級</td></tr>
+<tr><td>LINE 簽核 flex card 統一</td><td>P3</td><td>目前每張單的 LINE 卡片格式略有差異</td></tr>
+<tr><td>簽核儀表板</td><td>P3</td><td>待我簽 / 已過 / 平均處理時間</td></tr>
+<tr><td>退回上一步（不全否決）</td><td>P3</td><td>增加「只退一步」選項</td></tr>
+<tr><td>加簽 / 知會（非審核）</td><td>P3</td><td>副本給 HR 看不審</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>💡 開會討論重點</h2>
+
+<div class="key-point">
+<ol>
+<li><b>簽核鏈每關的具體簽核人</b>　離職/留停/異動的 3 關要選誰（直屬主管 / HR / 執行長）</li>
+<li><b>銷假 / 留停 / 預先加班的欄位</b>　決定要設哪些欄位再用建立器拉</li>
+<li><b>費用申請的金額分級</b>　3,000 / 10,000 / 10,000 以上的門檻是否合理？</li>
+<li><b>看其他人提交的權限</b>　主管能否看部門內所有人的提交？</li>
+<li><b>LINE 通知是否啟用</b>　每張表單都要 LINE 推播還是只有重要的？</li>
+<li><b>表單建立器自訂欄位的命名規範</b>　建議統一格式（如：「日期類欄位用 YYYY-MM-DD」）</li>
+</ol>
+</div>
+
+<p class="meta" style="margin-top:24px; text-align:center;">— 文件結束 —</p>
+
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>排班系統說明（開會用）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.4cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 17.5cm; margin: 0 auto; color: #1a1a1a; font-size: 11pt; line-height: 1.55; }
+  h1 { font-size: 18pt; color: #fff; background: linear-gradient(90deg, #6b21a8, #9333ea); padding: 12px 18px; margin: 0 0 14px 0; border-radius: 8px; }
+  h1 .sub { font-size: 11pt; font-weight: 400; opacity: 0.85; display: block; margin-top: 4px; }
+  h2 { font-size: 14pt; color: #6b21a8; margin: 22px 0 8px 0; padding: 8px 12px; background: #f5e6ff; border-radius: 6px; border-left: 5px solid #6b21a8; }
+  h3 { font-size: 11.5pt; color: #7e22ce; margin: 14px 0 6px 0; padding-left: 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+  th, td { border: 1px solid #c4b5fd; padding: 7px 10px; vertical-align: middle; font-size: 10.5pt; }
+  th { background: #6b21a8; color: white; font-weight: 600; text-align: left; }
+  tr:nth-child(even) td { background: #faf5ff; }
+  .ok { background: #d4f4dd !important; color: #166534; font-weight: 600; }
+  .warn { background: #fff4cc !important; color: #92400e; font-weight: 600; }
+  .meta { color: #555; font-size: 9.5pt; margin: 4px 0 12px 0; }
+
+  .flow-box {
+    background: #faf5ff;
+    border: 2px solid #6b21a8;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .flow-step {
+    background: #fff;
+    border: 1px solid #c4b5fd;
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .flow-step .num {
+    background: #6b21a8;
+    color: white;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .arrow-down { text-align: center; color: #6b21a8; font-size: 18pt; line-height: 1; margin: 0; }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .compare-card {
+    border: 2px solid #c4b5fd;
+    border-radius: 8px;
+    padding: 14px 18px;
+    background: #fff;
+  }
+  .compare-card h4 { color: #6b21a8; margin: 0 0 8px 0; font-size: 12pt; }
+
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 9.5pt; font-weight: 600; margin: 0 3px; }
+  .tag-purple { background: #ede9fe; color: #5b21b6; }
+  .tag-green { background: #d4f4dd; color: #166534; }
+  .tag-yellow { background: #fff4cc; color: #92400e; }
+
+  .summary-card {
+    background: #fff;
+    border: 2px solid #6b21a8;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 14px 0;
+  }
+  .summary-card .big { font-size: 22pt; color: #6b21a8; font-weight: 700; line-height: 1; }
+  .summary-card .label { color: #555; font-size: 10pt; margin-top: 4px; }
+
+  .key-point {
+    background: #fef3c7;
+    border-left: 4px solid #d97706;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .rule-grid {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .rule-grid .rule-num {
+    background: #6b21a8; color: white;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-weight: 700;
+    text-align: center;
+    font-size: 10pt;
+  }
+  .rule-grid .rule-title { padding: 6px 10px; background: #f5e6ff; border-radius: 4px; font-weight: 600; font-size: 10pt; }
+  .rule-grid .rule-law { padding: 6px 10px; background: #f4f4f5; border-radius: 4px; font-size: 9.5pt; color: #555; }
+
+  ul { margin: 6px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>排班系統說明
+<span class="sub">SME Ops System · 開會用簡報　·　2026-05-05</span>
+</h1>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>📌 一句話總結</h2>
+<div class="key-point">
+雙引擎（程式 + AI）排班系統，支援週/月/變形工時三種視圖、班別制與時段覆蓋制兩種模式，自動套用勞基法 17 條硬性規則 + 10 條軟性建議，產出後可發布給員工 LINE 通知。
+</div>
+
+<table>
+<colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup>
+<tbody><tr>
+<td>
+  <div class="summary-card">
+    <div class="big">17 條</div>
+    <div class="label">勞基法硬性規則</div>
+  </div>
+</td>
+<td>
+  <div class="summary-card">
+    <div class="big">3 種</div>
+    <div class="label">視圖模式（週/月/Cycle）</div>
+  </div>
+</td>
+<td>
+  <div class="summary-card">
+    <div class="big">2 種</div>
+    <div class="label">排班引擎（程式/AI）</div>
+  </div>
+</td>
+</tr></tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>⚙️ 兩種引擎對照</h2>
+
+<div class="compare">
+<div class="compare-card">
+<h4>📐 程式排班（Programmatic）</h4>
+<ul>
+<li>速度：<b>1–3 秒</b></li>
+<li>結果穩定：每次同輸入 = 同結果</li>
+<li>邏輯透明：每步驟都可追蹤</li>
+<li>免費：不用付 API 費用</li>
+<li>適合：日常排班、批次跑、無網路</li>
+</ul>
+</div>
+
+<div class="compare-card">
+<h4>🤖 AI 排班（Gemini）</h4>
+<ul>
+<li>速度：10–30 秒（含重試）</li>
+<li>結果有變異：每次略有差異</li>
+<li>創意度高：能處理複雜偏好</li>
+<li>需付 API 費</li>
+<li>適合：複雜排班、偏好衝突多時</li>
+</ul>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>📅 三種視圖模式</h2>
+
+<table>
+<colgroup><col style="width:18%"><col style="width:18%"><col style="width:22%"><col style="width:42%"></colgroup>
+<thead><tr><th>視圖</th><th>範圍</th><th>適用工時制</th><th>策略</th></tr></thead>
+<tbody>
+<tr><td>週視圖</td><td>7 天</td><td>標準工時</td><td>單週獨立排，最簡單</td></tr>
+<tr><td>月視圖</td><td>整個月</td><td>月制工時目標</td><td>切成 4–5 週逐週排，跨週累積工時</td></tr>
+<tr><td>Cycle 視圖</td><td>2 / 4 / 8 週</td><td>變形工時</td><td>以變形週期為單位，跨週累積工時與休假</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>⏰ 變形工時規則（勞基法 §30 / §30-1）</h2>
+
+<table>
+<colgroup><col style="width:22%"><col style="width:18%"><col style="width:22%"><col style="width:38%"></colgroup>
+<thead><tr><th>制度</th><th>單週上限</th><th>週期總時上限</th><th>休息天數</th></tr></thead>
+<tbody>
+<tr><td>標準工時</td><td>40 小時</td><td>—</td><td>每 7 天 1 例假 + 1 休息日</td></tr>
+<tr><td>2 週變形</td><td>48 小時</td><td>2 週 84 小時</td><td>2 週 4 天</td></tr>
+<tr><td>4 週變形</td><td>48 小時</td><td>4 週 168 小時</td><td>4 週 8 天</td></tr>
+<tr><td>8 週變形</td><td>48 小時</td><td>8 週 336 小時</td><td>8 週 16 天</td></tr>
+</tbody>
+</table>
+
+<p class="meta">每日工作上限 §32：8 小時（一般）、12 小時（含加班）</p>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🎯 兩種排班模式</h2>
+
+<div class="compare">
+<div class="compare-card">
+<h4>📋 班別制 Shift-based</h4>
+<p>有預設班別（如「11–20 早班」「15–24 晚班」），員工指派整段班別。</p>
+<ul>
+<li>適合：固定營業時段、有明確班別</li>
+<li>每班別有最低人數要求</li>
+<li>支援平日/假日不同班別</li>
+<li>可區分 FT/PT 限定班別</li>
+</ul>
+</div>
+
+<div class="compare-card">
+<h4>🕐 時段覆蓋制 Time Slot</h4>
+<p>不限定固定班別，員工只需「覆蓋」需求時段（如 11–14 點需 2 人、19–22 點需 3 人）。</p>
+<ul>
+<li>適合：彈性排班、人力靈活運用</li>
+<li>系統自動算每人最佳起訖時間</li>
+<li>適合超商/早午餐等不固定班別</li>
+<li>啟用條件：門市有設定時段需求</li>
+</ul>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔁 排班核心流程</h2>
+
+<div class="flow-box">
+  <div class="flow-step"><span class="num">1</span><b>排休假</b>　→ 依員工類型算月休目標（FT 10 天 / PT 20 天），先放員工已申請的休</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">2</span><b>排班別 / 時段</b>　→ 依排班優先序、員工偏好、最低人力，貪婪選最佳班別</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">3</span><b>修補開關店</b>　→ 找有開店資格的員工頂替早班、有關店資格的頂替晚班</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">4</span><b>跨店借調</b>　→ 本店缺人時從其他門市借調可支援員工</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">5</span><b>合規檢查</b>　→ 套 17 條勞基法規則，違規標 error；10 條軟性規則標 warning</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">6</span><b>產出草稿</b>　→ 顯示違規清單與工時統計，admin 審閱後發布</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>⚖️ 勞基法硬性規則（17 條，違反即為錯誤）</h2>
+
+<div class="rule-grid">
+<div class="rule-num">H1</div><div class="rule-title">員工請假日不得排班</div><div class="rule-law">排班規則</div>
+<div class="rule-num">H2</div><div class="rule-title">每日工時 ≤ 12 小時</div><div class="rule-law">勞基法 §32</div>
+<div class="rule-num">H3</div><div class="rule-title">連續工作 ≤ 12 天 (FT) / 6 天 (PT)</div><div class="rule-law">勞基法 §36</div>
+<div class="rule-num">H4</div><div class="rule-title">跨日班間隔 ≥ 11 小時</div><div class="rule-law">勞基法 §34</div>
+<div class="rule-num">H6</div><div class="rule-title">月加班 ≤ 46 小時</div><div class="rule-law">勞基法 §32</div>
+<div class="rule-num">H7</div><div class="rule-title">每週工時不超週上限 + 緩衝</div><div class="rule-law">依工時制動態</div>
+<div class="rule-num">H8</div><div class="rule-title">每週至少 1 例假</div><div class="rule-law">勞基法 §36</div>
+<div class="rule-num">H9</div><div class="rule-title">無開店資格者不得排早班</div><div class="rule-law">營運規則</div>
+<div class="rule-num">H10</div><div class="rule-title">未成年員工不得排夜班</div><div class="rule-law">勞基法 §48</div>
+<div class="rule-num">H11</div><div class="rule-title">變形工時週期總時上限</div><div class="rule-law">勞基法 §30-1</div>
+<div class="rule-num">H13</div><div class="rule-title">孕婦 / 哺乳員工不得排夜班</div><div class="rule-law">性平法 §15</div>
+<div class="rule-num">H14</div><div class="rule-title">員工不能排到非自己門市的班</div><div class="rule-law">除非該店在跨店清單</div>
+<div class="rule-num">H15</div><div class="rule-title">員工類型須與班別匹配</div><div class="rule-law">FT 不能排 PT 班反之亦然</div>
+<div class="rule-num">H16</div><div class="rule-title">平日 / 假日班別匹配</div><div class="rule-law">營運規則</div>
+<div class="rule-num">H17</div><div class="rule-title">月休天數符合設定</div><div class="rule-law">FT ≥ 10 天、PT ≤ 20 天</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>💡 軟性建議規則（10 條，違反為提醒不阻擋）</h2>
+
+<table>
+<colgroup><col style="width:8%"><col style="width:42%"><col style="width:50%"></colgroup>
+<thead><tr><th>編號</th><th>規則</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>S1</td><td>每天每班別人數 ≥ 設定需求</td><td>低於 → 提醒人力不足</td></tr>
+<tr><td>S5</td><td>月工時介於目標範圍</td><td>FT 150–175 小時、PT 80–175 小時</td></tr>
+<tr><td>S8</td><td>每天有開店 + 關店人員</td><td>否則上下班無人交接</td></tr>
+<tr><td>S9</td><td>連續週末工作 ≤ 2 週</td><td>公平性原則</td></tr>
+<tr><td>S10</td><td>每時段覆蓋人數 ≥ 需求</td><td>時段覆蓋制專用</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>👥 員工屬性（影響排班結果）</h2>
+
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<thead><tr><th>欄位</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>員工類型</td><td>正職 / 兼職 / PT — 影響月休目標、工時上限、可排班別</td></tr>
+<tr><td>能開店</td><td>是否能開店（開貨、開機台）— 影響早班指派</td></tr>
+<tr><td>能關店</td><td>是否能關店（盤點、結帳、上鎖）— 影響晚班指派</td></tr>
+<tr><td>跨店支援清單</td><td>可支援的其他門市 — 跨店借調基礎</td></tr>
+<tr><td>每週目標工時</td><td>該員工每週目標（FT 預設 40 小時，可個別調整）</td></tr>
+<tr><td>個人月工時上限</td><td>例：孕婦不得超過 160 小時</td></tr>
+<tr><td>排班優先序</td><td>有衝突時誰優先排</td></tr>
+<tr><td>是否懷孕 / 哺乳</td><td>觸發夜班禁排</td></tr>
+<tr><td>主要門市</td><td>班別優先排在此店</td></tr>
+</tbody>
+</table>
+
+<h3>員工偏好（3 級設定）</h3>
+<table>
+<colgroup><col style="width:25%"><col style="width:75%"></colgroup>
+<tbody>
+<tr><td><span class="tag tag-green">優先（preferred）</span></td><td>員工想要的班別 → 排班加分</td></tr>
+<tr><td><span class="tag tag-yellow">中性（neutral）</span></td><td>沒特別偏好 → 排班不加減分</td></tr>
+<tr><td><span class="tag" style="background:#fee2e2;color:#991b1b">避開（avoid）</span></td><td>員工不想要的班別 → 排班減分</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔄 換班 / 代班流程</h2>
+
+<div class="flow-box">
+  <div class="flow-step"><span class="num">1</span>A 員工想跟 B 換班 → 進「換班申請」選兩人的日期</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">2</span>B 員工收 LINE 通知 → 點同意 / 拒絕</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">3</span>B 同意後 → admin 進「換班申請」頁面審核</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">4</span>admin 核准 → 系統自動互換兩人班別</div>
+  <div class="arrow-down">▼</div>
+  <div class="flow-step"><span class="num">5</span>雙方收 LINE 通知排班已調整</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🏪 跨店借調機制</h2>
+
+<div class="key-point">
+本店人力不足時，從其他門市借調員工。每位員工可設定「我可支援的其他門市」。
+</div>
+
+<ol>
+<li>系統找出本店缺人時段（人數 &lt; 需求）</li>
+<li>掃描所有可支援本店的他店員工</li>
+<li>檢查該員工：當日未排其他店、通過勞基法、工時還有配額</li>
+<li>排入班表，標記為「跨店班」</li>
+<li>通知該員工本月有跨店班</li>
+</ol>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🔗 與薪資的連動</h2>
+
+<div class="flow-box">
+<table>
+<colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+<tbody>
+<tr><td><b>實際工時</b></td><td>累加為當月總工時 → 時薪員工底薪計算</td></tr>
+<tr><td><b>班別類型</b></td><td>休/特休/事假等 → 對應薪資（全薪/半薪/無薪）</td></tr>
+<tr><td><b>是否「公司休」</b></td><td>影響月休配額計算（員工請的假不算）</td></tr>
+<tr><td><b>跨日班別（夜班）</b></td><td>影響加班費級距判定</td></tr>
+<tr><td><b>已批准請假</b></td><td>排班會跳過該日，薪資依假別計算</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>📋 操作流程</h2>
+
+<table>
+<colgroup><col style="width:8%"><col style="width:30%"><col style="width:62%"></colgroup>
+<thead><tr><th>步</th><th>動作</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>準備門市設定</td><td>確認工時制、營業時間、人力規則、班別定義</td></tr>
+<tr><td>2</td><td>進入排班頁</td><td>選門市、選月份/週/cycle</td></tr>
+<tr><td>3</td><td>員工排休</td><td>員工自行用 LINE/手機提希望休 → 系統累積</td></tr>
+<tr><td>4</td><td>產生草稿</td><td>點「AI 自動排班」或「程式排班」→ 等 1–30 秒</td></tr>
+<tr><td>5</td><td>審閱草稿</td><td>看違規清單、調整不滿意的單格</td></tr>
+<tr><td>6</td><td>發布</td><td>點「發布草稿」→ 員工 LINE 通知收到班表</td></tr>
+<tr><td>7</td><td>事後變更</td><td>員工申請換班、補登、調休 → 走簽核流程</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>✅ 系統完整度</h2>
+
+<table>
+<colgroup><col style="width:40%"><col style="width:15%"><col style="width:45%"></colgroup>
+<thead><tr><th>功能</th><th>狀態</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>週 / 月 / Cycle 三種視圖</td><td class="ok">✅</td><td>三種模式都正常運作</td></tr>
+<tr><td>2 / 4 / 8 週變形工時</td><td class="ok">✅</td><td>動態套用對應規則</td></tr>
+<tr><td>班別制排班</td><td class="ok">✅</td><td>含開關店資格、跨店、員工類型、平假日</td></tr>
+<tr><td>時段覆蓋制排班</td><td class="ok">✅</td><td>依時段需求自動算最佳窗口</td></tr>
+<tr><td>勞基法 17 條規則</td><td class="ok">✅</td><td>全套自動檢查（含孕婦保護）</td></tr>
+<tr><td>軟性規則（人力 / 公平 / 開關店）</td><td class="ok">✅</td><td>違反提醒但不阻擋發布</td></tr>
+<tr><td>跨店借調</td><td class="ok">✅</td><td>本店缺人 → 從其他門市借</td></tr>
+<tr><td>員工偏好（3 級）</td><td class="ok">✅</td><td>優先 / 中性 / 避開</td></tr>
+<tr><td>程式排班引擎</td><td class="ok">✅</td><td>1–3 秒出結果</td></tr>
+<tr><td>AI 排班引擎</td><td class="ok">✅</td><td>含 2 次自動重試修正</td></tr>
+<tr><td>換班 / 代班兩階段審核</td><td class="ok">✅</td><td>對方同意 → admin 核准</td></tr>
+<tr><td>LINE 排班通知</td><td class="ok">✅</td><td>發布後員工收 flex card</td></tr>
+<tr><td>個人月工時上限</td><td class="ok">✅</td><td>例：孕婦 ≤ 160 小時</td></tr>
+<tr><td>排班 → 薪資自動連動</td><td class="ok">✅</td><td>實際工時、班別類型直接給薪資用</td></tr>
+<tr><td>排班規則 UI 設定</td><td class="ok">✅</td><td>視覺化編輯人力 / 偏好 / 工時</td></tr>
+<tr><td>多 cycle 跨月顯示</td><td class="ok">✅</td><td>月跨 2 個 cycle 自動分區顯示</td></tr>
+<tr><td>分析報表</td><td class="ok">✅</td><td>每人工時 / 休假分佈 / 疲勞圖</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>🎯 後續優化（非急迫）</h2>
+
+<table>
+<colgroup><col style="width:30%"><col style="width:15%"><col style="width:55%"></colgroup>
+<thead><tr><th>項目</th><th>優先級</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>歷史排班比對</td><td>P2</td><td>同期同店過去 3 個月排班滿意度比較</td></tr>
+<tr><td>員工排班疲勞預警</td><td>P2</td><td>連假期累積過高 → 自動避開困難班</td></tr>
+<tr><td>多店連動最佳化</td><td>P3</td><td>同人多店時，總工時整體最佳化</td></tr>
+<tr><td>每月自動排班 + 自動發布</td><td>P3</td><td>每月 25 號自動跑下個月並發布</td></tr>
+<tr><td>移動端拖拉編輯</td><td>P3</td><td>LIFF 上手機可調整自己班別</td></tr>
+</tbody>
+</table>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>💡 開會討論重點</h2>
+
+<div class="key-point">
+<ol>
+<li><b>每位門市的工時制要確認</b>　目前是設定在 store_settings — 標準工時 / 2 週 / 4 週 / 8 週變形 / 月制要逐店檢查</li>
+<li><b>每天的開關店人員清單</b>　哪些員工能開店、能關店要在員工檔逐個設定</li>
+<li><b>跨店支援員工清單</b>　哪些員工願意支援其他門市要設好</li>
+<li><b>員工偏好如何收集</b>　建議發給員工填一次（preferred / neutral / avoid），減少排班爭議</li>
+<li><b>每月排班何時跑</b>　建議 25 號跑下個月，留 5 天員工反饋與調整</li>
+<li><b>違規硬性規則處理</b>　目前出 error 會擋發布，要不要可以「強制覆寫 + 留註記」？</li>
+</ol>
+</div>
+
+<p class="meta" style="margin-top:24px; text-align:center;">— 文件結束 —</p>
+
+</body>
+</html>

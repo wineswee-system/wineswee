@@ -282,6 +282,11 @@ export function runProgrammaticSchedule(data) {
   // ── Step 2: Sort shifts by start time ──
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
 
+  // assignments declared here (before if/else split) so both modes can push to it.
+  // Bug fix: previously only declared inside the 'else' (shift-based) branch,
+  // causing ReferenceError when useTimeSlotMode=true reaches Step 4 below.
+  const assignments = []
+
   if (useTimeSlotMode) {
     // ══════════════════════════════════════════════════════════════
     //  TIME SLOT COVERAGE MODE (時段覆蓋制)
@@ -797,8 +802,7 @@ export function runProgrammaticSchedule(data) {
   }
 
   // ── Step 3c: Cross-store borrowing ──
-  // assignments declared here (not at Step 4) so push() below is in scope.
-  const assignments = []
+  // (assignments now declared at function top, shared across both if/else branches)
   if (data.allStoreEmployees && data.allStoreEmployees.length > 0) {
     const localEmpNames = new Set(employees.map(e => e.name))
     const currentStoreId = data.storeSettings?.store_id || data.storeSettings?.id || null

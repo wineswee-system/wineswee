@@ -205,95 +205,206 @@ export function exportTaxReportPdf(reportData) {
   doc.save(`401-tax-report-${startDate}-${endDate}.pdf`)
 }
 
-// Export expense request as PDF (費用申請單)
-export function exportExpenseRequestPdf(req) {
+// Export expense request as PDF — 台灣公司「簽呈」格式（HTML + 瀏覽器列印，中文完美顯示）
+//
+// opts:
+//   companyName  公司名稱（標題用，例：威耀時代股份有限公司）
+//   logoUrl      公司 LOGO URL（標題左側；可不傳）
+export function exportExpenseRequestPdf(req, opts = {}) {
   if (!req) return
+  const companyName = opts.companyName || ''
+  const logoUrl = opts.logoUrl || ''
+
   const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
-  const doc = createPdf('Expense Request', `#${req.id} | ${req.created_at?.slice(0, 10) || ''}`)
+  const dateStr = req.created_at
+    ? new Date(req.created_at).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/')
+    : ''
 
-  let y = 38
-
-  // Meta info
-  autoTable(doc, {
-    startY: y,
-    body: [
-      ['Applicant', req.employee || '-', 'Department', req.department || '-'],
-      ['Account', `${req.account_code || ''} ${req.account_name || ''}`, 'Store', req.store || '-'],
-      ['Supplier', req.supplier || '-', 'Status', req.status || '-'],
-      ['Title', { content: req.title || '-', colSpan: 3 }],
-    ],
-    theme: 'grid',
-    bodyStyles: { fontSize: 9 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 2: { fontStyle: 'bold', cellWidth: 30 } },
-  })
-
-  // Line items
   const rawItems = req.items
-  const items = Array.isArray(rawItems) ? rawItems : (typeof rawItems === 'string' ? JSON.parse(rawItems) : [])
-  if (items.length > 0) {
-    const y2 = doc.lastAutoTable.finalY + 8
-    doc.setFontSize(11)
-    doc.setTextColor(14, 116, 144)
-    doc.text('Items', 14, y2)
+  const items = Array.isArray(rawItems) ? rawItems : (typeof rawItems === 'string' ? (() => { try { return JSON.parse(rawItems) } catch { return [] } })() : [])
 
-    autoTable(doc, {
-      startY: y2 + 4,
-      head: [['#', 'Item Name', 'Qty', 'Unit Price', 'Subtotal']],
-      body: items.map((li, i) => [
-        i + 1,
-        li.name || '-',
-        li.qty || 0,
-        fmt(li.unit_price),
-        fmt(li.subtotal),
-      ]),
-      foot: [['', 'Total', '', '', fmt(req.estimated_amount)]],
-      theme: 'grid',
-      headStyles: { fillColor: [14, 116, 144], fontSize: 9 },
-      bodyStyles: { fontSize: 9 },
-      footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 10 },
-      columnStyles: { 0: { cellWidth: 12 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
-    })
+  const itemsRows = items.length > 0 ? items.map((li, i) => `
+    <tr>
+      <td style="text-align:center">${i + 1}</td>
+      <td>${escapeHtml(li.name || '-')}</td>
+      <td style="text-align:right">${escapeHtml(String(li.qty ?? 0))}</td>
+      <td style="text-align:right;font-family:monospace">${fmt(li.unit_price)}</td>
+      <td style="text-align:right;font-family:monospace;font-weight:600">${fmt(li.subtotal)}</td>
+    </tr>
+  `).join('') : ''
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>簽呈 #${req.id}</title>
+<style>
+  @page { size: A4 portrait; margin: 18mm 18mm 22mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "Heiti TC", sans-serif;
+    margin: 0; padding: 0; color: #111; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    font-size: 13px; line-height: 1.55;
   }
-
-  // Amount summary
-  const y3 = doc.lastAutoTable.finalY + 8
-  doc.setFontSize(11)
-  doc.setTextColor(14, 116, 144)
-  doc.text('Amount Summary', 14, y3)
-
-  autoTable(doc, {
-    startY: y3 + 4,
-    body: [
-      ['Estimated Amount', fmt(req.estimated_amount)],
-      ['Actual Amount', fmt(req.actual_amount)],
-      ['Difference', req.difference != null ? fmt(req.difference) : '-'],
-    ],
-    theme: 'grid',
-    bodyStyles: { fontSize: 9 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 1: { halign: 'right' } },
-  })
-
-  // Description
-  if (req.description) {
-    const y4 = doc.lastAutoTable.finalY + 8
-    doc.setFontSize(9)
-    doc.setTextColor(100)
-    doc.text(`Notes: ${req.description}`, 14, y4, { maxWidth: 180 })
+  .toolbar { position: fixed; top: 12px; right: 12px; z-index: 999; }
+  .toolbar button {
+    padding: 10px 20px; background: #0e7490; color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-family: inherit; font-weight: 600;
   }
+  .toolbar button:hover { background: #155e75; }
+  .page { padding: 16px 24px; max-width: 760px; margin: 0 auto; }
+  .header-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .logo { width: 60px; height: 60px; object-fit: contain; flex-shrink: 0; }
+  .title-area { flex: 1; text-align: center; }
+  .company-name { font-size: 22px; font-weight: 700; letter-spacing: 4px; margin: 0; }
+  .doc-no { font-size: 11px; color: #888; margin-top: 4px; }
+  table.meta {
+    width: 100%; border-collapse: collapse; margin-bottom: 18px;
+    border: 1.5px solid #333;
+  }
+  table.meta td {
+    border: 1px solid #333; padding: 8px 12px; font-size: 13px;
+  }
+  table.meta td.label {
+    width: 16%; background: #f5f5f5; font-weight: 700; text-align: center;
+  }
+  table.meta td.value { width: 34%; }
+  .section { margin: 14px 0; }
+  .section-title {
+    font-weight: 700; font-size: 14px; margin-bottom: 6px;
+  }
+  .section-body {
+    padding-left: 28px; min-height: 22px; white-space: pre-wrap;
+  }
+  table.items {
+    width: calc(100% - 28px); margin-left: 28px; border-collapse: collapse;
+    margin-top: 6px; font-size: 12px;
+  }
+  table.items th, table.items td { border: 1px solid #999; padding: 5px 8px; }
+  table.items th { background: #eef4f7; font-weight: 600; text-align: center; }
+  table.items tfoot td { font-weight: 700; background: #fafafa; }
+  table.amount {
+    width: calc(100% - 28px); margin-left: 28px; border-collapse: collapse;
+    margin-top: 6px; font-size: 13px;
+  }
+  table.amount td { border: 1px solid #999; padding: 6px 12px; }
+  table.amount td.label { background: #f5f5f5; font-weight: 600; width: 40%; }
+  table.amount td.value { text-align: right; font-family: monospace; }
+  .closing { text-align: left; margin-top: 24px; font-weight: 600; }
+  .signatures {
+    margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+  }
+  .sig-cell { text-align: center; }
+  .sig-line {
+    border-top: 1px solid #333; margin-top: 36px; padding-top: 6px;
+    font-size: 12px; color: #555;
+  }
+  .footer-meta {
+    margin-top: 28px; font-size: 10px; color: #aaa; text-align: center;
+    border-top: 1px dashed #ddd; padding-top: 8px;
+  }
+  @media print { .toolbar { display: none; } .page { padding: 0; } }
+</style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨️ 列印 / 另存為 PDF</button></div>
+  <div class="page">
+    <div class="header-row">
+      ${logoUrl ? `<img class="logo" src="${escapeHtml(logoUrl)}" alt="logo" onerror="this.style.display='none'" />` : '<div class="logo"></div>'}
+      <div class="title-area">
+        <div class="company-name">${escapeHtml(companyName || '　　　　')} 簽呈</div>
+        <div class="doc-no">文件編號 #${req.id}　|　狀態：${escapeHtml(req.status || '-')}</div>
+      </div>
+      <div style="width:60px"></div>
+    </div>
 
-  // Signature block
-  const ySign = doc.lastAutoTable.finalY + 25
-  doc.setDrawColor(150)
-  doc.setFontSize(9)
-  doc.setTextColor(80)
-  const cols = [14, 75, 136]
-  const labels = ['Applicant', 'Manager', 'Finance']
-  cols.forEach((x, i) => {
-    doc.line(x, ySign, x + 50, ySign)
-    doc.text(labels[i], x + 15, ySign + 6)
-  })
+    <table class="meta">
+      <tr>
+        <td class="label">呈文單位</td><td class="value">${escapeHtml(req.department || '-')}</td>
+        <td class="label">呈文者</td><td class="value">${escapeHtml(req.employee || '-')}</td>
+      </tr>
+      <tr>
+        <td class="label">呈文日期</td><td class="value">${escapeHtml(dateStr || '-')}</td>
+        <td class="label">副本</td><td class="value">${escapeHtml(req.store || '')}</td>
+      </tr>
+    </table>
 
-  doc.save(`expense-request-${req.id}.pdf`)
+    <div class="section">
+      <div class="section-title">一、主旨</div>
+      <div class="section-body">${escapeHtml(req.title || '-')}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">二、說明</div>
+      <div class="section-body">${escapeHtml(req.description || '-')}${req.supplier ? `\n供應商：${escapeHtml(req.supplier)}` : ''}${req.account_code ? `\n會計科目：${escapeHtml(req.account_code)}　${escapeHtml(req.account_name || '')}` : ''}</div>
+    </div>
+
+    ${items.length > 0 ? `
+    <div class="section">
+      <div class="section-title">三、品項明細</div>
+      <table class="items">
+        <thead>
+          <tr><th style="width:8%">#</th><th>品名</th><th style="width:12%">數量</th><th style="width:18%">單價</th><th style="width:20%">小計</th></tr>
+        </thead>
+        <tbody>${itemsRows}</tbody>
+        <tfoot>
+          <tr><td colspan="4" style="text-align:right">合計</td><td style="text-align:right;font-family:monospace">${fmt(req.estimated_amount)}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    ` : ''}
+
+    <div class="section">
+      <div class="section-title">${items.length > 0 ? '四' : '三'}、金額</div>
+      <table class="amount">
+        <tr><td class="label">預估金額</td><td class="value">${fmt(req.estimated_amount)}</td></tr>
+        ${req.actual_amount != null ? `<tr><td class="label">實際金額</td><td class="value">${fmt(req.actual_amount)}</td></tr>` : ''}
+        ${req.difference != null && req.difference !== 0 ? `<tr><td class="label">差異</td><td class="value" style="color:${req.difference > 0 ? '#b91c1c' : '#15803d'}">${req.difference > 0 ? '+' : ''}${fmt(req.difference)}</td></tr>` : ''}
+      </table>
+    </div>
+
+    ${req.notes ? `
+    <div class="section">
+      <div class="section-title">${items.length > 0 ? '五' : '四'}、核銷備註</div>
+      <div class="section-body">${escapeHtml(req.notes)}</div>
+    </div>
+    ` : ''}
+
+    ${req.reject_reason ? `
+    <div class="section" style="color:#b91c1c">
+      <div class="section-title">駁回原因</div>
+      <div class="section-body">${escapeHtml(req.reject_reason)}</div>
+    </div>
+    ` : ''}
+
+    <div class="closing">以上，呈請核示。</div>
+
+    <div class="signatures">
+      <div class="sig-cell"><div class="sig-line">呈文者</div></div>
+      <div class="sig-cell"><div class="sig-line">主管核示</div></div>
+      <div class="sig-cell"><div class="sig-line">財務核章</div></div>
+    </div>
+
+    <div class="footer-meta">
+      列印時間：${escapeHtml(new Date().toLocaleString('zh-TW'))}　|　由 SME Ops System 產生
+    </div>
+  </div>
+  <script>
+    window.addEventListener('load', () => setTimeout(() => window.print(), 300))
+  </script>
+</body>
+</html>`
+
+  const win = window.open('', '_blank')
+  if (!win) {
+    alert('請允許彈出視窗，才能匯出 PDF')
+    return
+  }
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
 }
 
 // ══════════════════════════════════════

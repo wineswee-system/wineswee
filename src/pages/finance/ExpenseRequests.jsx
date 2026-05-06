@@ -32,6 +32,7 @@ export default function ExpenseRequests() {
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
+  const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showSettleModal, setShowSettleModal] = useState(false)
@@ -61,14 +62,17 @@ export default function ExpenseRequests() {
 
   const load = async () => {
     setLoading(true)
-    const [reqRes, accRes, empRes] = await Promise.all([
+    const orgId = profile?.organization_id
+    const [reqRes, accRes, empRes, orgRes] = await Promise.all([
       supabase.from('expense_requests').select('*').order('created_at', { ascending: false }),
       getAccounts(),
       getEmployees(),
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setRequests(reqRes.data || [])
     setAccounts(accRes.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
+    setOrganization(orgRes?.data || null)
     setLoading(false)
   }
 
@@ -761,8 +765,8 @@ export default function ExpenseRequests() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => exportExpenseRequestPdf(showDetail)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Download size={13} /> 下載 PDF
+              <button className="btn btn-secondary" onClick={() => exportExpenseRequestPdf(showDetail, { companyName: organization?.name, logoUrl: organization?.logo_url })} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Download size={13} /> 下載簽呈
               </button>
               <button className="btn btn-secondary" onClick={() => setShowDetail(null)}>關閉</button>
             </div>

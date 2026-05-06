@@ -72,24 +72,24 @@ export default function ApprovalDetailModal({
         {/* Header bar */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 20px',
+          padding: '16px 22px',
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{docTitle}</h3>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{docTitle}</h3>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {onPrint && (
-              <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={onPrint}>
-                <Printer size={12} /> 下載簽呈
+              <button className="btn btn-secondary" style={{ fontSize: 14, padding: '8px 14px' }} onClick={onPrint}>
+                <Printer size={14} /> 下載簽呈
               </button>
             )}
             <button onClick={onClose} style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               color: 'var(--text-muted)', padding: 4, display: 'flex',
             }}>
-              <X size={20} />
+              <X size={22} />
             </button>
           </div>
         </div>
@@ -97,17 +97,17 @@ export default function ApprovalDetailModal({
         {/* Body: split layout */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* LEFT: form details */}
-          <div style={{ flex: 1, padding: 20, overflowY: 'auto', minWidth: 0 }}>
+          <div style={{ flex: 1, padding: 24, overflowY: 'auto', minWidth: 0 }}>
             {/* Applicant card */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: 12, marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 16,
+              padding: 14, marginBottom: 20,
               background: 'var(--bg-secondary)',
               borderRadius: 10,
               border: '1px solid var(--border-subtle)',
             }}>
               <div style={{
-                width: 56, height: 56, borderRadius: '50%',
+                width: 64, height: 64, borderRadius: '50%',
                 background: 'var(--bg-card)',
                 border: '2px solid var(--border-medium)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -116,29 +116,29 @@ export default function ApprovalDetailModal({
                 {applicant.avatar_url ? (
                   <img src={applicant.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <User size={28} color="var(--text-muted)" />
+                  <User size={32} color="var(--text-muted)" />
                 )}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.3 }}>
                   {applicant.name || '—'}
-                  {applicant.name_en && <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginLeft: 6, fontSize: 13 }}>{applicant.name_en}</span>}
+                  {applicant.name_en && <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginLeft: 6, fontSize: 15 }}>{applicant.name_en}</span>}
                 </div>
                 {applicant.position && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 3 }}>
                     {applicant.position}{applicant.dept ? `　·　${applicant.dept}` : ''}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {applicant.status && (
                     <span style={{
-                      padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                      padding: '3px 10px', borderRadius: 4, fontSize: 12, fontWeight: 700,
                       background: applicant.status === '在職' ? 'rgba(34,197,94,0.15)' : 'rgba(156,163,175,0.15)',
                       color: applicant.status === '在職' ? '#0a6b2e' : '#6b7280',
                     }}>{applicant.status}</span>
                   )}
                   {applicant.employee_no && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                       {applicant.employee_no}
                     </span>
                   )}
@@ -148,12 +148,12 @@ export default function ApprovalDetailModal({
 
             {/* Dynamic fields */}
             {fields.map((f, i) => (
-              <div key={i} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <div key={i} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>
                   {f.label}
                 </div>
                 <div style={{
-                  fontSize: 14, color: 'var(--text-primary)',
+                  fontSize: 16, color: 'var(--text-primary)',
                   whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
                   lineHeight: 1.6,
                 }}>
@@ -163,27 +163,27 @@ export default function ApprovalDetailModal({
             ))}
 
             {/* Attachments */}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
                 附件
               </div>
               {attachments.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>無附件</div>
+                <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>無附件</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {attachments.map((a, i) => {
                     const isImage = a.type?.startsWith('image') || /\.(jpe?g|png|gif|webp|svg)/i.test(a.name || a.url || '')
                     return (
                       <a key={i} href={a.url} target="_blank" rel="noreferrer"
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '6px 10px',
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px',
                           background: 'var(--bg-secondary)', borderRadius: 6,
                           border: '1px solid var(--border-subtle)',
-                          fontSize: 13, color: 'var(--accent-cyan)',
+                          fontSize: 14, color: 'var(--accent-cyan)',
                           textDecoration: 'none',
                         }}>
-                        {isImage ? <ImageIcon size={14} /> : <FileText size={14} />}
+                        {isImage ? <ImageIcon size={16} /> : <FileText size={16} />}
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {a.name || '附件'}
                         </span>
@@ -196,10 +196,10 @@ export default function ApprovalDetailModal({
 
             {/* Footer meta */}
             <div style={{
-              marginTop: 18, paddingTop: 12,
+              marginTop: 20, paddingTop: 14,
               borderTop: '1px dashed var(--border-subtle)',
-              fontSize: 11, color: 'var(--text-muted)',
-              display: 'flex', flexDirection: 'column', gap: 3,
+              fontSize: 13, color: 'var(--text-muted)',
+              display: 'flex', flexDirection: 'column', gap: 4,
             }}>
               {docNo && <div>表單編號：<span style={{ fontFamily: 'monospace' }}>{docNo}</span></div>}
               {createdAt && <div>申請時間：{fmtDateTime(createdAt)}</div>}
@@ -208,18 +208,18 @@ export default function ApprovalDetailModal({
 
           {/* RIGHT: chain timeline */}
           <div style={{
-            width: 280, flexShrink: 0,
+            width: 320, flexShrink: 0,
             background: 'var(--bg-secondary)',
             borderLeft: '1px solid var(--border-subtle)',
-            padding: 20, overflowY: 'auto',
+            padding: 24, overflowY: 'auto',
           }}>
             <div style={{
-              fontSize: 14, fontWeight: 700, marginBottom: 18,
-              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 17, fontWeight: 700, marginBottom: 22,
+              display: 'flex', alignItems: 'center', gap: 10,
             }}>
               簽核流程：
               <span style={{
-                padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                padding: '4px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700,
                 background: overallBadge.bg, color: overallBadge.color,
               }}>{overallBadge.text}</span>
             </div>
@@ -235,17 +235,17 @@ export default function ApprovalDetailModal({
 // ─── 內部：垂直時間軸 ───
 function ChainTimeline({ steps }) {
   if (!steps || steps.length === 0) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>
+    return <div style={{ fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
       尚未設定簽核鏈
     </div>
   }
 
   return (
-    <div style={{ position: 'relative', paddingLeft: 26 }}>
+    <div style={{ position: 'relative', paddingLeft: 34 }}>
       {/* Vertical line */}
       <div style={{
-        position: 'absolute', left: 7, top: 6, bottom: 6,
-        width: 2, background: 'var(--border-medium)',
+        position: 'absolute', left: 10, top: 8, bottom: 8,
+        width: 3, background: 'var(--border-medium)',
       }} />
 
       {steps.map((step, i) => (
@@ -253,14 +253,14 @@ function ChainTimeline({ steps }) {
       ))}
 
       {/* 終點 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6, position: 'relative' }}>
         <div style={{
-          position: 'absolute', left: -19,
-          width: 16, height: 16, borderRadius: '50%',
+          position: 'absolute', left: -25,
+          width: 22, height: 22, borderRadius: '50%',
           background: 'var(--border-medium)',
-          border: '3px solid var(--bg-secondary)',
+          border: '4px solid var(--bg-secondary)',
         }} />
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>簽核完成</div>
+        <div style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 600 }}>簽核完成</div>
       </div>
     </div>
   )
@@ -282,35 +282,35 @@ function TimelineDot({ step, index, isLast }) {
   const borderColor = step.status === 'pending' ? 'var(--border-medium)' : (colors[step.status] || 'var(--border-medium)')
 
   return (
-    <div style={{ position: 'relative', marginBottom: 18 }}>
+    <div style={{ position: 'relative', marginBottom: 22 }}>
       <div style={{
-        position: 'absolute', left: -19, top: 4,
-        width: 16, height: 16, borderRadius: '50%',
+        position: 'absolute', left: -25, top: 4,
+        width: 22, height: 22, borderRadius: '50%',
         background: colors[step.status] || 'transparent',
-        border: `2px solid ${borderColor}`,
-        boxShadow: '0 0 0 3px var(--bg-secondary)',
+        border: `3px solid ${borderColor}`,
+        boxShadow: '0 0 0 4px var(--bg-secondary)',
       }} />
       <div style={{
-        fontSize: 13, fontWeight: 700,
+        fontSize: 16, fontWeight: 700,
         color: labelColors[step.status] || 'var(--text-muted)',
-        lineHeight: 1.2,
+        lineHeight: 1.3,
       }}>
         {step.label}
       </div>
       {step.name && (
-        <div style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 3 }}>
+        <div style={{ fontSize: 15, color: 'var(--text-primary)', marginTop: 4 }}>
           {step.name}
         </div>
       )}
       {step.completedAt && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
           {fmtDateTime(step.completedAt)}
         </div>
       )}
       {step.status === 'rejected' && step.rejectReason && (
         <div style={{
-          fontSize: 11, color: '#9c1f1f', marginTop: 4,
-          padding: '4px 8px', borderRadius: 4,
+          fontSize: 13, color: '#9c1f1f', marginTop: 6,
+          padding: '6px 10px', borderRadius: 5,
           background: 'rgba(239,68,68,0.08)',
         }}>
           {step.rejectReason}

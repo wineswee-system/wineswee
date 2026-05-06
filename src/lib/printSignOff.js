@@ -23,7 +23,7 @@
  *                                          { title, text }                       純文字
  *                                          { title, rows: [[label, value], …] }  key-value 列
  *                                          { title, table: { head, body, foot } } 表格
- * @param {string} [opts.status]          狀態（影響簽核欄樣式）
+ * @param {string} [opts.status]          狀態（影響簽核欄樣式 + header badge）
  * @param {string} [opts.rejectReason]    駁回原因（status='已駁回'/'已拒絕' 用）
  * @param {Array} [opts.chainSteps]       approval_chain_steps：[{ step_order, label, role_name, target_emp_id }]
  * @param {Object} [opts.approverMap]     { emp_id: emp_name } chain 用
@@ -53,7 +53,7 @@ export function printSignOff(opts = {}) {
   const appDept = applicant.store || applicant.dept || applicant.departments?.name || applicant.stores?.name || '—'
   const appName = `${applicant.name || ''}${applicant.name_en ? ` (${applicant.name_en})` : ''}`.trim() || '—'
 
-  // 副本：手動指定優先，否則從 chainSteps 推（去重指定簽核人/角色名）
+  // 副本：手動指定優先，否則從 chainSteps 推
   const ccText = cc != null ? cc : (
     [...new Set((chainSteps || [])
       .map(s => s.target_emp_id ? approverMap[s.target_emp_id] : (s.role_name || s.label || ''))
@@ -61,10 +61,9 @@ export function printSignOff(opts = {}) {
       .join('、')
   )
 
-  // 簽核欄
+  // 狀態 badge 顏色
+  const statusBadge = renderStatusBadge(status)
   const signCellsHtml = renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign })
-
-  // sections 渲染
   const sectionsHtml = sections.map((sec, idx) => renderSection(sec, idx + 2)).join('')
 
   const html = `<!DOCTYPE html>
@@ -73,126 +72,242 @@ export function printSignOff(opts = {}) {
 <meta charset="UTF-8">
 <title>${safe(companyName)} ${safe(docTitle)}${docNo ? ` #${docNo}` : ''}</title>
 <style>
-  @page { size: A4 portrait; margin: 1.8cm; }
-  @media print { .no-print { display: none !important; } body { padding: 0; } }
+  @page { size: A4 portrait; margin: 1.6cm 1.8cm; }
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0; background: #fff; }
+    .page { box-shadow: none; padding: 0; border: none; }
+  }
   * { box-sizing: border-box; }
+  html, body { background: #f4f1ea; }
   body {
     font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "PMingLiU", "Heiti TC", sans-serif;
-    color: #000;
-    font-size: 12pt;
+    color: #1a1a1a;
+    font-size: 11.5pt;
     line-height: 1.7;
-    padding: 24px 32px;
-    max-width: 19cm;
-    margin: 0 auto;
-    background: #fff;
+    margin: 0;
+    padding: 24px 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .toolbar {
-    background: #f0f4f8; border: 1px solid #ccc; padding: 12px 16px;
-    margin-bottom: 18px; border-radius: 6px;
+    max-width: 19cm; margin: 0 auto 16px; background: #fff; border: 1px solid #d8cfb8;
+    padding: 12px 16px; border-radius: 8px;
     display: flex; gap: 10px; align-items: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
   }
   .toolbar button {
-    padding: 6px 14px; font-size: 12pt; cursor: pointer;
-    border-radius: 4px; border: 1px solid #888; background: #fff;
+    padding: 7px 16px; font-size: 11.5pt; cursor: pointer;
+    border-radius: 5px; border: 1px solid #b8a878; background: #fff;
     font-family: inherit;
+    transition: all 0.15s;
   }
-  .toolbar button.primary { background: #0b5cad; color: white; border-color: #0b5cad; }
+  .toolbar button:hover { background: #faf6ec; }
+  .toolbar button.primary { background: #6e5a2e; color: #fff; border-color: #6e5a2e; }
+  .toolbar button.primary:hover { background: #54441f; }
+  .page {
+    background: #fff; max-width: 19cm; margin: 0 auto;
+    padding: 28px 36px 36px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.1);
+    border-radius: 2px;
+    position: relative;
+  }
+  /* ─── 頁首：LOGO + 公司名 + 簽呈 + 狀態 ─── */
+  .header {
+    position: relative;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+  }
+  .header::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: linear-gradient(to right, #6e5a2e 0%, #6e5a2e 70%, #b8a878 100%);
+    border-radius: 2px;
+  }
+  .header::before {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -8px;
+    height: 1px; background: #6e5a2e;
+  }
   .header-row {
-    display: flex; align-items: center; gap: 16px; margin-bottom: 14px;
+    display: grid; grid-template-columns: 80px 1fr 80px;
+    align-items: center; gap: 14px;
   }
-  .logo {
-    width: 64px; height: 64px; object-fit: contain; flex-shrink: 0;
-    border-radius: 4px;
+  .logo-box {
+    width: 80px; height: 80px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .title-area { flex: 1; text-align: center; }
+  .logo-box img {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+  }
+  .title-area { text-align: center; }
   .company-name {
-    font-size: 22pt; font-weight: 700;
-    letter-spacing: 4px; margin: 0;
+    font-size: 14pt; font-weight: 600; color: #6e5a2e;
+    letter-spacing: 4px; margin: 0 0 6px 0;
   }
-  .doc-meta {
-    font-size: 10pt; color: #666; margin-top: 4px; letter-spacing: 1px;
+  .doc-title {
+    font-size: 26pt; font-weight: 800;
+    letter-spacing: 12px; margin: 0;
+    color: #1a1a1a; padding-left: 12px;  /* offset for letter-spacing */
   }
-  table.header {
+  .doc-meta-side { text-align: right; font-size: 9pt; color: #6b6357; }
+  .doc-meta-side .doc-no { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+  .status-pill {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 9pt; font-weight: 700; margin-top: 4px;
+  }
+  .status-pill.applying { background: #e8eef8; color: #2f4f8a; }
+  .status-pill.approved { background: #e0f0e3; color: #0a6b2e; }
+  .status-pill.rejected { background: #f8e3e3; color: #9c1f1f; }
+  .status-pill.cancelled { background: #ececec; color: #666; }
+
+  /* ─── 呈文資訊表 ─── */
+  table.meta {
     width: 100%; border-collapse: collapse;
-    margin-bottom: 16px; border: 2px solid #000;
+    margin-bottom: 18px;
+    border: 1.2px solid #2a2a2a;
+    background: #fdfcf8;
   }
-  table.header td {
-    border: 1px solid #000; padding: 8px 14px; font-size: 12pt;
+  table.meta td {
+    border: 0.8px solid #888;
+    padding: 9px 14px;
+    font-size: 11pt;
+    vertical-align: middle;
   }
-  table.header td.label {
-    background: #f0f0f0; width: 14%;
-    font-weight: 700; text-align: center;
+  table.meta td.label {
+    background: #efeadc;
+    width: 13%;
+    font-weight: 700;
+    text-align: center;
+    color: #4a3f1f;
+    letter-spacing: 1px;
   }
+  table.meta td.value {
+    width: 37%;
+    background: #fff;
+  }
+
+  /* ─── 章節 ─── */
+  .section { margin-bottom: 14px; }
   .section-title {
-    font-size: 13pt; font-weight: 700; margin: 14px 0 6px 0;
+    font-size: 12.5pt;
+    font-weight: 700;
+    margin: 14px 0 8px 0;
+    color: #2a2a2a;
+    display: flex; align-items: baseline; gap: 8px;
+    border-bottom: 1px dashed #c8b88a;
+    padding-bottom: 4px;
+  }
+  .section-title .num {
+    color: #6e5a2e; font-weight: 800; letter-spacing: 2px;
   }
   .section-content {
-    padding-left: 24px; line-height: 1.8;
+    padding-left: 26px;
+    line-height: 1.85;
+    color: #1a1a1a;
   }
   .subject {
-    font-size: 13pt; font-weight: 600;
+    font-size: 13pt; font-weight: 700;
+    color: #1a1a1a;
   }
   .text-content {
-    white-space: pre-wrap; word-wrap: break-word;
+    white-space: pre-wrap; word-wrap: break-word; font-size: 11.5pt;
   }
   .field-row {
-    display: flex; gap: 12px; margin-bottom: 6px; align-items: flex-start;
+    display: flex; gap: 14px;
+    margin-bottom: 5px;
+    align-items: flex-start;
   }
   .field-label {
-    flex-shrink: 0; min-width: 90px; font-weight: 700; color: #333;
+    flex-shrink: 0; min-width: 96px;
+    font-weight: 600; color: #4a3f1f;
+    text-align: justify; text-align-last: justify;
+    padding-right: 6px;
   }
+  .field-label::after { content: '：'; }
   .field-value {
     flex: 1; white-space: pre-wrap; word-wrap: break-word;
   }
+
+  /* ─── 內嵌資料表（明細）─── */
   table.data {
-    width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11pt;
+    width: 100%; border-collapse: collapse;
+    margin-top: 6px; font-size: 10.5pt;
+    border: 1px solid #b8a878;
   }
   table.data th, table.data td {
-    border: 1px solid #999; padding: 5px 8px;
+    border: 1px solid #c8b88a;
+    padding: 6px 10px;
   }
   table.data th {
-    background: #eef4f7; font-weight: 600; text-align: center;
+    background: #efeadc; font-weight: 700; text-align: center;
+    color: #4a3f1f;
   }
+  table.data tbody tr:nth-child(even) { background: #faf6ec; }
   table.data tfoot td {
-    font-weight: 700; background: #fafafa;
+    font-weight: 700; background: #efeadc; color: #4a3f1f;
   }
+
+  /* ─── 結尾 + 簽核欄 ─── */
   .ending {
-    margin-top: 22px; font-size: 13pt; font-weight: 700;
+    margin: 28px 0 22px;
+    text-align: right;
+    font-size: 13pt; font-weight: 700;
+    color: #1a1a1a; letter-spacing: 2px;
+    padding-right: 12px;
   }
   .sign-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 12px; margin-top: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0;
+    border: 1.2px solid #2a2a2a;
+    background: #fff;
   }
   .sign-cell {
-    border: 1.5px solid #000; min-height: 110px;
+    border-right: 0.8px solid #888;
+    min-height: 130px;
     display: flex; flex-direction: column;
+    background: #fff;
   }
+  .sign-cell:last-child { border-right: none; }
   .sign-cell .sign-header {
-    background: #f0f0f0; border-bottom: 1px solid #000;
-    padding: 4px 8px; font-size: 11pt; font-weight: 700; text-align: center;
+    background: #efeadc; border-bottom: 0.8px solid #888;
+    padding: 6px 10px; font-size: 10.5pt; font-weight: 700;
+    text-align: center; color: #4a3f1f; letter-spacing: 2px;
   }
   .sign-cell .sign-target {
-    background: #fafafa; padding: 3px 6px; font-size: 10pt;
-    color: #555; text-align: center; border-bottom: 1px dashed #999;
+    background: #fdfcf8; padding: 4px 8px; font-size: 9.5pt;
+    color: #6b6357; text-align: center;
+    border-bottom: 1px dashed #b8a878;
+    min-height: 22px;
   }
   .sign-cell .sign-stamp {
-    flex: 1; padding: 12px 6px; font-size: 11pt; text-align: center;
+    flex: 1; padding: 14px 8px;
+    font-size: 10.5pt; text-align: center;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
+    gap: 2px;
   }
-  .sign-cell .approved { color: #0a6b2e; font-weight: 700; }
-  .sign-cell .rejected { color: #b91c1c; font-weight: 700; }
+  .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 14pt; }
+  .sign-cell .rejected { color: #9c1f1f; font-weight: 700; font-size: 14pt; }
   .sign-cell .cancelled { color: #888; font-weight: 700; }
-  .sign-cell .pending { color: #888; }
-  .sign-cell .date { font-size: 10pt; color: #555; margin-top: 2px; }
-  .sign-cell .reason { font-size: 9.5pt; color: #b91c1c; margin-top: 4px; padding: 0 4px; }
-  .sign-cell.approved { background: rgba(34,197,94,0.05); }
-  .sign-cell.rejected { background: rgba(239,68,68,0.05); }
+  .sign-cell .pending { color: #aaa; font-size: 9.5pt; }
+  .sign-cell .date { font-size: 9pt; color: #6b6357; margin-top: 4px; }
+  .sign-cell .reason {
+    font-size: 9pt; color: #9c1f1f; margin-top: 4px;
+    padding: 0 6px; line-height: 1.4;
+  }
+  .sign-cell.approved-bg { background: rgba(34,197,94,0.04); }
+  .sign-cell.rejected-bg { background: rgba(239,68,68,0.04); }
+  .sign-cell .placeholder-line {
+    color: #cfc7b0; font-size: 9pt; letter-spacing: 4px;
+  }
+
+  /* ─── 頁尾 ─── */
   .footer {
-    margin-top: 26px; padding-top: 8px; border-top: 1px solid #888;
-    display: flex; justify-content: space-between; font-size: 9pt; color: #555;
+    margin-top: 24px; padding-top: 10px;
+    border-top: 1px solid #c8b88a;
+    display: flex; justify-content: space-between;
+    font-size: 8.5pt; color: #8a8270;
+    letter-spacing: 0.5px;
   }
 </style>
 </head>
@@ -200,43 +315,55 @@ export function printSignOff(opts = {}) {
   <div class="toolbar no-print">
     <button class="primary" onclick="window.print()">🖨 列印 / 另存 PDF</button>
     <button onclick="window.close()">關閉</button>
-    <span style="color:#666;font-size:10pt;margin-left:auto">提示：列印對話框可選「另存為 PDF」</span>
+    <span style="color:#8a8270;font-size:10pt;margin-left:auto">提示：列印對話框可選「另存為 PDF」</span>
   </div>
 
-  <div class="header-row">
-    ${logoUrl ? `<img class="logo" src="${safe(logoUrl)}" alt="logo" onerror="this.style.display='none'" />` : '<div class="logo"></div>'}
-    <div class="title-area">
-      <div class="company-name">${safe(companyName || '　　　　')} 簽呈</div>
-      <div class="doc-meta">${safe(docTitle || '')}${docNo ? `　|　文件編號 #${safe(String(docNo))}` : ''}${status ? `　|　狀態：${safe(status)}` : ''}</div>
+  <div class="page">
+    <div class="header">
+      <div class="header-row">
+        <div class="logo-box">
+          ${logoUrl ? `<img src="${safe(logoUrl)}" alt="logo" onerror="this.style.display='none'" />` : ''}
+        </div>
+        <div class="title-area">
+          ${companyName ? `<div class="company-name">${safe(companyName)}</div>` : ''}
+          <h1 class="doc-title">簽　呈</h1>
+        </div>
+        <div class="doc-meta-side">
+          ${docTitle ? `<div>${safe(docTitle)}</div>` : ''}
+          ${docNo ? `<div class="doc-no">No. ${safe(String(docNo))}</div>` : ''}
+          ${statusBadge}
+        </div>
+      </div>
     </div>
-    <div style="width:64px"></div>
-  </div>
 
-  <table class="header">
-    <tr>
-      <td class="label">呈文單位</td><td>${safe(appDept)}</td>
-      <td class="label">呈文者</td><td>${safe(appName)}</td>
-    </tr>
-    <tr>
-      <td class="label">呈文日期</td><td>${safe(date || '—')}</td>
-      <td class="label">副本</td><td>${safe(ccText || '—')}</td>
-    </tr>
-  </table>
+    <table class="meta">
+      <tr>
+        <td class="label">呈文單位</td><td class="value">${safe(appDept)}</td>
+        <td class="label">呈文者</td><td class="value">${safe(appName)}</td>
+      </tr>
+      <tr>
+        <td class="label">呈文日期</td><td class="value">${safe(date || '—')}</td>
+        <td class="label">副本</td><td class="value">${safe(ccText || '—')}</td>
+      </tr>
+    </table>
 
-  <div class="section-title">一、主旨</div>
-  <div class="section-content">
-    <div class="subject">${safe(subject || '—')}</div>
-  </div>
+    <div class="section">
+      <div class="section-title"><span class="num">一、</span>主旨</div>
+      <div class="section-content">
+        <div class="subject">${safe(subject || '—')}</div>
+      </div>
+    </div>
 
-  ${sectionsHtml}
+    ${sectionsHtml}
 
-  <div class="ending">以上，呈請核示。</div>
+    <div class="ending">以上，呈請核示。</div>
 
-  <div class="sign-row">${signCellsHtml}</div>
+    <div class="sign-row">${signCellsHtml}</div>
 
-  <div class="footer">
-    <div>產製日期：${new Date().toLocaleString('zh-TW')}</div>
-    <div>SME Ops System · 表單系統</div>
+    <div class="footer">
+      <div>產製日期：${new Date().toLocaleString('zh-TW')}</div>
+      <div>SME Ops System · 表單系統</div>
+    </div>
   </div>
 </body>
 </html>`
@@ -259,40 +386,52 @@ function safe(s) {
   ))
 }
 
+function renderStatusBadge(status) {
+  if (!status) return ''
+  const map = {
+    '申請中': 'applying', '待審核': 'applying',
+    '已核准': 'approved', '已核銷': 'approved',
+    '已駁回': 'rejected', '已拒絕': 'rejected', '已退回': 'rejected',
+    '已取消': 'cancelled',
+  }
+  const cls = map[status] || 'applying'
+  return `<div class="status-pill ${cls}">${safe(status)}</div>`
+}
+
 const NUM_LABELS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 
 function renderSection(sec, idx) {
   const numLabel = NUM_LABELS[idx - 1] || `第${idx}`
-  const titleHtml = `<div class="section-title">${numLabel}、${safe(sec.title || '')}</div>`
+  const titleHtml = `<div class="section-title"><span class="num">${numLabel}、</span>${safe(sec.title || '')}</div>`
 
   if (sec.text != null) {
-    return `${titleHtml}<div class="section-content"><div class="text-content">${safe(sec.text) || '<span style="color:#888">—</span>'}</div></div>`
+    return `<div class="section">${titleHtml}<div class="section-content"><div class="text-content">${safe(sec.text) || '<span style="color:#aaa">—</span>'}</div></div></div>`
   }
   if (Array.isArray(sec.rows) && sec.rows.length > 0) {
     const rowsHtml = sec.rows
       .filter(r => r && r.length >= 2 && r[1] != null && r[1] !== '')
-      .map(([label, value]) => `<div class="field-row"><span class="field-label">${safe(label)}：</span><span class="field-value">${safe(value)}</span></div>`)
+      .map(([label, value]) => `<div class="field-row"><span class="field-label">${safe(label)}</span><span class="field-value">${safe(value)}</span></div>`)
       .join('')
-    return `${titleHtml}<div class="section-content">${rowsHtml || '<div style="color:#888">—</div>'}</div>`
+    return `<div class="section">${titleHtml}<div class="section-content">${rowsHtml || '<div style="color:#aaa">—</div>'}</div></div>`
   }
   if (sec.table) {
     const { head = [], body = [], foot = [] } = sec.table
     const headHtml = head.length > 0 ? `<thead><tr>${head.map(h => `<th>${safe(h)}</th>`).join('')}</tr></thead>` : ''
     const bodyHtml = `<tbody>${body.map(row => `<tr>${row.map(cell => `<td>${safe(cell)}</td>`).join('')}</tr>`).join('')}</tbody>`
     const footHtml = foot.length > 0 ? `<tfoot>${foot.map(row => `<tr>${row.map(cell => `<td>${safe(cell)}</td>`).join('')}</tr>`).join('')}</tfoot>` : ''
-    return `${titleHtml}<div class="section-content"><table class="data">${headHtml}${bodyHtml}${footHtml}</table></div>`
+    return `<div class="section">${titleHtml}<div class="section-content"><table class="data">${headHtml}${bodyHtml}${footHtml}</table></div></div>`
   }
   return ''
 }
 
 function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign }) {
-  // 沒有 chainSteps → 靜態 3 格（無核章邏輯）
+  // 沒有 chainSteps → 靜態 N 格（無核章邏輯，只留簽章空間）
   if (!chainSteps || chainSteps.length === 0) {
     return simpleSign.map(label => `
       <div class="sign-cell">
         <div class="sign-header">${safe(label)}</div>
         <div class="sign-target">　</div>
-        <div class="sign-stamp"><div class="pending">　</div></div>
+        <div class="sign-stamp"><div class="placeholder-line">簽章 / 日期</div></div>
       </div>
     `).join('')
   }
@@ -307,29 +446,29 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
 
     if (status === '已核准' || status === '已核銷') {
       if (idx === chainSteps.length - 1 && finalApprover?.name) {
-        cellContent = `<div class="approved">✓ ${safe(finalApprover.name)}</div>` +
+        cellContent = `<div class="approved">✓</div><div style="font-weight:700">${safe(finalApprover.name)}</div>` +
                       (finalApprover.approved_at ? `<div class="date">${safe(fmtDate(finalApprover.approved_at))}</div>` : '')
       } else {
-        cellContent = `<div class="approved">✓ 核可</div>`
+        cellContent = `<div class="approved">✓</div><div style="font-size:10pt;color:#0a6b2e;font-weight:700">核可</div>`
       }
-      cellStatus = 'approved'
+      cellStatus = 'approved-bg'
     } else if (status === '已駁回' || status === '已拒絕' || status === '已退回') {
       cellContent = idx === 0
-        ? `<div class="rejected">✗ 駁回</div>${rejectReason ? `<div class="reason">${safe(rejectReason)}</div>` : ''}`
-        : `<div class="pending">—</div>`
-      cellStatus = idx === 0 ? 'rejected' : 'pending'
+        ? `<div class="rejected">✗</div><div style="font-size:10pt;color:#9c1f1f;font-weight:700">駁回</div>${rejectReason ? `<div class="reason">${safe(rejectReason)}</div>` : ''}`
+        : `<div class="placeholder-line">—</div>`
+      cellStatus = idx === 0 ? 'rejected-bg' : ''
     } else if (status === '已取消') {
       cellContent = `<div class="cancelled">已取消</div>`
-      cellStatus = 'cancelled'
+      cellStatus = ''
     } else {
       cellContent = `<div class="pending">⏸ 等候中</div>`
-      cellStatus = 'pending'
+      cellStatus = ''
     }
 
     return `
       <div class="sign-cell ${cellStatus}">
         <div class="sign-header">${safe(stepLabel)}</div>
-        <div class="sign-target">${safe(stepTarget || '—')}</div>
+        <div class="sign-target">${safe(stepTarget || '　')}</div>
         <div class="sign-stamp">${cellContent}</div>
       </div>`
   }).join('')

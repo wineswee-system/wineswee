@@ -46,7 +46,7 @@ export default function Resignation() {
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const [{ data: r }, { data: e }, chain] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,dept,department_id').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       findActiveChainByCategory('離職', profile?.organization_id),
     ])
     setList(r || [])

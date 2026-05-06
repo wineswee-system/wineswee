@@ -239,11 +239,23 @@ export default function SearchableSelect({
   )
 }
 
-/** Helper: 把 employees 陣列轉成 SearchableSelect 的 options 格式 */
+/**
+ * Helper: 把 employees 陣列轉成 SearchableSelect 的 options 格式
+ * 顯示一條：名字 (英文) 職稱 部門/分店
+ * 規則：有 store_id 或 store 欄位 → 視為分店人員，顯示分店；否則顯示部門
+ */
 export function empOptions(employees = []) {
-  return employees.map(e => ({
-    value: e.id,
-    label: e.name + (e.name_en ? ` ${e.name_en}` : ''),
-    sublabel: [e.position, e.dept || e.departments?.name].filter(Boolean).join(' · '),
-  }))
+  return employees.map(e => {
+    const parts = [e.name]
+    if (e.name_en) parts.push(`(${e.name_en})`)
+    if (e.position) parts.push(e.position)
+    const storeName = e.store || e.stores?.name
+    const deptName  = e.dept  || e.departments?.name
+    const place = storeName || deptName
+    if (place) parts.push(place)
+    return {
+      value: e.id,
+      label: parts.join(' '),
+    }
+  })
 }

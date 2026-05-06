@@ -35,7 +35,7 @@ export default function ApprovalChains() {
       getApprovalChains(orgId),
       supabase.from('approval_forms').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('approval_form_steps').select('*').order('form_id,step_order'),
-      supabase.from('employees').select('id, name, dept, department_id, position, role, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, role, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([c, f, fs, e, s]) => {
       setChains(c.data || [])

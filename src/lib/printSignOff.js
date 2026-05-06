@@ -83,7 +83,7 @@ export function printSignOff(opts = {}) {
   body {
     font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "PMingLiU", "Heiti TC", sans-serif;
     color: #1a1a1a;
-    font-size: 11.5pt;
+    font-size: 13.5pt;
     line-height: 1.7;
     margin: 0;
     padding: 24px 0;
@@ -141,19 +141,19 @@ export function printSignOff(opts = {}) {
   }
   .title-area { text-align: center; }
   .company-name {
-    font-size: 14pt; font-weight: 600; color: #6e5a2e;
+    font-size: 16pt; font-weight: 600; color: #6e5a2e;
     letter-spacing: 4px; margin: 0 0 6px 0;
   }
   .doc-title {
-    font-size: 26pt; font-weight: 800;
-    letter-spacing: 12px; margin: 0;
-    color: #1a1a1a; padding-left: 12px;  /* offset for letter-spacing */
+    font-size: 30pt; font-weight: 800;
+    letter-spacing: 14px; margin: 0;
+    color: #1a1a1a; padding-left: 14px;  /* offset for letter-spacing */
   }
-  .doc-meta-side { text-align: right; font-size: 9pt; color: #6b6357; }
+  .doc-meta-side { text-align: right; font-size: 10.5pt; color: #6b6357; }
   .doc-meta-side .doc-no { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
   .status-pill {
-    display: inline-block; padding: 2px 10px; border-radius: 10px;
-    font-size: 9pt; font-weight: 700; margin-top: 4px;
+    display: inline-block; padding: 3px 12px; border-radius: 12px;
+    font-size: 10.5pt; font-weight: 700; margin-top: 6px;
   }
   .status-pill.applying { background: #e8eef8; color: #2f4f8a; }
   .status-pill.approved { background: #e0f0e3; color: #0a6b2e; }
@@ -169,74 +169,77 @@ export function printSignOff(opts = {}) {
   }
   table.meta td {
     border: 0.8px solid #888;
-    padding: 9px 14px;
-    font-size: 11pt;
+    padding: 11px 14px;
+    font-size: 13pt;
     vertical-align: middle;
   }
   table.meta td.label {
     background: #efeadc;
-    width: 13%;
+    width: 17%;
     font-weight: 700;
     text-align: center;
     color: #4a3f1f;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
+    white-space: nowrap;
   }
   table.meta td.value {
-    width: 37%;
+    width: 33%;
     background: #fff;
   }
 
   /* ─── 章節 ─── */
-  .section { margin-bottom: 14px; }
+  .section { margin-bottom: 16px; }
   .section-title {
-    font-size: 12.5pt;
+    font-size: 14.5pt;
     font-weight: 700;
-    margin: 14px 0 8px 0;
+    margin: 16px 0 10px 0;
     color: #2a2a2a;
-    display: flex; align-items: baseline; gap: 8px;
+    display: flex; align-items: baseline; gap: 10px;
     border-bottom: 1px dashed #c8b88a;
-    padding-bottom: 4px;
+    padding-bottom: 5px;
   }
   .section-title .num {
     color: #6e5a2e; font-weight: 800; letter-spacing: 2px;
   }
   .section-content {
-    padding-left: 26px;
+    padding-left: 30px;
     line-height: 1.85;
     color: #1a1a1a;
   }
   .subject {
-    font-size: 13pt; font-weight: 700;
+    font-size: 15pt; font-weight: 700;
     color: #1a1a1a;
   }
   .text-content {
-    white-space: pre-wrap; word-wrap: break-word; font-size: 11.5pt;
+    white-space: pre-wrap; word-wrap: break-word; font-size: 13.5pt;
   }
   .field-row {
     display: flex; gap: 14px;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     align-items: flex-start;
   }
   .field-label {
-    flex-shrink: 0; min-width: 96px;
+    flex-shrink: 0; min-width: 116px;
     font-weight: 600; color: #4a3f1f;
     text-align: justify; text-align-last: justify;
     padding-right: 6px;
+    font-size: 13.5pt;
   }
   .field-label::after { content: '：'; }
   .field-value {
     flex: 1; white-space: pre-wrap; word-wrap: break-word;
+    font-size: 13.5pt;
   }
 
   /* ─── 內嵌資料表（明細）─── */
   table.data {
     width: 100%; border-collapse: collapse;
-    margin-top: 6px; font-size: 10.5pt;
+    margin-top: 8px; font-size: 12.5pt;
     border: 1px solid #b8a878;
   }
   table.data th, table.data td {
     border: 1px solid #c8b88a;
-    padding: 6px 10px;
+    padding: 8px 12px;
   }
   table.data th {
     background: #efeadc; font-weight: 700; text-align: center;
@@ -249,9 +252,9 @@ export function printSignOff(opts = {}) {
 
   /* ─── 結尾 + 簽核欄 ─── */
   .ending {
-    margin: 28px 0 22px;
+    margin: 30px 0 24px;
     text-align: right;
-    font-size: 13pt; font-weight: 700;
+    font-size: 15pt; font-weight: 700;
     color: #1a1a1a; letter-spacing: 2px;
     padding-right: 12px;
   }
@@ -271,42 +274,42 @@ export function printSignOff(opts = {}) {
   .sign-cell:last-child { border-right: none; }
   .sign-cell .sign-header {
     background: #efeadc; border-bottom: 0.8px solid #888;
-    padding: 6px 10px; font-size: 10.5pt; font-weight: 700;
+    padding: 8px 10px; font-size: 12.5pt; font-weight: 700;
     text-align: center; color: #4a3f1f; letter-spacing: 2px;
   }
   .sign-cell .sign-target {
-    background: #fdfcf8; padding: 4px 8px; font-size: 9.5pt;
+    background: #fdfcf8; padding: 5px 8px; font-size: 11pt;
     color: #6b6357; text-align: center;
     border-bottom: 1px dashed #b8a878;
-    min-height: 22px;
+    min-height: 24px;
   }
   .sign-cell .sign-stamp {
-    flex: 1; padding: 14px 8px;
-    font-size: 10.5pt; text-align: center;
+    flex: 1; padding: 16px 8px;
+    font-size: 12pt; text-align: center;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
-    gap: 2px;
+    gap: 3px;
   }
-  .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 14pt; }
-  .sign-cell .rejected { color: #9c1f1f; font-weight: 700; font-size: 14pt; }
-  .sign-cell .cancelled { color: #888; font-weight: 700; }
-  .sign-cell .pending { color: #aaa; font-size: 9.5pt; }
-  .sign-cell .date { font-size: 9pt; color: #6b6357; margin-top: 4px; }
+  .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 16pt; }
+  .sign-cell .rejected { color: #9c1f1f; font-weight: 700; font-size: 16pt; }
+  .sign-cell .cancelled { color: #888; font-weight: 700; font-size: 12pt; }
+  .sign-cell .pending { color: #aaa; font-size: 11pt; }
+  .sign-cell .date { font-size: 10.5pt; color: #6b6357; margin-top: 4px; }
   .sign-cell .reason {
-    font-size: 9pt; color: #9c1f1f; margin-top: 4px;
+    font-size: 10.5pt; color: #9c1f1f; margin-top: 4px;
     padding: 0 6px; line-height: 1.4;
   }
   .sign-cell.approved-bg { background: rgba(34,197,94,0.04); }
   .sign-cell.rejected-bg { background: rgba(239,68,68,0.04); }
   .sign-cell .placeholder-line {
-    color: #cfc7b0; font-size: 9pt; letter-spacing: 4px;
+    color: #cfc7b0; font-size: 10.5pt; letter-spacing: 4px;
   }
 
   /* ─── 頁尾 ─── */
   .footer {
-    margin-top: 24px; padding-top: 10px;
+    margin-top: 26px; padding-top: 10px;
     border-top: 1px solid #c8b88a;
     display: flex; justify-content: space-between;
-    font-size: 8.5pt; color: #8a8270;
+    font-size: 10pt; color: #8a8270;
     letter-spacing: 0.5px;
   }
 </style>

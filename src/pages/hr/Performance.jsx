@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const PERIODS = ['2026 Q1', '2026 Q2', '2026 Q3', '2026 Q4', '2025 Q4']
@@ -95,16 +96,12 @@ export default function Performance() {
 
 
   const EmpSelect = ({ value, onChange }) => (
-    <select className="form-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">請選擇員工</option>
-      {departments.map(d => (
-        <optgroup key={d.id} label={d.name}>
-          {employees.filter(e => e.dept === d.name).map(e => (
-            <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <SearchableSelect
+      value={value}
+      onChange={(v) => onChange(v || '')}
+      options={empOptions(employees, { keyBy: 'name' })}
+      placeholder="搜尋員工姓名/職稱..."
+    />
   )
 
   if (loading) return <LoadingSpinner />

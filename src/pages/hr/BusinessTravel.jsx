@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function BusinessTravel() {
@@ -189,16 +190,12 @@ export default function BusinessTravel() {
       {showModal && (
         <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增差旅申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
-            <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
-              <option value="">請選擇員工</option>
-              {departments.map(d => (
-                <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.dept === d.name).map(e => (
-                    <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.employee}
+              onChange={(v) => set('employee', v || '')}
+              options={empOptions(employees, { keyBy: 'name' })}
+              placeholder="搜尋員工姓名/職稱..."
+            />
           </Field>
           <Field label="目的地">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：東京" value={form.destination} onChange={e => set('destination', e.target.value)} />

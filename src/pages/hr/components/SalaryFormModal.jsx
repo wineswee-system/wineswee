@@ -1,5 +1,6 @@
 import { Calculator, X, AlertTriangle } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { empLabel } from '../../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
@@ -11,18 +12,14 @@ const PRESET_ALLOWANCES = [
   '通訊費補助', '託兒津貼', '房屋津貼', '績效獎金',
 ]
 
-function EmpSelect({ value, onChange, employees, departments }) {
+function EmpSelect({ value, onChange, employees }) {
   return (
-    <select className="form-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">請選擇員工</option>
-      {departments.map(d => (
-        <optgroup key={d.id} label={d.name}>
-          {employees.filter(e => e.dept === d.name).map(e => (
-            <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <SearchableSelect
+      value={value}
+      onChange={(v) => onChange(v || '')}
+      options={empOptions(employees, { keyBy: 'name' })}
+      placeholder="搜尋員工姓名/職稱..."
+    />
   )
 }
 

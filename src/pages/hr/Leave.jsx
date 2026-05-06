@@ -10,6 +10,7 @@ import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '.
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
 
@@ -405,16 +406,12 @@ export default function Leave() {
       {showModal && (
         <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'} onClose={() => { setShowModal(false); setValidationMsg(''); setEditingId(null) }} onSubmit={handleSubmit}>
           <Field label="員工 *">
-            <select className="form-input" style={{ width: '100%' }} value={form.employee} onChange={e => set('employee', e.target.value)}>
-              <option value="">請選擇</option>
-              {departments.map(d => (
-                <optgroup key={d.id} label={d.name}>
-                  {employees.filter(e => e.dept === d.name).map(e => (
-                    <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.employee}
+              onChange={(v) => set('employee', v || '')}
+              options={empOptions(employees, { keyBy: 'name' })}
+              placeholder="搜尋員工姓名/職稱..."
+            />
           </Field>
           <Field label="假別 *">
             <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>

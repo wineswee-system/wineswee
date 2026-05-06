@@ -5,6 +5,7 @@ import { createTask, createChecklist } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const DEFAULT_TEMPLATES = [
@@ -385,18 +386,12 @@ export default function SOPTemplates() {
                     <div style={{ fontSize: 13, fontWeight: 600 }}>Step {i + 1}：{step.title}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預設角色：{step.role || '-'}</div>
                   </div>
-                  <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                  <SearchableSelect
                     value={deployForm.assignees[i] || ''}
-                    onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
-                    <option value="">請選擇</option>
-                    {departments.map(d => (
-                      <optgroup key={d.id} label={d.name}>
-                        {employees.filter(e => e.dept === d.name).map(e => (
-                          <option key={e.id} value={e.name}>{empLabel(e)}｜{e.position}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={(v) => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: v || '' } }))}
+                    options={empOptions(employees, { keyBy: 'name' })}
+                    placeholder="搜尋員工..."
+                  />
                 </div>
               ))}
             </>

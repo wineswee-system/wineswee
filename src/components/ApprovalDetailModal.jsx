@@ -240,6 +240,15 @@ function ChainTimeline({ steps }) {
     </div>
   }
 
+  // 終點 dot：依整體狀態決定（任一 rejected → 失敗紅；無 pending/current → 完成綠；否則灰）
+  const hasRejected = steps.some(s => s.status === 'rejected')
+  const hasPendingOrCurrent = steps.some(s => s.status === 'pending' || s.status === 'current')
+  const allCompleted = !hasRejected && !hasPendingOrCurrent
+  const realPendingNotArchival = steps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival)
+  const closeStateText = hasRejected ? '簽核失敗' : (allCompleted || !realPendingNotArchival ? '簽核完成' : '簽核完成')
+  const closeStateColor = hasRejected ? '#ef4444' : ((allCompleted || !realPendingNotArchival) ? '#0a6b2e' : 'var(--border-medium)')
+  const closeStateBg = hasRejected ? '#ef4444' : ((allCompleted || !realPendingNotArchival) ? '#22c55e' : 'var(--border-medium)')
+
   return (
     <div style={{ position: 'relative', paddingLeft: 34 }}>
       {/* Vertical line */}
@@ -257,10 +266,10 @@ function ChainTimeline({ steps }) {
         <div style={{
           position: 'absolute', left: -25,
           width: 22, height: 22, borderRadius: '50%',
-          background: 'var(--border-medium)',
+          background: closeStateBg,
           border: '4px solid var(--bg-secondary)',
         }} />
-        <div style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 600 }}>簽核完成</div>
+        <div style={{ fontSize: 16, color: closeStateColor, fontWeight: 600 }}>{closeStateText}</div>
       </div>
     </div>
   )
@@ -294,8 +303,14 @@ function TimelineDot({ step, index, isLast }) {
         fontSize: 16, fontWeight: 700,
         color: labelColors[step.status] || 'var(--text-muted)',
         lineHeight: 1.3,
+        display: 'flex', alignItems: 'center', gap: 6,
       }}>
         {step.label}
+        {step.archival && (
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+            存檔
+          </span>
+        )}
       </div>
       {step.name && (
         <div style={{ fontSize: 15, color: 'var(--text-primary)', marginTop: 4 }}>

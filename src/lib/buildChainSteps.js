@@ -19,10 +19,16 @@ import { getWorkflowForRecord } from './workflowIntegration'
  * @param {number} [opts.applicantId]
  * @param {string} opts.applicantCreatedAt 申請時間 (ISO)
  * @param {string} opts.recordStatus       表單目前 status（'待審核' / '已核准' / '已拒絕' …）
+ * @param {string} [opts.approverName]     fallback 用：實際核可者姓名（row.approver）
+ * @param {string} [opts.approvedAt]       fallback 用：核可時間
+ * @param {string} [opts.rejectReason]     fallback 用：駁回原因
+ * @param {Array<string>} [opts.fallbackTail]  fallback 額外尾巴關卡（如 ['人資核章']），對齊 PDF simpleSign
  * @returns {Promise<Array>}
  */
 export async function buildWorkflowChainSteps({
   templateName, applicantName, applicantId, applicantCreatedAt, recordStatus,
+  approverName, approvedAt, rejectReason,
+  fallbackTail = ['人資核章'],
 }) {
   const applicantStep = {
     label: '申請人',
@@ -40,14 +46,20 @@ export async function buildWorkflowChainSteps({
   }
 
   if (!workflow || !workflow.workflow_steps?.length) {
-    // 沒走 workflow → 用單關 fallback
+    // 沒走 workflow → 用 3 關 fallback：申請人 + 直屬主管 + 尾巴（與 PDF 對齊）
+    let supervisorStep
     if (recordStatus === '已核准' || recordStatus === '已核銷') {
-      return [applicantStep, { label: '主管核示', name: '', status: 'completed' }]
+      supervisorStep = { label: '直屬主管', name: approverName || '', status: 'completed', completedAt: approvedAt }
+    } else if (recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回') {
+      supervisorStep = { label: '直屬主管', name: approverName || '', status: 'rejected', rejectReason }
+    } else {
+      supervisorStep = { label: '直屬主管', name: '', status: 'current' }
     }
-    if (recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回') {
-      return [applicantStep, { label: '主管核示', name: '', status: 'rejected' }]
-    }
-    return [applicantStep, { label: '主管核示', name: '', status: 'current' }]
+    // 尾巴關卡（人資核章 等）— 純形式存檔用，標 archival 讓 timeline 終點不卡住
+    const tailSteps = (fallbackTail || []).map(label => ({
+      label, name: '', status: 'pending', archival: true,
+    }))
+    return [applicantStep, supervisorStep, ...tailSteps]
   }
 
   let foundCurrent = false

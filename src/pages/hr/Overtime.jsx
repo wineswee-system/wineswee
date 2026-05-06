@@ -182,6 +182,9 @@ export default function Overtime() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
     })
     setDetailChainSteps(steps)
     setLoadingChain(false)

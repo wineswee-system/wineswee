@@ -32,11 +32,14 @@ export default function PunchCorrection() {
     setDetailChainSteps([])
     const empRow = employees.find(e => e.name === row.employee)
     const steps = await buildWorkflowChainSteps({
-      templateName: '補打卡簽核',  // 沒設 chain → fallback 「申請人 → 主管核示」
+      templateName: '補打卡簽核',  // 沒設 chain → fallback 3 關
       applicantName: row.employee,
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
+      approverName: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
     })
     setDetailChainSteps(steps)
     setLoadingChain(false)

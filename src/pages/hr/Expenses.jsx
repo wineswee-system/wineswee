@@ -125,6 +125,10 @@ export default function Expenses() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      fallbackTail: ['財務核章'],
     })
     setDetailChainSteps(steps)
     setLoadingChain(false)

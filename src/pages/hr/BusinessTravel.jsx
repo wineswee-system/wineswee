@@ -111,6 +111,10 @@ export default function BusinessTravel() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      fallbackTail: ['人資/財務'],
     })
     setDetailChainSteps(steps)
     setLoadingChain(false)

@@ -281,6 +281,9 @@ export default function Leave() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
+      approverName: row.approver && row.approver !== '-' ? row.approver : '',
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
     })
     setDetailChainSteps(steps)
     setLoadingChain(false)

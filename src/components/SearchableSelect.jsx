@@ -212,14 +212,14 @@ export default function SearchableSelect({
                 if (!groupMap.has(g)) groupMap.set(g, [])
                 groupMap.get(g).push({ opt, idx })
               })
-              return [...groupMap.entries()].map(([groupName, items]) => (
+              return [...groupMap.entries()].map(([groupName, items], gi) => (
                 <Fragment key={groupName}>
                   <div style={{
-                    padding: '5px 12px', fontSize: 11, fontWeight: 700,
-                    color: 'var(--text-muted)', background: 'var(--glass-light)',
-                    borderTop: '1px solid var(--border-subtle)',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    position: 'sticky', top: 0, zIndex: 1,
+                    padding: '6px 12px', fontSize: 11, fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    background: 'var(--bg-secondary)',
+                    borderTop: gi === 0 ? 'none' : '1px solid var(--border-medium)',
+                    letterSpacing: '0.3px',
                   }}>
                     {groupName} <span style={{ opacity: 0.6, fontWeight: 400 }}>· {items.length}</span>
                   </div>

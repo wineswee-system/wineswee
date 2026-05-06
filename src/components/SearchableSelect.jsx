@@ -37,6 +37,7 @@ export default function SearchableSelect({
   const popupRef = useRef(null)
   const inputRef = useRef(null)
   const listRef = useRef(null)
+  const lastKeyNavRef = useRef(false)  // 區分 highlight 是鍵盤還是滑鼠觸發
 
   const selected = useMemo(
     () => options.find(o => String(o.value) === String(value)) || null,
@@ -92,10 +93,11 @@ export default function SearchableSelect({
   // Reset highlight when filter changes
   useEffect(() => { setHighlight(0) }, [query, open])
 
-  // Scroll highlighted into view
+  // Scroll highlighted into view — 只有鍵盤導覽時才捲動，滑鼠 hover 不捲
   useEffect(() => {
     if (!open || !listRef.current) return
-    const el = listRef.current.children[highlight]
+    if (!lastKeyNavRef.current) return  // 避免滾輪 + hover 互相干擾
+    const el = listRef.current.querySelector(`[data-idx="${highlight}"]`)
     if (el?.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
   }, [highlight, open])
 
@@ -113,8 +115,8 @@ export default function SearchableSelect({
       return
     }
     if (!open) return
-    if (e.key === 'ArrowDown') { setHighlight(h => Math.min(h + 1, filtered.length - 1)); e.preventDefault() }
-    else if (e.key === 'ArrowUp') { setHighlight(h => Math.max(h - 1, 0)); e.preventDefault() }
+    if (e.key === 'ArrowDown') { lastKeyNavRef.current = true; setHighlight(h => Math.min(h + 1, filtered.length - 1)); e.preventDefault() }
+    else if (e.key === 'ArrowUp') { lastKeyNavRef.current = true; setHighlight(h => Math.max(h - 1, 0)); e.preventDefault() }
     else if (e.key === 'Enter') { if (filtered[highlight]) choose(filtered[highlight]); e.preventDefault() }
     else if (e.key === 'Escape') { setOpen(false); setQuery('') }
   }
@@ -203,7 +205,7 @@ export default function SearchableSelect({
               // 偵測是否要分群
               const hasGroups = filtered.some(o => o.group)
               if (!hasGroups) {
-                return filtered.map((opt, idx) => renderItem(opt, idx, value, highlight, choose, setHighlight))
+                return filtered.map((opt, idx) => renderItem(opt, idx, value, highlight, choose, setHighlight, lastKeyNavRef))
               }
               // 分群渲染（保留原 idx 在 filtered 中的位置給鍵盤導覽用）
               const groupMap = new Map()
@@ -223,7 +225,7 @@ export default function SearchableSelect({
                   }}>
                     {groupName} <span style={{ opacity: 0.6, fontWeight: 400 }}>· {items.length}</span>
                   </div>
-                  {items.map(({ opt, idx }) => renderItem(opt, idx, value, highlight, choose, setHighlight))}
+                  {items.map(({ opt, idx }) => renderItem(opt, idx, value, highlight, choose, setHighlight, lastKeyNavRef))}
                 </Fragment>
               ))
             })()}
@@ -235,15 +237,20 @@ export default function SearchableSelect({
   )
 }
 
-// 共用的列表項渲染（保持鍵盤 idx 一致）
-function renderItem(opt, idx, value, highlight, choose, setHighlight) {
+// 共用的列表項渲染。data-idx 給 scrollIntoView 找對應元素用。
+function renderItem(opt, idx, value, highlight, choose, setHighlight, lastKeyNavRef) {
   const isSel = String(opt.value) === String(value)
   const isHi = idx === highlight
   return (
     <div
       key={opt.value ?? `i${idx}`}
+      data-idx={idx}
       onClick={() => choose(opt)}
-      onMouseEnter={() => setHighlight(idx)}
+      onMouseEnter={() => {
+        // 滑鼠 hover 標記為非鍵盤，避免觸發 scrollIntoView 把清單捲回去
+        if (lastKeyNavRef) lastKeyNavRef.current = false
+        setHighlight(idx)
+      }}
       style={{
         padding: '8px 12px', cursor: opt.disabled ? 'not-allowed' : 'pointer',
         display: 'flex', alignItems: 'center', gap: 8,

@@ -11,6 +11,7 @@ import { empLabel } from '../../lib/empLabel'
 import { printTripSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function BusinessTravel() {
   const { profile } = useAuth()
@@ -23,6 +24,7 @@ export default function BusinessTravel() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+  const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
@@ -53,7 +55,7 @@ export default function BusinessTravel() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.destination || !form.start_date || !form.employee) return
+    if (!validateRequired(form, ['employee', 'destination', 'start_date'], setErrors)) return
     const payload = { ...form, budget: Number(form.budget) || 0 }
 
     // ── 編輯重送路徑 ──
@@ -250,21 +252,21 @@ export default function BusinessTravel() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增差旅申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增差旅申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
+          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
-              onChange={(v) => set('employee', v || '')}
+              onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
               options={empOptions(employees, { keyBy: 'name' })}
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <Field label="目的地">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：東京" value={form.destination} onChange={e => set('destination', e.target.value)} />
+          <Field label="目的地 *" error={errors.destination} errorMsg="請填寫目的地">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：東京" value={form.destination} onChange={e => { set('destination', e.target.value); clearError('destination', setErrors) }} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="出發日">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+            <Field label="出發日 *" error={errors.start_date} errorMsg="請選日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
             <Field label="回程日">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />

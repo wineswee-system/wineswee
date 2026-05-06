@@ -12,6 +12,7 @@ import {
 import { printTransferSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
 
@@ -35,6 +36,7 @@ export default function TransferRequest() {
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const [errors, setErrors] = useState({})
 
   const openDetail = async (row) => {
     setDetailRow(row)
@@ -135,8 +137,11 @@ export default function TransferRequest() {
 
   const handleSubmit = async () => {
     const empId = isAdmin ? form.employee_id : profile?.id
-    if (!empId) return alert('請選擇員工')
-    if (!form.effective_date) return alert('請填生效日')
+    const validateForm = isAdmin
+      ? { employee_id: empId, effective_date: form.effective_date }
+      : { effective_date: form.effective_date }
+    const validateKeys = isAdmin ? ['employee_id', 'effective_date'] : ['effective_date']
+    if (!validateRequired(validateForm, validateKeys, setErrors)) return
     const payload = {
       employee_id: Number(empId),
       organization_id: profile?.organization_id || 1,
@@ -332,12 +337,12 @@ export default function TransferRequest() {
       </div>
 
       {showForm && (
-        <Modal title="新增人事異動申請" onClose={() => setShowForm(false)} onSubmit={handleSubmit} submitLabel="送出申請">
+        <Modal title="新增人事異動申請" onClose={() => { setShowForm(false); setErrors({}) }} onSubmit={handleSubmit} submitLabel="送出申請">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工">
+            <Field label="員工 *" error={errors.employee_id} errorMsg="請選擇員工">
               <SearchableSelect
                 value={form.employee_id}
-                onChange={(v) => setForm(f => ({ ...f, employee_id: v || '' }))}
+                onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}
                 options={formattedEmpOptions}
                 placeholder="搜尋員工姓名/職稱..."
               />
@@ -348,8 +353,8 @@ export default function TransferRequest() {
               </select>
             </Field>
           </div>
-          <Field label="生效日">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.effective_date} onChange={e => setForm(f => ({ ...f, effective_date: e.target.value }))} />
+          <Field label="生效日 *" error={errors.effective_date} errorMsg="請選日期">
+            <input className="form-input" type="date" style={{ width: '100%' }} value={form.effective_date} onChange={e => { setForm(f => ({ ...f, effective_date: e.target.value })); clearError('effective_date', setErrors) }} />
           </Field>
           {selectedEmp && (
             <div style={{ padding: 10, background: 'var(--glass-light)', borderRadius: 8, fontSize: 12 }}>

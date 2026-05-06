@@ -9,6 +9,7 @@ import { empLabel } from '../../lib/empLabel'
 import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
@@ -21,6 +22,7 @@ export default function PunchCorrection() {
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+  const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
@@ -89,7 +91,7 @@ export default function PunchCorrection() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.employee || !form.date || !form.corrected_time || !form.reason) return
+    if (!validateRequired(form, ['employee', 'date', 'corrected_time', 'reason'], setErrors)) return
     // Lookup employee_id
     const emp = employees.find(e => e.name === form.employee)
     const insertData = {
@@ -264,18 +266,18 @@ export default function PunchCorrection() {
       </div>
 
       {showModal && (
-        <Modal title="新增補登申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title="新增補登申請" onClose={() => { setShowModal(false); setErrors({}) }} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
+            <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
               <SearchableSelect
                 value={form.employee}
-                onChange={(v) => set('employee', v || '')}
+                onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
                 options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋員工姓名..."
               />
             </Field>
-            <Field label="日期 *">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />
+            <Field label="日期 *" error={errors.date} errorMsg="請選日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -285,13 +287,13 @@ export default function PunchCorrection() {
                 <option value="clock_out">下班打卡</option>
               </select>
             </Field>
-            <Field label="補登時間 *">
-              <input className="form-input" type="time" style={{ width: '100%' }} value={form.corrected_time} onChange={e => set('corrected_time', e.target.value)} />
+            <Field label="補登時間 *" error={errors.corrected_time} errorMsg="請選時間">
+              <input className="form-input" type="time" style={{ width: '100%' }} value={form.corrected_time} onChange={e => { set('corrected_time', e.target.value); clearError('corrected_time', setErrors) }} />
             </Field>
           </div>
-          <Field label="原因 *">
+          <Field label="原因 *" error={errors.reason} errorMsg="請填寫原因">
             <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="例：忘記打卡、系統異常..."
-              value={form.reason} onChange={e => set('reason', e.target.value)} />
+              value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>
         </Modal>
       )}

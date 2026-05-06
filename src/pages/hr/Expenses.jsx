@@ -12,6 +12,7 @@ import { empLabel } from '../../lib/empLabel'
 import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
@@ -26,6 +27,7 @@ export default function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+  const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
@@ -56,7 +58,7 @@ export default function Expenses() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.amount || !form.date || !form.employee) return
+    if (!validateRequired(form, ['employee', 'amount', 'date'], setErrors)) return
     const payload = { ...form, amount: Number(form.amount) }
 
     // ── 編輯重送路徑 ──
@@ -267,11 +269,11 @@ export default function Expenses() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
+          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
-              onChange={(v) => set('employee', v || '')}
+              onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
               options={empOptions(employees, { keyBy: 'name' })}
               placeholder="搜尋員工姓名/職稱..."
             />
@@ -282,12 +284,12 @@ export default function Expenses() {
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="金額 (NT$)">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <Field label="金額 (NT$) *" error={errors.amount} errorMsg="請填寫金額">
+              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.amount} onChange={e => { set('amount', e.target.value); clearError('amount', setErrors) }} />
             </Field>
           </div>
-          <Field label="日期">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />
+          <Field label="日期 *" error={errors.date} errorMsg="請選日期">
+            <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>
           <Field label="說明">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="費用說明" value={form.description} onChange={e => set('description', e.target.value)} />

@@ -12,6 +12,7 @@ import {
 import { printResignationSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 const REASONS = ['個人因素', '家庭因素', '健康因素', '另謀高就', '進修', '退休', '其他']
 
@@ -30,6 +31,7 @@ export default function Resignation() {
   const [chainSteps, setChainSteps] = useState({})  // { chainId: [steps] }
   const [activeChain, setActiveChain] = useState(null)
   const [organization, setOrganization] = useState(null)  // { name, logo_url } 印簽呈用
+  const [errors, setErrors] = useState({})
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
@@ -115,8 +117,12 @@ export default function Resignation() {
 
   const handleSubmit = async () => {
     const empId = isAdmin ? form.employee_id : profile?.id
-    if (!empId) return alert('請選擇員工')
-    if (!form.planned_resign_date) return alert('請填預計離職日')
+    // 用 validateRequired 統一處理：admin 模式需要 employee_id；非 admin 自動帶 profile.id
+    const validateForm = isAdmin
+      ? { employee_id: empId, planned_resign_date: form.planned_resign_date }
+      : { planned_resign_date: form.planned_resign_date }
+    const validateKeys = isAdmin ? ['employee_id', 'planned_resign_date'] : ['planned_resign_date']
+    if (!validateRequired(validateForm, validateKeys, setErrors)) return
     const payload = {
       employee_id: Number(empId),
       planned_resign_date: form.planned_resign_date,
@@ -312,12 +318,12 @@ export default function Resignation() {
       </div>
 
       {showForm && (
-        <Modal title="新增離職申請" onClose={() => setShowForm(false)} onSubmit={handleSubmit} submitLabel="送出申請">
-          <Field label="員工">
+        <Modal title="新增離職申請" onClose={() => { setShowForm(false); setErrors({}) }} onSubmit={handleSubmit} submitLabel="送出申請">
+          <Field label={isAdmin ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
             {isAdmin ? (
               <SearchableSelect
                 value={form.employee_id}
-                onChange={(v) => setForm(f => ({ ...f, employee_id: v || '' }))}
+                onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}
                 options={formattedEmpOptions}
                 placeholder="搜尋員工姓名/職稱..."
               />
@@ -325,8 +331,8 @@ export default function Resignation() {
               <input className="form-input" style={{ width: '100%' }} value={`${profile?.name || ''}${profile?.name_en ? ' ' + profile.name_en : ''}`} disabled />
             )}
           </Field>
-          <Field label="預計離職日">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_resign_date} onChange={e => setForm(f => ({ ...f, planned_resign_date: e.target.value }))} />
+          <Field label="預計離職日 *" error={errors.planned_resign_date} errorMsg="請選日期">
+            <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_resign_date} onChange={e => { setForm(f => ({ ...f, planned_resign_date: e.target.value })); clearError('planned_resign_date', setErrors) }} />
           </Field>
           <Field label="離職原因">
             <select className="form-input" style={{ width: '100%' }} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}>

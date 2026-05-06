@@ -7,6 +7,7 @@ import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -44,6 +45,7 @@ export default function ExpenseRequests() {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('all')
   const [isExpense, setIsExpense] = useState(true)
+  const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
@@ -142,7 +144,9 @@ export default function ExpenseRequests() {
   const handleSubmit = async () => {
     const validItems = lineItems.filter(li => li.name && li.qty > 0)
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
-    if (!form.employee || !form.account_code || !form.title || !total) return
+    // 把 total（合計金額）也納入驗證
+    const validateForm = { ...form, _total: total }
+    if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors)) return
     setSaving(true)
     const emp = employees.find(e => e.name === form.employee)
     const acc = accounts.find(a => a.code === form.account_code)
@@ -486,21 +490,22 @@ export default function ExpenseRequests() {
 
       {/* New Request Modal */}
       {showModal && (
-        <ModalOverlay onClose={() => setShowModal(false)}>
+        <ModalOverlay onClose={() => { setShowModal(false); setErrors({}) }}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowModal(false); setErrors({}) }}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
+              <div className={errors.employee ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
                 <SearchableSelect
                   value={form.employee}
-                  onChange={(v) => set('employee', v || '')}
+                  onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
                   options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="搜尋申請人姓名/部門/門市..."
                 />
+                {errors.employee && <div className="field-error-msg">⚠ 請選擇申請人</div>}
               </div>
               {/* Expense / Non-expense toggle */}
               <div>
@@ -520,9 +525,9 @@ export default function ExpenseRequests() {
                   ))}
                 </div>
               </div>
-              <div>
+              <div className={errors.account_code ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 *</label>
-                <select value={form.account_code} onChange={e => set('account_code', e.target.value)}
+                <select value={form.account_code} onChange={e => { set('account_code', e.target.value); clearError('account_code', setErrors) }}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇科目</option>
                   {Object.entries(
@@ -543,11 +548,13 @@ export default function ExpenseRequests() {
                     </optgroup>
                   ))}
                 </select>
+                {errors.account_code && <div className="field-error-msg">⚠ 請選擇會計科目</div>}
               </div>
-              <div>
+              <div className={errors.title ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>項目名稱 *</label>
-                <input type="text" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：採購辦公椅 x5"
+                <input type="text" value={form.title} onChange={e => { set('title', e.target.value); clearError('title', setErrors) }} placeholder="例：採購辦公椅 x5"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                {errors.title && <div className="field-error-msg">⚠ 請填寫項目名稱</div>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
@@ -563,8 +570,9 @@ export default function ExpenseRequests() {
               </div>
 
               {/* Line items */}
-              <div>
+              <div className={errors._total ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 *</label>
+                {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                   <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
                     <thead>
@@ -631,7 +639,7 @@ export default function ExpenseRequests() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>取消</button>
+              <button className="btn btn-secondary" onClick={() => { setShowModal(false); setErrors({}) }}>取消</button>
               <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '提交中...' : '提交申請'}</button>
             </div>
           </div>

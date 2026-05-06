@@ -16,6 +16,7 @@ import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -31,6 +32,7 @@ export default function Leave() {
   const [form, setForm] = useState({ employee: '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
   const [validationMsg, setValidationMsg] = useState('')
   const [error, setError] = useState(null)
+  const [errors, setErrors] = useState({})  // 必填欄位驗證
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
@@ -79,7 +81,7 @@ export default function Leave() {
 
   const handleSubmit = async () => {
     try {
-    if (!form.start_date || !form.employee) return
+    if (!validateRequired(form, ['employee', 'start_date'], setErrors)) return
 
     // 取此假別此員工的 step 設定（先看員工所屬店覆寫，沒有則全公司預設，再沒有用 leavePolicy.js）
     const empForStep = employees.find(em => em.name === form.employee)
@@ -465,11 +467,11 @@ export default function Leave() {
 
       {/* New Leave Modal */}
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'} onClose={() => { setShowModal(false); setValidationMsg(''); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'} onClose={() => { setShowModal(false); setValidationMsg(''); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
+          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
-              onChange={(v) => set('employee', v || '')}
+              onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
               options={empOptions(employees, { keyBy: 'name' })}
               placeholder="搜尋員工姓名/職稱..."
             />
@@ -522,8 +524,8 @@ export default function Leave() {
             </Field>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: form.unit === 'hour' ? '1fr' : '1fr 1fr', gap: 12 }}>
-            <Field label={form.unit === 'hour' ? '日期 *' : '開始日期 *'}>
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+            <Field label={form.unit === 'hour' ? '日期 *' : '開始日期 *'} error={errors.start_date} errorMsg="請選日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
             {form.unit === 'day' && (
               <Field label="結束日期">

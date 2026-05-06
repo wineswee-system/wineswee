@@ -81,11 +81,17 @@ export default function Modal({ title, onClose, children, onSubmit, submitLabel 
   )
 }
 
-export function Field({ label, children }) {
+/**
+ * Field — 表單欄位包裝
+ * @param {boolean} [error]   true 時加 .field-error class（紅框 + 抖動 + label 變紅）
+ * @param {string}  [errorMsg] 錯誤訊息（顯示在欄位下方）
+ */
+export function Field({ label, children, error, errorMsg }) {
   return (
-    <div>
+    <div className={error ? 'field-error' : undefined}>
       <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>{label}</label>
       {children}
+      {error && errorMsg && <div className="field-error-msg">⚠ {errorMsg}</div>}
     </div>
   )
 }

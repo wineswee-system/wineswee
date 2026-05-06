@@ -11,6 +11,7 @@ import { empLabel } from '../../lib/empLabel'
 import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function Overtime() {
   const { profile } = useAuth()
@@ -23,6 +24,7 @@ export default function Overtime() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '' })
   const [error, setError] = useState(null)
+  const [errors, setErrors] = useState({})
 
   // 各店的加班 step 設定 → {store_id: step}
   const [storeSteps, setStoreSteps] = useState({})
@@ -61,7 +63,7 @@ export default function Overtime() {
 
   const handleSubmit = async () => {
     try {
-      if (!form.date || !form.employee) return
+      if (!validateRequired(form, ['employee', 'date'], setErrors)) return
 
       // ── 編輯重送路徑 ──
       if (editingId) {
@@ -322,17 +324,17 @@ export default function Overtime() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
+          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
-              onChange={(v) => set('employee', v || '')}
+              onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
               options={empOptions(employees, { keyBy: 'name' })}
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <Field label="加班日期">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />
+          <Field label="加班日期 *" error={errors.date} errorMsg="請選日期">
+            <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>
           <Field label="加班時數">
             {(() => {

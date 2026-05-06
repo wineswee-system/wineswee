@@ -9,6 +9,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printOvertimeSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
 
 export default function Overtime() {
   const { profile } = useAuth()
@@ -25,6 +27,9 @@ export default function Overtime() {
   // 各店的加班 step 設定 → {store_id: step}
   const [storeSteps, setStoreSteps] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)        // 點 row 開的明細 modal
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
   // employees 多帶 store_id 進來，這樣選人後可查 step
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -165,6 +170,23 @@ export default function Overtime() {
     }
   }
 
+  // 點 row → 開明細 modal + 非同步抓 workflow chain
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    const empRow = employees.find(e => e.name === row.employee)
+    const steps = await buildWorkflowChainSteps({
+      templateName: '加班簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -227,7 +249,9 @@ export default function Overtime() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無加班紀錄</td></tr>}
               {filtered.map(o => (
-                <tr key={o.id}>
+                <tr key={o.id} onClick={() => openDetail(o)} style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ''}>
                   <td style={{ fontWeight: 600 }}>{o.employee}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(o.employee) || '-'}</td>
                   <td>{o.date}</td>
@@ -241,7 +265,7 @@ export default function Overtime() {
                       <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{o.reject_reason}</div>
                     )}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {o.status === '待審核' && (
                         <>
@@ -318,6 +342,44 @@ export default function Overtime() {
           </Field>
         </Modal>
       )}
+
+      {/* ─── 明細 modal（點 row 開）─── */}
+      {detailRow && (() => {
+        const empRow = employees.find(e => e.name === detailRow.employee)
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle={detailRow.is_pre_approval ? '預先加班申請' : '加班申請'}
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.employee,
+              name_en: empRow?.name_en,
+              position: empRow?.position,
+              dept: getEmpDept(detailRow.employee),
+              status: empRow?.status,
+              employee_no: empRow?.employee_no || (empRow?.id ? `ID ${empRow.id}` : undefined),
+            }}
+            fields={[
+              { label: '加班類型', value: detailRow.is_pre_approval ? '預先申請' : '事後補登' },
+              { label: '加班日期', value: detailRow.date },
+              { label: '時數', value: `${detailRow.hours || 0} 小時` },
+              { label: '事由', value: detailRow.reason, multiline: true },
+              ...(detailRow.reject_reason
+                ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }]
+                : []),
+            ]}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => printOvertimeSignOff(detailRow, {
+              companyName: organization?.name, logoUrl: organization?.logo_url,
+              dept: getEmpDept(detailRow.employee),
+              signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+            })}
+          />
+        )
+      })()}
     </div>
   )
 }

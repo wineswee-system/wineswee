@@ -8,6 +8,7 @@ import { updateEmployee } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import PersonalityTab from './employee/PersonalityTab'
 import DevelopmentTab from './employee/DevelopmentTab'
+import EmployeeChildTableEditor from '../pages/org/components/EmployeeChildTableEditor'
 import { empLabel } from '../lib/empLabel'
 import ChangelogPanel from './ChangelogPanel'
 
@@ -311,13 +312,20 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const TABS = [
     { key: 'personal',   label: '個人資訊', icon: '👤' },
     { key: 'org',        label: '組織',     icon: '🏢' },
-    { key: 'workflows',  label: '進行中流程', icon: '🚀' },
-    { key: 'assignments',label: '指派歷史', icon: '📜' },
+    // HR 資料子表（admin 才看得到）
+    ...(isAdmin ? [
+      { key: 'family',    label: '家庭', icon: '👪' },
+      { key: 'education', label: '學歷', icon: '🎓' },
+      { key: 'work',      label: '經歷', icon: '💼' },
+      { key: 'cert',      label: '證照', icon: '📜' },
+    ] : []),
     { key: 'skills',     label: '技能',     icon: '🏷️' },
+    { key: 'workflows',  label: '進行中流程', icon: '🚀' },
+    { key: 'assignments',label: '指派歷史', icon: '📋' },
     { key: 'personality',label: '性格分析', icon: '🧬' },
     { key: 'development',label: '能力發展', icon: '📚' },
     { key: 'schedule',   label: '排班',     icon: '📅' },
-    { key: 'records',    label: '紀錄',     icon: '📋' },
+    { key: 'records',    label: '紀錄',     icon: '🗂️' },
     ...(isAdmin ? [{ key: 'changelog', label: '變更日誌', icon: '📝' }] : []),
   ]
 
@@ -776,6 +784,38 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           )}
 
           {/* ═══ 技能 ═══ */}
+          {/* ═══ 家庭（admin 才看得到）═══ */}
+          {tab === 'family' && isAdmin && (
+            <>
+              <SectionTitle icon="👪" text="家庭成員" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="family_members" />
+            </>
+          )}
+
+          {/* ═══ 學歷 ═══ */}
+          {tab === 'education' && isAdmin && (
+            <>
+              <SectionTitle icon="🎓" text="學歷紀錄" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="education_records" />
+            </>
+          )}
+
+          {/* ═══ 經歷 ═══ */}
+          {tab === 'work' && isAdmin && (
+            <>
+              <SectionTitle icon="💼" text="工作經歷" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="work_experiences" />
+            </>
+          )}
+
+          {/* ═══ 證照 ═══ */}
+          {tab === 'cert' && isAdmin && (
+            <>
+              <SectionTitle icon="📜" text="證照清單" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="certifications" />
+            </>
+          )}
+
           {tab === 'skills' && (
             <>
               <SectionTitle icon="🏷️" text="技能 / 證照" />

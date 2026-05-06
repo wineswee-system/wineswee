@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Printer } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -29,6 +29,7 @@ export default function BusinessTravel() {
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -103,30 +104,40 @@ export default function BusinessTravel() {
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const printWithChain = async (row) => {
-    const empRow = employees.find(e => e.name === row.employee)
-    const chainSteps = await buildWorkflowChainSteps({
-      templateName: '出差申請簽核',
-      applicantName: row.employee,
-      applicantId: empRow?.id,
-      applicantCreatedAt: row.created_at,
-      recordStatus: row.status,
-      approverName: row.approver,
-      approvedAt: row.approved_at,
-      rejectReason: row.reject_reason,
-      fallbackTail: ['人資/財務'],
-    })
-    const approverMap = {}
-    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-    printTripSignOff(row, {
-      companyName: organization?.name, logoUrl: organization?.logo_url,
-      dept: getEmpDept(row.employee),
-      signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-      chainSteps,
-      approverMap,
-    })
+    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const empRow = employees.find(e => e.name === row.employee)
+      const chainSteps = await buildWorkflowChainSteps({
+        templateName: '出差申請簽核',
+        applicantName: row.employee,
+        applicantId: empRow?.id,
+        applicantCreatedAt: row.created_at,
+        recordStatus: row.status,
+        approverName: row.approver,
+        approvedAt: row.approved_at,
+        rejectReason: row.reject_reason,
+        fallbackTail: ['人資/財務'],
+      })
+      const approverMap = {}
+      chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printTripSignOff(row, {
+        companyName: organization?.name, logoUrl: organization?.logo_url,
+        dept: getEmpDept(row.employee),
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+        chainSteps,
+        approverMap,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
   }
 
   const openDetail = async (row) => {
+    detailRowIdRef.current = row.id
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
@@ -142,6 +153,7 @@ export default function BusinessTravel() {
       rejectReason: row.reject_reason,
       fallbackTail: ['人資/財務'],
     })
+    if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)
     setLoadingChain(false)
   }

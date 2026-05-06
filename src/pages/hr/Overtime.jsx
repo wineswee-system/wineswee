@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Printer } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
@@ -32,6 +32,7 @@ export default function Overtime() {
   const [detailRow, setDetailRow] = useState(null)        // 點 row 開的明細 modal
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)  // 防 race condition：快速切 row 時丟棄舊 fetch
   // employees 多帶 store_id 進來，這樣選人後可查 step
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -174,6 +175,7 @@ export default function Overtime() {
 
   // 點 row → 開明細 modal + 非同步抓 workflow chain
   const openDetail = async (row) => {
+    detailRowIdRef.current = row.id
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
@@ -188,6 +190,7 @@ export default function Overtime() {
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
     })
+    if (detailRowIdRef.current !== row.id) return  // race guard
     setDetailChainSteps(steps)
     setLoadingChain(false)
   }
@@ -199,27 +202,37 @@ export default function Overtime() {
 
   // 印簽呈統一邏輯：先 fetch 該單實際 chain → 把 chainSteps + approverMap 一起餵給 PDF
   // 這樣老闆改 chain（/system/approval-chains）後 PDF 會跟著動態更新欄數
+  // 注意：window.open 必須在 click handler 同步呼叫，避免被 popup blocker 擋
   const printWithChain = async (row) => {
-    const empRow = employees.find(e => e.name === row.employee)
-    const chainSteps = await buildWorkflowChainSteps({
-      templateName: '加班簽核',
-      applicantName: row.employee,
-      applicantId: empRow?.id,
-      applicantCreatedAt: row.created_at,
-      recordStatus: row.status,
-      approverName: row.approver,
-      approvedAt: row.approved_at,
-      rejectReason: row.reject_reason,
-    })
-    const approverMap = {}
-    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-    printOvertimeSignOff(row, {
-      companyName: organization?.name, logoUrl: organization?.logo_url,
-      dept: getEmpDept(row.employee),
-      signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-      chainSteps,
-      approverMap,
-    })
+    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const empRow = employees.find(e => e.name === row.employee)
+      const chainSteps = await buildWorkflowChainSteps({
+        templateName: '加班簽核',
+        applicantName: row.employee,
+        applicantId: empRow?.id,
+        applicantCreatedAt: row.created_at,
+        recordStatus: row.status,
+        approverName: row.approver,
+        approvedAt: row.approved_at,
+        rejectReason: row.reject_reason,
+      })
+      const approverMap = {}
+      chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printOvertimeSignOff(row, {
+        companyName: organization?.name, logoUrl: organization?.logo_url,
+        dept: getEmpDept(row.employee),
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+        chainSteps,
+        approverMap,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
   }
 
   const filtered = records.filter(r =>

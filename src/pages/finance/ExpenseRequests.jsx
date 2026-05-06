@@ -144,9 +144,9 @@ export default function ExpenseRequests() {
   const handleSubmit = async () => {
     const validItems = lineItems.filter(li => li.name && li.qty > 0)
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
-    // 把 total（合計金額）也納入驗證
+    // 把 total（合計金額）也納入驗證 — _total 必須 > 0，所以用 zeroInvalid: true
     const validateForm = { ...form, _total: total }
-    if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors)) return
+    if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors, { zeroInvalid: true })) return
     setSaving(true)
     const emp = employees.find(e => e.name === form.employee)
     const acc = accounts.find(a => a.code === form.account_code)
@@ -305,7 +305,7 @@ export default function ExpenseRequests() {
 
   // Submit settlement
   const handleSettle = async () => {
-    if (!settleForm.actual_amount) return
+    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) return
     setSaving(true)
     const req = showDetail
     const { error: upErr } = await supabase.from('expense_requests')
@@ -648,20 +648,21 @@ export default function ExpenseRequests() {
 
       {/* Settlement Modal */}
       {showSettleModal && showDetail && (
-        <ModalOverlay onClose={() => setShowSettleModal(false)}>
+        <ModalOverlay onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 480, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>核銷：{showDetail.title}</h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowSettleModal(false)}><X size={20} /></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}><X size={20} /></button>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
               預估金額：<strong>{fmt(showDetail.estimated_amount)}</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
+              <div className={errors.actual_amount ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>實際金額 *</label>
-                <input type="number" value={settleForm.actual_amount} onChange={e => setSettleForm(f => ({ ...f, actual_amount: e.target.value }))}
+                <input type="number" value={settleForm.actual_amount} onChange={e => { setSettleForm(f => ({ ...f, actual_amount: e.target.value })); clearError('actual_amount', setErrors) }}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                {errors.actual_amount && <div className="field-error-msg">⚠ 請填寫實際金額</div>}
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>備註</label>
@@ -692,7 +693,7 @@ export default function ExpenseRequests() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-              <button className="btn btn-secondary" onClick={() => setShowSettleModal(false)}>取消</button>
+              <button className="btn btn-secondary" onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>取消</button>
               <button className="btn btn-primary" onClick={handleSettle} disabled={saving}>{saving ? '提交中...' : '提交核銷'}</button>
             </div>
           </div>
@@ -775,43 +776,50 @@ export default function ExpenseRequests() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={async () => {
-                // 把附件即時撈一份（圖檔會內嵌進簽呈 PDF）
-                const { data: atts } = await supabase.from('expense_request_attachments')
-                  .select('file_name, storage_path, file_type')
-                  .eq('request_id', showDetail.id)
-                  .order('created_at')
-                const attachments = (atts || []).map(a => ({
-                  url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-                  name: a.file_name,
-                  type: a.file_type,
-                }))
-                // 簽章 map：所有有上傳簽章的員工
-                const signatures = Object.fromEntries(
-                  employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
-                )
-                // chain：抓該單實際 workflow 步驟
-                const empRow = employees.find(e => e.name === showDetail.employee)
-                const chainSteps = await buildWorkflowChainSteps({
-                  templateName: '費用申請簽核',
-                  applicantName: showDetail.employee,
-                  applicantId: empRow?.id,
-                  applicantCreatedAt: showDetail.created_at,
-                  recordStatus: showDetail.status,
-                  approverName: showDetail.approved_by,
-                  approvedAt: showDetail.approved_at,
-                  rejectReason: showDetail.reject_reason,
-                  fallbackTail: ['財務核章'],
-                })
-                const approverMap = {}
-                chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-                exportExpenseRequestPdf(showDetail, {
-                  companyName: organization?.name,
-                  logoUrl: organization?.logo_url,
-                  attachments,
-                  signatures,
-                  chainSteps,
-                  approverMap,
-                })
+                if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+                const win = window.open('', '_blank', 'width=900,height=1100')
+                if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+                try {
+                  // 把附件即時撈一份（圖檔會內嵌進簽呈 PDF）
+                  const { data: atts } = await supabase.from('expense_request_attachments')
+                    .select('file_name, storage_path, file_type')
+                    .eq('request_id', showDetail.id)
+                    .order('created_at')
+                  const attachments = (atts || []).map(a => ({
+                    url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+                    name: a.file_name,
+                    type: a.file_type,
+                  }))
+                  const signatures = Object.fromEntries(
+                    employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+                  )
+                  const empRow = employees.find(e => e.name === showDetail.employee)
+                  const chainSteps = await buildWorkflowChainSteps({
+                    templateName: '費用申請簽核',
+                    applicantName: showDetail.employee,
+                    applicantId: empRow?.id,
+                    applicantCreatedAt: showDetail.created_at,
+                    recordStatus: showDetail.status,
+                    approverName: showDetail.approved_by,
+                    approvedAt: showDetail.approved_at,
+                    rejectReason: showDetail.reject_reason,
+                    fallbackTail: ['財務核章'],
+                  })
+                  const approverMap = {}
+                  chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+                  exportExpenseRequestPdf(showDetail, {
+                    companyName: organization?.name,
+                    logoUrl: organization?.logo_url,
+                    attachments,
+                    signatures,
+                    chainSteps,
+                    approverMap,
+                    _win: win,
+                  })
+                } catch (e) {
+                  win.close()
+                  alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+                }
               }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Download size={13} /> 下載簽呈
               </button>

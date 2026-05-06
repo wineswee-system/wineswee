@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { LayoutGrid, GitBranch } from 'lucide-react'
 import { Tree, TreeNode } from 'react-organizational-chart'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 
 const VIEW_KEY = 'sme_orgchart_view_mode'
 
 export default function OrgChart() {
+  const { profile } = useAuth()
   const [departments, setDepartments] = useState([])
   const [sections, setSections] = useState([])
   const [employees, setEmployees] = useState([])
@@ -19,15 +21,18 @@ export default function OrgChart() {
   }
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([getDepartments(), getDepartmentSections(), getEmployees(), getStores()])
       .then(([dRes, secRes, eRes, sRes]) => {
-        setDepartments(dRes.data || [])
-        setSections(secRes.data || [])
-        setEmployees((eRes.data || []).filter(e => e.status === '在職'))
-        setStores((sRes.data || []).filter(s => s.is_active !== false))
+        // 多租戶過濾：只顯示自己組織的資料（避免幽靈員工）
+        const inOrg = (x) => orgId == null || x.organization_id == null || x.organization_id === orgId
+        setDepartments((dRes.data || []).filter(inOrg))
+        setSections((secRes.data || []).filter(inOrg))
+        setEmployees((eRes.data || []).filter(e => e.status === '在職' && inOrg(e)))
+        setStores((sRes.data || []).filter(s => s.is_active !== false && inOrg(s)))
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
 

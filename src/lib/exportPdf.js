@@ -283,6 +283,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
     simpleSignApproverIdx: 1,  // 主管核示位置（核可者）；settled_by 簽章 v2 再做
     attachments: opts.attachments || [],
     signatures: opts.signatures || {},
+    _win: opts._win,
   })
 }
 

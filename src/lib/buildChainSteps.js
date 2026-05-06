@@ -30,11 +30,15 @@ export async function buildWorkflowChainSteps({
   approverName, approvedAt, rejectReason,
   fallbackTail = ['人資核章'],
 }) {
+  // 過濾「-」這種 placeholder 字串
+  const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
+
   const applicantStep = {
     label: '申請人',
     name: applicantName || '—',
     status: 'completed',
     completedAt: applicantCreatedAt,
+    isApplicant: true,  // 給 PDF / Modal 識別這是申請人 cell（不蓋章）
   }
 
   // 試拿 workflow_instance
@@ -49,9 +53,9 @@ export async function buildWorkflowChainSteps({
     // 沒走 workflow → 用 3 關 fallback：申請人 + 直屬主管 + 尾巴（與 PDF 對齊）
     let supervisorStep
     if (recordStatus === '已核准' || recordStatus === '已核銷') {
-      supervisorStep = { label: '直屬主管', name: approverName || '', status: 'completed', completedAt: approvedAt }
+      supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'completed', completedAt: approvedAt }
     } else if (recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回') {
-      supervisorStep = { label: '直屬主管', name: approverName || '', status: 'rejected', rejectReason }
+      supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'rejected', rejectReason }
     } else {
       supervisorStep = { label: '直屬主管', name: '', status: 'current' }
     }
@@ -106,6 +110,7 @@ export async function buildChainBasedSteps({
     name: applicantName || '—',
     status: 'completed',
     completedAt: applicantCreatedAt,
+    isApplicant: true,
   }
 
   if (!row?.approval_chain_id) {
@@ -125,7 +130,14 @@ export async function buildChainBasedSteps({
     .eq('chain_id', row.approval_chain_id)
     .order('step_order')
 
-  const cur = row.current_step || 0
+  // current_step 慣例：0 = 還沒進任何關，1 = 在第一關，N+1 = 全部完成
+  // sanity check：超出範圍時 clamp 並 warn
+  const totalSteps = chainSteps?.length || 0
+  let cur = row.current_step || 0
+  if (cur < 0 || cur > totalSteps + 1) {
+    console.warn('[buildChainBasedSteps] current_step out of range:', cur, 'total:', totalSteps)
+    cur = Math.max(0, Math.min(cur, totalSteps + 1))
+  }
   const steps = (chainSteps || []).map((s) => {
     const idx = s.step_order
     let status

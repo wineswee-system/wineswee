@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Check, X, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -27,8 +27,10 @@ export default function PunchCorrection() {
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
 
   const openDetail = async (row) => {
+    detailRowIdRef.current = row.id
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
@@ -43,30 +45,40 @@ export default function PunchCorrection() {
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
     })
+    if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)
     setLoadingChain(false)
   }
 
   const printWithChain = async (row) => {
-    const empRow = employees.find(e => e.name === row.employee)
-    const chainSteps = await buildWorkflowChainSteps({
-      templateName: '補打卡簽核',
-      applicantName: row.employee,
-      applicantId: empRow?.id,
-      applicantCreatedAt: row.created_at,
-      recordStatus: row.status,
-      approverName: row.approved_by,
-      approvedAt: row.approved_at,
-      rejectReason: row.reject_reason,
-    })
-    const approverMap = {}
-    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-    printClockCorrectionSignOff(row, {
-      companyName: organization?.name, logoUrl: organization?.logo_url,
-      signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
-      chainSteps,
-      approverMap,
-    })
+    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const empRow = employees.find(e => e.name === row.employee)
+      const chainSteps = await buildWorkflowChainSteps({
+        templateName: '補打卡簽核',
+        applicantName: row.employee,
+        applicantId: empRow?.id,
+        applicantCreatedAt: row.created_at,
+        recordStatus: row.status,
+        approverName: row.approved_by,
+        approvedAt: row.approved_at,
+        rejectReason: row.reject_reason,
+      })
+      const approverMap = {}
+      chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printClockCorrectionSignOff(row, {
+        companyName: organization?.name, logoUrl: organization?.logo_url,
+        signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
+        chainSteps,
+        approverMap,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
   }
 
   const load = () => {

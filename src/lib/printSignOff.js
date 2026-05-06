@@ -32,6 +32,8 @@
  *                                            預設 ['呈文者', '主管核示', '人資/財務']
  * @param {number} [opts.simpleSignApproverIdx]  approved 時 finalApprover 的簽章要印在哪一格
  *                                                預設最後一格；HR 表單通常設 1（中間的主管）
+ * @param {Window} [opts._win]            預先開好的 window（給 caller 在 click handler 內 sync 開好，
+ *                                          避免 async fetch 後 window.open() 被 popup blocker 擋）
  * @param {Array} [opts.attachments]      附件列表：[{ url, name?, type? }]
  *                                          - 圖檔（image/* 或副檔名 jpg/png/...）會內嵌顯示
  *                                          - 其他檔案只列檔名與「請另行查閱」提示
@@ -59,6 +61,7 @@ export function printSignOff(opts = {}) {
     simpleSignApproverIdx,
     attachments = [],
     signatures = {},
+    _win,
   } = opts
 
   const appDept = applicant.store || applicant.dept || applicant.departments?.name || applicant.stores?.name || '—'
@@ -440,11 +443,13 @@ export function printSignOff(opts = {}) {
 </body>
 </html>`
 
-  const w = window.open('', '_blank', 'width=900,height=1100')
+  // 優先用 caller 預先開好的 window（避免 async 後被 popup blocker 擋）；fallback 自己開
+  const w = _win || window.open('', '_blank', 'width=900,height=1100')
   if (!w) {
     alert('無法開啟新視窗，請允許彈出視窗權限')
     return
   }
+  w.document.open()
   w.document.write(html)
   w.document.close()
 }
@@ -499,7 +504,7 @@ function renderSection(sec, idx) {
 function renderApprovedCell({ name, signatureUrl, approvedAt }) {
   if (signatureUrl) {
     return `
-      <img src="${safe(signatureUrl)}" alt="${safe(name)}" class="signature-img" onerror="this.outerHTML='<div class=approved>✓</div>'" />
+      <img src="${safe(signatureUrl)}" alt="${safe(name)}" class="signature-img" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'approved',textContent:'✓'}))" />
       <div class="signature-name">${safe(name)}</div>
       ${approvedAt ? `<div class="date">${safe(fmtDate(approvedAt))}</div>` : ''}
     `
@@ -556,9 +561,12 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
       else perStepStatus = 'pending'
     }
 
+    // 申請人 cell 特殊判斷（用 step.isApplicant flag，比依賴 idx + label 更穩）
+    const isApplicantCell = step.isApplicant === true
+
     if (perStepStatus === 'completed') {
-      // 申請人 step 特殊：不蓋章，只顯示 submission timestamp
-      if (idx === 0 && (step.label === '申請人' || stepLabel === '申請人')) {
+      if (isApplicantCell) {
+        // 申請人 cell：不蓋章，只顯示送出時間
         cellContent = `<div style="font-size:11pt;font-weight:700;color:#0a6b2e">${safe(step.name || stepTarget)}</div>` +
                       (step.completedAt ? `<div class="date">${safe(fmtDate(step.completedAt))}　送出</div>` : '')
       } else {
@@ -578,8 +586,10 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
     } else if (perStepStatus === 'cancelled') {
       cellContent = `<div class="cancelled">已取消</div>`
     } else {
-      // pending：空格留簽章空間
-      cellContent = `<div class="placeholder-line">簽章 / 日期</div>`
+      // pending：archival 標「（存檔用）」更明顯；其他留簽章 placeholder
+      cellContent = step.archival
+        ? `<div class="placeholder-line">（存檔用）</div>`
+        : `<div class="placeholder-line">簽章 / 日期</div>`
     }
 
     return `
@@ -611,10 +621,11 @@ function renderAttachments(attachments, sectionIdx) {
     if (!att?.url) return ''
     const name = att.name || `附件 ${i + 1}`
     if (isImageAttachment(att)) {
+      // onerror 用 textContent 避免任何 HTML injection 風險
       return `
         <div class="attachment-item">
           <div class="attachment-name">📎 ${safe(name)} <span class="badge">圖檔</span></div>
-          <div class="attachment-image"><img src="${safe(att.url)}" alt="${safe(name)}" onerror="this.parentElement.innerHTML='<span style=color:#9c1f1f>（圖檔載入失敗，請另行查閱）</span>'" /></div>
+          <div class="attachment-image"><img src="${safe(att.url)}" alt="${safe(name)}" onerror="this.parentElement.textContent='（圖檔載入失敗，請另行查閱）';this.parentElement.style.color='#9c1f1f'" /></div>
         </div>`
     }
     return `

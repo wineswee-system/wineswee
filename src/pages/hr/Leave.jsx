@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Plus, Search, Info, Paperclip, Printer } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -37,6 +37,7 @@ export default function Leave() {
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
 
   // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
   // storeKey: 'all' = 全公司預設、其他 = store id
@@ -273,29 +274,39 @@ export default function Leave() {
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
 
   const printWithChain = async (row) => {
-    const empRow = employees.find(e => e.name === row.employee)
-    const chainSteps = await buildWorkflowChainSteps({
-      templateName: '請假簽核',
-      applicantName: row.employee,
-      applicantId: empRow?.id,
-      applicantCreatedAt: row.created_at,
-      recordStatus: row.status,
-      approverName: row.approver && row.approver !== '-' ? row.approver : '',
-      approvedAt: row.approved_at,
-      rejectReason: row.reject_reason,
-    })
-    const approverMap = {}
-    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-    printLeaveSignOff(row, {
-      companyName: organization?.name, logoUrl: organization?.logo_url,
-      dept: getEmpDept(row.employee),
-      signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-      chainSteps,
-      approverMap,
-    })
+    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const empRow = employees.find(e => e.name === row.employee)
+      const chainSteps = await buildWorkflowChainSteps({
+        templateName: '請假簽核',
+        applicantName: row.employee,
+        applicantId: empRow?.id,
+        applicantCreatedAt: row.created_at,
+        recordStatus: row.status,
+        approverName: row.approver,  // buildChainSteps 內部會處理 '-'
+        approvedAt: row.approved_at,
+        rejectReason: row.reject_reason,
+      })
+      const approverMap = {}
+      chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printLeaveSignOff(row, {
+        companyName: organization?.name, logoUrl: organization?.logo_url,
+        dept: getEmpDept(row.employee),
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+        chainSteps,
+        approverMap,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
   }
 
   const openDetail = async (row) => {
+    detailRowIdRef.current = row.id
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
@@ -306,10 +317,11 @@ export default function Leave() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
-      approverName: row.approver && row.approver !== '-' ? row.approver : '',
+      approverName: row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
     })
+    if (detailRowIdRef.current !== row.id) return  // race guard
     setDetailChainSteps(steps)
     setLoadingChain(false)
   }

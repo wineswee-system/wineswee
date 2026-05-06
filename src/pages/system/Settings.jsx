@@ -69,9 +69,9 @@ export default function SystemSettings() {
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: true, contentType: file.type })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('attachments').getPublicUrl(path)
-      // 加 cache-buster 確保即時看到新圖
-      const url = `${data.publicUrl}?v=${Date.now()}`
-      setCompanyForm(p => ({ ...p, logo_url: url }))
+      // DB 存 pure URL（不含 cache-buster）；前端預覽才加，否則重複上傳同 path 會看到舊圖
+      const pureUrl = data.publicUrl
+      setCompanyForm(p => ({ ...p, logo_url: pureUrl, _previewUrl: `${pureUrl}?v=${Date.now()}` }))
       setCompanyMsg({ type: 'ok', text: '已上傳，記得按「儲存」寫入 DB' })
     } catch (e) {
       setCompanyMsg({ type: 'error', text: '上傳失敗：' + (e.message || '未知錯誤') })
@@ -256,7 +256,7 @@ export default function SystemSettings() {
                   overflow: 'hidden', flexShrink: 0,
                 }}>
                   {companyForm.logo_url ? (
-                    <img src={companyForm.logo_url} alt="logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <img src={companyForm._previewUrl || companyForm.logo_url} alt="logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   ) : (
                     <ImageIcon size={32} color="var(--text-muted)" />
                   )}

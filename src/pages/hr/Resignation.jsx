@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Plus, CheckCircle, XCircle, ArrowRight, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -35,12 +35,15 @@ export default function Resignation() {
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
 
   const openDetail = async (row) => {
+    detailRowIdRef.current = row.id
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
     const steps = await buildAndResolveChain(row)
+    if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)
     setLoadingChain(false)
   }
@@ -63,15 +66,23 @@ export default function Resignation() {
   }
 
   const printWithChain = async (row) => {
-    const builtSteps = await buildAndResolveChain(row)
-    const approverMap = {}
-    builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-    printResignationSignOff(row, {
-      companyName: organization?.name,
-      logoUrl: organization?.logo_url,
-      chainSteps: builtSteps,
-      approverMap,
-    })
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const builtSteps = await buildAndResolveChain(row)
+      const approverMap = {}
+      builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printResignationSignOff(row, {
+        companyName: organization?.name,
+        logoUrl: organization?.logo_url,
+        chainSteps: builtSteps,
+        approverMap,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
   }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)

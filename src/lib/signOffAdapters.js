@@ -21,6 +21,8 @@ const baseOpts = (opts = {}) => ({
   attachments: opts.attachments || [],
   // 簽章圖 map：{ '簽核人姓名': 'url' }
   signatures: opts.signatures || {},
+  // 預先開好的 window（避免 popup blocker），由 caller 在 click handler 同步開
+  _win: opts._win,
 })
 
 // 把單一 attachment_url（TEXT 欄位）轉成標準陣列格式

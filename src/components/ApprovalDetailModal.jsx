@@ -240,14 +240,20 @@ function ChainTimeline({ steps }) {
     </div>
   }
 
-  // 終點 dot：依整體狀態決定（任一 rejected → 失敗紅；無 pending/current → 完成綠；否則灰）
+  // 終點 dot：依整體狀態決定
+  //   任一 rejected → 失敗紅
+  //   有非 archival 的 pending/current → 等待中（灰）
+  //   其他（全 completed，或剩下都是 archival 存檔關卡）→ 簽核完成（綠）
   const hasRejected = steps.some(s => s.status === 'rejected')
-  const hasPendingOrCurrent = steps.some(s => s.status === 'pending' || s.status === 'current')
-  const allCompleted = !hasRejected && !hasPendingOrCurrent
-  const realPendingNotArchival = steps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival)
-  const closeStateText = hasRejected ? '簽核失敗' : (allCompleted || !realPendingNotArchival ? '簽核完成' : '簽核完成')
-  const closeStateColor = hasRejected ? '#ef4444' : ((allCompleted || !realPendingNotArchival) ? '#0a6b2e' : 'var(--border-medium)')
-  const closeStateBg = hasRejected ? '#ef4444' : ((allCompleted || !realPendingNotArchival) ? '#22c55e' : 'var(--border-medium)')
+  const hasRealPending = steps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival)
+  let closeStateText, closeStateColor, closeStateBg
+  if (hasRejected) {
+    closeStateText = '簽核失敗'; closeStateColor = '#ef4444'; closeStateBg = '#ef4444'
+  } else if (hasRealPending) {
+    closeStateText = '等待簽核'; closeStateColor = 'var(--text-muted)'; closeStateBg = 'var(--border-medium)'
+  } else {
+    closeStateText = '簽核完成'; closeStateColor = '#0a6b2e'; closeStateBg = '#22c55e'
+  }
 
   return (
     <div style={{ position: 'relative', paddingLeft: 34 }}>

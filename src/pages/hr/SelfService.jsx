@@ -28,7 +28,8 @@ export default function SelfService() {
         setEmployees(data || [])
         if (data?.length) {
           // Default to the logged-in user's record; fall back to first in list
-          const self = profile?.name ? data.find(e => e.id === profile.id) : null
+          // 用 String 比較避免 number vs string 型別不一致
+          const self = profile?.id != null ? data.find(e => String(e.id) === String(profile.id)) : null
           const defaultEmp = self || data[0]
           setSelectedEmpName(defaultEmp.name)
           setEmployee(defaultEmp)
@@ -68,8 +69,10 @@ export default function SelfService() {
     return { total, late, totalHours: Math.round(totalHours * 10) / 10 }
   }, [attendance])
 
-  // 編輯權限：自己 or admin
-  const canEditSignature = employee && (employee.id === profile?.id || isSuperAdmin || isAdmin)
+  // 編輯權限：自己 or admin（用 String 比避免 number/string 型別差異）
+  const canEditSignature = employee && (
+    String(employee.id) === String(profile?.id) || isSuperAdmin || isAdmin
+  )
 
   const handleSigUpload = async (file) => {
     if (!file || !employee?.id) return

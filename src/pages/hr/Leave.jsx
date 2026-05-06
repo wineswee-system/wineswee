@@ -38,7 +38,7 @@ export default function Leave() {
     const orgId = profile?.organization_id
     Promise.all([
       getLeaveRequests({ orgId }),
-      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)', orgId),
+      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, signature_url, departments!department_id(name)', orgId),
       getDepartments(orgId),
       getLeaveStepSettings(),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -401,7 +401,11 @@ export default function Leave() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printLeaveSignOff(l, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(l.employee) })}>
+                        onClick={() => printLeaveSignOff(l, {
+                          companyName: organization?.name, logoUrl: organization?.logo_url,
+                          dept: getEmpDept(l.employee),
+                          signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+                        })}>
                         <Printer size={11} />
                       </button>
                     </div>

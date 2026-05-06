@@ -27,7 +27,7 @@ export default function BusinessTravel() {
     const orgId = profile?.organization_id
     Promise.all([
       getBusinessTrips(),
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ]).then(([t, e, d, orgRes]) => {
@@ -186,7 +186,11 @@ export default function BusinessTravel() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printTripSignOff(t, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(t.employee) })}>
+                        onClick={() => printTripSignOff(t, {
+                          companyName: organization?.name, logoUrl: organization?.logo_url,
+                          dept: getEmpDept(t.employee),
+                          signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+                        })}>
                         <Printer size={11} />
                       </button>
                     </div>

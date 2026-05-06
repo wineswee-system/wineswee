@@ -64,7 +64,11 @@ export function printFormMemo({
     chainSteps,
     approverMap,
     finalApprover: submission?.approver
-      ? { name: submission.approver.name || submission.approver_name || '', approved_at: submission.approved_at }
+      ? {
+          name: submission.approver.name || submission.approver_name || '',
+          signature_url: submission.approver.signature_url,
+          approved_at: submission.approved_at,
+        }
       : undefined,
     attachments,
   })

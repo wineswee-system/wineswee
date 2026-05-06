@@ -54,7 +54,7 @@ export default function TransferRequest() {
     let q = supabase.from('personnel_transfer_requests')
       .select(`*,
         employee:employees(id,name,name_en,department_id,store_id,position,role),
-        approver:employees!approver_id(id,name),
+        approver:employees!approver_id(id,name,signature_url),
         old_dept:departments!old_department_id(id,name),
         new_dept:departments!new_department_id(id,name),
         old_store:stores!old_store_id(id,name),

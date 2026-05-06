@@ -25,7 +25,7 @@ export default function PunchCorrection() {
     const orgId = profile?.organization_id
     Promise.all([
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ]).then(([c, e, orgRes]) => {
       let recs = c.data || []
@@ -203,7 +203,10 @@ export default function PunchCorrection() {
                         </span>
                       )}
                       <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} title="下載簽呈"
-                        onClick={() => printClockCorrectionSignOff(c, { companyName: organization?.name, logoUrl: organization?.logo_url })}>
+                        onClick={() => printClockCorrectionSignOff(c, {
+                          companyName: organization?.name, logoUrl: organization?.logo_url,
+                          signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
+                        })}>
                         <Printer size={11} />
                       </button>
                     </div>

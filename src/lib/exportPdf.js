@@ -280,7 +280,9 @@ export function exportExpenseRequestPdf(req, opts = {}) {
     approverMap: opts.approverMap || {},
     finalApprover: req.approved_by ? { name: req.approved_by, approved_at: req.approved_at } : undefined,
     simpleSign: ['呈文者', '主管核示', '財務核章'],
+    simpleSignApproverIdx: 1,  // 主管核示位置（核可者）；settled_by 簽章 v2 再做
     attachments: opts.attachments || [],
+    signatures: opts.signatures || {},
   })
 }
 

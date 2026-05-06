@@ -19,6 +19,8 @@ const baseOpts = (opts = {}) => ({
   approverMap: opts.approverMap || {},
   // 任何 caller 可以直接傳 attachments 進來；adapter 也可以再合併自己從 row 抽出來的
   attachments: opts.attachments || [],
+  // 簽章圖 map：{ '簽核人姓名': 'url' }
+  signatures: opts.signatures || {},
 })
 
 // 把單一 attachment_url（TEXT 欄位）轉成標準陣列格式
@@ -77,6 +79,7 @@ export function printLeaveSignOff(row, opts = {}) {
       ? { name: row.approver, approved_at: row.approved_at }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
   })
 }
 
@@ -105,6 +108,7 @@ export function printOvertimeSignOff(row, opts = {}) {
       ? { name: row.approver, approved_at: row.approved_at }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
   })
 }
 
@@ -136,6 +140,7 @@ export function printTripSignOff(row, opts = {}) {
       ? { name: row.approver, approved_at: row.approved_at }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資/財務'],
+    simpleSignApproverIdx: 1,
   })
 }
 
@@ -165,6 +170,7 @@ export function printExpenseSimpleSignOff(row, opts = {}) {
       ? { name: row.approver, approved_at: row.approved_at }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '財務核章'],
+    simpleSignApproverIdx: 1,
   })
 }
 
@@ -202,6 +208,7 @@ export function printClockCorrectionSignOff(row, opts = {}) {
       ? { name: approverName, approved_at: row.approved_at }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
   })
 }
 
@@ -241,9 +248,14 @@ export function printResignationSignOff(row, opts = {}) {
     status: row.status || '',
     rejectReason: row.reject_reason || '',
     finalApprover: row.approver
-      ? { name: row.approver.name || row.approver, approved_at: row.approved_at }
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
   })
 }
 
@@ -295,8 +307,13 @@ export function printTransferSignOff(row, opts = {}) {
     status: row.status || '',
     rejectReason: row.reject_reason || '',
     finalApprover: row.approver
-      ? { name: row.approver.name || row.approver, approved_at: row.approved_at }
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
       : undefined,
     simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
   })
 }

@@ -30,7 +30,7 @@ export default function Overtime() {
     const orgId = profile?.organization_id
     Promise.all([
       getOvertimeRequests(),
-      supabase.from('employees').select('id, name, dept, store_id, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('id, overtime_step_hours'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -257,7 +257,11 @@ export default function Overtime() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printOvertimeSignOff(o, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(o.employee) })}>
+                        onClick={() => printOvertimeSignOff(o, {
+                          companyName: organization?.name, logoUrl: organization?.logo_url,
+                          dept: getEmpDept(o.employee),
+                          signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+                        })}>
                         <Printer size={11} />
                       </button>
                     </div>

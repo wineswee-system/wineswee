@@ -36,7 +36,7 @@ export default function FormSubmissions() {
     let q = supabase.from('form_submissions').select(`*,
       template:form_templates(id,name,category,fields),
       applicant:employees!applicant_id(id,name,name_en,position),
-      approver:employees!approver_id(id,name)`).order('id', { ascending: false })
+      approver:employees!approver_id(id,name,signature_url)`).order('id', { ascending: false })
     if (tab === 'mine') q = q.eq('applicant_id', profile?.id || 0)
     else if (tab === 'review') q = q.eq('status', '申請中')
 

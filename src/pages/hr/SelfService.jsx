@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight, Upload, Trash2, PenTool } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -18,6 +18,9 @@ export default function SelfService() {
   const [leaves, setLeaves] = useState([])
   const [salaryRecords, setSalaryRecords] = useState([])
   const [leaveEntitlements, setLeaveEntitlements] = useState([])
+  const [sigUploading, setSigUploading] = useState(false)
+  const [sigMsg, setSigMsg] = useState(null)  // { type:'ok'|'error', text }
+  const sigFileRef = useRef(null)
 
   useEffect(() => {
     supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name')
@@ -64,6 +67,59 @@ export default function SelfService() {
     const totalHours = attendance.reduce((s, a) => s + (a.hours || 0), 0)
     return { total, late, totalHours: Math.round(totalHours * 10) / 10 }
   }, [attendance])
+
+  // 編輯權限：自己 or admin
+  const canEditSignature = employee && (employee.id === profile?.id || isSuperAdmin || isAdmin)
+
+  const handleSigUpload = async (file) => {
+    if (!file || !employee?.id) return
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
+      setSigMsg({ type: 'error', text: '請上傳 PNG / JPG / WEBP / SVG 圖檔' })
+      return
+    }
+    if (file.size > 1024 * 1024) {
+      setSigMsg({ type: 'error', text: '檔案大小不可超過 1MB' })
+      return
+    }
+    setSigUploading(true)
+    setSigMsg(null)
+    try {
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+      const path = `employee-signatures/${employee.id}/signature.${ext}`
+      const { error: upErr } = await supabase.storage.from('attachments')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('attachments').getPublicUrl(path)
+      const url = `${data.publicUrl}?v=${Date.now()}`  // cache-buster
+      const { error: updErr } = await supabase.from('employees')
+        .update({ signature_url: url }).eq('id', employee.id)
+      if (updErr) throw updErr
+      // 同步更新本地 state，下次切回不用重撈
+      setEmployee(e => ({ ...e, signature_url: url }))
+      setEmployees(list => list.map(e => e.id === employee.id ? { ...e, signature_url: url } : e))
+      setSigMsg({ type: 'ok', text: '已儲存簽章。下次有人用你的名字核可文件，PDF 就會印出此簽章' })
+    } catch (e) {
+      setSigMsg({ type: 'error', text: '上傳失敗：' + (e.message || '未知錯誤') })
+    } finally {
+      setSigUploading(false)
+      if (sigFileRef.current) sigFileRef.current.value = ''
+    }
+  }
+
+  const handleSigRemove = async () => {
+    if (!employee?.id) return
+    if (!confirm('確定移除簽章？簽呈 PDF 會回到空白狀態。')) return
+    setSigUploading(true)
+    const { error } = await supabase.from('employees').update({ signature_url: null }).eq('id', employee.id)
+    setSigUploading(false)
+    if (error) {
+      setSigMsg({ type: 'error', text: '移除失敗：' + error.message })
+      return
+    }
+    setEmployee(e => ({ ...e, signature_url: null }))
+    setEmployees(list => list.map(e => e.id === employee.id ? { ...e, signature_url: null } : e))
+    setSigMsg({ type: 'ok', text: '已移除簽章' })
+  }
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
@@ -172,6 +228,65 @@ export default function SelfService() {
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{value}</div>
                     </div>
                   ))}
+                </div>
+
+                {/* 個人簽章 ── 簽呈 PDF 用 */}
+                <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <PenTool size={16} style={{ color: 'var(--accent-cyan)' }} /> 個人簽章
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    上傳後，當你核可任何簽呈（請假/出差/費用/離職/異動…）時，PDF 的對應簽核欄會自動印出此簽章
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                    <div style={{
+                      width: 160, height: 80, borderRadius: 6,
+                      border: '1.5px dashed var(--border-medium)',
+                      background: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      overflow: 'hidden', flexShrink: 0,
+                    }}>
+                      {employee.signature_url ? (
+                        <img src={employee.signature_url} alt="signature" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>（尚未上傳）</span>
+                      )}
+                    </div>
+                    {canEditSignature && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input ref={sigFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            onChange={(e) => handleSigUpload(e.target.files?.[0])} style={{ display: 'none' }} />
+                          <button className="btn btn-secondary" style={{ fontSize: 12 }}
+                            onClick={() => sigFileRef.current?.click()} disabled={sigUploading}>
+                            <Upload size={12} /> {sigUploading ? '上傳中...' : (employee.signature_url ? '更換' : '上傳')}
+                          </button>
+                          {employee.signature_url && (
+                            <button className="btn btn-secondary" style={{ fontSize: 12, color: 'var(--accent-red)' }}
+                              onClick={handleSigRemove} disabled={sigUploading}>
+                              <Trash2 size={12} /> 移除
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          建議透明背景 PNG，2:1 比例（如 200×100）<br />
+                          PNG / JPG / WEBP / SVG，1MB 內
+                        </div>
+                      </div>
+                    )}
+                    {!canEditSignature && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        僅能編輯自己的簽章
+                      </div>
+                    )}
+                  </div>
+                  {sigMsg && (
+                    <div style={{
+                      marginTop: 10, padding: '6px 10px', borderRadius: 5, fontSize: 12, fontWeight: 600,
+                      background: sigMsg.type === 'ok' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)',
+                      color: sigMsg.type === 'ok' ? 'var(--accent-green)' : 'var(--accent-red)',
+                    }}>{sigMsg.text}</div>
+                  )}
                 </div>
 
                 {/* Leave Entitlements */}

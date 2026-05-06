@@ -776,10 +776,15 @@ export default function ExpenseRequests() {
                   name: a.file_name,
                   type: a.file_type,
                 }))
+                // 簽章 map：所有有上傳簽章的員工
+                const signatures = Object.fromEntries(
+                  employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+                )
                 exportExpenseRequestPdf(showDetail, {
                   companyName: organization?.name,
                   logoUrl: organization?.logo_url,
                   attachments,
+                  signatures,
                 })
               }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Download size={13} /> 下載簽呈

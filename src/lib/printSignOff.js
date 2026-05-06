@@ -30,9 +30,14 @@
  * @param {Object} [opts.finalApprover]   { name, approved_at } 最後核可者顯示用
  * @param {Array<string>} [opts.simpleSign]  無 chain 時的靜態簽核欄 label 陣列
  *                                            預設 ['呈文者', '主管核示', '人資/財務']
+ * @param {number} [opts.simpleSignApproverIdx]  approved 時 finalApprover 的簽章要印在哪一格
+ *                                                預設最後一格；HR 表單通常設 1（中間的主管）
  * @param {Array} [opts.attachments]      附件列表：[{ url, name?, type? }]
  *                                          - 圖檔（image/* 或副檔名 jpg/png/...）會內嵌顯示
  *                                          - 其他檔案只列檔名與「請另行查閱」提示
+ * @param {Object} [opts.signatures]      簽章圖 map：{ '簽核人姓名': 'url' }
+ *                                          - 該關核可後，用簽核人名字 lookup 簽章圖印在 cell 中
+ *                                          - finalApprover.signature_url 可直接傳，會優先覆蓋 map lookup
  */
 export function printSignOff(opts = {}) {
   const {
@@ -51,7 +56,9 @@ export function printSignOff(opts = {}) {
     approverMap = {},
     finalApprover,
     simpleSign = ['呈文者', '主管核示', '人資/財務'],
+    simpleSignApproverIdx,
     attachments = [],
+    signatures = {},
   } = opts
 
   const appDept = applicant.store || applicant.dept || applicant.departments?.name || applicant.stores?.name || '—'
@@ -67,7 +74,7 @@ export function printSignOff(opts = {}) {
 
   // 狀態 badge 顏色
   const statusBadge = renderStatusBadge(status)
-  const signCellsHtml = renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign })
+  const signCellsHtml = renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign, simpleSignApproverIdx, signatures })
   const sectionsHtml = sections.map((sec, idx) => renderSection(sec, idx + 2)).join('')
   const attachmentsHtml = renderAttachments(attachments, sections.length + 2)
 
@@ -313,6 +320,14 @@ export function printSignOff(opts = {}) {
   .sign-cell .placeholder-line {
     color: #cfc7b0; font-size: 10.5pt; letter-spacing: 4px;
   }
+  .sign-cell .signature-img {
+    max-width: 90%; max-height: 50px;
+    object-fit: contain;
+    margin-bottom: 2px;
+  }
+  .sign-cell .signature-name {
+    font-size: 10pt; color: #0a6b2e; font-weight: 700;
+  }
 
   /* ─── 附件區 ─── */
   .attachment-item {
@@ -481,16 +496,45 @@ function renderSection(sec, idx) {
   return ''
 }
 
-function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign }) {
-  // 沒有 chainSteps → 靜態 N 格（無核章邏輯，只留簽章空間）
+function renderApprovedCell({ name, signatureUrl, approvedAt }) {
+  if (signatureUrl) {
+    return `
+      <img src="${safe(signatureUrl)}" alt="${safe(name)}" class="signature-img" onerror="this.outerHTML='<div class=approved>✓</div>'" />
+      <div class="signature-name">${safe(name)}</div>
+      ${approvedAt ? `<div class="date">${safe(fmtDate(approvedAt))}</div>` : ''}
+    `
+  }
+  return `
+    <div class="approved">✓</div>
+    <div style="font-weight:700;font-size:10.5pt">${safe(name)}</div>
+    ${approvedAt ? `<div class="date">${safe(fmtDate(approvedAt))}</div>` : ''}
+  `
+}
+
+function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign, simpleSignApproverIdx, signatures = {} }) {
+  // 沒有 chainSteps → 靜態 N 格（指定格如有 finalApprover.name 且核可，印簽章）
   if (!chainSteps || chainSteps.length === 0) {
-    return simpleSign.map(label => `
-      <div class="sign-cell">
-        <div class="sign-header">${safe(label)}</div>
-        <div class="sign-target">　</div>
-        <div class="sign-stamp"><div class="placeholder-line">簽章 / 日期</div></div>
-      </div>
-    `).join('')
+    const targetIdx = simpleSignApproverIdx != null ? simpleSignApproverIdx : (simpleSign.length - 1)
+    return simpleSign.map((label, idx) => {
+      const isApproved = (status === '已核准' || status === '已核銷') && idx === targetIdx && finalApprover?.name
+      if (isApproved) {
+        const sigUrl = finalApprover.signature_url || signatures[finalApprover.name]
+        return `
+          <div class="sign-cell approved-bg">
+            <div class="sign-header">${safe(label)}</div>
+            <div class="sign-target">${safe(finalApprover.name)}</div>
+            <div class="sign-stamp">${renderApprovedCell({ name: finalApprover.name, signatureUrl: sigUrl, approvedAt: finalApprover.approved_at })}</div>
+          </div>
+        `
+      }
+      return `
+        <div class="sign-cell">
+          <div class="sign-header">${safe(label)}</div>
+          <div class="sign-target">　</div>
+          <div class="sign-stamp"><div class="placeholder-line">簽章 / 日期</div></div>
+        </div>
+      `
+    }).join('')
   }
 
   // 有 chainSteps → 智慧渲染
@@ -503,8 +547,12 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
 
     if (status === '已核准' || status === '已核銷') {
       if (idx === chainSteps.length - 1 && finalApprover?.name) {
-        cellContent = `<div class="approved">✓</div><div style="font-weight:700">${safe(finalApprover.name)}</div>` +
-                      (finalApprover.approved_at ? `<div class="date">${safe(fmtDate(finalApprover.approved_at))}</div>` : '')
+        const sigUrl = finalApprover.signature_url || signatures[finalApprover.name]
+        cellContent = renderApprovedCell({ name: finalApprover.name, signatureUrl: sigUrl, approvedAt: finalApprover.approved_at })
+      } else if (stepTarget) {
+        // 中間關卡：用該關 target_emp_id 對應到 name → 找簽章
+        const sigUrl = signatures[stepTarget]
+        cellContent = renderApprovedCell({ name: stepTarget, signatureUrl: sigUrl })
       } else {
         cellContent = `<div class="approved">✓</div><div style="font-size:10pt;color:#0a6b2e;font-weight:700">核可</div>`
       }

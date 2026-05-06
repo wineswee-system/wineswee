@@ -43,7 +43,7 @@ export default function Resignation() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('resignation_requests')
-      .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name)')
+      .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Search, Info, Paperclip } from 'lucide-react'
+import { Plus, Search, Info, Paperclip, Printer } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
@@ -13,6 +13,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
+import { printLeaveSignOff } from '../../lib/signOffAdapters'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -28,21 +29,25 @@ export default function Leave() {
   const [form, setForm] = useState({ employee: '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
   const [validationMsg, setValidationMsg] = useState('')
   const [error, setError] = useState(null)
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
 
   // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
   // storeKey: 'all' = 全公司預設、其他 = store id
   const [stepSettings, setStepSettings] = useState({ all: {} })
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
-      getLeaveRequests({ orgId: profile?.organization_id }),
-      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)', profile?.organization_id),
-      getDepartments(profile?.organization_id),
+      getLeaveRequests({ orgId }),
+      getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, departments!department_id(name)', orgId),
+      getDepartments(orgId),
       getLeaveStepSettings(),
-    ]).then(([l, e, d, ls]) => {
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([l, e, d, ls, orgRes]) => {
       const emps = e.data || []
       setLeaves(l.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
+      setOrganization(orgRes?.data || null)
       // 整理 stepSettings
       const map = { all: {} }
       ;(ls.data || []).forEach(row => {
@@ -370,30 +375,36 @@ export default function Leave() {
                     {l.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>原因：{l.reject_reason}</div>}
                   </div>
                   <div style={{ padding: '4px 8px' }}>
-                    {l.status === '待審核' && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)}>核准</button>
-                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
-                      </div>
-                    )}
-                    {(l.status === '已拒絕' || l.status === '已退回') && l.employee === profile?.name && (
-                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                        setEditingId(l.id)
-                        setForm({
-                          employee: l.employee || '',
-                          type: l.type || 'annual',
-                          start_date: l.start_date || '',
-                          end_date: l.end_date || '',
-                          start_time: l.start_time || '09:00',
-                          end_time: l.end_time || '18:00',
-                          unit: l.start_time ? 'hour' : 'day',
-                          hours: l.hours || 0,
-                          days: l.days || 1,
-                          reason: l.reason || '',
-                        })
-                        setShowModal(true)
-                      }}>✏️ 編輯重送</button>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {l.status === '待審核' && (
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)}>核准</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
+                        </>
+                      )}
+                      {(l.status === '已拒絕' || l.status === '已退回') && l.employee === profile?.name && (
+                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                          setEditingId(l.id)
+                          setForm({
+                            employee: l.employee || '',
+                            type: l.type || 'annual',
+                            start_date: l.start_date || '',
+                            end_date: l.end_date || '',
+                            start_time: l.start_time || '09:00',
+                            end_time: l.end_time || '18:00',
+                            unit: l.start_time ? 'hour' : 'day',
+                            hours: l.hours || 0,
+                            days: l.days || 1,
+                            reason: l.reason || '',
+                          })
+                          setShowModal(true)
+                        }}>✏️ 編輯重送</button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" title="下載簽呈"
+                        onClick={() => printLeaveSignOff(l, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(l.employee) })}>
+                        <Printer size={11} />
+                      </button>
+                    </div>
                   </div>
                 </VirtualRow>
               ))}

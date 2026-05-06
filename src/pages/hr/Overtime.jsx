@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Printer } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -8,6 +8,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 
 export default function Overtime() {
   const { profile } = useAuth()
@@ -23,14 +24,17 @@ export default function Overtime() {
 
   // 各店的加班 step 設定 → {store_id: step}
   const [storeSteps, setStoreSteps] = useState({})
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
   // employees 多帶 store_id 進來，這樣選人後可查 step
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
       getOvertimeRequests(),
       supabase.from('employees').select('id, name, dept, store_id, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('id, overtime_step_hours'),
-    ]).then(([r, e, d, s]) => {
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([r, e, d, s, orgRes]) => {
       const emps = e.data || []
       setRecords(r.data || [])
       setEmployees(emps)
@@ -38,6 +42,7 @@ export default function Overtime() {
       const steps = {}
       ;(s.data || []).forEach(st => { steps[st.id] = Number(st.overtime_step_hours) || 0.5 })
       setStoreSteps(steps)
+      setOrganization(orgRes?.data || null)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -237,19 +242,25 @@ export default function Overtime() {
                     )}
                   </td>
                   <td>
-                    {o.status === '待審核' && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
-                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
-                      </div>
-                    )}
-                    {(o.status === '已拒絕' || o.status === '已退回') && o.employee === profile?.name && (
-                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                        setEditingId(o.id)
-                        setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '' })
-                        setShowModal(true)
-                      }}>✏️ 編輯重送</button>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {o.status === '待審核' && (
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)}>核准</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
+                        </>
+                      )}
+                      {(o.status === '已拒絕' || o.status === '已退回') && o.employee === profile?.name && (
+                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                          setEditingId(o.id)
+                          setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '' })
+                          setShowModal(true)
+                        }}>✏️ 編輯重送</button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" title="下載簽呈"
+                        onClick={() => printOvertimeSignOff(o, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(o.employee) })}>
+                        <Printer size={11} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Printer } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -8,6 +8,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { printTripSignOff } from '../../lib/signOffAdapters'
 
 export default function BusinessTravel() {
   const { profile } = useAuth()
@@ -20,17 +21,21 @@ export default function BusinessTravel() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
       getBusinessTrips(),
       supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([t, e, d]) => {
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([t, e, d, orgRes]) => {
       const emps = e.data || []
       setTrips(t.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
+      setOrganization(orgRes?.data || null)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -159,26 +164,32 @@ export default function BusinessTravel() {
                     )}
                   </td>
                   <td>
-                    {t.status === '待審核' && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
-                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
-                      </div>
-                    )}
-                    {(t.status === '已駁回' || t.status === '已退回') && t.employee === profile?.name && (
-                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                        setEditingId(t.id)
-                        setForm({
-                          employee: t.employee,
-                          destination: t.destination || '',
-                          start_date: t.start_date || '',
-                          end_date: t.end_date || '',
-                          purpose: t.purpose || '',
-                          budget: t.budget?.toString() || '',
-                        })
-                        setShowModal(true)
-                      }}>✏️ 編輯重送</button>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {t.status === '待審核' && (
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
+                        </>
+                      )}
+                      {(t.status === '已駁回' || t.status === '已退回') && t.employee === profile?.name && (
+                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                          setEditingId(t.id)
+                          setForm({
+                            employee: t.employee,
+                            destination: t.destination || '',
+                            start_date: t.start_date || '',
+                            end_date: t.end_date || '',
+                            purpose: t.purpose || '',
+                            budget: t.budget?.toString() || '',
+                          })
+                          setShowModal(true)
+                        }}>✏️ 編輯重送</button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" title="下載簽呈"
+                        onClick={() => printTripSignOff(t, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(t.employee) })}>
+                        <Printer size={11} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

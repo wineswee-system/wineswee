@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Plus, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, ArrowRight, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -9,6 +9,7 @@ import {
   findActiveChainByCategory, loadChainSteps,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
+import { printTransferSignOff } from '../../lib/signOffAdapters'
 
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
 
@@ -28,6 +29,7 @@ export default function TransferRequest() {
   const [stores, setStores] = useState([])
   const [chainSteps, setChainSteps] = useState({})
   const [activeChain, setActiveChain] = useState(null)
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm())
@@ -59,18 +61,21 @@ export default function TransferRequest() {
         new_store:stores!new_store_id(id,name)`)
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
-    const [{ data: r }, { data: e }, { data: d }, { data: s }, chain] = await Promise.all([
+    const orgId = profile?.organization_id
+    const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role,dept,store,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').order('name'),
       supabase.from('stores').select('id,name').eq('is_active', true).order('name'),
-      findActiveChainByCategory('異動', profile?.organization_id),
+      findActiveChainByCategory('異動', orgId),
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])
     setEmployees(e || [])
     setDepartments(d || [])
     setStores(s || [])
     setActiveChain(chain)
+    setOrganization(orgRes?.data || null)
 
     const uniqChainIds = [...new Set((r || []).map(x => x.approval_chain_id).filter(Boolean))]
     if (chain?.id) uniqChainIds.push(chain.id)
@@ -268,6 +273,10 @@ export default function TransferRequest() {
                         {canCancel && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
                         )}
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
+                          onClick={() => printTransferSignOff(r, { companyName: organization?.name, logoUrl: organization?.logo_url })}>
+                          <Printer size={11} />
+                        </button>
                       </div>
                     </td>
                   </tr>

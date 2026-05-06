@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Printer } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
@@ -23,17 +24,21 @@ export default function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
       getExpenses(),
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-    ]).then(([ex, e, d]) => {
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([ex, e, d, orgRes]) => {
       const emps = e.data || []
       setExpenses(ex.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
+      setOrganization(orgRes?.data || null)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -176,26 +181,32 @@ export default function Expenses() {
                     )}
                   </td>
                   <td>
-                    {e.status === '待審核' && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
-                        <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
-                      </div>
-                    )}
-                    {(e.status === '已駁回' || e.status === '已退回') && e.employee === profile?.name && (
-                      <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                        setEditingId(e.id)
-                        setForm({
-                          employee: e.employee,
-                          category: e.category || CATEGORIES[0],
-                          amount: e.amount?.toString() || '',
-                          date: e.date || '',
-                          description: e.description || '',
-                          receipt: e.receipt ?? true,
-                        })
-                        setShowModal(true)
-                      }}>✏️ 編輯重送</button>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {e.status === '待審核' && (
+                        <>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)}>核銷</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
+                        </>
+                      )}
+                      {(e.status === '已駁回' || e.status === '已退回') && e.employee === profile?.name && (
+                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                          setEditingId(e.id)
+                          setForm({
+                            employee: e.employee,
+                            category: e.category || CATEGORIES[0],
+                            amount: e.amount?.toString() || '',
+                            date: e.date || '',
+                            description: e.description || '',
+                            receipt: e.receipt ?? true,
+                          })
+                          setShowModal(true)
+                        }}>✏️ 編輯重送</button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" title="下載簽呈"
+                        onClick={() => printExpenseSimpleSignOff(e, { companyName: organization?.name, logoUrl: organization?.logo_url, dept: getEmpDept(e.employee) })}>
+                        <Printer size={11} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

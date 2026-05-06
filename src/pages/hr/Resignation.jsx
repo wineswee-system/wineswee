@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Plus, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, ArrowRight, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -9,6 +9,7 @@ import {
   findActiveChainByCategory, loadChainSteps,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
+import { printResignationSignOff } from '../../lib/signOffAdapters'
 
 const REASONS = ['個人因素', '家庭因素', '健康因素', '另謀高就', '進修', '退休', '其他']
 
@@ -26,6 +27,7 @@ export default function Resignation() {
   const [employees, setEmployees] = useState([])
   const [chainSteps, setChainSteps] = useState({})  // { chainId: [steps] }
   const [activeChain, setActiveChain] = useState(null)
+  const [organization, setOrganization] = useState(null)  // { name, logo_url } 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -44,14 +46,17 @@ export default function Resignation() {
       .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name)')
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
-    const [{ data: r }, { data: e }, chain] = await Promise.all([
+    const orgId = profile?.organization_id
+    const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
-      findActiveChainByCategory('離職', profile?.organization_id),
+      findActiveChainByCategory('離職', orgId),
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])
     setEmployees(e || [])
     setActiveChain(chain)
+    setOrganization(orgRes?.data || null)
 
     // 預載各 chain 的步驟
     const uniqChainIds = [...new Set((r || []).map(x => x.approval_chain_id).filter(Boolean))]
@@ -247,6 +252,10 @@ export default function Resignation() {
                         {canCancel && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
                         )}
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
+                          onClick={() => printResignationSignOff(r, { companyName: organization?.name, logoUrl: organization?.logo_url })}>
+                          <Printer size={11} />
+                        </button>
                       </div>
                     </td>
                   </tr>

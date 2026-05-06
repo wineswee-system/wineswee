@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
@@ -18,18 +19,22 @@ export default function PunchCorrection() {
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+  const [organization, setOrganization] = useState(null)  // 印簽呈用
 
   const load = () => {
+    const orgId = profile?.organization_id
     Promise.all([
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-    ]).then(([c, e]) => {
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([c, e, orgRes]) => {
       let recs = c.data || []
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
       setCorrections(recs)
       // store_staff: 只顯示自己
       const emps = e.data || []
       setEmployees(isStaff ? emps.filter(emp => emp.name === profile?.name) : emps)
+      setOrganization(orgRes?.data || null)
     }).finally(() => setLoading(false))
   }
 
@@ -181,21 +186,27 @@ export default function PunchCorrection() {
                     </span>
                   </td>
                   <td>
-                    {c.status === '待審核' ? (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)}>
-                          <Check size={12} /> 核准
-                        </button>
-                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)}>
-                          <X size={12} /> 駁回
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {c.approved_by}
-                        {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {c.status === '待審核' ? (
+                        <>
+                          <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)}>
+                            <Check size={12} /> 核准
+                          </button>
+                          <button className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)}>
+                            <X size={12} /> 駁回
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {c.approved_by}
+                          {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
+                        </span>
+                      )}
+                      <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} title="下載簽呈"
+                        onClick={() => printClockCorrectionSignOff(c, { companyName: organization?.name, logoUrl: organization?.logo_url })}>
+                        <Printer size={11} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

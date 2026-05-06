@@ -29,6 +29,7 @@ export default function FormSubmissions() {
   const [rejectReason, setRejectReason] = useState('')
   const [showCompanyModal, setShowCompanyModal] = useState(false)
   const [companyName, setCompanyName] = useState(loadCompanyName)
+  const [logoUrl, setLogoUrl] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -38,8 +39,14 @@ export default function FormSubmissions() {
       approver:employees!approver_id(id,name)`).order('id', { ascending: false })
     if (tab === 'mine') q = q.eq('applicant_id', profile?.id || 0)
     else if (tab === 'review') q = q.eq('status', '申請中')
-    const { data } = await q
-    setList(data || [])
+
+    const orgId = profile?.organization_id
+    const [listRes, orgRes] = await Promise.all([
+      q,
+      orgId ? supabase.from('organizations').select('logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+    ])
+    setList(listRes.data || [])
+    setLogoUrl(orgRes?.data?.logo_url || '')
     setLoading(false)
   }
   useEffect(() => { load() }, [tab, profile?.id])
@@ -108,6 +115,7 @@ export default function FormSubmissions() {
       template: sub.template,
       applicant: sub.applicant,
       companyName,
+      logoUrl,
       chainSteps,
       approverMap,
     })

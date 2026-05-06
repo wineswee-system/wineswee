@@ -10,6 +10,8 @@ import {
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import { printTransferSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
 
@@ -30,6 +32,30 @@ export default function TransferRequest() {
   const [chainSteps, setChainSteps] = useState({})
   const [activeChain, setActiveChain] = useState(null)
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    const stepIds = (chainSteps[row.approval_chain_id] || [])
+      .map(s => s.target_emp_id).filter(Boolean)
+    let approverMap = {}
+    if (stepIds.length > 0) {
+      const { data: emps } = await supabase.from('employees').select('id,name').in('id', stepIds)
+      approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
+    }
+    const steps = await buildChainBasedSteps({
+      row,
+      applicantName: row.employee?.name || '',
+      applicantCreatedAt: row.created_at,
+      approverMap,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm())
@@ -226,7 +252,9 @@ export default function TransferRequest() {
                 const myTurn = canIApprove(r)
                 const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
                 return (
-                  <tr key={r.id}>
+                  <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
+                    onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
+                    onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
                     <td><b>{r.employee?.name}</b>{r.employee?.name_en ? ` ${r.employee.name_en}` : ''}</td>
                     <td><span style={{ padding: '2px 6px', fontSize: 11, fontWeight: 600, borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>{r.transfer_type}</span></td>
                     <td style={{ fontSize: 12 }}>
@@ -262,7 +290,7 @@ export default function TransferRequest() {
                       )}
                     </td>
                     <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>{r.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}</td>
-                    <td>
+                    <td onClick={(ev) => ev.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (
                           <>
@@ -370,6 +398,44 @@ export default function TransferRequest() {
           </Field>
         </Modal>
       )}
+
+      {detailRow && (() => {
+        const changes = []
+        if (detailRow.old_dept?.name !== detailRow.new_dept?.name && detailRow.new_dept?.name)
+          changes.push(`部門：${detailRow.old_dept?.name || '—'} → ${detailRow.new_dept?.name}`)
+        if (detailRow.old_store?.name !== detailRow.new_store?.name && detailRow.new_store?.name)
+          changes.push(`門市：${detailRow.old_store?.name || '—'} → ${detailRow.new_store?.name}`)
+        if (detailRow.new_position)
+          changes.push(`職位：${detailRow.old_position || '—'} → ${detailRow.new_position}`)
+        if (detailRow.new_base_salary != null)
+          changes.push(`底薪：${detailRow.old_base_salary || '—'} → NT$ ${Number(detailRow.new_base_salary).toLocaleString()}`)
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle="人事異動申請"
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.employee?.name || '',
+              name_en: detailRow.employee?.name_en,
+              position: detailRow.employee?.position,
+              status: '在職',
+            }}
+            fields={[
+              { label: '異動類型', value: detailRow.transfer_type },
+              { label: '生效日期', value: detailRow.effective_date },
+              { label: '異動內容', value: changes.join('\n') || '—', multiline: true },
+              ...(detailRow.reason ? [{ label: '異動原因', value: detailRow.reason, multiline: true }] : []),
+              ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
+            ]}
+            attachments={detailRow.attachment_url ? [{ url: detailRow.attachment_url, name: detailRow.attachment_url.split('/').pop() }] : []}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => printTransferSignOff(detailRow, { companyName: organization?.name, logoUrl: organization?.logo_url })}
+          />
+        )
+      })()}
     </div>
   )
 }

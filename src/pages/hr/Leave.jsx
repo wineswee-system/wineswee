@@ -14,6 +14,8 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
 
 export default function Leave() {
   const { profile } = useAuth()
@@ -30,6 +32,9 @@ export default function Leave() {
   const [validationMsg, setValidationMsg] = useState('')
   const [error, setError] = useState(null)
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
 
   // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
   // storeKey: 'all' = 全公司預設、其他 = store id
@@ -265,6 +270,22 @@ export default function Leave() {
 
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
 
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    const empRow = employees.find(e => e.name === row.employee)
+    const steps = await buildWorkflowChainSteps({
+      templateName: '請假簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
+
   const filtered = useMemo(() => leaves.filter(l =>
     (deptFilter === '' || getEmpDept(l.employee) === deptFilter) &&
     (search === '' || l.employee.includes(search))
@@ -346,7 +367,10 @@ export default function Leave() {
           <div ref={containerRef} style={{ height: 480, overflowY: 'auto', overflowX: 'hidden' }}>
             <div style={containerStyle}>
               {virtualItems.map(({ item: l, style }) => (
-                <VirtualRow key={l.id} style={{ ...style, display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)' }}>
+                <VirtualRow key={l.id}
+                  onClick={() => openDetail(l)}
+                  title="點擊查看簽核明細"
+                  style={{ ...style, display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                   <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
                   <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{l.type}</span></div>
@@ -374,7 +398,7 @@ export default function Leave() {
                     </span>
                     {l.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>原因：{l.reject_reason}</div>}
                   </div>
-                  <div style={{ padding: '4px 8px' }}>
+                  <div style={{ padding: '4px 8px' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {l.status === '待審核' && (
                         <>
@@ -549,6 +573,50 @@ export default function Leave() {
           </div>
         </Modal>
       )}
+
+      {/* ─── 明細 modal ─── */}
+      {detailRow && (() => {
+        const empRow = employees.find(e => e.name === detailRow.employee)
+        const period = detailRow.start_date === detailRow.end_date || !detailRow.end_date
+          ? `${detailRow.start_date}${detailRow.start_time ? ` ${detailRow.start_time}~${detailRow.end_time || ''}` : ''}`
+          : `${detailRow.start_date} ~ ${detailRow.end_date}`
+        const duration = detailRow.hours && detailRow.hours < 8 ? `${detailRow.hours} 小時` : `${detailRow.days || 0} 天`
+        const atts = (detailRow.attachments || []).map((u, i) => typeof u === 'string'
+          ? { url: u, name: u.split('?')[0].split('/').pop() || `附件 ${i+1}` }
+          : u)
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle="請假申請"
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.employee,
+              name_en: empRow?.name_en,
+              position: empRow?.position,
+              dept: getEmpDept(detailRow.employee),
+              status: empRow?.status,
+              employee_no: empRow?.employee_no,
+            }}
+            fields={[
+              { label: '假別', value: detailRow.type },
+              { label: '期間', value: period },
+              { label: '天/時數', value: duration },
+              { label: '事由', value: detailRow.reason, multiline: true },
+              ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
+            ]}
+            attachments={atts}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => printLeaveSignOff(detailRow, {
+              companyName: organization?.name, logoUrl: organization?.logo_url,
+              dept: getEmpDept(detailRow.employee),
+              signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+            })}
+          />
+        )
+      })()}
     </div>
   )
 }

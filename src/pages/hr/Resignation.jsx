@@ -10,6 +10,8 @@ import {
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import { printResignationSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 
 const REASONS = ['個人因素', '家庭因素', '健康因素', '另謀高就', '進修', '退休', '其他']
 
@@ -28,6 +30,31 @@ export default function Resignation() {
   const [chainSteps, setChainSteps] = useState({})  // { chainId: [steps] }
   const [activeChain, setActiveChain] = useState(null)
   const [organization, setOrganization] = useState(null)  // { name, logo_url } 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    // 對應 chainSteps 中所有 target_emp_id → 員工姓名 map
+    const stepIds = (chainSteps[row.approval_chain_id] || [])
+      .map(s => s.target_emp_id).filter(Boolean)
+    let approverMap = {}
+    if (stepIds.length > 0) {
+      const { data: emps } = await supabase.from('employees').select('id,name').in('id', stepIds)
+      approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
+    }
+    const steps = await buildChainBasedSteps({
+      row,
+      applicantName: row.employee?.name || '',
+      applicantCreatedAt: row.created_at,
+      approverMap,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -208,7 +235,9 @@ export default function Resignation() {
                 const myTurn = canIApprove(r)
                 const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
                 return (
-                  <tr key={r.id}>
+                  <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
+                    onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
+                    onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
                     <td><b>{r.employee?.name}</b>{r.employee?.name_en ? ` ${r.employee.name_en}` : ''}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.employee?.position}</div></td>
                     <td>{r.planned_resign_date}</td>
                     <td>{r.reason}{r.reason_detail ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.reason_detail}</div> : null}</td>
@@ -239,7 +268,7 @@ export default function Resignation() {
                       )}
                     </td>
                     <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>{r.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}</td>
-                    <td>
+                    <td onClick={(ev) => ev.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (
                           <>
@@ -319,6 +348,33 @@ export default function Resignation() {
             <textarea className="form-input" rows={3} style={{ width: '100%' }} placeholder="請說明駁回原因（員工會收到）" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
           </Field>
         </Modal>
+      )}
+
+      {detailRow && (
+        <ApprovalDetailModal
+          open={!!detailRow}
+          onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+          docTitle="離職申請"
+          docNo={detailRow.id}
+          status={detailRow.status}
+          applicant={{
+            name: detailRow.employee?.name || '',
+            name_en: detailRow.employee?.name_en,
+            position: detailRow.employee?.position,
+            status: '在職',
+          }}
+          fields={[
+            { label: '預計離職日', value: detailRow.planned_resign_date },
+            { label: '離職原因', value: detailRow.reason },
+            ...(detailRow.reason_detail ? [{ label: '原因說明', value: detailRow.reason_detail, multiline: true }] : []),
+            ...(detailRow.handover_notes ? [{ label: '交接事項', value: detailRow.handover_notes, multiline: true }] : []),
+            ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
+          ]}
+          attachments={detailRow.attachment_url ? [{ url: detailRow.attachment_url, name: detailRow.attachment_url.split('/').pop() }] : []}
+          createdAt={detailRow.created_at}
+          chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+          onPrint={() => printResignationSignOff(detailRow, { companyName: organization?.name, logoUrl: organization?.logo_url })}
+        />
       )}
     </div>
   )

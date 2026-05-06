@@ -7,6 +7,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
@@ -20,6 +22,25 @@ export default function PunchCorrection() {
   const [tab, setTab] = useState('pending')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    const empRow = employees.find(e => e.name === row.employee)
+    const steps = await buildWorkflowChainSteps({
+      templateName: '補打卡簽核',  // 沒設 chain → fallback 「申請人 → 主管核示」
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
 
   const load = () => {
     const orgId = profile?.organization_id
@@ -174,7 +195,9 @@ export default function PunchCorrection() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
               {filtered.map(c => (
-                <tr key={c.id}>
+                <tr key={c.id} onClick={() => openDetail(c)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
+                  onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
                   <td style={{ fontWeight: 600 }}>{c.employee}</td>
                   <td>{c.date}</td>
                   <td><span className="badge badge-cyan">{c.correction_type === 'clock_in' ? '上班' : '下班'}</span></td>
@@ -185,7 +208,7 @@ export default function PunchCorrection() {
                       <span className="badge-dot"></span>{c.status}
                     </span>
                   </td>
-                  <td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                       {c.status === '待審核' ? (
                         <>
@@ -250,6 +273,41 @@ export default function PunchCorrection() {
           </Field>
         </Modal>
       )}
+
+      {detailRow && (() => {
+        const empRow = employees.find(e => e.name === detailRow.employee)
+        const typeLabel = detailRow.correction_type === 'clock_in' ? '上班打卡' : '下班打卡'
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle="補打卡申請"
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.employee,
+              name_en: empRow?.name_en,
+              position: empRow?.position,
+              dept: empRow?.dept,
+              status: empRow?.status,
+              employee_no: empRow?.employee_no,
+            }}
+            fields={[
+              { label: '日期', value: detailRow.date },
+              { label: '打卡類型', value: typeLabel },
+              { label: '補登時間', value: detailRow.corrected_time },
+              { label: '原因', value: detailRow.reason, multiline: true },
+              ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
+            ]}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => printClockCorrectionSignOff(detailRow, {
+              companyName: organization?.name, logoUrl: organization?.logo_url,
+              signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
+            })}
+          />
+        )
+      })()}
     </div>
   )
 }

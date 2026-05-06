@@ -9,6 +9,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printTripSignOff } from '../../lib/signOffAdapters'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
 
 export default function BusinessTravel() {
   const { profile } = useAuth()
@@ -22,6 +24,9 @@ export default function BusinessTravel() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ employee: '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -95,6 +100,22 @@ export default function BusinessTravel() {
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
+  const openDetail = async (row) => {
+    setDetailRow(row)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+    const empRow = employees.find(e => e.name === row.employee)
+    const steps = await buildWorkflowChainSteps({
+      templateName: '出差申請簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+    })
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
+
   const filtered = trips.filter(t =>
     deptFilter === '' || getEmpDept(t.employee) === deptFilter
   )
@@ -147,7 +168,9 @@ export default function BusinessTravel() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無差旅紀錄</td></tr>}
               {filtered.map(t => (
-                <tr key={t.id}>
+                <tr key={t.id} onClick={() => openDetail(t)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ''}>
                   <td style={{ fontWeight: 600 }}>{t.employee}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(t.employee) || '-'}</td>
                   <td>{t.destination}</td>
@@ -163,7 +186,7 @@ export default function BusinessTravel() {
                       <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{t.reject_reason}</div>
                     )}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {t.status === '待審核' && (
                         <>
@@ -231,6 +254,44 @@ export default function BusinessTravel() {
           </Field>
         </Modal>
       )}
+
+      {detailRow && (() => {
+        const empRow = employees.find(e => e.name === detailRow.employee)
+        const period = detailRow.start_date === detailRow.end_date || !detailRow.end_date
+          ? detailRow.start_date
+          : `${detailRow.start_date} ~ ${detailRow.end_date}`
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle="出差申請"
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.employee,
+              name_en: empRow?.name_en,
+              position: empRow?.position,
+              dept: getEmpDept(detailRow.employee),
+              status: empRow?.status,
+              employee_no: empRow?.employee_no,
+            }}
+            fields={[
+              { label: '出差地點', value: detailRow.destination },
+              { label: '期間', value: period },
+              { label: '預估費用', value: `NT$ ${Number(detailRow.budget || 0).toLocaleString()}` },
+              { label: '出差目的', value: detailRow.purpose, multiline: true },
+              ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
+            ]}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => printTripSignOff(detailRow, {
+              companyName: organization?.name, logoUrl: organization?.logo_url,
+              dept: getEmpDept(detailRow.employee),
+              signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+            })}
+          />
+        )
+      })()}
     </div>
   )
 }

@@ -109,9 +109,9 @@ export function useVirtualList({ items, itemHeight = 48, overscan = 5 }) {
  *     <td>{item.name}</td>
  *   </VirtualRow>
  */
-export const VirtualRow = React.memo(function VirtualRow({ style, children, className = '' }) {
+export const VirtualRow = React.memo(function VirtualRow({ style, children, className = '', onClick, onMouseEnter, onMouseLeave, title }) {
   return (
-    <div style={style} className={className}>
+    <div style={style} className={className} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={title}>
       {children}
     </div>
   )

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LayoutGrid, GitBranch } from 'lucide-react'
+import { Tree, TreeNode } from 'react-organizational-chart'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
 
 const VIEW_KEY = 'sme_orgchart_view_mode'
@@ -679,10 +680,6 @@ function NodeBox({ color = '#14b8a6', title, subtitle, footnote, big = false }) 
   )
 }
 
-function VLine({ h = 18 }) {
-  return <div style={{ width: 1, height: h, background: '#9ca3af' }} />
-}
-
 function CompactTreeView({
   departments, sections, employees, stores,
   headcountOf, sectionHeadcount, managerName,
@@ -691,188 +688,102 @@ function CompactTreeView({
   totalCompanyHeadcount, execBoardMembers, labelOf,
 }) {
   const visibleDepts = departments.filter(d => d.name !== '總經理室')
-
-  // 根節點 = 總經理室 dept；找不到就用通用「公司」
   const apex = departments.find(d => d.name === '總經理室')
   const apexMgr = apex ? managerName(apex) : ''
 
+  // ── 渲染 helpers（用 react-organizational-chart 的 Tree/TreeNode 自動畫線、自動對齊）──
+  const renderStore = (store, color) => {
+    const sMgr = storeManagerOf(store)
+    return (
+      <TreeNode key={store.id} label={
+        <NodeBox color={color}
+          title={store.name}
+          subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
+          footnote={`部門人數：${storeEmployees(store).length}`} />
+      } />
+    )
+  }
+
+  const renderSection = (sec, color) => {
+    const secMgr = sec.supervisor_id
+      ? employees.find(e => e.id === sec.supervisor_id)?.name || ''
+      : ''
+    const secStores = sectionStores(sec)
+    return (
+      <TreeNode key={sec.id} label={
+        <NodeBox color={color}
+          title={sec.name}
+          subtitle={secMgr}
+          footnote={`部門人數：${sectionHeadcount(sec)}`} />
+      }>
+        {secStores.map(s => renderStore(s, color))}
+      </TreeNode>
+    )
+  }
+
+  const renderDept = (dept, i) => {
+    const color = TREE_COLORS[i % TREE_COLORS.length]
+    const mgr = managerName(dept)
+    const cnt = headcountOf(dept)
+    const secs = deptSections(dept)
+    const dStores = deptStores(dept).filter(s => !s.section_id)
+    return (
+      <TreeNode key={dept.id} label={
+        <NodeBox color={color}
+          title={dept.name}
+          subtitle={mgr !== '-' ? mgr : ''}
+          footnote={`部門人數：${cnt}`} />
+      }>
+        {secs.map(sec => renderSection(sec, color))}
+        {dStores.map(s => renderStore(s, color))}
+      </TreeNode>
+    )
+  }
+
   return (
     <div className="card">
-      <div className="card-body" style={{ padding: 32, overflowX: 'auto', background: '#fafafa' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 'fit-content' }}>
-
-          {/* 根節點 */}
-          <NodeBox
-            color="#0e7490"
-            title={apex?.name || '公司'}
-            subtitle={apexMgr || ''}
-            footnote={`共 ${totalCompanyHeadcount} 人`}
-            big
-          />
-
-          {/* 兼任高管（如有）— 浮在根節點右側 */}
-          {execBoardMembers.length > 0 && (
-            <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280' }}>
-              兼任高管：{execBoardMembers.map(e => e.name).join('、')}
-            </div>
-          )}
-
-          <VLine h={20} />
-
-          {/* 主橫向 bus */}
-          {visibleDepts.length > 0 && (
-            <div style={{
-              width: `${Math.min(visibleDepts.length, 8) * 150}px`,
-              maxWidth: '95vw',
-              height: 1,
-              background: '#9ca3af',
-            }} />
-          )}
-
-          {/* 部門列 */}
-          <div style={{
-            display: 'flex',
-            justifyContent: visibleDepts.length <= 6 ? 'space-around' : 'flex-start',
-            gap: 12, alignItems: 'flex-start',
-            flexWrap: 'wrap', rowGap: 32,
-            marginTop: 0,
-            width: '100%',
-          }}>
-            {visibleDepts.map((dept, i) => {
-              const color = TREE_COLORS[i % TREE_COLORS.length]
-              const mgr = managerName(dept)
-              const cnt = headcountOf(dept)
-              const secs = deptSections(dept)
-              const dStores = deptStores(dept).filter(s => !s.section_id)
-              const hasChildren = secs.length > 0 || dStores.length > 0
-
-              return (
-                <div key={dept.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                  <VLine h={20} />
-                  <NodeBox
-                    color={color}
-                    title={dept.name}
-                    subtitle={mgr !== '-' ? mgr : ''}
-                    footnote={`部門人數：${cnt}`}
-                  />
-
-                  {hasChildren && (
-                    <>
-                      <VLine h={18} />
-
-                      {/* sectioned dept (e.g. 營運部) → 課別 */}
-                      {secs.length > 0 && (
-                        <>
-                          {secs.length > 1 && (
-                            <div style={{
-                              width: `${secs.length * 150}px`,
-                              maxWidth: '90vw',
-                              height: 1, background: '#9ca3af',
-                            }} />
-                          )}
-                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center', rowGap: 24 }}>
-                            {secs.map(sec => {
-                              const secMgr = sec.supervisor_id
-                                ? employees.find(e => e.id === sec.supervisor_id)?.name || ''
-                                : ''
-                              const secStores = sectionStores(sec)
-                              return (
-                                <div key={sec.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                                  <VLine h={18} />
-                                  <NodeBox
-                                    color={color}
-                                    title={sec.name}
-                                    subtitle={secMgr}
-                                    footnote={`部門人數：${sectionHeadcount(sec)}`}
-                                  />
-                                  {secStores.length > 0 && (
-                                    <>
-                                      <VLine h={18} />
-                                      {secStores.length > 1 && (
-                                        <div style={{
-                                          width: `${secStores.length * 150}px`,
-                                          maxWidth: '85vw',
-                                          height: 1, background: '#9ca3af',
-                                        }} />
-                                      )}
-                                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', rowGap: 18 }}>
-                                        {secStores.map(s => {
-                                          const sMgr = storeManagerOf(s)
-                                          return (
-                                            <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                              <VLine h={14} />
-                                              <NodeBox
-                                                color={color}
-                                                title={s.name}
-                                                subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
-                                                footnote={`部門人數：${storeEmployees(s).length}`}
-                                              />
-                                            </div>
-                                          )
-                                        })}
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-
-                      {/* 直屬門市（無 section）*/}
-                      {dStores.length > 0 && (
-                        <>
-                          {dStores.length > 1 && (
-                            <div style={{
-                              width: `${dStores.length * 150}px`,
-                              maxWidth: '90vw',
-                              height: 1, background: '#9ca3af',
-                            }} />
-                          )}
-                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', rowGap: 18 }}>
-                            {dStores.map(s => {
-                              const sMgr = storeManagerOf(s)
-                              return (
-                                <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                  <VLine h={14} />
-                                  <NodeBox
-                                    color={color}
-                                    title={s.name}
-                                    subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
-                                    footnote={`部門人數：${storeEmployees(s).length}`}
-                                  />
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* 未分配門市 */}
-          {(() => {
-            const unassigned = stores.filter(s => !s.department_id && !s.section_id && s.is_active !== false)
-            if (unassigned.length === 0) return null
-            return (
-              <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px dashed #d1d5db', width: '100%' }}>
-                <div style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
-                  未分配門市（{unassigned.length}）
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-                  {unassigned.map(s => (
-                    <NodeBox key={s.id} color="#9ca3af" title={s.name} footnote={`${storeEmployees(s).length} 人`} />
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
+      <div className="card-body" style={{ padding: 24, overflowX: 'auto', background: '#fafafa' }}>
+        <div style={{ minWidth: 'fit-content' }}>
+          <Tree
+            lineWidth="1.5px"
+            lineColor="#9ca3af"
+            lineBorderRadius="6px"
+            label={
+              <NodeBox color="#0e7490"
+                title={apex?.name || '公司'}
+                subtitle={apexMgr || ''}
+                footnote={`共 ${totalCompanyHeadcount} 人`}
+                big />
+            }
+          >
+            {visibleDepts.map(renderDept)}
+          </Tree>
         </div>
+
+        {/* 兼任高管 */}
+        {execBoardMembers.length > 0 && (
+          <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#6b7280' }}>
+            兼任高管：{execBoardMembers.map(e => e.name).join('、')}
+          </div>
+        )}
+
+        {/* 未分配門市 */}
+        {(() => {
+          const unassigned = stores.filter(s => !s.department_id && !s.section_id && s.is_active !== false)
+          if (unassigned.length === 0) return null
+          return (
+            <div style={{ marginTop: 28, paddingTop: 16, borderTop: '1px dashed #d1d5db' }}>
+              <div style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
+                未分配門市（{unassigned.length}）
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                {unassigned.map(s => (
+                  <NodeBox key={s.id} color="#9ca3af" title={s.name} footnote={`${storeEmployees(s).length} 人`} />
+                ))}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

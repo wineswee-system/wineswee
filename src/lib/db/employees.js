@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import { dedup } from './utils'
 
 export const getEmployees = (orgId) => {
-  let q = supabase.from('employees').select('*').order('id')
+  let q = supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').order('id')
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }

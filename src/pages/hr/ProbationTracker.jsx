@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getProbationRecords, createProbationRecord, updateProbationRecord } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_STYLES = {
@@ -33,7 +33,7 @@ export default function ProbationTracker() {
   useEffect(() => {
     Promise.all([
       getProbationRecords(),
-      supabase.from('employees').select('id, name, dept, department_id, position, join_date, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
     ]).then(([r, e]) => {
       setRecords(r.data || [])
       setEmployees(e.data || [])
@@ -261,11 +261,7 @@ export default function ProbationTracker() {
                     setF('end_date', end.toISOString().slice(0, 10))
                   }
                 }}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                  sublabel: e.dept || '',
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋員工姓名..."
               />
             </Field>
@@ -273,10 +269,7 @@ export default function ProbationTracker() {
               <SearchableSelect
                 value={form.mentor}
                 onChange={(v) => setF('mentor', v || '')}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋指導人..."
               />
             </Field>

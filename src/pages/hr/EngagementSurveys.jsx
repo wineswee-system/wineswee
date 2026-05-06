@@ -6,7 +6,7 @@ import { generateSurveyInsights, isConfigured as aiReady } from '../../lib/ai/hr
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
@@ -67,7 +67,7 @@ export default function EngagementSurveys() {
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getEngagementSurveys(),  // ← 表 query 走 db.js helper，後續可加 org param
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
     ]).then(([s, e]) => {
       setSurveys(s.data || [])
       setEmployees(e.data || [])
@@ -579,11 +579,7 @@ export default function EngagementSurveys() {
               <SearchableSelect
                 value={fillEmployee}
                 onChange={(v) => setFillEmployee(v || '')}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                  sublabel: e.dept || '',
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋員工姓名..."
               />
             </Field>

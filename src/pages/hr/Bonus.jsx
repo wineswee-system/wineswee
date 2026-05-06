@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
 
@@ -42,7 +42,7 @@ export default function Bonus() {
       supabase.from('customer_contacts').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('inventory_adjustments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('outbound_orders').select('*').eq('organization_id', orgId),
-      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('organization_id', orgId).order('name'),
     ]).then(([r, s, o, t, ct, adj, ob, emp]) => {
       setRecords(r.data || [])
       setSettings(s.data || [])
@@ -491,11 +491,7 @@ export default function Bonus() {
               <SearchableSelect
                 value={recordForm.employee_name}
                 onChange={(v) => handleEmployeeSelect(v || '')}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                  sublabel: e.store || '',
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋員工姓名/門市..."
               />
             </Field>

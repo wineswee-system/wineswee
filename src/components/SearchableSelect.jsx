@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Search, X, ChevronDown, Check } from 'lucide-react'
 
@@ -199,38 +199,34 @@ export default function SearchableSelect({
           <div ref={listRef} style={{ overflowY: 'auto', flex: 1 }}>
             {filtered.length === 0 ? (
               <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{emptyText}</div>
-            ) : (
-              filtered.map((opt, idx) => {
-                const isSel = String(opt.value) === String(value)
-                const isHi = idx === highlight
-                return (
-                  <div
-                    key={opt.value ?? `i${idx}`}
-                    onClick={() => choose(opt)}
-                    onMouseEnter={() => setHighlight(idx)}
-                    style={{
-                      padding: '8px 12px', cursor: opt.disabled ? 'not-allowed' : 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      background: isHi ? 'var(--glass-light)' : 'transparent',
-                      opacity: opt.disabled ? 0.5 : 1,
-                      borderLeft: isSel ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {opt.label}
-                      </div>
-                      {opt.sublabel && (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-                          {opt.sublabel}
-                        </div>
-                      )}
-                    </div>
-                    {isSel && <Check size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />}
-                  </div>
-                )
+            ) : (() => {
+              // 偵測是否要分群
+              const hasGroups = filtered.some(o => o.group)
+              if (!hasGroups) {
+                return filtered.map((opt, idx) => renderItem(opt, idx, value, highlight, choose, setHighlight))
+              }
+              // 分群渲染（保留原 idx 在 filtered 中的位置給鍵盤導覽用）
+              const groupMap = new Map()
+              filtered.forEach((opt, idx) => {
+                const g = opt.group || '未分類'
+                if (!groupMap.has(g)) groupMap.set(g, [])
+                groupMap.get(g).push({ opt, idx })
               })
-            )}
+              return [...groupMap.entries()].map(([groupName, items]) => (
+                <Fragment key={groupName}>
+                  <div style={{
+                    padding: '5px 12px', fontSize: 11, fontWeight: 700,
+                    color: 'var(--text-muted)', background: 'var(--glass-light)',
+                    borderTop: '1px solid var(--border-subtle)',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    position: 'sticky', top: 0, zIndex: 1,
+                  }}>
+                    {groupName} <span style={{ opacity: 0.6, fontWeight: 400 }}>· {items.length}</span>
+                  </div>
+                  {items.map(({ opt, idx }) => renderItem(opt, idx, value, highlight, choose, setHighlight))}
+                </Fragment>
+              ))
+            })()}
           </div>
         </div>,
         document.body
@@ -239,23 +235,61 @@ export default function SearchableSelect({
   )
 }
 
+// 共用的列表項渲染（保持鍵盤 idx 一致）
+function renderItem(opt, idx, value, highlight, choose, setHighlight) {
+  const isSel = String(opt.value) === String(value)
+  const isHi = idx === highlight
+  return (
+    <div
+      key={opt.value ?? `i${idx}`}
+      onClick={() => choose(opt)}
+      onMouseEnter={() => setHighlight(idx)}
+      style={{
+        padding: '8px 12px', cursor: opt.disabled ? 'not-allowed' : 'pointer',
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: isHi ? 'var(--glass-light)' : 'transparent',
+        opacity: opt.disabled ? 0.5 : 1,
+        borderLeft: isSel ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {opt.label}
+        </div>
+        {opt.sublabel && (
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+            {opt.sublabel}
+          </div>
+        )}
+      </div>
+      {isSel && <Check size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />}
+    </div>
+  )
+}
+
 /**
  * Helper: 把 employees 陣列轉成 SearchableSelect 的 options 格式
- * 顯示一條：名字 (英文) 職稱 部門/分店
- * 規則：有 store_id 或 store 欄位 → 視為分店人員，顯示分店；否則顯示部門
+ * 顯示一條：名字 (英文) 職稱
+ * 自動依「部門 / 門市」分群（group 欄位）
+ *
+ * @param employees - 員工陣列
+ * @param opts.keyBy - 'id' (預設) 或 'name'，決定 option.value 用哪個欄位
+ *                    - 'id' → 適合直接寫 employee_id 的表單（簽核鏈/離職單等）
+ *                    - 'name' → 適合舊欄位用 employee 名字字串的表單（補登/任務指派等）
  */
-export function empOptions(employees = []) {
+export function empOptions(employees = [], opts = {}) {
+  const keyBy = opts.keyBy || 'id'
   return employees.map(e => {
     const parts = [e.name]
     if (e.name_en) parts.push(`(${e.name_en})`)
     if (e.position) parts.push(e.position)
     const storeName = e.store || e.stores?.name
     const deptName  = e.dept  || e.departments?.name
-    const place = storeName || deptName
-    if (place) parts.push(place)
+    const group = storeName ? `🏪 ${storeName}` : (deptName ? `🏢 ${deptName}` : '未分類')
     return {
-      value: e.id,
+      value: keyBy === 'name' ? e.name : e.id,
       label: parts.join(' '),
+      group,
     }
   })
 }

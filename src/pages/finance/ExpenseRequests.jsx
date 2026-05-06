@@ -7,7 +7,7 @@ import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_COLORS = {
@@ -493,11 +493,7 @@ export default function ExpenseRequests() {
                 <SearchableSelect
                   value={form.employee}
                   onChange={(v) => set('employee', v || '')}
-                  options={employees.map(e => ({
-                    value: e.name,
-                    label: empLabel(e),
-                    sublabel: [e.dept, e.store].filter(Boolean).join(' · '),
-                  }))}
+                  options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="搜尋申請人姓名/部門/門市..."
                 />
               </div>

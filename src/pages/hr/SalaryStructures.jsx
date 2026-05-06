@@ -3,7 +3,7 @@ import { Plus, Edit2, DollarSign, Users, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
@@ -46,7 +46,7 @@ export default function SalaryStructures() {
     setLoading(true)
     Promise.all([
       supabase.from('salary_structures').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, dept, store, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, store, position, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([s, e, d]) => {
       setStructures(s.data || [])
@@ -282,11 +282,7 @@ export default function SalaryStructures() {
             <SearchableSelect
               value={form.employee_id}
               onChange={(v) => set('employee_id', v || '')}
-              options={employees.map(e => ({
-                value: e.id,
-                label: empLabel(e),
-                sublabel: [e.dept, e.store].filter(Boolean).join(' / '),
-              }))}
+              options={empOptions(employees)}
               placeholder="搜尋員工姓名/部門/門市..."
               disabled={!!editingId}
             />

@@ -5,7 +5,7 @@ import { getLineGroups, getLineMessages } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function LineIntegration() {
@@ -45,7 +45,7 @@ export default function LineIntegration() {
       const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
         supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
         supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, dept, department_id, position, status, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+        supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
         getLineGroups(),
         getLineMessages(),
         supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),
@@ -730,11 +730,7 @@ export default function LineIntegration() {
             <SearchableSelect
               value={linkForm.employee_id}
               onChange={(v) => setLinkForm(f => ({ ...f, employee_id: v || '' }))}
-              options={employees.map(e => ({
-                value: e.id,
-                label: empLabel(e),
-                sublabel: [e.dept, e.position].filter(Boolean).join(' · '),
-              }))}
+              options={empOptions(employees)}
               placeholder="搜尋員工..."
             />
           </Field>

@@ -3,7 +3,7 @@ import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight } from 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function SelfService() {
@@ -20,7 +20,7 @@ export default function SelfService() {
   const [leaveEntitlements, setLeaveEntitlements] = useState([])
 
   useEffect(() => {
-    supabase.from('employees').select('*').eq('status', '在職').order('name')
+    supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name')
       .then(({ data }) => {
         setEmployees(data || [])
         if (data?.length) {
@@ -81,11 +81,7 @@ export default function SelfService() {
               <SearchableSelect
                 value={selectedEmpName}
                 onChange={(v) => setSelectedEmpName(v || '')}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                  sublabel: e.dept || '',
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="切換員工..."
                 clearable={false}
               />

@@ -4,7 +4,7 @@ import {
   Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
-import SearchableSelect from '../../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import { empLabel } from '../../../lib/empLabel'
 
@@ -245,7 +245,7 @@ export default function InstanceDetailView({
               <SearchableSelect
                 value={taskForm.assignee}
                 onChange={(v) => setTaskForm(f => ({ ...f, assignee: v || '' }))}
-                options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋負責人..."
               />
             </Field>
@@ -426,7 +426,7 @@ export default function InstanceDetailView({
             <SearchableSelect
               value={editForm.assignee}
               onChange={(v) => setEditForm(f => ({ ...f, assignee: v || '' }))}
-              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              options={empOptions(employees, { keyBy: 'name' })}
               placeholder="未指定"
             />
           </Field>

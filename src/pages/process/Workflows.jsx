@@ -16,7 +16,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
@@ -100,7 +100,7 @@ export default function Workflows() {
       getWorkflows(),
       getWorkflowInstances(),
       getTasks(),
-      supabase.from('employees').select('id, name, dept, position, department_id').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
@@ -1075,7 +1075,7 @@ export default function Workflows() {
             <SearchableSelect
               value={filterAssignee}
               onChange={(v) => setFilterAssignee(v || '')}
-              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              options={empOptions(employees, { keyBy: 'name' })}
               placeholder="全部人員"
             />
           </div>
@@ -1205,7 +1205,7 @@ export default function Workflows() {
             <SearchableSelect
               value={blankWorkflowForm.assignee}
               onChange={(v) => setBlankWorkflowForm(p => ({ ...p, assignee: v || '' }))}
-              options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+              options={empOptions(employees, { keyBy: 'name' })}
               placeholder="搜尋負責人..."
             />
           </Field>

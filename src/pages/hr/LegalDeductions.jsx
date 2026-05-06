@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
@@ -49,7 +49,7 @@ export default function LegalDeductions() {
     setLoading(true)
     Promise.all([
       supabase.from('legal_deductions').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, dept, store, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([d, e, dp]) => {
       setItems(d.data || [])
@@ -348,11 +348,7 @@ export default function LegalDeductions() {
             <SearchableSelect
               value={form.employee_id}
               onChange={(v) => set('employee_id', v || '')}
-              options={employees.map(e => ({
-                value: e.id,
-                label: empLabel(e),
-                sublabel: e.dept || '',
-              }))}
+              options={empOptions(employees)}
               placeholder="搜尋員工姓名/部門..."
               disabled={!!editingId}
             />

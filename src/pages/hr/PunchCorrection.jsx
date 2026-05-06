@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 export default function PunchCorrection() {
@@ -22,7 +22,7 @@ export default function PunchCorrection() {
   const load = () => {
     Promise.all([
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, department_id, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
     ]).then(([c, e]) => {
       let recs = c.data || []
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
@@ -211,11 +211,7 @@ export default function PunchCorrection() {
               <SearchableSelect
                 value={form.employee}
                 onChange={(v) => set('employee', v || '')}
-                options={employees.map(e => ({
-                  value: e.name,
-                  label: empLabel(e),
-                  sublabel: e.departments?.name || '',
-                }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋員工姓名..."
               />
             </Field>

@@ -15,7 +15,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
 import ChangelogPanel from '../../components/ChangelogPanel'
 import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
-import SearchableSelect from '../../components/SearchableSelect'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 const STATUS_MAP = {
@@ -760,7 +760,7 @@ export default function Projects() {
                       <SearchableSelect
                         value={addTaskForm.assignee}
                         onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
-                        options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                        options={empOptions(employees, { keyBy: 'name' })}
                         placeholder="負責人"
                       />
                     </div>
@@ -833,7 +833,7 @@ export default function Projects() {
                       <SearchableSelect
                         value={directTaskForm.assignee}
                         onChange={(v) => setDirectTaskForm(f => ({ ...f, assignee: v || '' }))}
-                        options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                        options={empOptions(employees, { keyBy: 'name' })}
                         placeholder="負責人"
                       />
                     </div>
@@ -946,7 +946,7 @@ export default function Projects() {
                     <SearchableSelect
                       value={newWfForm.assignee}
                       onChange={(v) => setNewWfForm(f => ({ ...f, assignee: v || '' }))}
-                      options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                      options={empOptions(employees, { keyBy: 'name' })}
                       placeholder="請選擇負責人"
                     />
                   </Field>
@@ -991,7 +991,7 @@ export default function Projects() {
                 <SearchableSelect
                   value={form.owner}
                   onChange={(v) => set('owner', v || '')}
-                  options={employees.map(e => ({ value: e.name, label: empLabel(e), sublabel: e.dept || e.position || '' }))}
+                  options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="搜尋專案負責人..."
                 />
               </Field>
@@ -1131,7 +1131,7 @@ export default function Projects() {
               <SearchableSelect
                 value={deployForm.owner}
                 onChange={(v) => setDeployForm(f => ({ ...f, owner: v || '' }))}
-                options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                options={empOptions(employees, { keyBy: 'name' })}
                 placeholder="搜尋負責人..."
               />
             </Field>
@@ -1348,7 +1348,7 @@ export default function Projects() {
                     <SearchableSelect
                       value={inlineTask.assignee}
                       onChange={(v) => setInlineTask(f => ({ ...f, assignee: v || '' }))}
-                      options={employees.map(e => ({ value: e.name, label: empLabel(e) }))}
+                      options={empOptions(employees, { keyBy: 'name' })}
                       placeholder="負責人"
                     />
                     <input className="form-input" type="date" style={{ fontSize: 13 }} value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />

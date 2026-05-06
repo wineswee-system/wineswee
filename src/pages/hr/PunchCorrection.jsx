@@ -45,6 +45,28 @@ export default function PunchCorrection() {
     setLoadingChain(false)
   }
 
+  const printWithChain = async (row) => {
+    const empRow = employees.find(e => e.name === row.employee)
+    const chainSteps = await buildWorkflowChainSteps({
+      templateName: '補打卡簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approved_by,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+    })
+    const approverMap = {}
+    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+    printClockCorrectionSignOff(row, {
+      companyName: organization?.name, logoUrl: organization?.logo_url,
+      signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
+      chainSteps,
+      approverMap,
+    })
+  }
+
   const load = () => {
     const orgId = profile?.organization_id
     Promise.all([
@@ -229,10 +251,7 @@ export default function PunchCorrection() {
                         </span>
                       )}
                       <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} title="下載簽呈"
-                        onClick={() => printClockCorrectionSignOff(c, {
-                          companyName: organization?.name, logoUrl: organization?.logo_url,
-                          signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
-                        })}>
+                        onClick={() => printWithChain(c)}>
                         <Printer size={11} />
                       </button>
                     </div>
@@ -304,10 +323,7 @@ export default function PunchCorrection() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
-            onPrint={() => printClockCorrectionSignOff(detailRow, {
-              companyName: organization?.name, logoUrl: organization?.logo_url,
-              signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
-            })}
+            onPrint={() => printWithChain(detailRow)}
           />
         )
       })()}

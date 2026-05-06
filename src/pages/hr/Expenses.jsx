@@ -114,6 +114,30 @@ export default function Expenses() {
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
+  const printWithChain = async (row) => {
+    const empRow = employees.find(e => e.name === row.employee)
+    const chainSteps = await buildWorkflowChainSteps({
+      templateName: '費用報帳簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      fallbackTail: ['財務核章'],
+    })
+    const approverMap = {}
+    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+    printExpenseSimpleSignOff(row, {
+      companyName: organization?.name, logoUrl: organization?.logo_url,
+      dept: getEmpDept(row.employee),
+      signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
+      chainSteps,
+      approverMap,
+    })
+  }
+
   const openDetail = async (row) => {
     setDetailRow(row)
     setLoadingChain(true)
@@ -230,11 +254,7 @@ export default function Expenses() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printExpenseSimpleSignOff(e, {
-                          companyName: organization?.name, logoUrl: organization?.logo_url,
-                          dept: getEmpDept(e.employee),
-                          signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
-                        })}>
+                        onClick={() => printWithChain(e)}>
                         <Printer size={11} />
                       </button>
                     </div>
@@ -308,11 +328,7 @@ export default function Expenses() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
-            onPrint={() => printExpenseSimpleSignOff(detailRow, {
-              companyName: organization?.name, logoUrl: organization?.logo_url,
-              dept: getEmpDept(detailRow.employee),
-              signatures: Object.fromEntries(employees.filter(emp => emp.signature_url).map(emp => [emp.name, emp.signature_url])),
-            })}
+            onPrint={() => printWithChain(detailRow)}
           />
         )
       })()}

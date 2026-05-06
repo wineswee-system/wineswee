@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
+import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -780,11 +781,28 @@ export default function ExpenseRequests() {
                 const signatures = Object.fromEntries(
                   employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
                 )
+                // chain：抓該單實際 workflow 步驟
+                const empRow = employees.find(e => e.name === showDetail.employee)
+                const chainSteps = await buildWorkflowChainSteps({
+                  templateName: '費用申請簽核',
+                  applicantName: showDetail.employee,
+                  applicantId: empRow?.id,
+                  applicantCreatedAt: showDetail.created_at,
+                  recordStatus: showDetail.status,
+                  approverName: showDetail.approved_by,
+                  approvedAt: showDetail.approved_at,
+                  rejectReason: showDetail.reject_reason,
+                  fallbackTail: ['財務核章'],
+                })
+                const approverMap = {}
+                chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
                 exportExpenseRequestPdf(showDetail, {
                   companyName: organization?.name,
                   logoUrl: organization?.logo_url,
                   attachments,
                   signatures,
+                  chainSteps,
+                  approverMap,
                 })
               }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Download size={13} /> 下載簽呈

@@ -38,7 +38,13 @@ export default function Resignation() {
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
-    // 對應 chainSteps 中所有 target_emp_id → 員工姓名 map
+    const steps = await buildAndResolveChain(row)
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
+
+  // 共用：抓 chain steps + approverMap，給 modal / PDF 都用
+  const buildAndResolveChain = async (row) => {
     const stepIds = (chainSteps[row.approval_chain_id] || [])
       .map(s => s.target_emp_id).filter(Boolean)
     let approverMap = {}
@@ -46,14 +52,24 @@ export default function Resignation() {
       const { data: emps } = await supabase.from('employees').select('id,name').in('id', stepIds)
       approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
     }
-    const steps = await buildChainBasedSteps({
+    return buildChainBasedSteps({
       row,
       applicantName: row.employee?.name || '',
       applicantCreatedAt: row.created_at,
       approverMap,
     })
-    setDetailChainSteps(steps)
-    setLoadingChain(false)
+  }
+
+  const printWithChain = async (row) => {
+    const builtSteps = await buildAndResolveChain(row)
+    const approverMap = {}
+    builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+    printResignationSignOff(row, {
+      companyName: organization?.name,
+      logoUrl: organization?.logo_url,
+      chainSteps: builtSteps,
+      approverMap,
+    })
   }
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -282,7 +298,7 @@ export default function Resignation() {
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
                         )}
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
-                          onClick={() => printResignationSignOff(r, { companyName: organization?.name, logoUrl: organization?.logo_url })}>
+                          onClick={() => printWithChain(r)}>
                           <Printer size={11} />
                         </button>
                       </div>
@@ -373,7 +389,7 @@ export default function Resignation() {
           attachments={detailRow.attachment_url ? [{ url: detailRow.attachment_url, name: detailRow.attachment_url.split('/').pop() }] : []}
           createdAt={detailRow.created_at}
           chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
-          onPrint={() => printResignationSignOff(detailRow, { companyName: organization?.name, logoUrl: organization?.logo_url })}
+          onPrint={() => printWithChain(detailRow)}
         />
       )}
     </div>

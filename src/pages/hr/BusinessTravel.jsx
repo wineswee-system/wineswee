@@ -100,6 +100,30 @@ export default function BusinessTravel() {
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
+  const printWithChain = async (row) => {
+    const empRow = employees.find(e => e.name === row.employee)
+    const chainSteps = await buildWorkflowChainSteps({
+      templateName: '出差申請簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      fallbackTail: ['人資/財務'],
+    })
+    const approverMap = {}
+    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+    printTripSignOff(row, {
+      companyName: organization?.name, logoUrl: organization?.logo_url,
+      dept: getEmpDept(row.employee),
+      signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+      chainSteps,
+      approverMap,
+    })
+  }
+
   const openDetail = async (row) => {
     setDetailRow(row)
     setLoadingChain(true)
@@ -213,11 +237,7 @@ export default function BusinessTravel() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printTripSignOff(t, {
-                          companyName: organization?.name, logoUrl: organization?.logo_url,
-                          dept: getEmpDept(t.employee),
-                          signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-                        })}>
+                        onClick={() => printWithChain(t)}>
                         <Printer size={11} />
                       </button>
                     </div>
@@ -288,11 +308,7 @@ export default function BusinessTravel() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
-            onPrint={() => printTripSignOff(detailRow, {
-              companyName: organization?.name, logoUrl: organization?.logo_url,
-              dept: getEmpDept(detailRow.employee),
-              signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-            })}
+            onPrint={() => printWithChain(detailRow)}
           />
         )
       })()}

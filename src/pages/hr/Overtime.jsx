@@ -195,6 +195,31 @@ export default function Overtime() {
 
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
+  // 印簽呈統一邏輯：先 fetch 該單實際 chain → 把 chainSteps + approverMap 一起餵給 PDF
+  // 這樣老闆改 chain（/system/approval-chains）後 PDF 會跟著動態更新欄數
+  const printWithChain = async (row) => {
+    const empRow = employees.find(e => e.name === row.employee)
+    const chainSteps = await buildWorkflowChainSteps({
+      templateName: '加班簽核',
+      applicantName: row.employee,
+      applicantId: empRow?.id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+    })
+    const approverMap = {}
+    chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+    printOvertimeSignOff(row, {
+      companyName: organization?.name, logoUrl: organization?.logo_url,
+      dept: getEmpDept(row.employee),
+      signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+      chainSteps,
+      approverMap,
+    })
+  }
+
   const filtered = records.filter(r =>
     deptFilter === '' || getEmpDept(r.employee) === deptFilter
   )
@@ -284,11 +309,7 @@ export default function Overtime() {
                         }}>✏️ 編輯重送</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
-                        onClick={() => printOvertimeSignOff(o, {
-                          companyName: organization?.name, logoUrl: organization?.logo_url,
-                          dept: getEmpDept(o.employee),
-                          signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-                        })}>
+                        onClick={() => printWithChain(o)}>
                         <Printer size={11} />
                       </button>
                     </div>
@@ -375,11 +396,7 @@ export default function Overtime() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
-            onPrint={() => printOvertimeSignOff(detailRow, {
-              companyName: organization?.name, logoUrl: organization?.logo_url,
-              dept: getEmpDept(detailRow.employee),
-              signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
-            })}
+            onPrint={() => printWithChain(detailRow)}
           />
         )
       })()}

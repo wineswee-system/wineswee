@@ -537,37 +537,49 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
     }).join('')
   }
 
-  // 有 chainSteps → 智慧渲染
+  // 有 chainSteps → 智慧渲染（優先使用 step.status；沒設則 fallback 用 overall status）
   return chainSteps.map((step, idx) => {
     const stepLabel = step.label || step.role_name || `第 ${idx + 1} 關`
-    const stepTarget = step.target_emp_id ? approverMap[step.target_emp_id] : (step.role_name || '')
+    // 優先：step.name（buildChainSteps 已預先填好）；次之：approverMap lookup；最後：role_name
+    const stepTarget = step.name || (step.target_emp_id ? approverMap[step.target_emp_id] : '') || step.role_name || ''
 
     let cellContent = ''
     let cellStatus = ''
 
-    if (status === '已核准' || status === '已核銷') {
-      if (idx === chainSteps.length - 1 && finalApprover?.name) {
-        const sigUrl = finalApprover.signature_url || signatures[finalApprover.name]
-        cellContent = renderApprovedCell({ name: finalApprover.name, signatureUrl: sigUrl, approvedAt: finalApprover.approved_at })
-      } else if (stepTarget) {
-        // 中間關卡：用該關 target_emp_id 對應到 name → 找簽章
-        const sigUrl = signatures[stepTarget]
-        cellContent = renderApprovedCell({ name: stepTarget, signatureUrl: sigUrl })
+    // per-step status 優先
+    let perStepStatus = step.status
+    if (!perStepStatus) {
+      // fallback to overall status (舊行為)
+      if (status === '已核准' || status === '已核銷') perStepStatus = 'completed'
+      else if (status === '已駁回' || status === '已拒絕' || status === '已退回') perStepStatus = (idx === 0 ? 'rejected' : 'pending')
+      else if (status === '已取消') perStepStatus = 'cancelled'
+      else perStepStatus = 'pending'
+    }
+
+    if (perStepStatus === 'completed') {
+      // 申請人 step 特殊：不蓋章，只顯示 submission timestamp
+      if (idx === 0 && (step.label === '申請人' || stepLabel === '申請人')) {
+        cellContent = `<div style="font-size:11pt;font-weight:700;color:#0a6b2e">${safe(step.name || stepTarget)}</div>` +
+                      (step.completedAt ? `<div class="date">${safe(fmtDate(step.completedAt))}　送出</div>` : '')
       } else {
-        cellContent = `<div class="approved">✓</div><div style="font-size:10pt;color:#0a6b2e;font-weight:700">核可</div>`
+        const signerName = step.completedBy || stepTarget
+        // 簽章優先序：finalApprover.signature_url（最後關）→ signatures[signerName]
+        const isLastStep = idx === chainSteps.length - 1
+        const sigUrl = (isLastStep && finalApprover?.signature_url) || signatures[signerName]
+        cellContent = renderApprovedCell({ name: signerName, signatureUrl: sigUrl, approvedAt: step.completedAt })
       }
       cellStatus = 'approved-bg'
-    } else if (status === '已駁回' || status === '已拒絕' || status === '已退回') {
-      cellContent = idx === 0
-        ? `<div class="rejected">✗</div><div style="font-size:10pt;color:#9c1f1f;font-weight:700">駁回</div>${rejectReason ? `<div class="reason">${safe(rejectReason)}</div>` : ''}`
-        : `<div class="placeholder-line">—</div>`
-      cellStatus = idx === 0 ? 'rejected-bg' : ''
-    } else if (status === '已取消') {
-      cellContent = `<div class="cancelled">已取消</div>`
-      cellStatus = ''
-    } else {
+    } else if (perStepStatus === 'rejected') {
+      cellContent = `<div class="rejected">✗</div><div style="font-size:10pt;color:#9c1f1f;font-weight:700">駁回</div>` +
+                    (step.rejectReason || rejectReason ? `<div class="reason">${safe(step.rejectReason || rejectReason)}</div>` : '')
+      cellStatus = 'rejected-bg'
+    } else if (perStepStatus === 'current') {
       cellContent = `<div class="pending">⏸ 等候中</div>`
-      cellStatus = ''
+    } else if (perStepStatus === 'cancelled') {
+      cellContent = `<div class="cancelled">已取消</div>`
+    } else {
+      // pending：空格留簽章空間
+      cellContent = `<div class="placeholder-line">簽章 / 日期</div>`
     }
 
     return `

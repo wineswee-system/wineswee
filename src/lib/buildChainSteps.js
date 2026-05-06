@@ -76,8 +76,11 @@ export async function buildWorkflowChainSteps({
     return {
       label: t.role || t.title?.replace(/^.+? - /, '') || `第${t.step_order}關`,
       name: t.assignee || '',
+      target_emp_id: t.assignee_id || null,
+      role_name: t.role || null,
       status,
       completedAt: t.completed_at,
+      completedBy: t.completed_by || (status === 'completed' ? t.assignee : null),
       rejectReason: t.status === '已退回' ? (t.description || '') : '',
     }
   })
@@ -134,12 +137,16 @@ export async function buildChainBasedSteps({
       // 進行中：cur 之前 = completed, cur = current, 之後 = pending
       status = idx < cur ? 'completed' : (idx === cur ? 'current' : 'pending')
     }
+    const targetName = s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || '')
     return {
       label: s.label || s.role_name || `第${idx}關`,
-      name: s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || ''),
+      name: targetName,
+      target_emp_id: s.target_emp_id || null,
+      role_name: s.role_name || null,
       status,
       // 最後一關核可的時間用 row.approved_at
       completedAt: status === 'completed' && idx === (chainSteps?.length || 0) ? row.approved_at : undefined,
+      completedBy: status === 'completed' ? targetName : null,
       rejectReason: status === 'rejected' ? row.reject_reason : '',
     }
   })

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
+import { LayoutGrid, GitBranch } from 'lucide-react'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
+
+const VIEW_KEY = 'sme_orgchart_view_mode'
 
 export default function OrgChart() {
   const [departments, setDepartments] = useState([])
@@ -7,6 +10,12 @@ export default function OrgChart() {
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem(VIEW_KEY) || 'detail')
+
+  const switchMode = (m) => {
+    setViewMode(m)
+    localStorage.setItem(VIEW_KEY, m)
+  }
 
   useEffect(() => {
     Promise.all([getDepartments(), getDepartmentSections(), getEmployees(), getStores()])
@@ -107,11 +116,93 @@ export default function OrgChart() {
   )
   const sectionedDepts = departments.filter(d => deptSections(d).length > 0)
 
+  // 部門總人數：含主管 + 副主管 + 部門員工 + 部門 / 課別下所有門市員工（去重）
+  const headcountOf = (dept) => {
+    const ids = new Set()
+    employees.forEach(e => {
+      if (e.department_id === dept.id || e.dept === dept.name) ids.add(e.id)
+    })
+    deptStores(dept).forEach(s => storeEmployees(s).forEach(e => ids.add(e.id)))
+    deptSections(dept).forEach(sec => sectionStores(sec).forEach(s =>
+      storeEmployees(s).forEach(e => ids.add(e.id))
+    ))
+    return ids.size
+  }
+  const sectionHeadcount = (sec) => {
+    const ids = new Set()
+    sectionStores(sec).forEach(s => storeEmployees(s).forEach(e => ids.add(e.id)))
+    if (sec.supervisor_id) ids.add(sec.supervisor_id)
+    return ids.size
+  }
+  const totalCompanyHeadcount = employees.length
+
+  // ─── 模式切換按鈕 ───
+  const ModeToggle = () => (
+    <div style={{ display: 'inline-flex', gap: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, padding: 3 }}>
+      {[
+        { key: 'detail', label: '詳細', icon: LayoutGrid, hint: '完整人員配置' },
+        { key: 'compact', label: '精簡', icon: GitBranch, hint: '僅部門結構' },
+      ].map(m => {
+        const Icon = m.icon
+        const active = viewMode === m.key
+        return (
+          <button key={m.key} onClick={() => switchMode(m.key)} title={m.hint} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600,
+            background: active ? 'var(--accent-cyan)' : 'transparent',
+            color: active ? '#fff' : 'var(--text-muted)',
+          }}>
+            <Icon size={13} /> {m.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  if (viewMode === 'compact') {
+    return (
+      <div className="fade-in">
+        <div className="page-header">
+          <div className="page-header-row">
+            <div>
+              <h2><span className="header-icon">🌐</span> 組織架構</h2>
+              <p>精簡模式 — 部門結構樹（共 {totalCompanyHeadcount} 人）</p>
+            </div>
+            <ModeToggle />
+          </div>
+        </div>
+        <CompactTreeView
+          departments={departments}
+          sections={sections}
+          employees={employees}
+          stores={stores}
+          headcountOf={headcountOf}
+          sectionHeadcount={sectionHeadcount}
+          managerName={managerName}
+          deptStores={deptStores}
+          deptSections={deptSections}
+          sectionStores={sectionStores}
+          storeManagerOf={storeManagerOf}
+          storeEmployees={storeEmployees}
+          totalCompanyHeadcount={totalCompanyHeadcount}
+          execBoardMembers={execBoardMembers}
+          labelOf={labelOf}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h2><span className="header-icon">🌐</span> 組織架構</h2>
-        <p>公司組織層級圖</p>
+        <div className="page-header-row">
+          <div>
+            <h2><span className="header-icon">🌐</span> 組織架構</h2>
+            <p>詳細模式 — 完整人員配置（共 {totalCompanyHeadcount} 人）</p>
+          </div>
+          <ModeToggle />
+        </div>
       </div>
 
       <div className="card">
@@ -189,6 +280,9 @@ export default function OrgChart() {
                     width: '100%',
                   }}>
                     <div style={{ fontWeight: 700, color, fontSize: 13, lineHeight: 1.3 }}>{dept.name}</div>
+                    <div style={{ fontSize: 10, color, opacity: 0.85, marginTop: 3, fontWeight: 600 }}>
+                      共 {headcountOf(dept)} 人
+                    </div>
                   </div>
 
                   {/* Dashed manager box under dept */}
@@ -397,7 +491,7 @@ export default function OrgChart() {
                       }}>
                         {/* connector to bus */}
                         <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
-                        {/* Section header (課別 + 督導) */}
+                        {/* Section header (課別 + 督導 + 人數) */}
                         <div style={{
                           background: dim,
                           border: `1.5px solid ${color}`,
@@ -406,7 +500,10 @@ export default function OrgChart() {
                           textAlign: 'center',
                           minWidth: 160,
                         }}>
-                          <div style={{ fontWeight: 700, color, fontSize: 13 }}>{sec.name}</div>
+                          <div style={{ fontWeight: 700, color, fontSize: 13 }}>
+                            {sec.name}
+                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {sectionHeadcount(sec)} 人</span>
+                          </div>
                           {supe && (
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                               {supe.position || '督導'} · {labelOf(supe)}
@@ -534,6 +631,247 @@ export default function OrgChart() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  精簡模式 — 104 風樹狀圖
+//  每個 node 只顯示「部門名 + 主管 + 人數」，靠細線連接
+// ═══════════════════════════════════════════════════════════════
+const TREE_COLORS = ['#0ea5e9', '#14b8a6', '#f59e0b', '#a855f7', '#ec4899', '#10b981', '#ef4444']
+
+function NodeBox({ color = '#14b8a6', title, subtitle, footnote, big = false }) {
+  return (
+    <div style={{
+      background: '#fff',
+      border: '1px solid #d1d5db',
+      borderRadius: 4,
+      width: big ? 180 : 138,
+      textAlign: 'center',
+      overflow: 'hidden',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      flexShrink: 0,
+    }}>
+      <div style={{
+        background: color, color: '#fff',
+        fontSize: 9, fontWeight: 600,
+        padding: '3px 6px', letterSpacing: 2,
+      }}>　</div>
+      <div style={{ padding: '8px 6px' }}>
+        <div style={{ fontSize: big ? 14 : 12, fontWeight: 700, color: '#111', lineHeight: 1.3 }}>
+          {title || '—'}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#374151', marginTop: 4, lineHeight: 1.3 }}>
+            {subtitle}
+          </div>
+        )}
+        {footnote && (
+          <div style={{ fontSize: 9.5, color: '#6b7280', marginTop: 3 }}>
+            {footnote}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function VLine({ h = 18 }) {
+  return <div style={{ width: 1, height: h, background: '#9ca3af' }} />
+}
+
+function CompactTreeView({
+  departments, sections, employees, stores,
+  headcountOf, sectionHeadcount, managerName,
+  deptStores, deptSections, sectionStores,
+  storeManagerOf, storeEmployees,
+  totalCompanyHeadcount, execBoardMembers, labelOf,
+}) {
+  const visibleDepts = departments.filter(d => d.name !== '總經理室')
+
+  // 根節點 = 總經理室 dept；找不到就用通用「公司」
+  const apex = departments.find(d => d.name === '總經理室')
+  const apexMgr = apex ? managerName(apex) : ''
+
+  return (
+    <div className="card">
+      <div className="card-body" style={{ padding: 32, overflowX: 'auto', background: '#fafafa' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 'fit-content' }}>
+
+          {/* 根節點 */}
+          <NodeBox
+            color="#0e7490"
+            title={apex?.name || '公司'}
+            subtitle={apexMgr || ''}
+            footnote={`共 ${totalCompanyHeadcount} 人`}
+            big
+          />
+
+          {/* 兼任高管（如有）— 浮在根節點右側 */}
+          {execBoardMembers.length > 0 && (
+            <div style={{ marginTop: 4, fontSize: 10, color: '#6b7280' }}>
+              兼任高管：{execBoardMembers.map(e => e.name).join('、')}
+            </div>
+          )}
+
+          <VLine h={20} />
+
+          {/* 主橫向 bus */}
+          {visibleDepts.length > 0 && (
+            <div style={{
+              width: `${Math.min(visibleDepts.length, 8) * 150}px`,
+              maxWidth: '95vw',
+              height: 1,
+              background: '#9ca3af',
+            }} />
+          )}
+
+          {/* 部門列 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: visibleDepts.length <= 6 ? 'space-around' : 'flex-start',
+            gap: 12, alignItems: 'flex-start',
+            flexWrap: 'wrap', rowGap: 32,
+            marginTop: 0,
+            width: '100%',
+          }}>
+            {visibleDepts.map((dept, i) => {
+              const color = TREE_COLORS[i % TREE_COLORS.length]
+              const mgr = managerName(dept)
+              const cnt = headcountOf(dept)
+              const secs = deptSections(dept)
+              const dStores = deptStores(dept).filter(s => !s.section_id)
+              const hasChildren = secs.length > 0 || dStores.length > 0
+
+              return (
+                <div key={dept.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                  <VLine h={20} />
+                  <NodeBox
+                    color={color}
+                    title={dept.name}
+                    subtitle={mgr !== '-' ? mgr : ''}
+                    footnote={`部門人數：${cnt}`}
+                  />
+
+                  {hasChildren && (
+                    <>
+                      <VLine h={18} />
+
+                      {/* sectioned dept (e.g. 營運部) → 課別 */}
+                      {secs.length > 0 && (
+                        <>
+                          {secs.length > 1 && (
+                            <div style={{
+                              width: `${secs.length * 150}px`,
+                              maxWidth: '90vw',
+                              height: 1, background: '#9ca3af',
+                            }} />
+                          )}
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center', rowGap: 24 }}>
+                            {secs.map(sec => {
+                              const secMgr = sec.supervisor_id
+                                ? employees.find(e => e.id === sec.supervisor_id)?.name || ''
+                                : ''
+                              const secStores = sectionStores(sec)
+                              return (
+                                <div key={sec.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                                  <VLine h={18} />
+                                  <NodeBox
+                                    color={color}
+                                    title={sec.name}
+                                    subtitle={secMgr}
+                                    footnote={`部門人數：${sectionHeadcount(sec)}`}
+                                  />
+                                  {secStores.length > 0 && (
+                                    <>
+                                      <VLine h={18} />
+                                      {secStores.length > 1 && (
+                                        <div style={{
+                                          width: `${secStores.length * 150}px`,
+                                          maxWidth: '85vw',
+                                          height: 1, background: '#9ca3af',
+                                        }} />
+                                      )}
+                                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', rowGap: 18 }}>
+                                        {secStores.map(s => {
+                                          const sMgr = storeManagerOf(s)
+                                          return (
+                                            <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                              <VLine h={14} />
+                                              <NodeBox
+                                                color={color}
+                                                title={s.name}
+                                                subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
+                                                footnote={`部門人數：${storeEmployees(s).length}`}
+                                              />
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {/* 直屬門市（無 section）*/}
+                      {dStores.length > 0 && (
+                        <>
+                          {dStores.length > 1 && (
+                            <div style={{
+                              width: `${dStores.length * 150}px`,
+                              maxWidth: '90vw',
+                              height: 1, background: '#9ca3af',
+                            }} />
+                          )}
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', rowGap: 18 }}>
+                            {dStores.map(s => {
+                              const sMgr = storeManagerOf(s)
+                              return (
+                                <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  <VLine h={14} />
+                                  <NodeBox
+                                    color={color}
+                                    title={s.name}
+                                    subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
+                                    footnote={`部門人數：${storeEmployees(s).length}`}
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 未分配門市 */}
+          {(() => {
+            const unassigned = stores.filter(s => !s.department_id && !s.section_id && s.is_active !== false)
+            if (unassigned.length === 0) return null
+            return (
+              <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px dashed #d1d5db', width: '100%' }}>
+                <div style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
+                  未分配門市（{unassigned.length}）
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                  {unassigned.map(s => (
+                    <NodeBox key={s.id} color="#9ca3af" title={s.name} footnote={`${storeEmployees(s).length} 人`} />
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>

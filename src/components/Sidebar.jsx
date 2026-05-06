@@ -58,11 +58,10 @@ const groupNav = {
       ]
     },
     {
-      label: '行銷',
+      label: '行銷自動化',
       icon: Megaphone,
-      divider: true,
       children: [
-        { icon: Megaphone, label: '行銷自動化', path: '/crm/marketing' },
+        { icon: Megaphone, label: '行銷活動', path: '/crm/marketing' },
         { icon: Sparkles, label: 'Drip Campaign', path: '/crm/drip-campaigns' },
         { icon: FileText, label: '表單建立器', path: '/crm/forms' },
         { icon: Zap, label: '工作流程', path: '/crm/workflows' },
@@ -81,12 +80,12 @@ const groupNav = {
         { icon: Tag, label: '促銷活動', path: '/sales/promotions' },
         { icon: Tag, label: '價格規則', path: '/sales/pricing' },
         { icon: DollarSign, label: '業務佣金', path: '/sales/commission' },
-        { icon: RotateCcw, label: '退貨管理', path: '/sales/returns' },
+        { icon: RotateCcw, label: '銷售退貨', path: '/sales/returns' },
         { icon: Truck, label: '物流追蹤', path: '/sales/shipments' },
       ]
     },
     {
-      label: 'POS 收銀',
+      label: '門市 / POS',
       icon: Monitor,
       children: [
         { icon: PieChart, label: '營運總覽', path: '/pos' },
@@ -105,13 +104,6 @@ const groupNav = {
         { icon: Tag, label: '供應商分類', path: '/purchase/categories' },
         { icon: BarChart2, label: '供應商績效', path: '/purchase/performance' },
         { icon: UserCheck, label: '廠商入駐', path: '/purchase/onboarding' },
-      ]
-    },
-    {
-      label: '採購作業',
-      icon: ClipboardList,
-      divider: true,
-      children: [
         { icon: ClipboardList, label: '採購申請', path: '/purchase/requests' },
         { icon: FileText, label: '採購單', path: '/purchase/orders' },
         { icon: FileCheck, label: '進貨驗收', path: '/purchase/receipts' },
@@ -123,32 +115,24 @@ const groupNav = {
       ]
     },
     {
-      label: 'WMS 倉儲管理',
+      label: '倉儲管理',
       icon: Warehouse,
       children: [
         { icon: BarChart2, label: '倉庫總覽', path: '/wms/overview' },
         { icon: Package, label: '商品主檔', path: '/wms/skus' },
         { icon: Package, label: '儲位管理', path: '/wms/bins' },
-      ]
-    },
-    {
-      label: '進出貨',
-      icon: Truck,
-      divider: true,
-      children: [
         { icon: PackageOpen, label: '進貨管理', path: '/wms/inbound' },
         { icon: BarChart3, label: '庫存管理', path: '/wms/inventory' },
         { icon: Truck, label: '出貨管理', path: '/wms/outbound' },
         { icon: Truck, label: '揀貨/包裝/出貨', path: '/wms/pick-pack-ship' },
         { icon: ArrowRightLeft, label: '倉庫調撥', path: '/wms/transfers' },
-        { icon: RotateCcw, label: '退貨管理 (RMA)', path: '/wms/returns' },
+        { icon: RotateCcw, label: 'RMA / 倉退', path: '/wms/returns' },
         { icon: Layers, label: '組合商品', path: '/wms/kitting' },
       ]
     },
     {
-      label: '盤點與追蹤',
+      label: '庫存與盤點',
       icon: CheckSquare,
-      divider: true,
       children: [
         { icon: Package, label: '批號追蹤', path: '/wms/lots' },
         { icon: CheckSquare, label: '盤點作業', path: '/wms/stock-count' },
@@ -182,7 +166,7 @@ const groupNav = {
         { icon: BookText, label: '傳票管理', path: '/finance/journal' },
         { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
-        { icon: FileEdit, label: '申請（申請與核銷）', path: '/finance/expense-requests' },
+        { icon: FileEdit, label: '費用申請與核銷', path: '/finance/expense-requests' },
         { icon: FileText, label: '電子發票', path: '/finance/invoices' },
         { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
       ]
@@ -232,20 +216,24 @@ const groupNav = {
         { icon: MapPin, label: '門市', path: '/org/locations' },
         { icon: ClipboardList, label: '部門', path: '/org/departments' },
         { icon: UserCircle, label: '員工', path: '/org/employees' },
-        { icon: MessageCircle, label: 'LINE', path: '/org/line' },
-        { icon: FileText, label: '模單', path: '/org/templates' },
       ]
     },
     {
-      label: '出勤管理',
+      label: '出勤與請假',
       icon: Clock,
       children: [
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
+        { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
         { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
-        { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
+      ]
+    },
+    {
+      label: '排班管理',
+      icon: Calendar,
+      children: [
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
         { icon: Workflow, label: '排班規則', path: '/hr/schedule-rules' },
@@ -260,21 +248,22 @@ const groupNav = {
         { icon: FileText, label: 'HR 表單中心', path: '/hr/forms' },
         { icon: ClipboardCheck, label: '我的提交', path: '/hr/forms/submissions' },
         { icon: Settings, label: '表單建立器', path: '/hr/form-builder' },
+        { icon: FileText, label: '文件範本', path: '/org/templates' },
       ]
     },
     {
-      label: '薪酬績效',
+      label: '薪酬與福利',
       icon: DollarSign,
       children: [
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
         { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
         { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
         { icon: Scale, label: '法扣管理', path: '/hr/legal-deductions' },
+        { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
-        { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
-        { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
+        { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },
         { icon: FileBarChart, label: '健保級距監控', path: '/hr/insurance-grade' },
       ]
@@ -285,19 +274,18 @@ const groupNav = {
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
         { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
-        { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
         { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
+        { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
       ]
     },
     {
-      label: '人才分析',
-      icon: Brain,
+      label: '員工體驗',
+      icon: Heart,
       children: [
-        { icon: Bot, label: 'HR AI 助理', path: '/hr/assistant' },
-        { icon: Sparkles, label: 'HR 導覽助理', path: '/ai/nav-assistant' },
-        { icon: Brain, label: 'AI 離職預測', path: '/hr/attrition' },
-        { icon: MessageSquare, label: '滿意度調查', path: '/hr/surveys' },
         { icon: UserCircle, label: '員工自助', path: '/hr/self-service' },
+        { icon: MessageSquare, label: '滿意度調查', path: '/hr/surveys' },
+        { icon: Bot, label: 'HR AI 助理', path: '/hr/assistant' },
+        { icon: Brain, label: 'AI 離職預測', path: '/hr/attrition' },
       ]
     },
     {
@@ -320,7 +308,6 @@ const groupNav = {
       children: [
         { icon: Eye, label: '總覽', path: '/process/overview' },
         { icon: FolderOpen, label: '專案', path: '/process/projects' },
-        { icon: Bot, label: '流程導覽助理', path: '/ai/nav-assistant' },
         { icon: Workflow, label: '流程', path: '/process/workflows' },
         { icon: ClipboardCheck, label: '簽核', path: '/process/approvals' },
         { icon: ListChecks, label: '任務', path: '/process/tasks' },
@@ -330,13 +317,22 @@ const groupNav = {
     {
       label: '設定管理',
       icon: Settings,
-      divider: true,
       children: [
         { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
         { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
         { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
         { icon: FolderTree, label: '分類管理', path: '/process/settings/categories' },
         { icon: Tag, label: '標籤管理', path: '/process/settings/tags' },
+      ]
+    },
+    {
+      label: 'AI 助理中心',
+      icon: Sparkles,
+      children: [
+        { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant' },
+        { icon: Bot, label: 'Agent 控制台', path: '/ai/agent' },
+        { icon: BookOpen, label: '說明中心', path: '/ai/help' },
+        { icon: BookOpen, label: '教學中心', path: '/ai/tutorial' },
       ]
     },
   ],
@@ -388,14 +384,11 @@ const systemItems = [
   { icon: Award, label: '系統效能', path: '/system/performance' },
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },
   { icon: FileText, label: '匯入匯出', path: '/system/import-export' },
-  { icon: Bot, label: 'Agent 控制台', path: '/ai/agent' },
-  { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant' },
-  { icon: BookOpen, label: '說明中心', path: '/ai/help' },
-  { icon: BookOpen, label: '教學中心', path: '/ai/tutorial' },
   { icon: FileText, label: '電商串接', path: '/integration/ecommerce' },
-  { icon: Upload, label: '文中匯入', path: '/integration/wenzhong' },
+  { icon: Upload, label: '文件匯入', path: '/integration/wenzhong' },
   { icon: Settings, label: 'API 文件', path: '/integration/api' },
   { icon: Truck, label: '物流整合', path: '/integration/carriers' },
+  { icon: MessageCircle, label: 'LINE 整合', path: '/org/line' },
 ]
 
 // Super admin sidebar items
@@ -417,6 +410,7 @@ const routeToGroup = (pathname) => {
   if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
   if (pathname.startsWith('/finance')) return 'finance'
   if (pathname.startsWith('/process')) return 'project'
+  if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
   if (pathname.startsWith('/hr') || pathname.startsWith('/org')) return 'people'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'

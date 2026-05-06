@@ -765,7 +765,23 @@ export default function ExpenseRequests() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => exportExpenseRequestPdf(showDetail, { companyName: organization?.name, logoUrl: organization?.logo_url })} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-secondary" onClick={async () => {
+                // 把附件即時撈一份（圖檔會內嵌進簽呈 PDF）
+                const { data: atts } = await supabase.from('expense_request_attachments')
+                  .select('file_name, storage_path, file_type')
+                  .eq('request_id', showDetail.id)
+                  .order('created_at')
+                const attachments = (atts || []).map(a => ({
+                  url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+                  name: a.file_name,
+                  type: a.file_type,
+                }))
+                exportExpenseRequestPdf(showDetail, {
+                  companyName: organization?.name,
+                  logoUrl: organization?.logo_url,
+                  attachments,
+                })
+              }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Download size={13} /> 下載簽呈
               </button>
               <button className="btn btn-secondary" onClick={() => setShowDetail(null)}>關閉</button>

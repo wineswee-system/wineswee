@@ -30,6 +30,9 @@
  * @param {Object} [opts.finalApprover]   { name, approved_at } 最後核可者顯示用
  * @param {Array<string>} [opts.simpleSign]  無 chain 時的靜態簽核欄 label 陣列
  *                                            預設 ['呈文者', '主管核示', '人資/財務']
+ * @param {Array} [opts.attachments]      附件列表：[{ url, name?, type? }]
+ *                                          - 圖檔（image/* 或副檔名 jpg/png/...）會內嵌顯示
+ *                                          - 其他檔案只列檔名與「請另行查閱」提示
  */
 export function printSignOff(opts = {}) {
   const {
@@ -48,6 +51,7 @@ export function printSignOff(opts = {}) {
     approverMap = {},
     finalApprover,
     simpleSign = ['呈文者', '主管核示', '人資/財務'],
+    attachments = [],
   } = opts
 
   const appDept = applicant.store || applicant.dept || applicant.departments?.name || applicant.stores?.name || '—'
@@ -65,6 +69,7 @@ export function printSignOff(opts = {}) {
   const statusBadge = renderStatusBadge(status)
   const signCellsHtml = renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign })
   const sectionsHtml = sections.map((sec, idx) => renderSection(sec, idx + 2)).join('')
+  const attachmentsHtml = renderAttachments(attachments, sections.length + 2)
 
   const html = `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -72,11 +77,15 @@ export function printSignOff(opts = {}) {
 <meta charset="UTF-8">
 <title>${safe(companyName)} ${safe(docTitle)}${docNo ? ` #${docNo}` : ''}</title>
 <style>
-  @page { size: A4 portrait; margin: 1.6cm 1.8cm; }
+  @page { size: A4 portrait; margin: 1.2cm 1.4cm; }
   @media print {
     .no-print { display: none !important; }
     body { padding: 0; background: #fff; }
     .page { box-shadow: none; padding: 0; border: none; }
+    /* 強制章節 / 簽核欄不要切開 */
+    .section { page-break-inside: avoid; }
+    .sign-row { page-break-inside: avoid; }
+    .ending { page-break-after: avoid; }
   }
   * { box-sizing: border-box; }
   html, body { background: #f4f1ea; }
@@ -84,9 +93,9 @@ export function printSignOff(opts = {}) {
     font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "PMingLiU", "Heiti TC", sans-serif;
     color: #1a1a1a;
     font-size: 13.5pt;
-    line-height: 1.7;
+    line-height: 1.55;
     margin: 0;
-    padding: 24px 0;
+    padding: 20px 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -107,7 +116,7 @@ export function printSignOff(opts = {}) {
   .toolbar button.primary:hover { background: #54441f; }
   .page {
     background: #fff; max-width: 19cm; margin: 0 auto;
-    padding: 28px 36px 36px;
+    padding: 20px 28px 24px;
     box-shadow: 0 8px 28px rgba(0,0,0,0.1);
     border-radius: 2px;
     position: relative;
@@ -115,8 +124,8 @@ export function printSignOff(opts = {}) {
   /* ─── 頁首：LOGO + 公司名 + 簽呈 + 狀態 ─── */
   .header {
     position: relative;
-    padding-bottom: 14px;
-    margin-bottom: 18px;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
   }
   .header::after {
     content: ''; position: absolute; left: 0; right: 0; bottom: 0;
@@ -141,13 +150,14 @@ export function printSignOff(opts = {}) {
   }
   .title-area { text-align: center; }
   .company-name {
-    font-size: 16pt; font-weight: 600; color: #6e5a2e;
-    letter-spacing: 4px; margin: 0 0 6px 0;
+    font-size: 15pt; font-weight: 600; color: #6e5a2e;
+    letter-spacing: 4px; margin: 0 0 4px 0;
   }
   .doc-title {
-    font-size: 30pt; font-weight: 800;
-    letter-spacing: 14px; margin: 0;
-    color: #1a1a1a; padding-left: 14px;  /* offset for letter-spacing */
+    font-size: 26pt; font-weight: 800;
+    letter-spacing: 12px; margin: 0;
+    color: #1a1a1a; padding-left: 12px;  /* offset for letter-spacing */
+    line-height: 1.2;
   }
   .doc-meta-side { text-align: right; font-size: 10.5pt; color: #6b6357; }
   .doc-meta-side .doc-no { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
@@ -163,13 +173,13 @@ export function printSignOff(opts = {}) {
   /* ─── 呈文資訊表 ─── */
   table.meta {
     width: 100%; border-collapse: collapse;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
     border: 1.2px solid #2a2a2a;
     background: #fdfcf8;
   }
   table.meta td {
     border: 0.8px solid #888;
-    padding: 11px 14px;
+    padding: 7px 12px;
     font-size: 13pt;
     vertical-align: middle;
   }
@@ -188,34 +198,34 @@ export function printSignOff(opts = {}) {
   }
 
   /* ─── 章節 ─── */
-  .section { margin-bottom: 16px; }
+  .section { margin-bottom: 8px; }
   .section-title {
-    font-size: 14.5pt;
+    font-size: 14pt;
     font-weight: 700;
-    margin: 16px 0 10px 0;
+    margin: 10px 0 6px 0;
     color: #2a2a2a;
     display: flex; align-items: baseline; gap: 10px;
     border-bottom: 1px dashed #c8b88a;
-    padding-bottom: 5px;
+    padding-bottom: 3px;
   }
   .section-title .num {
     color: #6e5a2e; font-weight: 800; letter-spacing: 2px;
   }
   .section-content {
-    padding-left: 30px;
-    line-height: 1.85;
+    padding-left: 28px;
+    line-height: 1.55;
     color: #1a1a1a;
   }
   .subject {
-    font-size: 15pt; font-weight: 700;
+    font-size: 14.5pt; font-weight: 700;
     color: #1a1a1a;
   }
   .text-content {
-    white-space: pre-wrap; word-wrap: break-word; font-size: 13.5pt;
+    white-space: pre-wrap; word-wrap: break-word; font-size: 13pt;
   }
   .field-row {
     display: flex; gap: 14px;
-    margin-bottom: 6px;
+    margin-bottom: 3px;
     align-items: flex-start;
   }
   .field-label {
@@ -252,9 +262,9 @@ export function printSignOff(opts = {}) {
 
   /* ─── 結尾 + 簽核欄 ─── */
   .ending {
-    margin: 30px 0 24px;
+    margin: 14px 0 12px;
     text-align: right;
-    font-size: 15pt; font-weight: 700;
+    font-size: 14pt; font-weight: 700;
     color: #1a1a1a; letter-spacing: 2px;
     padding-right: 12px;
   }
@@ -267,27 +277,27 @@ export function printSignOff(opts = {}) {
   }
   .sign-cell {
     border-right: 0.8px solid #888;
-    min-height: 130px;
+    min-height: 88px;
     display: flex; flex-direction: column;
     background: #fff;
   }
   .sign-cell:last-child { border-right: none; }
   .sign-cell .sign-header {
     background: #efeadc; border-bottom: 0.8px solid #888;
-    padding: 8px 10px; font-size: 12.5pt; font-weight: 700;
+    padding: 5px 8px; font-size: 12pt; font-weight: 700;
     text-align: center; color: #4a3f1f; letter-spacing: 2px;
   }
   .sign-cell .sign-target {
-    background: #fdfcf8; padding: 5px 8px; font-size: 11pt;
+    background: #fdfcf8; padding: 3px 8px; font-size: 10.5pt;
     color: #6b6357; text-align: center;
     border-bottom: 1px dashed #b8a878;
-    min-height: 24px;
+    min-height: 20px;
   }
   .sign-cell .sign-stamp {
-    flex: 1; padding: 16px 8px;
-    font-size: 12pt; text-align: center;
+    flex: 1; padding: 8px 6px;
+    font-size: 11.5pt; text-align: center;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
-    gap: 3px;
+    gap: 2px;
   }
   .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 16pt; }
   .sign-cell .rejected { color: #9c1f1f; font-weight: 700; font-size: 16pt; }
@@ -304,12 +314,54 @@ export function printSignOff(opts = {}) {
     color: #cfc7b0; font-size: 10.5pt; letter-spacing: 4px;
   }
 
+  /* ─── 附件區 ─── */
+  .attachment-item {
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+  }
+  .attachment-name {
+    font-size: 11.5pt; color: #4a3f1f; font-weight: 600;
+    margin-bottom: 6px;
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .attachment-name .badge {
+    font-size: 9pt; color: #6e5a2e;
+    background: #efeadc; padding: 1px 8px; border-radius: 8px;
+    font-weight: 500;
+  }
+  .attachment-image {
+    border: 1px solid #c8b88a;
+    border-radius: 4px;
+    padding: 6px;
+    background: #fdfcf8;
+    display: inline-block;
+    max-width: 100%;
+  }
+  .attachment-image img {
+    max-width: 100%;
+    max-height: 480px;
+    display: block;
+    object-fit: contain;
+  }
+  .attachment-file {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: #faf6ec;
+    border: 1px solid #e0d5b0;
+    border-radius: 4px;
+    font-size: 12pt;
+    color: #4a3f1f;
+  }
+  .attachment-file .file-note {
+    color: #8a8270; font-size: 10pt; margin-left: auto;
+  }
+
   /* ─── 頁尾 ─── */
   .footer {
-    margin-top: 26px; padding-top: 10px;
+    margin-top: 12px; padding-top: 8px;
     border-top: 1px solid #c8b88a;
     display: flex; justify-content: space-between;
-    font-size: 10pt; color: #8a8270;
+    font-size: 9.5pt; color: #8a8270;
     letter-spacing: 0.5px;
   }
 </style>
@@ -358,6 +410,8 @@ export function printSignOff(opts = {}) {
     </div>
 
     ${sectionsHtml}
+
+    ${attachmentsHtml}
 
     <div class="ending">以上，呈請核示。</div>
 
@@ -481,4 +535,41 @@ function fmtDate(s) {
   if (!s) return ''
   const d = typeof s === 'string' ? s.slice(0, 10) : new Date(s).toISOString().slice(0, 10)
   return d.replace(/-/g, '/')
+}
+
+function isImageAttachment(att) {
+  if (att.type && att.type.startsWith('image/')) return true
+  const target = (att.name || att.url || '').toLowerCase()
+  return /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(target)
+}
+
+function renderAttachments(attachments, sectionIdx) {
+  if (!attachments || attachments.length === 0) return ''
+  const numLabel = NUM_LABELS[sectionIdx - 1] || `第${sectionIdx}`
+
+  const itemsHtml = attachments.map((att, i) => {
+    if (!att?.url) return ''
+    const name = att.name || `附件 ${i + 1}`
+    if (isImageAttachment(att)) {
+      return `
+        <div class="attachment-item">
+          <div class="attachment-name">📎 ${safe(name)} <span class="badge">圖檔</span></div>
+          <div class="attachment-image"><img src="${safe(att.url)}" alt="${safe(name)}" onerror="this.parentElement.innerHTML='<span style=color:#9c1f1f>（圖檔載入失敗，請另行查閱）</span>'" /></div>
+        </div>`
+    }
+    return `
+      <div class="attachment-item">
+        <div class="attachment-file">
+          <span style="font-size:14pt">📄</span>
+          <span>${safe(name)}</span>
+          <span class="file-note">非圖檔，請另行查閱</span>
+        </div>
+      </div>`
+  }).join('')
+
+  // 附件區強制換頁，避免擠壞主表
+  return `<div class="section attachments-section" style="page-break-before: always; padding-top: 12px">
+    <div class="section-title"><span class="num">${numLabel}、</span>附件</div>
+    <div class="section-content">${itemsHtml}</div>
+  </div>`
 }

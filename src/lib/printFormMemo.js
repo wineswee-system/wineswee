@@ -25,11 +25,28 @@ export function printFormMemo({
   chainSteps = [],
   approverMap = {},
 }) {
-  // template.fields → sections[0].rows
-  const fieldRows = (template?.fields || []).map(f => [
-    f.label,
-    fmtFieldValue(submission?.data?.[f.key], f),
-  ])
+  const fields = template?.fields || []
+
+  // 把 type=file 的欄位抽出來當附件，其餘做成說明 rows
+  const attachments = []
+  const fieldRows = []
+  for (const f of fields) {
+    const v = submission?.data?.[f.key]
+    if (f.type === 'file' || f.type === 'image' || f.type === 'attachment') {
+      // 可能是單一 URL 或陣列
+      const urls = Array.isArray(v) ? v : (v ? [v] : [])
+      for (const url of urls) {
+        if (typeof url === 'string' && url) {
+          const name = url.split('?')[0].split('/').pop() || f.label || '附件'
+          attachments.push({ url, name })
+        } else if (url && typeof url === 'object' && url.url) {
+          attachments.push(url)
+        }
+      }
+    } else {
+      fieldRows.push([f.label, fmtFieldValue(v, f)])
+    }
+  }
 
   printSignOff({
     companyName,
@@ -49,6 +66,7 @@ export function printFormMemo({
     finalApprover: submission?.approver
       ? { name: submission.approver.name || submission.approver_name || '', approved_at: submission.approved_at }
       : undefined,
+    attachments,
   })
 }
 

@@ -17,7 +17,28 @@ const baseOpts = (opts = {}) => ({
   logoUrl: opts.logoUrl || '',
   chainSteps: opts.chainSteps || [],
   approverMap: opts.approverMap || {},
+  // 任何 caller 可以直接傳 attachments 進來；adapter 也可以再合併自己從 row 抽出來的
+  attachments: opts.attachments || [],
 })
+
+// 把單一 attachment_url（TEXT 欄位）轉成標準陣列格式
+const singleUrlToAtt = (url) => {
+  if (!url) return []
+  const name = String(url).split('?')[0].split('/').pop() || '附件'
+  return [{ url, name }]
+}
+
+// 把 leave_requests.attachments（jsonb 陣列，元素可能是字串或 {url,name}）標準化
+const normalizeAttList = (arr) => {
+  if (!Array.isArray(arr)) return []
+  return arr.map((it, i) => {
+    if (typeof it === 'string') {
+      const name = it.split('?')[0].split('/').pop() || `附件 ${i + 1}`
+      return { url: it, name }
+    }
+    return it
+  }).filter(a => a?.url)
+}
 
 // ─── 1. 請假申請 leave_requests ───
 export function printLeaveSignOff(row, opts = {}) {
@@ -29,8 +50,13 @@ export function printLeaveSignOff(row, opts = {}) {
     ? `${row.hours} 小時`
     : `${row.days || 0} 天`
 
+  const base = baseOpts(opts)
+  const rowAtts = normalizeAttList(row.attachments)
+  const attachments = [...base.attachments, ...rowAtts]
+
   printSignOff({
-    ...baseOpts(opts),
+    ...base,
+    attachments,
     docTitle: '請假申請',
     docNo: row.id,
     applicant: { name: row.employee, dept: opts.dept || '' },
@@ -183,8 +209,12 @@ export function printClockCorrectionSignOff(row, opts = {}) {
 // row 預期已 join employee:employees(id,name,name_en,position) + approver:employees!approver_id(name)
 export function printResignationSignOff(row, opts = {}) {
   if (!row) return
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
   printSignOff({
-    ...baseOpts(opts),
+    ...base,
+    attachments,
     docTitle: '離職申請',
     docNo: row.id,
     applicant: {
@@ -236,8 +266,12 @@ export function printTransferSignOff(row, opts = {}) {
   if (row.new_role) changeRows.push(['角色', `${row.old_role || '—'}  →  ${row.new_role || '—'}`])
   if (row.new_base_salary != null) changeRows.push(['底薪', `${fmtMoney(row.old_base_salary)}  →  ${fmtMoney(row.new_base_salary)}`])
 
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
   printSignOff({
-    ...baseOpts(opts),
+    ...base,
+    attachments,
     docTitle: '人事異動申請',
     docNo: row.id,
     applicant: {

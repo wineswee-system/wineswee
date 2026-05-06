@@ -209,8 +209,9 @@ export function exportTaxReportPdf(reportData) {
 // 費用申請 → 簽呈 PDF（adapter，丟給 printSignOff）
 //
 // opts:
-//   companyName / logoUrl   公司資訊
+//   companyName / logoUrl     公司資訊
 //   chainSteps / approverMap  簽核鏈（可省，省略則 fallback 三格靜態簽核欄）
+//   attachments               附件陣列 [{url, name, type}]，圖檔會內嵌
 export function exportExpenseRequestPdf(req, opts = {}) {
   if (!req) return
   const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
@@ -279,6 +280,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
     approverMap: opts.approverMap || {},
     finalApprover: req.approved_by ? { name: req.approved_by, approved_at: req.approved_at } : undefined,
     simpleSign: ['呈文者', '主管核示', '財務核章'],
+    attachments: opts.attachments || [],
   })
 }
 

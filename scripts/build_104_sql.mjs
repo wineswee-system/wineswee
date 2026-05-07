@@ -85,7 +85,7 @@ const VALUE_TRANSFORMS = {
   probation_end_date: parseDate,
   resign_date: parseDate,
   reinstatement_date: parseDate,
-  id_number: (v) => STRIP_PARENS(v),  // 「A800104124/A800104124」→「A800104124」
+  id_number: (v) => STRIP_PARENS(v).split('/')[0].trim(),  // 「A800104124/A800104124」→「A800104124」
 }
 
 function parseDate(v) {
@@ -131,7 +131,13 @@ function parseCSV(text) {
   for (let i = 0; i < Math.min(20, rows.length); i++) {
     if (rows[i][1] === '公司統編' || rows[i].includes('員工編號')) { headerIdx = i; break }
   }
-  const headers = rows[headerIdx].map(h => String(h).trim())
+  // header 常帶換行 + 括號註解（例：「身分證字號\n(外籍員工顯示護照/居留證)」）→ 取第一行 + 去括號
+  const headers = rows[headerIdx].map(h => {
+    let s = String(h || '').trim()
+    s = s.split(/[\r\n]/)[0].trim()       // 砍換行後的註解
+    s = s.split(/[（(]/)[0].trim()         // 砍括號後的註解
+    return s
+  })
   return rows.slice(headerIdx + 1).map(cells => {
     const obj = {}
     headers.forEach((h, i) => { obj[h] = String(cells[i] || '').trim() })
@@ -211,6 +217,9 @@ function main() {
   lines.push('')
   lines.push('BEGIN;')
   lines.push('')
+  lines.push('-- ─── Section 0: 把佔用 email 的測試帳號 email 改掉（保留 row 避免 FK 連動） ───')
+  lines.push("UPDATE public.employees SET email = NULL WHERE email = 'astrops.psych@gmail.com';")
+  lines.push('')
 
   // ── Section 1: 列出 CSV 出現過的部門/門市名（給人工檢查用，註解形式） ──
   lines.push('-- ─── Section 1: CSV 「部門」欄出現過的名稱（檢查用，無實際動作） ───')
@@ -222,24 +231,36 @@ function main() {
   }
   lines.push('')
 
-  // ── Section 2: 員工資料 INSERT ON CONFLICT ──
-  lines.push('-- ─── Section 2: 員工資料 UPSERT（依 employee_number 為唯一鍵） ───')
-
+  // ── 資料欄位（不含 dept/department_id/store_id/organization_id；那 4 個分階段處理） ──
   const cols = [
     'employee_number', 'id_number', 'name', 'name_en', 'gender', 'birth_date',
     'marital_status', 'ethnic_group', 'disability_type', 'military_status',
     'phone', 'work_phone', 'email', 'personal_email', 'address', 'registered_address',
     'emergency_contact_name', 'emergency_contact_phone',
     'join_date', 'probation_end_date',
-    'dept', 'department_id', 'store_id',
     'position', 'job_category', 'employment_type', 'responsibility_type',
     'staffing_status', 'status', 'resign_date', 'reinstatement_date',
-    'organization_id',
   ]
+  const colTypes = {
+    employee_number: 'text', id_number: 'text', name: 'text', name_en: 'text',
+    gender: 'text', birth_date: 'date',
+    marital_status: 'text', ethnic_group: 'text', disability_type: 'text', military_status: 'text',
+    phone: 'text', work_phone: 'text', email: 'text', personal_email: 'text',
+    address: 'text', registered_address: 'text',
+    emergency_contact_name: 'text', emergency_contact_phone: 'text',
+    join_date: 'date', probation_end_date: 'date',
+    position: 'text', job_category: 'text', employment_type: 'text', responsibility_type: 'text',
+    staffing_status: 'text', status: 'text',
+    resign_date: 'date', reinstatement_date: 'date',
+  }
+  const tempCols = [...cols, 'dept_text']
 
+  // ── 預先把每筆組好；同時收集 unique dept 名稱 ──
+  const valueRows = []
+  const deptByText = new Map()
   let exported = 0, skipped = 0
   for (const r of rows) {
-    const empData = { organization_id: ORG_ID }
+    const empData = {}
     for (const [k104, kOurs] of Object.entries(COLUMN_MAP)) {
       let v = r[k104]
       if (v === '' || v == null) continue
@@ -247,54 +268,124 @@ function main() {
       if (v == null || v === '') continue
       empData[kOurs] = v
     }
-
-    // 「部門」欄 → 用 SQL 子查詢 lookup（不在這支 script 裡解析；DB 跑時自己對）
+    if (!empData.employee_number) { skipped++; continue }
     const deptText = r['部門'] || ''
-    if (deptText) {
-      empData.dept = deptText
-      // department_id / store_id 用 SQL 子查詢，跑的時候才查 DB
-      // 但 INSERT 一定要有具體值，所以用 COALESCE + 三層 lookup
-    }
-
-    if (!empData.employee_number) {
-      skipped++
-      continue
-    }
-
-    // 組 INSERT statement —— 每筆 INSERT 全部單行，避免 Supabase Editor 多行解析問題
-    const aliases = deptAliases(deptText)
-    const aliasList = sqlNameList(aliases)
-    const values = cols.map(c => {
-      if (c === 'department_id') {
-        if (!deptText) return 'NULL'
-        return `COALESCE((SELECT id FROM departments WHERE name IN (${aliasList}) LIMIT 1),(SELECT department_id FROM stores WHERE name IN (${aliasList}) LIMIT 1),(SELECT department_id FROM department_sections WHERE name IN (${aliasList}) LIMIT 1))`
-      }
-      if (c === 'store_id') {
-        if (!deptText) return 'NULL'
-        return `(SELECT id FROM stores WHERE name IN (${aliasList}) LIMIT 1)`
-      }
-      if (c === 'organization_id') return ORG_ID
-      return sqlStr(empData[c])
+    if (deptText) deptByText.set(deptText, (deptByText.get(deptText) || 0) + 1)
+    valueRows.push({
+      data: { ...empData, dept_text: deptText },
+      label: `${empData.employee_number} ${empData.name || ''} | ${deptText || '(無部門)'}`,
     })
-
-    const updateSet = cols.filter(c => c !== 'employee_number').map(c => {
-      if (c === 'department_id' || c === 'store_id') return `${c}=EXCLUDED.${c}`
-      return `${c}=COALESCE(EXCLUDED.${c},employees.${c})`
-    })
-
-    lines.push(`-- ${empData.employee_number} ${empData.name || ''}${empData.name_en ? ' (' + empData.name_en + ')' : ''} | ${deptText || '(無部門)'}`)
-    lines.push(`INSERT INTO employees (${cols.join(',')}) VALUES (${values.join(',')}) ON CONFLICT (employee_number) DO UPDATE SET ${updateSet.join(',')};`)
-
     exported++
   }
 
-  // ── Section 3: 跑完查驗 ──
-  lines.push('-- ─── Section 3: 查驗（commit 前看一下，有沒有 NULL department_id 但 dept 文字有填的） ───')
-  lines.push(`SELECT COUNT(*) AS total_employees FROM employees WHERE organization_id = ${ORG_ID};`)
-  lines.push(`SELECT employee_number, name, dept, department_id, store_id`)
-  lines.push(`FROM employees`)
+  // ── Section 2: 三階段 UPSERT — 單一 CTE statement，避免跨 statement 問題 ──
+  // 用 VALUES 把 CSV 直接 inline，不用 staging table（Supabase SQL Editor 對跨 statement 的 staging table 處理有 quirks）
+  // 第一個 row 對每個欄位加 ::type 強制型別，後面的 row 沿用即可
+  const buildVal = (data, c, withCast) => {
+    const t = c === 'dept_text' ? 'text' : colTypes[c]
+    const v = sqlStr(data[c])
+    if (!withCast) return v
+    return v === 'NULL' ? `NULL::${t}` : `${v}::${t}`
+  }
+
+  lines.push('-- ─── Section 2: 三階段 UPSERT（CTE 內含 VALUES + Phase A/B/C），單一 statement 原子操作 ───')
+  lines.push(`WITH csv (${tempCols.join(', ')}) AS (`)
+  lines.push('  VALUES')
+  valueRows.forEach((vr, idx) => {
+    const withCast = idx === 0
+    const vals = tempCols.map(c => buildVal(vr.data, c, withCast)).join(',')
+    const tail = idx === valueRows.length - 1 ? '' : ','
+    lines.push(`    (${vals})${tail}  -- ${vr.label}`)
+  })
+  lines.push('),')
+
+  // Phase A: id_number 比對
+  lines.push('upd_a AS (  -- Phase A: id_number 比對')
+  lines.push('  UPDATE public.employees e SET')
+  const setA = []
+  setA.push('employee_number = c.employee_number')
+  for (const cc of cols) {
+    if (cc === 'employee_number' || cc === 'id_number') continue
+    setA.push(`${cc} = COALESCE(c.${cc}, e.${cc})`)
+  }
+  setA.push("dept = COALESCE(NULLIF(c.dept_text,''), e.dept)")
+  lines.push(setA.map(s => '    ' + s).join(',\n'))
+  lines.push('  FROM csv c')
+  lines.push("  WHERE c.id_number IS NOT NULL AND c.id_number <> ''")
+  lines.push('    AND e.id_number = c.id_number')
+  lines.push(`    AND e.organization_id = ${ORG_ID}`)
+  lines.push('  RETURNING c.employee_number AS en')
+  lines.push('),')
+
+  // Phase B: name 比對 fallback
+  lines.push('upd_b AS (  -- Phase B: 用 name 比對沒填 id_number 的舊員工')
+  lines.push('  UPDATE public.employees e SET')
+  const setB = []
+  setB.push('employee_number = c.employee_number')
+  setB.push("id_number = COALESCE(NULLIF(e.id_number,''), c.id_number)")
+  for (const cc of cols) {
+    if (cc === 'employee_number' || cc === 'id_number') continue
+    setB.push(`${cc} = COALESCE(c.${cc}, e.${cc})`)
+  }
+  setB.push("dept = COALESCE(NULLIF(c.dept_text,''), e.dept)")
+  lines.push(setB.map(s => '    ' + s).join(',\n'))
+  lines.push('  FROM csv c')
+  lines.push("  WHERE (e.id_number IS NULL OR e.id_number = '')")
+  lines.push('    AND e.name = c.name')
+  lines.push(`    AND e.organization_id = ${ORG_ID}`)
+  lines.push('    AND c.employee_number NOT IN (SELECT en FROM upd_a)')
+  lines.push('    AND NOT EXISTS (  -- 同名舊員工 >1 → 跳過（人工處理）')
+  lines.push('      SELECT 1 FROM public.employees e2 WHERE e2.name = e.name AND e2.id <> e.id')
+  lines.push("        AND (e2.id_number IS NULL OR e2.id_number = '')")
+  lines.push(`        AND e2.organization_id = ${ORG_ID}`)
+  lines.push('    )')
+  lines.push('  RETURNING c.employee_number AS en')
+  lines.push('),')
+
+  // Phase C: INSERT new
+  lines.push('ins_c AS (  -- Phase C: 完全沒對到 → INSERT 新員工')
+  lines.push(`  INSERT INTO public.employees (${cols.join(', ')}, dept, organization_id)`)
+  lines.push(`  SELECT ${cols.map(cc => `c.${cc}`).join(', ')}, NULLIF(c.dept_text,''), ${ORG_ID}`)
+  lines.push('  FROM csv c')
+  lines.push('  WHERE c.employee_number NOT IN (SELECT en FROM upd_a)')
+  lines.push('    AND c.employee_number NOT IN (SELECT en FROM upd_b)')
+  lines.push('  RETURNING employee_number AS en')
+  lines.push(')')
+  // 結果 SELECT
+  lines.push("SELECT 'A: id_number match' AS phase, COUNT(*) AS rows FROM upd_a")
+  lines.push("UNION ALL SELECT 'B: name match', COUNT(*) FROM upd_b")
+  lines.push("UNION ALL SELECT 'C: new insert', COUNT(*) FROM ins_c;")
+  lines.push('')
+
+  // ── Section 4: dept 文字 → department_id / store_id（含別名） ──
+  lines.push('-- ─── Section 4: dept 文字 → department_id / store_id（含別名比對） ───')
+  for (const [deptText] of deptByText) {
+    const aliasList = sqlNameList(deptAliases(deptText))
+    lines.push('UPDATE public.employees SET')
+    lines.push('  department_id = COALESCE(')
+    lines.push(`    (SELECT id FROM departments WHERE name IN (${aliasList}) LIMIT 1),`)
+    lines.push(`    (SELECT department_id FROM stores WHERE name IN (${aliasList}) LIMIT 1),`)
+    lines.push(`    (SELECT department_id FROM department_sections WHERE name IN (${aliasList}) LIMIT 1)`)
+    lines.push('  ),')
+    lines.push(`  store_id = (SELECT id FROM stores WHERE name IN (${aliasList}) LIMIT 1)`)
+    lines.push(`WHERE dept = ${sqlStr(deptText)} AND organization_id = ${ORG_ID};`)
+  }
+  lines.push('')
+
+  // ── Section 5: 查驗 ──
+  lines.push('-- ─── Section 5: 查驗 ───')
+  lines.push('-- A. 總員工數（應該約等於原本 + truly_new_hire；不會暴增）')
+  lines.push(`SELECT COUNT(*) AS total_employees FROM public.employees WHERE organization_id = ${ORG_ID};`)
+  lines.push('-- B. 同名重複（>1 = 沒被自動 merge → 人工處理）')
+  lines.push('SELECT name, COUNT(*) AS dup, ARRAY_AGG(id ORDER BY id) AS ids,')
+  lines.push('       ARRAY_AGG(employee_number ORDER BY id) AS nums')
+  lines.push('FROM public.employees')
+  lines.push(`WHERE organization_id = ${ORG_ID}`)
+  lines.push('GROUP BY name HAVING COUNT(*) > 1 ORDER BY dup DESC, name;')
+  lines.push('-- C. 部門對不到（dept 有值但 department_id/store_id 都 NULL → 補建後重跑）')
+  lines.push('SELECT employee_number, name, dept FROM public.employees')
   lines.push(`WHERE organization_id = ${ORG_ID} AND dept IS NOT NULL AND department_id IS NULL AND store_id IS NULL`)
-  lines.push(`ORDER BY dept;  -- 這些是「部門」欄文字對不到 DB 任何 table，需要先補建再重跑`)
+  lines.push('ORDER BY dept;')
   lines.push('')
   lines.push('COMMIT;')
   lines.push('')

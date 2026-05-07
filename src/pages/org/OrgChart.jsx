@@ -215,7 +215,7 @@ export default function OrgChart() {
 
       <div className="card">
         <div className="card-body" style={{ padding: '32px 24px', overflowX: 'auto' }}>
-          {/* Top: 總經理室 + 兼任高管 */}
+          {/* Top: 總經理室 + 高管 */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 16, marginBottom: 0 }}>
             <div style={{
               background: 'linear-gradient(135deg, var(--accent-cyan-dim), var(--accent-blue-dim))',
@@ -238,7 +238,7 @@ export default function OrgChart() {
                 padding: '8px 14px',
                 minWidth: 120,
               }}>
-                <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>兼任高管</div>
+                <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>高管</div>
                 {execBoardMembers.map(emp => (
                   <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-red)', textAlign: 'center' }}>
                     {labelOf(emp)}
@@ -767,10 +767,10 @@ function CompactTreeView({
           </Tree>
         </div>
 
-        {/* 兼任高管 */}
+        {/* 高管 */}
         {execBoardMembers.length > 0 && (
           <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#6b7280' }}>
-            兼任高管：{execBoardMembers.map(e => e.name).join('、')}
+            高管：{execBoardMembers.map(e => e.name).join('、')}
           </div>
         )}
 

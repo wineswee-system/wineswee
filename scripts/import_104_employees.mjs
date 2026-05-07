@@ -61,6 +61,8 @@ const COLUMN_MAP = {
   // 緊急聯絡人
   '聯絡人姓名/關係': 'emergency_contact_name',
   '聯絡人電話':       'emergency_contact_phone',
+  // 104 匯出實際 header 用「留職/離職日期」（不是「留停/離職日期」）
+  '留職/離職日期':    'resign_date',
 }
 
 // ── 值轉換函式 ──
@@ -115,16 +117,34 @@ function parseDate(v) {
   return null
 }
 
-// ── 解析 CSV (簡版，不處理跳脫的 quote 內逗號) ──
+// ── 解析 CSV ──
+// 104 原檔結構：
+//   line 1-5: 公司名 / 資料類型 / 匯出日期 / 篩選條件 / 共幾筆（meta）
+//   line 6: 空行
+//   line 7: 類別 header（基本資料 / 聯絡資料 / 職務 ...）
+//   line 8: 真正欄位 header（# 那行）
+//   line 9+: 資料
 function parseCSV(text) {
+  // 去 BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
   const lines = text.split(/\r?\n/).filter(l => l.trim())
-  const headers = parseRow(lines[0])
-  return lines.slice(1).map(line => {
+  // 自動偵測 header：找第一行第一個 cell = '#' 的下一行作為 header
+  let headerIdx = 0
+  for (let i = 0; i < Math.min(20, lines.length); i++) {
+    const cells = parseRow(lines[i])
+    // 104 的 header 行第一格是空（因為 column 0 是 # 序號），第二格是「公司統編」
+    if (cells[1] === '公司統編' || cells.includes('員工編號')) {
+      headerIdx = i
+      break
+    }
+  }
+  const headers = parseRow(lines[headerIdx])
+  return lines.slice(headerIdx + 1).map(line => {
     const cells = parseRow(line)
     const row = {}
-    headers.forEach((h, i) => { row[h] = cells[i] || '' })
+    headers.forEach((h, i) => { row[h] = (cells[i] || '').trim() })
     return row
-  })
+  }).filter(r => r['員工編號'] || r['姓名'])  // 跳過空行
 }
 function parseRow(line) {
   const result = []
@@ -148,12 +168,21 @@ async function main() {
   const rows = parseCSV(text)
   console.log(`讀到 ${rows.length} 筆`)
 
-  // 部門名稱 → id 的對照（先載 departments）
+  // 部門名稱 → id 的對照
   const { data: depts } = await sb.from('departments').select('id, name')
   const deptByName = Object.fromEntries((depts || []).map(d => [d.name, d.id]))
 
+  // 門市名稱 → store + 對應 dept 的對照（104 匯出的「部門」欄常是門市名）
+  const { data: stores } = await sb.from('stores').select('id, name, department_id, section_id')
+  const storeByName = Object.fromEntries((stores || []).map(s => [s.name, s]))
+
+  // 課別名稱 → section（如 研發暨品管課）
+  const { data: secs } = await sb.from('department_sections').select('id, name, department_id')
+  const sectionByName = Object.fromEntries((secs || []).map(s => [s.name, s]))
+
   const stats = { insert: 0, update: 0, skip: 0, error: 0 }
   const errors = []
+  const unknownDepts = new Set()
 
   for (const r of rows) {
     const empData = {}
@@ -166,26 +195,43 @@ async function main() {
       empData[kOurs] = v
     }
 
-    // 部門名稱 → department_id
-    if (r['部門'] && deptByName[r['部門']]) {
-      empData.department_id = deptByName[r['部門']]
-      empData.dept = r['部門']
+    // 「部門」欄 → 依序 try：departments / stores / sections
+    const deptText = r['部門']
+    if (deptText) {
+      empData.dept = deptText
+      if (deptByName[deptText]) {
+        empData.department_id = deptByName[deptText]
+      } else if (storeByName[deptText]) {
+        const st = storeByName[deptText]
+        empData.store_id = st.id
+        if (st.department_id) empData.department_id = st.department_id
+      } else if (sectionByName[deptText]) {
+        const sec = sectionByName[deptText]
+        empData.department_id = sec.department_id
+      } else {
+        unknownDepts.add(deptText)
+      }
     }
 
-    // 唯一鍵：身分證字號（最穩定）
+    // 唯一鍵：身分證字號優先 → 失敗 fallback employee_number
     const idNumber = empData.id_number
-    if (!idNumber) {
+    const empNum   = empData.employee_number
+    if (!idNumber && !empNum) {
       stats.skip++
-      errors.push({ name: empData.name, reason: '無身分證字號 → 跳過' })
+      errors.push({ name: empData.name, reason: '無身分證 + 無員工編號 → 跳過' })
       continue
     }
 
     // 比對既有員工
-    const { data: existing } = await sb
-      .from('employees')
-      .select('id, name, status')
-      .eq('id_number', idNumber)
-      .maybeSingle()
+    let existing = null
+    if (idNumber) {
+      const { data } = await sb.from('employees').select('id, name, status').eq('id_number', idNumber).maybeSingle()
+      if (data) existing = data
+    }
+    if (!existing && empNum) {
+      const { data } = await sb.from('employees').select('id, name, status').eq('employee_number', empNum).maybeSingle()
+      if (data) existing = data
+    }
 
     if (DRY_RUN) {
       console.log(existing
@@ -210,6 +256,11 @@ async function main() {
 
   console.log('\n--- 結果 ---')
   console.table(stats)
+  if (unknownDepts.size > 0) {
+    console.log('\n⚠ 找不到對應的「部門」名稱（既不是 departments 也不是 stores 也不是 sections）：')
+    console.log([...unknownDepts].map(d => '  ' + d).join('\n'))
+    console.log('  → 這些員工會匯入但 department_id / store_id 是 NULL；先到 /org/departments 或 /org/locations 把它們建好再重跑')
+  }
   if (errors.length) {
     console.log('\n錯誤 / 跳過：')
     console.table(errors.slice(0, 20))

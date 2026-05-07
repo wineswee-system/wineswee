@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, History } from 'lucide-react'
+import { Plus, Pencil, Trash2, History, Layers, X } from 'lucide-react'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, getEmployees, getDeptManagerHistory } from '../../lib/db'
+import { getDepartmentSectionsAll, createDepartmentSection, updateDepartmentSection, deleteDepartmentSection } from '../../lib/db/org'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -13,8 +15,10 @@ const LEVELS = [
 ]
 
 export default function Departments() {
+  const { profile } = useAuth()
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
+  const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -22,16 +26,22 @@ export default function Departments() {
   const [form, setForm] = useState({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '' })
   const [historyDept, setHistoryDept] = useState(null)
   const [mgrHistory, setMgrHistory] = useState([])
+  // 課別管理
+  const [sectionsDept, setSectionsDept] = useState(null)  // 點哪個部門開課別管理
+  const [editingSection, setEditingSection] = useState(null)
+  const [secForm, setSecForm] = useState({ name: '', supervisor_id: '', sort_order: 0 })
 
   useEffect(() => {
-    Promise.all([getDepartments(), getEmployees()]).then(([d, e]) => {
+    const orgId = profile?.organization_id
+    Promise.all([getDepartments(), getEmployees(), getDepartmentSectionsAll(orgId)]).then(([d, e, s]) => {
       setDepartments(d.data || [])
       setEmployees(e.data || [])
+      setSections(s.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -72,6 +82,10 @@ export default function Departments() {
       level: form.level,
       parent_department_id: form.parent_department_id ? parseInt(form.parent_department_id) : null,
     }
+    // 新增時自動帶 organization_id（避免新部門被多租戶 filter 擋掉）
+    if (!editingDept && profile?.organization_id) {
+      payload.organization_id = profile.organization_id
+    }
     try {
       if (editingDept) {
         const { data, error } = await updateDepartment(editingDept.id, payload)
@@ -89,6 +103,68 @@ export default function Departments() {
       alert('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
+
+  // ─── 課別管理 ───
+  const openSectionsModal = (dept) => {
+    setSectionsDept(dept)
+    setEditingSection(null)
+    setSecForm({ name: '', supervisor_id: '', sort_order: (sections.filter(s => s.department_id === dept.id).length) * 10 })
+  }
+  const closeSectionsModal = () => {
+    setSectionsDept(null)
+    setEditingSection(null)
+    setSecForm({ name: '', supervisor_id: '', sort_order: 0 })
+  }
+  const setSec = (k, v) => setSecForm(f => ({ ...f, [k]: v }))
+
+  const editSection = (sec) => {
+    setEditingSection(sec)
+    setSecForm({
+      name: sec.name || '',
+      supervisor_id: sec.supervisor_id || '',
+      sort_order: sec.sort_order || 0,
+    })
+  }
+
+  const handleSubmitSection = async () => {
+    if (!secForm.name || !sectionsDept) return
+    const payload = {
+      name: secForm.name,
+      supervisor_id: secForm.supervisor_id ? parseInt(secForm.supervisor_id) : null,
+      sort_order: parseInt(secForm.sort_order) || 0,
+      department_id: sectionsDept.id,
+      organization_id: profile?.organization_id || 1,
+      is_active: true,
+    }
+    try {
+      if (editingSection) {
+        const { data, error } = await updateDepartmentSection(editingSection.id, payload)
+        if (error) throw error
+        if (data) setSections(prev => prev.map(s => s.id === data.id ? data : s))
+      } else {
+        const { data, error } = await createDepartmentSection(payload)
+        if (error) throw error
+        if (data) setSections(prev => [...prev, data])
+      }
+      setEditingSection(null)
+      setSecForm({ name: '', supervisor_id: '', sort_order: (sections.filter(s => s.department_id === sectionsDept.id).length + 1) * 10 })
+    } catch (err) {
+      alert('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  const handleDeleteSection = async (sec) => {
+    if (!confirm(`確定要刪除課別「${sec.name}」？\n（如果該課別下有門市，門市的 section_id 會變 NULL）`)) return
+    try {
+      const { error } = await deleteDepartmentSection(sec.id)
+      if (error) throw error
+      setSections(prev => prev.filter(s => s.id !== sec.id))
+    } catch (err) {
+      alert('刪除失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  const sectionsOf = (deptId) => sections.filter(s => s.department_id === deptId)
 
   const deptCount = (dept) => employees.filter(e => (e.department_id === dept.id || e.dept === dept.name) && e.status === '在職').length
   const totalMembers = departments.reduce((s, d) => s + deptCount(d), 0)
@@ -129,12 +205,13 @@ export default function Departments() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>部門名稱</th><th>層級</th><th>上級部門</th><th>部門主管</th><th>人數</th><th>描述</th><th>操作</th></tr>
+              <tr><th>部門名稱</th><th>層級</th><th>上級部門</th><th>部門主管</th><th>人數</th><th>課別</th><th>描述</th><th>操作</th></tr>
             </thead>
             <tbody>
               {departments.map(d => {
                 const manager = employees.find(e => e.id === d.manager_id)
                 const parent = departments.find(p => p.id === d.parent_department_id)
+                const secs = sectionsOf(d.id)
                 return (
                 <tr key={d.id}>
                   <td style={{ fontWeight: 600 }}>{d.name}</td>
@@ -142,6 +219,12 @@ export default function Departments() {
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{parent?.name || '-'}</td>
                   <td>{manager?.name || d.head || '-'}</td>
                   <td>{deptCount(d)}</td>
+                  <td>
+                    <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => openSectionsModal(d)}>
+                      <Layers size={11} /> {secs.length > 0 ? `${secs.length} 個課別` : '管理'}
+                    </button>
+                  </td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{d.description}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -191,6 +274,66 @@ export default function Departments() {
           <Field label="部門描述">
             <textarea className="form-input" style={{ width: '100%', height: 80, resize: 'vertical' }} placeholder="部門職責說明" value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
+        </Modal>
+      )}
+
+      {sectionsDept && (
+        <Modal title={`${sectionsDept.name} — 課別管理`} onClose={closeSectionsModal} onSubmit={closeSectionsModal} submitLabel="關閉" maxWidth={680}>
+          {/* 現有課別清單 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>現有課別（{sectionsOf(sectionsDept.id).length}）</div>
+            {sectionsOf(sectionsDept.id).length === 0 ? (
+              <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, background: 'var(--bg-secondary)', borderRadius: 6 }}>尚無課別</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sectionsOf(sectionsDept.id).map(sec => {
+                  const supe = employees.find(e => e.id === sec.supervisor_id)
+                  return (
+                    <div key={sec.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 12px', background: 'var(--bg-secondary)',
+                      borderRadius: 6, border: '1px solid var(--border-subtle)',
+                    }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{sec.name}</span>
+                      {supe && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>督導：{supe.name}</span>}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>排序 {sec.sort_order}</span>
+                      <button className="btn btn-sm btn-secondary" style={{ padding: '3px 8px' }} onClick={() => editSection(sec)}><Pencil size={11} /></button>
+                      <button className="btn btn-sm btn-secondary" style={{ padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDeleteSection(sec)}><Trash2 size={11} /></button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 新增 / 編輯表單 */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>
+              {editingSection ? `編輯：${editingSection.name}` : '新增課別'}
+              {editingSection && (
+                <button className="btn btn-sm btn-secondary" style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px' }} onClick={() => { setEditingSection(null); setSecForm({ name: '', supervisor_id: '', sort_order: 0 }) }}>
+                  <X size={10} /> 取消編輯
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 10 }}>
+              <Field label="課別名稱 *">
+                <input className="form-input" type="text" placeholder="例：營運四課" value={secForm.name} onChange={e => setSec('name', e.target.value)} style={{ width: '100%' }} />
+              </Field>
+              <Field label="督導">
+                <select className="form-input" value={secForm.supervisor_id} onChange={e => setSec('supervisor_id', e.target.value)} style={{ width: '100%' }}>
+                  <option value="">無</option>
+                  {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
+                </select>
+              </Field>
+              <Field label="排序">
+                <input className="form-input" type="number" value={secForm.sort_order} onChange={e => setSec('sort_order', e.target.value)} style={{ width: '100%' }} />
+              </Field>
+            </div>
+            <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={handleSubmitSection}>
+              <Plus size={12} /> {editingSection ? '儲存變更' : '新增課別'}
+            </button>
+          </div>
         </Modal>
       )}
 

@@ -77,6 +77,22 @@ export const getDepartmentSections = (orgId) => {
   return q
 }
 
+export const getDepartmentSectionsAll = (orgId) => {
+  // 含 inactive，給管理頁用
+  let q = supabase.from('department_sections').select('*').order('department_id').order('sort_order')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const createDepartmentSection = (data) =>
+  supabase.from('department_sections').insert(data).select().single()
+
+export const updateDepartmentSection = (id, data) =>
+  supabase.from('department_sections').update(data).eq('id', id).select().single()
+
+export const deleteDepartmentSection = (id) =>
+  supabase.from('department_sections').delete().eq('id', id)
+
 export const getDeptManagerHistory = (deptId) =>
   supabase.from('department_manager_history').select('*').eq('department_id', deptId).order('effective_date', { ascending: false })
 

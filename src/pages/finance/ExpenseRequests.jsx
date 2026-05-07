@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
-import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -317,47 +317,46 @@ export default function ExpenseRequests() {
     setLoadingChain(true)
     setDetailChainSteps([])
 
-    // 兩階段：申請人 → 直屬主管（核可） → 財務核章（核銷）
-    const empRow = employees.find(e => e.name === req.employee)
-    let steps = []
-    try {
-      // 先試 workflow_instance（如果有 multi-step 自訂簽核鏈）
-      steps = await buildWorkflowChainSteps({
-        templateName: '費用申請簽核',
-        applicantName: req.employee,
-        applicantId: empRow?.id,
-        applicantCreatedAt: req.created_at,
-        recordStatus: req.status,
-        approverName: req.approved_by,
-        approvedAt: req.approved_at,
-        rejectReason: req.reject_reason,
-        fallbackTail: ['財務核章'],
-      })
-    } catch (e) {
-      console.error('build chain steps failed:', e)
+    const isPending  = req.status === '待核銷'
+    const isSettled  = req.status === '已核銷'
+
+    // 用 buildChainBasedSteps 讀 row.approval_chain_id 動態建 chain steps
+    // expense_requests 沒有 current_step 欄位（MVP 階段），所以用 status 推算 cur：
+    //   申請中  → cur=0（第一關 current）
+    //   已核准/待核銷/已核銷 → cur=999（buildChainBasedSteps 看 status 直接全部標 completed）
+    //   已駁回/已退回 → cur=0（第一關 rejected）
+    // 為了讓「待核銷」也能讓 chain 全部 completed，把 status 翻成 '已核准' 餵進去
+    const fakeRow = {
+      approval_chain_id: req.approval_chain_id || null,
+      current_step: ['已核准', '待核銷', '已核銷'].includes(req.status) ? 999 : 0,
+      status: req.status === '待核銷' ? '已核准' : req.status,
+      approved_at: req.approved_at,
+      reject_reason: req.reject_reason,
+      approver: req.approved_by ? { name: req.approved_by } : null,
     }
 
-    // 修正 fallback 模式下的「財務核章」status — 它要反映實際核銷狀態
-    // buildWorkflowChainSteps fallback 把 tail 都標 archival+pending，但 ExpenseRequests 的「財務核章」是真實階段
-    const isApproved = ['已核准', '待核銷', '已核銷'].includes(req.status)
-    const isPendingSettle = req.status === '待核銷'
-    const isSettled = req.status === '已核銷'
-    const fin = steps.find(s => s.label === '財務核章')
-    if (fin) {
-      fin.archival = false  // 真實階段，非僅形式
-      if (isSettled) {
-        fin.status = 'completed'
-        fin.name = req.settled_by || ''
-        fin.completedAt = req.settled_at
-      } else if (isPendingSettle) {
-        fin.status = 'current'
-      } else if (isApproved) {
-        fin.status = 'pending'
-      }
+    let baseSteps = []
+    try {
+      baseSteps = await buildChainBasedSteps({
+        row: fakeRow,
+        applicantName: req.employee,
+        applicantCreatedAt: req.created_at,
+      })
+    } catch (e) {
+      console.error('buildChainBasedSteps failed:', e)
+    }
+
+    // 補加「財務核章」step — 費用申請特有的第二階段，不在 approval_chain_steps 內，看 settled_by/at
+    const finStep = {
+      label: '財務核章',
+      name: isSettled ? (req.settled_by || '') : '',
+      status: isSettled ? 'completed' : (isPending ? 'current' : 'pending'),
+      completedAt: isSettled ? req.settled_at : undefined,
+      archival: false,  // 真實階段，不是純存檔
     }
 
     if (detailRowIdRef.current !== req.id) return
-    setDetailChainSteps(steps)
+    setDetailChainSteps([...baseSteps, finStep])
     setLoadingChain(false)
   }
 

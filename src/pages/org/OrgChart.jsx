@@ -123,11 +123,13 @@ export default function OrgChart() {
   const sectionedDepts = departments.filter(d => deptSections(d).length > 0)
 
   // 部門總人數：含主管 + 副主管 + 部門員工 + 部門 / 課別下所有門市員工（去重）
+  // 含「掛名主管」— 即使該主管的主部門不是這個部門，只要 dept.manager_id 指向他就算
   const headcountOf = (dept) => {
     const ids = new Set()
     employees.forEach(e => {
       if (e.department_id === dept.id || e.dept === dept.name) ids.add(e.id)
     })
+    if (dept.manager_id) ids.add(dept.manager_id)
     deptStores(dept).forEach(s => storeEmployees(s).forEach(e => ids.add(e.id)))
     deptSections(dept).forEach(sec => sectionStores(sec).forEach(s =>
       storeEmployees(s).forEach(e => ids.add(e.id))

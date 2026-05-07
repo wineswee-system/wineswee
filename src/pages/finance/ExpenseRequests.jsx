@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Eye, Send } from 'lucide-react'
+import { Plus, X, Check, Upload, FileText, Image, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
@@ -491,7 +491,7 @@ export default function ExpenseRequests() {
             {filtered.map(r => {
               const sc = STATUS_COLORS[r.status] || {}
               return (
-                <tr key={r.id}>
+                <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
                   <td style={{ fontWeight: 600 }}>{r.employee}</td>
                   <td><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.account_code}</span> {r.account_name}</td>
                   <td style={{ fontWeight: 500 }}>{r.title}</td>
@@ -506,12 +506,8 @@ export default function ExpenseRequests() {
                   </td>
                   <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{r.status}</span></td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
-                        onClick={() => openDetail(r)}>
-                        <Eye size={12} />
-                      </button>
                       {r.status === '申請中' && (
                         <>
                           <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)}>

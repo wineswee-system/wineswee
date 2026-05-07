@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle, XCircle, Eye, Printer, Building2 } from 'lucide-react'
+import { CheckCircle, XCircle, Printer, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -246,17 +246,14 @@ export default function FormSubmissions() {
                 const canApprove = isAdmin && s.status === '申請中'
                 const canCancel = s.status === '申請中' && (s.applicant_id === profile?.id || isAdmin)
                 return (
-                  <tr key={s.id}>
+                  <tr key={s.id} onClick={() => openDetail(s)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
                     <td><b>{s.template?.name}</b></td>
                     <td>{s.applicant?.name}{s.applicant?.name_en ? ` ${s.applicant.name_en}` : ''}</td>
                     <td style={{ fontSize: 12 }}>{s.created_at?.slice(0, 10)}</td>
                     <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{s.status}</span></td>
                     <td style={{ fontSize: 12 }}>{s.approver?.name || '—'}{s.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)' }}>{s.reject_reason}</div>}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openDetail(s)}>
-                          <Eye size={11} /> 查看
-                        </button>
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-purple)' }} onClick={() => handlePrint(s)} title="列印簽呈 PDF">
                           <Printer size={11} /> 列印
                         </button>

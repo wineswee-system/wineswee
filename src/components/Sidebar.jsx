@@ -213,8 +213,8 @@ const groupNav = {
         { icon: Building2, label: '組織', path: '/org/organizations' },
         { icon: Network, label: '組織圖', path: '/org/chart' },
         { icon: Building, label: '公司', path: '/org/companies' },
-        { icon: MapPin, label: '門市', path: '/org/locations' },
         { icon: ClipboardList, label: '部門', path: '/org/departments' },
+        { icon: MapPin, label: '門市', path: '/org/locations' },
         { icon: UserCircle, label: '員工', path: '/org/employees' },
       ]
     },

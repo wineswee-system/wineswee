@@ -4,11 +4,14 @@ import { createPortal } from 'react-dom'
 import { Plus, X, CheckCircle, Package, Truck, ClipboardList } from 'lucide-react'
 import { getPickLists, createPickList, updatePickList, getPackLists, createPackList, updatePackList, getSalesOrders, getWarehouses } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const PICK_STATUSES = ['待揀貨', '揀貨中', '已完成']
 const PACK_STATUSES = ['待包裝', '包裝中', '已完成']
 
 export default function PickPackShip() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [pickLists, setPickLists] = useState([])
   const [packLists, setPackLists] = useState([])
   const [salesOrders, setSalesOrders] = useState([])
@@ -22,7 +25,7 @@ export default function PickPackShip() {
   const load = async () => {
     setLoading(true)
     const [pickRes, packRes, soRes, whRes] = await Promise.all([
-      getPickLists(), getPackLists(), getSalesOrders(), getWarehouses(),
+      getPickLists(orgId), getPackLists(orgId), getSalesOrders(orgId), getWarehouses(orgId),
     ])
     setPickLists(pickRes.data || [])
     setPackLists(packRes.data || [])
@@ -31,7 +34,7 @@ export default function PickPackShip() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleCreatePick = async () => {
     if (!pickForm.sales_order_id) return

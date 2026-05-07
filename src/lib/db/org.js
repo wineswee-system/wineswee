@@ -12,7 +12,7 @@ export const updateOrganization = (id, data) =>
 export const deleteOrganization = (id) =>
   supabase.from('organizations').delete().eq('id', id)
 
-// Legacy tenant aliases
+// Legacy tenant aliases — callers must check isSuperAdmin before invoking; relies on RLS for DB enforcement
 export const getTenants = () =>
   supabase.from('organizations').select('*').order('id')
 
@@ -108,12 +108,11 @@ export const getPermissions = () =>
 export const getRolePermissions = (roleId) =>
   supabase.from('role_permissions').select('*, permissions(code, name, module)').eq('role_id', roleId)
 
-export const setRolePermissions = async (roleId, permissionIds) => {
-  await supabase.from('role_permissions').delete().eq('role_id', roleId)
-  if (!permissionIds?.length) return
-  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
-  return supabase.from('role_permissions').insert(rows)
-}
+export const setRolePermissions = (roleId, permissionIds) =>
+  supabase.rpc('replace_role_permissions', {
+    p_role_id: roleId,
+    p_permission_ids: permissionIds?.length ? permissionIds : [],
+  })
 
 export const getEmployeePermissions = async (employeeId) => {
   const { data } = await supabase

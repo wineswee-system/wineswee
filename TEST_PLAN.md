@@ -1019,3 +1019,240 @@ npm install -D @lhci/cli
 | jsPDF in tests | No real PDF rendering in JSDOM | Mock jsPDF, verify function calls |
 | Lazy loading in tests | Suspense boundaries complicate rendering | Use `waitFor` / `findBy` queries |
 | Mock data drift from real schema | Tests pass but prod fails | Generate fixtures from Supabase types |
+
+---
+
+## Appendix A — Focused Test Plan: Projects/Workflow & HRM
+
+> Added: 2026-05-07
+> Derived from codebase analysis of `src/modules/ProcessModule` and `src/modules/HRModule`.
+> Complements the broad plan above with targeted IDs for these two domains.
+
+### Existing Coverage — Do Not Duplicate
+
+| File | IDs | What's covered |
+|------|-----|----------------|
+| [src/lib/__tests__/workflowExecutor.test.js](src/lib/__tests__/workflowExecutor.test.js) | WF-01–03 | Template resolution, condition operators, trigger mapping |
+| [src/__tests__/integration/hr-payroll.test.js](src/__tests__/integration/hr-payroll.test.js) | INT-16–20 | Attendance→OT, leave→balance, OT→salary, deductions, JE balance |
+| [src/lib/__tests__/approval.test.js](src/lib/__tests__/approval.test.js) | — | Approval chain evaluation |
+
+### Infrastructure Notes
+
+- **MSW**: mock all Supabase calls in unit and integration layers — never hit live DB
+- **Fixtures**: shared factory functions in `src/__tests__/fixtures/` (see A7 below)
+- **Date pinning**: leave/payroll tests must mock `new Date()` or accept a reference date param — Taiwan public holidays change yearly
+- **RBAC personas**: E2E needs at least three — `store_staff`, `manager`, `super_admin`
+- **Current gap**: `src/lib/db/tasks.js` and `src/lib/db/projects.js` have zero unit tests
+
+### Implementation Priority
+
+```
+Phase 1 — critical path / high business risk
+  PAY-U01–07, LEAVE-U01–05, HR-INT01–05, WF-INT01–04
+
+Phase 2 — workflow correctness
+  WFE-U01–07, PROJ-U01–08, TASK-U01–07, HR-INT06–10
+
+Phase 3 — UI / E2E golden paths
+  HR-E2E01–06, WF-E2E01–05
+
+Phase 4 — edge cases / less-used features
+  HR-E2E07–12, WF-E2E06–08, HRD-U01–06
+```
+
+---
+
+### A1. Projects / Workflow — Unit Tests
+
+**Target**: [src/lib/db/projects.js](src/lib/db/projects.js) · **Output**: `src/lib/__tests__/db-projects.test.js`
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| PROJ-U01 | [ ] | `createProject` with valid data | Returns `{ id, name, status }`, no error |
+| PROJ-U02 | [ ] | `createProject` missing required field | Throws / rejects with validation error |
+| PROJ-U03 | [ ] | `getProjectSections` for project without sections | Returns `[]` |
+| PROJ-U04 | [ ] | `createProjectSection` → `getProjectSections` | Section appears with correct `sort_order` |
+| PROJ-U05 | [ ] | `deleteProjectSection` cascade | Tasks in section reassigned or deleted |
+| PROJ-U06 | [ ] | `upsertTaskCustomFieldValue` idempotency | Two calls with same key produce one row |
+| PROJ-U07 | [ ] | `logTaskActivity` → `getTaskActivity` | Entry has `actor_id`, `action`, `meta` |
+| PROJ-U08 | [ ] | `getTasksExpanded` with `assignee_id` filter | Only returns tasks for that employee |
+
+**Target**: [src/lib/db/workflows.js](src/lib/db/workflows.js) · **Output**: `src/lib/__tests__/db-workflows.test.js`
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| WF-U01 | [ ] | `createWorkflow` with steps | Returns definition with nested steps |
+| WF-U02 | [ ] | `deleteWorkflow` with active instances | Rejects or cascade-checks |
+| WF-U03 | [ ] | `createWorkflowInstance` from template | Instance inherits template steps as `workflow_steps` rows |
+| WF-U04 | [ ] | `updateWorkflowInstance` status transitions | `draft→active→completed` valid; `completed→draft` invalid |
+| WF-U05 | [ ] | `getWorkflowInstances` with `status` filter | Only returns matching status |
+| WF-U06 | [ ] | `createWorkflowCategory` duplicate name | Rejects or returns existing |
+
+**Target**: [src/lib/db/tasks.js](src/lib/db/tasks.js) · **Output**: `src/lib/__tests__/db-tasks.test.js`
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| TASK-U01 | [ ] | `createTask` with circular `depends_on` | Rejects with cycle error |
+| TASK-U02 | [ ] | `createTaskDependency` → `getTaskDependenciesByInstance` | Dependency appears in result |
+| TASK-U03 | [ ] | `deleteTask` with dependents | Dependency row removed from dependents |
+| TASK-U04 | [ ] | `createTaskComment` → `getTaskComments` | Comment has `author_id`, `body`, `created_at` |
+| TASK-U05 | [ ] | `addTaskWatcher` duplicate | Idempotent — no duplicate row |
+| TASK-U06 | [ ] | `createTaskConfirmation` → `updateTaskConfirmation` | Status changes `pending → signed` |
+| TASK-U07 | [ ] | `createTasksBatch` with 100 rows | All inserted, no partial failure |
+
+**Target**: [src/lib/workflowExecutor.js](src/lib/workflowExecutor.js) · **Output**: `src/lib/__tests__/workflowExecutor-actions.test.js` *(extends existing WF-01–03)*
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| WFE-U01 | [ ] | `send_email` action on trigger event | Mock email handler called with resolved template |
+| WFE-U02 | [ ] | `create_task` action | Task row inserted with correct `workflow_instance_id` |
+| WFE-U03 | [ ] | `update_field` action | Target field updated, others unchanged |
+| WFE-U04 | [ ] | Condition `contains` with array field | Matches when array includes value |
+| WFE-U05 | [ ] | Condition `greater_than` with ISO date | Correct date comparison |
+| WFE-U06 | [ ] | Multiple actions on single trigger | All execute, none silently skipped |
+| WFE-U07 | [ ] | Unknown action type | Logs warning, does not throw |
+
+---
+
+### A2. Projects / Workflow — Integration Tests
+
+**Output**: `src/__tests__/integration/workflow-process.test.js`
+
+| ID | Status | Flow |
+|----|--------|------|
+| WF-INT01 | [ ] | `createWorkflow` → `createWorkflowInstance` → instance has correct step count |
+| WF-INT02 | [ ] | `updateWorkflowStep` × N all done → `getWorkflowInstances` shows `completed` |
+| WF-INT03 | [ ] | Task B blocked until Task A `status = done` (dependency gate) |
+| WF-INT04 | [ ] | Approval step creates `approval_request` → approval unblocks next step |
+| WF-INT05 | [ ] | `createProject` → `createTask(project_id)` → `getTasksExpanded` returns project name |
+| WF-INT06 | [ ] | Publish EventBus event → executor creates task via `create_task` action |
+| WF-INT07 | [ ] | `linkTaskChecklist` → `getTaskChecklistItems` → items appear on task |
+
+---
+
+### A3. Projects / Workflow — E2E Tests
+
+**Output**: `e2e/process/projects-workflows.spec.js`
+
+| ID | Status | Scenario | Key steps |
+|----|--------|----------|-----------|
+| WF-E2E01 | [ ] | Create project end-to-end | `/process/projects` → New → add section → add task → assign member → verify Kanban |
+| WF-E2E02 | [ ] | Kanban drag-drop persists | Drag task "Todo"→"Done" → reload → status retained |
+| WF-E2E03 | [ ] | Deploy SOP from template | `/process/sop` → select template → Deploy → pick store → verify instance at `/process/workflows` |
+| WF-E2E04 | [ ] | Complete workflow instance | Open instance → mark each step done → status = completed |
+| WF-E2E05 | [ ] | Task dependency blocks progress | Mark dependent task — verify blocked indicator |
+| WF-E2E06 | [ ] | Calendar view shows tasks | `/process/tasks` → Calendar tab → task on correct date |
+| WF-E2E07 | [ ] | Approval request flow | Workflow approval step → approver approves → next step unlocks |
+| WF-E2E08 | [ ] | Custom fields on project | Create select-type custom field → fill on task → value persists on reload |
+
+---
+
+### A4. HRM — Unit Tests
+
+**Target**: [src/lib/hrWorkflow.js](src/lib/hrWorkflow.js) · **Output**: `src/lib/__tests__/hrWorkflow.test.js`
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| HR-U01 | [ ] | `createOnboardingPlan` new hire | Returns plan with ≥1 step, `status = pending` |
+| HR-U02 | [ ] | `updateOnboardingStep` all steps done | Plan `status` becomes `completed` |
+| HR-U03 | [ ] | `calculateLeaveDays` weekdays only | Excludes weekends and public holidays |
+| HR-U04 | [ ] | `calculateLeaveDays` over entitlement | Returns `{ valid: false, reason }` |
+| HR-U05 | [ ] | `calculateProbationStatus` past end date | Returns `{ expired: true }` |
+| HR-U06 | [ ] | `validateSalaryChange` >50% increase | Returns warning flag |
+| HR-U07 | [ ] | `getTotalCompensation` with benefits | Sum includes all benefit values |
+| HR-U08 | [ ] | `createOffboardingPlan` | Returns plan with resignation, IT, and finance steps |
+
+**Target**: [src/lib/payroll.js](src/lib/payroll.js) · **Output**: `src/lib/__tests__/payroll.test.js` *(supplements P-01–11 above)*
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| PAY-U01 | [ ] | Labor insurance deduction | Matches NHI table bracket for given salary |
+| PAY-U02 | [ ] | Health insurance employee share | Correct % of insured salary |
+| PAY-U03 | [ ] | Pension contribution (6%) | Employer + employee split correct |
+| PAY-U04 | [ ] | Withholding tax progressive bracket | Correct rate at each threshold |
+| PAY-U05 | [ ] | Net pay = gross − all deductions | No double-deduction |
+| PAY-U06 | [ ] | Mid-month hire prorating | Proportional pay for partial month |
+| PAY-U07 | [ ] | OT hours × 1.34 / 1.67 rate | Correct multiplier per Taiwan Labor Standards Act |
+
+**Target**: [src/lib/leavePolicy.js](src/lib/leavePolicy.js) · **Output**: `src/lib/__tests__/leavePolicy.test.js` *(supplements LP-01–13 above)*
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| LEAVE-U01 | [ ] | Annual leave entitlement by seniority | 0–1yr=0d, 1yr=7d, 3yr=10d, 5yr=14d |
+| LEAVE-U02 | [ ] | Balance decremented after approved request | Correct days deducted |
+| LEAVE-U03 | [ ] | Sick leave cap enforcement | Rejects request exceeding statutory max |
+| LEAVE-U04 | [ ] | Maternity leave duration | 8 weeks pre + post birth |
+| LEAVE-U05 | [ ] | Carry-over calculation | Unused days ≤ statutory cap carried forward |
+
+**Target**: [src/lib/db/hr.js](src/lib/db/hr.js) · **Output**: `src/lib/__tests__/db-hr.test.js`
+
+| ID | Status | Test description | Assert |
+|----|--------|-----------------|--------|
+| HRD-U01 | [ ] | `createRecruitmentJob` → `getRecruitmentJobs` | Job appears with `status = open` |
+| HRD-U02 | [ ] | `updateBusinessTripStatus` reject with reason | `status = rejected`, `reject_reason` saved |
+| HRD-U03 | [ ] | `upsertAttritionSnapshot` idempotency | Second call for same date updates, no duplicate row |
+| HRD-U04 | [ ] | `submitEngagementResponse` duplicate prevention | Second submission from same employee rejects |
+| HRD-U05 | [ ] | `createProbationRecord` → `updateProbationRecord` | Status change persists |
+| HRD-U06 | [ ] | `deleteBenefitPolicy` with active enrollments | Rejects or cascade-warns |
+
+---
+
+### A5. HRM — Integration Tests
+
+**Output**: `src/__tests__/integration/hr-lifecycle.test.js`
+
+| ID | Status | Flow |
+|----|--------|------|
+| HR-INT01 | [ ] | Hire employee → `createOnboardingPlan` → complete all steps → `hr.employee.onboarded` event fires |
+| HR-INT02 | [ ] | Submit leave → `approval_request` created → manager approves → balance deducted → calendar updated |
+| HR-INT03 | [ ] | Log OT hours → approve → next payroll run includes OT line item |
+| HR-INT04 | [ ] | Submit punch correction → approve → attendance record updated |
+| HR-INT05 | [ ] | Submit resignation → `hr.offboarding.started` event → offboarding checklist created |
+| HR-INT06 | [ ] | `calculateProbationStatus` expiring → event triggers notification |
+| HR-INT07 | [ ] | Approve transfer → employee `department_id` changes → org chart reflects new position |
+| HR-INT08 | [ ] | Approve expense → finance handler creates journal entry debit |
+| HR-INT09 | [ ] | Run payroll → `hr.salary.calculated` → `hr.payslip.sent` event → employee notified |
+| HR-INT10 | [ ] | Low engagement survey score → `hr.attrition.high_risk` event → attrition snapshot updated |
+
+---
+
+### A6. HRM — E2E Tests
+
+**Output**: `e2e/hr/hr-core.spec.js`
+
+| ID | Status | Scenario | Key steps |
+|----|--------|----------|-----------|
+| HR-E2E01 | [ ] | Attendance clock in/out | `/hr/attendance` → Clock In → verify timestamp → Clock Out → verify duration |
+| HR-E2E02 | [ ] | Submit leave request | `/hr/leave` → New Request → select dates → submit → status = pending |
+| HR-E2E03 | [ ] | Manager approves leave | Login as manager → approve → verify employee balance decremented |
+| HR-E2E04 | [ ] | Schedule roster creation | `/hr/schedule` → assign shifts → verify no overlap warning |
+| HR-E2E05 | [ ] | Run payroll | `/hr/payroll` → select month → Run → verify summary totals per employee |
+| HR-E2E06 | [ ] | Employee self-service | `/hr/self-service` → view payslip → view leave balance → update emergency contact |
+| HR-E2E07 | [ ] | Recruitment pipeline | `/hr/recruitment` → post job → add candidate → move through stages |
+| HR-E2E08 | [ ] | Performance review cycle | `/hr/performance` → create review → fill KPIs → submit → manager sees it |
+| HR-E2E09 | [ ] | Training enrollment | `/hr/training` → enroll employee → complete course → verify certification |
+| HR-E2E10 | [ ] | Resignation form workflow | `/hr/forms/resignation` → fill → submit → HR sees pending offboarding |
+| HR-E2E11 | [ ] | Probation tracker alert | `/hr/probation` → employee near end date shows warning badge |
+| HR-E2E12 | [ ] | Salary structure assignment | `/hr/salary-structures` → create structure → assign to employee → salary page reflects it |
+
+---
+
+### A7. Suggested Fixture Structure
+
+```
+src/__tests__/fixtures/
+  employee.js       — createEmployee(overrides), createManager(overrides)
+  org.js            — createOrg(), createDepartment()
+  workflow.js       — createWorkflowTemplate(), createWorkflowInstance()
+  project.js        — createProject(), createTask(projectId)
+  leave.js          — createLeaveRequest(employeeId, dates)
+  payroll.js        — createPayrollRun(month, employeeIds)
+
+src/__tests__/mocks/
+  supabase-handlers.js   — Supabase REST + RPC intercepts
+  handlers.js            — aggregated handler list for setupServer()
+```
+
+### A8. Status Tracking
+
+When implementing a test from this appendix, change `[ ]` to `[x]` in the Status column of the relevant table.

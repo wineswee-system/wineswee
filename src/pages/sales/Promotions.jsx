@@ -3,11 +3,14 @@ import { Plus, Search } from 'lucide-react'
 import { getPromotions, createPromotion } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const TYPE_OPTIONS = ['滿額折扣', '滿額贈品', '階梯折扣', 'VIP專屬價', '組合優惠']
 const STATUS_BADGE = { '進行中': 'badge-success', '即將開始': 'badge-info', '已結束': 'badge-danger' }
 
 export default function Promotions() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -16,8 +19,8 @@ export default function Promotions() {
   const [form, setForm] = useState({ name: '', type: '滿額折扣', start_date: '', end_date: '', discount_value: 0, discount_type: '百分比', applicable_to: '', max_uses: 0, status: '即將開始' })
 
   useEffect(() => {
-    getPromotions().then(({ data }) => { setItems(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+    getPromotions(orgId).then(({ data }) => { setItems(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

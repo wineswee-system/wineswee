@@ -3,6 +3,7 @@ import { Plus, FileText, AlertTriangle } from 'lucide-react'
 import { getAccountsReceivable, createAccountReceivable } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const emptyForm = {
   invoice_number: '', customer: '', order_ref: '',
@@ -10,6 +11,8 @@ const emptyForm = {
 }
 
 export default function AccountsReceivable() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -17,7 +20,7 @@ export default function AccountsReceivable() {
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => {
-    getAccountsReceivable().then(({ data }) => {
+    getAccountsReceivable(orgId).then(({ data }) => {
       setRecords(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -25,7 +28,7 @@ export default function AccountsReceivable() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

@@ -80,8 +80,7 @@ export function TenantProvider({ children }) {
     if (tenantData.organization_id) {
       const authorizedOrgId = await getAuthorizedOrgId()
       if (authorizedOrgId !== null && tenantData.organization_id !== authorizedOrgId) {
-        console.error('Tenant switch denied: org mismatch')
-        return
+        return { error: 'Tenant switch denied: org mismatch' }
       }
     }
     setTenant(tenantData)
@@ -93,6 +92,7 @@ export function TenantProvider({ children }) {
       }
     }
     localStorage.setItem('sme_tenant', JSON.stringify(tenantData))
+    return { error: null }
   }
 
   const clearTenant = () => {
@@ -100,6 +100,17 @@ export function TenantProvider({ children }) {
     setOrganization(null)
     localStorage.removeItem('sme_tenant')
   }
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setTenant(null)
+        setOrganization(null)
+        localStorage.removeItem('sme_tenant')
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <TenantContext.Provider value={{ tenant, organization, loading, switchTenant, clearTenant }}>

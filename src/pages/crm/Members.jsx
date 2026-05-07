@@ -6,6 +6,7 @@ import { getMembers, createMember, updateMember, createPointTransaction, getAllP
 import { supabase } from '../../lib/supabase'
 import { earnPoints, redeemPoints, refundPoints, generateReferralCode } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 import MemberListTab from './components/MemberListTab'
 import TierRulesTab from './components/TierRulesTab'
 import ReferralTab from './components/ReferralTab'
@@ -23,6 +24,8 @@ const TABS = [
 ]
 
 export default function Members() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -67,7 +70,7 @@ export default function Members() {
 
   useEffect(() => {
     Promise.all([
-      getMembers(),
+      getMembers(orgId),
       getAllPointTransactions(),
       getReferralCodes(),
       getAllReferralRedemptions(),
@@ -85,7 +88,7 @@ export default function Members() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -105,7 +108,7 @@ export default function Members() {
           const result = await handleApplyReferral(data.id, referral_code.trim())
           if (result.success) {
             // Refresh member data to reflect bonus points
-            const { data: updated } = await getMembers()
+            const { data: updated } = await getMembers(orgId)
             if (updated) setMembers(updated)
           } else {
             alert(`會員已建立，但推薦碼兌換失敗：${result.message}`)

@@ -90,8 +90,11 @@ export const getOutboundOrders = (orgId) => {
 export const getOutboundItems = (orderId) =>
   supabase.from('outbound_items').select('*').eq('outbound_order_id', orderId)
 
-export const getPickLists = () =>
-  supabase.from('pick_lists').select('*').order('created_at', { ascending: false })
+export const getPickLists = (orgId) => {
+  let q = supabase.from('pick_lists').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPickList = (data) =>
   supabase.from('pick_lists').insert(data).select().single()
@@ -99,8 +102,11 @@ export const createPickList = (data) =>
 export const updatePickList = (id, data) =>
   supabase.from('pick_lists').update(data).eq('id', id).select().single()
 
-export const getPackLists = () =>
-  supabase.from('pack_lists').select('*, pick_lists(pick_number)').order('created_at', { ascending: false })
+export const getPackLists = (orgId) => {
+  let q = supabase.from('pack_lists').select('*, pick_lists(pick_number)').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPackList = (data) =>
   supabase.from('pack_lists').insert(data).select().single()

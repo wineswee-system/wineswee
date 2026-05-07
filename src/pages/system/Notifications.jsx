@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
 import { CheckCheck } from 'lucide-react'
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const typeIcon = { leave: '📅', task: '✅', system: '⚙️', performance: '⭐', hr: '👥' }
 
 export default function Notifications() {
+  const { user } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    getNotifications().then(({ data }) => {
+    if (!user?.id) return
+    getNotifications(user.id).then(({ data }) => {
       setNotifications(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -19,7 +22,7 @@ export default function Notifications() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [user?.id])
 
   const handleMarkRead = async (id) => {
     try {
@@ -34,7 +37,7 @@ export default function Notifications() {
 
   const handleMarkAllRead = async () => {
     try {
-      const { error } = await markAllNotificationsRead()
+      const { error } = await markAllNotificationsRead(user?.id)
       if (error) throw error
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     } catch (err) {
@@ -98,7 +101,7 @@ export default function Notifications() {
                 border: n.read ? '1px solid transparent' : '1px solid var(--border-subtle)',
               }}
             >
-              <div style={{ fontSize: 18, flexShrink: 0 }}>{typeIcon[n.type] || '📣'}</div>
+              <div style={{ fontSize: 18, flexShrink: 0 }} aria-label={n.type || '通知'}>{typeIcon[n.type] || '📣'}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600 }}>{n.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{formatTime(n.created_at)}</div>

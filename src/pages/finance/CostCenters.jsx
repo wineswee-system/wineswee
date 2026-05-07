@@ -5,12 +5,15 @@ import { Plus, Trash2, Edit3, X, BarChart3, PieChart } from 'lucide-react'
 import { getCostCenters, createCostCenter, updateCostCenter, deleteCostCenter, getAllJournalLines, getJournalEntries, getAccounts } from '../../lib/db'
 import { generateTrialBalanceByCostCenter } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const emptyForm = { code: '', name: '', department: '', manager: '', is_active: true }
 
 export default function CostCenters() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [centers, setCenters] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -26,13 +29,13 @@ export default function CostCenters() {
 
   const load = async () => {
     setLoading(true)
-    const { data, error } = await getCostCenters()
+    const { data, error } = await getCostCenters(orgId)
     if (error) setError(error.message)
     else setCenters(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleSubmit = async () => {
     if (!form.code || !form.name) return
@@ -72,9 +75,9 @@ export default function CostCenters() {
     try {
       // Fetch posted journal entries and their lines with cost_center
       const [entriesRes, linesRes, accountsRes] = await Promise.all([
-        getJournalEntries(),
-        getAllJournalLines(),
-        getAccounts(),
+        getJournalEntries(orgId),
+        getAllJournalLines(orgId),
+        getAccounts(orgId),
       ])
 
       const postedEntryIds = new Set(

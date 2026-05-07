@@ -5,6 +5,7 @@ import {
   getInvoiceLines, createInvoiceLine, updateInvoiceLine, deleteInvoiceLine,
   batchCreateInvoiceLines, getSKUs
 } from '../../lib/db'
+import { useTenant } from '../../contexts/TenantContext'
 import { calculateInvoiceTax, validateTaxId, generateInvoiceNumber, generateMIGXml, generateTurnkeyBatch, validateInvoiceNumber } from '../../lib/einvoice'
 import { getCurrencies, getDbExchangeRate, formatCurrency as fmtCurrency, DEFAULT_RATES } from '../../lib/currency'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -46,6 +47,8 @@ function dbLineToLocal(line) {
 }
 
 export default function Invoices() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -68,7 +71,7 @@ export default function Invoices() {
 
   useEffect(() => {
     Promise.all([
-      getInvoices(),
+      getInvoices(orgId),
       getSKUs(),
       getCurrencies(),
     ]).then(([invRes, skuRes, curRes]) => {
@@ -80,7 +83,7 @@ export default function Invoices() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

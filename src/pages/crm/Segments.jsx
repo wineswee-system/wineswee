@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, X, Users, Filter, Play, Zap, Sparkles, Loader, Sen
 import { getCustomerSegments, createCustomerSegment, updateCustomerSegment, deleteCustomerSegment, getMembers } from '../../lib/db'
 import { PRESET_SEGMENTS, filterUnsubscribed } from '../../lib/crmEngine'
 import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../contexts/TenantContext'
 import { nlToSegmentRules, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -55,6 +56,8 @@ function evaluateRule(member, rule) {
 }
 
 function SendCampaignModal({ segment, onClose }) {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [channel, setChannel] = useState('email')
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
@@ -68,7 +71,7 @@ function SendCampaignModal({ segment, onClose }) {
     setResult(null)
     try {
       // Fetch all members and filter by segment rules
-      const { data: allMembers } = await getMembers()
+      const { data: allMembers } = await getMembers(orgId)
       const members = allMembers || []
       const segRules = Array.isArray(segment.rules) ? segment.rules : []
       const logic = segment.logic || 'and'
@@ -186,6 +189,8 @@ function SendCampaignModal({ segment, onClose }) {
 }
 
 export default function Segments() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [segments, setSegments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -302,7 +307,7 @@ export default function Segments() {
     if (previewSegmentId === seg.id) { setPreviewSegmentId(null); return }
     setPreviewSegmentId(seg.id)
     setPreviewLoading(true)
-    const { data } = await getMembers()
+    const { data } = await getMembers(orgId)
     const members = data || []
     const segRules = Array.isArray(seg.rules) ? seg.rules : []
 

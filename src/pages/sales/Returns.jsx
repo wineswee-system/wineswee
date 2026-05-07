@@ -4,10 +4,13 @@ import { getReturns, createReturn } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const STATUS_BADGE = { '待處理': 'badge-warning', '處理中': 'badge-info', '已完成': 'badge-success', '已拒絕': 'badge-danger' }
 
 export default function Returns() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -16,8 +19,8 @@ export default function Returns() {
   const [form, setForm] = useState({ return_number: '', original_order: '', customer: '', total_refund: 0, reason: '', refund_method: '原路退回', status: '待處理', processed_by: '' })
 
   useEffect(() => {
-    getReturns().then(({ data }) => { setItems(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+    getReturns(orgId).then(({ data }) => { setItems(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

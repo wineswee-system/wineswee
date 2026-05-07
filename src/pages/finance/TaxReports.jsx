@@ -3,10 +3,13 @@ import { FileText, Download, Filter } from 'lucide-react'
 import { getInvoices } from '../../lib/db'
 import { generate401Report, generate403Report, calculateBusinessTax, formatTaxPeriod } from '../../lib/taxReport'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function TaxReports() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -20,7 +23,7 @@ export default function TaxReports() {
   })
 
   useEffect(() => {
-    getInvoices().then(({ data }) => {
+    getInvoices(orgId).then(({ data }) => {
       setInvoices(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -28,7 +31,7 @@ export default function TaxReports() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

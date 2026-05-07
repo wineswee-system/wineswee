@@ -3,6 +3,7 @@ import { Plus, FileText, AlertTriangle } from 'lucide-react'
 import { getAccountsPayable, createAccountPayable } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const emptyForm = {
   bill_number: '', supplier: '', po_ref: '',
@@ -10,6 +11,8 @@ const emptyForm = {
 }
 
 export default function AccountsPayable() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -17,7 +20,7 @@ export default function AccountsPayable() {
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => {
-    getAccountsPayable().then(({ data }) => {
+    getAccountsPayable(orgId).then(({ data }) => {
       setRecords(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -25,7 +28,7 @@ export default function AccountsPayable() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

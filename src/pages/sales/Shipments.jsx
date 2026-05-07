@@ -3,10 +3,13 @@ import { Plus, Search } from 'lucide-react'
 import { getShipments, createShipment } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const CARRIERS = ['黑貓宅急便', '新竹物流', '超商取貨', '順豐速運', '自行配送']
 
 export default function Shipments() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [shipments, setShipments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -15,8 +18,8 @@ export default function Shipments() {
   const [form, setForm] = useState({ shipment_number: '', order_ref: '', carrier: '黑貓宅急便', tracking_number: '', destination: '', recipient: '', estimated_date: '', status: '待出貨' })
 
   useEffect(() => {
-    getShipments().then(({ data }) => { setShipments(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+    getShipments(orgId).then(({ data }) => { setShipments(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

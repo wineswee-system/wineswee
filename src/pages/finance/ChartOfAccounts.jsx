@@ -3,22 +3,26 @@ import { ModalOverlay } from '../../components/Modal'
 import { Plus, Trash2, Edit3, X, Search, ChevronRight, Filter } from 'lucide-react'
 import { getAccounts, createAccount, updateAccount, deleteAccount } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const TYPES = [
-  { value: '費用', label: '費用', color: 'var(--accent-red)' },
-  { value: '收入', label: '收入', color: 'var(--accent-green)' },
-  { value: '資產', label: '資產', color: 'var(--accent-blue)' },
-  { value: '負債', label: '負債', color: 'var(--accent-yellow)' },
-  { value: '權益', label: '權益', color: 'var(--accent-purple)' },
-  { value: '代收代付', label: '代收代付', color: 'var(--accent-cyan)' },
-  { value: '週轉金', label: '週轉金', color: 'var(--accent-pink)' },
+  { value: '費用', label: '費用', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)' },
+  { value: '收入', label: '收入', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { value: '資產', label: '資產', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
+  { value: '負債', label: '負債', color: 'var(--accent-yellow)', dim: 'var(--accent-yellow-dim)' },
+  { value: '權益', label: '權益', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
+  { value: '代收代付', label: '代收代付', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)' },
+  { value: '週轉金', label: '週轉金', color: 'var(--accent-pink)', dim: 'var(--accent-pink-dim)' },
 ]
 
 const typeColor = (type) => TYPES.find(t => t.value === type)?.color || 'var(--text-secondary)'
+const typeDim = (type) => TYPES.find(t => t.value === type)?.dim || 'var(--bg-tertiary)'
 
 const emptyForm = { code: '', name: '', type: '費用', parent_code: '', description: '', balance: 0 }
 
 export default function ChartOfAccounts() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -33,13 +37,13 @@ export default function ChartOfAccounts() {
 
   const load = async () => {
     setLoading(true)
-    const { data, error } = await getAccounts()
+    const { data, error } = await getAccounts(orgId)
     if (error) setError(error.message)
     else setAccounts(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleSubmit = async () => {
     if (!form.code || !form.name || !form.type) return
@@ -193,7 +197,7 @@ export default function ChartOfAccounts() {
                 <td>
                   <span style={{
                     padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600,
-                    background: `color-mix(in srgb, ${typeColor(acc.type)} 15%, transparent)`,
+                    background: typeDim(acc.type),
                     color: typeColor(acc.type),
                   }}>{acc.type || '-'}</span>
                 </td>

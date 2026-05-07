@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Tag, ChevronDown, ChevronRight } from 'lucide-react'
 import { getPriceLists, createPriceList, updatePriceList, deletePriceList, getPriceRules, createPriceRule, deletePriceRule, getSKUs } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -11,6 +12,8 @@ const emptyListForm = { name: '', currency: 'NTD', valid_from: '', valid_to: '',
 const emptyRuleForm = { sku_id: '', min_qty: '1', unit_price: '', discount_percent: '0', priority: '0' }
 
 export default function PricingRules() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [priceLists, setPriceLists] = useState([])
   const [loading, setLoading] = useState(true)
   const [showListModal, setShowListModal] = useState(false)
@@ -32,14 +35,14 @@ export default function PricingRules() {
 
   const load = async () => {
     setLoading(true)
-    const [plRes, skuRes] = await Promise.all([getPriceLists(), getSKUs()])
+    const [plRes, skuRes] = await Promise.all([getPriceLists(orgId), getSKUs()])
     if (plRes.error) setError(plRes.error.message)
     else setPriceLists(plRes.data || [])
     setSKUs(skuRes.data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleListSubmit = async () => {
     if (!listForm.name) return

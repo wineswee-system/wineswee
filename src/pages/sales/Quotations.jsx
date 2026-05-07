@@ -8,6 +8,7 @@ import {
 import { calculateInvoiceTax } from '../../lib/einvoice'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const STATUS_BADGE = { '草稿': 'badge-warning', '已送出': 'badge-info', '已成交': 'badge-success', '已失效': 'badge-danger' }
@@ -46,6 +47,8 @@ function dbLineToLocal(line) {
 }
 
 export default function Quotations() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -65,7 +68,7 @@ export default function Quotations() {
 
   useEffect(() => {
     Promise.all([
-      getQuotations(),
+      getQuotations(orgId),
       getSKUs(),
     ]).then(([qRes, skuRes]) => {
       setItems(qRes.data || [])
@@ -74,7 +77,7 @@ export default function Quotations() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

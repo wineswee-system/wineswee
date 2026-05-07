@@ -3,6 +3,7 @@ import { ArrowDownRight, ArrowUpRight, RefreshCw, Download } from 'lucide-react'
 import { getJournalEntries, getAllJournalLines, getAccounts } from '../../lib/db'
 import { getAccountType } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const fmtSigned = (n) => n >= 0 ? fmt(n) : `(${fmt(Math.abs(n))})`
@@ -100,6 +101,8 @@ function generateCashFlowStatement(accounts, journalLines, entryMap) {
 }
 
 export default function CashFlow() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [cashFlow, setCashFlow] = useState(null)
@@ -114,9 +117,9 @@ export default function CashFlow() {
     setError(null)
     try {
       const [entriesRes, linesRes, accountsRes] = await Promise.all([
-        getJournalEntries(),
-        getAllJournalLines(),
-        getAccounts(),
+        getJournalEntries(orgId),
+        getAllJournalLines(orgId),
+        getAccounts(orgId),
       ])
 
       const entries = (entriesRes.data || []).filter(e => e.status === '已過帳')
@@ -138,7 +141,7 @@ export default function CashFlow() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [orgId])
 
   const Section = ({ title, icon, items, total, color }) => (
     <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', padding: 20, marginBottom: 16 }}>

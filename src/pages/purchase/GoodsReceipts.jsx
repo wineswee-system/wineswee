@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Search, CheckCircle, XCircle, AlertTriangle, ArrowRightLeft } from 'lucide-react'
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders, getAccountsPayable } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../contexts/TenantContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { performThreeWayMatch, calculatePriceVariance, performThreeWayMatchById } from '../../lib/threeWayMatch'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -12,6 +13,8 @@ import Modal, { Field } from '../../components/Modal'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function GoodsReceipts() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -91,7 +94,7 @@ export default function GoodsReceipts() {
       }
 
       // 2. Find matching AP / invoice records for this PO
-      const { data: apRecords } = await getAccountsPayable()
+      const { data: apRecords } = await getAccountsPayable(orgId)
       const matchingAP = (apRecords || []).find(ap =>
         ap.po_id === gr.po_id || ap.reference?.includes(String(gr.po_id)) || ap.reference?.includes(po.po_number)
       )

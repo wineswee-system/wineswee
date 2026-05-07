@@ -18,8 +18,11 @@ export const updateCustomerSegment = (id, data) =>
 export const deleteCustomerSegment = (id) =>
   supabase.from('customer_segments').delete().eq('id', id)
 
-export const getQuotations = () =>
-  supabase.from('quotations').select('*').order('id', { ascending: false })
+export const getQuotations = (orgId) => {
+  let q = supabase.from('quotations').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createQuotation = (data) =>
   supabase.from('quotations').insert(data).select().single()
@@ -42,8 +45,11 @@ export const deleteQuotationLine = (id) =>
 export const batchCreateQuotationLines = (lines) =>
   supabase.from('quotation_lines').insert(lines).select()
 
-export const getSalesOrders = () =>
-  supabase.from('sales_orders').select('*').order('id', { ascending: false })
+export const getSalesOrders = (orgId) => {
+  let q = supabase.from('sales_orders').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createSalesOrder = (data) =>
   supabase.rpc('secure_create_sales_order', {
@@ -77,14 +83,20 @@ export const deleteSalesOrderLine = (id) =>
 export const batchCreateSalesOrderLines = (lines) =>
   supabase.from('sales_order_lines').insert(lines).select()
 
-export const getPromotions = () =>
-  supabase.from('promotions').select('*').order('id', { ascending: false })
+export const getPromotions = (orgId) => {
+  let q = supabase.from('promotions').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPromotion = (data) =>
   supabase.from('promotions').insert(data).select().single()
 
-export const getPriceLists = () =>
-  supabase.from('price_lists').select('*').order('id')
+export const getPriceLists = (orgId) => {
+  let q = supabase.from('price_lists').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPriceList = (data) =>
   supabase.from('price_lists').insert(data).select().single()
@@ -109,8 +121,11 @@ export const updatePriceRule = (id, data) =>
 export const deletePriceRule = (id) =>
   supabase.from('price_rules').delete().eq('id', id)
 
-export const getPOSTransactions = () =>
-  supabase.from('pos_transactions').select('*').order('id', { ascending: false })
+export const getPOSTransactions = (orgId) => {
+  let q = supabase.from('pos_transactions').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPOSTransaction = (data) =>
   supabase.rpc('secure_create_pos_transaction', {
@@ -133,8 +148,11 @@ export const createPOSTransaction = (data) =>
 export const updatePOSTransaction = (id, data) =>
   supabase.from('pos_transactions').update(data).eq('id', id).select().single()
 
-export const getPOSShifts = () =>
-  supabase.from('pos_shifts').select('*').order('id', { ascending: false })
+export const getPOSShifts = (orgId) => {
+  let q = supabase.from('pos_shifts').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPOSShift = (data) =>
   supabase.from('pos_shifts').insert(data).select().single()
@@ -142,14 +160,20 @@ export const createPOSShift = (data) =>
 export const updatePOSShift = (id, data) =>
   supabase.from('pos_shifts').update(data).eq('id', id).select().single()
 
-export const getReturns = () =>
-  supabase.from('returns').select('*').order('id', { ascending: false })
+export const getReturns = (orgId) => {
+  let q = supabase.from('returns').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createReturn = (data) =>
   supabase.from('returns').insert(data).select().single()
 
-export const getShipments = () =>
-  supabase.from('shipments').select('*').order('id', { ascending: false })
+export const getShipments = (orgId) => {
+  let q = supabase.from('shipments').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createShipment = (data) =>
   supabase.from('shipments').insert(data).select().single()
@@ -157,8 +181,11 @@ export const createShipment = (data) =>
 export const updateShipment = (id, data) =>
   supabase.from('shipments').update(data).eq('id', id).select().single()
 
-export const getMembers = () =>
-  supabase.from('members').select('*').order('id', { ascending: false })
+export const getMembers = (orgId) => {
+  let q = supabase.from('members').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createMember = (data) =>
   supabase.from('members').insert(data).select().single()
@@ -169,14 +196,20 @@ export const updateMember = (id, data) =>
 export const getPointTransactions = (memberId) =>
   supabase.from('point_transactions').select('*').eq('member_id', memberId).order('id', { ascending: false })
 
-export const getAllPointTransactions = () =>
-  supabase.from('point_transactions').select('*').order('id', { ascending: false })
+export const getAllPointTransactions = (orgId) => {
+  let q = supabase.from('point_transactions').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPointTransaction = (data) =>
   supabase.from('point_transactions').insert(data).select().single()
 
-export const getReferralCodes = () =>
-  supabase.from('referral_codes').select('*').order('id', { ascending: false })
+export const getReferralCodes = (orgId) => {
+  let q = supabase.from('referral_codes').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getReferralCodeByMember = (memberId) =>
   supabase.from('referral_codes').select('*').eq('member_id', memberId).eq('status', '有效').maybeSingle()
@@ -193,8 +226,11 @@ export const updateReferralCode = (id, data) =>
 export const getReferralRedemptions = (referralCodeId) =>
   supabase.from('referral_redemptions').select('*').eq('referral_code_id', referralCodeId).order('id', { ascending: false })
 
-export const getAllReferralRedemptions = () =>
-  supabase.from('referral_redemptions').select('*').order('id', { ascending: false })
+export const getAllReferralRedemptions = (orgId) => {
+  let q = supabase.from('referral_redemptions').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getReferralRedemptionsByReferee = (refereeId) =>
   supabase.from('referral_redemptions').select('*').eq('referee_id', refereeId).maybeSingle()
@@ -202,8 +238,11 @@ export const getReferralRedemptionsByReferee = (refereeId) =>
 export const createReferralRedemption = (data) =>
   supabase.from('referral_redemptions').insert(data).select().single()
 
-export const getInvoices = () =>
-  supabase.from('invoices').select('*').order('id', { ascending: false })
+export const getInvoices = (orgId) => {
+  let q = supabase.from('invoices').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createInvoice = (data) =>
   supabase.from('invoices').insert(data).select().single()

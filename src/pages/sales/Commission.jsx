@@ -4,10 +4,13 @@ import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, DollarSign, Calculator } from 'lucide-react'
 import { getCommissionRules, createCommissionRule, updateCommissionRule, deleteCommissionRule, getCommissionRecords, createCommissionRecord, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function Commission() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [rules, setRules] = useState([])
   const [records, setRecords] = useState([])
   const [orders, setOrders] = useState([])
@@ -21,14 +24,14 @@ export default function Commission() {
 
   const load = async () => {
     setLoading(true)
-    const [rulesRes, recsRes, soRes] = await Promise.all([getCommissionRules(), getCommissionRecords(), getSalesOrders()])
+    const [rulesRes, recsRes, soRes] = await Promise.all([getCommissionRules(), getCommissionRecords(), getSalesOrders(orgId)])
     setRules(rulesRes.data || [])
     setRecords(recsRes.data || [])
     setOrders(soRes.data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleRuleSubmit = async () => {
     if (!ruleForm.name || !ruleForm.rate_percent) return

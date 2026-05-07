@@ -14,8 +14,11 @@ export const getNotifications = (userId) => {
 export const markNotificationRead = (id) =>
   supabase.from('notifications').update({ read: true }).eq('id', id)
 
-export const markAllNotificationsRead = () =>
-  supabase.from('notifications').update({ read: true }).eq('read', false)
+export const markAllNotificationsRead = (userId) => {
+  if (!userId) return Promise.resolve({ data: null, error: { message: 'userId required' } })
+  return supabase.from('notifications').update({ read: true })
+    .eq('user_id', userId).eq('read', false)
+}
 
 export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action, tables, targetId, from, to, search } = {}) => {
   if (!orgId) return Promise.resolve({ data: [], count: 0, error: null })
@@ -28,7 +31,7 @@ export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action,
   if (from) q = q.gte('time', from)
   if (to) q = q.lte('time', to)
   if (search) {
-    const s = search.replace(/[^\w\s\-一-鿿]/g, '').trim()
+    const s = search.replace(/[^\w\s\-一-鿿]/g, '').replace(/_/g, '\\_').trim()
     if (s) q = q.or(`action.ilike.%${s}%,target.ilike.%${s}%`)
   }
   return q.range(offset, offset + limit - 1)
@@ -44,7 +47,7 @@ export const getAuditLogsAll = ({ limit = 100, offset = 0, orgId, userName, acti
   if (from) q = q.gte('time', from)
   if (to) q = q.lte('time', to)
   if (search) {
-    const s = search.replace(/[^\w\s\-一-鿿]/g, '').trim()
+    const s = search.replace(/[^\w\s\-一-鿿]/g, '').replace(/_/g, '\\_').trim()
     if (s) q = q.or(`action.ilike.%${s}%,target.ilike.%${s}%`)
   }
   return q.range(offset, offset + limit - 1)
@@ -135,13 +138,6 @@ export const updateTenantModules = (id, features) =>
 
 export const getTenantEmployees = (orgId) =>
   supabase.from('employees').select('*').eq('organization_id', orgId).order('id')
-
-export const updateRolePermissions = async (roleId, permissionIds) => {
-  await supabase.from('role_permissions').delete().eq('role_id', roleId)
-  if (!permissionIds?.length) return
-  const rows = permissionIds.map(pid => ({ role_id: roleId, permission_id: pid }))
-  return supabase.from('role_permissions').insert(rows)
-}
 
 // Bulk imports
 export const bulkUpsertSKUs = (rows) =>

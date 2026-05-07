@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { getQuotations, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { DollarSign, TrendingUp, FileText, ShoppingCart, Truck, RotateCcw, Clock, BarChart3, Package } from 'lucide-react'
+import { useTenant } from '../../contexts/TenantContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
@@ -80,6 +81,8 @@ function generateDemoData() {
 }
 
 export default function SalesOverview() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [quotations, setQuotations] = useState([])
   const [orders, setOrders] = useState([])
   const [shipments, setShipments] = useState([])
@@ -90,8 +93,8 @@ export default function SalesOverview() {
 
   useEffect(() => {
     Promise.all([
-      getQuotations(),
-      getSalesOrders(),
+      getQuotations(orgId),
+      getSalesOrders(orgId),
       supabase.from('shipments').select('*'),
       supabase.from('sales_returns').select('*'),
     ]).then(([qRes, soRes, shipRes, retRes]) => {
@@ -112,7 +115,7 @@ export default function SalesOverview() {
       console.error('Failed to load sales data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [orgId])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

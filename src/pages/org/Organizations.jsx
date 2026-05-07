@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
 import { getOrganizations, createOrganization, updateOrganization, deleteOrganization, getCompanies, getStores, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 const PLANS = [
-  { value: 'free', label: '免費版', color: 'var(--text-muted)' },
-  { value: 'starter', label: '入門版', color: 'var(--accent-cyan)' },
-  { value: 'pro', label: '專業版', color: 'var(--accent-purple)' },
-  { value: 'enterprise', label: '企業版', color: 'var(--accent-orange)' },
+  { value: 'free', label: '免費版', color: 'var(--text-muted)', bg: 'var(--bg-tertiary)' },
+  { value: 'starter', label: '入門版', color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
+  { value: 'pro', label: '專業版', color: 'var(--accent-purple)', bg: 'var(--accent-purple-dim)' },
+  { value: 'enterprise', label: '企業版', color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
 ]
 
 const STATUSES = [
@@ -19,6 +21,7 @@ const STATUSES = [
 ]
 
 export default function Organizations() {
+  const { isSuperAdmin, loading: authLoading, profileReady } = useAuth()
   const [orgs, setOrgs] = useState([])
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])
@@ -31,6 +34,7 @@ export default function Organizations() {
   const [form, setForm] = useState({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free' })
 
   useEffect(() => {
+    if (!isSuperAdmin) return
     Promise.all([
       getOrganizations(), getCompanies(), getStores(), getEmployees(),
       supabase.from('org_subscriptions').select('*').order('created_at', { ascending: false }),
@@ -44,7 +48,7 @@ export default function Organizations() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [isSuperAdmin])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -96,6 +100,8 @@ export default function Organizations() {
     }
   }
 
+  if (authLoading || !profileReady) return <LoadingSpinner />
+  if (!isSuperAdmin) return <Navigate to="/" replace />
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -151,7 +157,7 @@ export default function Organizations() {
                   <td style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{o.tax_id || '-'}</td>
                   <td>{o.contact_person || '-'}</td>
                   <td>{o.phone || '-'}</td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: planInfo.color, background: planInfo.color + '18' }}>{planInfo.label}</span></td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: planInfo.color, background: planInfo.bg }}>{planInfo.label}</span></td>
                   <td>{orgCompanies.length}</td>
                   <td>{orgStores.length}</td>
                   <td>

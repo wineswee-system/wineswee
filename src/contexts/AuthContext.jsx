@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
   const [profileReady, setProfileReady] = useState(false)
   const profileLoaded = useRef(false)
 
-  const loadProfile = async (authUser) => {
+  const loadProfile = useCallback(async (authUser) => {
     if (!authUser?.email) {
       setProfile(null); setOrganization(null); setRole(null); setPermissions([])
       profileLoaded.current = false
@@ -60,17 +60,28 @@ export function AuthProvider({ children }) {
     } finally {
       setProfileReady(true)
     }
-  }
+  }, [])
 
   useEffect(() => {
+    // Track whether the subscription has already handled auth state.
+    // If it has, the getSession() fallback below becomes a no-op.
+    const fired = { current: false }
+
+    // Safety fallback: resolve auth state via a direct API call in case
+    // onAuthStateChange doesn't fire (offline mode, SW interception).
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (fired.current) return
       const u = session?.user ?? null
       setUser(u)
       setLoading(false)
-      loadProfile(u)
-    }).catch(() => setLoading(false))
+      if (u) loadProfile(u)
+      else setProfileReady(true)
+    }).catch(() => {
+      if (!fired.current) { setLoading(false); setProfileReady(true) }
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      fired.current = true
       const u = session?.user ?? null
       setUser(u)
       setLoading(false)
@@ -79,11 +90,11 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null); setOrganization(null); setRole(null); setPermissions([])
         profileLoaded.current = false
+        setProfileReady(true)
       }
     })
-
     return () => subscription.unsubscribe()
-  }, [])
+  }, [loadProfile])
 
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password })

@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, X, BookOpen, Download } from 'lucide-react'
 import { calculateDepreciation } from '../../lib/accounting'
 import { getFixedAssets, createFixedAsset, updateFixedAsset, deleteFixedAsset, createJournalEntry, batchCreateJournalLines } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -23,6 +24,8 @@ const emptyForm = {
 }
 
 export default function FixedAssets() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -38,13 +41,13 @@ export default function FixedAssets() {
 
   const loadAssets = async () => {
     setLoading(true)
-    const { data, error } = await getFixedAssets()
+    const { data, error } = await getFixedAssets(orgId)
     if (error) setError(error.message)
     else setAssets(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { loadAssets() }, [])
+  useEffect(() => { loadAssets() }, [orgId])
 
   const handleSubmit = async () => {
     if (!form.name || !form.cost || !form.useful_life) return

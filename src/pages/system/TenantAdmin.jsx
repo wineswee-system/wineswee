@@ -196,7 +196,7 @@ export default function TenantAdmin() {
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.created_at?.slice(0, 10)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-ghost" title="切換租戶" onClick={() => switchTenant(t)} style={{ padding: '4px 6px' }}>
+                      <button className="btn btn-ghost" title="切換租戶" onClick={async () => { const r = await switchTenant(t); if (r?.error) alert(`切換失敗：${r.error}`) }} style={{ padding: '4px 6px' }}>
                         <Globe size={13} />
                       </button>
                       <button className="btn btn-ghost" title="編輯" onClick={() => openEdit(t)} style={{ padding: '4px 6px' }}>

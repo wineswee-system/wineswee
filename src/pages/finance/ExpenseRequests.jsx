@@ -66,10 +66,12 @@ export default function ExpenseRequests() {
   const load = async () => {
     setLoading(true)
     const orgId = profile?.organization_id
+    let reqQuery = supabase.from('expense_requests').select('*').order('created_at', { ascending: false })
+    if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
     const [reqRes, accRes, empRes, orgRes] = await Promise.all([
-      supabase.from('expense_requests').select('*').order('created_at', { ascending: false }),
-      getAccounts(),
-      getEmployees(),
+      reqQuery,
+      getAccounts(orgId),
+      getEmployees(orgId),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setRequests(reqRes.data || [])
@@ -79,7 +81,7 @@ export default function ExpenseRequests() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id])
 
   // Load attachments for detail view
   const loadAttachments = async (requestId) => {

@@ -4,6 +4,7 @@ import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AttachmentsPanel from './components/AttachmentsPanel'
+import { useTenant } from '../../contexts/TenantContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -71,6 +72,8 @@ function buildUnifiedTimeline({ activities = [], notes = [], messages = [], orde
 const SALES_REPS = ['王經理', '李業務', '陳主任', '張專員', '林業務']
 
 export default function Customer360() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -79,8 +82,8 @@ export default function Customer360() {
   const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
-    getMembers().then(({ data }) => { setMembers(data || []); setLoading(false) })
-  }, [])
+    getMembers(orgId).then(({ data }) => { setMembers(data || []); setLoading(false) })
+  }, [orgId])
 
   const filtered = members.filter(m => {
     if (!search) return true
@@ -97,10 +100,10 @@ export default function Customer360() {
     setDetailLoading(true)
     setTimelineFilter('all')
     const [soRes, arRes, ptRes, posRes, actRes, noteRes, msgRes] = await Promise.all([
-      getSalesOrders(),
-      getAccountsReceivable(),
+      getSalesOrders(orgId),
+      getAccountsReceivable(orgId),
       member.id ? getPointTransactions(member.id) : { data: [] },
-      getPOSTransactions(),
+      getPOSTransactions(orgId),
       getCRMActivities({ entity_type: 'customer', entity_id: member.id }),
       getCRMNotes('customer', member.id),
       supabase.from('message_logs').select('*').or(`recipient.eq.${member.email},recipient.eq.${member.phone}`).order('sent_at', { ascending: false }).limit(50),

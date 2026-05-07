@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Search, Landmark, Zap, CheckCircle, Link2, FileText, X, ArrowRight } from 'lucide-react'
 import { getBankTransactions, getJournalEntries, createJournalEntry } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -29,6 +30,8 @@ function daysBetween(d1, d2) {
 }
 
 export default function BankReconciliation() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [transactions, setTransactions] = useState([])
   const [journalEntries, setJournalEntries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +43,7 @@ export default function BankReconciliation() {
   const [confirmedMatches, setConfirmedMatches] = useState(new Set()) // Set of bankId
   const [autoMatched, setAutoMatched] = useState(false)
   const [matching, setMatching] = useState(false)
+  const matchTimerRef = useRef(null)
 
   // Manual matching state
   const [selectedBankId, setSelectedBankId] = useState(null)
@@ -52,8 +56,8 @@ export default function BankReconciliation() {
 
   useEffect(() => {
     Promise.all([
-      getBankTransactions(),
-      getJournalEntries(),
+      getBankTransactions(orgId),
+      getJournalEntries(orgId),
     ]).then(([bt, je]) => {
       setTransactions(bt.data || [])
       setJournalEntries(je.data || [])
@@ -63,12 +67,14 @@ export default function BankReconciliation() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
+
+  useEffect(() => () => clearTimeout(matchTimerRef.current), [])
 
   // Auto-match logic
   const handleAutoMatch = () => {
     setMatching(true)
-    setTimeout(() => {
+    matchTimerRef.current = setTimeout(() => {
       const pairs = []
       const usedJournals = new Set()
       const usedBanks = new Set()
@@ -273,8 +279,8 @@ export default function BankReconciliation() {
   }
 
   const rowBg = (t) => {
-    if (t.matched) return 'rgba(34, 197, 94, 0.06)'
-    if (pendingBankIds.has(t.id)) return 'rgba(251, 191, 36, 0.08)'
+    if (t.matched) return 'var(--accent-green-dim)'
+    if (pendingBankIds.has(t.id)) return 'var(--accent-orange-dim)'
     return undefined
   }
 
@@ -491,9 +497,9 @@ export default function BankReconciliation() {
           <div className="card-title"><span className="card-title-icon"><Landmark size={16} /></span> 交易記錄</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'rgba(34, 197, 94, 0.3)', marginRight: 4, verticalAlign: 'middle' }}></span>已對帳</span>
-              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'rgba(251, 191, 36, 0.3)', marginRight: 4, verticalAlign: 'middle' }}></span>建議比對</span>
-              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'rgba(239, 68, 68, 0.15)', marginRight: 4, verticalAlign: 'middle' }}></span>未對帳</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'var(--accent-green-dim)', marginRight: 4, verticalAlign: 'middle' }}></span>已對帳</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'var(--accent-orange-dim)', marginRight: 4, verticalAlign: 'middle' }}></span>建議比對</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: 'var(--accent-red-dim)', marginRight: 4, verticalAlign: 'middle' }}></span>未對帳</span>
             </div>
             <div className="search-bar">
               <Search className="search-icon" />
@@ -528,8 +534,8 @@ export default function BankReconciliation() {
                       ) : isPending ? (
                         <span className="badge badge-warning"><span className="badge-dot"></span>建議比對</span>
                       ) : (
-                        <span className="badge badge-danger" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                          <span className="badge-dot" style={{ background: 'var(--accent-red)' }}></span>未對帳
+                        <span className="badge badge-danger">
+                          <span className="badge-dot"></span>未對帳
                         </span>
                       )}
                     </td>

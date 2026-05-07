@@ -4,12 +4,15 @@ import { getPOSShifts, createPOSShift, getPOSTransactions } from '../../lib/db'
 import { printShiftReport } from '../../lib/receiptPrinter'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useTenant } from '../../contexts/TenantContext'
 
 const STATUS_BADGE = { '營業中': 'badge-success', '已結班': 'badge-info' }
 
 const PAYMENT_TYPES = ['現金', '信用卡', 'LINE Pay', '綠界金流', '銀行轉帳']
 
 export default function POSShifts() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -66,7 +69,7 @@ export default function POSShifts() {
     setExpandedId(shiftId)
     setLoadingTxns(true)
     try {
-      const { data } = await getPOSTransactions()
+      const { data } = await getPOSTransactions(orgId)
       // Filter transactions for this shift's store and time range
       const shift = items.find(s => s.id === shiftId)
       const txns = (data || []).filter(t => {
@@ -136,7 +139,7 @@ export default function POSShifts() {
   const handlePrintShiftReport = async (shift) => {
     try {
       // Load transactions for this shift
-      const { data } = await getPOSTransactions()
+      const { data } = await getPOSTransactions(orgId)
       const txns = (data || []).filter(t => t.store === shift.store).slice(0, 100)
       printShiftReport(shift, txns, { companyName: shift.store || '商店' })
     } catch (err) {

@@ -3,8 +3,11 @@ import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, BarChart3 } from '
 import { getAccounts, getAccountsReceivable, getAccountsPayable } from '../../lib/db'
 import { calculateProfitability } from '../../lib/automation'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 export default function Overview() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id
   const [accounts, setAccounts] = useState([])
   const [ar, setAr] = useState([])
   const [ap, setAp] = useState([])
@@ -15,9 +18,9 @@ export default function Overview() {
   useEffect(() => {
     const month = new Date().toISOString().slice(0, 7)
     Promise.all([
-      getAccounts(),
-      getAccountsReceivable(),
-      getAccountsPayable(),
+      getAccounts(orgId),
+      getAccountsReceivable(orgId),
+      getAccountsPayable(orgId),
       calculateProfitability(month),
     ]).then(([a, r, p, prof]) => {
       setAccounts(a.data || [])
@@ -30,7 +33,7 @@ export default function Overview() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

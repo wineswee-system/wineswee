@@ -1,7 +1,10 @@
 import { supabase } from '../supabase'
 
-export const getAccounts = () =>
-  supabase.from('accounts').select('*').order('code')
+export const getAccounts = (orgId) => {
+  let q = supabase.from('accounts').select('*').order('code')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createAccount = (data) =>
   supabase.from('accounts').insert(data).select().single()
@@ -21,8 +24,15 @@ export const getJournalEntries = (orgId) => {
 export const getJournalLines = (entryId) =>
   supabase.from('journal_lines').select('*').eq('entry_id', entryId).order('id')
 
-export const getAllJournalLines = () =>
-  supabase.from('journal_lines').select('*').order('id')
+export const getAllJournalLines = (orgId) => {
+  if (orgId) {
+    return supabase.from('journal_lines')
+      .select('*, journal_entries!inner(organization_id)')
+      .eq('journal_entries.organization_id', orgId)
+      .order('id')
+  }
+  return supabase.from('journal_lines').select('*').order('id')
+}
 
 export const createJournalEntry = (data, lines = null) =>
   supabase.rpc('secure_create_journal_entry', {
@@ -81,8 +91,11 @@ export const createBudget = (data) =>
 export const updateBudget = (id, data) =>
   supabase.from('budgets').update(data).eq('id', id).select().single()
 
-export const getBankTransactions = () =>
-  supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false })
+export const getBankTransactions = (orgId) => {
+  let q = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const updateBankTransaction = (id, data) =>
   supabase.from('bank_transactions').update(data).eq('id', id).select().single()
@@ -92,8 +105,11 @@ export const getInventoryTransactions = (sku) => {
   return sku ? q.eq('sku', sku) : q
 }
 
-export const getStockLevels = () =>
-  supabase.from('stock_levels').select('*').order('id')
+export const getStockLevels = (orgId) => {
+  let q = supabase.from('stock_levels').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getInventoryCostLayers = (skuId) => {
   const q = supabase.from('inventory_cost_layers').select('*, skus(code, name)').order('receipt_date', { ascending: true })
@@ -124,8 +140,11 @@ export const createInventoryValuation = (data) =>
 export const batchCreateInventoryValuations = (rows) =>
   supabase.from('inventory_valuations').insert(rows).select()
 
-export const getFixedAssets = () =>
-  supabase.from('fixed_assets').select('*').order('id')
+export const getFixedAssets = (orgId) => {
+  let q = supabase.from('fixed_assets').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createFixedAsset = (data) =>
   supabase.from('fixed_assets').insert(data).select().single()
@@ -136,8 +155,11 @@ export const updateFixedAsset = (id, data) =>
 export const deleteFixedAsset = (id) =>
   supabase.from('fixed_assets').delete().eq('id', id)
 
-export const getCostCenters = () =>
-  supabase.from('cost_centers').select('*').order('code')
+export const getCostCenters = (orgId) => {
+  let q = supabase.from('cost_centers').select('*').order('code')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createCostCenter = (data) =>
   supabase.from('cost_centers').insert(data).select().single()

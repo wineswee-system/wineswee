@@ -99,38 +99,80 @@ function parseDate(v) {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-// ── CSV parser（處理 quote 內逗號 + BOM + 自動跳過 metadata） ──
+// ── CSV parser（state machine：正確處理跨行的 quoted field + escaped quotes + BOM） ──
 function parseCSV(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
-  const lines = text.split(/\r?\n/).filter(l => l.trim())
+
+  const rows = []
+  let cur = '', row = [], inQuote = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1]
+    if (c === '"') {
+      if (inQuote && next === '"') { cur += '"'; i++ }  // escaped ""
+      else inQuote = !inQuote
+    } else if (c === ',' && !inQuote) {
+      row.push(cur); cur = ''
+    } else if ((c === '\n' || c === '\r') && !inQuote) {
+      if (c === '\r' && next === '\n') i++
+      row.push(cur)
+      if (row.some(x => String(x).trim())) rows.push(row)
+      row = []; cur = ''
+    } else {
+      cur += c
+    }
+  }
+  if (cur || row.length) {
+    row.push(cur)
+    if (row.some(x => String(x).trim())) rows.push(row)
+  }
+
+  // 找 header row：第一個 cells[1]='公司統編' 或含「員工編號」的 row
   let headerIdx = 0
-  for (let i = 0; i < Math.min(20, lines.length); i++) {
-    const cells = parseRow(lines[i])
-    if (cells[1] === '公司統編' || cells.includes('員工編號')) { headerIdx = i; break }
+  for (let i = 0; i < Math.min(20, rows.length); i++) {
+    if (rows[i][1] === '公司統編' || rows[i].includes('員工編號')) { headerIdx = i; break }
   }
-  const headers = parseRow(lines[headerIdx])
-  return lines.slice(headerIdx + 1).map(line => {
-    const cells = parseRow(line)
-    const row = {}
-    headers.forEach((h, i) => { row[h] = (cells[i] || '').trim() })
-    return row
+  const headers = rows[headerIdx].map(h => String(h).trim())
+  return rows.slice(headerIdx + 1).map(cells => {
+    const obj = {}
+    headers.forEach((h, i) => { obj[h] = String(cells[i] || '').trim() })
+    return obj
   }).filter(r => r['員工編號'] || r['姓名'])
-}
-function parseRow(line) {
-  const result = []
-  let cur = '', inQuote = false
-  for (const c of line) {
-    if (c === '"') inQuote = !inQuote
-    else if (c === ',' && !inQuote) { result.push(cur); cur = '' }
-    else cur += c
-  }
-  result.push(cur)
-  return result.map(s => s.trim())
 }
 
 // ── SQL escape ──
 const sqlStr = (v) => v == null || v === '' ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`
 const sqlBool = (v) => v == null ? 'NULL' : (v ? 'true' : 'false')
+
+// ── 部門/門市名稱別名 ──
+// 1. MANUAL_ALIASES：手動指定 CSV 名稱 → DB 真實名稱（多個用陣列）
+//    用於名稱完全不同的情況（人資部 → 人力資源部 等）
+const MANUAL_ALIASES = {
+  '人資部':         ['人力資源部'],
+  '微風百貨門市':   ['微風廣場'],
+  '研發課':         ['研發暨品管課'],
+  '營運課':         ['研發暨品管課'],  // 同一個人 (Jack 羅紹輝) 已在 DB 的研發暨品管課
+  'Mia':            ['MIa'],          // DB 用大寫 I
+  // 業務部 / 管理部 不加 alias —— 那 3 人都離職，department_id 留 NULL 即可
+  //（OrgChart 只顯示 status='在職'，不會出現）
+}
+
+// 2. 自動 alias：CSV 用「中山國小門市」但 DB 用「中山國小」之類
+function deptAliases(name) {
+  if (!name) return []
+  const s = name.trim()
+  const set = new Set([s])
+  // 手動 alias
+  for (const a of MANUAL_ALIASES[s] || []) set.add(a)
+  // 去掉常見後綴
+  const stripped = s.replace(/(門市|旗艦店|店|館)+$/g, '').trim()
+  if (stripped && stripped !== s) set.add(stripped)
+  // 加後綴
+  if (!s.endsWith('門市') && !s.endsWith('旗艦店') && !s.endsWith('部') && !s.endsWith('課') && !s.endsWith('室')) {
+    set.add(s + '門市')
+  }
+  return [...set]
+}
+const sqlNameList = (names) => names.map(n => sqlStr(n)).join(', ')
 
 // ── 主流程 ──
 function main() {
@@ -150,11 +192,14 @@ function main() {
   const uniqueDepts = Object.entries(deptCount).sort((a, b) => b[1] - a[1])
 
   console.log('\n📋 「部門」欄出現的所有名稱（依次數排序）：')
-  console.table(uniqueDepts.map(([name, count]) => ({ '部門/門市名稱': name, '人數': count })))
+  console.table(uniqueDepts.map(([name, count]) => ({
+    '部門/門市名稱': name,
+    '人數': count,
+    'SQL 會嘗試比對': name === '(空)' ? '—' : deptAliases(name).join(' / '),
+  })))
 
-  console.log(`\n⚠ 重要：上面這些名稱在你 DB 必須完全一致存在於 departments / stores / department_sections。`)
-  console.log(`   貼下面 SQL 之前，先到「組織架構 → 部門」「組織架構 → 門市」確認都建好。`)
-  console.log(`   或在這裡用 SQL 一次補建（建議方式）：\n`)
+  console.log(`\n⚠ DB 的 departments / stores / department_sections 任一表只要存在「SQL 會嘗試比對」那欄的任意一個名稱就會自動對應。`)
+  console.log(`   找不到的話員工 department_id / store_id 會是 NULL，跑完最後 SELECT 會列出來。\n`)
 
   // ── 產出 SQL ──
   const lines = []
@@ -217,19 +262,20 @@ function main() {
     }
 
     // 組 INSERT statement
+    const aliases = deptAliases(deptText)
+    const aliasList = sqlNameList(aliases)
     const values = cols.map(c => {
       if (c === 'department_id') {
-        // 子查詢：先查 departments，找不到 fallback 查 stores.department_id，最後 fallback section
         if (!deptText) return 'NULL'
         return `COALESCE(
-      (SELECT id FROM departments WHERE name = ${sqlStr(deptText)} LIMIT 1),
-      (SELECT department_id FROM stores WHERE name = ${sqlStr(deptText)} LIMIT 1),
-      (SELECT department_id FROM department_sections WHERE name = ${sqlStr(deptText)} LIMIT 1)
+      (SELECT id FROM departments WHERE name IN (${aliasList}) LIMIT 1),
+      (SELECT department_id FROM stores WHERE name IN (${aliasList}) LIMIT 1),
+      (SELECT department_id FROM department_sections WHERE name IN (${aliasList}) LIMIT 1)
     )`
       }
       if (c === 'store_id') {
         if (!deptText) return 'NULL'
-        return `(SELECT id FROM stores WHERE name = ${sqlStr(deptText)} LIMIT 1)`
+        return `(SELECT id FROM stores WHERE name IN (${aliasList}) LIMIT 1)`
       }
       if (c === 'organization_id') return ORG_ID
       return sqlStr(empData[c])

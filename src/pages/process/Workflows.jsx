@@ -878,26 +878,20 @@ export default function Workflows() {
             alert(`流程已建立，但有 ${subFailures.length} 項子設定失敗：\n\n${subFailures.join('\n')}\n\n請到流程詳細頁手動補上。`)
           }
 
-          // 建立流程結束簽核（如果範本有設定 approval_chain_id）
+          // 流程範本層級簽核鏈（template.approval_chain_id）：
+          // 改走新架構 — 不在 deploy 時建 approval_form。
+          // 範本層級的 chain 會綁到「最後一個 task」上（task.approval_chain_id），
+          // 由任務負責人完成最後一個任務時 web_complete_task RPC 會啟動 task_confirmations 流程。
+          // 部署時若有 template chain：把它寫到最後一個 task 的 approval_chain_id（如果該 task 沒設）。
           const chainId = deployTemplate.approval_chain_id
-          if (chainId) {
-            const chain = approvalChains.find(c => c.id === chainId)
-            if (chain) {
-              const { data: form } = await supabase.from('approval_forms').insert({
-                chain_id: chainId,
-                title: `${deployTemplate.name} — ${loc}`,
-                store: loc,
-                status: '待簽',
-                applicant: profile?.name || null,
-                form_data: { notes: `流程部署自動建立` },
-              }).select().single()
-              if (form && chain.steps) {
-                const formSteps = chain.steps.map((s, idx) => ({
-                  form_id: form.id, step_order: idx + 1,
-                  role: s.role, status: '待簽',
-                }))
-                await supabase.from('approval_form_steps').insert(formSteps)
-              }
+          if (chainId && insertedTasks && insertedTasks.length > 0) {
+            const lastTask = insertedTasks.reduce(
+              (a, b) => (b.step_order || 0) > (a.step_order || 0) ? b : a
+            )
+            if (lastTask && !lastTask.approval_chain_id) {
+              await supabase.from('tasks')
+                .update({ approval_chain_id: chainId })
+                .eq('id', lastTask.id)
             }
           }
         }

@@ -158,22 +158,44 @@ export default function TaskDetailPanel({
     const prevStatus = task.status
 
     // ★ If task has an approval chain, block direct completion until chain passes
+    // 走新架構：task_confirmations + DB trigger 推進；不再建 approval_form
     if (form.status === '已完成' && prevStatus !== '已完成' && task.approval_chain_id) {
-      if (!approvalForm) {
-        await handleStartApproval(task.approval_chain_id)
-        setForm(f => ({ ...f, status: prevStatus }))
+      const hasAnyConfirm = confirmations.length > 0
+      const hasPending = confirmations.some(c => c.status === 'pending')
+      const wasRejected = task.confirmation_status === 'rejected'
+
+      if (!hasAnyConfirm) {
+        // 第一次完成 → 呼 web_complete_task RPC：建 step 0 confirmations + trigger 推 LINE
+        const { data: result, error } = await supabase.rpc('web_complete_task', { p_task_id: task.id })
+        if (error || !result?.ok) {
+          setForm(f => ({ ...f, status: prevStatus }))
+          setSaving(false)
+          alert('啟動簽核失敗：' + (error?.message || result?.error || '未知錯誤'))
+          return
+        }
+        // reload confirmations 讓 UI 立刻反映
+        const { data: tcData } = await supabase.from('task_confirmations').select('*').eq('task_id', task.id).order('created_at')
+        setConfirmations(tcData || [])
+        setForm(f => ({ ...f, status: result.status === '已完成' ? '已完成' : prevStatus }))
         setSaving(false)
-        alert('已自動啟動簽核流程，完成所有簽核後任務將自動標記為已完成')
+        if (result.has_pending_confirmations) {
+          alert('已啟動簽核流程，完成所有簽核後任務會自動標記為已完成')
+        }
         return
       }
-      if (approvalForm.status !== '已通過') {
+      if (wasRejected) {
         setForm(f => ({ ...f, status: prevStatus }))
         setSaving(false)
-        alert(approvalForm.status === '已退回'
-          ? '簽核已退回，請重新啟動簽核流程'
-          : '請等待簽核完成後，任務將自動標記為已完成')
+        alert('簽核已退回，請聯絡管理員重啟簽核流程')
         return
       }
+      if (hasPending) {
+        setForm(f => ({ ...f, status: prevStatus }))
+        setSaving(false)
+        alert('請等待簽核完成後，任務會自動標記為已完成')
+        return
+      }
+      // confirmations 全部 approved → 任務應該已被 trigger 標完成；放行
     }
 
     const payload = {
@@ -357,11 +379,10 @@ export default function TaskDetailPanel({
     })
     if (!data) return
 
-    let next = confirmations.map(c => c.id === id ? data : c)
-
-    // 依序模式：前一位回應後，自動把排隊中優先度最高的升成 pending
+    // 依序模式（legacy 非 chain）：前一位回應後，自動升下一個 waiting → pending
     const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
-    if (mode === 'sequential' && (status === 'approved' || status === 'rejected')) {
+    let next = confirmations.map(c => c.id === id ? data : c)
+    if (mode === 'sequential' && (status === 'approved' || status === 'rejected') && !task.approval_chain_id) {
       const stillPending = next.some(c => c.status === 'pending')
       if (!stillPending) {
         const priRank = { '高': 0, '中': 1, '低': 2 }
@@ -371,13 +392,21 @@ export default function TaskDetailPanel({
         if (nextWaiting) {
           const { data: promoted } = await updateTaskConfirmation(nextWaiting.id, { status: 'pending' })
           if (promoted) {
-            next = next.map(c => c.id === promoted.id ? promoted : c)
             notifyApproval(promoted.approver, task.title, `請求審批（${promoted.priority || '中'}）`, { store: task.store || null })
           }
         }
       }
     }
-    setConfirmations(next)
+
+    // ★ Chain 任務：trigger 可能在背後建了下一關 confirmations 或標完成 task → 全部重抓
+    if (task.approval_chain_id) {
+      const { data: all } = await supabase.from('task_confirmations').select('*').eq('task_id', task.id).order('created_at')
+      setConfirmations(all || [])
+      const { data: refreshedTask } = await supabase.from('tasks').select('*').eq('id', task.id).single()
+      if (refreshedTask) onUpdate(refreshedTask)
+    } else {
+      setConfirmations(next)
+    }
   }
 
   const handleRemoveConfirmation = async (id) => {
@@ -1113,7 +1142,38 @@ export default function TaskDetailPanel({
               🔏 簽核流程
             </div>
 
-            {!approvalForm ? (
+            {task.approval_chain_id ? (
+              // 任務綁定簽核鏈 → 自動走 task_confirmations + DB trigger 推進
+              // 進度顯示在上面「🔐 確認審批」面板
+              <div style={{
+                padding: 12, borderRadius: 8,
+                background: 'var(--accent-cyan-dim)',
+                border: '1px solid var(--accent-cyan-dim)',
+                color: 'var(--text-secondary)',
+                fontSize: 13, lineHeight: 1.6,
+              }}>
+                {(() => {
+                  const chain = approvalChains.find(c => c.id === task.approval_chain_id)
+                  const totalSteps = chain?.steps?.length ?? '?'
+                  const hasConf = confirmations.length > 0
+                  const isApproved = task.confirmation_status === 'approved'
+                  const isRejected = task.confirmation_status === 'rejected'
+                  return (
+                    <>
+                      <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--accent-cyan)' }}>
+                        🔗 已綁定簽核鏈：{chain?.name || `#${task.approval_chain_id}`}（{totalSteps} 關）
+                      </div>
+                      <div style={{ fontSize: 12 }}>
+                        {isApproved ? '✅ 簽核完成，任務已標記完成。' :
+                         isRejected ? '❌ 簽核已退回，任務退回進行中。' :
+                         hasConf ? '⏳ 簽核進行中 — 進度請見上面「確認審批」面板。' :
+                         '完成任務時自動啟動，按「儲存」並把狀態改成「已完成」就會建第一關簽核者。'}
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            ) : !approvalForm ? (
               <>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>尚未啟動簽核，設定後選擇簽核鏈開始</div>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>

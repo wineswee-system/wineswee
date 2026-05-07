@@ -261,17 +261,13 @@ function main() {
       continue
     }
 
-    // 組 INSERT statement
+    // 組 INSERT statement —— 每筆 INSERT 全部單行，避免 Supabase Editor 多行解析問題
     const aliases = deptAliases(deptText)
     const aliasList = sqlNameList(aliases)
     const values = cols.map(c => {
       if (c === 'department_id') {
         if (!deptText) return 'NULL'
-        return `COALESCE(
-      (SELECT id FROM departments WHERE name IN (${aliasList}) LIMIT 1),
-      (SELECT department_id FROM stores WHERE name IN (${aliasList}) LIMIT 1),
-      (SELECT department_id FROM department_sections WHERE name IN (${aliasList}) LIMIT 1)
-    )`
+        return `COALESCE((SELECT id FROM departments WHERE name IN (${aliasList}) LIMIT 1),(SELECT department_id FROM stores WHERE name IN (${aliasList}) LIMIT 1),(SELECT department_id FROM department_sections WHERE name IN (${aliasList}) LIMIT 1))`
       }
       if (c === 'store_id') {
         if (!deptText) return 'NULL'
@@ -282,20 +278,12 @@ function main() {
     })
 
     const updateSet = cols.filter(c => c !== 'employee_number').map(c => {
-      if (c === 'department_id' || c === 'store_id') {
-        return `${c} = EXCLUDED.${c}`
-      }
-      return `${c} = COALESCE(EXCLUDED.${c}, employees.${c})`  // 不覆蓋既有非空值
+      if (c === 'department_id' || c === 'store_id') return `${c}=EXCLUDED.${c}`
+      return `${c}=COALESCE(EXCLUDED.${c},employees.${c})`
     })
 
     lines.push(`-- ${empData.employee_number} ${empData.name || ''}${empData.name_en ? ' (' + empData.name_en + ')' : ''} | ${deptText || '(無部門)'}`)
-    lines.push(`INSERT INTO employees (${cols.join(', ')}) VALUES (`)
-    lines.push('  ' + values.join(',\n  '))
-    lines.push(`)`)
-    lines.push(`ON CONFLICT (employee_number) DO UPDATE SET`)
-    lines.push('  ' + updateSet.join(',\n  '))
-    lines.push(';')
-    lines.push('')
+    lines.push(`INSERT INTO employees (${cols.join(',')}) VALUES (${values.join(',')}) ON CONFLICT (employee_number) DO UPDATE SET ${updateSet.join(',')};`)
 
     exported++
   }
@@ -312,6 +300,7 @@ function main() {
   lines.push('')
   lines.push(`-- ─── 完成。共 ${exported} 筆；跳過 ${skipped} 筆（無 employee_number） ───`)
 
+  // 不加 BOM（Supabase SQL Editor 對 BOM 敏感），純 UTF-8 + LF
   writeFileSync(SQL_OUT, lines.join('\n'), 'utf8')
 
   console.log(`\n✓ SQL 已寫入 ${SQL_OUT}`)

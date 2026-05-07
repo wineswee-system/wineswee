@@ -254,50 +254,44 @@ export default function ExpenseRequests() {
     return data?.[0]?.id || null
   }
 
+  // ★ 走 chain step-by-step 推進（呼 expense_request_step_advance RPC）
+  // RPC 會驗證 caller 是否對應目前 chain step，通過才推進；最後一關才標 '已核准'
+  // 沒綁 chain → RPC 自動 fallback 到舊單關行為
   const handleApprove = async (req) => {
-    const instId = await resolveLinkedInstanceId(req)
-    if (instId) {
-      const { data: pendingSteps } = await supabase.from('tasks')
-        .select('*').eq('workflow_instance_id', instId).eq('status', '待處理')
-        .order('step_order').limit(1)
-      const pendingStep = pendingSteps?.[0]
-      if (pendingStep) {
-        const result = await advanceWorkflow(pendingStep.id, profile?.name || '管理員', '核准')
-        if (result?.error) { setError(result.error); return }
-        // advanceWorkflow handles writeBackStatus (expense approved) and workflow_instance update
-        load()
-        return
-      }
-    }
-    // Fallback: no linked workflow — direct approve
-    const { error } = await supabase.from('expense_requests')
-      .update({ status: '已核准', approved_by: profile?.name || '管理員', approved_at: new Date().toISOString() })
-      .eq('id', req.id)
+    const { data, error } = await supabase.rpc('expense_request_step_advance', {
+      p_id: req.id, p_action: 'approve', p_reason: null,
+    })
     if (error) { setError(error.message); return }
+    if (!data?.ok) {
+      const msg = {
+        NOT_AUTHENTICATED: '尚未登入',
+        EMPLOYEE_NOT_FOUND: '找不到員工資料（auth_user_id 沒綁）',
+        NOT_FOUND: '找不到此申請',
+        NOT_PENDING: `此申請目前狀態 ${data.current_status}，無法核准`,
+        STEP_NOT_FOUND: `chain 第 ${data.current_step + 1} 關沒設定`,
+        NOT_AUTHORIZED_FOR_STEP: `你不是目前這關的簽核者（第 ${data.current_step + 1} 關需要 ${data.expected_role}）`,
+      }[data?.error] || `核准失敗：${data?.error || 'unknown'}`
+      alert(msg); return
+    }
+    if (data.fully_approved) {
+      alert('已通過全部簽核關卡')
+    } else {
+      alert(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
+    }
     load()
   }
 
   const handleReject = async (req) => {
     const reason = prompt('駁回原因：')
-    if (!reason) return
-    const instId = await resolveLinkedInstanceId(req)
-    if (instId) {
-      const { data: pendingSteps } = await supabase.from('tasks')
-        .select('*').eq('workflow_instance_id', instId).eq('status', '待處理')
-        .order('step_order').limit(1)
-      const pendingStep = pendingSteps?.[0]
-      if (pendingStep) {
-        const result = await advanceWorkflow(pendingStep.id, profile?.name || '管理員', '退回', reason)
-        if (result?.error) { setError(result.error); return }
-        load()
-        return
-      }
-    }
-    // Fallback: no linked workflow — direct reject
-    const { error } = await supabase.from('expense_requests')
-      .update({ status: '已駁回', reject_reason: reason })
-      .eq('id', req.id)
+    if (!reason || !reason.trim()) return
+    const { data, error } = await supabase.rpc('expense_request_step_advance', {
+      p_id: req.id, p_action: 'reject', p_reason: reason.trim(),
+    })
     if (error) { setError(error.message); return }
+    if (!data?.ok) {
+      alert(`退回失敗：${data?.error || 'unknown'}`)
+      return
+    }
     load()
   }
 
@@ -319,16 +313,28 @@ export default function ExpenseRequests() {
 
     const isPending  = req.status === '待核銷'
     const isSettled  = req.status === '已核銷'
+    const inSettleStage = isPending || isSettled
 
-    // 用 buildChainBasedSteps 讀 row.approval_chain_id 動態建 chain steps
-    // expense_requests 沒有 current_step 欄位（MVP 階段），所以用 status 推算 cur：
-    //   申請中  → cur=0（第一關 current）
-    //   已核准/待核銷/已核銷 → cur=999（buildChainBasedSteps 看 status 直接全部標 completed）
-    //   已駁回/已退回 → cur=0（第一關 rejected）
-    // 為了讓「待核銷」也能讓 chain 全部 completed，把 status 翻成 '已核准' 餵進去
+    // 預抓 chain steps 對應的 employee 名字 → approverMap，傳給 buildChainBasedSteps
+    let approverMap = {}
+    if (req.approval_chain_id) {
+      const { data: rawSteps } = await supabase
+        .from('approval_chain_steps')
+        .select('target_emp_id')
+        .eq('chain_id', req.approval_chain_id)
+      const empIds = [...new Set((rawSteps || []).map(s => s.target_emp_id).filter(Boolean))]
+      if (empIds.length > 0) {
+        const { data: emps } = await supabase.from('employees').select('id, name').in('id', empIds)
+        approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
+      }
+    }
+
+    // 餵 buildChainBasedSteps：用 row.current_step（新加的欄位）真實推進度
+    // 沒 chain → buildChainBasedSteps 自己 fallback 給「主管核示」單關
     const fakeRow = {
       approval_chain_id: req.approval_chain_id || null,
-      current_step: ['已核准', '待核銷', '已核銷'].includes(req.status) ? 999 : 0,
+      current_step: req.current_step || 0,
+      // 待核銷 視為 chain 全完，讓 buildChainBasedSteps 把所有 chain step 標 completed
       status: req.status === '待核銷' ? '已核准' : req.status,
       approved_at: req.approved_at,
       reject_reason: req.reject_reason,
@@ -341,22 +347,27 @@ export default function ExpenseRequests() {
         row: fakeRow,
         applicantName: req.employee,
         applicantCreatedAt: req.created_at,
+        approverMap,
       })
     } catch (e) {
       console.error('buildChainBasedSteps failed:', e)
     }
 
-    // 補加「財務核章」step — 費用申請特有的第二階段，不在 approval_chain_steps 內，看 settled_by/at
-    const finStep = {
-      label: '財務核章',
-      name: isSettled ? (req.settled_by || '') : '',
-      status: isSettled ? 'completed' : (isPending ? 'current' : 'pending'),
-      completedAt: isSettled ? req.settled_at : undefined,
-      archival: false,  // 真實階段，不是純存檔
+    // 「財務核章」只在實際進入核銷階段（待核銷/已核銷）才顯示。
+    // 沒設核銷需求 / chain 是最終決定的流程，不顯示這關。
+    let finalSteps = baseSteps
+    if (inSettleStage) {
+      finalSteps = [...baseSteps, {
+        label: '財務核章',
+        name: isSettled ? (req.settled_by || '') : '',
+        status: isSettled ? 'completed' : 'current',
+        completedAt: isSettled ? req.settled_at : undefined,
+        archival: false,
+      }]
     }
 
     if (detailRowIdRef.current !== req.id) return
-    setDetailChainSteps([...baseSteps, finStep])
+    setDetailChainSteps(finalSteps)
     setLoadingChain(false)
   }
 

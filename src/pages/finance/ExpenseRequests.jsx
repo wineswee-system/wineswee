@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Trash2, Eye, Send, Download } from 'lucide-react'
+import { Plus, X, Check, Upload, FileText, Image, Eye, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -39,6 +40,9 @@ export default function ExpenseRequests() {
   const [showModal, setShowModal] = useState(false)
   const [showSettleModal, setShowSettleModal] = useState(false)
   const [showDetail, setShowDetail] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
   const [form, setForm] = useState(emptyForm)
   const [settleForm, setSettleForm] = useState({ actual_amount: '', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -305,6 +309,58 @@ export default function ExpenseRequests() {
     setShowSettleModal(true)
   }
 
+  // Open detail modal: load attachments + build 2-stage chain steps
+  const openDetail = async (req) => {
+    detailRowIdRef.current = req.id
+    setShowDetail(req)
+    loadAttachments(req.id)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+
+    // 兩階段：申請人 → 直屬主管（核可） → 財務核章（核銷）
+    const empRow = employees.find(e => e.name === req.employee)
+    let steps = []
+    try {
+      // 先試 workflow_instance（如果有 multi-step 自訂簽核鏈）
+      steps = await buildWorkflowChainSteps({
+        templateName: '費用申請簽核',
+        applicantName: req.employee,
+        applicantId: empRow?.id,
+        applicantCreatedAt: req.created_at,
+        recordStatus: req.status,
+        approverName: req.approved_by,
+        approvedAt: req.approved_at,
+        rejectReason: req.reject_reason,
+        fallbackTail: ['財務核章'],
+      })
+    } catch (e) {
+      console.error('build chain steps failed:', e)
+    }
+
+    // 修正 fallback 模式下的「財務核章」status — 它要反映實際核銷狀態
+    // buildWorkflowChainSteps fallback 把 tail 都標 archival+pending，但 ExpenseRequests 的「財務核章」是真實階段
+    const isApproved = ['已核准', '待核銷', '已核銷'].includes(req.status)
+    const isPendingSettle = req.status === '待核銷'
+    const isSettled = req.status === '已核銷'
+    const fin = steps.find(s => s.label === '財務核章')
+    if (fin) {
+      fin.archival = false  // 真實階段，非僅形式
+      if (isSettled) {
+        fin.status = 'completed'
+        fin.name = req.settled_by || ''
+        fin.completedAt = req.settled_at
+      } else if (isPendingSettle) {
+        fin.status = 'current'
+      } else if (isApproved) {
+        fin.status = 'pending'
+      }
+    }
+
+    if (detailRowIdRef.current !== req.id) return
+    setDetailChainSteps(steps)
+    setLoadingChain(false)
+  }
+
   // Submit settlement
   const handleSettle = async () => {
     if (!validateRequired(settleForm, ['actual_amount'], setErrors)) return
@@ -453,7 +509,7 @@ export default function ExpenseRequests() {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
-                        onClick={() => { setShowDetail(r); loadAttachments(r.id) }}>
+                        onClick={() => openDetail(r)}>
                         <Eye size={12} />
                       </button>
                       {r.status === '申請中' && (
@@ -702,134 +758,127 @@ export default function ExpenseRequests() {
         </ModalOverlay>
       )}
 
-      {/* Detail Modal */}
-      {showDetail && !showSettleModal && (
-        <ModalOverlay onClose={() => setShowDetail(null)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>申請詳情 #{showDetail.id}</h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowDetail(null)}><X size={20} /></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div><span style={{ color: 'var(--text-muted)' }}>申請人：</span><strong>{showDetail.employee}</strong></div>
-                <div><span style={{ color: 'var(--text-muted)' }}>部門：</span>{showDetail.department || '-'}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>科目：</span>{showDetail.account_code} {showDetail.account_name}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>門市：</span>{showDetail.store || '-'}</div>
-                {showDetail.supplier && <div><span style={{ color: 'var(--text-muted)' }}>供應商：</span><strong>{showDetail.supplier}</strong></div>}
-              </div>
-              <div><span style={{ color: 'var(--text-muted)' }}>項目：</span><strong>{showDetail.title}</strong></div>
-              {showDetail.description && <div><span style={{ color: 'var(--text-muted)' }}>說明：</span>{showDetail.description}</div>}
+      {/* Detail Modal — split layout 與其他簽核表單一致 */}
+      {showDetail && !showSettleModal && (() => {
+        const empRow = employees.find(e => e.name === showDetail.employee)
+        const fields = [
+          { label: '部門', value: showDetail.department || '—' },
+          { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
+          { label: '門市', value: showDetail.store || '—' },
+          ...(showDetail.supplier ? [{ label: '供應商', value: showDetail.supplier }] : []),
+          { label: '項目', value: showDetail.title || '—' },
+          ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+        ]
 
-              {/* Line items table */}
-              {showDetail.items?.length > 0 && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-main)' }}>
-                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
+        // 明細表格 — 用 JSX 塞進 fields
+        if (showDetail.items?.length > 0) {
+          fields.push({
+            label: '明細項目',
+            value: (
+              <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)' }}>
+                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {showDetail.items.map((li, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '4px 8px' }}>{li.name}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {showDetail.items.map((li, i) => (
-                        <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                          <td style={{ padding: '4px 8px' }}>{li.name}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: '2px solid var(--border)' }}>
-                        <td colSpan={3} style={{ padding: '6px 8px', fontWeight: 700 }}>合計</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent-blue)' }}>{fmt(showDetail.estimated_amount)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-main)', padding: 12, borderRadius: 8 }}>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估金額</div><div style={{ fontWeight: 700 }}>{fmt(showDetail.estimated_amount)}</div></div>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmt(showDetail.actual_amount) : '-'}</div></div>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>差異</div><div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{showDetail.difference != null ? fmt(showDetail.difference) : '-'}</div></div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {showDetail.reject_reason && <div style={{ color: 'var(--accent-red)' }}>駁回原因：{showDetail.reject_reason}</div>}
-              {showDetail.notes && <div><span style={{ color: 'var(--text-muted)' }}>核銷備註：</span>{showDetail.notes}</div>}
+            ),
+          })
+        }
 
-              {/* Attachments */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>附件</div>
-                {(attachments[showDetail.id] || []).length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>無附件</div>
-                ) : (attachments[showDetail.id] || []).map(att => (
-                  <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12 }}>
-                    {att.file_type?.startsWith('image') ? <Image size={14} color="var(--accent-blue)" /> : <FileText size={14} color="var(--accent-yellow)" />}
-                    <span style={{ flex: 1 }}>{att.file_name}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{att.stage === 'settlement' ? '核銷' : '申請'}</span>
-                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-blue)' }} onClick={() => viewFile(att)}><Eye size={13} /></button>
-                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }} onClick={() => deleteFile(att)}><Trash2 size={13} /></button>
-                  </div>
-                ))}
-              </div>
+        // 三欄金額卡片
+        fields.push({
+          label: '金額',
+          value: (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8 }}>
+              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估金額</div><div style={{ fontWeight: 700 }}>{fmt(showDetail.estimated_amount)}</div></div>
+              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmt(showDetail.actual_amount) : '—'}</div></div>
+              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>差異</div><div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{showDetail.difference != null ? fmt(showDetail.difference) : '—'}</div></div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={async () => {
-                if (!employees.length) { alert('員工清單載入中，請稍候'); return }
-                const win = window.open('', '_blank', 'width=900,height=1100')
-                if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
-                try {
-                  // 把附件即時撈一份（圖檔會內嵌進簽呈 PDF）
-                  const { data: atts } = await supabase.from('expense_request_attachments')
-                    .select('file_name, storage_path, file_type')
-                    .eq('request_id', showDetail.id)
-                    .order('created_at')
-                  const attachments = (atts || []).map(a => ({
-                    url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-                    name: a.file_name,
-                    type: a.file_type,
-                  }))
-                  const signatures = Object.fromEntries(
-                    employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
-                  )
-                  const empRow = employees.find(e => e.name === showDetail.employee)
-                  const chainSteps = await buildWorkflowChainSteps({
-                    templateName: '費用申請簽核',
-                    applicantName: showDetail.employee,
-                    applicantId: empRow?.id,
-                    applicantCreatedAt: showDetail.created_at,
-                    recordStatus: showDetail.status,
-                    approverName: showDetail.approved_by,
-                    approvedAt: showDetail.approved_at,
-                    rejectReason: showDetail.reject_reason,
-                    fallbackTail: ['財務核章'],
-                  })
-                  const approverMap = {}
-                  chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-                  exportExpenseRequestPdf(showDetail, {
-                    companyName: organization?.name,
-                    logoUrl: organization?.logo_url,
-                    attachments,
-                    signatures,
-                    chainSteps,
-                    approverMap,
-                    _win: win,
-                  })
-                } catch (e) {
-                  win.close()
-                  alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
-                }
-              }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Download size={13} /> 下載簽呈
-              </button>
-              <button className="btn btn-secondary" onClick={() => setShowDetail(null)}>關閉</button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
+          ),
+        })
+
+        if (showDetail.reject_reason) fields.push({ label: '駁回原因', value: showDetail.reject_reason, multiline: true })
+        if (showDetail.notes) fields.push({ label: '核銷備註', value: showDetail.notes, multiline: true })
+
+        const atts = (attachments[showDetail.id] || []).map(a => ({
+          url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+          name: `${a.file_name}${a.stage === 'settlement' ? '（核銷）' : '（申請）'}`,
+          type: a.file_type,
+        }))
+
+        const handlePrintSignOff = async () => {
+          if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+          const win = window.open('', '_blank', 'width=900,height=1100')
+          if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+          try {
+            const { data: rawAtts } = await supabase.from('expense_request_attachments')
+              .select('file_name, storage_path, file_type')
+              .eq('request_id', showDetail.id)
+              .order('created_at')
+            const pdfAtts = (rawAtts || []).map(a => ({
+              url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+              name: a.file_name,
+              type: a.file_type,
+            }))
+            const signatures = Object.fromEntries(
+              employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+            )
+            const approverMap = {}
+            detailChainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+            exportExpenseRequestPdf(showDetail, {
+              companyName: organization?.name,
+              logoUrl: organization?.logo_url,
+              attachments: pdfAtts,
+              signatures,
+              chainSteps: detailChainSteps,
+              approverMap,
+              _win: win,
+            })
+          } catch (e) {
+            win.close()
+            alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+          }
+        }
+
+        return (
+          <ApprovalDetailModal
+            open={!!showDetail}
+            onClose={() => { setShowDetail(null); setDetailChainSteps([]) }}
+            docTitle={`費用申請 #${showDetail.id}`}
+            docNo={showDetail.id}
+            status={showDetail.status}
+            applicant={{
+              name: showDetail.employee,
+              name_en: empRow?.name_en,
+              position: empRow?.position,
+              dept: showDetail.department,
+              status: empRow?.status,
+              employee_no: empRow?.employee_number,
+            }}
+            fields={fields}
+            attachments={atts}
+            createdAt={showDetail.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={handlePrintSignOff}
+          />
+        )
+      })()}
     </div>
   )
 }

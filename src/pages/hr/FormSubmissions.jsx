@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle, XCircle, Eye, Printer, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printFormMemo } from '../../lib/printFormMemo'
 
 // 公司名（給簽呈標題用）— 存 localStorage，每台電腦設一次
@@ -24,7 +25,10 @@ export default function FormSubmissions() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState(isAdmin ? 'review' : 'mine')   // mine | review | all
-  const [viewing, setViewing] = useState(null)
+  const [detailRow, setDetailRow] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [showCompanyModal, setShowCompanyModal] = useState(false)
@@ -127,6 +131,68 @@ export default function FormSubmissions() {
     alert('公司名稱已儲存（瀏覽器本機）')
   }
 
+  // 開查看明細：抓 chain steps（template.approval_chain_id）+ 套 status 到每關
+  // form_submissions 是單關 admin 一鍵核准/駁回，沒有 current_step → inline 算 status，不走 buildChainBasedSteps
+  const openDetail = async (sub) => {
+    detailRowIdRef.current = sub.id
+    setDetailRow(sub)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+
+    const applicantStep = {
+      label: '申請人',
+      name: sub.applicant?.name || '—',
+      status: 'completed',
+      completedAt: sub.created_at,
+      isApplicant: true,
+    }
+
+    const isApproved = sub.status === '已核准' || sub.status === '已核銷'
+    const isRejected = sub.status === '已駁回' || sub.status === '已退回' || sub.status === '已拒絕'
+    let restSteps = []
+    const chainId = sub.template?.approval_chain_id
+
+    if (chainId) {
+      const { data: rawSteps } = await supabase
+        .from('approval_chain_steps')
+        .select('id, step_order, label, role_name, target_emp_id')
+        .eq('chain_id', chainId)
+        .order('step_order')
+      const empIds = [...new Set((rawSteps || []).map(s => s.target_emp_id).filter(Boolean))]
+      let nameMap = {}
+      if (empIds.length > 0) {
+        const { data: emps } = await supabase.from('employees').select('id, name').in('id', empIds)
+        nameMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
+      }
+      restSteps = (rawSteps || []).map((s, i) => {
+        let status
+        if (isApproved) status = 'completed'
+        else if (isRejected) status = i === 0 ? 'rejected' : 'pending'
+        else status = i === 0 ? 'current' : 'pending'
+        return {
+          label: s.label || s.role_name || `第${s.step_order}關`,
+          name: s.target_emp_id ? (nameMap[s.target_emp_id] || '') : (s.role_name || ''),
+          status,
+          completedAt: status === 'completed' && i === rawSteps.length - 1 ? sub.approved_at : undefined,
+          rejectReason: status === 'rejected' ? sub.reject_reason : '',
+        }
+      })
+    } else {
+      // 沒設 chain → 單關「主管核示」
+      if (isApproved) {
+        restSteps = [{ label: '主管核示', name: sub.approver?.name || '', status: 'completed', completedAt: sub.approved_at }]
+      } else if (isRejected) {
+        restSteps = [{ label: '主管核示', name: sub.approver?.name || '', status: 'rejected', rejectReason: sub.reject_reason }]
+      } else {
+        restSteps = [{ label: '主管核示', name: '', status: 'current' }]
+      }
+    }
+
+    if (detailRowIdRef.current !== sub.id) return
+    setDetailChainSteps([applicantStep, ...restSteps])
+    setLoadingChain(false)
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -188,7 +254,7 @@ export default function FormSubmissions() {
                     <td style={{ fontSize: 12 }}>{s.approver?.name || '—'}{s.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)' }}>{s.reject_reason}</div>}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setViewing(s)}>
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openDetail(s)}>
                           <Eye size={11} /> 查看
                         </button>
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-purple)' }} onClick={() => handlePrint(s)} title="列印簽呈 PDF">
@@ -217,20 +283,45 @@ export default function FormSubmissions() {
         </div>
       </div>
 
-      {viewing && (
-        <Modal title={`查看 — ${viewing.template?.name}`} onClose={() => setViewing(null)} onSubmit={null} maxWidth={700}>
-          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-            申請人：{viewing.applicant?.name} · 申請日：{viewing.created_at?.slice(0, 10)} · 狀態：{viewing.status}
-          </div>
-          {(viewing.template?.fields || []).map(f => (
-            <Field key={f.key} label={f.label}>
-              <div style={{ padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 6, fontSize: 13, minHeight: 32, whiteSpace: 'pre-wrap' }}>
-                {renderFieldValue(viewing.data?.[f.key], f)}
-              </div>
-            </Field>
-          ))}
-        </Modal>
-      )}
+      {detailRow && (() => {
+        const fields = []
+        const attachments = []
+        for (const f of (detailRow.template?.fields || [])) {
+          const v = detailRow.data?.[f.key]
+          if (f.type === 'file') {
+            if (v) attachments.push({ url: v, name: String(v).split('?')[0].split('/').pop() || f.label })
+          } else {
+            let displayValue
+            if (v === null || v === undefined || v === '') displayValue = ''
+            else if (f.type === 'checkbox') displayValue = v ? '✓ 是' : '✗ 否'
+            else displayValue = String(v)
+            const multiline = f.type === 'textarea' || (typeof displayValue === 'string' && displayValue.length > 50)
+            fields.push({ label: f.label, value: displayValue, multiline })
+          }
+        }
+        if (detailRow.reject_reason) {
+          fields.push({ label: '駁回原因', value: detailRow.reject_reason, multiline: true })
+        }
+        return (
+          <ApprovalDetailModal
+            open={!!detailRow}
+            onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
+            docTitle={detailRow.template?.name || '表單'}
+            docNo={detailRow.id}
+            status={detailRow.status}
+            applicant={{
+              name: detailRow.applicant?.name,
+              name_en: detailRow.applicant?.name_en,
+              position: detailRow.applicant?.position,
+            }}
+            fields={fields}
+            attachments={attachments}
+            createdAt={detailRow.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={() => handlePrint(detailRow)}
+          />
+        )
+      })()}
 
       {reviewModal && (
         <Modal title={`駁回 — ${reviewModal.template?.name}`} onClose={() => { setReviewModal(null); setRejectReason('') }} onSubmit={handleReject} submitLabel="確認駁回">
@@ -254,9 +345,3 @@ export default function FormSubmissions() {
   )
 }
 
-function renderFieldValue(v, f) {
-  if (v === null || v === undefined || v === '') return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  if (f.type === 'checkbox') return v ? '✓ 是' : '✗ 否'
-  if (f.type === 'file') return <a href={v} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>{v.split('/').pop()}</a>
-  return String(v)
-}

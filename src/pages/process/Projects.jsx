@@ -27,14 +27,17 @@ const STATUS_MAP = {
 }
 
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
-const TASK_STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
+const TASK_STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
 const TASK_STATUS_CONFIG = {
   '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
   '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
+  '待確認': { color: 'var(--accent-purple)', bg: 'var(--accent-purple-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
+  '已退回': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
   '已擱置': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
 }
+const TASK_STATUS_FALLBACK = TASK_STATUS_CONFIG['未開始']
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '' }
@@ -717,7 +720,7 @@ export default function Projects() {
                 )}
 
                 {wTasks.map((t, idx) => {
-                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_CONFIG['待處理']
+                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
                   return (
                     <div key={t.id}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px 5px 24px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}
@@ -796,7 +799,7 @@ export default function Projects() {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無獨立任務。點「新增任務」直接加入專案。</div>
                 )}
                 {directTasks.map((t, idx) => {
-                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_CONFIG['待處理']
+                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
                   return (
                     <div key={t.id}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}

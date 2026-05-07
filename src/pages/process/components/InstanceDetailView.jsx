@@ -8,15 +8,19 @@ import SearchableSelect, { empOptions } from '../../../components/SearchableSele
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import { empLabel } from '../../../lib/empLabel'
 
-const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
+const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
 
 const STATUS_CONFIG = {
   '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
   '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
+  '待確認': { color: 'var(--accent-purple)', bg: 'var(--accent-purple-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
+  '已退回': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
   '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },
 }
+// 任何 STATUS_CONFIG 沒對到的 status 都 fallback 到「未開始」（避免 sc.color 讀 undefined 崩）
+const FALLBACK_STATUS = STATUS_CONFIG['未開始']
 
 export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
@@ -171,7 +175,7 @@ export default function InstanceDetailView({
             <tbody>
               {instSteps.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>尚無任務</td></tr>}
               {instSteps.map(step => {
-                const sc = STATUS_CONFIG[step.status] || STATUS_CONFIG['待處理']
+                const sc = STATUS_CONFIG[step.status] || FALLBACK_STATUS
                 return (
                   <tr key={step.id} style={{ borderLeft: `3px solid ${sc.color}`, cursor: 'pointer' }} onClick={() => setSelectedStep(step)}>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{step.step_order}</td>

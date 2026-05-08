@@ -94,9 +94,20 @@ export default function Companies() {
             </thead>
             <tbody>
               {companies.map(c => {
-                const companyStores = stores.filter(s => s.company_id === c.id || s.company === c.name)
+                const companyStores = stores.filter(s =>
+                  s.company_id === c.id ||
+                  s.company === c.name ||
+                  (c.organization_id && s.organization_id === c.organization_id && !s.company_id && !s.company)
+                )
                 const storeIds = companyStores.map(s => s.id)
-                const empCount = employees.filter(e => (storeIds.includes(e.store_id) || companyStores.map(s => s.name).includes(e.store)) && e.status === '在職').length
+                const storeNames = companyStores.map(s => s.name)
+                const empCount = employees.filter(e =>
+                  e.status === '在職' && (
+                    storeIds.includes(e.store_id) ||
+                    storeNames.includes(e.store) ||
+                    (c.organization_id && e.organization_id === c.organization_id && !e.store_id && !e.store)
+                  )
+                ).length
                 return (
                 <tr key={c.id}>
                   <td style={{ fontWeight: 600 }}>{c.name}</td>

@@ -780,41 +780,46 @@ export default function ExpenseRequests() {
           { label: '部門', value: showDetail.department || '—' },
           { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
           { label: '門市', value: showDetail.store || '—' },
-          ...(showDetail.supplier ? [{ label: '供應商', value: showDetail.supplier }] : []),
+          { label: '供應商', value: showDetail.supplier || '—' },
           { label: '項目', value: showDetail.title || '—' },
           ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
         ]
 
-        // 明細表格 — 用 JSX 塞進 fields
-        if (showDetail.items?.length > 0) {
-          fields.push({
-            label: '明細項目',
-            value: (
-              <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
-                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-secondary)' }}>
-                      <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {showDetail.items.map((li, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '4px 8px' }}>{li.name}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ),
-          })
-        }
+        // 明細表格 — 始終顯示，無品項時顯示空白提示
+        fields.push({
+          label: '品項明細',
+          value: (
+            <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {showDetail.items?.length > 0
+                    ? showDetail.items.map((li, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '4px 8px' }}>{li.name}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
+                        </tr>
+                      ))
+                    : (
+                        <tr>
+                          <td colSpan={4} style={{ padding: '8px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>無品項明細</td>
+                        </tr>
+                      )
+                  }
+                </tbody>
+              </table>
+            </div>
+          ),
+        })
 
         // 三欄金額卡片
         fields.push({

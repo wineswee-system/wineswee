@@ -7,7 +7,7 @@
 
 import { supabase } from './supabase'
 import { getSupervisor, getApprovalChain } from './approval'
-import { notifyTaskAssignee } from './lineNotify'
+// notifyTaskAssignee 已拔除 — 簽核 LINE 推送統一走 DB trigger（feedback_signoff_must_use_db_trigger）
 
 // 預設簽核流程模板（fallback，優先讀 approval_chains）
 const DEFAULT_TEMPLATES = {
@@ -140,7 +140,12 @@ export async function createApprovalWorkflow(type, record, requesterName) {
 
   if (stepErr) return { error: stepErr.message }
 
-  // 建立通知給第一關審核人
+  // ★ 2026-05-08：notifyTaskAssignee 已移除
+  // 簽核 LINE 推送統一由 DB trigger 處理（feedback_signoff_must_use_db_trigger）：
+  //   - expense_request：trg_notify_expense_request_inserted (20260508110000)
+  //   - HR forms（leave/overtime/...）：尚未補 trigger，LINE 通知暫時失效
+  //     → 必須儘快補上（todo）
+  // 這裡只保留站內通知（notifications 表），不在 client 推 LINE。
   if (supervisor) {
     await supabase.from('notifications').insert({
       recipient_emp_id: supervisor.id,
@@ -149,11 +154,6 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       title: `${requesterName} 提交${template.name}，請審核`,
       read: false,
     })
-
-    // LINE 推播（notifyTaskAssignee 內部會解析 employee_line_accounts）
-    try {
-      await notifyTaskAssignee(supervisor.name, `${requesterName} 提交${template.name}，請審核`)
-    } catch (e) { /* LINE 推播失敗不阻擋流程 */ }
   }
 
   return { instance, steps }
@@ -254,9 +254,7 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
         title: `${instance?.template_name}：${nextStep.title}，請審核`,
         read: false,
       })
-      try {
-        await notifyTaskAssignee(nextAssignee, `${instance?.started_by} 的${instance?.template_name}，請審核`)
-      } catch (e) { /* LINE 推播失敗不阻擋流程 */ }
+      // ★ 2026-05-08：notifyTaskAssignee 已移除，LINE 通知統一走 DB trigger
     }
 
     return { action: 'advanced', instance, step, nextStep }

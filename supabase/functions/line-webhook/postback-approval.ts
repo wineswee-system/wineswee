@@ -71,10 +71,10 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
     return [txt(`❌ ${errorMap[result?.error ?? ""] ?? result?.error ?? "核准失敗"}`)];
   }
 
-  // 如果 chain advanced 到下一關 → 推 rich card 給下關簽核者（只有 expense_request 走 chain）
-  if (result.event === "advanced" && Array.isArray(result.next_approvers) && result.next_approvers.length > 0) {
-    await pushCardToApprovers(ctx, rt, id, result.next_approvers);
-  }
+  // ★ 2026-05-08：next-step LINE 推送已搬到 DB trigger
+  // (migration 20260508110000_expense_request_chain_db_trigger.sql)
+  // 這裡不再呼 pushCardToApprovers，避免雙推。
+  // expense_request_step_advance RPC update current_step → AFTER UPDATE trigger 會推下一關。
 
   // 成功：單行文字
   const status = result.status ?? "已核准";

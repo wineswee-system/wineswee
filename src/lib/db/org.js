@@ -37,11 +37,17 @@ export const updateCompany = (id, data) =>
 export const deleteCompany = (id) =>
   supabase.from('companies').delete().eq('id', id)
 
-export const getStores = () =>
-  supabase.from('stores').select('*').order('id')
+export const getStores = (orgId) => {
+  let q = supabase.from('stores').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
-export const getStoresWithRefs = () =>
-  supabase.from('stores').select('*, company_ref:companies!company_id(id,name), manager_ref:employees!manager_id(id,name)').order('id')
+export const getStoresWithRefs = (orgId) => {
+  let q = supabase.from('stores').select('*, company_ref:companies!company_id(id,name), manager_ref:employees!manager_id(id,name)').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createStore = (data) =>
   supabase.from('stores').insert(data).select().single()

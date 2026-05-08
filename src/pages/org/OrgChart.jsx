@@ -22,14 +22,12 @@ export default function OrgChart() {
 
   useEffect(() => {
     const orgId = profile?.organization_id
-    Promise.all([getDepartments(), getDepartmentSections(), getEmployees(), getStores()])
+    Promise.all([getDepartments(orgId), getDepartmentSections(orgId), getEmployees(orgId), getStores(orgId)])
       .then(([dRes, secRes, eRes, sRes]) => {
-        // 多租戶過濾：只顯示自己組織的資料（避免幽靈員工）
-        const inOrg = (x) => orgId == null || x.organization_id == null || x.organization_id === orgId
-        setDepartments((dRes.data || []).filter(inOrg))
-        setSections((secRes.data || []).filter(inOrg))
-        setEmployees((eRes.data || []).filter(e => e.status === '在職' && inOrg(e)))
-        setStores((sRes.data || []).filter(s => s.is_active !== false && inOrg(s)))
+        setDepartments(dRes.data || [])
+        setSections(secRes.data || [])
+        setEmployees((eRes.data || []).filter(e => e.status === '在職'))
+        setStores((sRes.data || []).filter(s => s.is_active !== false))
       })
       .finally(() => setLoading(false))
   }, [profile?.organization_id])

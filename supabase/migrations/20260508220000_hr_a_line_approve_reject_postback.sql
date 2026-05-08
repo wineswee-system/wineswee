@@ -1,13 +1,15 @@
 -- ════════════════════════════════════════════════════════════
--- HR A 類 LINE 通知：「核准」和「駁回」按鈕加在「看完整詳情」上方
+-- 修正 20260508210000：核准/駁回改用 postback（不走 LIFF）
 --
--- 修改 _push_hr_chain_flex：
---   step_assigned 事件（推給審核人）→ footer 顯示：
---     [ ✅ 核准 ]  [ ❌ 駁回 ]   (並排 horizontal box)
---     [ 📋 看完整詳情 ]           (secondary 按鈕)
---   其他事件（已核准/已退回推給申請人）→ 維持原單一「查看詳情」按鈕
+-- ✅ 核准 → postback action=approve&type=request&rt={rt}&id={id}
+--   → line-webhook handleApprove → liff_approve_request RPC → DB 直接更新
 --
--- 核准 / 駁回 LIFF URL 在 to 參數後加 &action=approve / &action=reject
+-- ❌ 駁回 → postback action=reject&type=request&rt={rt}&id={id}
+--   → line-webhook handleReject → setPending(approval_reject_reason)
+--   → bot 詢問原因（快速選項）→ 使用者回覆文字
+--   → pending handler → liff_approve_request reject+reason → DB 更新 → 通知申請人
+--
+-- 📋 看完整詳情 → uri → LIFF 頁面（唯一走 LIFF 的按鈕）
 -- ════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public._push_hr_chain_flex(
@@ -39,8 +41,6 @@ DECLARE
   v_status_chip  text;
   v_alt_text     text;
   v_liff_url     text;
-  v_liff_url_approve text;
-  v_liff_url_reject  text;
   v_payload      jsonb;
   v_rows         jsonb;
   v_applicant_inner jsonb;
@@ -132,12 +132,12 @@ BEGIN
     'contents', v_rows
   );
 
-  -- footer：step_assigned → 核准/駁回並排 + 看完整詳情；其他 → 單一查看按鈕
+  -- footer：step_assigned → [ ✅核准 | ❌駁回 ] postback 並排
+  --                        + [ 📋看完整詳情 ] uri→LIFF（唯一走 LIFF 的按鈕）
+  --         其他事件（已核准/已退回推給申請人）→ 單一 [ 📋查看詳情 ] uri→LIFF
   IF p_liff_id IS NOT NULL AND p_liff_id <> '' THEN
-    v_liff_url         := 'https://liff.line.me/' || p_liff_id
-                          || '?to=%2Fapprove%3Ftype%3D' || p_rt || '%26id%3D' || p_id::text;
-    v_liff_url_approve := v_liff_url || '%26action%3Dapprove';
-    v_liff_url_reject  := v_liff_url || '%26action%3Dreject';
+    v_liff_url := 'https://liff.line.me/' || p_liff_id
+                  || '?to=%2Fapprove%3Ftype%3D' || p_rt || '%26id%3D' || p_id::text;
 
     IF p_event = 'step_assigned' THEN
       v_footer_buttons := jsonb_build_array(
@@ -146,14 +146,22 @@ BEGIN
           'contents', jsonb_build_array(
             jsonb_build_object(
               'type','button',
-              'action', jsonb_build_object('type','uri','label','✅ 核准',
-                'uri', v_liff_url_approve),
+              'action', jsonb_build_object(
+                'type','postback',
+                'label','✅ 核准',
+                'data', 'action=approve&type=request&rt=' || p_rt || '&id=' || p_id::text,
+                'displayText','✅ 核准'
+              ),
               'style','primary','color','#10b981','height','sm','flex',1
             ),
             jsonb_build_object(
               'type','button',
-              'action', jsonb_build_object('type','uri','label','❌ 駁回',
-                'uri', v_liff_url_reject),
+              'action', jsonb_build_object(
+                'type','postback',
+                'label','❌ 駁回',
+                'data', 'action=reject&type=request&rt=' || p_rt || '&id=' || p_id::text,
+                'displayText','❌ 駁回'
+              ),
               'style','primary','color','#ef4444','height','sm','flex',1
             )
           )

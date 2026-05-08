@@ -64,8 +64,10 @@ BEGIN
     v_store     := v_er.store;
   ELSE
     v_applicant := v_task.assignee;
-    SELECT e.department INTO v_dept
+    -- employees 沒 dept text 欄（phase3 拔了），要 JOIN departments 拿名字
+    SELECT d.name INTO v_dept
       FROM employees e
+      LEFT JOIN departments d ON d.id = e.department_id
      WHERE e.name = v_applicant
        AND (e.organization_id = v_task.organization_id OR v_task.organization_id IS NULL)
      LIMIT 1;

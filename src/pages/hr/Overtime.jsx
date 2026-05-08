@@ -24,7 +24,8 @@ export default function Overtime() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '' })
+  const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '', store: '' })
+  const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
   const [errors, setErrors] = useState({})
 
@@ -42,7 +43,7 @@ export default function Overtime() {
       getOvertimeRequests(),
       supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('id, overtime_step_hours'),
+      supabase.from('stores').select('id, name, overtime_step_hours, organization_id').eq('organization_id', profile?.organization_id ?? -1).order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ]).then(([r, e, d, s, orgRes]) => {
       const emps = e.data || []
@@ -52,6 +53,7 @@ export default function Overtime() {
       const steps = {}
       ;(s.data || []).forEach(st => { steps[st.id] = Number(st.overtime_step_hours) || 0.5 })
       setStoreSteps(steps)
+      setStores(s.data || [])
       setOrganization(orgRes?.data || null)
       setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
     }).catch(err => {
@@ -66,7 +68,7 @@ export default function Overtime() {
 
   const handleSubmit = async () => {
     try {
-      if (!validateRequired(form, ['employee', 'date'], setErrors)) return
+      if (!validateRequired(form, ['employee', 'date', 'store'], setErrors)) return
 
       // ── 編輯重送路徑 ──
       if (editingId) {
@@ -80,7 +82,7 @@ export default function Overtime() {
         setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
         setShowModal(false)
         setEditingId(null)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
         return
       }
 
@@ -90,7 +92,7 @@ export default function Overtime() {
       if (data) {
         setRecords(prev => [...prev, data])
         setShowModal(false)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
         await createApprovalWorkflow('overtime', data, form.employee)
       }
     } catch (err) {
@@ -359,6 +361,16 @@ export default function Overtime() {
           </Field>
           <Field label="加班日期 *" error={errors.date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
+          </Field>
+          <Field label="加班門市 *" error={errors.store} errorMsg="請選門市">
+            <select className="form-input" style={{ width: '100%' }} value={form.store || ''}
+              onChange={e => { set('store', e.target.value); clearError('store', setErrors) }}>
+              <option value="">— 選擇加班門市 —</option>
+              {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              💡 跨門市加班請選實際支援門市
+            </div>
           </Field>
           <Field label="加班時數">
             {(() => {

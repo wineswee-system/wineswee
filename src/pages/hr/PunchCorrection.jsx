@@ -21,10 +21,11 @@ export default function PunchCorrection() {
 
   const [corrections, setCorrections] = useState([])
   const [employees, setEmployees] = useState([])
+  const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
-  const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+  const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
@@ -92,14 +93,15 @@ export default function PunchCorrection() {
       supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
-    ]).then(([c, e, orgRes]) => {
+      supabase.from('stores').select('id, name').eq('organization_id', orgId ?? -1).order('name'),
+    ]).then(([c, e, orgRes, s]) => {
       let recs = c.data || []
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
       setCorrections(recs)
-      // store_staff: 只顯示自己
       const emps = e.data || []
       setEmployees(isStaff ? emps.filter(emp => emp.name === profile?.name) : emps)
       setOrganization(orgRes?.data || null)
+      setStores(s.data || [])
     }).finally(() => setLoading(false))
   }
 
@@ -108,7 +110,7 @@ export default function PunchCorrection() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!validateRequired(form, ['employee', 'date', 'corrected_time', 'reason'], setErrors)) return
+    if (!validateRequired(form, ['employee', 'date', 'corrected_time', 'reason', 'store'], setErrors)) return
     // Lookup employee_id
     const emp = employees.find(e => e.name === form.employee)
     const insertData = {
@@ -118,6 +120,7 @@ export default function PunchCorrection() {
       correction_type: form.correction_type,
       corrected_time: form.corrected_time,
       reason: form.reason,
+      store: form.store,
       status: '待審核',
       organization_id: profile?.organization_id || null,
     }
@@ -125,7 +128,7 @@ export default function PunchCorrection() {
     if (data) {
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+      setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
       await createApprovalWorkflow('clock_correction', data, form.employee)
     }
   }
@@ -316,6 +319,16 @@ export default function PunchCorrection() {
               <input className="form-input" type="time" style={{ width: '100%' }} value={form.corrected_time} onChange={e => { set('corrected_time', e.target.value); clearError('corrected_time', setErrors) }} />
             </Field>
           </div>
+          <Field label="補打卡門市 *" error={errors.store} errorMsg="請選門市">
+            <select className="form-input" style={{ width: '100%' }} value={form.store || ''}
+              onChange={e => { set('store', e.target.value); clearError('store', setErrors) }}>
+              <option value="">— 選擇實際門市 —</option>
+              {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              💡 跨門市支援請選實際門市
+            </div>
+          </Field>
           <Field label="原因 *" error={errors.reason} errorMsg="請填寫原因">
             <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="例：忘記打卡、系統異常..."
               value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />

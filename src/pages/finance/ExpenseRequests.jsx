@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Send } from 'lucide-react'
+import { Plus, X, Check, Upload, FileText, Image, Send, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import ChainConfigModal from '../../components/ChainConfigModal'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -31,7 +32,8 @@ const emptyForm = {
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
+  const [showChainModal, setShowChainModal] = useState(false)
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -458,9 +460,16 @@ export default function ExpenseRequests() {
             <h2><span className="header-icon">📝</span> 申請（申請與核銷）</h2>
             <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷入帳</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
-            <Plus size={14} /> 新增申請
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用申請的金額分組簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
+              <Plus size={14} /> 新增申請
+            </button>
+          </div>
         </div>
       </div>
 
@@ -885,6 +894,15 @@ export default function ExpenseRequests() {
           />
         )
       })()}
+
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType="expense_request"
+        formLabel="費用申請"
+        organizationId={profile?.organization_id}
+        mode="amount_grouped"
+      />
     </div>
   )
 }

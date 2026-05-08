@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, BookOpen, Users, ChevronDown, ChevronRight, Award } from 'lucide-react'
 import { getTrainingCourses, createTrainingCourse, updateTrainingCourse, deleteTrainingCourse, getTrainingEnrollments, createTrainingEnrollment, updateTrainingEnrollment } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 
 const CATEGORIES = ['一般', '安全', '技術', '管理', '合規']
 const STATUSES = ['開課中', '已結束', '草稿']
@@ -12,6 +13,8 @@ const ENROLL_STATUSES = ['已報名', '進行中', '已完成', '未通過']
 const emptyForm = { title: '', description: '', category: '一般', duration_hours: '1', instructor: '', max_enrollment: '30', status: '開課中' }
 
 export default function Training() {
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -27,14 +30,15 @@ export default function Training() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const load = async () => {
+    if (!orgId) { setLoading(false); return }
     setLoading(true)
-    const { data, error } = await getTrainingCourses()
+    const { data, error } = await getTrainingCourses(orgId)
     if (error) setError(error.message)
     else setCourses(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [orgId])
 
   const handleSubmit = async () => {
     if (!form.title) return
@@ -87,7 +91,7 @@ export default function Training() {
   }
 
   const catColor = (c) => {
-    switch (c) { case '安全': return '#f87171'; case '技術': return '#3b82f6'; case '管理': return '#a78bfa'; case '合規': return '#fb923c'; default: return '#34d399' }
+    switch (c) { case '安全': return 'var(--accent-red)'; case '技術': return 'var(--accent-blue)'; case '管理': return 'var(--accent-purple)'; case '合規': return 'var(--accent-orange)'; default: return 'var(--accent-green)' }
   }
 
   if (loading) return <LoadingSpinner />

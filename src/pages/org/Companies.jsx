@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { getCompanies, createCompany, updateCompany, deleteCompany, getStores, getEmployees } from '../../lib/db'
+import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 export default function Companies() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id ?? null
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
@@ -15,7 +18,7 @@ export default function Companies() {
   const [form, setForm] = useState({ name: '', short_name: '', tax_id: '', phone: '', address: '', status: '營運中' })
 
   useEffect(() => {
-    Promise.all([getCompanies(), getStores(), getEmployees()]).then(([c, s, e]) => {
+    Promise.all([getCompanies(orgId), getStores(orgId), getEmployees(orgId)]).then(([c, s, e]) => {
       setCompanies(c.data || [])
       setStores(s.data || [])
       setEmployees(e.data || [])
@@ -23,13 +26,13 @@ export default function Companies() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const openCreate = () => {
     setEditingCompany(null)
-    setForm({ name: '', short_name: '', tax_id: '', phone: '', address: '', status: '營運中' })
+    setForm({ name: '', short_name: '', tax_id: '', phone: '', address: '', status: '營運中', organization_id: orgId })
     setShowModal(true)
   }
 
@@ -40,7 +43,7 @@ export default function Companies() {
   }
 
   const handleDelete = async (c) => {
-    const storeCount = stores.filter(s => s.company_id === c.id || s.company === c.name).length
+    const storeCount = stores.filter(s => s.company_id === c.id).length
     if (storeCount > 0) { alert(`無法刪除：該公司下有 ${storeCount} 間門市`); return }
     if (!confirm(`確定要刪除「${c.name}」嗎？`)) return
     try {
@@ -96,16 +99,13 @@ export default function Companies() {
               {companies.map(c => {
                 const companyStores = stores.filter(s =>
                   s.company_id === c.id ||
-                  s.company === c.name ||
-                  (c.organization_id && s.organization_id === c.organization_id && !s.company_id && !s.company)
+                  (c.organization_id && s.organization_id === c.organization_id && !s.company_id)
                 )
-                const storeIds = companyStores.map(s => s.id)
-                const storeNames = companyStores.map(s => s.name)
+                const storeIds = new Set(companyStores.map(s => s.id))
                 const empCount = employees.filter(e =>
                   e.status === '在職' && (
-                    storeIds.includes(e.store_id) ||
-                    storeNames.includes(e.store) ||
-                    (c.organization_id && e.organization_id === c.organization_id && !e.store_id && !e.store)
+                    storeIds.has(e.store_id) ||
+                    (c.organization_id && e.organization_id === c.organization_id && !e.store_id)
                   )
                 ).length
                 return (

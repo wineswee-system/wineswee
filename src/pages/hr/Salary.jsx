@@ -92,6 +92,7 @@ const emptyForm = {
 export default function Salary() {
   // Role-based access
   const { profile, role } = useAuth()
+  const orgId = profile?.organization_id
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const isManager = userRole === 'manager'
@@ -116,12 +117,13 @@ export default function Salary() {
   const [batchSaving, setBatchSaving] = useState(false)
 
   useEffect(() => {
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      supabase.from('salary_records').select('*').order('id'),
-      supabase.from('bonus_records').select('*'),
-      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      supabase.from('salary_records').select('*').eq('organization_id', orgId).order('id'),
+      supabase.from('bonus_records').select('*').eq('organization_id', orgId),
+      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
+      supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, b, e, d, st]) => {
       let recs = s.data || []
       // store_staff: 只看自己的薪資
@@ -142,7 +144,7 @@ export default function Salary() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -285,17 +287,21 @@ export default function Salary() {
       const [attRes, otRes, lvRes, ssRes] = await Promise.all([
         supabase.from('attendance_records')
           .select('employee_id, total_hours, is_late, late_minutes')
+          .eq('organization_id', orgId)
           .gte('date', monthStart).lte('date', monthEnd),
         supabase.from('overtime_requests')
           .select('employee_id, ot_hours, ot_type')
           .eq('status', '已核准')
+          .eq('organization_id', orgId)
           .gte('request_date', monthStart).lte('request_date', monthEnd),
         supabase.from('leave_requests')
           .select('employee_id, days, leave_type')
           .eq('status', '已核准')
+          .eq('organization_id', orgId)
           .gte('start_date', monthStart).lte('start_date', monthEnd),
         supabase.from('salary_structures')
           .select('*')
+          .eq('organization_id', orgId)
           .in('employee_id', employees.map(e => e.id)),
       ])
 

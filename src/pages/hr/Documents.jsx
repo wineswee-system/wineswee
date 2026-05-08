@@ -4,10 +4,13 @@ import { getDocuments, deleteDocument } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 const CATEGORIES = ['報告', '制度規章', '表單', '合約範本', '教育訓練', '其他']
 
 export default function Documents() {
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -16,13 +19,14 @@ export default function Documents() {
   const [form, setForm] = useState({ name: '', type: 'PDF', size: '', uploader: '', category: CATEGORIES[0], url: '', notes: '' })
 
   useEffect(() => {
-    getDocuments().then(({ data }) => {
+    if (!orgId) { setLoading(false); return }
+    getDocuments(orgId).then(({ data }) => {
       setDocs(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -37,6 +41,7 @@ export default function Documents() {
       category: form.category,
       url: form.url || null,
       notes: form.notes || null,
+      organization_id: orgId,
     }).select().single()
     if (data) {
       setDocs(prev => [data, ...prev])

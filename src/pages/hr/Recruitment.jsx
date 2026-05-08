@@ -4,8 +4,11 @@ import { getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob } from '
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function Recruitment() {
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
   const [jobs, setJobs] = useState([])
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
@@ -16,10 +19,11 @@ export default function Recruitment() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    if (!orgId) { setLoading(false); return }
     Promise.all([
-      getRecruitmentJobs(),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      getRecruitmentJobs(orgId),
+      supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
+      supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([j, d, l]) => {
       const depts = d.data || []
       const locs = l.data || []
@@ -33,7 +37,7 @@ export default function Recruitment() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

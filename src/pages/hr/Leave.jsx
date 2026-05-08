@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Plus, Search, Info, Paperclip, Printer } from 'lucide-react'
+import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
@@ -11,15 +11,17 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import ChainConfigModal from '../../components/ChainConfigModal'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import { buildWorkflowChainSteps, buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function Leave() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
+  const [showChainModal, setShowChainModal] = useState(false)
   const [leaves, setLeaves] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -279,13 +281,16 @@ export default function Leave() {
     if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildWorkflowChainSteps({
-        templateName: '請假簽核',
+      // ★ 用 buildFormChainSteps：讀 form_chain_configs 的設定（admin 在 Leave 頁面設好的 chain）
+      // 沒設定則 fallback 到舊的「申請人 + 直屬主管 + 人資核章」3 關
+      const chainSteps = await buildFormChainSteps({
+        formType: 'leave',
+        organizationId: profile?.organization_id,
         applicantName: row.employee,
         applicantId: empRow?.id,
         applicantCreatedAt: row.created_at,
         recordStatus: row.status,
-        approverName: row.approver,  // buildChainSteps 內部會處理 '-'
+        approverName: row.approver,
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
       })
@@ -311,8 +316,10 @@ export default function Leave() {
     setLoadingChain(true)
     setDetailChainSteps([])
     const empRow = employees.find(e => e.name === row.employee)
-    const steps = await buildWorkflowChainSteps({
-      templateName: '請假簽核',
+    // ★ 跟 PDF 同源：buildFormChainSteps 讀 form_chain_configs 的設定
+    const steps = await buildFormChainSteps({
+      formType: 'leave',
+      organizationId: profile?.organization_id,
       applicantName: row.employee,
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
@@ -347,6 +354,11 @@ export default function Leave() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowPolicyModal(true)}><Info size={14} /> 法規說明</button>
+            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定請假表單的簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
             <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增假單</button>
           </div>
         </div>
@@ -649,6 +661,15 @@ export default function Leave() {
           />
         )
       })()}
+
+      {/* 簽核鏈設定 modal — 只 admin 看得到入口 */}
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType="leave"
+        formLabel="請假"
+        organizationId={profile?.organization_id}
+      />
     </div>
   )
 }

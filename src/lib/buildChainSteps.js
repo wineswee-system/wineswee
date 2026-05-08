@@ -165,3 +165,110 @@ export async function buildChainBasedSteps({
 
   return [applicantStep, ...steps]
 }
+
+
+/**
+ * Pattern C：給 HR 表單用 — 讀 form_chain_configs(form_type, org) 動態組 chainSteps
+ *
+ * 與 Pattern A/B 不同：每張表自己有獨立配置（form_chain_configs），
+ * chain 步驟支援動態目標（依 applicant 解析）。
+ *
+ * 給 modal + PDF 共用，確保兩邊顯示一致。
+ *
+ * @param {Object} opts
+ * @param {string} opts.formType        'leave' | 'overtime' | 'trip' | ...
+ * @param {number} opts.organizationId
+ * @param {string} opts.applicantName
+ * @param {number} [opts.applicantId]   給 resolver 解動態目標
+ * @param {string} opts.applicantCreatedAt
+ * @param {string} opts.recordStatus    '申請中' / '已核准' / '已駁回' ...
+ * @param {string} [opts.approverName]  fallback 給沒設 chain 時用
+ * @param {string} [opts.approvedAt]
+ * @param {string} [opts.rejectReason]
+ * @param {Array<string>} [opts.fallbackTail]  沒設 chain 時的 fallback 尾巴關卡
+ * @returns {Promise<Array>}
+ */
+export async function buildFormChainSteps({
+  formType, organizationId, applicantName, applicantId, applicantCreatedAt, recordStatus,
+  approverName, approvedAt, rejectReason,
+  fallbackTail = ['人資核章'],
+}) {
+  const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
+  const applicantStep = {
+    label: '申請人', name: applicantName || '—',
+    status: 'completed', completedAt: applicantCreatedAt, isApplicant: true,
+  }
+
+  // 找 form_chain_configs
+  const { data: cfg } = await supabase
+    .from('form_chain_configs')
+    .select('chain_id, is_active')
+    .eq('form_type', formType)
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  if (!cfg?.chain_id || !cfg?.is_active) {
+    // 沒設定 → 退回到舊 fallback：申請人 + 直屬主管 + 人資核章
+    let supervisorStep
+    if (recordStatus === '已核准' || recordStatus === '已核銷') {
+      supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'completed', completedAt: approvedAt }
+    } else if (recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回') {
+      supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'rejected', rejectReason }
+    } else {
+      supervisorStep = { label: '直屬主管', name: '', status: 'current' }
+    }
+    const tailSteps = (fallbackTail || []).map(label => ({
+      label, name: '', status: 'pending', archival: true,
+    }))
+    return [applicantStep, supervisorStep, ...tailSteps]
+  }
+
+  // 抓 chain steps
+  const { data: chainSteps } = await supabase
+    .from('approval_chain_steps')
+    .select('id, step_order, label, role_name, target_type, target_emp_id, target_role_id, target_dept_id, target_store_id, target_section_id')
+    .eq('chain_id', cfg.chain_id)
+    .order('step_order')
+
+  // 解每關的實際簽核者（call resolver RPC）— 動態目標靠 applicantId 決定
+  const resolved = await Promise.all((chainSteps || []).map(async (s) => {
+    let names = ''
+    if (applicantId) {
+      try {
+        const { data: approvers } = await supabase.rpc('resolve_chain_step_approvers', {
+          p_chain_step_id: s.id,
+          p_applicant_emp_id: applicantId,
+        })
+        names = (approvers || []).map(a => a.emp_name).join('、')
+      } catch (e) {
+        console.warn('[buildFormChainSteps] resolve failed for step', s.id, e)
+      }
+    }
+    return { step: s, names: names || (s.target_type?.startsWith('applicant_') ? '⚠️ 動態解不出（檢查組織圖）' : '') }
+  }))
+
+  // Status 推算（單關 status 模式）：
+  //   申請中  → 第 1 關 current，其他 pending
+  //   已核准  → 全部 completed
+  //   已駁回  → 第 1 關 rejected，其他 pending（暫時假設駁回在第 1 關，未來 form 加 current_step 才能精準）
+  const isApproved = recordStatus === '已核准' || recordStatus === '已核銷'
+  const isRejected = recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回'
+
+  const finalSteps = resolved.map(({ step, names }, i) => {
+    let status
+    if (isApproved) status = 'completed'
+    else if (isRejected) status = i === 0 ? 'rejected' : 'pending'
+    else status = i === 0 ? 'current' : 'pending'
+    return {
+      label: step.label || step.role_name || `第${i + 1}關`,
+      name: names,
+      target_emp_id: step.target_emp_id || null,
+      role_name: step.role_name || null,
+      status,
+      completedAt: status === 'completed' && i === resolved.length - 1 ? approvedAt : undefined,
+      rejectReason: status === 'rejected' ? rejectReason : '',
+    }
+  })
+
+  return [applicantStep, ...finalSteps]
+}

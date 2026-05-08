@@ -2,6 +2,7 @@ import { supabase } from '../supabase'
 
 export const getWorkflows = (options = {}) => {
   let q = supabase.from('workflows').select('*').order('id')
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 200)
 }
 
@@ -11,11 +12,15 @@ export const createWorkflow = (data) =>
 export const updateWorkflow = (id, data) =>
   supabase.from('workflows').update(data).eq('id', id).select().single()
 
-export const deleteWorkflow = (id) =>
-  supabase.from('workflows').delete().eq('id', id)
+export const deleteWorkflow = (id, orgId) => {
+  let q = supabase.from('workflows').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getWorkflowInstances = (options = {}) => {
   let q = supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 200)
 }
 
@@ -25,8 +30,11 @@ export const createWorkflowInstance = (data) =>
 export const updateWorkflowInstance = (id, data) =>
   supabase.from('workflow_instances').update(data).eq('id', id).select().single()
 
-export const deleteWorkflowInstance = (id) =>
-  supabase.from('workflow_instances').delete().eq('id', id)
+export const deleteWorkflowInstance = (id, orgId) => {
+  let q = supabase.from('workflow_instances').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getWorkflowSteps = (instanceId) => {
   const q = supabase.from('workflow_steps').select('*').order('step_order')

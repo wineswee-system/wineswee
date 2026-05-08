@@ -104,23 +104,33 @@ export const createApprovalFormSteps = (rows) =>
 export const updateApprovalFormStep = (id, data) =>
   supabase.from('approval_form_steps').update(data).eq('id', id).select().single()
 
-export const getApprovalRules = (module) => {
-  const q = supabase.from('approval_rules').select('*').order('approval_order').limit(200)
-  return module ? q.eq('module', module) : q
+export const getApprovalRules = (module, orgId) => {
+  let q = supabase.from('approval_rules').select('*').order('approval_order').limit(200)
+  if (module) q = q.eq('module', module)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
 }
 
 export const createApprovalRule = (data) =>
   supabase.from('approval_rules').insert(data).select().single()
 
-export const updateApprovalRule = (id, data) =>
-  supabase.from('approval_rules').update(data).eq('id', id).select().single()
+export const updateApprovalRule = (id, data, orgId) => {
+  let q = supabase.from('approval_rules').update(data).eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.select().single()
+}
 
-export const deleteApprovalRule = (id) =>
-  supabase.from('approval_rules').delete().eq('id', id)
+export const deleteApprovalRule = (id, orgId) => {
+  let q = supabase.from('approval_rules').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
-export const getApprovalRequests = (status) => {
-  const q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false }).limit(200)
-  return status ? q.eq('status', status) : q
+export const getApprovalRequests = (status, orgId) => {
+  let q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false }).limit(200)
+  if (status) q = q.eq('status', status)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
 }
 
 export const createApprovalRequest = (data) =>
@@ -141,14 +151,23 @@ export const updateApprovalRequest = (id, data) =>
     p_reject_reason: data.reject_reason ?? null,
   })
 
-export const getApprovalDelegations = () =>
-  supabase.from('approval_delegations').select('*').order('start_date', { ascending: false }).limit(200)
+export const getApprovalDelegations = (orgId) => {
+  let q = supabase.from('approval_delegations').select('*').order('start_date', { ascending: false }).limit(200)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createApprovalDelegation = (data) =>
   supabase.from('approval_delegations').insert(data).select().single()
 
-export const updateApprovalDelegation = (id, data) =>
-  supabase.from('approval_delegations').update(data).eq('id', id).select().single()
+export const updateApprovalDelegation = (id, data, orgId) => {
+  let q = supabase.from('approval_delegations').update(data).eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.select().single()
+}
 
-export const deleteApprovalDelegation = (id) =>
-  supabase.from('approval_delegations').delete().eq('id', id)
+export const deleteApprovalDelegation = (id, orgId) => {
+  let q = supabase.from('approval_delegations').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}

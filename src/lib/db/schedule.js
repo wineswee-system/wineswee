@@ -2,11 +2,15 @@ import { supabase } from '../supabase'
 
 export const getScheduleData = (options = {}) => {
   let q = supabase.from('schedule_data').select('*').order('id')
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 500)
 }
 
-export const updateSchedule = (id, data) =>
-  supabase.from('schedule_data').update(data).eq('id', id).select().single()
+export const updateSchedule = (id, data, orgId) => {
+  let q = supabase.from('schedule_data').update(data).eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.select().single()
+}
 
 export const getHolidays = (options = {}) => {
   let q = supabase.from('holidays').select('*').order('date')

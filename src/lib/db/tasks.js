@@ -2,6 +2,7 @@ import { supabase } from '../supabase'
 
 export const getTasks = (filters = {}) => {
   let q = supabase.from('tasks').select('*').order('created_at', { ascending: false })
+  if (filters.orgId) q = q.eq('organization_id', filters.orgId)
   if (filters.instanceId) q = q.eq('workflow_instance_id', filters.instanceId)
   if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
   if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])

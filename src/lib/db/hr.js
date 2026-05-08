@@ -24,35 +24,56 @@ export const updateRecruitmentJob = (id, data) =>
 export const deleteRecruitmentJob = (id) =>
   supabase.from('recruitment_jobs').delete().eq('id', id)
 
-export const getDocuments = () =>
-  supabase.from('documents').select('*').order('upload_date', { ascending: false })
+export const getDocuments = (orgId) => {
+  let q = supabase.from('documents').select('*').order('upload_date', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createDocument = (data) =>
   supabase.from('documents').insert(data).select().single()
 
-export const deleteDocument = (id) =>
-  supabase.from('documents').delete().eq('id', id)
+export const deleteDocument = (id, orgId) => {
+  let q = supabase.from('documents').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
-export const getBusinessTrips = () =>
-  supabase.from('business_trips').select('*').order('id')
+export const getBusinessTrips = (orgId) => {
+  let q = supabase.from('business_trips').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createBusinessTrip = (data) =>
   supabase.from('business_trips').insert(data).select().single()
 
-export const updateBusinessTripStatus = (id, status, rejectReason) =>
-  supabase.from('business_trips').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
+export const updateBusinessTripStatus = (id, status, rejectReason, orgId) => {
+  let q = supabase.from('business_trips').update({ status, reject_reason: rejectReason || null }).eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.select().single()
+}
 
-export const getExpenses = () =>
-  supabase.from('expenses').select('*').order('id')
+export const getExpenses = (orgId) => {
+  let q = supabase.from('expenses').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createExpense = (data) =>
   supabase.from('expenses').insert(data).select().single()
 
-export const updateExpenseStatus = (id, status, rejectReason) =>
-  supabase.from('expenses').update({ status, reject_reason: rejectReason || null }).eq('id', id).select().single()
+export const updateExpenseStatus = (id, status, rejectReason, orgId) => {
+  let q = supabase.from('expenses').update({ status, reject_reason: rejectReason || null }).eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.select().single()
+}
 
-export const getTrainingCourses = () =>
-  supabase.from('training_courses').select('*').order('id', { ascending: false })
+export const getTrainingCourses = (orgId) => {
+  let q = supabase.from('training_courses').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createTrainingCourse = (data) =>
   supabase.from('training_courses').insert(data).select().single()
@@ -60,8 +81,11 @@ export const createTrainingCourse = (data) =>
 export const updateTrainingCourse = (id, data) =>
   supabase.from('training_courses').update(data).eq('id', id).select().single()
 
-export const deleteTrainingCourse = (id) =>
-  supabase.from('training_courses').delete().eq('id', id)
+export const deleteTrainingCourse = (id, orgId) => {
+  let q = supabase.from('training_courses').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getTrainingEnrollments = (courseId) => {
   const q = supabase.from('training_enrollments').select('*').order('id')
@@ -74,8 +98,11 @@ export const createTrainingEnrollment = (data) =>
 export const updateTrainingEnrollment = (id, data) =>
   supabase.from('training_enrollments').update(data).eq('id', id).select().single()
 
-export const getProbationRecords = () =>
-  supabase.from('probation_records').select('*').order('end_date')
+export const getProbationRecords = (orgId) => {
+  let q = supabase.from('probation_records').select('*').order('end_date')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createProbationRecord = (data) =>
   supabase.from('probation_records').insert(data).select().single()
@@ -83,16 +110,21 @@ export const createProbationRecord = (data) =>
 export const updateProbationRecord = (id, data) =>
   supabase.from('probation_records').update(data).eq('id', id).select().single()
 
-export const getAttritionSnapshots = (date) => {
-  const q = supabase.from('attrition_risk_snapshots').select('*').order('risk_score', { ascending: false })
-  return date ? q.eq('snapshot_date', date) : q
+export const getAttritionSnapshots = (date, orgId) => {
+  let q = supabase.from('attrition_risk_snapshots').select('*').order('risk_score', { ascending: false })
+  if (date) q = q.eq('snapshot_date', date)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
 }
 
 export const upsertAttritionSnapshot = (data) =>
   supabase.from('attrition_risk_snapshots').upsert(data, { onConflict: 'employee,snapshot_date' }).select().single()
 
-export const getCompensationBands = () =>
-  supabase.from('compensation_bands').select('*').order('dept')
+export const getCompensationBands = (orgId) => {
+  let q = supabase.from('compensation_bands').select('*').order('dept')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createCompensationBand = (data) =>
   supabase.from('compensation_bands').insert(data).select().single()
@@ -103,8 +135,11 @@ export const updateCompensationBand = (id, data) =>
 export const deleteCompensationBand = (id) =>
   supabase.from('compensation_bands').delete().eq('id', id)
 
-export const getEngagementSurveys = () =>
-  supabase.from('engagement_surveys').select('*').order('created_at', { ascending: false })
+export const getEngagementSurveys = (orgId) => {
+  let q = supabase.from('engagement_surveys').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createEngagementSurvey = (data) =>
   supabase.from('engagement_surveys').insert(data).select().single()
@@ -141,6 +176,7 @@ export const deleteDevelopmentPlan = (id) =>
 
 export const getBenefitPolicies = (filters = {}) => {
   let q = supabase.from('benefit_policies').select('*, stores(name), employees(name)').order('id', { ascending: false })
+  if (filters.orgId) q = q.eq('organization_id', filters.orgId)
   if (filters.storeId) q = q.eq('store_id', filters.storeId)
   if (filters.storeId === null) q = q.is('store_id', null)
   if (filters.category) q = q.eq('category', filters.category)

@@ -1,10 +1,16 @@
 import { supabase } from '../supabase'
 
-export const getProjects = () =>
-  supabase.from('projects').select('*').order('created_at', { ascending: false })
+export const getProjects = (orgId) => {
+  let q = supabase.from('projects').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
-export const getProject = (id) =>
-  supabase.from('projects').select('*').eq('id', id).maybeSingle()
+export const getProject = (id, orgId) => {
+  let q = supabase.from('projects').select('*').eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.maybeSingle()
+}
 
 export const createProject = (data) =>
   supabase.from('projects').insert(data).select().single()
@@ -68,6 +74,7 @@ export const logTaskActivity = (data) =>
 
 export const getTasksExpanded = (filters = {}) => {
   let q = supabase.from('v_tasks_expanded').select('*').order('created_at', { ascending: false })
+  if (filters.orgId) q = q.eq('organization_id', filters.orgId)
   if (filters.project_id) q = q.eq('project_id', filters.project_id)
   if (filters.section_id) q = q.eq('section_id', filters.section_id)
   if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
@@ -75,8 +82,11 @@ export const getTasksExpanded = (filters = {}) => {
   return q
 }
 
-export const getChecklists = () =>
-  supabase.from('checklists').select('*').order('id')
+export const getChecklists = (orgId) => {
+  let q = supabase.from('checklists').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createChecklist = (data) =>
   supabase.from('checklists').insert(data).select().single()

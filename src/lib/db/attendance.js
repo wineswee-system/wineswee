@@ -48,8 +48,11 @@ export const updateLeaveStatus = (id, status, approver, rejectReason) =>
     p_reject_reason: rejectReason || null,
   })
 
-export const deleteLeaveRequest = (id) =>
-  supabase.from('leave_requests').delete().eq('id', id)
+export const deleteLeaveRequest = (id, orgId) => {
+  let q = supabase.from('leave_requests').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const getOvertimeRequests = (options = {}) => {
   let q = supabase.from('overtime_requests').select('*').order('id')

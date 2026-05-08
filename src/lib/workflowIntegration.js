@@ -47,9 +47,10 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   const requesterId = empOrgRow?.id ?? null
 
   // approval_chains.steps 已遷移到 approval_chain_steps 關聯表 → 用 FK join 帶回
+  // 加 id 才能用 resolve_chain_step_approvers RPC 解 9 種 target_type
   const { data: allChains } = await supabase
     .from('approval_chains')
-    .select('*, approval_chain_steps(step_order, role_name, label, target_type, target_role_id, target_dept_id, target_emp_id)')
+    .select('*, approval_chain_steps(id, step_order, role_name, label, target_type, target_role_id, target_dept_id, target_emp_id)')
     .eq('category', category)
     .not('is_active', 'is', false)
     .lte('min_amount', amount)
@@ -73,17 +74,7 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       }
     : defaultTpl
 
-  // Pre-fetch employee names for target_emp_id values in chain steps
-  let empById = {}
-  if (sortedChainSteps) {
-    const empIds = sortedChainSteps.map(s => s.target_emp_id).filter(Boolean)
-    if (empIds.length > 0) {
-      const { data: empRows } = await supabase.from('employees').select('id, name').in('id', empIds).eq('status', '在職')
-      empById = Object.fromEntries((empRows || []).map(e => [e.id, e.name]))
-    }
-  }
-
-  // 找直屬主管
+  // 找直屬主管（fallback 用）
   const supervisor = await getSupervisor(requesterName)
 
   // 建立 workflow_instance
@@ -105,19 +96,32 @@ export async function createApprovalWorkflow(type, record, requesterName) {
   if (instErr) return { error: instErr.message }
 
   // 建立簽核步驟（以 tasks 執行表承載，workflow_instance_id 連結回實例）
-  // orgId already resolved above (H-4)
-  const stepRows = template.steps.map((title, i) => {
+  // ★ 2026-05-08：用 DB 端 resolve_chain_step_approvers 解 9 種 target_type
+  //   (fixed_emp/role/dept + applicant_dept/store/section_manager + specific_dept/store/section_manager)
+  //   每個 step 取第一個 approver 當 task.assignee_id（多人時 trigger 會用 _notify_workflow_task_assignee 推所有人）
+  const stepRows = await Promise.all(template.steps.map(async (title, i) => {
     const cs = sortedChainSteps?.[i]
-    // 解析該步的承辦人 name + id（兩者都要寫，否則 LIFF liff_list_my_tasks 用 assignee_id 篩會找不到）
     let assigneeName = null
     let assigneeId = null
-    if (cs?.target_type === 'employee' && cs?.target_emp_id) {
-      assigneeId = cs.target_emp_id
-      assigneeName = empById[cs.target_emp_id] || null
-    } else if (i === 0 && supervisor) {
+
+    if (cs?.id) {
+      // 用 RPC 解（吃 9 種 target_type，含動態目標）
+      const { data: approvers } = await supabase.rpc('resolve_chain_step_approvers', {
+        p_chain_step_id: cs.id,
+        p_applicant_emp_id: requesterId,
+      })
+      const first = (approvers || [])[0]
+      if (first) {
+        assigneeId = first.emp_id
+        assigneeName = first.emp_name
+      }
+    }
+    // RPC 解不到（chain step 設定問題或 applicant 組織圖缺）→ 第一關 fallback supervisor
+    if (!assigneeId && i === 0 && supervisor) {
       assigneeId = supervisor.id || null
       assigneeName = supervisor.name || null
     }
+
     return {
       workflow_instance_id: instance.id,
       organization_id: orgId ?? null,
@@ -126,12 +130,13 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       title,
       assignee:    assigneeName,
       assignee_id: assigneeId,  // ★ FK，LIFF 端必須
+      // chain_step_id 拿來給 advanceWorkflow 解下一關 approver 用（DB schema 沒這欄就忽略）
       role: cs?.role_name?.includes('HR') ? 'hr' : cs?.role_name?.includes('財務') ? 'finance' : (title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager'),
       status: '待簽核',
       due_date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
       store: record?.store || null,
     }
-  })
+  }))
 
   const { data: steps, error: stepErr } = await supabase
     .from('tasks')

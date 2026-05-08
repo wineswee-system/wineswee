@@ -37,7 +37,7 @@ export const createApprovalChain = async (data) => {
       role_name: s.role || s.role_name || (s.label || '審核'),
       role_id: s.role_id ?? null,
       label: s.label ?? null,
-      target_type: s.target_type || 'label',
+      target_type: s.target_type || 'fixed_emp',  // 'label' 已被 CHECK 砍除（20260508060000）
       target_role_id: s.target_role_id ?? null,
       target_dept_id: s.target_dept_id ?? null,
       target_emp_id: s.target_emp_id ?? null,
@@ -67,7 +67,7 @@ export const updateApprovalChain = async (id, data) => {
         role_name: s.role || s.role_name || (s.label || '審核'),
         role_id: s.role_id ?? null,
         label: s.label ?? null,
-        target_type: s.target_type || 'label',
+        target_type: s.target_type || 'fixed_emp',  // 'label' 已被 CHECK 砍除（20260508060000）
         target_role_id: s.target_role_id ?? null,
         target_dept_id: s.target_dept_id ?? null,
         target_emp_id: s.target_emp_id ?? null,

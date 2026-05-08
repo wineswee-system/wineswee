@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Check, X, Printer } from 'lucide-react'
+import { Plus, Check, X, Printer, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -8,13 +8,15 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import ChainConfigModal from '../../components/ChainConfigModal'
+import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
+  const [showChainModal, setShowChainModal] = useState(false)
 
   const [corrections, setCorrections] = useState([])
   const [employees, setEmployees] = useState([])
@@ -35,8 +37,9 @@ export default function PunchCorrection() {
     setLoadingChain(true)
     setDetailChainSteps([])
     const empRow = employees.find(e => e.name === row.employee)
-    const steps = await buildWorkflowChainSteps({
-      templateName: '補打卡簽核',  // 沒設 chain → fallback 3 關
+    const steps = await buildFormChainSteps({
+      formType: 'punch',
+      organizationId: profile?.organization_id,
       applicantName: row.employee,
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
@@ -56,8 +59,9 @@ export default function PunchCorrection() {
     if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildWorkflowChainSteps({
-        templateName: '補打卡簽核',
+      const chainSteps = await buildFormChainSteps({
+        formType: 'punch',
+        organizationId: profile?.organization_id,
         applicantName: row.employee,
         applicantId: empRow?.id,
         applicantCreatedAt: row.created_at,
@@ -206,7 +210,14 @@ export default function PunchCorrection() {
             <h2><span className="header-icon">🔄</span> 打卡補登申請</h2>
             <p>員工打卡異常補登審核</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增補登</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定補打卡簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增補登</button>
+          </div>
         </div>
       </div>
 
@@ -341,6 +352,14 @@ export default function PunchCorrection() {
           />
         )
       })()}
+
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType="punch"
+        formLabel="補打卡"
+        organizationId={profile?.organization_id}
+      />
     </div>
   )
 }

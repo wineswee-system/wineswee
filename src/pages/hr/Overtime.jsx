@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Printer } from 'lucide-react'
+import { Plus, Printer, Settings } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -10,11 +10,13 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildWorkflowChainSteps } from '../../lib/buildChainSteps'
+import ChainConfigModal from '../../components/ChainConfigModal'
+import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function Overtime() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
+  const [showChainModal, setShowChainModal] = useState(false)
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -180,8 +182,9 @@ export default function Overtime() {
     setLoadingChain(true)
     setDetailChainSteps([])
     const empRow = employees.find(e => e.name === row.employee)
-    const steps = await buildWorkflowChainSteps({
-      templateName: '加班簽核',
+    const steps = await buildFormChainSteps({
+      formType: 'overtime',
+      organizationId: profile?.organization_id,
       applicantName: row.employee,
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
@@ -209,8 +212,9 @@ export default function Overtime() {
     if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildWorkflowChainSteps({
-        templateName: '加班簽核',
+      const chainSteps = await buildFormChainSteps({
+        formType: 'overtime',
+        organizationId: profile?.organization_id,
         applicantName: row.employee,
         applicantId: empRow?.id,
         applicantCreatedAt: row.created_at,
@@ -250,7 +254,14 @@ export default function Overtime() {
             <h2><span className="header-icon">🕐</span> 加班申請</h2>
             <p>加班時數申請與審核</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增加班</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定加班簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增加班</button>
+          </div>
         </div>
       </div>
 
@@ -415,6 +426,14 @@ export default function Overtime() {
           />
         )
       })()}
+
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType="overtime"
+        formLabel="加班"
+        organizationId={profile?.organization_id}
+      />
     </div>
   )
 }

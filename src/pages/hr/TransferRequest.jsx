@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { Plus, CheckCircle, XCircle, ArrowRight, Printer } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -11,7 +11,8 @@ import {
 } from '../../lib/hrChain'
 import { printTransferSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildChainBasedSteps } from '../../lib/buildChainSteps'
+import ChainConfigModal from '../../components/ChainConfigModal'
+import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
@@ -26,6 +27,7 @@ const STATUS_BADGE = {
 export default function TransferRequest() {
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const [showChainModal, setShowChainModal] = useState(false)
   const [list, setList] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -50,19 +52,18 @@ export default function TransferRequest() {
     setLoadingChain(false)
   }
 
+  // ★ 改走 buildFormChainSteps：讀 form_chain_configs（admin 在異動頁面設定的 chain）
   const buildAndResolveChain = async (row) => {
-    const stepIds = (chainSteps[row.approval_chain_id] || [])
-      .map(s => s.target_emp_id).filter(Boolean)
-    let approverMap = {}
-    if (stepIds.length > 0) {
-      const { data: emps } = await supabase.from('employees').select('id,name').in('id', stepIds)
-      approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
-    }
-    return buildChainBasedSteps({
-      row,
+    return buildFormChainSteps({
+      formType: 'transfer',
+      organizationId: profile?.organization_id,
       applicantName: row.employee?.name || '',
+      applicantId: row.employee_id || row.employee?.id || null,
       applicantCreatedAt: row.created_at,
-      approverMap,
+      recordStatus: row.status,
+      approverName: row.approver?.name || row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
     })
   }
 
@@ -255,7 +256,14 @@ export default function TransferRequest() {
                 : <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontSize: 12 }}>· ⚠ 無簽核鏈，admin 可直接核准</span>}
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={14} /> 新增異動</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定人事異動簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={14} /> 新增異動</button>
+          </div>
         </div>
       </div>
 
@@ -468,6 +476,14 @@ export default function TransferRequest() {
           />
         )
       })()}
+
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType="transfer"
+        formLabel="人事異動"
+        organizationId={profile?.organization_id}
+      />
     </div>
   )
 }

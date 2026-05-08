@@ -32,6 +32,7 @@ import LeaveBalances from '../pages/hr/LeaveBalances'
 import SalaryStructures from '../pages/hr/SalaryStructures'
 import Payroll from '../pages/hr/Payroll'
 import LegalDeductions from '../pages/hr/LegalDeductions'
+import Severance from '../pages/hr/Severance'
 import WorkUnitSettings from '../pages/hr/WorkUnitSettings'
 import HRForms from '../pages/hr/HRForms'
 import InsuranceGradeMonitor from '../pages/hr/InsuranceGradeMonitor'
@@ -77,6 +78,7 @@ export default memo(function HRModule() {
       <Route path="salary-structures" element={<SalaryStructures />} />
       <Route path="payroll" element={<Payroll />} />
       <Route path="legal-deductions" element={<LegalDeductions />} />
+      <Route path="severance" element={<Severance />} />
       <Route path="work-unit-settings" element={<WorkUnitSettings />} />
       <Route path="forms" element={<HRForms />} />
       <Route path="forms/resignation" element={<Resignation />} />

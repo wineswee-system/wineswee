@@ -258,6 +258,7 @@ const groupNav = {
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
         { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
         { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
+        { icon: Scale, label: '資遣管理', path: '/hr/severance' },
         { icon: Scale, label: '法扣管理', path: '/hr/legal-deductions' },
         { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },

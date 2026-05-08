@@ -4,12 +4,15 @@ import Workflows from '../pages/process/Workflows'
 import Tasks from '../pages/process/Tasks'
 import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
-import ApprovalChains from '../pages/system/ApprovalChains'
 import Approvals from '../pages/process/Approvals'
 import Projects from '../pages/process/Projects'
-import ExpenseApprovalSettings from '../pages/finance/ExpenseApprovalSettings'
 import Categories from '../pages/process/settings/Categories'
 import Tags from '../pages/process/settings/Tags'
+
+// 老頁面已下架（2026-05-08）：
+//   /process/approval-chains  → ApprovalChains.jsx (deleted)
+//   /process/expense-approval → ExpenseApprovalSettings.jsx (deleted)
+// 替代入口：各表單頁面右上「⚙ 簽核設定」按鈕（透過 ChainConfigModal）
 
 export default function ProcessModule() {
   return (
@@ -21,8 +24,6 @@ export default function ProcessModule() {
       <Route path="checklists" element={<Checklists />} />
       <Route path="sop" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
-      <Route path="approval-chains" element={<ApprovalChains />} />
-      <Route path="expense-approval" element={<ExpenseApprovalSettings />} />
       <Route path="settings/categories" element={<Categories />} />
       <Route path="settings/tags" element={<Tags />} />
     </Routes>

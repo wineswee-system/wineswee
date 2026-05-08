@@ -319,9 +319,8 @@ const groupNav = {
       label: '設定管理',
       icon: Settings,
       children: [
-        { icon: Shield, label: '簽核鏈設定', path: '/process/approval-chains' },
+        // 簽核鏈設定 / 費用簽核設定 已下架（2026-05-08）— 改用各表單頁右上「⚙ 簽核設定」
         { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
-        { icon: Scale, label: '費用簽核設定', path: '/process/expense-approval' },
         { icon: FolderTree, label: '分類管理', path: '/process/settings/categories' },
         { icon: Tag, label: '標籤管理', path: '/process/settings/tags' },
       ]

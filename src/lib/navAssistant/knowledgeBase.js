@@ -514,31 +514,24 @@ export const KNOWLEDGE_BASE = [
       '可被流程/任務引用',
     ],
   },
+  // 老頁面已下架（2026-05-08）：
+  //   /process/approval-chains 及 /process/expense-approval 已從 sidebar / route 拆除
+  //   各表單的簽核流程設定改至各表單頁面右上「⚙ 簽核設定」按鈕（透過 ChainConfigModal）
   {
-    id: 'process.approval-chains',
-    module: 'Workflow',
+    id: 'forms.chain-settings',
+    module: 'HR',
     category: '設定管理',
-    title: '簽核鏈設定',
-    path: '/process/approval-chains',
-    keywords: ['簽核鏈', '簽核', '核准', 'approval chain'],
+    title: '簽核流程設定（各表單）',
+    path: '/hr/forms',
+    keywords: ['簽核鏈', '簽核設定', '核准流程', '簽核流程', 'approval chain', 'expense approval', '費用簽核'],
     steps: [
-      '進入「專案流程 → 簽核鏈設定」',
-      '新增簽核鏈：名稱、套用範圍（請假/加班/費用/採購…）',
-      '依條件（金額、部門、假別）分層指定簽核人',
+      '進入「HR 表單中心」找到要設定的表單（請假/加班/出差/離職/異動/留停/補打卡/費用報銷）',
+      '進入該表單頁面，admin 會看到右上「⚙ 簽核設定」按鈕',
+      '在彈出的設定視窗加關卡，每關可選：固定員工/角色/部門 或 申請人主管/部門主管/門市店長/課別督導 等動態目標',
+      '申請費用 (兩階段) 為例外：在 /finance/expense-requests 頁設定，可建多組金額區間',
+      '自訂表單 (FormBuilder) 編輯模板時內建設定按鈕',
     ],
-    tip: '更細的簽核規則（條件式）在 /system/approval-rules。',
-  },
-  {
-    id: 'process.expense-approval',
-    module: 'Workflow',
-    category: '設定管理',
-    title: '費用簽核設定',
-    path: '/process/expense-approval',
-    keywords: ['費用簽核', '報帳簽核', 'expense approval'],
-    steps: [
-      '進入「專案流程 → 費用簽核設定」',
-      '依金額區間設定簽核層級',
-    ],
+    tip: '更細的條件式規則 (例：金額分流以外的條件) 在 /system/approval-rules。',
   },
   {
     id: 'process.categories',

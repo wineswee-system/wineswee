@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, FileText, ToggleLeft, ToggleRight, GripVertical, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, FileText, ToggleLeft, ToggleRight, GripVertical, X, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import ChainConfigModal from '../../components/ChainConfigModal'
 
 const CATEGORIES = [
   { value: 'attendance', label: '📅 假勤申請' },
@@ -150,6 +151,7 @@ export default function FormBuilder() {
 function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }) {
   const [form, setForm] = useState({ ...template })
   const [saving, setSaving] = useState(false)
+  const [showChainModal, setShowChainModal] = useState(false)
 
   const setF = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
@@ -213,6 +215,7 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
   }
 
   return (
+    <>
     <Modal title={form.id ? `編輯模板 — ${form.name}` : '新增表單模板'} onClose={onClose} onSubmit={save} submitLabel={saving ? '儲存中…' : '儲存'} maxWidth={900}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
         <Field label="表單名稱"><input className="form-input" value={form.name || ''} onChange={e => setF('name', e.target.value)} /></Field>
@@ -231,11 +234,21 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
             {COLORS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </Field>
-        <Field label="簽核鏈（可空）">
-          <select className="form-input" value={form.approval_chain_id || ''} onChange={e => setF('approval_chain_id', e.target.value || null)}>
-            <option value="">不需簽核（直接通過）</option>
-            {chains.map(c => <option key={c.id} value={c.id}>{c.name}（{c.category}）</option>)}
-          </select>
+        <Field label="簽核流程">
+          {form.id ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowChainModal(true)}
+              style={{ width: '100%', justifyContent: 'flex-start' }}
+            >
+              <Settings size={14} /> 設定簽核流程
+            </button>
+          ) : (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 0', lineHeight: 1.5 }}>
+              💡 請先儲存模板，再回來設定簽核流程
+            </div>
+          )}
         </Field>
       </div>
 
@@ -286,5 +299,16 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
         ))}
       </div>
     </Modal>
+    {showChainModal && form.id && (
+      <ChainConfigModal
+        open={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        formType={`custom:${form.id}`}
+        formLabel={form.name || '自訂表單'}
+        organizationId={form.organization_id ?? orgId}
+        mode="single"
+      />
+    )}
+    </>
   )
 }

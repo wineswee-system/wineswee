@@ -222,8 +222,9 @@ serve(async (req) => {
 
       // Write auth_user_id back so AuthContext can resolve the employee profile on every login.
       // generateLink returns the user object for both new and existing auth users.
+      // Always sync when it differs — guards against stale UUIDs left by migrations.
       const authUserId = createData?.user?.id ?? (linkData as any)?.user?.id
-      if (authUserId && !employee.auth_user_id) {
+      if (authUserId && employee.auth_user_id !== authUserId) {
         await supabase.from('employees').update({ auth_user_id: authUserId }).eq('id', employee.id)
       }
 

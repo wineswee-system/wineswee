@@ -25,8 +25,11 @@ export const updateTenantRecord = (id, data) =>
 export const deleteTenantRecord = (id) =>
   supabase.from('organizations').delete().eq('id', id)
 
-export const getCompanies = () =>
-  supabase.from('companies').select('*').order('id')
+export const getCompanies = (orgId) => {
+  let q = supabase.from('companies').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createCompany = (data) =>
   supabase.from('companies').insert(data).select().single()

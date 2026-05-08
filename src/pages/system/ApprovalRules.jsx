@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Shield, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { getApprovalRules, createApprovalRule, updateApprovalRule, deleteApprovalRule, getApprovalRequests, updateApprovalRequest } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useTenant } from '../../contexts/TenantContext'
 
 const MODULES = [
   { value: 'purchase', label: '採購' },
@@ -69,6 +70,8 @@ const emptyForm = {
 }
 
 export default function ApprovalRules() {
+  const { tenant } = useTenant()
+  const orgId = tenant?.organization_id ?? null
   const [rules, setRules] = useState([])
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +86,7 @@ export default function ApprovalRules() {
 
   const load = async () => {
     setLoading(true)
-    const [rulesRes, reqRes] = await Promise.all([getApprovalRules(), getApprovalRequests()])
+    const [rulesRes, reqRes] = await Promise.all([getApprovalRules(undefined, orgId), getApprovalRequests(undefined, orgId)])
     if (rulesRes.error) setError(rulesRes.error.message)
     else setRules(rulesRes.data || [])
     setRequests(reqRes.data || [])
@@ -98,11 +101,12 @@ export default function ApprovalRules() {
       ...form,
       condition_value: Number(form.condition_value),
       approval_order: Number(form.approval_order),
+      organization_id: orgId,
     }
     delete payload.id
 
     if (editingId) {
-      const { error } = await updateApprovalRule(editingId, payload)
+      const { error } = await updateApprovalRule(editingId, payload, orgId)
       if (error) { setError(error.message); setSaving(false); return }
     } else {
       const { error } = await createApprovalRule(payload)
@@ -131,7 +135,7 @@ export default function ApprovalRules() {
 
   const handleDelete = async (id) => {
     if (!confirm('確定要刪除此簽核規則？')) return
-    await deleteApprovalRule(id)
+    await deleteApprovalRule(id, orgId)
     load()
   }
 

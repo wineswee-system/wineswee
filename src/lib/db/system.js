@@ -6,18 +6,23 @@ export const getTriggers = () =>
 export const updateTrigger = (id, data) =>
   supabase.from('triggers').update(data).eq('id', id).select().single()
 
-export const getNotifications = (userId) => {
+export const getNotifications = (userId, empId) => {
   const q = supabase.from('notifications').select('*').order('created_at', { ascending: false })
-  return userId ? q.eq('user_id', userId) : q
+  if (userId && empId) return q.or(`user_id.eq.${userId},recipient_emp_id.eq.${empId}`)
+  if (userId) return q.eq('user_id', userId)
+  if (empId) return q.eq('recipient_emp_id', empId)
+  return q
 }
 
 export const markNotificationRead = (id) =>
   supabase.from('notifications').update({ read: true }).eq('id', id)
 
-export const markAllNotificationsRead = (userId) => {
-  if (!userId) return Promise.resolve({ data: null, error: { message: 'userId required' } })
-  return supabase.from('notifications').update({ read: true })
-    .eq('user_id', userId).eq('read', false)
+export const markAllNotificationsRead = (userId, empId) => {
+  if (!userId && !empId) return Promise.resolve({ data: null, error: { message: 'userId or empId required' } })
+  const q = supabase.from('notifications').update({ read: true }).eq('read', false)
+  if (userId && empId) return q.or(`user_id.eq.${userId},recipient_emp_id.eq.${empId}`)
+  if (userId) return q.eq('user_id', userId)
+  return q.eq('recipient_emp_id', empId)
 }
 
 export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action, tables, targetId, from, to, search } = {}) => {

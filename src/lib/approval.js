@@ -48,9 +48,11 @@ export async function getApprovalChain(employeeNameOrId, permissionCode) {
   // Resolve to ID if name was passed
   let currentId = typeof employeeNameOrId === 'number' ? employeeNameOrId : null
   if (!currentId) {
-    const { data: emp } = await supabase
-      .from('employees').select('id').eq('name', employeeNameOrId).eq('status', '在職').maybeSingle()
-    currentId = emp?.id
+    const { data: rows } = await supabase
+      .from('employees').select('id').eq('name', employeeNameOrId).eq('status', '在職')
+    // Guard: ambiguous name match across org — cannot safely pick one approver
+    if (!rows?.length || rows.length > 1) return chain
+    currentId = rows[0].id
   }
   if (!currentId) return chain
 

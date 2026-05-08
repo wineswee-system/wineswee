@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { useAuth } from '../../contexts/AuthContext'
 
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
@@ -32,6 +33,8 @@ const emptyForm = {
 }
 
 export default function SalaryStructures() {
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
   const [structures, setStructures] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -43,11 +46,12 @@ export default function SalaryStructures() {
   const [form, setForm] = useState(emptyForm)
 
   const loadData = () => {
+    if (!orgId) { setLoading(false); return }
     setLoading(true)
     Promise.all([
-      supabase.from('salary_structures').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, dept, store, position, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('departments').select('*').order('name'),
+      supabase.from('salary_structures').select('*').eq('organization_id', orgId).order('id', { ascending: false }),
+      supabase.from('employees').select('id, name, name_en, dept, store, position, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, e, d]) => {
       setStructures(s.data || [])
       setEmployees(e.data || [])
@@ -60,7 +64,7 @@ export default function SalaryStructures() {
     })
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -135,6 +139,7 @@ export default function SalaryStructures() {
     if (!form.employee_id) return alert('請選擇員工')
     const payload = {
       employee_id: Number(form.employee_id),
+      organization_id: orgId,
       base_salary: Number(form.base_salary) || 0,
       role_allowance: Number(form.role_allowance) || 0,
       meal_allowance: Number(form.meal_allowance) || 0,

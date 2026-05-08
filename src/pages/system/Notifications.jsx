@@ -7,14 +7,14 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 const typeIcon = { leave: '📅', task: '✅', system: '⚙️', performance: '⭐', hr: '👥' }
 
 export default function Notifications() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!user?.id) return
-    getNotifications(user.id).then(({ data }) => {
+    getNotifications(user.id, profile?.id).then(({ data }) => {
       setNotifications(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -22,7 +22,7 @@ export default function Notifications() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [user?.id])
+  }, [user?.id, profile?.id])
 
   const handleMarkRead = async (id) => {
     try {
@@ -37,7 +37,7 @@ export default function Notifications() {
 
   const handleMarkAllRead = async () => {
     try {
-      const { error } = await markAllNotificationsRead(user?.id)
+      const { error } = await markAllNotificationsRead(user?.id, profile?.id)
       if (error) throw error
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     } catch (err) {

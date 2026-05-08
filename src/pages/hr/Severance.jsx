@@ -41,7 +41,8 @@ export default function Severance() {
     const orgId = profile?.organization_id
     const [recRes, empRes] = await Promise.all([
       supabase.from('severance_records').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, employee_number, status, position, join_date')
+      supabase.from('employees')
+        .select('id, name, name_en, employee_number, status, position, join_date, dept, store, departments!department_id(name), stores!store_id(name)')
         .eq('organization_id', orgId || 1).order('name'),
     ])
     setRecords(recRes.data || [])

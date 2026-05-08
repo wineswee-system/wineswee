@@ -48,7 +48,7 @@ export default function ChartOfAccounts() {
   const handleSubmit = async () => {
     if (!form.code || !form.name || !form.type) return
     setSaving(true)
-    const payload = { ...form }
+    const payload = { ...form, organization_id: orgId }
     delete payload.id
     if (!payload.parent_code) payload.parent_code = null
     if (!payload.description) payload.description = null

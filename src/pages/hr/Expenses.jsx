@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Printer, Settings } from 'lucide-react'
+import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -35,6 +35,38 @@ export default function Expenses() {
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
   const detailRowIdRef = useRef(null)
+  // 附件（對齊 LIFF）：bucket 'expense-receipts'
+  const [attachFiles, setAttachFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || [])
+    const newFiles = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 5))
+    e.target.value = ''
+  }
+  const removeAttach = (idx) => {
+    setAttachFiles(prev => {
+      try { URL.revokeObjectURL(prev[idx].preview) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+  const uploadAttachments = async (expenseId, empId) => {
+    if (attachFiles.length === 0) return
+    setUploading(true)
+    try {
+      for (const { file } of attachFiles) {
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+        const path = `emp-${empId || 'unknown'}/${expenseId}-${Date.now()}.${ext}`
+        const { error } = await supabase.storage.from('expense-receipts').upload(path, file, {
+          cacheControl: '3600', upsert: true,
+        })
+        if (error) console.warn('upload fail:', error)
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -84,7 +116,13 @@ export default function Expenses() {
     const { data } = await createExpense({ ...payload, status: '待審核' })
     if (data) {
       setExpenses(prev => [...prev, data])
+      // 附件上傳（與 LIFF 同 bucket）
+      const empRow = employees.find(e2 => e2.name === form.employee)
+      if (attachFiles.length > 0) {
+        await uploadAttachments(data.id, empRow?.id)
+      }
       setShowModal(false)
+      setAttachFiles([])
       setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
       await createApprovalWorkflow('expense', data, form.employee)
     }
@@ -322,6 +360,27 @@ export default function Expenses() {
               <option value="true">有收據</option>
               <option value="false">無收據</option>
             </select>
+          </Field>
+          <Field label="收據附件（最多 5 個）">
+            <div>
+              <input type="file" multiple accept="image/*,application/pdf"
+                onChange={handleFileSelect}
+                style={{ fontSize: 12 }}
+              />
+              {attachFiles.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {attachFiles.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                      <Paperclip size={11} />
+                      <span style={{ flex: 1 }}>{a.file.name}</span>
+                      <button type="button" onClick={() => removeAttach(i)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {uploading && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>📤 上傳中…</div>}
+            </div>
           </Field>
         </Modal>
       )}

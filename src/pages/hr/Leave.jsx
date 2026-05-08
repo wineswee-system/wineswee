@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'
+import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'  // Paperclip 已經有
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
@@ -44,6 +44,38 @@ export default function Leave() {
   // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
   // storeKey: 'all' = 全公司預設、其他 = store id
   const [stepSettings, setStepSettings] = useState({ all: {} })
+  // 附件（對齊 LIFF）：上傳到 Supabase Storage bucket `leave-attachments`
+  const [attachFiles, setAttachFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || [])
+    const newFiles = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 5))  // max 5
+    e.target.value = ''
+  }
+  const removeAttach = (idx) => {
+    setAttachFiles(prev => {
+      try { URL.revokeObjectURL(prev[idx].preview) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+  const uploadAttachments = async (leaveId, empId) => {
+    if (attachFiles.length === 0) return
+    setUploading(true)
+    try {
+      for (const { file } of attachFiles) {
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+        const path = `emp-${empId || 'unknown'}/${leaveId}-${Date.now()}.${ext}`
+        const { error } = await supabase.storage.from('leave-attachments').upload(path, file, {
+          cacheControl: '3600', upsert: true,
+        })
+        if (error) console.warn('upload fail:', error)
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([
@@ -172,7 +204,12 @@ export default function Leave() {
     const { data } = await createLeaveRequest({ ...payload, status: '待審核', approver: '-' })
     if (data) {
       setLeaves(prev => [data, ...prev])
+      // 附件上傳（與 LIFF 同 bucket / path 規則）
+      if (attachFiles.length > 0) {
+        await uploadAttachments(data.id, empRow?.id)
+      }
       setShowModal(false)
+      setAttachFiles([])
       setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
       setValidationMsg('')
 
@@ -569,6 +606,27 @@ export default function Leave() {
           )}
           <Field label="事由">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入請假事由" value={form.reason} onChange={e => set('reason', e.target.value)} />
+          </Field>
+          <Field label="附件（最多 5 個）">
+            <div>
+              <input type="file" multiple accept="image/*,application/pdf"
+                onChange={handleFileSelect}
+                style={{ fontSize: 12 }}
+              />
+              {attachFiles.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {attachFiles.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                      <Paperclip size={11} />
+                      <span style={{ flex: 1 }}>{a.file.name}</span>
+                      <button type="button" onClick={() => removeAttach(i)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {uploading && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>📤 附件上傳中…</div>}
+            </div>
           </Field>
           {validationMsg && (
             <div style={{ padding: '10px', borderRadius: 8, background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 13, fontWeight: 600 }}>

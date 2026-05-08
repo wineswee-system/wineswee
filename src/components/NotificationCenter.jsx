@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check, FileText, Scale } from 'lucide-react'
+import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check, FileText, Scale, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -16,6 +16,7 @@ const ROUTES = {
   overtime: '/hr/overtime',
   law_update_reminder: '/hr/labor-law-rates',
   form_submission: '/hr/forms/submissions',
+  approval: '/process/approvals',
 }
 
 // 從 notifications 表 type 對應的 icon / 顏色
@@ -171,6 +172,33 @@ export default function NotificationCenter() {
           desc: `${o.employee} 申請 ${o.date} 加班`,
           time: o.date,
         }))
+      }
+
+      // Pending approval form steps assigned to this user (by name or position/role)
+      if (profile?.name || profile?.position) {
+        const orParts = []
+        if (profile.name)     orParts.push(`approver.eq.${profile.name}`)
+        if (profile.position) orParts.push(`role.eq.${profile.position}`)
+        const { data: approvalSteps } = await supabase
+          .from('approval_form_steps')
+          .select('id, form_id, role, approver, approval_forms!form_id(id, title, applicant)')
+          .eq('status', '待簽')
+          .or(orParts.join(','))
+          .limit(10)
+        if (approvalSteps) {
+          approvalSteps.forEach(s => {
+            const form = s.approval_forms
+            items.push({
+              id: `approval-${s.id}`, type: 'approval', icon: ClipboardList,
+              color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
+              title: '待您簽核',
+              desc: form?.title
+                ? `${form.title}${form.applicant ? `（${form.applicant}）` : ''}`
+                : `簽核表單 #${s.form_id}`,
+              time: '',
+            })
+          })
+        }
       }
     } catch (e) { /* ignore */ }
 

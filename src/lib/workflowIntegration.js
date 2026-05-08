@@ -17,13 +17,14 @@ const DEFAULT_TEMPLATES = {
   business_trip: { name: '出差申請簽核', steps: ['直屬主管審核', 'HR 確認'] },
   purchase: { name: '採購簽核', steps: ['部門主管審核', '採購確認'] },
   expense_request: { name: '費用申請簽核', steps: ['直屬主管審核', '財務確認'] },
+  clock_correction: { name: '補打卡簽核', steps: ['直屬主管審核'] },
 }
 
 // approval_chains 的 category → type 對照
 const CHAIN_CATEGORY_MAP = {
   leave: 'HR', overtime: 'HR', expense: 'HR',
   business_trip: 'HR', purchase: '採購',
-  expense_request: '費用申請',
+  expense_request: '費用申請', clock_correction: 'HR',
 }
 
 /**
@@ -128,8 +129,10 @@ export async function createApprovalWorkflow(type, record, requesterName) {
       step_order: i + 1,
       step_type: 'workflow_step',
       title,
-      assignee:    assigneeName,
-      assignee_id: assigneeId,  // ★ FK，LIFF 端必須
+      // Only pre-assign step 1. Steps 2+ get assigned by advanceWorkflow so the
+      // DB trigger (trg_notify_workflow_task_assigned) fires on their assignee_id change.
+      assignee:    i === 0 ? assigneeName : null,
+      assignee_id: i === 0 ? assigneeId : null,  // ★ FK，LIFF 端必須
       // chain_step_id 拿來給 advanceWorkflow 解下一關 approver 用（DB schema 沒這欄就忽略）
       role: cs?.role_name?.includes('HR') ? 'hr' : cs?.role_name?.includes('財務') ? 'finance' : (title.includes('HR') ? 'hr' : title.includes('財務') ? 'finance' : 'manager'),
       status: '待簽核',
@@ -145,11 +148,12 @@ export async function createApprovalWorkflow(type, record, requesterName) {
 
   if (stepErr) return { error: stepErr.message }
 
-  // ★ 2026-05-08：notifyTaskAssignee 已移除
   // 簽核 LINE 推送統一由 DB trigger 處理（feedback_signoff_must_use_db_trigger）：
   //   - expense_request：trg_notify_expense_request_inserted (20260508110000)
-  //   - HR forms（leave/overtime/...）：尚未補 trigger，LINE 通知暫時失效
-  //     → 必須儘快補上（todo）
+  //   - HR forms（leave/overtime/business_trip/clock_correction）：
+  //       trg_notify_workflow_task_assigned (20260508130000) — fires on tasks INSERT step_order=1
+  //       及 UPDATE OF assignee_id（advance 後推下一關）
+  //   - workflow_instances 終態：trg_notify_workflow_instance_done → 推申請人結果
   // 這裡只保留站內通知（notifications 表），不在 client 推 LINE。
   if (supervisor) {
     await supabase.from('notifications').insert({

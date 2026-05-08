@@ -10,6 +10,7 @@ import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function PunchCorrection() {
@@ -125,6 +126,7 @@ export default function PunchCorrection() {
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
       setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '' })
+      await createApprovalWorkflow('clock_correction', data, form.employee)
     }
   }
 

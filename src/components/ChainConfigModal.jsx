@@ -23,14 +23,13 @@ import { ModalOverlay } from './Modal'
 import LoadingSpinner from './LoadingSpinner'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 
-// ─── target_type 選項 ───
+// ─── target_type 選項（9 種，砍了 applicant_supervisor 因為組織圖夠用）───
 const TARGET_TYPES = [
   // 寫死
   { value: 'fixed_emp',   group: '🔒 寫死指定', label: '指定員工',           needs: 'emp'   },
   { value: 'fixed_role',  group: '🔒 寫死指定', label: '指定角色（全部人）', needs: 'role'  },
   { value: 'fixed_dept',  group: '🔒 寫死指定', label: '指定部門（全部人）', needs: 'dept'  },
-  // 申請人連動
-  { value: 'applicant_supervisor',          group: '👤 申請人連動', label: '申請人的直屬主管',   needs: null },
+  // 申請人連動（依組織圖動態解）
   { value: 'applicant_dept_manager',        group: '👤 申請人連動', label: '申請人部門的主管',   needs: null },
   { value: 'applicant_store_manager',       group: '👤 申請人連動', label: '申請人門市的店長',   needs: null },
   { value: 'applicant_section_supervisor',  group: '👤 申請人連動', label: '申請人課別的督導',   needs: null },
@@ -47,7 +46,7 @@ const blankStep = (idx) => ({
   _localId: Math.random(),
   step_order: idx,
   label: '',
-  target_type: 'applicant_supervisor',
+  target_type: 'applicant_dept_manager',
   target_emp_id: null,
   target_role_id: null,
   target_dept_id: null,
@@ -103,7 +102,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         _localId: s.id,
         step_order: s.step_order,
         label: s.label || '',
-        target_type: s.target_type || 'applicant_supervisor',
+        target_type: s.target_type || 'applicant_dept_manager',
         target_emp_id: s.target_emp_id || null,
         target_role_id: s.target_role_id || null,
         target_dept_id: s.target_dept_id || null,

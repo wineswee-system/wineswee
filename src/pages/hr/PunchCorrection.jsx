@@ -12,6 +12,7 @@ import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { uploadFormAttachments } from '../../lib/formAttachments'
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
@@ -49,14 +50,11 @@ export default function PunchCorrection() {
     if (attachFiles.length === 0) return
     setUploading(true)
     try {
-      for (const { file } of attachFiles) {
-        const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-        const path = `punch/emp-${empId || 'unknown'}/${correctionId}-${Date.now()}.${ext}`
-        const { error } = await supabase.storage.from('attachments').upload(path, file, {
-          cacheControl: '3600', upsert: true,
-        })
-        if (error) console.warn('upload fail:', error)
-      }
+      await uploadFormAttachments({
+        formType: 'correction', formId: correctionId, files: attachFiles,
+        organizationId: profile?.organization_id,
+        uploaderEmpId: empId || profile?.id, uploaderName: profile?.name,
+      })
     } finally {
       setUploading(false)
     }

@@ -13,6 +13,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { uploadFormAttachments } from '../../lib/formAttachments'
 
 export default function Overtime() {
   const { profile, role } = useAuth()
@@ -56,14 +57,11 @@ export default function Overtime() {
     if (attachFiles.length === 0) return
     setUploading(true)
     try {
-      for (const { file } of attachFiles) {
-        const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-        const path = `overtime/emp-${empId || 'unknown'}/${otId}-${Date.now()}.${ext}`
-        const { error } = await supabase.storage.from('attachments').upload(path, file, {
-          cacheControl: '3600', upsert: true,
-        })
-        if (error) console.warn('upload fail:', error)
-      }
+      await uploadFormAttachments({
+        formType: 'overtime', formId: otId, files: attachFiles,
+        organizationId: profile?.organization_id,
+        uploaderEmpId: empId || profile?.id, uploaderName: profile?.name,
+      })
     } finally {
       setUploading(false)
     }

@@ -398,7 +398,7 @@ export default function Tasks() {
               })))
             }
             setTasks(prev => [...prev, dup])
-            toast.error(`已複製「${orig.title}」`)
+            toast.success(`已複製「${orig.title}」`)
           }}
         />
       )}

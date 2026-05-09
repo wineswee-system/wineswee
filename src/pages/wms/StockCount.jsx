@@ -149,7 +149,7 @@ export default function StockCount() {
         warehouse: selectedCount?.warehouse || '',
         count_id: String(selectedCount?.id || ''),
       })
-      toast.error(`已建立 ${item.sku} 庫存調整: ${diff > 0 ? '+' : ''}${diff}`)
+      toast.success(`已建立 ${item.sku} 庫存調整: ${diff > 0 ? '+' : ''}${diff}`)
     } catch (err) {
       toast.error('調整失敗: ' + (err.message || '未知錯誤'))
     }
@@ -182,7 +182,7 @@ export default function StockCount() {
         count_id: String(selectedCount?.id || ''),
       })
     }
-    toast.error(`已建立 ${itemsWithVariance.length} 筆庫存調整`)
+    toast.success(`已建立 ${itemsWithVariance.length} 筆庫存調整`)
     setShowVarianceModal(false)
   }
 

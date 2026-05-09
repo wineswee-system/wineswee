@@ -262,7 +262,7 @@ export default function Inventory() {
                 items,
                 total_amount: items.reduce((sum, i) => sum + (i.price * i.qty), 0),
               }, { source: 'Inventory.jsx' })
-              toast.error(`已發送低庫存採購事件（${lowItems.length} 項缺料）`)
+              toast.success(`已發送低庫存採購事件（${lowItems.length} 項缺料）`)
             }}><AlertTriangle size={14} /> 低庫存檢查</button>
             <button className="btn btn-primary" onClick={() => setShowAdjModal(true)}><Plus size={14} /> 庫存調整</button>
           </div>

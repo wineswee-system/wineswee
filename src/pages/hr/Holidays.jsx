@@ -87,7 +87,7 @@ export default function Holidays() {
                   await refreshHolidays([activeYear, activeYear + 1])
                   const { data } = await getHolidays()
                   setHolidays(data || [])
-                  toast.error(`已刷新 ${activeYear} 及 ${activeYear + 1} 年度國定假日`)
+                  toast.success(`已刷新 ${activeYear} 及 ${activeYear + 1} 年度國定假日`)
                 } catch (err) {
                   console.error('Refresh failed:', err)
                   toast.error('刷新失敗：' + (err.message || '未知錯誤'))

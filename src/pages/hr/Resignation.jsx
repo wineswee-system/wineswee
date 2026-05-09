@@ -182,10 +182,14 @@ export default function Resignation() {
           organizationId: profile?.organization_id,
         })
       } else {
-        toast.error('已送出，但找不到對應的第一關簽核人。請確認簽核鏈設定。')
+        toast.warning('已送出，但找不到對應的第一關簽核人', {
+          description: '請確認簽核鏈設定',
+        })
       }
     } else if (!activeChain) {
-      toast.error('已送出（目前無「離職」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=離職 的鏈。')
+      toast.warning('已送出（目前無「離職」簽核鏈，admin 可直接核准）', {
+        description: '建議到「簽核鏈設定」建立 category=離職 的鏈',
+      })
     }
 
     setShowForm(false)

@@ -95,7 +95,7 @@ export default function PeriodClose() {
       const linesWithEntry = lines.map(l => ({ ...l, entry_id: entry.id }))
       const { error: linesErr } = await batchCreateJournalLines(linesWithEntry)
       if (linesErr) setError(linesErr.message)
-      else toast.error(`已建立年度結帳分錄 JE-CLOSE-${year}，淨利 ${fmt(netIncome)} 結轉至保留盈餘（草稿狀態）`)
+      else toast.success(`已建立年度結帳分錄 JE-CLOSE-${year}，淨利 ${fmt(netIncome)} 結轉至保留盈餘（草稿狀態）`)
     } catch (err) {
       setError(err.message)
     }

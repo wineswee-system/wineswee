@@ -148,7 +148,7 @@ export default function AssignmentCsvImport({ employees, departments, stores, on
         if (error) throw error
         inserted += chunk.length
       }
-      toast.error(`成功匯入 ${inserted} 筆`)
+      toast.success(`成功匯入 ${inserted} 筆`)
       onDone?.()
       onClose()
     } catch (err) {

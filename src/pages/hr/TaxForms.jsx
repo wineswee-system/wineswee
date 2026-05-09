@@ -121,7 +121,7 @@ export default function TaxForms() {
 
     setRecords(results)
     setComputing(false)
-    toast.error(`已產生 ${results.length} 筆扣繳憑單`)
+    toast.success(`已產生 ${results.length} 筆扣繳憑單`)
   }
 
   const stats = useMemo(() => {

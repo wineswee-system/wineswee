@@ -1,4 +1,4 @@
-import { toast } from './/toast'
+import { toast } from './toast'
 /**
  * 各類所得扣繳暨免扣繳憑單 — HTML 列印版
  *

@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
 
-import { toast } from './/toast'
+import { toast } from './toast'
 // Common PDF setup with Chinese-friendly font
 function createPdf(title, subtitle) {
   const doc = new jsPDF()

@@ -78,7 +78,7 @@ export default function Commission() {
     }
 
     setCalculating(false)
-    toast.error(`已計算 ${created} 筆佣金紀錄`)
+    toast.success(`已計算 ${created} 筆佣金紀錄`)
     load()
   }
 

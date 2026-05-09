@@ -162,7 +162,7 @@ export default function FixedAssets() {
     const linesWithEntry = lines.map(l => ({ ...l, entry_id: entry.id }))
     const { error: linesErr } = await batchCreateJournalLines(linesWithEntry)
     if (linesErr) setError(linesErr.message)
-    else toast.error(`已建立折舊分錄 ${entryNumber}，總金額 ${fmt(totalDepreciation)}（草稿狀態，請至傳票管理過帳）`)
+    else toast.success(`已建立折舊分錄 ${entryNumber}，總金額 ${fmt(totalDepreciation)}（草稿狀態，請至傳票管理過帳）`)
 
     setGeneratingJE(false)
   }

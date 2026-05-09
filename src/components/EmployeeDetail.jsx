@@ -174,7 +174,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (storeChanged) {
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-        toast.error(`已調至${form.store}，未來排班已清除，請重新排班`)
+        toast.success(`已調至${form.store}，未來排班已清除，請重新排班`)
       }
     }
     setSaving(false)

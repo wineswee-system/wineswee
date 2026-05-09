@@ -161,7 +161,7 @@ export default function StoreSettingsTab({
     const rows = prev.map(({ id, created_at, ...rest }) => ({ ...rest, year_month: yearMonth }))
     const { data: inserted } = await supabase.from('store_time_slots').insert(rows).select()
     setTimeSlots(inserted || [])
-    toast.error(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
+    toast.success(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
   }
 
   // New staffing form state

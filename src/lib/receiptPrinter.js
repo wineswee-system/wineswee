@@ -1,4 +1,4 @@
-import { toast } from './/toast'
+import { toast } from './toast'
 /**
  * Receipt Printer — Browser print dialog & ESC/POS thermal printer support
  */

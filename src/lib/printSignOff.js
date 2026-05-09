@@ -1,4 +1,4 @@
-import { toast } from './/toast'
+import { toast } from './toast'
 /**
  * 通用「簽呈」列印（HTML + window.print()）
  *

@@ -224,7 +224,9 @@ export default function TransferRequest() {
         })
       }
     } else if (!activeChain) {
-      toast.error('已送出（目前無「異動」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=異動 的鏈。')
+      toast.warning('已送出（目前無「異動」簽核鏈，admin 可直接核准）', {
+        description: '建議到「簽核鏈設定」建立 category=異動 的鏈',
+      })
     }
 
     setShowForm(false)

@@ -390,7 +390,7 @@ export default function Schedule() {
       })
     }
     setCoverModal(null)
-    toast.error(`已強制指派 ${coverEmpName} 代班 ${shift}`)
+    toast.success(`已強制指派 ${coverEmpName} 代班 ${shift}`)
   }
 
   // 邀請式代班 — 主管發出邀請，所有候選人收 LINE，先搶先贏
@@ -566,7 +566,7 @@ export default function Schedule() {
       setPublishStatus(pubData)
     }
 
-    toast.error(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
+    toast.success(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
   }
 
   // ── Fix violations (re-run AI with violation context) ──
@@ -786,7 +786,7 @@ export default function Schedule() {
               if (newSchedules.length > 0) {
                 const { data } = await supabase.from('schedules').upsert(newSchedules, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
-                toast.error(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
+                toast.success(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
               }
             }}>
               📋 複製上月

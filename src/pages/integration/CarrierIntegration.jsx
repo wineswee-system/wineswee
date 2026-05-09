@@ -57,7 +57,7 @@ export default function CarrierIntegration() {
     }]
     await updateShipment(shipment.id, { timeline })
     load()
-    toast.error(`已更新 ${shipment.shipment_number} 的追蹤資訊（模擬）`)
+    toast.success(`已更新 ${shipment.shipment_number} 的追蹤資訊（模擬）`)
   }
 
   if (loading) return <LoadingSpinner />

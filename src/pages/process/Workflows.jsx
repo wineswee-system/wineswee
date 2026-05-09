@@ -411,7 +411,7 @@ export default function Workflows() {
       )
     }
 
-    toast.error(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
+    toast.success(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
   }
 
   const handleAddTask = async () => {

@@ -77,7 +77,7 @@ export default function ScheduledReports() {
   }
 
   const handleSendNow = (schedule) => {
-    toast.error(`已模擬寄送「${schedule.name}」至 ${schedule.recipients}`)
+    toast.success(`已模擬寄送「${schedule.name}」至 ${schedule.recipients}`)
     setSchedules(prev => prev.map(s => s.id === schedule.id ? { ...s, lastSent: new Date().toISOString().slice(0, 16).replace('T', ' ') } : s))
   }
 

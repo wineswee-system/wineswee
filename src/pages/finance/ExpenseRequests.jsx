@@ -281,7 +281,7 @@ export default function ExpenseRequests() {
     if (data.fully_approved) {
       toast.success('已通過全部簽核關卡')
     } else {
-      toast.error(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
+      toast.success(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
     }
     load()
   }

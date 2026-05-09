@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react'
+import React, { lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { TenantProvider } from './contexts/TenantContext'
@@ -137,23 +137,47 @@ function PortalGuard({ children }) {
 }
 
 // ── Root App ──
+// Toaster 主題跟著 documentElement 的 data-theme 走
+// Sidebar.toggleTheme 在 setAttribute('data-theme', ...) 時不發 event，
+// 所以用 MutationObserver 監聽 attribute 變化
+function useThemeFromDom() {
+  const [theme, setTheme] = useState(() =>
+    typeof document === 'undefined' ? 'dark' : (document.documentElement.getAttribute('data-theme') || 'dark')
+  )
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.documentElement.getAttribute('data-theme') || 'dark')
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
+  return theme
+}
+
+function ThemedToaster() {
+  const theme = useThemeFromDom()
+  return (
+    <Toaster
+      position={TOAST_POSITION}
+      theme={theme === 'light' ? 'light' : 'dark'}
+      richColors
+      closeButton
+      toastOptions={{
+        style: {
+          fontSize: 13,
+          fontFamily: 'inherit',
+        },
+      }}
+    />
+  )
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
     <AuthProvider>
       <TenantProvider>
-        <Toaster
-          position={TOAST_POSITION}
-          theme="dark"
-          richColors
-          closeButton
-          toastOptions={{
-            style: {
-              fontSize: 13,
-              fontFamily: 'inherit',
-            },
-          }}
-        />
+        <ThemedToaster />
         <ConfirmDialog />
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>

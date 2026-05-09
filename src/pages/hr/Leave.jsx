@@ -495,7 +495,7 @@ export default function Leave() {
                           <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
                         </>
                       )}
-                      {(l.status === '已拒絕' || l.status === '已退回') && l.employee === profile?.name && (
+                      {['待審核','申請中','已拒絕','已駁回','已退回'].includes(l.status) && l.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(l.id)
                           setForm({
@@ -511,7 +511,7 @@ export default function Leave() {
                             reason: l.reason || '',
                           })
                           setShowModal(true)
-                        }}>✏️ 編輯重送</button>
+                        }}>✏️ {(['已拒絕','已駁回','已退回'].includes(l.status)) ? '編輯重送' : '編輯'}</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(l)}>

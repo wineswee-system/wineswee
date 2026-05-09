@@ -329,12 +329,12 @@ export default function Overtime() {
                           <button className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)}>駁回</button>
                         </>
                       )}
-                      {(o.status === '已拒絕' || o.status === '已退回') && o.employee === profile?.name && (
+                      {['待審核','申請中','已拒絕','已駁回','已退回'].includes(o.status) && o.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(o.id)
-                          setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '' })
+                          setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '', store: o.store || '' })
                           setShowModal(true)
-                        }}>✏️ 編輯重送</button>
+                        }}>✏️ {(['已拒絕','已駁回','已退回'].includes(o.status)) ? '編輯重送' : '編輯'}</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(o)}>

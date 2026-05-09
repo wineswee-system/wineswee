@@ -14,6 +14,13 @@ import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
 
+// LIFF 既有 row 可能有中文 type，Web 這邊統一解到 clock_in / clock_out 顯示
+const normalizeType = (t) => {
+  if (t === 'clock_in' || t === '上班打卡') return 'clock_in'
+  if (t === 'clock_out' || t === '下班打卡') return 'clock_out'
+  return t
+}
+
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
@@ -26,7 +33,7 @@ export default function PunchCorrection() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
-  const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
+  const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
   const [editingId, setEditingId] = useState(null)
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
@@ -77,7 +84,7 @@ export default function PunchCorrection() {
       applicantId: empRow?.id,
       applicantCreatedAt: row.created_at,
       recordStatus: row.status,
-      approverName: row.approved_by,
+      approverName: row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
     })
@@ -99,7 +106,7 @@ export default function PunchCorrection() {
         applicantId: empRow?.id,
         applicantCreatedAt: row.created_at,
         recordStatus: row.status,
-        approverName: row.approved_by,
+        approverName: row.approver,
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
       })
@@ -121,7 +128,7 @@ export default function PunchCorrection() {
   const load = () => {
     const orgId = profile?.organization_id
     Promise.all([
-      supabase.from('punch_corrections').select('*').order('created_at', { ascending: false }),
+      supabase.from('clock_corrections').select('*').order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId ?? -1).order('name'),
@@ -141,35 +148,35 @@ export default function PunchCorrection() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!validateRequired(form, ['employee', 'date', 'corrected_time', 'reason', 'store'], setErrors)) return
+    if (!validateRequired(form, ['employee', 'date', 'correction_time', 'reason', 'store'], setErrors)) return
     const emp = employees.find(e => e.name === form.employee)
     const payload = {
       employee: form.employee,
       employee_id: emp?.id || null,
       date: form.date,
-      correction_type: form.correction_type,
-      corrected_time: form.corrected_time,
+      type: form.type,
+      correction_time: form.correction_time,
       reason: form.reason,
       store: form.store,
     }
 
     // ── 編輯路徑 ──（待審核 / 已駁回 都走這條）
     if (editingId) {
-      const { error: updErr } = await supabase.from('punch_corrections')
+      const { error: updErr } = await supabase.from('clock_corrections')
         .update({ ...payload, status: '待審核', reject_reason: null, current_step: 0 })
         .eq('id', editingId)
       if (updErr) { alert('更新失敗：' + updErr.message); return }
       try {
-        await supabase.rpc('resume_workflow_for_request', { p_type: 'punch_correction', p_id: editingId })
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'correction', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }
       setCorrections(prev => prev.map(c => c.id === editingId ? { ...c, ...payload, status: '待審核', reject_reason: null } : c))
       setShowModal(false); setEditingId(null)
-      setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
+      setForm({ employee: '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
       return
     }
 
     // ── 新增 ──
-    const { data } = await supabase.from('punch_corrections').insert({
+    const { data } = await supabase.from('clock_corrections').insert({
       ...payload, status: '待審核', organization_id: profile?.organization_id || null,
     }).select().single()
     if (data) {
@@ -179,7 +186,7 @@ export default function PunchCorrection() {
       }
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
+      setForm({ employee: '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
       await createApprovalWorkflow('clock_correction', data, form.employee)
     }
   }
@@ -189,8 +196,8 @@ export default function PunchCorrection() {
     setForm({
       employee: c.employee || '',
       date: c.date || '',
-      correction_type: c.correction_type || 'clock_out',
-      corrected_time: c.corrected_time || '',
+      type: normalizeType(c.type) || 'clock_out',
+      correction_time: c.correction_time || '',
       reason: c.reason || '',
       store: c.store || '',
     })
@@ -199,8 +206,8 @@ export default function PunchCorrection() {
 
   const handleApprove = async (id) => {
     const correction = corrections.find(c => c.id === id)
-    const { data } = await supabase.from('punch_corrections')
-      .update({ status: '已核准', approved_by: '管理員', approved_at: new Date().toISOString() })
+    const { data } = await supabase.from('clock_corrections')
+      .update({ status: '已核准', approver: profile?.name || '管理員', approved_at: new Date().toISOString() })
       .eq('id', id).select().single()
     if (data) {
       setCorrections(prev => prev.map(c => c.id === id ? data : c))
@@ -216,10 +223,10 @@ export default function PunchCorrection() {
 
         if (existing) {
           const update = {}
-          if (correction.correction_type === 'clock_in') {
-            update.clock_in = correction.corrected_time
+          if (normalizeType(correction.type) === 'clock_in') {
+            update.clock_in = correction.correction_time
           } else {
-            update.clock_out = correction.corrected_time
+            update.clock_out = correction.correction_time
           }
           // Recalculate hours when both in/out exist
           const finalIn = update.clock_in || existing.clock_in
@@ -240,10 +247,10 @@ export default function PunchCorrection() {
             date: correction.date,
             status: '補登',
           }
-          if (correction.correction_type === 'clock_in') {
-            newRecord.clock_in = correction.corrected_time
+          if (normalizeType(correction.type) === 'clock_in') {
+            newRecord.clock_in = correction.correction_time
           } else {
-            newRecord.clock_out = correction.corrected_time
+            newRecord.clock_out = correction.correction_time
           }
           await supabase.from('attendance_records').insert(newRecord)
         }
@@ -254,7 +261,7 @@ export default function PunchCorrection() {
   const handleReject = async (id) => {
     const reason = prompt('駁回原因：')
     if (!reason) return
-    const { data } = await supabase.from('punch_corrections')
+    const { data } = await supabase.from('clock_corrections')
       .update({ status: '已駁回', reject_reason: reason })
       .eq('id', id).select().single()
     if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
@@ -319,8 +326,8 @@ export default function PunchCorrection() {
                   onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
                   <td style={{ fontWeight: 600 }}>{c.employee}</td>
                   <td>{c.date}</td>
-                  <td><span className="badge badge-cyan">{c.correction_type === 'clock_in' ? '上班' : '下班'}</span></td>
-                  <td style={{ fontWeight: 600 }}>{c.corrected_time}</td>
+                  <td><span className="badge badge-cyan">{normalizeType(c.type) === 'clock_in' ? '上班' : '下班'}</span></td>
+                  <td style={{ fontWeight: 600 }}>{c.correction_time}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>{c.reason}</td>
                   <td>
                     <span className={`badge ${c.status === '已核准' ? 'badge-success' : c.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
@@ -340,7 +347,7 @@ export default function PunchCorrection() {
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {c.approved_by}
+                          {c.approver}
                           {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
                         </span>
                       )}
@@ -379,13 +386,13 @@ export default function PunchCorrection() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="補登類型">
-              <select className="form-input" style={{ width: '100%' }} value={form.correction_type} onChange={e => set('correction_type', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>
                 <option value="clock_in">上班打卡</option>
                 <option value="clock_out">下班打卡</option>
               </select>
             </Field>
-            <Field label="補登時間 *" error={errors.corrected_time} errorMsg="請選時間">
-              <input className="form-input" type="time" style={{ width: '100%' }} value={form.corrected_time} onChange={e => { set('corrected_time', e.target.value); clearError('corrected_time', setErrors) }} />
+            <Field label="補登時間 *" error={errors.correction_time} errorMsg="請選時間">
+              <input className="form-input" type="time" style={{ width: '100%' }} value={form.correction_time} onChange={e => { set('correction_time', e.target.value); clearError('correction_time', setErrors) }} />
             </Field>
           </div>
           <Field label="補打卡門市 *" error={errors.store} errorMsg="請選門市">
@@ -428,7 +435,7 @@ export default function PunchCorrection() {
 
       {detailRow && (() => {
         const empRow = employees.find(e => e.name === detailRow.employee)
-        const typeLabel = detailRow.correction_type === 'clock_in' ? '上班打卡' : '下班打卡'
+        const typeLabel = normalizeType(detailRow.type) === 'clock_in' ? '上班打卡' : '下班打卡'
         return (
           <ApprovalDetailModal
             open={!!detailRow}
@@ -447,7 +454,7 @@ export default function PunchCorrection() {
             fields={[
               { label: '日期', value: detailRow.date },
               { label: '打卡類型', value: typeLabel },
-              { label: '補登時間', value: detailRow.corrected_time },
+              { label: '補登時間', value: detailRow.correction_time },
               { label: '原因', value: detailRow.reason, multiline: true },
               ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
             ]}

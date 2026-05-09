@@ -176,17 +176,17 @@ export function printExpenseSimpleSignOff(row, opts = {}) {
   })
 }
 
-// ─── 5. 補打卡 punch_corrections / clock_corrections（兩種 schema 都吃）───
-//   punch_corrections：  correction_type 'clock_in'/'clock_out'、corrected_time、approved_by
-//   clock_corrections：  type '上班打卡'/'下班打卡'、correction_time、approver
+// ─── 5. 補打卡 clock_corrections ───
+//   type 'clock_in'/'clock_out'（LIFF 老資料可能還有 '上班打卡'/'下班打卡' 中文值）
+//   correction_time、approver
 export function printClockCorrectionSignOff(row, opts = {}) {
   if (!row) return
-  const typeRaw = row.correction_type || row.type || ''
-  const typeLabel = typeRaw === 'clock_in' ? '上班打卡'
-                  : typeRaw === 'clock_out' ? '下班打卡'
+  const typeRaw = row.type || ''
+  const typeLabel = (typeRaw === 'clock_in' || typeRaw === '上班打卡') ? '上班打卡'
+                  : (typeRaw === 'clock_out' || typeRaw === '下班打卡') ? '下班打卡'
                   : typeRaw
-  const time = row.corrected_time || row.correction_time || ''
-  const approverName = row.approver?.name || row.approver || row.approved_by || ''
+  const time = row.correction_time || ''
+  const approverName = row.approver?.name || row.approver || ''
 
   printSignOff({
     ...baseOpts(opts),

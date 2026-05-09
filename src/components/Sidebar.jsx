@@ -166,7 +166,6 @@ const groupNav = {
         { icon: BookText, label: '傳票管理', path: '/finance/journal' },
         { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
-        { icon: FileEdit, label: '費用申請與核銷', path: '/finance/expense-requests' },
         { icon: FileText, label: '電子發票', path: '/finance/invoices' },
         { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
       ]
@@ -295,6 +294,7 @@ const groupNav = {
       children: [
         { icon: BarChart3, label: 'HR 報表', path: '/hr/report' },
         { icon: Plane, label: '公出差旅', path: '/hr/travel' },
+        { icon: FileEdit, label: '費用申請與核銷', path: '/finance/expense-requests' },
         { icon: Receipt, label: '費用核銷', path: '/hr/expenses' },
         { icon: FolderOpen, label: '文件管理', path: '/hr/documents' },
         { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },

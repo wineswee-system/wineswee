@@ -116,6 +116,25 @@ export default function Leave() {
 
   const selectedPolicy = getLeaveTypeInfo(form.type)
 
+  // 計算員工該假別的年度餘額（顯示在 modal 法源 info 下方）
+  const balance = useMemo(() => {
+    if (!selectedPolicy || !form.employee) return null
+    const empFor = employees.find(em => em.name === form.employee)
+    let total = 0
+    if (selectedPolicy.code === 'annual' && empFor?.join_date) {
+      const yrs = (new Date() - new Date(empFor.join_date)) / (365.25 * 86400000)
+      total = selectedPolicy.calcEntitlement ? selectedPolicy.calcEntitlement(yrs) : 0
+    } else if (selectedPolicy.maxDays) {
+      total = selectedPolicy.maxDays
+    }
+    if (total === 0) return null
+    const used = leaves
+      .filter(l => l.employee === form.employee && l.status !== '已拒絕')
+      .filter(l => l.type === form.type || l.type === selectedPolicy.shortName)
+      .reduce((s, l) => s + (l.days || 0), 0)
+    return { total, used, remaining: Math.max(0, total - used) }
+  }, [form.employee, form.type, selectedPolicy, employees, leaves])
+
   const handleSubmit = async () => {
     try {
     if (!validateRequired(form, ['employee', 'start_date'], setErrors)) return
@@ -556,6 +575,20 @@ export default function Leave() {
               <div><strong style={{ color: 'var(--accent-cyan)' }}>法源：</strong>{selectedPolicy.law}</div>
               <div><strong style={{ color: 'var(--accent-cyan)' }}>薪資：</strong>{selectedPolicy.salary}</div>
               <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{selectedPolicy.description}</div>
+              {balance && (
+                <div style={{
+                  marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(34,211,238,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <strong style={{ color: 'var(--accent-cyan)' }}>該員餘額</strong>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: balance.remaining <= 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                    剩 {balance.remaining} / {balance.total} 天
+                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
+                      （已用 {balance.used}）
+                    </span>
+                  </span>
+                </div>
+              )}
               {(() => {
                 const empSel = employees.find(em => em.name === form.employee)
                 const sk = empSel?.store_id || null

@@ -265,7 +265,7 @@ export async function fetchApprovalCard(
     alerts: alerts.length > 0 ? alerts : undefined,
     attachments: attachments.length > 0 ? attachments : undefined,
     liffId,
-    liffDetailPath: "/approve",
+    liffDetailPath: type === "expense_request" ? `/approve/expense-request?id=${id}` : "/approve",
   };
 
   return { ok: true, card };

@@ -302,7 +302,7 @@ export default function Expenses() {
                           <button className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)}>駁回</button>
                         </>
                       )}
-                      {(e.status === '已駁回' || e.status === '已退回') && e.employee === profile?.name && (
+                      {['待審核','申請中','已駁回','已退回'].includes(e.status) && e.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(e.id)
                           setForm({
@@ -314,7 +314,7 @@ export default function Expenses() {
                             receipt: e.receipt ?? true,
                           })
                           setShowModal(true)
-                        }}>✏️ 編輯重送</button>
+                        }}>✏️ {(e.status === '已駁回' || e.status === '已退回') ? '編輯重送' : '編輯'}</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(e)}>

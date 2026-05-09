@@ -547,9 +547,9 @@ export default function ExpenseRequests() {
                           <Check size={12} /> 確認
                         </button>
                       )}
-                      {(r.status === '已駁回' || r.status === '已退回') && r.employee === profile?.name && (
+                      {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
-                          ✏️ 編輯重送
+                          ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
                         </button>
                       )}
                     </div>

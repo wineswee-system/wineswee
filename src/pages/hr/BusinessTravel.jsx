@@ -247,7 +247,7 @@ export default function BusinessTravel() {
                           <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
                         </>
                       )}
-                      {(t.status === '已駁回' || t.status === '已退回') && t.employee === profile?.name && (
+                      {['待審核','申請中','已駁回','已退回'].includes(t.status) && t.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(t.id)
                           setForm({
@@ -259,7 +259,7 @@ export default function BusinessTravel() {
                             budget: t.budget?.toString() || '',
                           })
                           setShowModal(true)
-                        }}>✏️ 編輯重送</button>
+                        }}>✏️ {(t.status === '已駁回' || t.status === '已退回') ? '編輯重送' : '編輯'}</button>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(t)}>

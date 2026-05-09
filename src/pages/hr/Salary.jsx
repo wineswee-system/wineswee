@@ -10,6 +10,8 @@ import SalaryTable from './components/SalaryTable'
 import SalaryFormModal from './components/SalaryFormModal'
 import BatchPayrollModal from './components/BatchPayrollModal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const CHINESE_MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
@@ -200,7 +202,7 @@ export default function Salary() {
     if (!form.employee) return
     // ★ 同月已有 payroll_record 警告（雙重計算防呆）
     if (payrollWarning && !editingRecord) {
-      if (!confirm(payrollWarning + '\n\n仍要繼續建立手動紀錄嗎？')) return
+      if (!(await confirm({ message: payrollWarning + '\n\n仍要繼續建立手動紀錄嗎？' }))) return
     }
     const d = deductions
     // 過濾空 custom_allowances
@@ -243,7 +245,7 @@ export default function Salary() {
     } else {
       // ★ 改用 v2：JSONB-based，支援所有對齊後欄位（含拆分津貼/自訂津貼/扣款明細）
       const { data, error } = await supabase.rpc('secure_upsert_salary_v2', { p_data: payload })
-      if (error) { alert('儲存失敗：' + error.message); return }
+      if (error) { toast.error('儲存失敗：' + error.message); return }
       if (data) {
         setRecords(prev => [...prev, data])
       }
@@ -435,7 +437,7 @@ export default function Salary() {
       setShowBatchModal(true)
     } catch (err) {
       console.error('Batch payroll failed:', err)
-      alert('計薪失敗：' + (err.message || '未知錯誤'))
+      toast.error('計薪失敗：' + (err.message || '未知錯誤'))
     }
   }
 

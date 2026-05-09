@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { getChannels } from '../../lib/messaging'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const PAGE_SIZE = 50
 
 const CHANNEL_LABEL = {
@@ -103,24 +105,24 @@ export default function MessageLog() {
 
   const bulkResend = async () => {
     if (selected.size === 0) return
-    const failedIds = [...selected].filter(id => {
+    const failedIds = [...selected].filter(async id => {
       const log = logs.find(l => l.id === id)
       return log && log.status === 'failed'
     })
-    if (failedIds.length === 0) { alert('所選項目中沒有失敗的訊息'); return }
-    if (!confirm(`確定要重新發送 ${failedIds.length} 筆失敗訊息？`)) return
+    if (failedIds.length === 0) { toast.error('所選項目中沒有失敗的訊息'); return }
+    if (!(await confirm({ message: `確定要重新發送 ${failedIds.length} 筆失敗訊息？` }))) return
     // Mark as queued for resend
     const { error: err } = await supabase.from('message_logs').update({ status: 'queued' }).in('id', failedIds)
-    if (err) { alert('操作失敗'); return }
+    if (err) { toast.error('操作失敗'); return }
     setSelected(new Set())
     loadLogs()
   }
 
   const bulkDelete = async () => {
     if (selected.size === 0) return
-    if (!confirm(`確定要刪除 ${selected.size} 筆紀錄？`)) return
+    if (!(await confirm({ message: `確定要刪除 ${selected.size} 筆紀錄？` }))) return
     const { error: err } = await supabase.from('message_logs').delete().in('id', [...selected])
-    if (err) { alert('刪除失敗'); return }
+    if (err) { toast.error('刪除失敗'); return }
     setSelected(new Set())
     loadLogs()
   }

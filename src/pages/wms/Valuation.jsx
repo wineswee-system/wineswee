@@ -3,6 +3,7 @@ import { Calculator, Download, Save } from 'lucide-react'
 import { getInventoryValuation, saveValuationSnapshot } from '../../lib/inventoryCosting'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
 const COSTING_METHODS = [
   { value: 'fifo', label: 'FIFO 先進先出' },
   { value: 'weighted_avg', label: '加權平均' },
@@ -37,10 +38,10 @@ export default function Valuation() {
     setSaving(true)
     try {
       await saveValuationSnapshot(data, valuationDate)
-      alert('快照已儲存')
+      toast.error('快照已儲存')
     } catch (err) {
       console.error('儲存快照失敗:', err)
-      alert('儲存快照失敗: ' + (err.message || '未知錯誤'))
+      toast.error('儲存快照失敗: ' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }

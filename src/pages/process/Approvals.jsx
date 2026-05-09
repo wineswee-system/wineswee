@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../../lib/toast'
 import {
   Plus, ArrowLeft, Check, CheckCircle2, XCircle, ChevronRight,
   User, ClipboardCheck,
@@ -198,8 +199,8 @@ export default function Approvals() {
 
   // ── Create ─────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!createFormData.title.trim()) { alert('請填寫簽核主旨'); return }
-    if (!createFormData.chain_id) { alert('請選擇簽核鏈'); return }
+    if (!createFormData.title.trim()) { toast.error('請填寫簽核主旨'); return }
+    if (!createFormData.chain_id) { toast.error('請選擇簽核鏈'); return }
     setCreating(true)
     try {
       const chain = approvalChains.find(c => c.id === Number(createFormData.chain_id))
@@ -229,7 +230,7 @@ export default function Approvals() {
       setCreateFormData({ title: '', chain_id: '', priority: '中', mode: 'sequential', store: '', notes: '' })
       await loadData()
     } catch (err) {
-      alert('建立失敗：' + (err.message || '未知'))
+      toast.error('建立失敗：' + (err.message || '未知'))
     } finally {
       setCreating(false)
     }
@@ -293,7 +294,7 @@ export default function Approvals() {
       setActionComment('')
       await loadData()
     } catch (err) {
-      alert('操作失敗：' + (err.message || '未知'))
+      toast.error('操作失敗：' + (err.message || '未知'))
     } finally {
       setActionLoading(false)
     }

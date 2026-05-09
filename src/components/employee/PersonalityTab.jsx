@@ -4,6 +4,7 @@ import { getEmployeePersonality, upsertEmployeePersonality } from '../../lib/db'
 import mbtiData from '../../lib/personality/mbtiProfiles.json'
 import astroData from '../../lib/personality/astrologyDefinitions.json'
 
+import { toast } from '../../lib/toast'
 const MBTI_TYPES = Object.keys(mbtiData.types)
 const SIGNS = astroData.meta.signs
 const PLANETS = ['sun', 'venus', 'mars', 'mercury', 'saturn']
@@ -34,7 +35,7 @@ export default function PersonalityTab({ employee }) {
       assessed_by: '系統',
       assessed_at: new Date().toISOString().slice(0, 10),
     })
-    if (error) alert('儲存失敗：' + error.message)
+    if (error) toast.error('儲存失敗：' + error.message)
     else { setProfile(data); setEditing(false) }
     setSaving(false)
   }

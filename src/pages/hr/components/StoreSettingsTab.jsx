@@ -4,6 +4,8 @@ import { supabase } from '../../../lib/supabase'
 import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay } from '../../../lib/scheduleUtils'
 import Modal, { Field } from '../../../components/Modal'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 function parseTime(t) {
   if (!t) return 0
   const [h, m] = String(t).split(':').map(Number)
@@ -76,7 +78,7 @@ export default function StoreSettingsTab({
   const handleShiftDelete = async (s) => {
     const { data: used } = await supabase.from('schedules').select('id').eq('shift', s.name).limit(1)
     const warning = used?.length > 0 ? `\n⚠ 有排班紀錄使用此班別，刪除後這些紀錄將無法顯示班別樣式。` : ''
-    if (!confirm(`確定要刪除「${s.name}」班別嗎？${warning}`)) return
+    if (!(await confirm({ message: `確定要刪除「${s.name}」班別嗎？${warning}` }))) return
     await supabase.from('shift_definitions').delete().eq('id', s.id)
     const updated = shiftDefs.filter(x => x.id !== s.id)
     setShiftDefs(updated)
@@ -98,7 +100,7 @@ export default function StoreSettingsTab({
     } else {
       payload.sort_order = shiftDefs.length + 1
       const { data, error } = await supabase.from('shift_definitions').insert(payload).select().single()
-      if (error) { alert('新增失敗：' + error.message); return }
+      if (error) { toast.error('新增失敗：' + error.message); return }
       if (data) {
         const updated = [...shiftDefs, data]
         setShiftDefs(updated)
@@ -126,7 +128,7 @@ export default function StoreSettingsTab({
     const { data, error } = await supabase.from('store_time_slots')
       .insert({ store_id: selectedStore.id, year_month: yearMonth || null, ...newSlot })
       .select().single()
-    if (error) { alert('新增失敗：' + error.message); return }
+    if (error) { toast.error('新增失敗：' + error.message); return }
     if (data) setTimeSlots(prev => [...prev.filter(s => s.id !== data.id), data].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
     setNewSlot(prev => ({ ...prev, start_time: '', end_time: '' }))
   }
@@ -146,10 +148,10 @@ export default function StoreSettingsTab({
     const { data: prev } = await supabase.from('store_time_slots').select('*')
       .eq('store_id', selectedStore.id).eq('year_month', prevMonth)
     if (!prev?.length) {
-      alert(`${prevMonth} 沒有時段人力設定可複製`)
+      toast.error(`${prevMonth} 沒有時段人力設定可複製`)
       return
     }
-    if (!confirm(`確定要將 ${prevMonth} 的 ${prev.length} 筆時段人力需求複製到 ${yearMonth}？`)) return
+    if (!(await confirm({ message: `確定要將 ${prevMonth} 的 ${prev.length} 筆時段人力需求複製到 ${yearMonth}？` }))) return
 
     // 先清除當月
     await supabase.from('store_time_slots').delete()
@@ -159,7 +161,7 @@ export default function StoreSettingsTab({
     const rows = prev.map(({ id, created_at, ...rest }) => ({ ...rest, year_month: yearMonth }))
     const { data: inserted } = await supabase.from('store_time_slots').insert(rows).select()
     setTimeSlots(inserted || [])
-    alert(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
+    toast.error(`已複製 ${inserted?.length || 0} 筆時段人力需求到 ${yearMonth}`)
   }
 
   // New staffing form state
@@ -528,7 +530,7 @@ export default function StoreSettingsTab({
           <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={async () => {
             if (!selectedStore) return
             await supabase.from('store_settings').upsert({ store_id: selectedStore.id, operating_hours: operatingHours }, { onConflict: 'store_id' })
-            alert('已儲存營業時間')
+            toast.success('已儲存營業時間')
           }}>儲存營業時間</button>
         </div>
       </div>

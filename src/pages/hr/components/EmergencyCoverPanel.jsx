@@ -5,6 +5,7 @@ import { isAbsence, getShiftHours, isWeekendDay } from '../../../lib/scheduleUti
 import { notifySchedulePublished } from '../../../lib/lineNotify'
 import { empLabel } from '../../../lib/empLabel'
 
+import { toast } from '../../../lib/toast'
 /**
  * Emergency Cover Panel
  *
@@ -140,7 +141,7 @@ export default function EmergencyCoverPanel({
       setSickEmployee('')
       setCandidates([])
     } catch (err) {
-      alert(err.message)
+      toast.error(err.message)
     } finally {
       setAssigning(null)
       onUpdate?.()

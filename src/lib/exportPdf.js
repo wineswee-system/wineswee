@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
 
+import { toast } from './/toast'
 // Common PDF setup with Chinese-friendly font
 function createPdf(title, subtitle) {
   const doc = new jsPDF()
@@ -310,7 +311,7 @@ const fmtDateLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
  */
 export function exportScheduleCalendarPdf({ storeName, yearMonth, monthDates, schedules, holidaySet }) {
   if (!monthDates || monthDates.length === 0) {
-    alert('沒有可匯出的排班資料')
+    toast.error('沒有可匯出的排班資料')
     return
   }
 
@@ -468,7 +469,7 @@ export function exportScheduleCalendarPdf({ storeName, yearMonth, monthDates, sc
   // 開新分頁顯示月曆，順便自動跳列印對話框
   const win = window.open('', '_blank')
   if (!win) {
-    alert('請允許彈出視窗，才能匯出 PDF')
+    toast.error('請允許彈出視窗，才能匯出 PDF')
     return
   }
   win.document.open()

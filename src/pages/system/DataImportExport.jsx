@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { toast } from '../../lib/toast'
 const IMPORT_ITEMS = [
   { key: 'employees', icon: '👥', title: '員工資料匯入', desc: '批次匯入員工名單，支援 Excel/CSV' },
   { key: 'customers', icon: '🤝', title: '客戶資料匯入', desc: '匯入客戶清單與聯絡資訊' },
@@ -21,12 +22,12 @@ export default function DataImportExport() {
   }
 
   const handleImport = (key) => {
-    if (!files[key]) return alert('請先選擇檔案')
-    alert(`正在匯入: ${files[key].name}（功能開發中）`)
+    if (!files[key]) return toast.error('請先選擇檔案')
+    toast.error(`正在匯入: ${files[key].name}（功能開發中）`)
   }
 
   const handleExport = () => {
-    alert('功能開發中')
+    toast.error('功能開發中')
   }
 
   return (

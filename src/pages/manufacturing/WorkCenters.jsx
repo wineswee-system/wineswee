@@ -6,6 +6,7 @@ import { getWorkCenters, createWorkCenter, updateWorkCenter, deleteWorkCenter, g
 import { calculateCapacityRequirements } from '../../lib/mrpEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const TYPES = ['加工', '組裝', '測試', '包裝']
 const STATUSES = ['啟用', '停用', '維修']
 
@@ -76,7 +77,7 @@ export default function WorkCenters() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此工作中心？')) return
+    if (!(await confirm({ message: '確定要刪除此工作中心？' }))) return
     const { error } = await deleteWorkCenter(id)
     if (error) setError(error.message)
     else load()

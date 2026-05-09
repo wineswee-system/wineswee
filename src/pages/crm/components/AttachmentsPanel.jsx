@@ -3,6 +3,8 @@ import { Upload, Trash2, FileText, Image, File } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { getCRMAttachments, createCRMAttachment, deleteCRMAttachment } from '../../../lib/db'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 function formatSize(bytes) {
   if (!bytes) return '-'
   if (bytes < 1024) return `${bytes} B`
@@ -39,8 +41,8 @@ export default function AttachmentsPanel({ entityType, entityId }) {
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!ALLOWED_TYPES.includes(file.type)) { alert('不支援此檔案類型'); return }
-    if (file.size > MAX_SIZE) { alert('檔案大小不可超過 10MB'); return }
+    if (!ALLOWED_TYPES.includes(file.type)) { toast.error('不支援此檔案類型'); return }
+    if (file.size > MAX_SIZE) { toast.error('檔案大小不可超過 10MB'); return }
     setUploading(true)
     try {
       const path = `crm/${entityType}/${entityId}/${Date.now()}_${file.name}`
@@ -59,7 +61,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
       if (dbErr) throw dbErr
       setAttachments(prev => [data, ...prev])
     } catch (err) {
-      alert('上傳失敗：' + (err.message || '未知錯誤'))
+      toast.error('上傳失敗：' + (err.message || '未知錯誤'))
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -67,7 +69,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
   }
 
   const handleDelete = async (att) => {
-    if (!confirm(`確定要刪除 ${att.file_name}？`)) return
+    if (!(await confirm({ message: `確定要刪除 ${att.file_name}？` }))) return
     await supabase.storage.from('attachments').remove([att.storage_path])
     await deleteCRMAttachment(att.id)
     setAttachments(prev => prev.filter(a => a.id !== att.id))

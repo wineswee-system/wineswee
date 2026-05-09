@@ -16,6 +16,7 @@ import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
 
+import { toast } from '../../lib/toast'
 export default function Overtime() {
   const { profile, role } = useAuth()
   const [showChainModal, setShowChainModal] = useState(false)
@@ -134,7 +135,7 @@ export default function Overtime() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -166,7 +167,7 @@ export default function Overtime() {
         const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
         if (pendingStep) {
           const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
-          if (result.error) { alert('操作失敗：' + result.error); return }
+          if (result.error) { toast.error('操作失敗：' + result.error); return }
           setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已核准' } : r))
           await writeAttendance(record)
           return
@@ -183,14 +184,14 @@ export default function Overtime() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const handleReject = async (id) => {
     const reason = prompt('請輸入駁回原因：')
     if (reason === null) return
-    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    if (!reason.trim()) { toast.error('請填寫駁回原因'); return }
     try {
       const record = records.find(r => r.id === id)
       if (record) {
@@ -198,7 +199,7 @@ export default function Overtime() {
         const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
         if (pendingStep) {
           const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
-          if (result.error) { alert('操作失敗：' + result.error); return }
+          if (result.error) { toast.error('操作失敗：' + result.error); return }
           setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已拒絕' } : r))
           return
         }
@@ -210,7 +211,7 @@ export default function Overtime() {
       if (error) throw error
       if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
     } catch (err) {
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -246,9 +247,9 @@ export default function Overtime() {
   // 這樣老闆改 chain（/system/approval-chains）後 PDF 會跟著動態更新欄數
   // 注意：window.open 必須在 click handler 同步呼叫，避免被 popup blocker 擋
   const printWithChain = async (row) => {
-    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
       const chainSteps = await buildFormChainSteps({
@@ -274,7 +275,7 @@ export default function Overtime() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
 

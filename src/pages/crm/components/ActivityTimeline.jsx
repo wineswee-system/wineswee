@@ -3,6 +3,7 @@ import { Phone, Video, CheckSquare, Mail, UserPlus, Plus, Check, Clock, MapPin, 
 import { getCRMActivities, createCRMActivity, updateCRMActivity } from '../../../lib/db'
 import Modal, { Field } from '../../../components/Modal'
 
+import { toast } from '../../../lib/toast'
 const TYPES = [
   { value: 'call', label: '電話', icon: Phone, color: 'var(--accent-green)' },
   { value: 'meeting', label: '會議', icon: Video, color: 'var(--accent-blue)' },
@@ -55,7 +56,7 @@ export default function ActivityTimeline({ entityType, entityId }) {
       due_date: form.due_date || null,
       status: 'planned',
     })
-    if (error) { alert('新增失敗'); return }
+    if (error) { toast.error('新增失敗'); return }
     setActivities(prev => [data, ...prev])
     setShowForm(false)
     setForm({ type: 'call', subject: '', assignee: '', due_date: '', description: '' })

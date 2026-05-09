@@ -7,6 +7,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const PLANS = [
   { value: 'free', label: '免費版', color: 'var(--text-muted)', bg: 'var(--bg-tertiary)' },
   { value: 'starter', label: '入門版', color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
@@ -70,13 +72,13 @@ export default function Organizations() {
 
   const handleDelete = async (o) => {
     const orgCompanies = companies.filter(c => c.organization_id === o.id)
-    if (orgCompanies.length > 0) { alert(`無法刪除：該組織下有 ${orgCompanies.length} 間公司`); return }
-    if (!confirm(`確定要刪除「${o.name}」嗎？`)) return
+    if (orgCompanies.length > 0) { toast.error(`無法刪除：該組織下有 ${orgCompanies.length} 間公司`); return }
+    if (!(await confirm({ message: `確定要刪除「${o.name}」嗎？` }))) return
     try {
       await deleteOrganization(o.id)
       setOrgs(prev => prev.filter(x => x.id !== o.id))
     } catch (err) {
-      alert('刪除失敗：' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -96,7 +98,7 @@ export default function Organizations() {
       setEditingOrg(null)
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

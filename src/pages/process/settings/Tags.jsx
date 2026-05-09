@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit3, Check, X, Tag as TagIcon } from 'lucide-react'
 import { getTags, createTag, updateTag, deleteTag } from '../../../lib/db'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 
+import { confirm } from '../../../lib/confirm'
 const COLORS = [
   { value: 'var(--accent-cyan)',   label: 'Cyan' },
   { value: 'var(--accent-blue)',   label: 'Blue' },
@@ -59,7 +60,7 @@ export default function Tags() {
   }
 
   const handleDelete = async (r) => {
-    if (!confirm(`確定刪除標籤「${r.name}」？`)) return
+    if (!(await confirm({ message: `確定刪除標籤「${r.name}」？` }))) return
     const { error } = await deleteTag(r.id)
     if (error) { setError(error.message); return }
     setRows(prev => prev.filter(x => x.id !== r.id))

@@ -5,6 +5,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const TYPES = [
   { value: 'call', label: '電話', icon: Phone, color: 'var(--accent-green)' },
   { value: 'meeting', label: '會議', icon: Video, color: 'var(--accent-blue)' },
@@ -113,7 +115,7 @@ export default function Activities() {
       }
       closeModal()
     } catch (err) {
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }
@@ -138,12 +140,12 @@ export default function Activities() {
 
   const completeActivity = async (id) => {
     const { data, error: err } = await updateCRMActivity(id, { status: 'completed', completed_at: new Date().toISOString() })
-    if (err) { alert('操作失敗'); return }
+    if (err) { toast.error('操作失敗'); return }
     setActivities(prev => prev.map(a => a.id === id ? data : a))
   }
 
   const deleteActivity = async (id) => {
-    if (!confirm('確定要刪除此活動？')) return
+    if (!(await confirm({ message: '確定要刪除此活動？' }))) return
     await deleteCRMActivity(id)
     setActivities(prev => prev.filter(a => a.id !== id))
   }

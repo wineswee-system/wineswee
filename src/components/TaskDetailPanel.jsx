@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { empLabel } from '../lib/empLabel'
+import { toast } from '../lib/toast'
 import {
   updateTask, deleteTask,
   getTaskComments, createTaskComment,
@@ -22,6 +23,7 @@ import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
 import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
 
+import { confirm } from '../lib/confirm'
 const STATUS_LIST = ['待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
@@ -144,8 +146,8 @@ export default function TaskDetailPanel({
   useEffect(() => { setIsDirty(false) }, [task?.id])
   const setAndDirty = (k, v) => { set(k, v); setIsDirty(true) }
 
-  const handleClose = () => {
-    if (isDirty && !confirm('有未儲存的變更，確定要離開嗎？')) return
+  const handleClose = async () => {
+    if (isDirty && !(await confirm({ message: '有未儲存的變更，確定要離開嗎？' }))) return
     onClose()
   }
 
@@ -170,7 +172,7 @@ export default function TaskDetailPanel({
         if (error || !result?.ok) {
           setForm(f => ({ ...f, status: prevStatus }))
           setSaving(false)
-          alert('啟動簽核失敗：' + (error?.message || result?.error || '未知錯誤'))
+          toast.error('啟動簽核失敗：' + (error?.message || result?.error || '未知錯誤'))
           return
         }
         // reload confirmations 讓 UI 立刻反映
@@ -179,20 +181,20 @@ export default function TaskDetailPanel({
         setForm(f => ({ ...f, status: result.status === '已完成' ? '已完成' : prevStatus }))
         setSaving(false)
         if (result.has_pending_confirmations) {
-          alert('已啟動簽核流程，完成所有簽核後任務會自動標記為已完成')
+          toast.success('已啟動簽核流程，完成所有簽核後任務會自動標記為已完成')
         }
         return
       }
       if (wasRejected) {
         setForm(f => ({ ...f, status: prevStatus }))
         setSaving(false)
-        alert('簽核已退回，請聯絡管理員重啟簽核流程')
+        toast.error('簽核已退回，請聯絡管理員重啟簽核流程')
         return
       }
       if (hasPending) {
         setForm(f => ({ ...f, status: prevStatus }))
         setSaving(false)
-        alert('請等待簽核完成後，任務會自動標記為已完成')
+        toast.error('請等待簽核完成後，任務會自動標記為已完成')
         return
       }
       // confirmations 全部 approved → 任務應該已被 trigger 標完成；放行
@@ -230,7 +232,7 @@ export default function TaskDetailPanel({
   }
 
   const handleDelete = async () => {
-    if (!confirm('確定刪除此任務？')) return
+    if (!(await confirm({ message: '確定刪除此任務？' }))) return
     await deleteTask(task.id)
     onDelete(task.id)
   }
@@ -515,7 +517,7 @@ export default function TaskDetailPanel({
       setTriggeredInstances(prev => [inst, ...prev])
       setTriggerTemplateId('')
     } catch (err) {
-      alert('觸發失敗，請稍後再試')
+      toast.error('觸發失敗，請稍後再試')
     }
     setTriggering(false)
   }
@@ -1092,7 +1094,7 @@ export default function TaskDetailPanel({
                   '新增附件',
                   '檔案 URL（須以 https:// 開頭）：',
                   (url) => {
-                    if (!url.startsWith('https://')) { alert('請輸入有效的 https:// 網址'); return }
+                    if (!url.startsWith('https://')) { toast.error('請輸入有效的 https:// 網址'); return }
                     openInput(
                       '新增附件',
                       '檔案名稱：',

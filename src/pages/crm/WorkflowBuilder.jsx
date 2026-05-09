@@ -5,6 +5,8 @@ import Modal, { Field } from '../../components/Modal'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { WORKFLOW_TRIGGERS, WORKFLOW_ACTIONS } from '../../lib/crmEngine'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 // --- Action config field definitions ---
 const ACTION_CONFIG_FIELDS = {
   send_email: [
@@ -197,14 +199,14 @@ export default function WorkflowBuilder() {
     if (!wf) return
     const next = wf.status === 'active' ? 'paused' : 'active'
     const { data, error: err } = await updateCRMWorkflow(id, { status: next })
-    if (err) { alert('狀態更新失敗'); return }
+    if (err) { toast.error('狀態更新失敗'); return }
     setWorkflows(prev => prev.map(w => w.id === id ? data : w))
   }
 
   const deleteWorkflow = async (id) => {
-    if (!confirm('確定要刪除此工作流程？')) return
+    if (!(await confirm({ message: '確定要刪除此工作流程？' }))) return
     const { error: err } = await deleteCRMWorkflow(id)
-    if (err) { alert('刪除失敗'); return }
+    if (err) { toast.error('刪除失敗'); return }
     setWorkflows(prev => prev.filter(w => w.id !== id))
   }
 
@@ -226,7 +228,7 @@ export default function WorkflowBuilder() {
   }
 
   const saveWorkflow = async () => {
-    if (!builderName.trim()) { alert('請輸入流程名稱'); return }
+    if (!builderName.trim()) { toast.error('請輸入流程名稱'); return }
     if (saving) return
     setSaving(true)
     try {
@@ -251,7 +253,7 @@ export default function WorkflowBuilder() {
       setTab('list')
     } catch (err) {
       console.error('Save workflow failed:', err)
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }

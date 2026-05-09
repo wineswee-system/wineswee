@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const REPORT_TYPES = ['營運摘要', '財務報表', '銷售績效', '庫存報告', 'HR 月報', 'POS 日報']
 const FREQUENCIES = [
   { value: '每日', label: '每日' },
@@ -44,7 +46,7 @@ export default function ScheduledReports() {
   }
 
   const handleSave = () => {
-    if (!form.name.trim() || !form.recipients.trim()) return alert('請填寫名稱與收件者')
+    if (!form.name.trim() || !form.recipients.trim()) return toast.error('請填寫名稱與收件者')
     if (editingId) {
       setSchedules(prev => prev.map(s => s.id === editingId ? { ...s, ...form, status: form.enabled ? '啟用' : '暫停', nextSend: form.enabled ? computeNext(form.frequency) : '-' } : s))
     } else {
@@ -61,8 +63,8 @@ export default function ScheduledReports() {
     d.setMonth(d.getMonth() + 1, 1); return d.toISOString().slice(0, 10)
   }
 
-  const handleDelete = (id) => {
-    if (!confirm('確定刪除此排程？')) return
+  const handleDelete = async (id) => {
+    if (!(await confirm({ message: '確定刪除此排程？' }))) return
     setSchedules(prev => prev.filter(s => s.id !== id))
   }
 
@@ -75,7 +77,7 @@ export default function ScheduledReports() {
   }
 
   const handleSendNow = (schedule) => {
-    alert(`已模擬寄送「${schedule.name}」至 ${schedule.recipients}`)
+    toast.error(`已模擬寄送「${schedule.name}」至 ${schedule.recipients}`)
     setSchedules(prev => prev.map(s => s.id === schedule.id ? { ...s, lastSent: new Date().toISOString().slice(0, 16).replace('T', ' ') } : s))
   }
 

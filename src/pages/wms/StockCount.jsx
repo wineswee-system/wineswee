@@ -9,6 +9,8 @@ import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const CYCLE_FREQUENCIES = [
   { value: 'daily', label: '每日' },
   { value: 'weekly', label: '每週' },
@@ -68,7 +70,7 @@ export default function StockCount() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -147,17 +149,17 @@ export default function StockCount() {
         warehouse: selectedCount?.warehouse || '',
         count_id: String(selectedCount?.id || ''),
       })
-      alert(`已建立 ${item.sku} 庫存調整: ${diff > 0 ? '+' : ''}${diff}`)
+      toast.error(`已建立 ${item.sku} 庫存調整: ${diff > 0 ? '+' : ''}${diff}`)
     } catch (err) {
-      alert('調整失敗: ' + (err.message || '未知錯誤'))
+      toast.error('調整失敗: ' + (err.message || '未知錯誤'))
     }
   }
 
   // Adjust all variances at once
   const handleAdjustAll = async () => {
     const itemsWithVariance = varianceItems.filter(v => v.counted_qty !== v.system_qty)
-    if (itemsWithVariance.length === 0) { alert('無差異需要調整'); return }
-    if (!confirm(`確定要調整 ${itemsWithVariance.length} 個品項的庫存差異？`)) return
+    if (itemsWithVariance.length === 0) { toast.error('無差異需要調整'); return }
+    if (!(await confirm({ message: `確定要調整 ${itemsWithVariance.length} 個品項的庫存差異？` }))) return
 
     for (const item of itemsWithVariance) {
       const diff = item.counted_qty - item.system_qty
@@ -180,7 +182,7 @@ export default function StockCount() {
         count_id: String(selectedCount?.id || ''),
       })
     }
-    alert(`已建立 ${itemsWithVariance.length} 筆庫存調整`)
+    toast.error(`已建立 ${itemsWithVariance.length} 筆庫存調整`)
     setShowVarianceModal(false)
   }
 

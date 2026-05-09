@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { toast } from '../../lib/toast'
 import {
   findActiveChainByCategory, loadChainSteps,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
@@ -16,6 +17,7 @@ import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
+import { confirm } from '../../lib/confirm'
 const REASONS = ['個人因素', '家庭因素', '健康因素', '另謀高就', '進修', '退休', '其他']
 
 const STATUS_BADGE = {
@@ -69,7 +71,7 @@ export default function Resignation() {
 
   const printWithChain = async (row) => {
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const builtSteps = await buildAndResolveChain(row)
       const approverMap = {}
@@ -83,7 +85,7 @@ export default function Resignation() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
   const [loading, setLoading] = useState(true)
@@ -153,7 +155,7 @@ export default function Resignation() {
     if (editingId) {
       const { error: updErr } = await supabase.from('resignation_requests')
         .update({ ...payload, reject_reason: null }).eq('id', editingId)
-      if (updErr) return alert('更新失敗：' + updErr.message)
+      if (updErr) return toast.error('更新失敗：' + updErr.message)
       try {
         await supabase.rpc('resume_workflow_for_request', { p_type: 'resignation', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }
@@ -164,7 +166,7 @@ export default function Resignation() {
     }
 
     const { data: inserted, error } = await supabase.from('resignation_requests').insert(payload).select().single()
-    if (error) return alert('送出失敗：' + error.message)
+    if (error) return toast.error('送出失敗：' + error.message)
 
     // 推第一審
     if (activeChain?.id && inserted) {
@@ -180,10 +182,10 @@ export default function Resignation() {
           organizationId: profile?.organization_id,
         })
       } else {
-        alert('已送出，但找不到對應的第一關簽核人。請確認簽核鏈設定。')
+        toast.error('已送出，但找不到對應的第一關簽核人。請確認簽核鏈設定。')
       }
     } else if (!activeChain) {
-      alert('已送出（目前無「離職」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=離職 的鏈。')
+      toast.error('已送出（目前無「離職」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=離職 的鏈。')
     }
 
     setShowForm(false)
@@ -192,12 +194,12 @@ export default function Resignation() {
   }
 
   const handleApprove = async (req) => {
-    if (!confirm(`核准 ${req.employee?.name} 的離職申請？\n最後一關核准後會自動把員工狀態改為「離職」。`)) return
+    if (!(await confirm({ message: `核准 ${req.employee?.name} 的離職申請？\n最後一關核准後會自動把員工狀態改為「離職」。` }))) return
     const res = await approveChainStep({
       table: 'resignation', id: req.id,
       approverEmpId: profile?.id, action: 'approve',
     })
-    if (!res?.ok) return alert('核准失敗：' + (res?.error || 'unknown'))
+    if (!res?.ok) return toast.error('核准失敗：' + (res?.error || 'unknown'))
 
     // 若推進到下一關 → 推通知
     if (res.event === 'advanced' && res.next_approvers?.length > 0) {
@@ -214,19 +216,19 @@ export default function Resignation() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return alert('請填駁回原因')
+    if (!rejectReason.trim()) return toast.error('請填駁回原因')
     const res = await approveChainStep({
       table: 'resignation', id: reviewModal.id,
       approverEmpId: profile?.id, action: 'reject', reason: rejectReason,
     })
-    if (!res?.ok) return alert('駁回失敗：' + (res?.error || 'unknown'))
+    if (!res?.ok) return toast.error('駁回失敗：' + (res?.error || 'unknown'))
     setReviewModal(null)
     setRejectReason('')
     load()
   }
 
   const handleCancel = async (req) => {
-    if (!confirm('確定取消此申請？')) return
+    if (!(await confirm({ message: '確定取消此申請？' }))) return
     await supabase.from('resignation_requests').update({ status: '已取消' }).eq('id', req.id)
     load()
   }

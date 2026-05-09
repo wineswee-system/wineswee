@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours } from '../../lib/scheduleUtils'
 
+import { toast } from '../../lib/toast'
 export default function MySchedule() {
   const { profile: authProfile } = useAuth()
   const [profile, setProfile] = useState(null)
@@ -330,7 +331,7 @@ function OffRequestForm({ empName, empId, employmentType }) {
         .upsert({ employee: empName, employee_id: empId, date }, { onConflict: 'employee,date' })
         .select().single()
       if (data) setMyRequests(prev => [...prev, data])
-      if (error) alert('申請失敗：' + error.message)
+      if (error) toast.error('申請失敗：' + error.message)
     }
     setSubmitting(false)
   }
@@ -448,7 +449,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
     }).select().single()
 
     if (data) setMySwaps(prev => [data, ...prev])
-    if (error) alert('申請失敗：' + error.message)
+    if (error) toast.error('申請失敗：' + error.message)
     setSubmitting(false)
     setDate('')
     setTargetEmployee('')

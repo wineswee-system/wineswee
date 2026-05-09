@@ -4,6 +4,8 @@ import { getAccountingPeriods, createAccountingPeriod, updateAccountingPeriod, c
 import { getIncomeStatement } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function PeriodClose() {
@@ -23,7 +25,7 @@ export default function PeriodClose() {
   useEffect(() => { load() }, [])
 
   const handleClose = async (period) => {
-    if (!confirm(`確定要關閉 ${period.period} 期間？關帳後該期間的傳票將無法修改���`)) return
+    if (!(await confirm({ message: `確定要關閉 ${period.period} 期間？關帳後該期間的傳票將無法修改���` }))) return
     setClosing(period.id)
     await updateAccountingPeriod(period.id, {
       status: '已關帳',
@@ -35,14 +37,14 @@ export default function PeriodClose() {
   }
 
   const handleReopen = async (period) => {
-    if (!confirm(`確定要重新開放 ${period.period}？`)) return
+    if (!(await confirm({ message: `確定要重新開放 ${period.period}？` }))) return
     await updateAccountingPeriod(period.id, { status: '開放', closed_by: null, closed_at: null })
     load()
   }
 
   const handleYearEnd = async () => {
     const year = new Date().getFullYear()
-    if (!confirm(`將產生 ${year} 年度結轉分錄（本期損益 → 保留盈餘），是否繼續？`)) return
+    if (!(await confirm({ message: `將產生 ${year} 年度結轉分錄（本期損益 → 保留盈餘），是否繼續？` }))) return
 
     setClosing('yearend')
     try {
@@ -52,7 +54,7 @@ export default function PeriodClose() {
       const netIncome = pl?.netIncome || 0
 
       if (netIncome === 0) {
-        alert('本年度淨利為 0，無需結轉')
+        toast.error('本年度淨利為 0，無需結轉')
         setClosing(null)
         return
       }
@@ -93,7 +95,7 @@ export default function PeriodClose() {
       const linesWithEntry = lines.map(l => ({ ...l, entry_id: entry.id }))
       const { error: linesErr } = await batchCreateJournalLines(linesWithEntry)
       if (linesErr) setError(linesErr.message)
-      else alert(`已建立年度結帳分錄 JE-CLOSE-${year}，淨利 ${fmt(netIncome)} 結轉至保留盈餘（草稿狀態）`)
+      else toast.error(`已建立年度結帳分錄 JE-CLOSE-${year}，淨利 ${fmt(netIncome)} 結轉至保留盈餘（草稿狀態）`)
     } catch (err) {
       setError(err.message)
     }

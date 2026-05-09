@@ -9,6 +9,7 @@ import Modal, { Field } from '../../components/Modal'
 import ActivityTimeline from './components/ActivityTimeline'
 import NotesPanel from './components/NotesPanel'
 
+import { toast } from '../../lib/toast'
 const STAGE_PALETTE = [
   { accent: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
   { accent: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)' },
@@ -282,9 +283,9 @@ export default function Pipeline() {
         await batchCreateQuotationLines(lines)
       }
 
-      alert(`報價單 ${quoteNumber} 已建立！\n金額：NT$ ${(quote.total || opp.amount || 0).toLocaleString()}\n可在「銷售管理 > 報價單」查看`)
+      toast.error(`報價單 ${quoteNumber} 已建立！\n金額：NT$ ${(quote.total || opp.amount || 0).toLocaleString()}\n可在「銷售管理 > 報價單」查看`)
     } catch (err) {
-      alert('建立報價單失敗：' + (err.message || '未知錯誤'))
+      toast.error('建立報價單失敗：' + (err.message || '未知錯誤'))
     }
   }
 

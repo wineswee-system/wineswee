@@ -11,6 +11,8 @@ import TaskModal from '../../components/tasks/TaskModal'
 import { useAuth } from '../../contexts/AuthContext'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 export default function Tasks() {
   const { profile, isSuperAdmin } = useAuth()
   const [tab, setTab] = useState('all')
@@ -79,7 +81,7 @@ export default function Tasks() {
   }
 
   const handleDeleteTask = async (id) => {
-    if (!confirm('確定刪除此任務？')) return
+    if (!(await confirm({ message: '確定刪除此任務？' }))) return
     await deleteTask(id)
     setTasks(prev => prev.filter(t => t.id !== id))
   }
@@ -379,7 +381,7 @@ export default function Tasks() {
               trigger_template_id_on_complete: orig.trigger_template_id_on_complete || null,
             })
             if (error || !dup) {
-              alert('複製失敗：' + (error?.message || '未知錯誤'))
+              toast.error('複製失敗：' + (error?.message || '未知錯誤'))
               return
             }
             // 複製 task_checklists
@@ -396,7 +398,7 @@ export default function Tasks() {
               })))
             }
             setTasks(prev => [...prev, dup])
-            alert(`已複製「${orig.title}」`)
+            toast.error(`已複製「${orig.title}」`)
           }}
         />
       )}

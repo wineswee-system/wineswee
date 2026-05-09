@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
 const STATUS_BADGE = { '營業中': 'badge-success', '已結班': 'badge-info' }
 
 const PAYMENT_TYPES = ['現金', '信用卡', 'LINE Pay', '綠界金流', '銀行轉帳']
@@ -55,7 +56,7 @@ export default function POSShifts() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -131,7 +132,7 @@ export default function POSShifts() {
       setCloseSuccess(true)
     } catch (err) {
       console.error('Close shift failed:', err)
-      alert('結班失敗：' + (err.message || '未知錯誤'))
+      toast.error('結班失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -144,7 +145,7 @@ export default function POSShifts() {
       printShiftReport(shift, txns, { companyName: shift.store || '商店' })
     } catch (err) {
       console.error('列印日結報表失敗:', err)
-      alert('列印日結報表失敗：' + (err.message || '未知錯誤'))
+      toast.error('列印日結報表失敗：' + (err.message || '未知錯誤'))
     }
   }
 

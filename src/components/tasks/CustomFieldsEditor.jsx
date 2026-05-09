@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Settings } from 'lucide-react'
+import { confirm } from '../../lib/confirm'
 import {
   getProjectCustomFields, createProjectCustomField, updateProjectCustomField, deleteProjectCustomField,
   getTaskCustomFieldValues, upsertTaskCustomFieldValue,
@@ -153,7 +154,7 @@ export function ProjectCustomFieldsAdmin({ projectId }) {
   }
 
   const remove = async (id) => {
-    if (!confirm('刪除此自訂欄位？所有任務的值也會一起刪除。')) return
+    if (!(await confirm({ message: '刪除此自訂欄位？所有任務的值也會一起刪除。' }))) return
     await deleteProjectCustomField(id)
     load()
   }

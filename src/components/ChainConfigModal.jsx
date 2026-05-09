@@ -24,6 +24,8 @@ import { ModalOverlay } from './Modal'
 import LoadingSpinner from './LoadingSpinner'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 
+import { toast } from '../lib/toast'
+import { confirm } from '../lib/confirm'
 // ─── target_type 選項（9 種，砍了 applicant_supervisor 因為組織圖夠用）───
 const TARGET_TYPES = [
   // 寫死
@@ -222,12 +224,12 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         .eq('approval_chain_id', cid)
         .in('status', ['申請中', '待審'])
       if ((count || 0) > 0) {
-        alert(`無法刪除「${name}」\n\n目前有 ${count} 筆「申請中/待審」的費用申請正在使用此鏈。\n請等這些申請走完流程後再刪除，或先把它們處理掉。`)
+        toast.error(`無法刪除「${name}」\n\n目前有 ${count} 筆「申請中/待審」的費用申請正在使用此鏈。\n請等這些申請走完流程後再刪除，或先把它們處理掉。`)
         return
       }
     }
 
-    if (!confirm(`確認刪除「${name}」？\n\n此 chain 的所有關卡設定會一併刪除（已完成的歷史申請會保留 chain_id 但流程不再走）`)) return
+    if (!(await (await confirm({ message: { message: `確認刪除「${name}」？\n\n此 chain 的所有關卡設定會一併刪除（已完成的歷史申請會保留 chain_id 但流程不再走）` } })))) return
     try {
       await supabase.from('approval_chain_steps').delete().eq('chain_id', cid)
       const { error } = await supabase.from('approval_chains').delete().eq('id', cid)
@@ -238,7 +240,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       const msg = (e.message || '').includes('foreign key')
         ? '此 chain 仍被歷史申請引用，無法刪除（請先檢查 expense_requests 表）'
         : (e.message || '未知錯誤')
-      alert('刪除失敗：' + msg)
+      toast.error('刪除失敗：' + msg)
     }
   }
 
@@ -257,7 +259,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     setSteps(prev => [...prev, blankStep(prev.length)])
   }
   const removeStep = (idx) => {
-    if (steps.length === 1) { alert('至少要保留 1 關'); return }
+    if (steps.length === 1) { toast.error('至少要保留 1 關'); return }
     setSteps(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, step_order: i })))
   }
   const moveStep = (idx, dir) => {
@@ -344,7 +346,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   const handleSave = async () => {
     const missing = []
     if (!chainName?.trim()) missing.push('簽核鏈名稱不能空白')
-    steps.forEach((s, i) => {
+    steps.forEachasync ((s, i) => {
       if (!s.label?.trim()) missing.push(`第 ${i+1} 關沒填標籤`)
       const preview = stepPreview(s)
       if (!preview.ok) missing.push(`第 ${i+1} 關：${preview.text}`)
@@ -357,7 +359,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       if (maxN !== null && minN > maxN) missing.push('最低金額不可大於最高金額')
     }
     if (missing.length > 0) {
-      alert('有以下問題：\n\n' + missing.join('\n'))
+      toast.error('有以下問題：\n\n' + missing.join('\n'))
       return
     }
 
@@ -374,7 +376,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
           .select('id', { count: 'exact', head: true })
           .eq('chain_id', chainId)
         if (steps.length < (oldStepCount || 0)) {
-          if (!confirm(`⚠️ 警告\n\n目前有 ${count} 筆「申請中/待審」費用申請正在使用此鏈，舊版有 ${oldStepCount} 關，新版只剩 ${steps.length} 關。\n\n如果某筆申請目前 current_step >= ${steps.length}，會卡在「找不到 chain step」的狀態。\n\n仍要繼續儲存嗎？`)) {
+          if (!(await (await confirm({ message: { message: `⚠️ 警告\n\n目前有 ${count} 筆「申請中/待審」費用申請正在使用此鏈，舊版有 ${oldStepCount} 關，新版只剩 ${steps.length} 關。\n\n如果某筆申請目前 current_step >= ${steps.length}，會卡在「找不到 chain step」的狀態。\n\n仍要繼續儲存嗎？` } })))) {
             return
           }
         }
@@ -442,16 +444,16 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         }, { onConflict: 'form_type,organization_id' })
         if (cfgErr) throw cfgErr
 
-        alert(`「${formLabel}」簽核鏈已儲存（${steps.length} 關）`)
+        toast.error(`「${formLabel}」簽核鏈已儲存（${steps.length} 關）`)
         onClose()
       } else {
         // amount_grouped：存完回列表
-        alert(`「${chainPayload.name}」已儲存（${steps.length} 關）`)
+        toast.error(`「${chainPayload.name}」已儲存（${steps.length} 關）`)
         await handleBackToList()
       }
     } catch (err) {
       console.error('save chain failed:', err)
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }

@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit3, Check, X, FolderTree, FolderOpen, ListChecks, Chec
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../../../lib/db'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 
+import { confirm } from '../../../lib/confirm'
 const SCOPES = [
   { value: 'project',   label: '專案',     icon: FolderOpen },
   { value: 'task',      label: '任務',     icon: ListChecks },
@@ -68,7 +69,7 @@ export default function Categories() {
   }
 
   const handleDelete = async (r) => {
-    if (!confirm(`確定刪除分類「${r.name}」？`)) return
+    if (!(await confirm({ message: `確定刪除分類「${r.name}」？` }))) return
     const { error } = await deleteCategory(r.id)
     if (error) { setError(error.message); return }
     setRows(prev => prev.filter(x => x.id !== r.id))

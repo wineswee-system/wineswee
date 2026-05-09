@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
 const LEAVE_TYPES = ['特休', '病假', '事假', '喪假', '婚假', '產假', '陪產假', '無薪假']
 
 export default function LeaveBalances() {
@@ -133,7 +134,7 @@ export default function LeaveBalances() {
       setCashoutItems(items)
     } catch (err) {
       console.error('Failed to prepare cashout:', err)
-      alert('結算資料載入失敗：' + (err.message || '未知錯誤'))
+      toast.error('結算資料載入失敗：' + (err.message || '未知錯誤'))
       setShowCashoutModal(false)
     } finally {
       setCashoutLoading(false)
@@ -171,7 +172,7 @@ export default function LeaveBalances() {
       fetchData()
     } catch (err) {
       console.error('Cashout failed:', err)
-      alert('結算失敗：' + (err.message || '未知錯誤'))
+      toast.error('結算失敗：' + (err.message || '未知錯誤'))
     } finally {
       setCashoutSaving(false)
     }
@@ -208,7 +209,7 @@ export default function LeaveBalances() {
   const handleSubmit = async () => {
     try {
       if (!form.employee_id || !form.total_days) {
-        alert('請填寫員工與總天數')
+        toast.error('請填寫員工與總天數')
         return
       }
       const payload = {
@@ -236,7 +237,7 @@ export default function LeaveBalances() {
       fetchData()
     } catch (err) {
       console.error('Save failed:', err)
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     }
   }
 

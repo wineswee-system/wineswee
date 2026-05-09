@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { toast } from '../../lib/toast'
 import {
   Plus, Phone, Mail, MessageSquare, FileText, PenLine,
   AlertTriangle, Clock, CheckCircle, Star, Shield, ArrowUpCircle,
@@ -15,6 +16,7 @@ import {
 import { generateTicketReply, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
 import NotesPanel from './components/NotesPanel'
 
+import { confirm } from '../../lib/confirm'
 const TICKET_TYPES = ['商品瑕疵', '出貨錯誤', '退換貨', '付款問題', '諮詢', '其他']
 const PRIORITIES = ['緊急', '高', '一般', '低']
 const STATUSES = ['待處理', '處理中', '待客戶回覆', '已解決', '已關閉']
@@ -174,7 +176,7 @@ export default function Service() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -199,7 +201,7 @@ export default function Service() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -262,7 +264,7 @@ export default function Service() {
       setBulkAction('')
       setBulkValue('')
     } catch (err) {
-      alert('批次操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('批次操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -282,7 +284,7 @@ export default function Service() {
       setEditingSLAId(null)
       setSlaForm({ name: '', priority: '一般', response_hours: 24, resolution_hours: 72, is_default: false })
     } catch (err) {
-      alert('SLA 儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('SLA 儲存失敗：' + (err.message || '未知錯誤'))
     }
   }
   const handleSLAEdit = (sla) => {
@@ -291,7 +293,7 @@ export default function Service() {
     setShowSLAForm(true)
   }
   const handleSLADelete = async (id) => {
-    if (!confirm('確定要刪除此 SLA 政策？')) return
+    if (!(await confirm({ message: '確定要刪除此 SLA 政策？' }))) return
     await deleteSLAPolicy(id)
     setCustomSLAs(prev => prev.filter(s => s.id !== id))
   }

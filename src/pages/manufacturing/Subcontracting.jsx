@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, X, Truck, Package } from 'lucide-react'
 import { getSubcontracts, createSubcontract, updateSubcontract, deleteSubcontract, getSuppliers, getManufacturingOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const STATUSES = ['已發出', '加工中', '已收回', '已結案']
 
@@ -81,7 +82,7 @@ export default function Subcontracting() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除？')) return
+    if (!(await confirm({ message: '確定刪除？' }))) return
     await deleteSubcontract(id)
     load()
   }

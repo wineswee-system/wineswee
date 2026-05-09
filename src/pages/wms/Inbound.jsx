@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
 
+import { toast } from '../../lib/toast'
 const STATUSES = ['待到貨', '收貨中', '已完成', '異常']
 
 export default function Inbound() {
@@ -56,7 +57,7 @@ export default function Inbound() {
 
   const handleSubmit = async () => {
     if (!form.po_number || !form.supplier) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     const { data } = await supabase.from('inbound_orders').insert({
       ...form,
       warehouse_id: form.warehouse_id || null,

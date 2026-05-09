@@ -16,6 +16,7 @@ import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
+import { toast } from '../../lib/toast'
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
@@ -102,7 +103,7 @@ export default function Expenses() {
       const { error: updErr } = await supabase.from('expenses')
         .update({ ...payload, status: '待審核', reject_reason: null })
         .eq('id', editingId)
-      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      if (updErr) { toast.error('更新失敗：' + updErr.message); return }
       try {
         await supabase.rpc('resume_workflow_for_request', { p_type: 'expense', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }
@@ -141,14 +142,14 @@ export default function Expenses() {
         description: data.description,
         date: data.date,
       }, { source: 'Expenses.jsx' })
-      alert('已核銷並發送費用核准事件')
+      toast.success('已核銷')
     }
   }
 
   const handleReject = async (id) => {
     const reason = prompt('請輸入駁回原因：')
     if (reason === null) return
-    if (!reason.trim()) { alert('請填寫駁回原因'); return }
+    if (!reason.trim()) { toast.error('請填寫駁回原因'); return }
     const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
     if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
   }
@@ -159,9 +160,9 @@ export default function Expenses() {
   const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
 
   const printWithChain = async (row) => {
-    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
       const chainSteps = await buildFormChainSteps({
@@ -188,7 +189,7 @@ export default function Expenses() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
 

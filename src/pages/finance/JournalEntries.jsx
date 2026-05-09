@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { toast } from '../../lib/toast'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const emptyLine = { account_code: '', account_name: '', description: '', debit: '', credit: '' }
@@ -171,7 +172,7 @@ export default function JournalEntries() {
       // 快速借貸平衡檢查
       const balanceCheck = validateJournalBalance(mappedLines)
       if (!balanceCheck.balanced) {
-        alert(`借貸不平衡：借方 ${balanceCheck.totalDebit} / 貸方 ${balanceCheck.totalCredit}`)
+        toast.error(`借貸不平衡：借方 ${balanceCheck.totalDebit} / 貸方 ${balanceCheck.totalCredit}`)
         setPosting(null)
         return
       }
@@ -180,7 +181,7 @@ export default function JournalEntries() {
       const result = await postJournalEntry(entry.id, mappedLines, supabase)
 
       if (!result.success) {
-        alert(`無法過帳：${result.errors.join('；')}`)
+        toast.error(`無法過帳：${result.errors.join('；')}`)
         setPosting(null)
         return
       }
@@ -199,7 +200,7 @@ export default function JournalEntries() {
         total_debit: totalDebit,
       })
     } catch (err) {
-      alert(`過帳時發生錯誤：${err.message}`)
+      toast.error(`過帳時發生錯誤：${err.message}`)
     } finally {
       setPosting(null)
     }
@@ -253,7 +254,7 @@ export default function JournalEntries() {
       setLines({})
       setExpanded(null)
     } catch (err) {
-      alert(`作廢失敗：${err.message}`)
+      toast.error(`作廢失敗：${err.message}`)
     }
   }
 

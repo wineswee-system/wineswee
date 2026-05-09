@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 
+import { confirm } from '../../lib/confirm'
 export default function Checklists() {
   const { profile } = useAuth()
   const [checklists, setChecklists] = useState([])
@@ -62,7 +63,7 @@ export default function Checklists() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此清單？資料會移入回收暫存區保留備份（可供復原）。')) return
+    if (!(await confirm({ message: '確定刪除此清單？資料會移入回收暫存區保留備份（可供復原）。' }))) return
     const checklist = checklists.find(c => c.id === id)
     const { data: clItems } = await getChecklistItems(id)
     if (checklist) {

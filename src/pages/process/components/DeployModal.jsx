@@ -3,6 +3,8 @@ import { Rocket, Calendar, User, AlertTriangle, CheckCircle2, Bell, Settings, Co
 import Modal, { Field } from '../../../components/Modal'
 import { empLabel } from '../../../lib/empLabel'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 // 提醒預設選項
 const REMINDER_PRESETS = [
   { value: '1hr',  label: '到期前 1 小時' },
@@ -168,13 +170,13 @@ export default function DeployModal({
     return { ...f, step_overrides: overrides }
   })
   // 「套用到所有步驟」: 把指定步驟的 override 複製給所有步驟
-  const applyOverrideToAll = (sourceIdx) => {
+  const applyOverrideToAll = async (sourceIdx) => {
     const src = deployForm.step_overrides?.[sourceIdx]
     if (!src || Object.keys(src).length === 0) {
-      alert('此步驟沒有覆寫設定，無需套用')
+      toast.error('此步驟沒有覆寫設定，無需套用')
       return
     }
-    if (!confirm(`要把 Step ${sourceIdx + 1} 的進階設定複製到其他 ${tplSteps.length - 1} 個步驟嗎？`)) return
+    if (!(await confirm({ message: `要把 Step ${sourceIdx + 1} 的進階設定複製到其他 ${tplSteps.length - 1} 個步驟嗎？` }))) return
     setDeployForm(f => {
       const overrides = { ...(f.step_overrides || {}) }
       tplSteps.forEach((_, i) => {

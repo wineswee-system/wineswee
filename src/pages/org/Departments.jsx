@@ -7,6 +7,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const LEVELS = [
   { value: '董事長', label: '董事長室' },
   { value: '部', label: '部' },
@@ -64,12 +66,12 @@ export default function Departments() {
   }
 
   const handleDelete = async (d) => {
-    if (!confirm(`確定要刪除「${d.name}」嗎？`)) return
+    if (!(await confirm({ message: `確定要刪除「${d.name}」嗎？` }))) return
     try {
       await deleteDepartment(d.id)
       setDepartments(prev => prev.filter(x => x.id !== d.id))
     } catch (err) {
-      alert('刪除失敗：' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -100,7 +102,7 @@ export default function Departments() {
       setEditingDept(null)
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -149,18 +151,18 @@ export default function Departments() {
       setEditingSection(null)
       setSecForm({ name: '', supervisor_id: '', sort_order: (sections.filter(s => s.department_id === sectionsDept.id).length + 1) * 10 })
     } catch (err) {
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const handleDeleteSection = async (sec) => {
-    if (!confirm(`確定要刪除課別「${sec.name}」？\n（如果該課別下有門市，門市的 section_id 會變 NULL）`)) return
+    if (!(await confirm({ message: `確定要刪除課別「${sec.name}」？\n（如果該課別下有門市，門市的 section_id 會變 NULL）` }))) return
     try {
       const { error } = await deleteDepartmentSection(sec.id)
       if (error) throw error
       setSections(prev => prev.filter(s => s.id !== sec.id))
     } catch (err) {
-      alert('刪除失敗：' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
   }
 

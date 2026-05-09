@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const findGrade = (salary, brackets) => {
   if (!brackets?.length) return null
   const sorted = [...brackets].sort((a, b) => (a.min_salary || 0) - (b.min_salary || 0))
@@ -82,7 +84,7 @@ export default function InsuranceGradeMonitor() {
       await fetchData()
     } catch (err) {
       console.error('Update failed:', err)
-      alert('更新失敗：' + (err.message || '未知錯誤'))
+      toast.error('更新失敗：' + (err.message || '未知錯誤'))
     } finally {
       setUpdatingId(null)
     }
@@ -91,7 +93,7 @@ export default function InsuranceGradeMonitor() {
   const updateAll = async () => {
     const toUpdate = employees.filter(needsChange)
     if (!toUpdate.length) return
-    if (!confirm(`確定要更新 ${toUpdate.length} 位員工的投保級距？`)) return
+    if (!(await confirm({ message: `確定要更新 ${toUpdate.length} 位員工的投保級距？` }))) return
     try {
       setUpdating(true)
       const results = await Promise.all(
@@ -106,12 +108,12 @@ export default function InsuranceGradeMonitor() {
       const failed = results.filter(r => r.error)
       if (failed.length > 0) {
         console.error('Bulk update partial failure:', failed.map(r => r.error))
-        alert(`更新完成，但有 ${failed.length} 筆失敗，請重新整理後確認`)
+        toast.error(`更新完成，但有 ${failed.length} 筆失敗，請重新整理後確認`)
       }
       await fetchData()
     } catch (err) {
       console.error('Bulk update failed:', err)
-      alert('批次更新失敗：' + (err.message || '未知錯誤'))
+      toast.error('批次更新失敗：' + (err.message || '未知錯誤'))
     } finally {
       setUpdating(false)
     }

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon } from 'lucide-react'
 import { detectPayrollAnomalies, isConfigured as aiReady } from '../../../lib/ai/hrAI'
 
+import { toast } from '../../../lib/toast'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const STATUS_ICON = {
@@ -27,7 +28,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
       const result = await detectPayrollAnomalies(batchPreview, month)
       setAnomalyReport(result)
     } catch (err) {
-      alert('AI 審核失敗：' + err.message)
+      toast.error('AI 審核失敗：' + err.message)
     } finally {
       setAiChecking(false)
     }

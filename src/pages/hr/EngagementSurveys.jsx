@@ -9,6 +9,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STATUS_MAP = {
   '草稿': { color: 'var(--text-muted)', bg: 'var(--bg-secondary)' },
   '進行中': { color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.12)' },
@@ -78,7 +80,7 @@ export default function EngagementSurveys() {
   }, [profile?.organization_id])
 
   const handleCreateSurvey = async () => {
-    if (!surveyForm.title) return alert('請填寫問卷標題')
+    if (!surveyForm.title) return toast.error('請填寫問卷標題')
     const payload = {
       title: surveyForm.title,
       description: surveyForm.description,
@@ -92,7 +94,7 @@ export default function EngagementSurveys() {
       ? await updateEngagementSurvey(editingId, payload)
       : await createEngagementSurvey(payload)
 
-    if (err) return alert('儲存失敗：' + err.message)
+    if (err) return toast.error('儲存失敗：' + err.message)
     if (editingId) {
       setSurveys(prev => prev.map(s => s.id === editingId ? data : s))
     } else {
@@ -114,7 +116,7 @@ export default function EngagementSurveys() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此問卷？')) return
+    if (!(await confirm({ message: '確定刪除此問卷？' }))) return
     await deleteEngagementSurvey(id)
     setSurveys(prev => prev.filter(s => s.id !== id))
   }
@@ -146,8 +148,8 @@ export default function EngagementSurveys() {
       answers: fillForm,
       overall_score: overall,
     })
-    if (err) return alert('提交失敗：' + err.message)
-    alert('問卷已提交，感謝您的回饋！')
+    if (err) return toast.error('提交失敗：' + err.message)
+    toast.error('問卷已提交，感謝您的回饋！')
     setShowFillModal(false)
   }
 
@@ -360,7 +362,7 @@ export default function EngagementSurveys() {
                       })).filter(tr => tr.answers.length > 0)
                       const result = await generateSurveyInsights({ ...analysis, title: selectedSurvey?.title, questions: selectedSurvey?.questions, textResponses })
                       setAiInsights(result)
-                    } catch (err) { alert('AI 分析失敗：' + err.message) }
+                    } catch (err) { toast.error('AI 分析失敗：' + err.message) }
                     finally { setAiLoading(false) }
                   }}>
                   <Sparkles size={12} /> {aiLoading ? '分析中...' : aiInsights ? '重新分析' : '產生 AI 洞察'}

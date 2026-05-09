@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { confirm } from '../../lib/confirm'
 export default function SelfService() {
   const { profile, isSuperAdmin, isAdmin } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -111,7 +112,7 @@ export default function SelfService() {
 
   const handleSigRemove = async () => {
     if (!employee?.id) return
-    if (!confirm('確定移除簽章？簽呈 PDF 會回到空白狀態。')) return
+    if (!(await confirm({ message: '確定移除簽章？簽呈 PDF 會回到空白狀態。' }))) return
     setSigUploading(true)
     const { error } = await supabase.from('employees').update({ signature_url: null }).eq('id', employee.id)
     setSigUploading(false)

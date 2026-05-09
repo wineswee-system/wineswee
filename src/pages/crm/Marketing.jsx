@@ -3,6 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { toast } from '../../lib/toast'
 import {
   sendBulkEmail, sendLINEMessage, sendSMS,
   sendCampaignMessages, getChannels, MESSAGE_TEMPLATES,
@@ -22,6 +23,7 @@ import MarketingSendResultModal from './components/MarketingSendResultModal'
 import MarketingSegmentModal from './components/MarketingSegmentModal'
 import MarketingUnsubscribeModal from './components/MarketingUnsubscribeModal'
 
+import { confirm } from '../../lib/confirm'
 const TYPE_MAP = { 'Email': 'email', 'LINE 訊息': 'line', 'SMS 簡訊': 'sms' }
 const TABS = [
   { key: 'campaigns', label: '📣 行銷活動' },
@@ -208,7 +210,7 @@ export default function Marketing() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -231,7 +233,7 @@ export default function Marketing() {
       if (data) setCampaigns(prev => prev.map(c => c.id === id ? data : c))
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -244,10 +246,8 @@ export default function Marketing() {
     const filteredRecipients = filterUnsubscribed(recipients, unsubscribeList, channelType)
     const unsubCount = recipients.length - filteredRecipients.length
 
-    if (!confirm(
-      `確定要立即發送「${campaign.name}」嗎？\n目標受眾：${campaign.segment}\n發送類型：${campaign.type}\n收件人數：${filteredRecipients.length} 人` +
-      (unsubCount > 0 ? `\n（已排除 ${unsubCount} 位退訂用戶）` : '')
-    )) return
+    if (!(await confirm({ message: `確定要立即發送「${campaign.name}」嗎？\n目標受眾：${campaign.segment}\n發送類型：${campaign.type}\n收件人數：${filteredRecipients.length} 人` +
+      (unsubCount > 0 ? `\n（已排除 ${unsubCount} 位退訂用戶）` : '') }))) return
 
     setSending(true)
     recipients = filteredRecipients
@@ -371,7 +371,7 @@ export default function Marketing() {
       setShowResultModal(true)
     } catch (err) {
       console.error('Send failed:', err)
-      alert('發送失敗：' + (err.message || '未知錯誤'))
+      toast.error('發送失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSending(false)
     }
@@ -398,7 +398,7 @@ export default function Marketing() {
   }
 
   const saveSegment = () => {
-    if (!segmentBuilder.name.trim()) { alert('請輸入分群名稱'); return }
+    if (!segmentBuilder.name.trim()) { toast.error('請輸入分群名稱'); return }
     const key = `custom_${Date.now()}`
     setCustomSegments(prev => [...prev, {
       key,

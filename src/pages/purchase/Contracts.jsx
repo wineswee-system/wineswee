@@ -4,6 +4,7 @@ import { getSupplierContracts, createSupplierContract, getSuppliers } from '../.
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
 export default function Contracts() {
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +41,7 @@ export default function Contracts() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

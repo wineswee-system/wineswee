@@ -7,6 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenants, createTenantRecord, updateTenantRecord, deleteTenantRecord, getTenantEmployees } from '../../lib/db'
 
+import { confirm } from '../../lib/confirm'
 const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
 const ALL_MODULES = [
@@ -113,7 +114,7 @@ export default function OrgManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此組織？所有關聯資料將一併刪除，此操作無法復原。')) return
+    if (!(await confirm({ message: '確定要刪除此組織？所有關聯資料將一併刪除，此操作無法復原。' }))) return
     const { error } = await deleteTenantRecord(id)
     if (error) { console.error('Delete error:', error); return }
     fetchTenants()

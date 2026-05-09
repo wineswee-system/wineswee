@@ -7,6 +7,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 
+import { toast } from '../../lib/toast'
 const fmt = (n) => n ? `NT$ ${(+n).toLocaleString()}` : '-'
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -184,9 +185,9 @@ export default function Transfer() {
   )
 
   const handleTransferSubmit = async () => {
-    if (!transferForm.employee_id) return alert('請選擇員工')
-    if (!transferForm.effective_date) return alert('請填寫生效日')
-    if (transferForm.change_type === '薪資調整' && !transferForm.base_salary) return alert('請填寫新基本薪資')
+    if (!transferForm.employee_id) return toast.error('請選擇員工')
+    if (!transferForm.effective_date) return toast.error('請填寫生效日')
+    if (transferForm.change_type === '薪資調整' && !transferForm.base_salary) return toast.error('請填寫新基本薪資')
     setSubmitting(true)
     try {
       const empId = Number(transferForm.employee_id)
@@ -238,7 +239,7 @@ export default function Transfer() {
       setTransferForm(TRANSFER_EMPTY)
     } catch (err) {
       console.error('Transfer submit failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSubmitting(false)
     }
@@ -248,8 +249,8 @@ export default function Transfer() {
   const setSF = (k, v) => setSalaryForm(f => ({ ...f, [k]: v }))
 
   const handleSalarySubmit = async () => {
-    if (!salaryForm.employee_id) return alert('請選擇員工')
-    if (!salaryForm.base_salary) return alert('請填寫新基本薪資')
+    if (!salaryForm.employee_id) return toast.error('請選擇員工')
+    if (!salaryForm.base_salary) return toast.error('請填寫新基本薪資')
     setSalarySubmitting(true)
     try {
       const { error } = await supabase.from('salary_structures').insert({
@@ -269,7 +270,7 @@ export default function Transfer() {
       setSalaryForm(SALARY_EMPTY)
     } catch (err) {
       console.error('Salary adjust failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSalarySubmitting(false)
     }

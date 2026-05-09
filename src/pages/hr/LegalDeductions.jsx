@@ -7,6 +7,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const STATUS_STYLE = {
@@ -121,23 +123,23 @@ export default function LegalDeductions() {
   }
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return alert('請選擇員工')
-    if (!form.title.trim()) return alert('請輸入標題')
+    if (!form.employee_id) return toast.error('請選擇員工')
+    if (!form.title.trim()) return toast.error('請輸入標題')
     const totalAmt = Number(form.total_amount)
-    if (!totalAmt || totalAmt <= 0) return alert('總額必須大於 0')
+    if (!totalAmt || totalAmt <= 0) return toast.error('總額必須大於 0')
 
     const isPct = form.deduction_type === 'percent'
     const monthlyAmt = Number(form.monthly_amount)
     const monthlyPct = Number(form.monthly_percent)
 
     if (isPct) {
-      if (!monthlyPct || monthlyPct <= 0 || monthlyPct > 100) return alert('百分比必須介於 0.01–100')
+      if (!monthlyPct || monthlyPct <= 0 || monthlyPct > 100) return toast.error('百分比必須介於 0.01–100')
     } else {
-      if (!monthlyAmt || monthlyAmt <= 0) return alert('每月金額必須大於 0')
+      if (!monthlyAmt || monthlyAmt <= 0) return toast.error('每月金額必須大於 0')
     }
-    if (!/^\d{4}-\d{2}$/.test(form.started_month)) return alert('開始月份格式錯誤（應為 YYYY-MM）')
+    if (!/^\d{4}-\d{2}$/.test(form.started_month)) return toast.error('開始月份格式錯誤（應為 YYYY-MM）')
 
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     const payload = {
       employee_id: Number(form.employee_id),
       title: form.title.trim(),
@@ -162,25 +164,25 @@ export default function LegalDeductions() {
       }
       setShowModal(false)
     } catch (err) {
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const toggleStatus = async (item, newStatus) => {
     const verb = newStatus === '已停止' ? '停止' : '恢復'
-    if (!confirm(`確定要${verb}此筆法扣？`)) return
+    if (!(await confirm({ message: `確定要${verb}此筆法扣？` }))) return
     const { data, error } = await supabase.from('legal_deductions')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', item.id).select().single()
-    if (error) return alert('操作失敗：' + error.message)
+    if (error) return toast.error('操作失敗：' + error.message)
     setItems(prev => prev.map(i => i.id === item.id ? data : i))
   }
 
   const handleDelete = async (item) => {
-    if (item.paid_amount > 0) return alert('已有扣款紀錄的法扣不能刪除，請改用「停止」')
-    if (!confirm(`確定刪除：${item.title}？`)) return
+    if (item.paid_amount > 0) return toast.error('已有扣款紀錄的法扣不能刪除，請改用「停止」')
+    if (!(await confirm({ message: `確定刪除：${item.title}？` }))) return
     const { error } = await supabase.from('legal_deductions').delete().eq('id', item.id)
-    if (error) return alert('刪除失敗：' + error.message)
+    if (error) return toast.error('刪除失敗：' + error.message)
     setItems(prev => prev.filter(i => i.id !== item.id))
   }
 

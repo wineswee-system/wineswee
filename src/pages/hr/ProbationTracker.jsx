@@ -7,6 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
 const STATUS_STYLES = {
   '試用中': { color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.12)' },
   '已通過': { color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.12)' },
@@ -44,7 +45,7 @@ export default function ProbationTracker() {
   }, [])
 
   const handleCreate = async () => {
-    if (!form.employee || !form.start_date || !form.end_date) return alert('請填寫必要欄位')
+    if (!form.employee || !form.start_date || !form.end_date) return toast.error('請填寫必要欄位')
     const { data, error: err } = await createProbationRecord({
       employee: form.employee,
       start_date: form.start_date,
@@ -53,7 +54,7 @@ export default function ProbationTracker() {
       notes: form.notes || null,
       status: '試用中',
     })
-    if (err) return alert('建立失敗：' + err.message)
+    if (err) return toast.error('建立失敗：' + err.message)
     setRecords(prev => [...prev, data])
     setShowModal(false)
     setForm(EMPTY_FORM)
@@ -73,7 +74,7 @@ export default function ProbationTracker() {
       result: evalForm.result,
       decided_at: evalForm.result !== '試用中' ? new Date().toISOString().slice(0, 10) : null,
     })
-    if (err) return alert('評核失敗：' + err.message)
+    if (err) return toast.error('評核失敗：' + err.message)
     setRecords(prev => prev.map(r => r.id === evalTarget.id ? data : r))
     setShowEvalModal(false)
     setEvalTarget(null)

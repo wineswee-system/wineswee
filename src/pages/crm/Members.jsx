@@ -16,6 +16,7 @@ import RedeemModal from './components/RedeemModal'
 import RefundModal from './components/RefundModal'
 import MemberFormModal from './components/MemberFormModal'
 
+import { toast } from '../../lib/toast'
 const TABS = [
   { key: 'list', label: '📋 會員列表' },
   { key: 'tiers', label: '⭐ 等級規則' },
@@ -111,13 +112,13 @@ export default function Members() {
             const { data: updated } = await getMembers(orgId)
             if (updated) setMembers(updated)
           } else {
-            alert(`會員已建立，但推薦碼兌換失敗：${result.message}`)
+            toast.error(`會員已建立，但推薦碼兌換失敗：${result.message}`)
           }
         }
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -208,7 +209,7 @@ export default function Members() {
     if (!pts || pts <= 0 || !redeemMember) return
     const result = redeemPoints(redeemMember, pts, 'discount')
     if (!result.success) {
-      alert(result.error)
+      toast.error(result.error)
       return
     }
 
@@ -237,7 +238,7 @@ export default function Members() {
     }
 
     setShowRedeemModal(false)
-    alert(`兌換成功！折抵金額：NT$ ${result.discountAmount}`)
+    toast.error(`兌換成功！折抵金額：NT$ ${result.discountAmount}`)
   }
 
   // --- Refund flow ---
@@ -304,7 +305,7 @@ export default function Members() {
       setReferralCodes(prev => ({ ...prev, [member.id]: data }))
     } catch (err) {
       console.error('Failed to create referral code:', err)
-      alert('推薦碼建立失敗：' + (err.message || '未知錯誤'))
+      toast.error('推薦碼建立失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -393,7 +394,7 @@ export default function Members() {
   }
 
   const copyCode = (code) => {
-    navigator.clipboard.writeText(code).then(() => alert('已複製推薦碼')).catch(() => {})
+    navigator.clipboard.writeText(code).then(() => toast.success('已複製推薦碼')).catch(() => {})
   }
 
   if (loading) return <LoadingSpinner />

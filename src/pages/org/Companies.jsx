@@ -5,6 +5,8 @@ import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 export default function Companies() {
   const { tenant } = useTenant()
   const orgId = tenant?.organization_id ?? null
@@ -44,13 +46,13 @@ export default function Companies() {
 
   const handleDelete = async (c) => {
     const storeCount = stores.filter(s => s.company_id === c.id).length
-    if (storeCount > 0) { alert(`無法刪除：該公司下有 ${storeCount} 間門市`); return }
-    if (!confirm(`確定要刪除「${c.name}」嗎？`)) return
+    if (storeCount > 0) { toast.error(`無法刪除：該公司下有 ${storeCount} 間門市`); return }
+    if (!(await confirm({ message: `確定要刪除「${c.name}」嗎？` }))) return
     try {
       await deleteCompany(c.id)
       setCompanies(prev => prev.filter(x => x.id !== c.id))
     } catch (err) {
-      alert('刪除失敗：' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -70,7 +72,7 @@ export default function Companies() {
       setEditingCompany(null)
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

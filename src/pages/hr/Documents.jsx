@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 
+import { confirm } from '../../lib/confirm'
 const CATEGORIES = ['報告', '制度規章', '表單', '合約範本', '教育訓練', '其他']
 
 export default function Documents() {
@@ -51,7 +52,7 @@ export default function Documents() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此文件？')) return
+    if (!(await confirm({ message: '確定刪除此文件？' }))) return
     await deleteDocument(id)
     setDocs(prev => prev.filter(d => d.id !== id))
   }

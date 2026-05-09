@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Mic, MicOff } from 'lucide-react'
 
+import { toast } from '../../../lib/toast'
 const AI_EXAMPLES = [
   '我需要一個新員工入職訓練流程',
   '設計一個每月庫存盤點的工作流程',
@@ -18,7 +19,7 @@ function useSpeechInput(onResult) {
   const toggle = () => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRec) {
-      alert('您的瀏覽器不支援語音輸入（請使用 Chrome）')
+      toast.error('您的瀏覽器不支援語音輸入（請使用 Chrome）')
       return
     }
     if (listening) {

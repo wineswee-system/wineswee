@@ -8,6 +8,8 @@ import Modal, { Field } from '../../components/Modal'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printFormMemo } from '../../lib/printFormMemo'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 // 公司名（給簽呈標題用）— 存 localStorage，每台電腦設一次
 const COMPANY_KEY = 'sme_form_memo_company_name'
 const loadCompanyName = () => localStorage.getItem(COMPANY_KEY) || '本公司'
@@ -57,7 +59,7 @@ export default function FormSubmissions() {
   useEffect(() => { load() }, [tab, profile?.id])
 
   const handleApprove = async (sub) => {
-    if (!confirm(`核准 ${sub.applicant?.name} 的「${sub.template?.name}」？`)) return
+    if (!(await confirm({ message: `核准 ${sub.applicant?.name} 的「${sub.template?.name}」？` }))) return
     await supabase.from('form_submissions').update({
       status: '已核准',
       approver_id: profile?.id || null,
@@ -67,7 +69,7 @@ export default function FormSubmissions() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason) return alert('請填駁回原因')
+    if (!rejectReason) return toast.error('請填駁回原因')
     await supabase.from('form_submissions').update({
       status: '已駁回',
       approver_id: profile?.id || null,
@@ -79,7 +81,7 @@ export default function FormSubmissions() {
   }
 
   const handleCancel = async (sub) => {
-    if (!confirm('確定取消此申請？')) return
+    if (!(await confirm({ message: '確定取消此申請？' }))) return
     await supabase.from('form_submissions').update({ status: '已取消' }).eq('id', sub.id)
     load()
   }
@@ -87,7 +89,7 @@ export default function FormSubmissions() {
   // 列印簽呈：抓 chain steps + 簽核人姓名 → 開新視窗
   const handlePrint = async (sub) => {
     if (!companyName || companyName === '本公司') {
-      if (!confirm('尚未設定公司名稱，要先設定嗎？')) return
+      if (!(await confirm({ message: '尚未設定公司名稱，要先設定嗎？' }))) return
       setShowCompanyModal(true)
       return
     }
@@ -129,7 +131,7 @@ export default function FormSubmissions() {
   const handleSaveCompany = () => {
     saveCompanyName(companyName)
     setShowCompanyModal(false)
-    alert('公司名稱已儲存（瀏覽器本機）')
+    toast.error('公司名稱已儲存（瀏覽器本機）')
   }
 
   // 開查看明細：抓 chain steps（template.approval_chain_id）+ 套 status 到每關

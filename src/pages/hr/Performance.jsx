@@ -8,6 +8,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
 const PERIODS = ['2026 Q1', '2026 Q2', '2026 Q3', '2026 Q4', '2025 Q4']
 const RATINGS = ['S', 'A+', 'A', 'B+', 'B', 'C']
 const GOAL_CATEGORIES = ['業績', '學習', '專案', '品質', '協作', '其他']
@@ -51,7 +52,7 @@ export default function Performance() {
 
   const handleAddReview = async () => {
     if (!reviewForm.employee || !reviewForm.overall_score) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     const { data } = await supabase.from('performance_reviews').insert({
       ...reviewForm,
       overall_score: Number(reviewForm.overall_score),
@@ -64,7 +65,7 @@ export default function Performance() {
 
   const handleAddGoal = async () => {
     if (!goalForm.employee || !goalForm.title) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     const currentVal = Number(goalForm.current) || 0
     const { data } = await supabase.from('performance_goals').insert({
       ...goalForm,

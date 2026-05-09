@@ -4,6 +4,7 @@ import { getCurrencies, getExchangeRates, getExchangeRateHistory, saveExchangeRa
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { confirm } from '../../lib/confirm'
 export default function ExchangeRates() {
   const [currencies, setCurrencies] = useState([])
   const [currentRates, setCurrentRates] = useState([])
@@ -82,7 +83,7 @@ export default function ExchangeRates() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此匯率紀錄？')) return
+    if (!(await confirm({ message: '確定要刪除此匯率紀錄？' }))) return
     try {
       await deleteExchangeRate(id)
       await Promise.all([loadData(), loadHistory(filterCurrency)])

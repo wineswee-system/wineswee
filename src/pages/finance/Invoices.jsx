@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Download } from 'lucide-react'
+import { toast } from '../../lib/toast'
 import {
   getInvoices, createInvoice, updateInvoice,
   getInvoiceLines, createInvoiceLine, updateInvoiceLine, deleteInvoiceLine,
@@ -13,6 +14,7 @@ import InvoiceTable from './components/InvoiceTable'
 import InvoiceFormModal from './components/InvoiceFormModal'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const emptyLineItem = () => ({ product: '', sku_id: '', qty: 1, unit_price: 0, tax_type: '應稅' })
@@ -205,7 +207,7 @@ export default function Invoices() {
   }
 
   const handleVoid = async (invoice) => {
-    if (!confirm(`確定要作廢發票 ${invoice.invoice_number} 嗎？`)) return
+    if (!(await confirm({ message: `確定要作廢發票 ${invoice.invoice_number} 嗎？` }))) return
     try {
       const { data } = await updateInvoice(invoice.id, { status: '已作廢' })
       if (data) {
@@ -305,7 +307,7 @@ export default function Invoices() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('MIG XML export failed:', err)
-      alert('MIG XML 匯出失敗: ' + (err.message || '未知錯誤'))
+      toast.error('MIG XML 匯出失敗: ' + (err.message || '未知錯誤'))
     }
   }
 
@@ -313,7 +315,7 @@ export default function Invoices() {
   const handleExportTurnkeyBatch = () => {
     const selected = invoices.filter(inv => selectedInvoiceIds.has(inv.id))
     if (selected.length === 0) {
-      alert('請先勾選要匯出的發票')
+      toast.error('請先勾選要匯出的發票')
       return
     }
     try {
@@ -329,7 +331,7 @@ export default function Invoices() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Turnkey batch export failed:', err)
-      alert('Turnkey 批次匯出失敗: ' + (err.message || '未知錯誤'))
+      toast.error('Turnkey 批次匯出失敗: ' + (err.message || '未知錯誤'))
     }
   }
 

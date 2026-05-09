@@ -8,6 +8,7 @@ import { checkAndNotifyDailyTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
 const STATUS_CONFIG = {
   '進行中': { color: 'var(--accent-cyan)', icon: Clock, badge: 'badge-info' },
   '已完成': { color: 'var(--accent-green)', icon: CheckCircle, badge: 'badge-success' },
@@ -344,7 +345,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
       onSaved?.()
     } catch (err) {
       console.error('[Overview] Failed to update task:', err)
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
       setSaving(false)
     }
   }

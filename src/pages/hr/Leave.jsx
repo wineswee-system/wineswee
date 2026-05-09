@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { toast } from '../../lib/toast'
 import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'  // Paperclip 已經有
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -189,7 +190,7 @@ export default function Leave() {
       const { error: updErr } = await supabase.from('leave_requests')
         .update({ ...payload, status: '待審核', reject_reason: null })
         .eq('id', editingId)
-      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      if (updErr) { toast.error('更新失敗：' + updErr.message); return }
       try {
         await supabase.rpc('resume_workflow_for_request', { p_type: 'leave', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }
@@ -219,7 +220,7 @@ export default function Leave() {
     }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -230,7 +231,7 @@ export default function Leave() {
       const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
       if (pendingStep) {
         const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
-        if (result.error) { alert('操作失敗：' + result.error); return }
+        if (result.error) { toast.error('操作失敗：' + result.error); return }
         setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已核准' } : l))
         const bus = getEventBus()
         await bus.publish('hr.leave.approved', {
@@ -262,7 +263,7 @@ export default function Leave() {
     const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
       p_id: id, p_status: '已核准', p_approver: profile?.name || '',
     })
-    if (rpcErr) { alert('操作失敗：' + rpcErr.message); return }
+    if (rpcErr) { toast.error('操作失敗：' + rpcErr.message); return }
     if (data) {
       setLeaves(prev => prev.map(l => l.id === id ? data : l))
       const bus = getEventBus()
@@ -292,14 +293,14 @@ export default function Leave() {
   const handleReject = async (id) => {
     const reason = prompt('請輸入拒絕原因：')
     if (reason === null) return
-    if (!reason.trim()) { alert('請填寫拒絕原因'); return }
+    if (!reason.trim()) { toast.error('請填寫拒絕原因'); return }
     const leave = leaves.find(l => l.id === id)
     if (leave) {
       const wf = await getWorkflowForRecord('請假簽核', leave.employee)
       const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
       if (pendingStep) {
         const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
-        if (result.error) { alert('操作失敗：' + result.error); return }
+        if (result.error) { toast.error('操作失敗：' + result.error); return }
         setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已拒絕' } : l))
         return
       }
@@ -307,16 +308,16 @@ export default function Leave() {
     const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
       p_id: id, p_status: '已駁回', p_approver: profile?.name || '', p_reject_reason: reason.trim(),
     })
-    if (rpcErr) { alert('操作失敗：' + rpcErr.message); return }
+    if (rpcErr) { toast.error('操作失敗：' + rpcErr.message); return }
     if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
 
   const printWithChain = async (row) => {
-    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
       // ★ 用 buildFormChainSteps：讀 form_chain_configs 的設定（admin 在 Leave 頁面設好的 chain）
@@ -344,7 +345,7 @@ export default function Leave() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
 

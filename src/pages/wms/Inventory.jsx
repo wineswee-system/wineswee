@@ -10,6 +10,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
 
+import { toast } from '../../lib/toast'
 const COSTING_METHODS = [
   { value: 'FIFO', label: 'FIFO 先進先出' },
   { value: 'WEIGHTED_AVG', label: '加權平均' },
@@ -67,7 +68,7 @@ export default function Inventory() {
 
   const handleAdjust = async () => {
     if (!adjForm.sku_code || !adjForm.quantity || !adjForm.reason) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     // ★ 用 atomic RPC：原子更新 stock_levels + 寫 audit
     //   舊路徑只 INSERT audit 不動 stock_levels → 帳面跟實際對不上
     //   warehouse 必填（從表單選或 scan 帶入）
@@ -79,7 +80,7 @@ export default function Inventory() {
       warehouseName = wh?.name || ''
     }
     if (!warehouseName) {
-      alert('請選擇倉庫（atomic 更新 stock_levels 必須）')
+      toast.error('請選擇倉庫（atomic 更新 stock_levels 必須）')
       return
     }
     const { data: result, error: rpcErr } = await supabase.rpc('apply_inventory_adjustment_atomic', {
@@ -98,7 +99,7 @@ export default function Inventory() {
         WAREHOUSE_REQUIRED: '請選擇倉庫',
         QTY_DELTA_ZERO: '調整數量不可為 0',
       }
-      alert(msgMap[result?.error] || ('調整失敗：' + (rpcErr?.message || result?.error || '未知')))
+      toast.error(msgMap[result?.error] || ('調整失敗：' + (rpcErr?.message || result?.error || '未知')))
       return
     }
     await loadInventory(profile.organization_id)
@@ -108,7 +109,7 @@ export default function Inventory() {
 
   const handleTransfer = async () => {
     if (!transferForm.sku_code || !transferForm.from_bin || !transferForm.to_bin) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     // ⚠️ 注意：這裡的 transfer 是「儲位 (bin) 級」，不是 stock_levels 的 warehouse 級
     // 真正改 stock_levels 數量還是另一條路徑。本處只寫 audit 紀錄 + 補 org_id。
     // 為避免「源 insert 成功但目標 insert 失敗」的半成功，包成 try 並補償回滾
@@ -119,7 +120,7 @@ export default function Inventory() {
       reason: `庫內移倉至 ${transferForm.to_bin}`, operator: '系統',
       organization_id: orgId,
     }).select().single()
-    if (fromErr) { alert('移倉失敗（源）：' + fromErr.message); return }
+    if (fromErr) { toast.error('移倉失敗（源）：' + fromErr.message); return }
     const { error: toErr } = await supabase.from('inventory_adjustments').insert({
       sku_code: transferForm.sku_code, bin_code: transferForm.to_bin,
       quantity: Number(transferForm.quantity),
@@ -129,7 +130,7 @@ export default function Inventory() {
     if (toErr) {
       // 補償：刪掉剛剛源的紀錄，避免帳面消失
       await supabase.from('inventory_adjustments').delete().eq('id', from.id)
-      alert('移倉失敗（目標），已自動回滾源紀錄：' + toErr.message)
+      toast.error('移倉失敗（目標），已自動回滾源紀錄：' + toErr.message)
       return
     }
     await loadInventory(orgId)
@@ -254,14 +255,14 @@ export default function Inventory() {
             <button className="btn btn-secondary" onClick={() => setShowTransferModal(true)}><ArrowRightLeft size={14} /> 庫內移倉</button>
             <button className="btn btn-secondary" onClick={async () => {
               const lowItems = stocks.filter(s => (s.quantity || 0) <= (s.min_qty || 10))
-              if (lowItems.length === 0) { alert('目前沒有低庫存品項'); return }
+              if (lowItems.length === 0) { toast.error('目前沒有低庫存品項'); return }
               const items = lowItems.map(s => ({ name: s.sku_name, qty: (s.min_qty || 10) * 2, unit: s.unit, price: s.unit_cost || 0 }))
               getEventBus().publish('sales.order.created', {
                 order_id: `LOW-STOCK-${Date.now()}`,
                 items,
                 total_amount: items.reduce((sum, i) => sum + (i.price * i.qty), 0),
               }, { source: 'Inventory.jsx' })
-              alert(`已發送低庫存採購事件（${lowItems.length} 項缺料）`)
+              toast.error(`已發送低庫存採購事件（${lowItems.length} 項缺料）`)
             }}><AlertTriangle size={14} /> 低庫存檢查</button>
             <button className="btn btn-primary" onClick={() => setShowAdjModal(true)}><Plus size={14} /> 庫存調整</button>
           </div>

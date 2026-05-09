@@ -5,6 +5,9 @@ import { TenantProvider } from './contexts/TenantContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
 import LoadingSpinner from './components/LoadingSpinner'
+import ConfirmDialog from './components/ConfirmDialog'
+import { Toaster } from 'sonner'
+import { TOAST_POSITION } from './lib/toast'
 
 // ── Standalone pages (not part of any module) ──
 const DemoLanding = lazy(() => import('./pages/DemoLanding'))
@@ -139,6 +142,19 @@ export default function App() {
     <ErrorBoundary>
     <AuthProvider>
       <TenantProvider>
+        <Toaster
+          position={TOAST_POSITION}
+          theme="dark"
+          richColors
+          closeButton
+          toastOptions={{
+            style: {
+              fontSize: 13,
+              fontFamily: 'inherit',
+            },
+          }}
+        />
+        <ConfirmDialog />
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/demo" element={<PortalGuard><DemoLanding /></PortalGuard>} />

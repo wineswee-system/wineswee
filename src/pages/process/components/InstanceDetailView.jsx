@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
   Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
@@ -502,7 +503,7 @@ export default function InstanceDetailView({
               <button
                 style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: 'var(--accent-red)', color: '#fff' }}
                 onClick={() => {
-                  if (!confirmModal.reason.trim()) { alert('請填寫拒絕原因'); return }
+                  if (!confirmModal.reason.trim()) { toast.error('請填寫拒絕原因'); return }
                   onConfirmTask(confirmModal.step.id, 'rejected', confirmModal.reason.trim())
                   setConfirmModal({ open: false, step: null, reason: '' })
                 }}>

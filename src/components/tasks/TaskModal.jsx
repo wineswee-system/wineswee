@@ -13,6 +13,7 @@ import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
 import MentionInput, { MentionText } from './MentionInput'
 
+import { confirm } from '../../lib/confirm'
 const STATUS_LIST = ['未開始', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
@@ -103,7 +104,7 @@ export default function TaskModal({ task, employees = [], sections = [], current
   }
 
   const handleDelete = async () => {
-    if (!confirm(`刪除任務「${task.title}」？`)) return
+    if (!(await confirm({ message: `刪除任務「${task.title}」？` }))) return
     await deleteTask(task.id)
     onDelete?.(task.id)
     onClose?.()

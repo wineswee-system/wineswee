@@ -8,6 +8,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 export default function LineIntegration() {
   const { profile } = useAuth()
   const [channels, setChannels] = useState([])
@@ -98,7 +100,7 @@ export default function LineIntegration() {
   }
 
   const handleDeleteChannel = async (id) => {
-    if (!confirm('確定刪除此 LINE 官方帳號？關聯的員工綁定也會被刪除。')) return
+    if (!(await confirm({ message: '確定刪除此 LINE 官方帳號？關聯的員工綁定也會被刪除。' }))) return
     await supabase.from('line_channels').delete().eq('id', id)
     setChannels(prev => prev.filter(c => c.id !== id))
     setAccounts(prev => prev.filter(a => a.channel_id !== id))
@@ -115,7 +117,7 @@ export default function LineIntegration() {
       is_primary: linkForm.is_primary,
     }).select('*, employees(name, dept, position), line_channels(code, name)').single()
     if (err) {
-      alert(err.message.includes('unique') ? '此員工已綁定到此 OA，或此 LINE ID 已被使用' : err.message)
+      toast.error(err.message.includes('unique') ? '此員工已綁定到此 OA，或此 LINE ID 已被使用' : err.message)
     } else if (data) {
       setAccounts(prev => [...prev, data])
       setShowLinkModal(false)
@@ -125,7 +127,7 @@ export default function LineIntegration() {
   }
 
   const handleUnlink = async (id) => {
-    if (!confirm('確定解除此綁定？')) return
+    if (!(await confirm({ message: '確定解除此綁定？' }))) return
     await supabase.from('employee_line_accounts').delete().eq('id', id)
     setAccounts(prev => prev.filter(a => a.id !== id))
   }
@@ -196,7 +198,7 @@ export default function LineIntegration() {
         }
         return { ...c, matched_employee_id: null, matched_name: null, confidence: 'none' }
       })
-      list.sort((a, b) => {
+      list.sortasync ((a, b) => {
         const rank = { exact: 0, partial: 1, none: 2 }
         if (rank[a.confidence] !== rank[b.confidence]) return rank[a.confidence] - rank[b.confidence]
         return (b.message_count || 0) - (a.message_count || 0)
@@ -205,14 +207,14 @@ export default function LineIntegration() {
       setCandidateOverrides({})
     } catch (err) {
       console.error('[LineIntegration] scan error:', err)
-      alert('掃描失敗：' + (err?.message || 'unknown'))
+      toast.error('掃描失敗：' + (err?.message || 'unknown'))
     }
     setScanning(false)
   }
 
   async function bindCandidate(c) {
     const empId = candidateOverrides[candidateKey(c)] ?? c.matched_employee_id
-    if (!empId) { alert('請先選擇員工'); return }
+    if (!empId) { toast.error('請先選擇員工'); return }
     const { error: err } = await supabase.from('employee_line_accounts').upsert({
       employee_id: Number(empId),
       channel_id: c.channel_id,
@@ -221,7 +223,7 @@ export default function LineIntegration() {
       is_primary: true,
       is_verified: false,
     }, { onConflict: 'channel_id,line_user_id' })
-    if (err) { alert('綁定失敗：' + err.message); return }
+    if (err) { toast.error('綁定失敗：' + err.message); return }
     // Also set employee_id on line_users so the webhook recognises this user going forward
     await supabase.from('line_users').update({ employee_id: Number(empId) })
       .eq('channel_id', c.channel_id).eq('line_user_id', c.line_user_id)
@@ -231,8 +233,8 @@ export default function LineIntegration() {
 
   async function bindAllExact() {
     const exacts = candidates.filter(c => c.confidence === 'exact' && (candidateOverrides[candidateKey(c)] ?? c.matched_employee_id))
-    if (!exacts.length) { alert('沒有完全對應的候選'); return }
-    if (!confirm(`將 ${exacts.length} 筆完全對應的候選一次綁定？`)) return
+    if (!exacts.length) { toast.error('沒有完全對應的候選'); return }
+    if (!(await confirm({ message: `將 ${exacts.length} 筆完全對應的候選一次綁定？` }))) return
     setScanning(true)
     const rows = exacts.map(c => ({
       employee_id: Number(candidateOverrides[candidateKey(c)] ?? c.matched_employee_id),
@@ -245,7 +247,7 @@ export default function LineIntegration() {
     const { error: err } = await supabase.from('employee_line_accounts')
       .upsert(rows, { onConflict: 'channel_id,line_user_id' })
     if (err) {
-      alert('批次綁定失敗：' + err.message)
+      toast.error('批次綁定失敗：' + err.message)
     } else {
       for (const r of rows) {
         await supabase.from('line_users').update({ employee_id: r.employee_id })
@@ -549,7 +551,7 @@ export default function LineIntegration() {
                   <span style={{ color: 'var(--text-muted)' }}>Webhook URL</span>
                   {ch.webhook_url ? (
                     <code style={{ fontSize: 12, color: 'var(--accent-cyan)', cursor: 'pointer' }}
-                      onClick={() => { navigator.clipboard?.writeText(ch.webhook_url); alert('已複製！') }}>
+                      onClick={() => { navigator.clipboard?.writeText(ch.webhook_url); toast.success('已複製！') }}>
                       {ch.webhook_url}
                     </code>
                   ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>未設定</span>}

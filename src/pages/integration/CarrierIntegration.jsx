@@ -6,6 +6,7 @@ import { getCarrierConfigs, createCarrierConfig, updateCarrierConfig, getShipmen
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
 const CARRIERS = ['黑貓宅急便', '新竹物流', '中華郵政', '順豐速運', '7-11 交貨便', '全家店到店']
 
 export default function CarrierIntegration() {
@@ -56,7 +57,7 @@ export default function CarrierIntegration() {
     }]
     await updateShipment(shipment.id, { timeline })
     load()
-    alert(`已更新 ${shipment.shipment_number} 的追蹤資訊（模擬）`)
+    toast.error(`已更新 ${shipment.shipment_number} 的追蹤資訊（模擬）`)
   }
 
   if (loading) return <LoadingSpinner />

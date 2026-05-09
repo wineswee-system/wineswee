@@ -6,6 +6,7 @@ import { getTrainingCourses, createTrainingCourse, updateTrainingCourse, deleteT
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 
+import { confirm } from '../../lib/confirm'
 const CATEGORIES = ['一般', '安全', '技術', '管理', '合規']
 const STATUSES = ['開課中', '已結束', '草稿']
 const ENROLL_STATUSES = ['已報名', '進行中', '已完成', '未通過']
@@ -61,7 +62,7 @@ export default function Training() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此課程？')) return
+    if (!(await confirm({ message: '確定刪除此課程？' }))) return
     await deleteTrainingCourse(id); load()
   }
 

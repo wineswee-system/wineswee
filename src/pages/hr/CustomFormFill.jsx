@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
 export default function CustomFormFill() {
@@ -41,7 +42,7 @@ export default function CustomFormFill() {
       if (f.required) {
         const v = data[f.key]
         if (v === '' || v === null || v === undefined || (f.type === 'checkbox' && !v)) {
-          alert(`「${f.label}」為必填`)
+          toast.error(`「${f.label}」為必填`)
           return false
         }
       }
@@ -51,7 +52,7 @@ export default function CustomFormFill() {
 
   const submit = async () => {
     if (!validate()) return
-    if (!profile?.id) return alert('未登入')
+    if (!profile?.id) return toast.error('未登入')
     setSubmitting(true)
     try {
       const { error } = await supabase.from('form_submissions').insert({
@@ -62,10 +63,10 @@ export default function CustomFormFill() {
         status: '申請中',
       })
       if (error) throw error
-      alert('已送出申請！')
+      toast.success('已送出申請！')
       navigate('/hr/forms/submissions')
     } catch (err) {
-      alert('送出失敗：' + (err.message || '未知錯誤'))
+      toast.error('送出失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSubmitting(false)
     }
@@ -157,7 +158,7 @@ function FieldRender({ field, value, onChange }) {
           // 上傳到 Supabase Storage
           const path = `form-uploads/${Date.now()}_${file.name}`
           const { data: upload, error } = await supabase.storage.from('uploads').upload(path, file)
-          if (error) return alert('上傳失敗：' + error.message)
+          if (error) return toast.error('上傳失敗：' + error.message)
           const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(upload.path)
           onChange(publicUrl)
         }} />

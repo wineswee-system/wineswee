@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
 
+import { toast } from '../../lib/toast'
 const STATUSES = ['待揀貨', '揀貨中', '已複核', '已出貨']
 const CARRIERS = ['黑貓', '新竹', '郵局', '順豐', '7-11', '全家', '自取', '其他']
 
@@ -57,7 +58,7 @@ export default function Outbound() {
 
   const handleSubmit = async () => {
     if (!form.order_number || !form.customer) return
-    if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+    if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
     const { data } = await supabase.from('outbound_orders').insert({
       ...form,
       warehouse_id: form.warehouse_id || null,
@@ -83,7 +84,7 @@ export default function Outbound() {
       p_actor: profile?.name || '系統',
     })
     if (shipErr || !shipResult?.ok) {
-      alert('出貨失敗：' + (shipResult?.error || shipErr?.message || '未知'))
+      toast.error('出貨失敗：' + (shipResult?.error || shipErr?.message || '未知'))
       return
     }
     // 更新 tracking + 重抓 order

@@ -5,6 +5,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any' }
 
 export default function Locations() {
@@ -60,12 +62,12 @@ export default function Locations() {
   }
 
   const handleDelete = async (s) => {
-    if (!confirm(`確定要刪除「${s.name}」嗎？此操作無法復原。`)) return
+    if (!(await confirm({ message: `確定要刪除「${s.name}」嗎？此操作無法復原。` }))) return
     try {
       await deleteStore(s.id)
       setStores(prev => prev.filter(x => x.id !== s.id))
     } catch (err) {
-      alert('刪除失敗：' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -104,7 +106,7 @@ export default function Locations() {
       setEditingStore(null)
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

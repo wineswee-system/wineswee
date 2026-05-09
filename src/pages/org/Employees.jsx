@@ -10,6 +10,8 @@ import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
 const EMPLOYMENT_TYPES = [
@@ -166,23 +168,23 @@ export default function Employees() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   // 發送邀請信
   const handleInvite = async (emp) => {
-    if (!emp.email) { alert('此員工沒有設定 Email，請先編輯填入 Email'); return }
-    if (!confirm(`確定要發送帳號邀請信給 ${emp.name}（${emp.email}）？`)) return
+    if (!emp.email) { toast.error('此員工沒有設定 Email，請先編輯填入 Email'); return }
+    if (!(await confirm({ message: `確定要發送帳號邀請信給 ${emp.name}（${emp.email}）？` }))) return
     try {
       const result = await inviteEmployee(emp.email, emp.name)
       if (result.ok) {
-        alert(result.message)
+        toast.error(result.message)
       } else {
-        alert('發送失敗：' + (result.error || '未知錯誤'))
+        toast.error('發送失敗：' + (result.error || '未知錯誤'))
       }
     } catch (err) {
-      alert('發送失敗：' + err.message)
+      toast.error('發送失敗：' + err.message)
     }
   }
 
@@ -215,7 +217,7 @@ export default function Employees() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -247,7 +249,7 @@ export default function Employees() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -319,7 +321,7 @@ export default function Employees() {
                       <Pencil size={12} />
                     </button>
                     <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px', color: 'var(--accent-red)' }}
-                      onClick={async () => { if (!confirm(`確定刪除「${dept.name}」？`)) return; const { error } = await supabase.from('departments').delete().eq('id', dept.id); if (error) { alert('刪除失敗：' + error.message) } else { setDepartments(prev => prev.filter(d => d.id !== dept.id)) } }}>
+                      onClick={async () => { if (!(await confirm({ message: `確定刪除「${dept.name}」？` }))) return; const { error } = await supabase.from('departments').delete().eq('id', dept.id); if (error) { toast.error('刪除失敗：' + error.message) } else { setDepartments(prev => prev.filter(d => d.id !== dept.id)) } }}>
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -697,11 +699,11 @@ export default function Employees() {
             const payload = { name: deptForm.name, manager_id: deptForm.manager_id ? parseInt(deptForm.manager_id) : null, description: deptForm.description, level: deptForm.level, parent_department_id: deptForm.parent_department_id ? parseInt(deptForm.parent_department_id) : null }
             if (editingDept) {
               const { data, error } = await supabase.from('departments').update(payload).eq('id', editingDept.id).select().single()
-              if (error) { alert('儲存失敗：' + error.message); return }
+              if (error) { toast.error('儲存失敗：' + error.message); return }
               if (data) setDepartments(prev => prev.map(d => d.id === data.id ? data : d))
             } else {
               const { data, error } = await supabase.from('departments').insert(payload).select().single()
-              if (error) { alert('新增失敗：' + error.message); return }
+              if (error) { toast.error('新增失敗：' + error.message); return }
               if (data) setDepartments(prev => [...prev, data])
             }
             setShowDeptModal(false); setEditingDept(null)

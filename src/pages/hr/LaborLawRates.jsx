@@ -5,6 +5,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 function SectionHeader({ title, subtitle }) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -270,7 +272,7 @@ function ImportModal({ modal, year, onClose, onApplied }) {
       setParsed(rows)
       computeDiff(rows)
     } catch (err) {
-      alert('解析失敗：' + err.message)
+      toast.error('解析失敗：' + err.message)
       setParsed(null)
       setDiff(null)
     }
@@ -300,8 +302,8 @@ function ImportModal({ modal, year, onClose, onApplied }) {
   }
 
   const apply = async () => {
-    if (!parsed) return alert('請先解析')
-    if (!confirm(`確定套用？這會：\n- INSERT ${diff.added.length} 筆新級距\n- UPDATE ${diff.updated.length} 筆異動\n- DELETE ${diff.removed.length} 筆移除\n至 ${targetYear} 年`)) return
+    if (!parsed) return toast.error('請先解析')
+    if (!(await confirm({ message: `確定套用？這會：\n- INSERT ${diff.added.length} 筆新級距\n- UPDATE ${diff.updated.length} 筆異動\n- DELETE ${diff.removed.length} 筆移除\n至 ${targetYear} 年` }))) return
     setApplying(true)
     try {
       // 用 upsert 一次處理 added + updated
@@ -313,10 +315,10 @@ function ImportModal({ modal, year, onClose, onApplied }) {
       for (const r of diff.removed) {
         await supabase.from(modal.table).delete().eq('year', targetYear).eq('grade', r.grade)
       }
-      alert('套用完成')
+      toast.error('套用完成')
       onApplied()
     } catch (err) {
-      alert('套用失敗：' + (err.message || '未知錯誤'))
+      toast.error('套用失敗：' + (err.message || '未知錯誤'))
     } finally {
       setApplying(false)
     }

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
 // ── Risk factor weights & thresholds ──
 const RISK_WEIGHTS = {
   tenure_short: { weight: 15, label: '年資過短（<1年）', threshold: m => m < 12 },
@@ -195,7 +196,7 @@ export default function AttritionPrediction() {
       }, { onConflict: 'employee,snapshot_date' })
     }
     setComputing(false)
-    alert('風險快照已儲存')
+    toast.error('風險快照已儲存')
   }
 
   const toggleSort = (field) => {

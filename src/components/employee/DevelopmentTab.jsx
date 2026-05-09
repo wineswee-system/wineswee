@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, CheckCircle, Clock, BookOpen, Wrench, Users } from 'lucide-react'
 import { getEmployeeDevelopmentPlans, createDevelopmentPlan, updateDevelopmentPlan, deleteDevelopmentPlan } from '../../lib/db'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const SKILL_TYPES = [
   { value: 'hard', label: '硬技能', icon: '🔧', color: 'var(--accent-cyan)' },
   { value: 'soft', label: '軟技能', icon: '🤝', color: 'var(--accent-purple)' },
@@ -35,9 +37,9 @@ export default function DevelopmentTab({ employee }) {
   }, [employee?.id])
 
   const handleAdd = async () => {
-    if (!form.skill_name) return alert('請填寫技能名稱')
+    if (!form.skill_name) return toast.error('請填寫技能名稱')
     const { data, error } = await createDevelopmentPlan({ ...form, employee_id: employee.id })
-    if (error) { console.error('Save failed:', error); return alert('儲存失敗，請稍後再試') }
+    if (error) { console.error('Save failed:', error); return toast.error('儲存失敗，請稍後再試') }
     setPlans(prev => [data, ...prev])
     setShowForm(false)
     setForm(EMPTY_FORM)
@@ -51,7 +53,7 @@ export default function DevelopmentTab({ employee }) {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此發展計畫？')) return
+    if (!(await confirm({ message: '確定刪除此發展計畫？' }))) return
     await deleteDevelopmentPlan(id)
     setPlans(prev => prev.filter(p => p.id !== id))
   }

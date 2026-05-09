@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
 const STATUS_BADGE = { '待處理': 'badge-warning', '處理中': 'badge-info', '已完成': 'badge-success', '已拒絕': 'badge-danger' }
 
 export default function Returns() {
@@ -28,12 +29,12 @@ export default function Returns() {
     if (!form.return_number || !form.customer) return
     const refund = Number(form.total_refund)
     // ★ 防呆：退款金額必須 > 0；若有指定 original_order，要不超過原訂單總額
-    if (!refund || refund <= 0) { alert('退款金額必須大於 0'); return }
+    if (!refund || refund <= 0) { toast.error('退款金額必須大於 0'); return }
     if (form.original_order) {
       const { data: orig } = await supabase.from('sales_orders')
         .select('total').eq('order_number', form.original_order).maybeSingle()
       if (orig?.total != null && refund > Number(orig.total)) {
-        alert(`退款金額 NT$${refund.toLocaleString()} 超過原訂單總額 NT$${Number(orig.total).toLocaleString()}，請確認`)
+        toast.error(`退款金額 NT$${refund.toLocaleString()} 超過原訂單總額 NT$${Number(orig.total).toLocaleString()}，請確認`)
         return
       }
     }

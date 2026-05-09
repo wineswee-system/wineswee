@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { toast } from '../../lib/toast'
 import {
   Plus, Search, Play, Pause, Sparkles, Edit3, Check
 } from 'lucide-react'
@@ -12,6 +13,7 @@ import DripStepEditor from './components/DripStepEditor'
 import DripTemplateSelector from './components/DripTemplateSelector'
 import DripCampaignAnalytics from './components/DripCampaignAnalytics'
 
+import { confirm } from '../../lib/confirm'
 const STATUS_MAP = {
   draft: { label: '草稿', badge: 'badge-neutral', icon: <Edit3 size={12} /> },
   active: { label: '進行中', badge: 'badge-success', icon: <Play size={12} /> },
@@ -174,8 +176,8 @@ export default function DripCampaigns() {
     }))
   }
 
-  const deleteCampaign = (id) => {
-    if (!confirm('確定要刪除此活動？')) return
+  const deleteCampaign = async (id) => {
+    if (!(await confirm({ message: '確定要刪除此活動？' }))) return
     setCampaigns(prev => prev.filter(c => c.id !== id))
   }
 
@@ -214,7 +216,7 @@ export default function DripCampaigns() {
   }
 
   const saveCampaign = () => {
-    if (!form.name) { alert('請輸入活動名稱'); return }
+    if (!form.name) { toast.error('請輸入活動名稱'); return }
     if (editingCampaign) {
       setCampaigns(prev => prev.map(c => c.id === editingCampaign.id ? {
         ...c, name: form.name, description: form.description, trigger: form.trigger,
@@ -243,7 +245,7 @@ export default function DripCampaigns() {
   }
 
   const saveStep = () => {
-    if (stepForm.type === 'email' && !stepForm.subject) { alert('Email 步驟需輸入主旨'); return }
+    if (stepForm.type === 'email' && !stepForm.subject) { toast.error('Email 步驟需輸入主旨'); return }
     if (editingStep !== null) {
       setSteps(prev => prev.map((s, i) => i === editingStep ? { ...s, ...stepForm, step_index: i } : s))
     } else {

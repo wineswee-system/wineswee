@@ -1,3 +1,4 @@
+import { toast } from './/toast'
 /**
  * Receipt Printer — Browser print dialog & ESC/POS thermal printer support
  */
@@ -95,7 +96,7 @@ export function printReceipt(transaction, options = {}) {
     const html = generateReceiptHTML(transaction, options);
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) {
-      alert('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗。');
+      toast.error('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗。');
       return;
     }
     printWindow.document.write(html);
@@ -109,7 +110,7 @@ export function printReceipt(transaction, options = {}) {
     };
   } catch (err) {
     console.error('列印收據失敗:', err);
-    alert('列印收據失敗：' + (err.message || '未知錯誤'));
+    toast.error('列印收據失敗：' + (err.message || '未知錯誤'));
   }
 }
 
@@ -204,7 +205,7 @@ export function printShiftReport(shift, transactions = [], options = {}) {
     const html = generateShiftReportHTML(shift, transactions, options);
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) {
-      alert('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗。');
+      toast.error('無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗。');
       return;
     }
     printWindow.document.write(html);
@@ -216,7 +217,7 @@ export function printShiftReport(shift, transactions = [], options = {}) {
     };
   } catch (err) {
     console.error('列印日結報表失敗:', err);
-    alert('列印日結報表失敗：' + (err.message || '未知錯誤'));
+    toast.error('列印日結報表失敗：' + (err.message || '未知錯誤'));
   }
 }
 

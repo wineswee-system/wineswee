@@ -4,6 +4,8 @@ import { getHolidays, createHoliday, deleteHoliday, refreshHolidays } from '../.
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
 
 export default function Holidays() {
@@ -36,19 +38,19 @@ export default function Holidays() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此假日？')) return
+    if (!(await confirm({ message: '確定刪除此假日？' }))) return
     try {
       const { error } = await deleteHoliday(id)
       if (error) throw error
       setHolidays(prev => prev.filter(h => h.id !== id))
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -85,10 +87,10 @@ export default function Holidays() {
                   await refreshHolidays([activeYear, activeYear + 1])
                   const { data } = await getHolidays()
                   setHolidays(data || [])
-                  alert(`已刷新 ${activeYear} 及 ${activeYear + 1} 年度國定假日`)
+                  toast.error(`已刷新 ${activeYear} 及 ${activeYear + 1} 年度國定假日`)
                 } catch (err) {
                   console.error('Refresh failed:', err)
-                  alert('刷新失敗：' + (err.message || '未知錯誤'))
+                  toast.error('刷新失敗：' + (err.message || '未知錯誤'))
                 } finally {
                   setRefreshing(false)
                 }

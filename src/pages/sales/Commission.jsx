@@ -6,6 +6,8 @@ import { getCommissionRules, createCommissionRule, updateCommissionRule, deleteC
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 export default function Commission() {
@@ -47,9 +49,9 @@ export default function Commission() {
   }
 
   const handleCalculate = async () => {
-    if (rules.length === 0) { alert('請先建立佣金規則'); return }
+    if (rules.length === 0) { toast.error('請先建立佣金規則'); return }
     const period = new Date().toISOString().slice(0, 7)
-    if (!confirm(`將根據佣金規則計算 ${period} 的佣金，是否繼續？`)) return
+    if (!(await confirm({ message: `將根據佣金規則計算 ${period} 的佣金，是否繼續？` }))) return
 
     setCalculating(true)
     const completedOrders = orders.filter(o => o.payment_status === '已付款' || o.total > 0)
@@ -76,7 +78,7 @@ export default function Commission() {
     }
 
     setCalculating(false)
-    alert(`已計算 ${created} 筆佣金紀錄`)
+    toast.error(`已計算 ${created} 筆佣金紀錄`)
     load()
   }
 

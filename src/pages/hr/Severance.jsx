@@ -8,6 +8,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STATUS_BADGE = {
   pending:   { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', text: '待支付' },
   paid:      { bg: 'var(--accent-green-dim)',  color: 'var(--accent-green)',  text: '已支付' },
@@ -55,7 +57,7 @@ export default function Severance() {
 
   // 試算 — 按「試算」按鈕觸發
   const handleCalc = async () => {
-    if (!form.employee_id || !form.termination_date) { alert('請選員工 + 離職日'); return }
+    if (!form.employee_id || !form.termination_date) { toast.error('請選員工 + 離職日'); return }
     setCalcing(true)
     setCalcResult(null)
     const { data, error } = await supabase.rpc('calc_severance', {
@@ -64,16 +66,16 @@ export default function Severance() {
       p_avg_wage_override: form.avg_wage_override ? Number(form.avg_wage_override) : null,
     })
     setCalcing(false)
-    if (error) { alert(`試算失敗：${error.message}`); return }
+    if (error) { toast.error(`試算失敗：${error.message}`); return }
     if (!data?.ok) {
-      alert(data?.message || `試算失敗：${data?.error || 'unknown'}`)
+      toast.error(data?.message || `試算失敗：${data?.error || 'unknown'}`)
       return
     }
     setCalcResult(data)
   }
 
   const handleSave = async () => {
-    if (!calcResult) { alert('請先試算'); return }
+    if (!calcResult) { toast.error('請先試算'); return }
     setSaving(true)
     const noticeWage = form.notice_paid ? 0 : Number(calcResult.notice_wage || 0)
     const unusedLeaveWage = Number(form.unused_leave_wage || 0)
@@ -100,7 +102,7 @@ export default function Severance() {
       created_by: profile?.name || null,
     })
     setSaving(false)
-    if (error) { alert(`儲存失敗：${error.message}`); return }
+    if (error) { toast.error(`儲存失敗：${error.message}`); return }
     setShowCalcModal(false)
     setForm({ employee_id: '', termination_date: '', reason: '', notice_paid: true, unused_leave_days: 0, unused_leave_wage: 0, avg_wage_override: '', notes: '' })
     setCalcResult(null)
@@ -108,11 +110,11 @@ export default function Severance() {
   }
 
   const handleMarkPaid = async (rec) => {
-    if (!confirm(`標記 ${rec.employee_name_snapshot} 的資遣費為「已支付」？`)) return
+    if (!(await confirm({ message: `標記 ${rec.employee_name_snapshot} 的資遣費為「已支付」？` }))) return
     const { error } = await supabase.from('severance_records').update({
       status: 'paid', paid_at: new Date().toISOString(),
     }).eq('id', rec.id)
-    if (error) { alert(`更新失敗：${error.message}`); return }
+    if (error) { toast.error(`更新失敗：${error.message}`); return }
     load()
   }
 
@@ -122,7 +124,7 @@ export default function Severance() {
     const { error } = await supabase.from('severance_records').update({
       status: 'cancelled', notes: (rec.notes ? rec.notes + '\n' : '') + `[取消] ${reason}`,
     }).eq('id', rec.id)
-    if (error) { alert(`取消失敗：${error.message}`); return }
+    if (error) { toast.error(`取消失敗：${error.message}`); return }
     load()
   }
 

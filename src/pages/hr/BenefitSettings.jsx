@@ -8,6 +8,7 @@ import { LEAVE_TYPES } from '../../lib/leavePolicy'
 import { validateBenefitPolicy, BONUS_TYPE_LABELS, getLeaveLabel } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
 
+import { confirm } from '../../lib/confirm'
 const TABS = [
   { key: 'leave', label: '假別政策', icon: Calendar },
   { key: 'bonus', label: '獎金政策', icon: DollarSign },
@@ -140,7 +141,7 @@ export default function BenefitSettings() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此福利政策？')) return
+    if (!(await confirm({ message: '確定刪除此福利政策？' }))) return
     await deleteBenefitPolicy(id)
     loadPolicies()
   }

@@ -7,6 +7,8 @@ import { FORM_FIELD_TYPES, createFormDefinition, DEFAULT_PIPELINES } from '../..
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STATUS_BADGE = {
   draft: 'badge-neutral',
   active: 'badge-success',
@@ -120,7 +122,7 @@ export default function FormBuilder() {
       setEditingId(null)
     } catch (err) {
       console.error('Save form failed:', err)
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }
@@ -128,9 +130,9 @@ export default function FormBuilder() {
 
   // Delete form
   const deleteForm = async (id) => {
-    if (!confirm('確定要刪除此表單？相關提交紀錄也會一併刪除。')) return
+    if (!(await confirm({ message: '確定要刪除此表單？相關提交紀錄也會一併刪除。' }))) return
     const { error: err } = await deleteCRMForm(id)
-    if (err) { alert('刪除失敗'); return }
+    if (err) { toast.error('刪除失敗'); return }
     setForms(prev => prev.filter(f => f.id !== id))
     setSubmissions(prev => prev.filter(s => s.form_id !== id))
   }
@@ -138,7 +140,7 @@ export default function FormBuilder() {
   // Toggle form status
   const toggleStatus = async (id, newStatus) => {
     const { data, error: err } = await updateCRMForm(id, { status: newStatus })
-    if (err) { alert('狀態更新失敗'); return }
+    if (err) { toast.error('狀態更新失敗'); return }
     setForms(prev => prev.map(f => f.id === id ? data : f))
   }
 

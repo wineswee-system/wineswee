@@ -8,6 +8,7 @@ import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 // Similarity score between two strings (simple token overlap)
@@ -166,7 +167,7 @@ export default function BankReconciliation() {
     setTransactions(prev => prev.map(t => newConfirmed.has(t.id) ? { ...t, matched: true } : t))
     setMatchedPairs([])
     setAutoMatched(false)
-    alert('已確認所有比對結果！')
+    toast.success('已確認所有比對結果！')
   }
 
   // Confirm single match
@@ -241,13 +242,13 @@ export default function BankReconciliation() {
       if (error) throw error
       if (data) {
         setJournalEntries(prev => [data, ...prev])
-        alert('調整分錄已建立！')
+        toast.error('調整分錄已建立！')
       }
       setShowAdjustModal(false)
       setAdjustTarget(null)
     } catch (err) {
       console.error('Create adjustment entry failed:', err)
-      alert('建立調整分錄失敗：' + (err.message || '未知錯誤'))
+      toast.error('建立調整分錄失敗：' + (err.message || '未知錯誤'))
     }
   }
 

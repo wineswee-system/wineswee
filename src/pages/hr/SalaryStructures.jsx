@@ -7,6 +7,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { useAuth } from '../../contexts/AuthContext'
 
+import { toast } from '../../lib/toast'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 // 內建常見津貼項目，廠商可一鍵加入；也支援完全自訂
@@ -136,7 +137,7 @@ export default function SalaryStructures() {
   }
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return alert('請選擇員工')
+    if (!form.employee_id) return toast.error('請選擇員工')
     const payload = {
       employee_id: Number(form.employee_id),
       organization_id: orgId,
@@ -168,7 +169,7 @@ export default function SalaryStructures() {
       setShowModal(false)
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

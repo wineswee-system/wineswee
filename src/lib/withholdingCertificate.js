@@ -1,3 +1,4 @@
+import { toast } from './/toast'
 /**
  * 各類所得扣繳暨免扣繳憑單 — HTML 列印版
  *
@@ -303,7 +304,7 @@ export function printWithholdingCertificate({ record, employee, company, format 
 
   const w = window.open('', '_blank', 'width=900,height=1000')
   if (!w) {
-    alert('無法開啟新視窗，請允許彈出視窗權限')
+    toast.error('無法開啟新視窗，請允許彈出視窗權限')
     return
   }
   w.document.write(html)
@@ -379,7 +380,7 @@ export function printBatchCertificates({ records, employees, company, format = '
 </html>`
 
   const w = window.open('', '_blank', 'width=900,height=1000')
-  if (!w) { alert('無法開啟新視窗，請允許彈出視窗權限'); return }
+  if (!w) { toast.error('無法開啟新視窗，請允許彈出視窗權限'); return }
   w.document.write(html)
   w.document.close()
 }

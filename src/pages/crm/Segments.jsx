@@ -9,6 +9,7 @@ import { useTenant } from '../../contexts/TenantContext'
 import { nlToSegmentRules, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const FIELDS = [
   { value: 'total_spent', label: '累計消費', type: 'number' },
   { value: 'visit_count', label: '來店次數', type: 'number' },
@@ -297,7 +298,7 @@ export default function Segments() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此分群？')) return
+    if (!(await confirm({ message: '確定要刪除此分群？' }))) return
     const { error } = await deleteCustomerSegment(id)
     if (error) setError(error.message)
     else load()

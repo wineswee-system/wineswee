@@ -15,6 +15,7 @@ import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
 
+import { toast } from '../../lib/toast'
 // LIFF 既有 row 可能有中文 type，Web 這邊統一解到 clock_in / clock_out 顯示
 const normalizeType = (t) => {
   if (t === 'clock_in' || t === '上班打卡') return 'clock_in'
@@ -95,9 +96,9 @@ export default function PunchCorrection() {
   }
 
   const printWithChain = async (row) => {
-    if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+    if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
       const chainSteps = await buildFormChainSteps({
@@ -122,7 +123,7 @@ export default function PunchCorrection() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
 
@@ -166,7 +167,7 @@ export default function PunchCorrection() {
       const { error: updErr } = await supabase.from('clock_corrections')
         .update({ ...payload, status: '待審核', reject_reason: null, current_step: 0 })
         .eq('id', editingId)
-      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      if (updErr) { toast.error('更新失敗：' + updErr.message); return }
       try {
         await supabase.rpc('resume_workflow_for_request', { p_type: 'correction', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }

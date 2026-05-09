@@ -23,6 +23,8 @@ import { exportScheduleCalendarPdf } from '../../lib/exportPdf'
 import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
 
@@ -225,17 +227,13 @@ export default function Schedule() {
       })
 
       if (validation.errors.length > 0) {
-        const proceed = confirm(
-          `⚠️ 違規警告：\n\n${validation.errors.map(e => `❌ ${e}`).join('\n')}` +
+        const proceed = (await confirm({ message: `⚠️ 違規警告：\n\n${validation.errors.map(e => `❌ ${e}`).join('\n')}` +
           (validation.warnings.length > 0 ? `\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` : '') +
-          `\n\n確定要強制排班嗎？`
-        )
+          `\n\n確定要強制排班嗎？` }))
         if (!proceed) return
       } else if (validation.warnings.length > 0) {
-        const proceed = confirm(
-          `注意事項：\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` +
-          `\n\n確定要排班嗎？`
-        )
+        const proceed = (await confirm({ message: `注意事項：\n\n${validation.warnings.map(w => `⚠ ${w}`).join('\n')}` +
+          `\n\n確定要排班嗎？` }))
         if (!proceed) return
       }
     }
@@ -382,7 +380,7 @@ export default function Schedule() {
   }
 
   const handleAssignCover = async (coverEmpName, date, shift) => {
-    if (!confirm(`強制指派 ${coverEmpName} 代班 ${shift}？\n\n（被指派者沒有同意機會。建議優先用「發出代班邀請」讓員工自願接班）`)) return
+    if (!(await confirm({ message: `強制指派 ${coverEmpName} 代班 ${shift}？\n\n（被指派者沒有同意機會。建議優先用「發出代班邀請」讓員工自願接班）` }))) return
     const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' }).select().single()
     if (data) {
       setSchedules(prev => {
@@ -392,7 +390,7 @@ export default function Schedule() {
       })
     }
     setCoverModal(null)
-    alert(`已強制指派 ${coverEmpName} 代班 ${shift}`)
+    toast.error(`已強制指派 ${coverEmpName} 代班 ${shift}`)
   }
 
   // 邀請式代班 — 主管發出邀請，所有候選人收 LINE，先搶先贏
@@ -401,14 +399,14 @@ export default function Schedule() {
     const { employee: absentEmpName, date, shift } = coverModal
     const eligibleCandidates = coverCandidates.filter(c => c.isOff && c.valid11h)
     if (eligibleCandidates.length === 0) {
-      alert('沒有可邀請的候選人')
+      toast.error('沒有可邀請的候選人')
       return
     }
 
     // 抓缺勤者 ID + 班別 snapshot
     const absentEmp = employees.find(e => e.name === absentEmpName)
     const absentSched = schedules.find(s => s.employee === absentEmpName && s.date === date)
-    if (!absentEmp) { alert('找不到缺勤員工'); return }
+    if (!absentEmp) { toast.error('找不到缺勤員工'); return }
 
     const storeRow = locations.find(l => l.name === (absentSched?.store || absentEmp.store))
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
@@ -434,7 +432,7 @@ export default function Schedule() {
       expires_at: expiresAt,
     }).select().single()
 
-    if (error) { alert('發出失敗：' + error.message); return }
+    if (error) { toast.error('發出失敗：' + error.message); return }
 
     // 推 LINE 給候選人
     notifyCoverInvitationFromWeb(
@@ -443,12 +441,12 @@ export default function Schedule() {
     ).catch(err => console.warn('LINE 推播失敗', err))
 
     setCoverModal(null)
-    alert(`✅ 已發出代班邀請給 ${eligibleCandidates.length} 位候選人，等待先搶先贏（24h 過期）`)
+    toast.error(`✅ 已發出代班邀請給 ${eligibleCandidates.length} 位候選人，等待先搶先贏（24h 過期）`)
   }
 
   // ── AI Auto-Schedule (LLM-based, 6-phase framework) ──
   const handleAutoSchedule = async () => {
-    if (!canUseAISchedule) { alert('您沒有使用 AI 排班的權限'); return }
+    if (!canUseAISchedule) { toast.error('您沒有使用 AI 排班的權限'); return }
     const isMonthly = viewMode === 'month'
     const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
     const isMulti = isMonthly || isCycle  // 月制 + cycle 都要走多週邏輯
@@ -456,7 +454,7 @@ export default function Schedule() {
       ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
       : isMonthly ? `${selectedMonth} 月排班`
       : `${weekStart} ~ ${weekEnd}`
-    if (!confirm(`將使用 AI (Gemini 2.5) 為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n已有的排班會保留。AI 產出為草稿，您可以審閱後再發布。`)) return
+    if (!(await confirm({ message: `將使用 AI (Gemini 2.5) 為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n已有的排班會保留。AI 產出為草稿，您可以審閱後再發布。` }))) return
     setAutoScheduling(true)
     setAiDraft(null)
     setAiProgress('正在收集排班資料...')
@@ -493,7 +491,7 @@ export default function Schedule() {
 
     } catch (err) {
       console.error('[AI Schedule] Error:', err)
-      alert(`AI 排班失敗：${err.message}`)
+      toast.error(`AI 排班失敗：${err.message}`)
       setAiProgress('')
     } finally {
       setAutoScheduling(false)
@@ -504,7 +502,7 @@ export default function Schedule() {
   const handlePublishDraft = async () => {
     if (!aiDraft?.assignments?.length) return
     if (aiDraft.errors?.length > 0) {
-      if (!confirm(`仍有 ${aiDraft.errors.length} 個違規項目。確定要發布嗎？`)) return
+      if (!(await confirm({ message: `仍有 ${aiDraft.errors.length} 個違規項目。確定要發布嗎？` }))) return
     }
 
     const empNames = [...new Set(aiDraft.assignments.map(a => a.employee))]
@@ -568,7 +566,7 @@ export default function Schedule() {
       setPublishStatus(pubData)
     }
 
-    alert(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
+    toast.error(`已發布排班！共 ${newSchedules.length} 筆${notified > 0 ? `\n已透過 LINE 通知 ${notified} 位員工` : ''}`)
   }
 
   // ── Fix violations (re-run AI with violation context) ──
@@ -586,7 +584,7 @@ export default function Schedule() {
       setAiProgress('')
     } catch (err) {
       console.error('[AI Fix] Error:', err)
-      alert(`修正失敗：${err.message}`)
+      toast.error(`修正失敗：${err.message}`)
       setAiProgress('')
     } finally {
       setAutoScheduling(false)
@@ -594,8 +592,8 @@ export default function Schedule() {
   }
 
   // ── Discard draft ──
-  const handleDiscardDraft = () => {
-    if (confirm('確定要捨棄排班草稿嗎？')) setAiDraft(null)
+  const handleDiscardDraft = async () => {
+    if ((await confirm({ message: '確定要捨棄排班草稿嗎？' }))) setAiDraft(null)
   }
 
   // ── Helper: merge current schedule 休 into offRequests ──
@@ -625,7 +623,7 @@ export default function Schedule() {
 
   // ── Programmatic Schedule (no AI) ──
   const handleCodeSchedule = async () => {
-    if (!canUseAISchedule) { alert('您沒有使用排班功能的權限'); return }
+    if (!canUseAISchedule) { toast.error('您沒有使用排班功能的權限'); return }
     const isMonthly = viewMode === 'month'
     const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
     const isMulti = isMonthly || isCycle  // 月制 + cycle 都要走多週邏輯
@@ -637,10 +635,10 @@ export default function Schedule() {
     const selectedStoreObj = locations.find(l => l.name === storeFilter)
     const storeShifts = shiftDefs.filter(d => !d.store_id || d.store_id === selectedStoreObj?.id)
     if (storeShifts.length === 0) {
-      alert('⚠ 尚未設定班別定義，無法排班。\n\n請先到「門市設定」新增班別（例如：11-20 早班、15-0 晚班等）。')
+      toast.error('⚠ 尚未設定班別定義，無法排班。\n\n請先到「門市設定」新增班別（例如：11-20 早班、15-0 晚班等）。')
       return
     }
-    if (!confirm(`將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。`)) return
+    if (!(await confirm({ message: `將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。` }))) return
     setAutoScheduling(true)
     setAiDraft(null)
     setAiProgress('程式排班計算中...')
@@ -669,7 +667,7 @@ export default function Schedule() {
       setAiProgress('')
     } catch (err) {
       console.error('[Code Schedule] Error:', err)
-      alert(`程式排班失敗：${err.message}`)
+      toast.error(`程式排班失敗：${err.message}`)
       setAiProgress('')
     } finally {
       setAutoScheduling(false)
@@ -768,8 +766,8 @@ export default function Schedule() {
               const { data: lastSchedules } = await supabase.from('schedules').select('*')
                 .in('employee', empNames)
                 .gte('date', prevDates[0]).lte('date', prevDates[prevDates.length - 1])
-              if (!lastSchedules?.length) { alert('上月無排班資料'); return }
-              if (!confirm(`將上月 ${lastSchedules.length} 筆排班複製到 ${selectedMonth}？\n\n會根據星期幾對應，已有的排班會被覆蓋。`)) return
+              if (!lastSchedules?.length) { toast.error('上月無排班資料'); return }
+              if (!(await confirm({ message: `將上月 ${lastSchedules.length} 筆排班複製到 ${selectedMonth}？\n\n會根據星期幾對應，已有的排班會被覆蓋。` }))) return
               // Map by day-of-week: group last month shifts by (employee, dow)
               const byEmpDow = {}
               for (const s of lastSchedules) {
@@ -788,14 +786,14 @@ export default function Schedule() {
               if (newSchedules.length > 0) {
                 const { data } = await supabase.from('schedules').upsert(newSchedules, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
-                alert(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
+                toast.error(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
               }
             }}>
               📋 複製上月
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
-              if (!confirm(`確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？`)) return
+              if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
               await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
               setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
             }}>
@@ -1361,7 +1359,7 @@ function ScheduleCalendarEvents({ selectedMonth, monthDates, holidays, storeEven
       .insert({ store_id: store.id, date: newEvent.date, title: newEvent.title, color: newEvent.color })
       .select().single()
     if (data) setStoreEvents(prev => [...prev, data])
-    if (error) alert('新增失敗：' + error.message)
+    if (error) toast.error('新增失敗：' + error.message)
     setNewEvent({ date: '', title: '', color: '#f59e0b' })
     setShowForm(false)
   }

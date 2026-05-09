@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import Modal, { Field } from '../../components/Modal'
+import { toast } from '../../lib/toast'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
@@ -18,6 +19,7 @@ import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEdi
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { confirm } from '../../lib/confirm'
 const STATUS_MAP = {
   '規劃中': { color: 'var(--accent-blue)', icon: Clock },
   '進行中': { color: 'var(--accent-cyan)', icon: Play },
@@ -140,7 +142,7 @@ export default function Projects() {
   }
 
   const removeSection = async (id) => {
-    if (!confirm('刪除此欄位？任務不會刪除但會脫離欄位。')) return
+    if (!(await confirm({ message: '刪除此欄位？任務不會刪除但會脫離欄位。' }))) return
     await deleteProjectSection(id)
     setSections(prev => prev.filter(s => s.id !== id))
   }
@@ -181,7 +183,7 @@ export default function Projects() {
     if (profile?.organization_id) payload.organization_id = profile.organization_id
     if (editingId) {
       const { data, error } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
-      if (error) { alert('更新失敗，請稍後再試'); return }
+      if (error) { toast.error('更新失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => prev.map(p => p.id === editingId ? data : p))
         if (selected?.id === editingId) setSelected(data)
@@ -189,7 +191,7 @@ export default function Projects() {
     } else {
       payload.owner = payload.owner || profile?.name || ''
       const { data, error } = await supabase.from('projects').insert(payload).select().single()
-      if (error) { alert('建立失敗，請稍後再試'); return }
+      if (error) { toast.error('建立失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => [data, ...prev])
         let sortOrder = 1
@@ -237,7 +239,7 @@ export default function Projects() {
 
   const handleDelete = async (id, e) => {
     e?.stopPropagation()
-    if (!confirm('確定刪除此專案？資料會移入回收暫存區保留備份（可供復原）。')) return
+    if (!(await confirm({ message: '確定刪除此專案？資料會移入回收暫存區保留備份（可供復原）。' }))) return
     const proj = projects.find(p => p.id === id)
     if (proj) {
       await drainEntity({
@@ -268,7 +270,7 @@ export default function Projects() {
     if (!selectedAttachId || !selected) return
     setWorkflowSaving(true)
     const { error } = await supabase.from('workflow_instances').update({ project_id: selected.id }).eq('id', selectedAttachId)
-    if (error) { alert('連結失敗，請稍後再試'); setWorkflowSaving(false); return }
+    if (error) { toast.error('連結失敗，請稍後再試'); setWorkflowSaving(false); return }
     const maxOrder = workflows.filter(w => w.project_id === selected.id).reduce((m, w) => Math.max(m, w.sort_order || 0), 0)
     await supabase.from('workflow_instances').update({ sort_order: maxOrder + 1 }).eq('id', selectedAttachId)
     const { data: updatedWf } = await supabase.from('workflow_instances').select('*').eq('id', selectedAttachId).single()
@@ -293,7 +295,7 @@ export default function Projects() {
       sort_order: maxOrder + 1,
       started_at: new Date().toISOString(),
     })
-    if (error) { alert('建立失敗，請稍後再試'); setWorkflowSaving(false); return }
+    if (error) { toast.error('建立失敗，請稍後再試'); setWorkflowSaving(false); return }
     if (newWf) setWorkflows(prev => [...prev, newWf])
     setShowWorkflowModal(false)
     setWorkflowSaving(false)
@@ -382,7 +384,7 @@ export default function Projects() {
     //   未載入的 profile 全部塞進 demo org，是 silent corruption）
     const orgId = profile?.organization_id
     if (!orgId) {
-      alert('身份資訊未載入完成，請重新登入再操作')
+      toast.error('身份資訊未載入完成，請重新登入再操作')
       return
     }
 
@@ -451,7 +453,7 @@ export default function Projects() {
       setDeployTpl(null)
       load()
     } catch (err) {
-      alert('部署失敗，請稍後再試')
+      toast.error('部署失敗，請稍後再試')
     }
     setDeploying(false)
   }

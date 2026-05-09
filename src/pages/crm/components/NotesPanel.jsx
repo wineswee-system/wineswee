@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Plus, Pin, Trash2, Edit3, Check, X } from 'lucide-react'
 import { getCRMNotes, createCRMNote, updateCRMNote, deleteCRMNote } from '../../../lib/db'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 /**
  * Reusable notes panel for any CRM entity.
  * Props: entityType ('customer'|'opportunity'|'service_ticket'), entityId (number)
@@ -28,7 +30,7 @@ export default function NotesPanel({ entityType, entityId }) {
       content: newNote,
       author: '系統使用者',
     })
-    if (error) { alert('新增失敗'); return }
+    if (error) { toast.error('新增失敗'); return }
     setNotes(prev => [data, ...prev])
     setNewNote('')
   }
@@ -52,7 +54,7 @@ export default function NotesPanel({ entityType, entityId }) {
   }
 
   const removeNote = async (id) => {
-    if (!confirm('確定要刪除此備註？')) return
+    if (!(await confirm({ message: '確定要刪除此備註？' }))) return
     await deleteCRMNote(id)
     setNotes(prev => prev.filter(n => n.id !== id))
   }

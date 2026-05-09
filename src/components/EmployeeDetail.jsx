@@ -12,6 +12,8 @@ import EmployeeChildTableEditor from '../pages/org/components/EmployeeChildTable
 import { empLabel } from '../lib/empLabel'
 import ChangelogPanel from './ChangelogPanel'
 
+import { toast } from '../lib/toast'
+import { confirm } from '../lib/confirm'
 // Mask sensitive fields for non-admin users
 const maskId = (v) => v ? v.slice(0, 3) + '****' + v.slice(-2) : ''
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
@@ -165,21 +167,21 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     }
 
     const { data, error } = await updateEmployee(employee.id, dataToSave)
-    if (error) { alert('儲存失敗，請稍後再試'); setSaving(false); return }
+    if (error) { toast.error('儲存失敗，請稍後再試'); setSaving(false); return }
     if (data) {
       onUpdate(data); setIsDirty(false)
       // If store changed, remove future schedules (shifts may not exist at new store)
       if (storeChanged) {
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-        alert(`已調至${form.store}，未來排班已清除，請重新排班`)
+        toast.error(`已調至${form.store}，未來排班已清除，請重新排班`)
       }
     }
     setSaving(false)
   }
 
-  const handleClose = () => {
-    if (isDirty && !confirm('有未儲存的變更，確定離開？')) return
+  const handleClose = async () => {
+    if (isDirty && !(await confirm({ message: '有未儲存的變更，確定離開？' }))) return
     onClose()
   }
 
@@ -189,14 +191,14 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     try {
       const { data } = await supabase.from('employee_skills').insert({ employee_id: employee.id, skill_name: newSkill.trim(), level: newSkillLevel }).select().single()
       if (data) { setSkills(prev => [...prev, data]); setNewSkill('') }
-    } catch (e) { alert('新增失敗') }
+    } catch (e) { toast.error('新增失敗') }
   }
 
   const deleteSkill = async (id) => {
     try {
       await supabase.from('employee_skills').delete().eq('id', id)
       setSkills(prev => prev.filter(s => s.id !== id))
-    } catch (e) { alert('刪除失敗') }
+    } catch (e) { toast.error('刪除失敗') }
   }
 
   const [showDepForm, setShowDepForm] = useState(false)
@@ -215,14 +217,14 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         setDepForm({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
         setShowDepForm(false)
       }
-    } catch (e) { alert('新增失敗') }
+    } catch (e) { toast.error('新增失敗') }
   }
 
   const deleteDependent = async (id) => {
     try {
       await supabase.from('employee_dependents').delete().eq('id', id)
       setDependents(prev => prev.filter(d => d.id !== id))
-    } catch (e) { alert('刪除失敗') }
+    } catch (e) { toast.error('刪除失敗') }
   }
 
   const addReview = () => {
@@ -235,7 +237,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             reviewer: profile?.name || '管理員', score: Number(score), notes,
           }).select().single()
           if (data) setReviews(prev => [data, ...prev])
-        } catch (e) { alert('新增失敗') }
+        } catch (e) { toast.error('新增失敗') }
       }, { placeholder: '選填', required: false })
     }, { placeholder: '1–5' })
   }
@@ -250,7 +252,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             from_store: employee.store, to_store, from_dept: employee.dept, from_position: employee.position, reason,
           }).select().single()
           if (data) setTransfers(prev => [data, ...prev])
-        } catch (e) { alert('新增失敗') }
+        } catch (e) { toast.error('新增失敗') }
       }, { placeholder: '選填', required: false })
     }, { placeholder: '門市名稱' })
   }
@@ -263,13 +265,13 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           employee_id: employee.id, pref_type: 'note', notes,
         }).select().single()
         if (data) setSchedPrefs(prev => [...prev, data])
-      } catch (e) { alert('新增失敗') }
+      } catch (e) { toast.error('新增失敗') }
     }, { placeholder: '例如：週六不排晚班' })
   }
 
   const deleteSchedPref = async (id) => {
     const { error } = await supabase.from('employee_schedule_prefs').delete().eq('id', id)
-    if (error) { alert('刪除失敗，請稍後再試'); return }
+    if (error) { toast.error('刪除失敗，請稍後再試'); return }
     setSchedPrefs(prev => prev.filter(p => p.id !== id))
   }
 
@@ -702,7 +704,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                       {la.line_channels?.name || la.channel_id}{la.is_primary ? ' · 主要' : ''}
                     </span>
                     <button onClick={async () => {
-                      if (!confirm('確定解除此 LINE 綁定？')) return
+                      if (!(await confirm({ message: '確定解除此 LINE 綁定？' }))) return
                       await supabase.from('employee_line_accounts').delete().eq('id', la.id)
                       setLineAccounts(prev => prev.filter(x => x.id !== la.id))
                     }} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}>
@@ -745,7 +747,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   disabled={!newLineUserId || !newLineChannel}
                   onClick={async () => {
                     const uid = newLineUserId.trim()
-                    if (!uid.startsWith('U') || uid.length < 20) { alert('LINE User ID 格式錯誤（應以 U 開頭且至少 20 字元）'); return }
+                    if (!uid.startsWith('U') || uid.length < 20) { toast.error('LINE User ID 格式錯誤（應以 U 開頭且至少 20 字元）'); return }
                     const chId = parseInt(newLineChannel)
                     const { data, error } = await supabase.from('employee_line_accounts').insert({
                       employee_id: employee.id,
@@ -754,7 +756,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                       is_primary: lineAccounts.length === 0,
                       is_verified: true,
                     }).select('*, line_channels(id, code, name)').single()
-                    if (error) { alert('儲存失敗，請稍後再試'); return }
+                    if (error) { toast.error('儲存失敗，請稍後再試'); return }
                     // Sync line_users so the webhook recognises this user going forward
                     await supabase.from('line_users').update({ employee_id: employee.id, is_verified: true })
                       .eq('channel_id', chId).eq('line_user_id', uid).catch(() => {})

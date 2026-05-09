@@ -6,6 +6,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import ChainConfigModal from '../../components/ChainConfigModal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const CATEGORIES = [
   { value: 'attendance', label: '📅 假勤申請' },
   { value: 'personnel',  label: '🏃 人事異動' },
@@ -54,7 +56,7 @@ export default function FormBuilder() {
   const openEdit = (t) => setEditing({ ...t, fields: Array.isArray(t.fields) ? t.fields : [] })
 
   const handleDelete = async (t) => {
-    if (!confirm(`確定刪除模板「${t.name}」？已提交的申請不受影響。`)) return
+    if (!(await confirm({ message: `確定刪除模板「${t.name}」？已提交的申請不受影響。` }))) return
     await supabase.from('form_templates').delete().eq('id', t.id)
     load()
   }
@@ -181,11 +183,11 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
   }
 
   const save = async () => {
-    if (!form.name?.trim()) return alert('請填模板名稱')
-    if (!(form.fields || []).length) return alert('至少要 1 個欄位')
+    if (!form.name?.trim()) return toast.error('請填模板名稱')
+    if (!(form.fields || []).length) return toast.error('至少要 1 個欄位')
     for (const f of form.fields) {
-      if (!f.key || !f.label) return alert(`欄位「${f.label || f.key}」缺 key 或 label`)
-      if (f.type === 'select' && !(f.options || '').trim()) return alert(`下拉選單「${f.label}」需要設選項`)
+      if (!f.key || !f.label) return toast.error(`欄位「${f.label || f.key}」缺 key 或 label`)
+      if (f.type === 'select' && !(f.options || '').trim()) return toast.error(`下拉選單「${f.label}」需要設選項`)
     }
     setSaving(true)
     try {
@@ -208,7 +210,7 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
       }
       onSaved()
     } catch (err) {
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }

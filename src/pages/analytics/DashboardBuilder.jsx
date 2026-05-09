@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 const colors = { cyan: '#22d3ee', blue: '#3b82f6', purple: '#a78bfa', green: '#34d399', orange: '#fb923c', red: '#f87171', pink: '#f472b6', yellow: '#fbbf24' }
@@ -220,7 +221,7 @@ export default function DashboardBuilder() {
 
   const handleSave = () => {
     saveToStorage(widgets)
-    alert('儀表板已儲存')
+    toast.error('儀表板已儲存')
   }
 
   const addWidget = (type) => {

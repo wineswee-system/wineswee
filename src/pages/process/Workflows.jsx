@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from '../../lib/toast'
 import {
   Plus, Pencil, Trash2, ChevronRight, CheckCircle,
   X, Users, User, Play, Pause, Rocket, Archive,
@@ -30,6 +31,7 @@ import TemplatesList from './components/TemplatesList'
 import ArchivedInstancesList from './components/ArchivedInstancesList'
 import { generateFlowByRules } from './components/flowTemplates'
 
+import { confirm } from '../../lib/confirm'
 export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
   const currentUser = profile?.name || '管理員'
@@ -365,7 +367,7 @@ export default function Workflows() {
       trigger_template_id_on_complete: origTask.trigger_template_id_on_complete || null,
     })
     if (error || !newTask) {
-      alert('複製失敗：' + (error?.message || '未知錯誤'))
+      toast.error('複製失敗：' + (error?.message || '未知錯誤'))
       return
     }
 
@@ -409,12 +411,12 @@ export default function Workflows() {
       )
     }
 
-    alert(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
+    toast.error(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
   }
 
   const handleAddTask = async () => {
-    if (!taskForm.title) { alert('請填寫任務名稱'); return }
-    if (!selectedInstance) { alert('找不到流程實例，請重新整理後再試'); return }
+    if (!taskForm.title) { toast.error('請填寫任務名稱'); return }
+    if (!selectedInstance) { toast.error('找不到流程實例，請重新整理後再試'); return }
     const instTasks = getInstanceTasks(selectedInstance.id)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
 
@@ -446,7 +448,7 @@ export default function Workflows() {
       confirmation_mode: usePeople ? (taskForm.confirmation_mode || 'parallel') : null,
     })
     if (taskError || !data) {
-      alert(`新增任務失敗：${taskError?.message || '未知錯誤'}`)
+      toast.error(`新增任務失敗：${taskError?.message || '未知錯誤'}`)
       return
     }
     if (data) {
@@ -502,7 +504,7 @@ export default function Workflows() {
       setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
 
       if (subFailures.length > 0) {
-        alert(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
+        toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
       }
 
       // 只在「沒有未完成前置步驟」時才推 LINE
@@ -622,11 +624,11 @@ export default function Workflows() {
   // ── Create SOP Template ──
   const handleCreateTpl = async () => {
     if (!newTpl.name?.trim()) {
-      alert('請填寫範本名稱')
+      toast.error('請填寫範本名稱')
       return
     }
     if (!newTpl.steps.some(s => s.title?.trim())) {
-      alert('至少需要填寫一個步驟名稱')
+      toast.error('至少需要填寫一個步驟名稱')
       return
     }
     const validSteps = newTpl.steps.filter(s => s.title?.trim()).map(s => ({
@@ -642,7 +644,7 @@ export default function Workflows() {
       approval_chain_id: newTpl.approval_chain_id || null,
     }).select().single()
     if (error) {
-      alert('建立失敗：' + error.message)
+      toast.error('建立失敗：' + error.message)
       console.error('sop_templates insert error', error)
       return
     }
@@ -660,29 +662,29 @@ export default function Workflows() {
     if (categories.some(c => c.name === name)) { setNewCategoryName(''); return }
     const nextOrder = (categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 0) || 0) + 10
     const { data, error } = await createWorkflowCategory({ name, sort_order: nextOrder })
-    if (error) { alert('新增失敗：' + error.message); return }
+    if (error) { toast.error('新增失敗：' + error.message); return }
     if (data) setCategories(prev => [...prev, data])
     setNewCategoryName('')
   }
 
   const handleDeleteCategory = async (cat) => {
-    if (!confirm(`確定刪除分類「${cat.name}」？`)) return
+    if (!(await confirm({ message: `確定刪除分類「${cat.name}」？` }))) return
     const { error } = await deleteWorkflowCategory(cat.id)
-    if (error) { alert('刪除失敗：' + error.message); return }
+    if (error) { toast.error('刪除失敗：' + error.message); return }
     setCategories(prev => prev.filter(c => c.id !== cat.id))
   }
 
   const handleDeleteTemplate = async (tpl) => {
-    if (!confirm(`確定刪除範本「${tpl.name}」？此操作無法復原。`)) return
+    if (!(await confirm({ message: `確定刪除範本「${tpl.name}」？此操作無法復原。` }))) return
     const { error } = await deleteWorkflow(tpl.id)
-    if (error) { alert('刪除失敗：' + error.message); return }
+    if (error) { toast.error('刪除失敗：' + error.message); return }
     setTemplates(prev => prev.filter(t => t.id !== tpl.id))
   }
 
   // ── Blank Workflow ──
   const handleCreateBlankWorkflow = async () => {
     const name = blankWorkflowForm.name.trim()
-    if (!name) { alert('請填寫流程名稱'); return }
+    if (!name) { toast.error('請填寫流程名稱'); return }
     const { data, error } = await supabase.from('workflow_instances').insert({
       template_name: name,
       store: blankWorkflowForm.store || null,
@@ -692,7 +694,7 @@ export default function Workflows() {
       status: '進行中',
       organization_id: profile?.organization_id || null,
     }).select().single()
-    if (error) { alert('建立失敗：' + error.message); return }
+    if (error) { toast.error('建立失敗：' + error.message); return }
     if (data) {
       setInstances(prev => [data, ...prev])
       setBlankWorkflowForm({ name: '', store: '', assignee: '', due_date: '' })
@@ -798,13 +800,13 @@ export default function Workflows() {
         const { data: insertedTasks, error: tasksErr } = await createTasksBatch(taskRows)
         if (tasksErr) {
           console.error('[deploy] task insert failed', tasksErr, 'rows=', taskRows)
-          alert(`❌ 任務建立失敗：${tasksErr.message}\n\n部署中斷，請檢查 console。`)
+          toast.error(`❌ 任務建立失敗：${tasksErr.message}\n\n部署中斷，請檢查 console。`)
           setDeploying(false)
           return
         }
         if (!insertedTasks || insertedTasks.length === 0) {
           console.error('[deploy] insertedTasks empty', taskRows)
-          alert('❌ 任務沒有任何被建立（可能 RLS 擋住或欄位錯誤）。請看 console。')
+          toast.error('❌ 任務沒有任何被建立（可能 RLS 擋住或欄位錯誤）。請看 console。')
           setDeploying(false)
           return
         }
@@ -875,7 +877,7 @@ export default function Workflows() {
             }
           }
           if (subFailures.length > 0) {
-            alert(`流程已建立，但有 ${subFailures.length} 項子設定失敗：\n\n${subFailures.join('\n')}\n\n請到流程詳細頁手動補上。`)
+            toast.error(`流程已建立，但有 ${subFailures.length} 項子設定失敗：\n\n${subFailures.join('\n')}\n\n請到流程詳細頁手動補上。`)
           }
 
           // 流程範本層級簽核鏈（template.approval_chain_id）：
@@ -904,14 +906,14 @@ export default function Workflows() {
         })
       }
     } catch (err) {
-      alert('部署失敗：' + (err.message || '未知錯誤'))
+      toast.error('部署失敗：' + (err.message || '未知錯誤'))
     }
     setDeploying(false)
   }
 
   // ── Archive / Delete instance ──
   const handleArchiveInstance = async (inst) => {
-    if (!confirm(`確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「封存流程」分頁查看。`)) return
+    if (!(await confirm({ message: `確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「封存流程」分頁查看。` }))) return
     const archivedAt = new Date().toISOString()
     const { data, error } = await supabase.from('workflow_instances')
       .update({
@@ -920,7 +922,7 @@ export default function Workflows() {
         completed_at: inst.completed_at || archivedAt,
       })
       .eq('id', inst.id).select().single()
-    if (error) { alert('封存失敗：' + error.message); return }
+    if (error) { toast.error('封存失敗：' + error.message); return }
     // cascade archive to all tasks belonging to this workflow instance
     await supabase.from('tasks').update({ archived_at: archivedAt }).eq('workflow_instance_id', inst.id)
     if (data) {
@@ -935,7 +937,7 @@ export default function Workflows() {
     const warning = stats.pct < 100
       ? `⚠️ 此流程僅完成 ${stats.pct}%，資料會移入回收暫存區保留備份（可供復原）。`
       : `資料會移入回收暫存區保留備份（可供復原）。建議改用「封存」保留進行中紀錄。`
-    if (!confirm(`確定刪除「${inst.template_name}」？\n\n${warning}\n\n仍要刪除？`)) return
+    if (!(await confirm({ message: `確定刪除「${inst.template_name}」？\n\n${warning}\n\n仍要刪除？` }))) return
 
     const instTasks = getInstanceTasks(inst.id)
     const taskIds = instTasks.map(t => t.id)
@@ -976,9 +978,9 @@ export default function Workflows() {
 
     // Hard delete tasks first, then instance
     const { error: tasksErr } = await supabase.from('tasks').delete().eq('workflow_instance_id', inst.id)
-    if (tasksErr) { alert('刪除任務失敗：' + tasksErr.message); return }
+    if (tasksErr) { toast.error('刪除任務失敗：' + tasksErr.message); return }
     const { error } = await supabase.from('workflow_instances').delete().eq('id', inst.id)
-    if (error) { alert('刪除流程失敗：' + error.message); return }
+    if (error) { toast.error('刪除流程失敗：' + error.message); return }
     setInstances(prev => prev.filter(i => i.id !== inst.id))
     setAllTasks(prev => prev.filter(t => t.workflow_instance_id !== inst.id))
     setSelectedInstance(null)

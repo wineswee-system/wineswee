@@ -7,6 +7,8 @@ import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { printWithholdingCertificate, printBatchCertificates } from '../../lib/withholdingCertificate'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 // 扣繳單位（公司）資料 — 存 localStorage，每次列印帶入
 const COMPANY_KEY = 'sme_withholding_company'
 const loadCompany = () => {
@@ -44,9 +46,9 @@ export default function TaxForms() {
   }, [year])
 
   // 列印單張憑單
-  const handlePrintOne = (record) => {
+  const handlePrintOne = async (record) => {
     if (!company?.name) {
-      if (!confirm('尚未設定扣繳單位（公司）資料，要先設定嗎？')) return
+      if (!(await confirm({ message: '尚未設定扣繳單位（公司）資料，要先設定嗎？' }))) return
       setShowCompanyModal(true)
       return
     }
@@ -55,20 +57,20 @@ export default function TaxForms() {
   }
 
   // 批次列印
-  const handlePrintBatch = () => {
+  const handlePrintBatch = async () => {
     if (!company?.name) {
-      if (!confirm('尚未設定扣繳單位（公司）資料，要先設定嗎？')) return
+      if (!(await confirm({ message: '尚未設定扣繳單位（公司）資料，要先設定嗎？' }))) return
       setShowCompanyModal(true)
       return
     }
-    if (records.length === 0) return alert('尚無資料可列印')
+    if (records.length === 0) return toast.error('尚無資料可列印')
     printBatchCertificates({ records, employees, company, format })
   }
 
   const handleSaveCompany = () => {
     saveCompany(company)
     setShowCompanyModal(false)
-    alert('扣繳單位資料已儲存（瀏覽器本機）')
+    toast.error('扣繳單位資料已儲存（瀏覽器本機）')
   }
 
   const handleCompute = async () => {
@@ -119,7 +121,7 @@ export default function TaxForms() {
 
     setRecords(results)
     setComputing(false)
-    alert(`已產生 ${results.length} 筆扣繳憑單`)
+    toast.error(`已產生 ${results.length} 筆扣繳憑單`)
   }
 
   const stats = useMemo(() => {

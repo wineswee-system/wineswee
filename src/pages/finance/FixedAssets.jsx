@@ -7,6 +7,8 @@ import { getFixedAssets, createFixedAsset, updateFixedAsset, deleteFixedAsset, c
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const CATEGORIES = ['土地', '建築物', '機器設備', '運輸設備', '辦公設備', '其他']
@@ -90,7 +92,7 @@ export default function FixedAssets() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此資產？')) return
+    if (!(await confirm({ message: '確定要刪除此資產？' }))) return
     const { error } = await deleteFixedAsset(id)
     if (error) setError(error.message)
     else loadAssets()
@@ -99,9 +101,9 @@ export default function FixedAssets() {
   // Generate monthly depreciation journal entries for all active assets
   const handleGenerateDepreciationJE = async () => {
     const activeAssets = assets.filter(a => a.status === '使用中')
-    if (activeAssets.length === 0) return alert('沒有使用中的資產')
+    if (activeAssets.length === 0) return toast.error('沒有使用中的資產')
 
-    if (!confirm(`將為 ${activeAssets.length} 項資產建立本月折舊分錄，是否繼續？`)) return
+    if (!(await confirm({ message: `將為 ${activeAssets.length} 項資產建立本月折舊分錄，是否繼續？` }))) return
 
     setGeneratingJE(true)
     const today = new Date().toISOString().slice(0, 10)
@@ -131,7 +133,7 @@ export default function FixedAssets() {
 
     if (totalDepreciation === 0) {
       setGeneratingJE(false)
-      return alert('所有資產折舊金額為 0（可能已超過耐用年限）')
+      return toast.error('所有資產折舊金額為 0（可能已超過耐用年限）')
     }
 
     // Single credit line for accumulated depreciation
@@ -160,7 +162,7 @@ export default function FixedAssets() {
     const linesWithEntry = lines.map(l => ({ ...l, entry_id: entry.id }))
     const { error: linesErr } = await batchCreateJournalLines(linesWithEntry)
     if (linesErr) setError(linesErr.message)
-    else alert(`已建立折舊分錄 ${entryNumber}，總金額 ${fmt(totalDepreciation)}（草稿狀態，請至傳票管理過帳）`)
+    else toast.error(`已建立折舊分錄 ${entryNumber}，總金額 ${fmt(totalDepreciation)}（草稿狀態，請至傳票管理過帳）`)
 
     setGeneratingJE(false)
   }

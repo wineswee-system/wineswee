@@ -6,6 +6,8 @@ import { getApprovalRules, createApprovalRule, updateApprovalRule, deleteApprova
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const MODULES = [
   { value: 'purchase', label: '採購' },
   { value: 'finance', label: '財務' },
@@ -134,7 +136,7 @@ export default function ApprovalRules() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此簽核規則？')) return
+    if (!(await confirm({ message: '確定要刪除此簽核規則？' }))) return
     await deleteApprovalRule(id, orgId)
     load()
   }
@@ -150,7 +152,7 @@ export default function ApprovalRules() {
       reject_reason: rejectReason,
       decided_at: new Date().toISOString(),
     })
-    if (error) { alert(`操作失敗：${error.message || error}`); return }
+    if (error) { toast.error(`操作失敗：${error.message || error}`); return }
     load()
   }
 

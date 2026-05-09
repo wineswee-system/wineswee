@@ -8,6 +8,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const DEFAULT_TEMPLATES = [
   {
     name: '新人到職 SOP',
@@ -194,7 +196,7 @@ export default function SOPTemplates() {
       setDeployResult({ location: loc, count: results.length })
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
     setDeploying(false)
   }
@@ -225,7 +227,7 @@ export default function SOPTemplates() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -234,14 +236,14 @@ export default function SOPTemplates() {
   const removeStep = (i) => setNewTemplate(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此範本？')) return
+    if (!(await confirm({ message: '確定刪除此範本？' }))) return
     try {
       const { error } = await supabase.from('sop_templates').delete().eq('id', id)
       if (error) throw error
       setTemplates(prev => prev.filter(t => t.id !== id))
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

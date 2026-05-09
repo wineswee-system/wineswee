@@ -15,6 +15,8 @@ import AsyncButton from '../../components/AsyncButton'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STATUS_COLORS = {
   '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
   '已核准': { bg: 'var(--accent-green-dim)', color: 'var(--accent-green)' },
@@ -104,8 +106,8 @@ export default function ExpenseRequests() {
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
     const results = []
     for (const file of fileList) {
-      if (!ALLOWED_TYPES.includes(file.type)) { alert('不支援此檔案類型'); continue }
-      if (file.size > MAX_SIZE) { alert('檔案大小不可超過 10MB'); continue }
+      if (!ALLOWED_TYPES.includes(file.type)) { toast.error('不支援此檔案類型'); continue }
+      if (file.size > MAX_SIZE) { toast.error('檔案大小不可超過 10MB'); continue }
       const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${file.name}`
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
       if (upErr) continue
@@ -274,12 +276,12 @@ export default function ExpenseRequests() {
         STEP_NOT_FOUND: `chain 第 ${data.current_step + 1} 關沒設定`,
         NOT_AUTHORIZED_FOR_STEP: `你不是目前這關的簽核者（第 ${data.current_step + 1} 關需要 ${data.expected_role}）`,
       }[data?.error] || `核准失敗：${data?.error || 'unknown'}`
-      alert(msg); return
+      toast.error(msg); return
     }
     if (data.fully_approved) {
-      alert('已通過全部簽核關卡')
+      toast.success('已通過全部簽核關卡')
     } else {
-      alert(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
+      toast.error(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
     }
     load()
   }
@@ -292,7 +294,7 @@ export default function ExpenseRequests() {
     })
     if (error) { setError(error.message); return }
     if (!data?.ok) {
-      alert(`退回失敗：${data?.error || 'unknown'}`)
+      toast.error(`退回失敗：${data?.error || 'unknown'}`)
       return
     }
     load()
@@ -430,10 +432,10 @@ export default function ExpenseRequests() {
 
   const deleteFile = async (att) => {
     if (profile?.role !== 'admin' && profile?.role !== 'super_admin' && att.uploaded_by !== profile?.name) {
-      alert('僅能刪除自己上傳的檔案')
+      toast.error('僅能刪除自己上傳的檔案')
       return
     }
-    if (!confirm(`刪除 ${att.file_name}？`)) return
+    if (!(await confirm({ message: `刪除 ${att.file_name}？` }))) return
     await supabase.storage.from('attachments').remove([att.storage_path])
     await supabase.from('expense_request_attachments').delete().eq('id', att.id)
     setAttachments(prev => ({
@@ -844,9 +846,9 @@ export default function ExpenseRequests() {
         }))
 
         const handlePrintSignOff = async () => {
-          if (!employees.length) { alert('員工清單載入中，請稍候'); return }
+          if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
           const win = window.open('', '_blank', 'width=900,height=1100')
-          if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+          if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
           try {
             const { data: rawAtts } = await supabase.from('expense_request_attachments')
               .select('file_name, storage_path, file_type')
@@ -873,7 +875,7 @@ export default function ExpenseRequests() {
             })
           } catch (e) {
             win.close()
-            alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+            toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
           }
         }
 

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
 const TOUCHPOINT_ICONS = {
   call: { icon: Phone, label: '電話', color: 'var(--accent-green)' },
   meeting: { icon: Video, label: '會議', color: 'var(--accent-blue)' },
@@ -227,7 +228,7 @@ export default function Contacts() {
       loadData()
     } catch (err) {
       console.error('Save failed:', err)
-      alert('儲存失敗: ' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗: ' + (err.message || '未知錯誤'))
     }
   }
 
@@ -242,7 +243,7 @@ export default function Contacts() {
       loadData()
     } catch (err) {
       console.error('Delete failed:', err)
-      alert('刪除失敗: ' + (err.message || '未知錯誤'))
+      toast.error('刪除失敗: ' + (err.message || '未知錯誤'))
     }
   }
 

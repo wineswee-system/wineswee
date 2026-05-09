@@ -13,6 +13,7 @@ import POSCartPanel from './components/POSCartPanel'
 import POSReceiptModal from './components/POSReceiptModal'
 import POSRefundModal from './components/POSRefundModal'
 
+import { toast } from '../../lib/toast'
 const MOCK_PRODUCTS = [
   { id: 1, name: '美式咖啡', price: 60, category: '飲品', barcode: '4710001001' },
   { id: 2, name: '拿鐵咖啡', price: 80, category: '飲品', barcode: '4710001002' },
@@ -141,11 +142,11 @@ export default function POSTerminal() {
     const safeDiscount = Math.max(0, Math.min(subtotal, Number(discount) || 0))
     if (safeDiscount !== discount) {
       setDiscount(safeDiscount)
-      alert('折扣金額已自動修正為合法範圍（0 ~ 小計）')
+      toast.error('折扣金額已自動修正為合法範圍（0 ~ 小計）')
       return
     }
     if (total < 0) {
-      alert('總額不可為負，請檢查折扣與品項')
+      toast.error('總額不可為負，請檢查折扣與品項')
       return
     }
 
@@ -153,7 +154,7 @@ export default function POSTerminal() {
     if (selectedPayment === 'cash') {
       const tendered = Number(cashTendered)
       if (!tendered || tendered < total) {
-        alert('現金金額不足')
+        toast.error('現金金額不足')
         return
       }
     }
@@ -335,7 +336,7 @@ export default function POSTerminal() {
       }
     } catch (err) {
       console.error('Refund failed:', err)
-      alert('退款失敗: ' + (err.message || '未知錯誤'))
+      toast.error('退款失敗: ' + (err.message || '未知錯誤'))
     }
   }
 

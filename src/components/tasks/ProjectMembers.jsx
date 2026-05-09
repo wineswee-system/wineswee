@@ -3,6 +3,7 @@ import { UserPlus, X, Users } from 'lucide-react'
 import { getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember } from '../../lib/db'
 import { empLabel } from '../../lib/empLabel'
 
+import { confirm } from '../../lib/confirm'
 const ROLE_OPTIONS = [
   { value: 'owner',  label: '擁有者',  color: '#f43f5e' },
   { value: 'admin',  label: '管理員',  color: '#8b5cf6' },
@@ -59,7 +60,7 @@ export default function ProjectMembers({ projectId, employees = [], currentUser,
   }
 
   const remove = async (id) => {
-    if (!confirm('將此成員移出專案？')) return
+    if (!(await confirm({ message: '將此成員移出專案？' }))) return
     await removeProjectMember(id)
     load()
   }

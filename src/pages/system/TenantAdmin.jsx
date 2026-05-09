@@ -5,6 +5,8 @@ import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenants, createTenantRecord, updateTenantRecord, deleteTenantRecord } from '../../lib/db'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
 const FEATURES = ['HR', 'Finance', 'CRM', 'WMS', 'POS', 'Manufacturing']
@@ -74,10 +76,10 @@ export default function TenantAdmin() {
 
     if (editId) {
       const { error } = await updateTenantRecord(editId, payload)
-      if (error) { alert('儲存失敗，請稍後再試'); setSaving(false); return }
+      if (error) { toast.error('儲存失敗，請稍後再試'); setSaving(false); return }
     } else {
       const { error } = await createTenantRecord(payload)
-      if (error) { alert('新增失敗，請稍後再試'); setSaving(false); return }
+      if (error) { toast.error('新增失敗，請稍後再試'); setSaving(false); return }
     }
     setSaving(false)
     setShowModal(false)
@@ -87,10 +89,10 @@ export default function TenantAdmin() {
   }
 
   const handleDelete = async (id) => {
-    if (activeTenant?.id === id) { alert('無法刪除目前使用中的租戶，請先切換租戶後再操作。'); return }
-    if (!confirm('確定要刪除此租戶？此操作無法復原。')) return
+    if (activeTenant?.id === id) { toast.error('無法刪除目前使用中的租戶，請先切換租戶後再操作。'); return }
+    if (!(await confirm({ message: '確定要刪除此租戶？此操作無法復原。' }))) return
     const { error } = await deleteTenantRecord(id)
-    if (error) { alert('刪除失敗，請稍後再試'); return }
+    if (error) { toast.error('刪除失敗，請稍後再試'); return }
     fetchTenants()
   }
 
@@ -196,7 +198,7 @@ export default function TenantAdmin() {
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.created_at?.slice(0, 10)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-ghost" title="切換租戶" onClick={async () => { const r = await switchTenant(t); if (r?.error) alert(`切換失敗：${r.error}`) }} style={{ padding: '4px 6px' }}>
+                      <button className="btn btn-ghost" title="切換租戶" onClick={async () => { const r = await switchTenant(t); if (r?.error) toast.error(`切換失敗：${r.error}`) }} style={{ padding: '4px 6px' }}>
                         <Globe size={13} />
                       </button>
                       <button className="btn btn-ghost" title="編輯" onClick={() => openEdit(t)} style={{ padding: '4px 6px' }}>

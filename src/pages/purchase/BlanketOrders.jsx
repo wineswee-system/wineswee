@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, X, FileText, ChevronDown, ChevronRight } from 'luc
 import { getBlanketOrders, createBlanketOrder, updateBlanketOrder, deleteBlanketOrder, getBlanketOrderReleases, createBlanketOrderRelease, getSuppliers } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const STATUSES = ['有效', '已完成', '已取消']
 
@@ -78,7 +79,7 @@ export default function BlanketOrders() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此長期採購協議？')) return
+    if (!(await confirm({ message: '確定要刪除此長期採購協議？' }))) return
     const { error } = await deleteBlanketOrder(id)
     if (error) setError(error.message)
     else load()

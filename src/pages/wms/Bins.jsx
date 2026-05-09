@@ -5,6 +5,7 @@ import { Plus, Trash2, X, ChevronDown, ChevronRight, MapPin, Package, Warehouse 
 import { getWarehouses, createWarehouse, getWarehouseZones, createWarehouseZone, deleteWarehouseZone, getWarehouseBins, createWarehouseBin, updateWarehouseBin, deleteWarehouseBin } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const ZONE_TYPES = ['收貨', '儲存', '揀貨', '出貨', '退貨']
 const BIN_STATUSES = ['可用', '已滿', '停用']
 
@@ -70,7 +71,7 @@ export default function Bins() {
   }
 
   const handleDeleteZone = async (id) => {
-    if (!confirm('刪除此儲區會同時刪除所有儲位，確定？')) return
+    if (!(await confirm({ message: '刪除此儲區會同時刪除所有儲位，確定？' }))) return
     await deleteWarehouseZone(id)
     const { data } = await getWarehouseZones(expandedWh)
     setZones(data || [])

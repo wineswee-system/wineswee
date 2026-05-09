@@ -1,3 +1,4 @@
+import { toast } from './/toast'
 /**
  * 通用「簽呈」列印（HTML + window.print()）
  *
@@ -446,7 +447,7 @@ export function printSignOff(opts = {}) {
   // 優先用 caller 預先開好的 window（避免 async 後被 popup blocker 擋）；fallback 自己開
   const w = _win || window.open('', '_blank', 'width=900,height=1100')
   if (!w) {
-    alert('無法開啟新視窗，請允許彈出視窗權限')
+    toast.error('無法開啟新視窗，請允許彈出視窗權限')
     return
   }
   w.document.open()

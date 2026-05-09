@@ -5,6 +5,7 @@ import { Plus, X, ArrowRight, Trash2, Edit3 } from 'lucide-react'
 import { getWarehouseTransfers, createWarehouseTransfer, updateWarehouseTransfer, getWarehouses } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { confirm } from '../../lib/confirm'
 const STATUSES = ['待出庫', '運送中', '已入庫', '已取消']
 
 export default function Transfers() {
@@ -54,7 +55,7 @@ export default function Transfers() {
   }
 
   const cancel = async (t) => {
-    if (!confirm('確定取消此調撥？')) return
+    if (!(await confirm({ message: '確定取消此調撥？' }))) return
     await updateWarehouseTransfer(t.id, { status: '已取消' })
     load()
   }

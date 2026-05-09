@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 // 單一子表的 CRUD 編輯器（給編輯 modal 內各 tab 重用）
 // props:
 //   employeeId: number
@@ -84,7 +86,7 @@ export default function EmployeeChildTableEditor({ employeeId, table }) {
   const deleteRow = async (idx) => {
     const row = rows[idx]
     if (!row._isNew && row.id) {
-      if (!confirm('確定刪除這筆？')) return
+      if (!(await confirm({ message: '確定刪除這筆？' }))) return
       await supabase.from(table).delete().eq('id', row.id)
     }
     setRows(rows.filter((_, i) => i !== idx))
@@ -115,9 +117,9 @@ export default function EmployeeChildTableEditor({ employeeId, table }) {
       }
       const { data: fresh } = await supabase.from(table).select('*').eq('employee_id', employeeId).order('id')
       setRows(fresh || [])
-      alert('已儲存')
+      toast.success('已儲存')
     } catch (err) {
-      alert('儲存失敗：' + (err.message || '未知錯誤'))
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }

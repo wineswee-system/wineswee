@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { toast } from '../../lib/toast'
 import {
   findActiveChainByCategory, loadChainSteps,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
@@ -16,6 +17,7 @@ import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
+import { confirm } from '../../lib/confirm'
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
 
 const STATUS_BADGE = {
@@ -70,7 +72,7 @@ export default function TransferRequest() {
 
   const printWithChain = async (row) => {
     const win = window.open('', '_blank', 'width=900,height=1100')
-    if (!win) { alert('請允許彈出視窗才能列印簽呈'); return }
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const builtSteps = await buildAndResolveChain(row)
       const approverMap = {}
@@ -84,7 +86,7 @@ export default function TransferRequest() {
       })
     } catch (e) {
       win.close()
-      alert('產生簽呈失敗：' + (e.message || '未知錯誤'))
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
   }
   const [loading, setLoading] = useState(true)
@@ -195,7 +197,7 @@ export default function TransferRequest() {
     if (editingId) {
       const { error: updErr } = await supabase.from('personnel_transfer_requests')
         .update({ ...payload, reject_reason: null }).eq('id', editingId)
-      if (updErr) return alert('更新失敗：' + updErr.message)
+      if (updErr) return toast.error('更新失敗：' + updErr.message)
       try {
         await supabase.rpc('resume_workflow_for_request', { p_type: 'transfer', p_id: editingId })
       } catch (e) { console.error('[resume_workflow] failed:', e) }
@@ -206,7 +208,7 @@ export default function TransferRequest() {
     }
 
     const { data: inserted, error } = await supabase.from('personnel_transfer_requests').insert(payload).select().single()
-    if (error) return alert('送出失敗：' + error.message)
+    if (error) return toast.error('送出失敗：' + error.message)
 
     if (activeChain?.id && inserted) {
       const approvers = await resolveFirstApprovers('transfer', inserted.id)
@@ -222,7 +224,7 @@ export default function TransferRequest() {
         })
       }
     } else if (!activeChain) {
-      alert('已送出（目前無「異動」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=異動 的鏈。')
+      toast.error('已送出（目前無「異動」簽核鏈，admin 可直接核准）。\n建議到「簽核鏈設定」建立 category=異動 的鏈。')
     }
 
     setShowForm(false)
@@ -231,12 +233,12 @@ export default function TransferRequest() {
   }
 
   const handleApprove = async (req) => {
-    if (!confirm(`核准 ${req.employee?.name} 的異動申請？\n最後一關核准後 DB 會自動寫 position_history 並更新員工資料。`)) return
+    if (!(await confirm({ message: `核准 ${req.employee?.name} 的異動申請？\n最後一關核准後 DB 會自動寫 position_history 並更新員工資料。` }))) return
     const res = await approveChainStep({
       table: 'transfer', id: req.id,
       approverEmpId: profile?.id, action: 'approve',
     })
-    if (!res?.ok) return alert('核准失敗：' + (res?.error || 'unknown'))
+    if (!res?.ok) return toast.error('核准失敗：' + (res?.error || 'unknown'))
     if (res.event === 'advanced' && res.next_approvers?.length > 0) {
       await notifyApprovers({
         approvers: res.next_approvers,
@@ -251,18 +253,18 @@ export default function TransferRequest() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return alert('請填駁回原因')
+    if (!rejectReason.trim()) return toast.error('請填駁回原因')
     const res = await approveChainStep({
       table: 'transfer', id: reviewModal.id,
       approverEmpId: profile?.id, action: 'reject', reason: rejectReason,
     })
-    if (!res?.ok) return alert('駁回失敗：' + (res?.error || 'unknown'))
+    if (!res?.ok) return toast.error('駁回失敗：' + (res?.error || 'unknown'))
     setReviewModal(null); setRejectReason('')
     load()
   }
 
   const handleCancel = async (req) => {
-    if (!confirm('確定取消此申請？')) return
+    if (!(await confirm({ message: '確定取消此申請？' }))) return
     await supabase.from('personnel_transfer_requests').update({ status: '已取消' }).eq('id', req.id)
     load()
   }

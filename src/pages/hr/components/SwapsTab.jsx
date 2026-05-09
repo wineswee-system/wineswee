@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import AsyncButton from '../../../components/AsyncButton'
 
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 const STATUS_CLASS = {
   '待對方同意':  'badge-warning',
   '待主管核准':  'badge-warning',
@@ -17,7 +19,7 @@ export default function SwapsTab({ swaps, setSwaps }) {
   // 主管核准 — 抓 schedules 真實值，互換 shift + actual_*
   const handleApprove = async (s) => {
     if (s.status !== '待主管核准') {
-      alert('此單目前不在「待主管核准」階段')
+      toast.error('此單目前不在「待主管核准」階段')
       return
     }
     setProcessing(s.id)
@@ -34,7 +36,7 @@ export default function SwapsTab({ swaps, setSwaps }) {
           .limit(1).maybeSingle(),
       ])
       if (!aRes.data || !bRes.data) {
-        alert('找不到當日班表，無法執行換班')
+        toast.error('找不到當日班表，無法執行換班')
         return
       }
 
@@ -69,7 +71,7 @@ export default function SwapsTab({ swaps, setSwaps }) {
 
   const handleReject = async (s) => {
     if (s.status !== '待主管核准' && s.status !== '待對方同意') {
-      alert('此單已結案，無法駁回')
+      toast.error('此單已結案，無法駁回')
       return
     }
     const reason = prompt('駁回原因（A、B 都會看到）：')
@@ -90,7 +92,7 @@ export default function SwapsTab({ swaps, setSwaps }) {
 
   const handleCancel = async (s) => {
     if (!['待對方同意', '待主管核准'].includes(s.status)) return
-    if (!confirm('確定取消此換班？')) return
+    if (!(await confirm({ message: '確定取消此換班？' }))) return
     setProcessing(s.id)
     try {
       const { data: updated } = await supabase.from('shift_swaps').update({

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { X, Upload, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 /**
  * CSV / TSV importer for employee_assignments.
  *
@@ -116,8 +118,8 @@ export default function AssignmentCsvImport({ employees, departments, stores, on
   const importRows = async () => {
     if (!preview) return
     const ok = preview.filter(p => p.emp && !p.issues.some(i => i.startsWith('缺少') || i.startsWith('找不到')))
-    if (!ok.length) { alert('沒有可匯入的有效資料'); return }
-    if (!confirm(`匯入 ${ok.length} / ${preview.length} 筆指派紀錄？`)) return
+    if (!ok.length) { toast.error('沒有可匯入的有效資料'); return }
+    if (!(await confirm({ message: `匯入 ${ok.length} / ${preview.length} 筆指派紀錄？` }))) return
     setImporting(true)
     try {
       const payload = ok.map(p => ({
@@ -146,12 +148,12 @@ export default function AssignmentCsvImport({ employees, departments, stores, on
         if (error) throw error
         inserted += chunk.length
       }
-      alert(`成功匯入 ${inserted} 筆`)
+      toast.error(`成功匯入 ${inserted} 筆`)
       onDone?.()
       onClose()
     } catch (err) {
       console.error('[CsvImport] failed:', err)
-      alert('匯入失敗：' + (err.message || 'unknown'))
+      toast.error('匯入失敗：' + (err.message || 'unknown'))
     }
     setImporting(false)
   }

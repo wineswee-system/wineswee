@@ -6,6 +6,7 @@ import { getPriceLists, createPriceList, updatePriceList, deletePriceList, getPr
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const emptyListForm = { name: '', currency: 'NTD', valid_from: '', valid_to: '', status: '啟用', is_default: false }
@@ -65,7 +66,7 @@ export default function PricingRules() {
   }
 
   const handleDeleteList = async (id) => {
-    if (!confirm('刪除此價格表將同時刪除所有規則，確定？')) return
+    if (!(await confirm({ message: '刪除此價格表將同時刪除所有規則，確定？' }))) return
     const { error } = await deletePriceList(id)
     if (error) setError(error.message)
     else { if (expandedId === id) setExpandedId(null); load() }

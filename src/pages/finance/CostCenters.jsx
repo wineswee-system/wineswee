@@ -7,6 +7,7 @@ import { generateTrialBalanceByCostCenter } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const emptyForm = { code: '', name: '', department: '', manager: '', is_active: true }
@@ -64,7 +65,7 @@ export default function CostCenters() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此成本中心？')) return
+    if (!(await confirm({ message: '確定要刪除此成本中心？' }))) return
     const { error } = await deleteCostCenter(id)
     if (error) setError(error.message)
     else load()

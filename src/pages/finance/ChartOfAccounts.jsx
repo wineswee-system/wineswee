@@ -5,6 +5,7 @@ import { getAccounts, createAccount, updateAccount, deleteAccount } from '../../
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
+import { confirm } from '../../lib/confirm'
 const TYPES = [
   { value: '費用', label: '費用', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)' },
   { value: '收入', label: '收入', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
@@ -87,7 +88,7 @@ export default function ChartOfAccounts() {
       setError(`科目 ${code} 有子科目，無法刪除`)
       return
     }
-    if (!confirm('確定要刪除此會計科目？')) return
+    if (!(await confirm({ message: '確定要刪除此會計科目？' }))) return
     const { error } = await deleteAccount(id)
     if (error) setError(error.message)
     else load()

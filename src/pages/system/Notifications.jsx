@@ -4,6 +4,7 @@ import { getNotifications, markNotificationRead, markAllNotificationsRead } from
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+import { toast } from '../../lib/toast'
 const typeIcon = { leave: '📅', task: '✅', system: '⚙️', performance: '⭐', hr: '👥' }
 
 export default function Notifications() {
@@ -31,7 +32,7 @@ export default function Notifications() {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -42,7 +43,7 @@ export default function Notifications() {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 

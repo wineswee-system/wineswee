@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const EMPTY_BAND = { dept: '', position: '', band_name: '', min_salary: '', mid_salary: '', max_salary: '' }
 
 function compaRatio(salary, midpoint) {
@@ -130,13 +132,13 @@ export default function CompensationBenchmark() {
       mid_salary: Number(bandForm.mid_salary),
       max_salary: Number(bandForm.max_salary),
     }
-    if (!payload.dept || !payload.position || !payload.min_salary) return alert('請填寫必要欄位')
+    if (!payload.dept || !payload.position || !payload.min_salary) return toast.error('請填寫必要欄位')
 
     const { data, error: err } = editingId
       ? await updateCompensationBand(editingId, payload)
       : await createCompensationBand(payload)
 
-    if (err) return alert('儲存失敗：' + err.message)
+    if (err) return toast.error('儲存失敗：' + err.message)
     if (editingId) {
       setBands(prev => prev.map(b => b.id === editingId ? data : b))
     } else {
@@ -148,7 +150,7 @@ export default function CompensationBenchmark() {
   }
 
   const handleDeleteBand = async (id) => {
-    if (!confirm('確定刪除此薪資帶？')) return
+    if (!(await confirm({ message: '確定刪除此薪資帶？' }))) return
     await deleteCompensationBand(id)
     setBands(prev => prev.filter(b => b.id !== id))
   }

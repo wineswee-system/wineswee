@@ -7,6 +7,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STAGES = ['新線索', '已聯繫', '合格', '已轉換', '不合格']
 const SOURCES = ['官網', '展覽', '轉介', 'LINE', '廣告', '表單', '其他']
 const SALES_REPS = ['王經理', '李業務', '陳主任', '張專員', '林業務']
@@ -80,7 +82,7 @@ export default function Leads() {
       setShowModal(false)
       setForm(emptyForm)
     } catch (err) {
-      alert('建立失敗：' + (err.message || '未知錯誤'))
+      toast.error('建立失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSaving(false)
     }
@@ -101,7 +103,7 @@ export default function Leads() {
       return
     }
     const { data, error: err } = await updateCRMLead(id, { stage })
-    if (err) { alert('更新失敗'); return }
+    if (err) { toast.error('更新失敗'); return }
     setLeads(prev => prev.map(l => l.id === id ? data : l))
   }
 
@@ -151,9 +153,9 @@ export default function Leads() {
         source: convertLead.source || '',
       })
       setConvertLead(null)
-      alert(`線索已轉換為客戶！${dealId ? '商機也已建立。' : ''}`)
+      toast.error(`線索已轉換為客戶！${dealId ? '商機也已建立。' : ''}`)
     } catch (err) {
-      alert('轉換失敗：' + (err.message || '未知錯誤'))
+      toast.error('轉換失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -165,7 +167,7 @@ export default function Leads() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定要刪除此線索？')) return
+    if (!(await confirm({ message: '確定要刪除此線索？' }))) return
     await deleteCRMLead(id)
     setLeads(prev => prev.filter(l => l.id !== id))
   }

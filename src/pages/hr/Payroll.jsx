@@ -7,6 +7,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const STATUS_STYLES = {
@@ -82,7 +84,7 @@ export default function Payroll() {
       setRecords(data || [])
     } catch (err) {
       console.error('Failed to load records:', err)
-      alert('載入薪資明細失敗')
+      toast.error('載入薪資明細失敗')
     } finally {
       setLoadingRecords(false)
     }
@@ -92,7 +94,7 @@ export default function Payroll() {
   const handleCreateRun = async () => {
     if (!newPeriod) return
     const exists = runs.find(r => r.pay_period === newPeriod)
-    if (exists) return alert('該月份的薪資作業已存在')
+    if (exists) return toast.error('該月份的薪資作業已存在')
     try {
       // Call Postgres function to generate payroll run + records
       const { data, error } = await supabase.rpc('generate_payroll', {
@@ -101,27 +103,27 @@ export default function Payroll() {
       })
       if (error) throw error
       const result = data?.[0] || data
-      alert(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
+      toast.error(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
       const { data: freshRuns } = await getPayrollRuns()
       setRuns(freshRuns || [])
       setShowCreateModal(false)
     } catch (err) {
       console.error('Create failed:', err)
-      alert('建立失敗：' + (err.message || '未知錯誤'))
+      toast.error('建立失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   // Send payslips
   const handleSendPayslips = async () => {
     if (!selectedRunId) return
-    if (!confirm('確定要發送此期薪資單給所有員工嗎？')) return
+    if (!(await confirm({ message: '確定要發送此期薪資單給所有員工嗎？' }))) return
     setSendingPayslips(true)
     try {
       const { data, error } = await supabase.functions.invoke('send-payslips', {
         body: { payroll_run_id: selectedRunId },
       })
       if (error) throw error
-      alert(data?.message || '薪資單已發送')
+      toast.error(data?.message || '薪資單已發送')
       const bus = getEventBus()
       const sentRun = runs.find(r => r.id === selectedRunId)
       await bus.publish('hr.payslip.sent', {
@@ -138,7 +140,7 @@ export default function Payroll() {
       if (updated) setRecords(updated)
     } catch (err) {
       console.error('Send payslips failed:', err)
-      alert('發送失敗：' + (err.message || '未知錯誤'))
+      toast.error('發送失敗：' + (err.message || '未知錯誤'))
     } finally {
       setSendingPayslips(false)
     }
@@ -147,7 +149,7 @@ export default function Payroll() {
   // Finalize payroll run (draft → finalized)
   const handleFinalizeRun = async () => {
     if (!selectedRunId) return
-    if (!confirm('確定定案此薪資作業？定案後無法重新計算。')) return
+    if (!(await confirm({ message: '確定定案此薪資作業？定案後無法重新計算。' }))) return
     setFinalizing(true)
     try {
       const { error } = await updatePayrollRun(selectedRunId, { status: 'finalized', finalized_at: new Date().toISOString() })
@@ -169,7 +171,7 @@ export default function Payroll() {
       })
     } catch (err) {
       console.error('Finalize failed:', err)
-      alert('定案失敗：' + (err.message || '未知錯誤'))
+      toast.error('定案失敗：' + (err.message || '未知錯誤'))
     } finally {
       setFinalizing(false)
     }
@@ -185,7 +187,7 @@ export default function Payroll() {
   // 年終獎金結算
   const handleGenerateYearEnd = async () => {
     if (!yearEndYear) return
-    if (!confirm(`確定產生 ${yearEndYear} 年度年終獎金結算？\n${yearEndMonths ? `所有員工統一給 ${yearEndMonths} 個月` : '依員工 salary_structures 各自的設定計算'}\n\n注意：同年度只能跑一次，重跑需先刪除既有 run。`)) return
+    if (!(await confirm({ message: `確定產生 ${yearEndYear} 年度年終獎金結算？\n${yearEndMonths ? `所有員工統一給 ${yearEndMonths} 個月` : '依員工 salary_structures 各自的設定計算'}\n\n注意：同年度只能跑一次，重跑需先刪除既有 run。` }))) return
     setGeneratingYearEnd(true)
     try {
       const { data, error } = await supabase.rpc('generate_year_end_bonus', {
@@ -195,13 +197,13 @@ export default function Payroll() {
       })
       if (error) throw error
       const result = data?.[0] || data
-      alert(`年終獎金結算完成！\n發放 ${result?.records_created || 0} 人，總金額 NT$ ${(result?.total_amount || 0).toLocaleString()}`)
+      toast.error(`年終獎金結算完成！\n發放 ${result?.records_created || 0} 人，總金額 NT$ ${(result?.total_amount || 0).toLocaleString()}`)
       const { data: freshRuns } = await getPayrollRuns()
       setRuns(freshRuns || [])
       setShowYearEndModal(false)
     } catch (err) {
       console.error('Year-end bonus failed:', err)
-      alert('結算失敗：' + (err.message || '未知錯誤'))
+      toast.error('結算失敗：' + (err.message || '未知錯誤'))
     } finally {
       setGeneratingYearEnd(false)
     }
@@ -217,7 +219,7 @@ export default function Payroll() {
         .eq('pay_period', selectedRun.pay_period)
         .order('employee_name')
       if (error) throw error
-      if (!data?.length) return alert('查無此期勞退提繳資料')
+      if (!data?.length) return toast.error('查無此期勞退提繳資料')
       const headers = '員工編號,姓名,身份證,提繳基礎,雇主提繳(6%),員工自提,自提率,合計'
       const rows = data.map(r => [
         r.employee_id, r.employee_name, r.id_number || '',
@@ -232,7 +234,7 @@ export default function Payroll() {
       a.download = `勞退提繳清冊_${selectedRun.pay_period}.csv`
       a.click()
     } catch (err) {
-      alert('匯出失敗：' + err.message)
+      toast.error('匯出失敗：' + err.message)
     }
   }
 
@@ -246,7 +248,7 @@ export default function Payroll() {
         .eq('pay_period', selectedRun.pay_period)
         .order('category')
       if (error) throw error
-      if (!data?.length) return alert('該期無補充保費紀錄（沒有員工觸發 2.11% 扣繳）')
+      if (!data?.length) return toast.error('該期無補充保費紀錄（沒有員工觸發 2.11% 扣繳）')
       const headers = '員工編號,姓名,身份證,所得類別,所得金額,免扣額,應扣額,費率,補充保費,已申報'
       const rows = data.map(r => [
         r.employee_id, r.employee_name, r.id_number || '',
@@ -261,7 +263,7 @@ export default function Payroll() {
       a.download = `二代健保補充保費_${selectedRun.pay_period}.csv`
       a.click()
     } catch (err) {
-      alert('匯出失敗：' + err.message)
+      toast.error('匯出失敗：' + err.message)
     }
   }
 
@@ -298,7 +300,7 @@ export default function Payroll() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Bank export failed:', err)
-      alert('匯出失敗：' + (err.message || '未知錯誤'))
+      toast.error('匯出失敗：' + (err.message || '未知錯誤'))
     } finally {
       setExportingBank(false)
     }
@@ -357,7 +359,7 @@ export default function Payroll() {
       setImportResult({ success, failed })
     } catch (err) {
       console.error('Import failed:', err)
-      alert('匯入失敗：' + (err.message || '未知錯誤'))
+      toast.error('匯入失敗：' + (err.message || '未知錯誤'))
     } finally {
       setImporting(false)
     }

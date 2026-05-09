@@ -8,6 +8,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName, BONUS_TYPE_LABELS } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
 
+import { toast } from '../../lib/toast'
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
 export default function Bonus() {
@@ -112,13 +113,13 @@ export default function Bonus() {
     if (!recordForm.employee_name) return
     try {
       const total = (Number(recordForm.base_bonus) || 0) + (Number(recordForm.data_bonus) || 0)
-      if (!profile?.organization_id) { alert('身份未載入，請重新登入'); return }
+      if (!profile?.organization_id) { toast.error('身份未載入，請重新登入'); return }
       const { data, error } = await supabase.from('bonus_records').insert({ ...recordForm, base_bonus: Number(recordForm.base_bonus) || 0, data_bonus: Number(recordForm.data_bonus) || 0, total_bonus: total, organization_id: profile.organization_id }).select().single()
       if (error) throw error
       if (data) { setRecords(prev => [data, ...prev]); setShowRecordModal(false); setRecordForm({ employee_name: '', role_type: '業務', period: new Date().toISOString().slice(0, 7), base_bonus: '', data_bonus: '', notes: '' }) }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
@@ -130,13 +131,13 @@ export default function Bonus() {
       if (data) { setSettings(prev => [...prev, data]); setShowSettingModal(false); setSettingForm({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' }) }
     } catch (err) {
       console.error('Operation failed:', err)
-      alert('操作失敗：' + (err.message || '未知錯誤'))
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
 
   const toggleSetting = async (id, is_active) => {
     const { data, error } = await supabase.from('bonus_settings').update({ is_active: !is_active }).eq('id', id).select().single()
-    if (error) { console.error('Toggle setting failed:', error); alert('更新失敗：' + (error.message || '未知錯誤')); return }
+    if (error) { console.error('Toggle setting failed:', error); toast.error('更新失敗：' + (error.message || '未知錯誤')); return }
     if (data) setSettings(prev => prev.map(s => s.id === id ? data : s))
   }
 

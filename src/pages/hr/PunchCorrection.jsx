@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Check, X, Printer, Settings } from 'lucide-react'
+import { Plus, Check, X, Printer, Settings, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -29,6 +29,38 @@ export default function PunchCorrection() {
   const [editingId, setEditingId] = useState(null)
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
+  // 附件（對齊 Leave）：上傳到 attachments bucket / punch/ 子目錄
+  const [attachFiles, setAttachFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || [])
+    const newFiles = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 5))
+    e.target.value = ''
+  }
+  const removeAttach = (idx) => {
+    setAttachFiles(prev => {
+      try { URL.revokeObjectURL(prev[idx].preview) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+  const uploadAttachments = async (correctionId, empId) => {
+    if (attachFiles.length === 0) return
+    setUploading(true)
+    try {
+      for (const { file } of attachFiles) {
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+        const path = `punch/emp-${empId || 'unknown'}/${correctionId}-${Date.now()}.${ext}`
+        const { error } = await supabase.storage.from('attachments').upload(path, file, {
+          cacheControl: '3600', upsert: true,
+        })
+        if (error) console.warn('upload fail:', error)
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
@@ -143,6 +175,10 @@ export default function PunchCorrection() {
       ...payload, status: '待審核', organization_id: profile?.organization_id || null,
     }).select().single()
     if (data) {
+      if (attachFiles.length > 0) {
+        await uploadAttachments(data.id, emp?.id)
+        setAttachFiles([])
+      }
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
       setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
@@ -367,6 +403,27 @@ export default function PunchCorrection() {
           <Field label="原因 *" error={errors.reason} errorMsg="請填寫原因">
             <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="例：忘記打卡、系統異常..."
               value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
+          </Field>
+          <Field label="附件（最多 5 個）">
+            <div>
+              <input type="file" multiple accept="image/*,application/pdf"
+                onChange={handleFileSelect}
+                style={{ fontSize: 12 }}
+              />
+              {attachFiles.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {attachFiles.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 6 }}>
+                      <Paperclip size={11} />
+                      <span style={{ flex: 1 }}>{a.file.name}</span>
+                      <button type="button" onClick={() => removeAttach(i)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {uploading && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>📤 附件上傳中…</div>}
+            </div>
           </Field>
         </Modal>
       )}

@@ -26,6 +26,7 @@ export default function PunchCorrection() {
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
+  const [editingId, setEditingId] = useState(null)
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
@@ -111,9 +112,8 @@ export default function PunchCorrection() {
 
   const handleSubmit = async () => {
     if (!validateRequired(form, ['employee', 'date', 'corrected_time', 'reason', 'store'], setErrors)) return
-    // Lookup employee_id
     const emp = employees.find(e => e.name === form.employee)
-    const insertData = {
+    const payload = {
       employee: form.employee,
       employee_id: emp?.id || null,
       date: form.date,
@@ -121,16 +121,46 @@ export default function PunchCorrection() {
       corrected_time: form.corrected_time,
       reason: form.reason,
       store: form.store,
-      status: '待審核',
-      organization_id: profile?.organization_id || null,
     }
-    const { data } = await supabase.from('punch_corrections').insert(insertData).select().single()
+
+    // ── 編輯路徑 ──（待審核 / 已駁回 都走這條）
+    if (editingId) {
+      const { error: updErr } = await supabase.from('punch_corrections')
+        .update({ ...payload, status: '待審核', reject_reason: null, current_step: 0 })
+        .eq('id', editingId)
+      if (updErr) { alert('更新失敗：' + updErr.message); return }
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'punch_correction', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setCorrections(prev => prev.map(c => c.id === editingId ? { ...c, ...payload, status: '待審核', reject_reason: null } : c))
+      setShowModal(false); setEditingId(null)
+      setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
+      return
+    }
+
+    // ── 新增 ──
+    const { data } = await supabase.from('punch_corrections').insert({
+      ...payload, status: '待審核', organization_id: profile?.organization_id || null,
+    }).select().single()
     if (data) {
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
       setForm({ employee: '', date: '', correction_type: 'clock_out', corrected_time: '', reason: '', store: '' })
       await createApprovalWorkflow('clock_correction', data, form.employee)
     }
+  }
+
+  const openEditPunch = (c) => {
+    setEditingId(c.id)
+    setForm({
+      employee: c.employee || '',
+      date: c.date || '',
+      correction_type: c.correction_type || 'clock_out',
+      corrected_time: c.corrected_time || '',
+      reason: c.reason || '',
+      store: c.store || '',
+    })
+    setShowModal(true)
   }
 
   const handleApprove = async (id) => {
@@ -280,6 +310,11 @@ export default function PunchCorrection() {
                           {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
                         </span>
                       )}
+                      {['待審核','申請中','已駁回','已退回'].includes(c.status) && c.employee === profile?.name && (
+                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditPunch(c)}>
+                          ✏️ {(['已駁回','已退回'].includes(c.status)) ? '編輯重送' : '編輯'}
+                        </button>
+                      )}
                       <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} title="下載簽呈"
                         onClick={() => printWithChain(c)}>
                         <Printer size={11} />
@@ -294,7 +329,7 @@ export default function PunchCorrection() {
       </div>
 
       {showModal && (
-        <Modal title="新增補登申請" onClose={() => { setShowModal(false); setErrors({}) }} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '✏️ 編輯補登申請' : '新增補登申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
               <SearchableSelect

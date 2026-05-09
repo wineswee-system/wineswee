@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -91,6 +91,23 @@ export default function TransferRequest() {
   const [form, setForm] = useState(emptyForm())
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [editingId, setEditingId] = useState(null)
+
+  const openEdit = (r) => {
+    setEditingId(r.id)
+    setForm({
+      employee_id: r.employee_id || '',
+      transfer_type: r.transfer_type || '調職',
+      effective_date: r.effective_date || '',
+      new_department_id: r.new_department_id || '',
+      new_store_id: r.new_store_id || '',
+      new_position: r.new_position || '',
+      new_base_salary: r.new_base_salary || '',
+      reason: r.reason || '',
+    })
+    setErrors({})
+    setShowForm(true)
+  }
 
   function emptyForm() {
     return {
@@ -172,6 +189,21 @@ export default function TransferRequest() {
       approval_chain_id: activeChain?.id || null,
       current_step: 0,
     }
+
+    // ── 編輯路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('personnel_transfer_requests')
+        .update({ ...payload, reject_reason: null }).eq('id', editingId)
+      if (updErr) return alert('更新失敗：' + updErr.message)
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'transfer', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setShowForm(false); setEditingId(null)
+      setForm(emptyForm())
+      load()
+      return
+    }
+
     const { data: inserted, error } = await supabase.from('personnel_transfer_requests').insert(payload).select().single()
     if (error) return alert('送出失敗：' + error.message)
 
@@ -291,6 +323,7 @@ export default function TransferRequest() {
                 const steps = chainSteps[r.approval_chain_id] || []
                 const myTurn = canIApprove(r)
                 const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
+                const canEdit = ['申請中','已駁回','已退回'].includes(r.status) && r.employee_id === profile?.id
                 return (
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                     onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -338,6 +371,11 @@ export default function TransferRequest() {
                             <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(r)}><XCircle size={11} /> 駁回</button>
                           </>
                         )}
+                        {canEdit && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} onClick={() => openEdit(r)}>
+                            <Pencil size={11} /> {['已駁回','已退回'].includes(r.status) ? '編輯重送' : '編輯'}
+                          </button>
+                        )}
                         {canCancel && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
                         )}
@@ -356,7 +394,7 @@ export default function TransferRequest() {
       </div>
 
       {showForm && (
-        <Modal title="新增人事異動申請" onClose={() => { setShowForm(false); setErrors({}) }} onSubmit={handleSubmit} submitLabel="送出申請">
+        <Modal title={editingId ? '✏️ 編輯人事異動申請' : '新增人事異動申請'} onClose={() => { setShowForm(false); setEditingId(null); setForm(emptyForm()); setErrors({}) }} onSubmit={handleSubmit} submitLabel={editingId ? '更新送出' : '送出申請'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="員工 *" error={errors.employee_id} errorMsg="請選擇員工">
               <SearchableSelect

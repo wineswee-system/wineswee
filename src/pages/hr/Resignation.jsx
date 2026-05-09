@@ -96,6 +96,7 @@ export default function Resignation() {
   })
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [editingId, setEditingId] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -146,6 +147,21 @@ export default function Resignation() {
       approval_chain_id: activeChain?.id || null,
       current_step: 0,
     }
+
+    // ── 編輯路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('resignation_requests')
+        .update({ ...payload, reject_reason: null }).eq('id', editingId)
+      if (updErr) return alert('更新失敗：' + updErr.message)
+      try {
+        await supabase.rpc('resume_workflow_for_request', { p_type: 'resignation', p_id: editingId })
+      } catch (e) { console.error('[resume_workflow] failed:', e) }
+      setShowForm(false); setEditingId(null)
+      setForm({ employee_id: profile?.id || '', planned_resign_date: '', reason: '個人因素', reason_detail: '', handover_notes: '' })
+      load()
+      return
+    }
+
     const { data: inserted, error } = await supabase.from('resignation_requests').insert(payload).select().single()
     if (error) return alert('送出失敗：' + error.message)
 
@@ -322,6 +338,20 @@ export default function Resignation() {
                         {canCancel && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
                         )}
+                        {['申請中','已駁回','已退回'].includes(r.status) && r.employee_id === profile?.id && (
+                          <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '3px 8px', background: 'var(--accent-orange)' }}
+                            onClick={() => {
+                              setEditingId(r.id)
+                              setForm({
+                                employee_id: r.employee_id,
+                                planned_resign_date: r.planned_resign_date || '',
+                                reason: r.reason || '個人因素',
+                                reason_detail: r.reason_detail || '',
+                                handover_notes: r.handover_notes || '',
+                              })
+                              setShowForm(true)
+                            }}>✏️ {(['已駁回','已退回'].includes(r.status)) ? '編輯重送' : '編輯'}</button>
+                        )}
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
                           onClick={() => printWithChain(r)}>
                           <Printer size={11} />
@@ -337,7 +367,7 @@ export default function Resignation() {
       </div>
 
       {showForm && (
-        <Modal title="新增離職申請" onClose={() => { setShowForm(false); setErrors({}) }} onSubmit={handleSubmit} submitLabel="送出申請">
+        <Modal title={editingId ? '✏️ 編輯離職申請' : '新增離職申請'} onClose={() => { setShowForm(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit} submitLabel={editingId ? '更新送出' : '送出申請'}>
           <Field label={isAdmin ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
             {isAdmin ? (
               <SearchableSelect

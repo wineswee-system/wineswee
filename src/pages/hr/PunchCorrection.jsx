@@ -3,6 +3,7 @@ import { Plus, Check, X, Printer, Settings, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -338,12 +339,12 @@ export default function PunchCorrection() {
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                       {c.status === '待審核' ? (
                         <>
-                          <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)}>
+                          <AsyncButton className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)} busyLabel="處理中…">
                             <Check size={12} /> 核准
-                          </button>
-                          <button className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)}>
+                          </AsyncButton>
+                          <AsyncButton className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)} busyLabel="處理中…">
                             <X size={12} /> 駁回
-                          </button>
+                          </AsyncButton>
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>

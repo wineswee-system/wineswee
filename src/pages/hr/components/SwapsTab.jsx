@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import AsyncButton from '../../../components/AsyncButton'
 
 const STATUS_CLASS = {
   '待對方同意':  'badge-warning',
@@ -159,24 +160,24 @@ export default function SwapsTab({ swaps, setSwaps }) {
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {s.status === '待主管核准' && (
                       <>
-                        <button className="btn btn-sm btn-primary" disabled={processing === s.id}
-                          onClick={() => handleApprove(s)}>核准</button>
-                        <button className="btn btn-sm btn-secondary" disabled={processing === s.id}
-                          onClick={() => handleReject(s)}>駁回</button>
+                        <AsyncButton className="btn btn-sm btn-primary" disabled={processing === s.id}
+                          onClick={() => handleApprove(s)} busyLabel="處理中…">核准</AsyncButton>
+                        <AsyncButton className="btn btn-sm btn-secondary" disabled={processing === s.id}
+                          onClick={() => handleReject(s)} busyLabel="處理中…">駁回</AsyncButton>
                       </>
                     )}
                     {s.status === '待對方同意' && (
                       <>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>等 {s.target} 回覆</span>
-                        <button className="btn btn-sm btn-secondary" disabled={processing === s.id}
-                          onClick={() => handleReject(s)}
-                          style={{ fontSize: 11 }}>駁回</button>
+                        <AsyncButton className="btn btn-sm btn-secondary" disabled={processing === s.id}
+                          onClick={() => handleReject(s)} busyLabel="處理中…"
+                          style={{ fontSize: 11 }}>駁回</AsyncButton>
                       </>
                     )}
                     {['待對方同意', '待主管核准'].includes(s.status) && (
-                      <button className="btn btn-sm" disabled={processing === s.id}
-                        onClick={() => handleCancel(s)}
-                        style={{ fontSize: 11, color: 'var(--text-muted)' }}>取消</button>
+                      <AsyncButton className="btn btn-sm" disabled={processing === s.id}
+                        onClick={() => handleCancel(s)} busyLabel="處理中…"
+                        style={{ fontSize: 11, color: 'var(--text-muted)' }}>取消</AsyncButton>
                     )}
                   </div>
                 </td>

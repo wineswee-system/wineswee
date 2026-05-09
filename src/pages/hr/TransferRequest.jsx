@@ -3,6 +3,7 @@ import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil } fro
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import {
@@ -367,7 +368,7 @@ export default function TransferRequest() {
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (
                           <>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(r)}><CheckCircle size={11} /> 核准</button>
+                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(r)} busyLabel="處理中…"><CheckCircle size={11} /> 核准</AsyncButton>
                             <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(r)}><XCircle size={11} /> 駁回</button>
                           </>
                         )}
@@ -377,7 +378,7 @@ export default function TransferRequest() {
                           </button>
                         )}
                         {canCancel && (
-                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)}>取消</button>
+                          <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(r)} busyLabel="處理中…">取消</AsyncButton>
                         )}
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
                           onClick={() => printWithChain(r)}>

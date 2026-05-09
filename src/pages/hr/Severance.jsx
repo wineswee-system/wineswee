@@ -3,6 +3,7 @@ import { Plus, Calculator, X, AlertCircle, Check, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -229,12 +230,12 @@ export default function Severance() {
                       <div style={{ display: 'flex', gap: 4 }}>
                         {r.status === 'pending' && (
                           <>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleMarkPaid(r)}>
+                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleMarkPaid(r)} busyLabel="處理中…">
                               <Check size={11} /> 標已付
-                            </button>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleCancel(r)}>
+                            </AsyncButton>
+                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleCancel(r)} busyLabel="處理中…">
                               <X size={11} /> 取消
-                            </button>
+                            </AsyncButton>
                           </>
                         )}
                         {r.status === 'paid' && r.paid_at && (

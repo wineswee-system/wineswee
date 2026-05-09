@@ -5,6 +5,7 @@ import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -243,8 +244,8 @@ export default function BusinessTravel() {
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {t.status === '待審核' && (
                         <>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)}>核准</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)}>駁回</button>
+                          <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)} busyLabel="處理中…">核准</AsyncButton>
+                          <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)} busyLabel="處理中…">駁回</AsyncButton>
                         </>
                       )}
                       {['待審核','申請中','已駁回','已退回'].includes(t.status) && t.employee === profile?.name && (

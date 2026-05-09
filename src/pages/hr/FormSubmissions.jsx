@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Printer, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field } from '../../components/Modal'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printFormMemo } from '../../lib/printFormMemo'
@@ -259,16 +260,16 @@ export default function FormSubmissions() {
                         </button>
                         {canApprove && (
                           <>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(s)}>
+                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(s)} busyLabel="處理中…">
                               <CheckCircle size={11} /> 核准
-                            </button>
+                            </AsyncButton>
                             <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(s)}>
                               <XCircle size={11} /> 駁回
                             </button>
                           </>
                         )}
                         {canCancel && (
-                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(s)}>取消</button>
+                          <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(s)} busyLabel="處理中…">取消</AsyncButton>
                         )}
                       </div>
                     </td>

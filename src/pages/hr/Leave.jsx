@@ -8,6 +8,7 @@ import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeave
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -491,8 +492,8 @@ export default function Leave() {
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {l.status === '待審核' && (
                         <>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)}>核准</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)}>拒絕</button>
+                          <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)} busyLabel="處理中…">核准</AsyncButton>
+                          <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)} busyLabel="處理中…">拒絕</AsyncButton>
                         </>
                       )}
                       {['待審核','申請中','已拒絕','已駁回','已退回'].includes(l.status) && l.employee === profile?.name && (

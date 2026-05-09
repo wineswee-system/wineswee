@@ -11,6 +11,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import ChainConfigModal from '../../components/ChainConfigModal'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import AsyncButton from '../../components/AsyncButton'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
@@ -529,12 +530,12 @@ export default function ExpenseRequests() {
                     <div style={{ display: 'flex', gap: 4 }}>
                       {r.status === '申請中' && (
                         <>
-                          <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)}>
+                          <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)} busyLabel="處理中…">
                             <Check size={12} /> 核准
-                          </button>
-                          <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(r)}>
+                          </AsyncButton>
+                          <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(r)} busyLabel="…">
                             <X size={12} />
-                          </button>
+                          </AsyncButton>
                         </>
                       )}
                       {r.status === '已核准' && (

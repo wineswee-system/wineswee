@@ -306,7 +306,124 @@ export default function Payroll() {
     }
   }
 
-  // 薪資CSV匯入 — parse file on selection
+  // ── 薪資條列印（開新視窗 + window.print() ） ──
+  const printPayslip = (rec, emp, run) => {
+    const win = window.open('', '_blank', 'width=720,height=900')
+    if (!win) { toast.error('請允許彈出視窗才能列印薪資條'); return }
+    const empName = emp?.name || `#${rec.employee_id}`
+    const dept = emp?.departments?.name || emp?.dept || ''
+    const period = run?.pay_period || rec.pay_period || ''
+    const row = (label, val, bold) => val == null || val === 0 || val === '' ? '' :
+      `<tr><td style="padding:4px 12px;color:#666;font-size:13px;${bold ? 'font-weight:700;border-top:1px solid #ccc;' : ''}">${label}</td><td style="padding:4px 12px;text-align:right;font-size:13px;${bold ? 'font-weight:700;border-top:1px solid #ccc;' : ''}">${typeof val === 'number' ? fmt(val) : val}</td></tr>`
+    win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>薪資條 ${empName} ${period}</title>
+<style>
+  body { font-family: 'Microsoft JhengHei', sans-serif; padding: 32px; color: #222; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .meta { font-size: 12px; color: #666; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .section { border: 1px solid #ccc; border-radius: 6px; }
+  .section h2 { font-size: 14px; padding: 8px 12px; margin: 0; background: #f5f5f5; border-bottom: 1px solid #ccc; }
+  .section table { width: 100%; border-collapse: collapse; }
+  .total { margin-top: 16px; padding: 12px; background: #fff8dc; border: 2px solid #d4a017; border-radius: 6px; text-align: center; font-size: 20px; font-weight: 700; }
+  @media print { body { padding: 16px; } }
+</style></head><body>
+<h1>🧾 薪資明細條</h1>
+<div class="meta">${empName} ${dept ? '· ' + dept : ''} ｜ ${period} 月</div>
+<div class="grid">
+  <div class="section"><h2 style="color:#16a34a">應發項目</h2><table>
+    ${row('本薪', rec.base_salary)}
+    ${rec.base_insured && rec.base_insured !== rec.base_salary ? row('└ 申報底薪', rec.base_insured) : ''}
+    ${row('主管加給', rec.supervisor_allowance)}
+    ${row('職務津貼', rec.role_allowance)}
+    ${row('夜班津貼', rec.night_shift_allowance)}
+    ${row('跨區津貼', rec.cross_store_allowance)}
+    ${row('伙食津貼', rec.meal_allowance)}
+    ${row('交通津貼', rec.transport_allowance)}
+    ${row('全勤獎金', rec.attendance_bonus_earned)}
+    ${row('加班費', rec.overtime_pay)}
+    ${row('└ 平日加班', rec.overtime_pay_weekday)}
+    ${row('└ 休息日加班', rec.overtime_pay_restday)}
+    ${row('└ 例假加班', rec.overtime_pay_holiday)}
+    ${row('└ 國定加班', rec.overtime_pay_national)}
+    ${row('休息未休補償', rec.rest_day_unused_pay)}
+    ${row('補發前期差額', rec.back_pay_adjustment)}
+    ${row('績效獎金', rec.performance_bonus)}
+    ${row('業績/差額', rec.commission)}
+    ${row('三節獎金', rec.festival_bonus)}
+    ${row('其他獎金', rec.other_bonus)}
+    ${row('年終獎金', rec.year_end_bonus)}
+    ${row('未休特休折現', rec.unused_leave_payout)}
+    ${row('應發合計', rec.gross_salary, true)}
+  </table></div>
+  <div class="section"><h2 style="color:#dc2626">扣除項目</h2><table>
+    ${row('請假扣款（有薪）', rec.paid_leave_deduction)}
+    ${row('請假扣款（無薪）', rec.unpaid_leave_deduction)}
+    ${rec.leave_deduction && !rec.paid_leave_deduction && !rec.unpaid_leave_deduction ? row('請假扣款', rec.leave_deduction) : ''}
+    ${row('遲到扣款', rec.late_deduction)}
+    ${row('預支扣回', rec.advance_recovery)}
+    ${row('勞保（個人）', rec.labor_ins_employee)}
+    ${row('健保（個人）', rec.health_ins_employee)}
+    ${row('勞退（個人）', rec.labor_pension_employee)}
+    ${row('代扣所得稅', rec.income_tax_withheld)}
+    ${row('二代健保補充', rec.nhi_supplementary)}
+    ${row('法扣項目', rec.legal_deduction_total)}
+    ${row('扣除合計', rec.total_deductions, true)}
+  </table></div>
+</div>
+<div class="total">實發 NT$ ${(rec.net_salary || 0).toLocaleString()}</div>
+${rec.notes ? `<div style="margin-top:12px;padding:8px;background:#f5f5f5;border-radius:4px;font-size:12px;color:#666">備註：${rec.notes}</div>` : ''}
+<script>window.onload = () => { window.print(); }</script>
+</body></html>`)
+    win.document.close()
+  }
+
+  // ── 薪資 CSV 匯入（新版：對應 payroll_records 完整欄位） ──
+  // 支援老闆 Excel 格式：前 N 行標題 → 找包含「姓名」的 header row → 跳「總計」row
+
+  // 中文 header → DB column。沒對應的 column 就 ignore。
+  // 重複欄位（資食費 vs 伙食津貼）以前者為準。
+  const COLUMN_MAP = {
+    '本薪': 'base_salary',
+    '底薪': 'base_insured',
+    '伙食津貼': 'meal_allowance',
+    '資食費': 'meal_allowance',          // 老闆 Excel 有兩個都叫伙食的欄位，後面這個會覆蓋前面
+    '主管加給': 'supervisor_allowance',
+    '夜班津貼': 'night_shift_allowance',
+    '跨區津貼': 'cross_store_allowance',
+    '加班費': 'overtime_pay_weekday',
+    '額外加班費': 'overtime_pay_holiday',
+    '公休薪資': 'rest_day_unused_pay',
+    '補發前期差額': 'back_pay_adjustment',
+    '休息未休': 'unused_leave_payout',
+    '折扣差額': 'commission',             // 暫對到 commission；老闆若有差額分類再細分
+    '勞保費': 'labor_ins_employee',
+    '健保費': 'health_ins_employee',
+    '員工自提退休': 'labor_pension_employee',
+    '請假扣款(有薪)': 'paid_leave_deduction',
+    '請假扣款(無薪)': 'unpaid_leave_deduction',
+    '法扣項目': 'legal_deduction_total',
+    '應付總計': 'gross_salary',
+    '實際薪資': 'net_salary',
+    '勞保費(公司負擔)': 'labor_ins_employer',
+    '健保費(公司負擔)': 'health_ins_employer',
+    '員工退休金提撥(公司負擔)': 'labor_pension_employer',
+  }
+
+  // 從原始字串抓 yyyy-MM（例：「2026年04月 台中永春門市 薪資表」→ "2026-04"）
+  const extractPayPeriod = (lines) => {
+    for (const line of lines.slice(0, 5)) {
+      const m = line.match(/(\d{4})\D{0,3}(\d{1,2})/)
+      if (m) return `${m[1]}-${m[2].padStart(2, '0')}`
+    }
+    return null
+  }
+
+  // 找 header row（包含「姓名」欄）
+  const findHeaderRowIdx = (lines) => {
+    return lines.findIndex(l => l.split(',').some(c => c.trim() === '姓名'))
+  }
+
   const handleImportFileChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -316,47 +433,85 @@ export default function Payroll() {
     reader.onload = (evt) => {
       const text = evt.target.result.replace(/^﻿/, '') // strip BOM
       const lines = text.split(/\r?\n/).filter(l => l.trim())
-      if (lines.length < 2) { setImportPreview([]); setImportHeaders([]); return }
-      const headers = lines[0].split(',')
+      const headerIdx = findHeaderRowIdx(lines)
+      if (headerIdx < 0) {
+        setImportHeaders([])
+        setImportPreview([])
+        toast.error('找不到 header row（沒有「姓名」欄位）')
+        return
+      }
+      const headers = lines[headerIdx].split(',').map(s => s.trim())
       setImportHeaders(headers)
-      const preview = lines.slice(1, 6).map(l => l.split(','))
+      // 預覽接下來 5 row（跳掉「總計」row）
+      const preview = lines.slice(headerIdx + 1, headerIdx + 1 + 8)
+        .map(l => l.split(','))
+        .filter(cols => {
+          const nameIdx = headers.indexOf('姓名')
+          const name = cols[nameIdx]?.trim()
+          return name && name !== '總計'
+        })
+        .slice(0, 5)
       setImportPreview(preview)
     }
     reader.readAsText(file, 'utf-8')
   }
 
-  // 確認匯入
+  // 確認匯入：對每一筆 row 呼叫 payroll_import_row RPC
   const handleConfirmImport = async () => {
     if (!importFile) return
     setImporting(true)
     setImportResult(null)
     try {
-      const text = await importFile.text()
-      const clean = text.replace(/^﻿/, '')
-      const lines = clean.split(/\r?\n/).filter(l => l.trim())
-      const dataLines = lines.slice(1)
-      let success = 0, failed = 0
+      const text = (await importFile.text()).replace(/^﻿/, '')
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      const payPeriod = extractPayPeriod(lines)
+      if (!payPeriod) throw new Error('無法從 CSV 抓出年月（前 5 行需有 yyyy/MM 格式）')
+
+      const headerIdx = findHeaderRowIdx(lines)
+      if (headerIdx < 0) throw new Error('找不到 header row（含「姓名」欄）')
+      const headers = lines[headerIdx].split(',').map(s => s.trim())
+      const nameIdx = headers.indexOf('姓名')
+      const dataLines = lines.slice(headerIdx + 1)
+
+      // 員工名 → id 的 map（用 employees 已載入的）
+      const empByName = {}
+      employees.forEach(e => { empByName[e.name] = e })
+
+      let success = 0, failed = 0, errors = []
       for (const line of dataLines) {
         const cols = line.split(',')
-        const [employeeName, month, base_salary, allowance, overtime, deductions, insurance, net_salary] = cols
-        if (!employeeName || !month) { failed++; continue }
-        try {
-          await upsertSalaryRecord({
-            employee: employeeName.trim(),
-            month: month.trim(),
-            base_salary: Number(base_salary) || 0,
-            allowance: Number(allowance) || 0,
-            overtime: Number(overtime) || 0,
-            deductions: Number(deductions) || 0,
-            insurance: Number(insurance) || 0,
-            net_salary: Number(net_salary) || 0,
-          })
-          success++
-        } catch {
+        const empName = cols[nameIdx]?.trim()
+        if (!empName || empName === '總計' || empName === '合計') continue
+        const emp = empByName[empName]
+        if (!emp) {
           failed++
+          errors.push(`找不到員工：${empName}`)
+          continue
+        }
+        // 建 payload：依 COLUMN_MAP 把中文 header 對應到 DB 欄
+        const payload = {
+          pay_period: payPeriod,
+          employee_id: emp.id,
+          organization_id: profile?.organization_id,
+        }
+        headers.forEach((h, idx) => {
+          const dbCol = COLUMN_MAP[h]
+          if (!dbCol) return
+          const v = (cols[idx] || '').trim().replace(/[",]/g, '')
+          if (v && !isNaN(Number(v))) payload[dbCol] = Number(v)
+        })
+        try {
+          const { data, error } = await supabase.rpc('payroll_import_row', { p_payload: payload })
+          if (error) throw error
+          if (!data?.ok) throw new Error(data?.error || '未知錯誤')
+          success++
+        } catch (e) {
+          failed++
+          errors.push(`${empName}: ${e.message}`)
         }
       }
-      setImportResult({ success, failed })
+      setImportResult({ success, failed, errors: errors.slice(0, 10), payPeriod })
+      if (success > 0) loadData()
     } catch (err) {
       console.error('Import failed:', err)
       toast.error('匯入失敗：' + (err.message || '未知錯誤'))
@@ -583,12 +738,31 @@ export default function Payroll() {
                                             {/* Income */}
                                             <div>
                                               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-green)' }}>收入項目</div>
-                                              <DetailRow label="底薪" value={fmt(rec.base_salary)} />
+                                              <DetailRow label="本薪" value={fmt(rec.base_salary)} />
+                                              {rec.base_insured > 0 && rec.base_insured !== rec.base_salary && (
+                                                <DetailRow label="└ 申報底薪" value={fmt(rec.base_insured)} />
+                                              )}
+                                              {rec.supervisor_allowance > 0 && <DetailRow label="主管加給" value={fmt(rec.supervisor_allowance)} />}
                                               <DetailRow label="職務津貼" value={fmt(rec.role_allowance)} />
-                                              <DetailRow label="餐費津貼" value={fmt(rec.meal_allowance)} />
+                                              {rec.night_shift_allowance > 0 && <DetailRow label="夜班津貼" value={fmt(rec.night_shift_allowance)} />}
+                                              {rec.cross_store_allowance > 0 && <DetailRow label="跨區津貼" value={fmt(rec.cross_store_allowance)} />}
+                                              <DetailRow label="伙食津貼" value={fmt(rec.meal_allowance)} />
                                               <DetailRow label="交通津貼" value={fmt(rec.transport_allowance)} />
                                               <DetailRow label="全勤獎金" value={fmt(rec.attendance_bonus_earned)} />
                                               <DetailRow label="加班費" value={fmt(rec.overtime_pay)} />
+                                              {(rec.overtime_pay_weekday > 0 || rec.overtime_pay_restday > 0 || rec.overtime_pay_holiday > 0 || rec.overtime_pay_national > 0) && (
+                                                <>
+                                                  {rec.overtime_pay_weekday > 0 && <DetailRow label="└ 平日加班" value={fmt(rec.overtime_pay_weekday)} />}
+                                                  {rec.overtime_pay_restday > 0 && <DetailRow label="└ 休息日加班" value={fmt(rec.overtime_pay_restday)} />}
+                                                  {rec.overtime_pay_holiday > 0 && <DetailRow label="└ 例假加班" value={fmt(rec.overtime_pay_holiday)} />}
+                                                  {rec.overtime_pay_national > 0 && <DetailRow label="└ 國定加班" value={fmt(rec.overtime_pay_national)} />}
+                                                </>
+                                              )}
+                                              {rec.rest_day_unused_pay > 0 && <DetailRow label="休息未休補償" value={fmt(rec.rest_day_unused_pay)} />}
+                                              {rec.back_pay_adjustment > 0 && <DetailRow label="補發前期差額" value={fmt(rec.back_pay_adjustment)} />}
+                                              {rec.performance_bonus > 0 && <DetailRow label="績效獎金" value={fmt(rec.performance_bonus)} />}
+                                              {rec.commission > 0 && <DetailRow label="業績/差額" value={fmt(rec.commission)} />}
+                                              {rec.festival_bonus > 0 && <DetailRow label="三節獎金" value={fmt(rec.festival_bonus)} />}
                                               {rec.other_bonus > 0 && <DetailRow label="其他獎金" value={fmt(rec.other_bonus)} />}
                                               {rec.year_end_bonus > 0 && <DetailRow label="年終獎金" value={fmt(rec.year_end_bonus)} />}
                                               {rec.unused_leave_payout > 0 && <DetailRow label={`未休特休折現（${rec.unused_leave_days || 0} 天）`} value={fmt(rec.unused_leave_payout)} />}
@@ -605,8 +779,13 @@ export default function Payroll() {
                                             {/* Deductions */}
                                             <div>
                                               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-red)' }}>扣除項目</div>
-                                              <DetailRow label="請假扣款" value={fmt(rec.leave_deduction)} />
+                                              {rec.paid_leave_deduction > 0 && <DetailRow label="請假扣款（有薪）" value={fmt(rec.paid_leave_deduction)} />}
+                                              {rec.unpaid_leave_deduction > 0 && <DetailRow label="請假扣款（無薪）" value={fmt(rec.unpaid_leave_deduction)} />}
+                                              {(rec.leave_deduction > 0 && !rec.paid_leave_deduction && !rec.unpaid_leave_deduction) && (
+                                                <DetailRow label="請假扣款" value={fmt(rec.leave_deduction)} />
+                                              )}
                                               {rec.late_deduction > 0 && <DetailRow label="遲到扣款" value={fmt(rec.late_deduction)} />}
+                                              {rec.advance_recovery > 0 && <DetailRow label="預支扣回" value={fmt(rec.advance_recovery)} />}
                                               <DetailRow label="勞保（個人）" value={fmt(rec.labor_ins_employee)} />
                                               <DetailRow label="健保（個人）" value={fmt(rec.health_ins_employee)} />
                                               <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
@@ -649,6 +828,31 @@ export default function Payroll() {
                                               <DetailRow label="實際工時" value={rec.hours_worked != null ? `${rec.hours_worked} 小時` : '-'} />
                                               <DetailRow label="實發薪資" value={fmt(rec.net_salary)} bold />
                                               <DetailRow label="薪資單發送" value={rec.payslip_sent_at ? new Date(rec.payslip_sent_at).toLocaleString('zh-TW') : '尚未發送'} />
+                                              <button
+                                                onClick={() => printPayslip(rec, empMap[rec.employee_id], selectedRun)}
+                                                style={{
+                                                  marginTop: 12, padding: '8px 16px', borderRadius: 8,
+                                                  background: 'var(--accent-cyan)', color: '#fff',
+                                                  border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+                                                  display: 'flex', alignItems: 'center', gap: 6,
+                                                }}
+                                              >🧾 列印薪資條</button>
+                                            </div>
+                                            {/* 公司負擔 */}
+                                            <div>
+                                              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-purple)' }}>公司負擔</div>
+                                              <DetailRow label="勞保（公司）" value={fmt(rec.labor_ins_employer)} />
+                                              <DetailRow label="健保（公司）" value={fmt(rec.health_ins_employer)} />
+                                              <DetailRow label="勞退提撥（6%）" value={fmt(rec.labor_pension_employer)} />
+                                              {rec.occupational_injury_employer > 0 && (
+                                                <DetailRow label="職災保險" value={fmt(rec.occupational_injury_employer)} />
+                                              )}
+                                              {rec.nhi_supplementary_employer > 0 && (
+                                                <DetailRow label="二代健保補充（公司）" value={fmt(rec.nhi_supplementary_employer)} />
+                                              )}
+                                              {rec.employer_total_cost > 0 && (
+                                                <DetailRow label="公司總成本" value={fmt(rec.employer_total_cost)} bold />
+                                              )}
                                             </div>
                                           </div>
                                         </td>
@@ -761,7 +965,18 @@ export default function Payroll() {
               color: importResult.failed === 0 ? 'var(--accent-green)' : 'var(--accent-orange)',
               fontSize: 13, fontWeight: 600,
             }}>
-              匯入完成：成功 {importResult.success} 筆{importResult.failed > 0 ? `，失敗 ${importResult.failed} 筆` : ''}
+              <div>
+                匯入完成 {importResult.payPeriod && `(${importResult.payPeriod})`}：成功 {importResult.success} 筆
+                {importResult.failed > 0 ? `，失敗 ${importResult.failed} 筆` : ''}
+              </div>
+              {importResult.errors?.length > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 400, marginTop: 6, color: 'var(--accent-red)', maxHeight: 120, overflowY: 'auto' }}>
+                  {importResult.errors.map((e, i) => <div key={i}>• {e}</div>)}
+                  {importResult.failed > importResult.errors.length && (
+                    <div style={{ fontStyle: 'italic', marginTop: 4 }}>... 還有 {importResult.failed - importResult.errors.length} 筆錯誤未顯示</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Modal>

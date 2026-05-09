@@ -19,18 +19,23 @@ const PRESET_ALLOWANCES = [
 
 const emptyForm = {
   employee_id: '',
-  base_salary: '',
-  role_allowance: '',
+  base_salary: '',           // 本薪（合約名義）
+  base_insured: '',          // 申報底薪（投保用）— 雙基薪制
+  role_allowance: '',        // 職務津貼
+  supervisor_allowance: '',  // 主管加給
   meal_allowance: '',
   transport_allowance: '',
+  night_shift_allowance: '', // 夜班津貼
+  cross_store_allowance: '', // 跨區津貼
   attendance_bonus: '',
   salary_type: 'monthly',
   hourly_rate: '',
   health_ins_dependents: '0',
+  insurance_grade_id: '',    // 投保級距 (預留 fk)
   effective_from: new Date().toISOString().slice(0, 10),
   year_end_bonus_months: '',
   notes: '',
-  custom_allowances: [],  // [{name, amount}]
+  custom_allowances: [],     // [{name, amount}]
 }
 
 export default function SalaryStructures() {
@@ -100,13 +105,18 @@ export default function SalaryStructures() {
     setForm({
       employee_id: String(s.employee_id || ''),
       base_salary: String(s.base_salary || ''),
+      base_insured: String(s.base_insured || ''),
       role_allowance: String(s.role_allowance || ''),
+      supervisor_allowance: String(s.supervisor_allowance || ''),
       meal_allowance: String(s.meal_allowance || ''),
       transport_allowance: String(s.transport_allowance || ''),
+      night_shift_allowance: String(s.night_shift_allowance || ''),
+      cross_store_allowance: String(s.cross_store_allowance || ''),
       attendance_bonus: String(s.attendance_bonus || ''),
       salary_type: s.salary_type || 'monthly',
       hourly_rate: String(s.hourly_rate || ''),
       health_ins_dependents: String(s.health_ins_dependents || 0),
+      insurance_grade_id: String(s.insurance_grade_id || ''),
       effective_from: s.effective_from || new Date().toISOString().slice(0, 10),
       year_end_bonus_months: String(s.year_end_bonus_months || ''),
       notes: s.notes || '',
@@ -142,13 +152,18 @@ export default function SalaryStructures() {
       employee_id: Number(form.employee_id),
       organization_id: orgId,
       base_salary: Number(form.base_salary) || 0,
+      base_insured: Number(form.base_insured) || Number(form.base_salary) || 0,  // 沒填投保底薪預設等於本薪
       role_allowance: Number(form.role_allowance) || 0,
+      supervisor_allowance: Number(form.supervisor_allowance) || 0,
       meal_allowance: Number(form.meal_allowance) || 0,
       transport_allowance: Number(form.transport_allowance) || 0,
+      night_shift_allowance: Number(form.night_shift_allowance) || 0,
+      cross_store_allowance: Number(form.cross_store_allowance) || 0,
       attendance_bonus: Number(form.attendance_bonus) || 0,
       salary_type: form.salary_type,
       hourly_rate: form.salary_type === 'hourly' ? (Number(form.hourly_rate) || 0) : null,
       health_ins_dependents: Number(form.health_ins_dependents) || 0,
+      insurance_grade_id: form.insurance_grade_id ? Number(form.insurance_grade_id) : null,
       effective_from: form.effective_from,
       year_end_bonus_months: Number(form.year_end_bonus_months) || 0,
       notes: form.notes || '',
@@ -228,14 +243,14 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '部門', '門市', '薪資類型', '底薪', '職務津貼', '餐費津貼', '交通津貼', '全勤獎金', '其他津貼', '生效日', '操作'].map(h => (
+                {['員工', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '職務/餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={12} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
+                <tr><td colSpan={11} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
               ) : filtered.map(s => {
                 const emp = empMap[s.employee_id]
                 return (
@@ -252,10 +267,18 @@ export default function SalaryStructures() {
                         {s.salary_type === 'monthly' ? '月薪' : '時薪'}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(s.base_salary)}</td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(s.role_allowance)}</td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(s.meal_allowance)}</td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(s.transport_allowance)}</td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
+                      <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>投保 {fmt(s.base_insured || s.base_salary)}</div>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
+                      <div>{fmt(s.supervisor_allowance)}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.night_shift_allowance)} / {fmt(s.cross_store_allowance)}</div>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
+                      <div>{fmt(s.role_allowance)}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.meal_allowance)} / {fmt(s.transport_allowance)}</div>
+                    </td>
                     <td style={{ padding: '10px 14px' }}>{fmt(s.attendance_bonus)}</td>
                     <td style={{ padding: '10px 14px' }}>
                       {Array.isArray(s.custom_allowances) && s.custom_allowances.length > 0 ? (
@@ -300,19 +323,34 @@ export default function SalaryStructures() {
             </select>
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="底薪">
+            <Field label="本薪 (合約名義)">
               <input className="form-input" type="number" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} placeholder="0" />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
+            </Field>
+            <Field label="申報底薪 (投保用)">
+              <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="預設等於本薪" />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
             </Field>
             {form.salary_type === 'hourly' && (
               <Field label="時薪">
                 <input className="form-input" type="number" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} placeholder="0" />
               </Field>
             )}
+            <Field label="主管加給">
+              <input className="form-input" type="number" value={form.supervisor_allowance} onChange={e => set('supervisor_allowance', e.target.value)} placeholder="0" />
+            </Field>
             <Field label="職務津貼">
               <input className="form-input" type="number" value={form.role_allowance} onChange={e => set('role_allowance', e.target.value)} placeholder="0" />
             </Field>
+            <Field label="夜班津貼">
+              <input className="form-input" type="number" value={form.night_shift_allowance} onChange={e => set('night_shift_allowance', e.target.value)} placeholder="0" />
+            </Field>
+            <Field label="跨區津貼">
+              <input className="form-input" type="number" value={form.cross_store_allowance} onChange={e => set('cross_store_allowance', e.target.value)} placeholder="0" />
+            </Field>
             <Field label="餐費津貼">
               <input className="form-input" type="number" value={form.meal_allowance} onChange={e => set('meal_allowance', e.target.value)} placeholder="0" />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>NT$ 3,000 以下免稅</div>
             </Field>
             <Field label="交通津貼">
               <input className="form-input" type="number" value={form.transport_allowance} onChange={e => set('transport_allowance', e.target.value)} placeholder="0" />
@@ -322,6 +360,10 @@ export default function SalaryStructures() {
             </Field>
             <Field label="健保眷屬人數">
               <input className="form-input" type="number" value={form.health_ins_dependents} onChange={e => set('health_ins_dependents', e.target.value)} min="0" />
+            </Field>
+            <Field label="投保級距 ID (選填)">
+              <input className="form-input" type="number" value={form.insurance_grade_id} onChange={e => set('insurance_grade_id', e.target.value)} placeholder="—" />
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>之後接 insurance_grades 表</div>
             </Field>
             <Field label="年終獎金月數">
               <input className="form-input" type="number" value={form.year_end_bonus_months} onChange={e => set('year_end_bonus_months', e.target.value)} placeholder="0" step="0.5" />

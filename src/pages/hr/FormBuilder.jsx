@@ -183,8 +183,8 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
   }
 
   const save = async () => {
-    if (!form.name?.trim()) return toast.error('請填模板名稱')
-    if (!(form.fields || []).length) return toast.error('至少要 1 個欄位')
+    if (!form.name?.trim()) return toast.warning('請填模板名稱')
+    if (!(form.fields || []).length) return toast.warning('至少要 1 個欄位')
     for (const f of form.fields) {
       if (!f.key || !f.label) return toast.error(`欄位「${f.label || f.key}」缺 key 或 label`)
       if (f.type === 'select' && !(f.options || '').trim()) return toast.error(`下拉選單「${f.label}」需要設選項`)

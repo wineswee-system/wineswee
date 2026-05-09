@@ -315,7 +315,7 @@ export default function Invoices() {
   const handleExportTurnkeyBatch = () => {
     const selected = invoices.filter(inv => selectedInvoiceIds.has(inv.id))
     if (selected.length === 0) {
-      toast.error('請先勾選要匯出的發票')
+      toast.warning('請先勾選要匯出的發票')
       return
     }
     try {

@@ -259,7 +259,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     setSteps(prev => [...prev, blankStep(prev.length)])
   }
   const removeStep = (idx) => {
-    if (steps.length === 1) { toast.error('至少要保留 1 關'); return }
+    if (steps.length === 1) { toast.warning('至少要保留 1 關'); return }
     setSteps(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, step_order: i })))
   }
   const moveStep = (idx, dir) => {

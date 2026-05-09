@@ -228,7 +228,7 @@ export default function WorkflowBuilder() {
   }
 
   const saveWorkflow = async () => {
-    if (!builderName.trim()) { toast.error('請輸入流程名稱'); return }
+    if (!builderName.trim()) { toast.warning('請輸入流程名稱'); return }
     if (saving) return
     setSaving(true)
     try {

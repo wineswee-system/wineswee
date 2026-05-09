@@ -37,7 +37,7 @@ export default function DevelopmentTab({ employee }) {
   }, [employee?.id])
 
   const handleAdd = async () => {
-    if (!form.skill_name) return toast.error('請填寫技能名稱')
+    if (!form.skill_name) return toast.warning('請填寫技能名稱')
     const { data, error } = await createDevelopmentPlan({ ...form, employee_id: employee.id })
     if (error) { console.error('Save failed:', error); return toast.error('儲存失敗，請稍後再試') }
     setPlans(prev => [data, ...prev])

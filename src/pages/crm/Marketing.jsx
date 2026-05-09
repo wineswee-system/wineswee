@@ -398,7 +398,7 @@ export default function Marketing() {
   }
 
   const saveSegment = () => {
-    if (!segmentBuilder.name.trim()) { toast.error('請輸入分群名稱'); return }
+    if (!segmentBuilder.name.trim()) { toast.warning('請輸入分群名稱'); return }
     const key = `custom_${Date.now()}`
     setCustomSegments(prev => [...prev, {
       key,

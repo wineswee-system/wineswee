@@ -293,7 +293,7 @@ export default function Leave() {
   const handleReject = async (id) => {
     const reason = prompt('請輸入拒絕原因：')
     if (reason === null) return
-    if (!reason.trim()) { toast.error('請填寫拒絕原因'); return }
+    if (!reason.trim()) { toast.warning('請填寫拒絕原因'); return }
     const leave = leaves.find(l => l.id === id)
     if (leave) {
       const wf = await getWorkflowForRecord('請假簽核', leave.employee)

@@ -132,7 +132,7 @@ export default function CompensationBenchmark() {
       mid_salary: Number(bandForm.mid_salary),
       max_salary: Number(bandForm.max_salary),
     }
-    if (!payload.dept || !payload.position || !payload.min_salary) return toast.error('請填寫必要欄位')
+    if (!payload.dept || !payload.position || !payload.min_salary) return toast.warning('請填寫必要欄位')
 
     const { data, error: err } = editingId
       ? await updateCompensationBand(editingId, payload)

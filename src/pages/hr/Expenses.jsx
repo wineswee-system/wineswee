@@ -149,7 +149,7 @@ export default function Expenses() {
   const handleReject = async (id) => {
     const reason = prompt('請輸入駁回原因：')
     if (reason === null) return
-    if (!reason.trim()) { toast.error('請填寫駁回原因'); return }
+    if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
     if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
   }

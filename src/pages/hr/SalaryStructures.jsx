@@ -137,7 +137,7 @@ export default function SalaryStructures() {
   }
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return toast.error('請選擇員工')
+    if (!form.employee_id) return toast.warning('請選擇員工')
     const payload = {
       employee_id: Number(form.employee_id),
       organization_id: orgId,

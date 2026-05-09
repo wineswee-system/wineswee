@@ -69,7 +69,7 @@ export default function FormSubmissions() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason) return toast.error('請填駁回原因')
+    if (!rejectReason) return toast.warning('請填駁回原因')
     await supabase.from('form_submissions').update({
       status: '已駁回',
       approver_id: profile?.id || null,

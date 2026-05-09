@@ -220,7 +220,7 @@ export default function Resignation() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return toast.error('請填駁回原因')
+    if (!rejectReason.trim()) return toast.warning('請填駁回原因')
     const res = await approveChainStep({
       table: 'resignation', id: reviewModal.id,
       approverEmpId: profile?.id, action: 'reject', reason: rejectReason,

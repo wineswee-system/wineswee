@@ -57,7 +57,7 @@ export default function Severance() {
 
   // 試算 — 按「試算」按鈕觸發
   const handleCalc = async () => {
-    if (!form.employee_id || !form.termination_date) { toast.error('請選員工 + 離職日'); return }
+    if (!form.employee_id || !form.termination_date) { toast.warning('請選員工 + 離職日'); return }
     setCalcing(true)
     setCalcResult(null)
     const { data, error } = await supabase.rpc('calc_severance', {
@@ -75,7 +75,7 @@ export default function Severance() {
   }
 
   const handleSave = async () => {
-    if (!calcResult) { toast.error('請先試算'); return }
+    if (!calcResult) { toast.warning('請先試算'); return }
     setSaving(true)
     const noticeWage = form.notice_paid ? 0 : Number(calcResult.notice_wage || 0)
     const unusedLeaveWage = Number(form.unused_leave_wage || 0)

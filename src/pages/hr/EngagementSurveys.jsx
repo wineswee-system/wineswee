@@ -80,7 +80,7 @@ export default function EngagementSurveys() {
   }, [profile?.organization_id])
 
   const handleCreateSurvey = async () => {
-    if (!surveyForm.title) return toast.error('請填寫問卷標題')
+    if (!surveyForm.title) return toast.warning('請填寫問卷標題')
     const payload = {
       title: surveyForm.title,
       description: surveyForm.description,

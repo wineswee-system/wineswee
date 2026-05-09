@@ -22,7 +22,7 @@ export default function DataImportExport() {
   }
 
   const handleImport = (key) => {
-    if (!files[key]) return toast.error('請先選擇檔案')
+    if (!files[key]) return toast.warning('請先選擇檔案')
     toast.error(`正在匯入: ${files[key].name}（功能開發中）`)
   }
 

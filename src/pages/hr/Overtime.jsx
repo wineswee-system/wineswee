@@ -191,7 +191,7 @@ export default function Overtime() {
   const handleReject = async (id) => {
     const reason = prompt('請輸入駁回原因：')
     if (reason === null) return
-    if (!reason.trim()) { toast.error('請填寫駁回原因'); return }
+    if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     try {
       const record = records.find(r => r.id === id)
       if (record) {

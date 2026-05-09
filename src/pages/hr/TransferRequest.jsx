@@ -255,7 +255,7 @@ export default function TransferRequest() {
   }
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return toast.error('請填駁回原因')
+    if (!rejectReason.trim()) return toast.warning('請填駁回原因')
     const res = await approveChainStep({
       table: 'transfer', id: reviewModal.id,
       approverEmpId: profile?.id, action: 'reject', reason: rejectReason,

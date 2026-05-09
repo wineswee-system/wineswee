@@ -49,7 +49,7 @@ export default function Commission() {
   }
 
   const handleCalculate = async () => {
-    if (rules.length === 0) { toast.error('請先建立佣金規則'); return }
+    if (rules.length === 0) { toast.warning('請先建立佣金規則'); return }
     const period = new Date().toISOString().slice(0, 7)
     if (!(await confirm({ message: `將根據佣金規則計算 ${period} 的佣金，是否繼續？` }))) return
 

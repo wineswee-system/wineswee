@@ -123,8 +123,8 @@ export default function LegalDeductions() {
   }
 
   const handleSubmit = async () => {
-    if (!form.employee_id) return toast.error('請選擇員工')
-    if (!form.title.trim()) return toast.error('請輸入標題')
+    if (!form.employee_id) return toast.warning('請選擇員工')
+    if (!form.title.trim()) return toast.warning('請輸入標題')
     const totalAmt = Number(form.total_amount)
     if (!totalAmt || totalAmt <= 0) return toast.error('總額必須大於 0')
 

@@ -46,7 +46,7 @@ export default function ScheduledReports() {
   }
 
   const handleSave = () => {
-    if (!form.name.trim() || !form.recipients.trim()) return toast.error('請填寫名稱與收件者')
+    if (!form.name.trim() || !form.recipients.trim()) return toast.warning('請填寫名稱與收件者')
     if (editingId) {
       setSchedules(prev => prev.map(s => s.id === editingId ? { ...s, ...form, status: form.enabled ? '啟用' : '暫停', nextSend: form.enabled ? computeNext(form.frequency) : '-' } : s))
     } else {

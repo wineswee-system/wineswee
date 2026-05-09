@@ -199,8 +199,8 @@ export default function Approvals() {
 
   // ── Create ─────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!createFormData.title.trim()) { toast.error('請填寫簽核主旨'); return }
-    if (!createFormData.chain_id) { toast.error('請選擇簽核鏈'); return }
+    if (!createFormData.title.trim()) { toast.warning('請填寫簽核主旨'); return }
+    if (!createFormData.chain_id) { toast.warning('請選擇簽核鏈'); return }
     setCreating(true)
     try {
       const chain = approvalChains.find(c => c.id === Number(createFormData.chain_id))

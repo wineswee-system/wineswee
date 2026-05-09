@@ -1094,7 +1094,7 @@ export default function TaskDetailPanel({
                   '新增附件',
                   '檔案 URL（須以 https:// 開頭）：',
                   (url) => {
-                    if (!url.startsWith('https://')) { toast.error('請輸入有效的 https:// 網址'); return }
+                    if (!url.startsWith('https://')) { toast.warning('請輸入有效的 https:// 網址'); return }
                     openInput(
                       '新增附件',
                       '檔案名稱：',

@@ -80,7 +80,7 @@ export default function Inventory() {
       warehouseName = wh?.name || ''
     }
     if (!warehouseName) {
-      toast.error('請選擇倉庫（atomic 更新 stock_levels 必須）')
+      toast.warning('請選擇倉庫（atomic 更新 stock_levels 必須）')
       return
     }
     const { data: result, error: rpcErr } = await supabase.rpc('apply_inventory_adjustment_atomic', {

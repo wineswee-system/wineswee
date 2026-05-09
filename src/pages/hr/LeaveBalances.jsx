@@ -209,7 +209,7 @@ export default function LeaveBalances() {
   const handleSubmit = async () => {
     try {
       if (!form.employee_id || !form.total_days) {
-        toast.error('請填寫員工與總天數')
+        toast.warning('請填寫員工與總天數')
         return
       }
       const payload = {

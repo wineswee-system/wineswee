@@ -185,9 +185,9 @@ export default function Transfer() {
   )
 
   const handleTransferSubmit = async () => {
-    if (!transferForm.employee_id) return toast.error('請選擇員工')
-    if (!transferForm.effective_date) return toast.error('請填寫生效日')
-    if (transferForm.change_type === '薪資調整' && !transferForm.base_salary) return toast.error('請填寫新基本薪資')
+    if (!transferForm.employee_id) return toast.warning('請選擇員工')
+    if (!transferForm.effective_date) return toast.warning('請填寫生效日')
+    if (transferForm.change_type === '薪資調整' && !transferForm.base_salary) return toast.warning('請填寫新基本薪資')
     setSubmitting(true)
     try {
       const empId = Number(transferForm.employee_id)
@@ -249,8 +249,8 @@ export default function Transfer() {
   const setSF = (k, v) => setSalaryForm(f => ({ ...f, [k]: v }))
 
   const handleSalarySubmit = async () => {
-    if (!salaryForm.employee_id) return toast.error('請選擇員工')
-    if (!salaryForm.base_salary) return toast.error('請填寫新基本薪資')
+    if (!salaryForm.employee_id) return toast.warning('請選擇員工')
+    if (!salaryForm.base_salary) return toast.warning('請填寫新基本薪資')
     setSalarySubmitting(true)
     try {
       const { error } = await supabase.from('salary_structures').insert({

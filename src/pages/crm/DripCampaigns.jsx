@@ -216,7 +216,7 @@ export default function DripCampaigns() {
   }
 
   const saveCampaign = () => {
-    if (!form.name) { toast.error('請輸入活動名稱'); return }
+    if (!form.name) { toast.warning('請輸入活動名稱'); return }
     if (editingCampaign) {
       setCampaigns(prev => prev.map(c => c.id === editingCampaign.id ? {
         ...c, name: form.name, description: form.description, trigger: form.trigger,

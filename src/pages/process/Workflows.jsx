@@ -415,7 +415,7 @@ export default function Workflows() {
   }
 
   const handleAddTask = async () => {
-    if (!taskForm.title) { toast.error('請填寫任務名稱'); return }
+    if (!taskForm.title) { toast.warning('請填寫任務名稱'); return }
     if (!selectedInstance) { toast.error('找不到流程實例，請重新整理後再試'); return }
     const instTasks = getInstanceTasks(selectedInstance.id)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
@@ -624,11 +624,11 @@ export default function Workflows() {
   // ── Create SOP Template ──
   const handleCreateTpl = async () => {
     if (!newTpl.name?.trim()) {
-      toast.error('請填寫範本名稱')
+      toast.warning('請填寫範本名稱')
       return
     }
     if (!newTpl.steps.some(s => s.title?.trim())) {
-      toast.error('至少需要填寫一個步驟名稱')
+      toast.warning('至少需要填寫一個步驟名稱')
       return
     }
     const validSteps = newTpl.steps.filter(s => s.title?.trim()).map(s => ({
@@ -684,7 +684,7 @@ export default function Workflows() {
   // ── Blank Workflow ──
   const handleCreateBlankWorkflow = async () => {
     const name = blankWorkflowForm.name.trim()
-    if (!name) { toast.error('請填寫流程名稱'); return }
+    if (!name) { toast.warning('請填寫流程名稱'); return }
     const { data, error } = await supabase.from('workflow_instances').insert({
       template_name: name,
       store: blankWorkflowForm.store || null,

@@ -97,7 +97,7 @@ export default function BusinessTravel() {
   const handleReject = async (id) => {
     const reason = prompt('請輸入駁回原因：')
     if (reason === null) return
-    if (!reason.trim()) { toast.error('請填寫駁回原因'); return }
+    if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     const { data } = await updateBusinessTripStatus(id, '已駁回', reason.trim())
     if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
   }

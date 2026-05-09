@@ -45,7 +45,7 @@ export default function ProbationTracker() {
   }, [])
 
   const handleCreate = async () => {
-    if (!form.employee || !form.start_date || !form.end_date) return toast.error('請填寫必要欄位')
+    if (!form.employee || !form.start_date || !form.end_date) return toast.warning('請填寫必要欄位')
     const { data, error: err } = await createProbationRecord({
       employee: form.employee,
       start_date: form.start_date,

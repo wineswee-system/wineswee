@@ -214,7 +214,7 @@ export default function LineIntegration() {
 
   async function bindCandidate(c) {
     const empId = candidateOverrides[candidateKey(c)] ?? c.matched_employee_id
-    if (!empId) { toast.error('請先選擇員工'); return }
+    if (!empId) { toast.warning('請先選擇員工'); return }
     const { error: err } = await supabase.from('employee_line_accounts').upsert({
       employee_id: Number(empId),
       channel_id: c.channel_id,

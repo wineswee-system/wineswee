@@ -302,7 +302,7 @@ function ImportModal({ modal, year, onClose, onApplied }) {
   }
 
   const apply = async () => {
-    if (!parsed) return toast.error('請先解析')
+    if (!parsed) return toast.warning('請先解析')
     if (!(await confirm({ message: `確定套用？這會：\n- INSERT ${diff.added.length} 筆新級距\n- UPDATE ${diff.updated.length} 筆異動\n- DELETE ${diff.removed.length} 筆移除\n至 ${targetYear} 年` }))) return
     setApplying(true)
     try {

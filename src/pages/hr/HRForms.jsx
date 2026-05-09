@@ -40,7 +40,7 @@ const CATEGORIES = [
     desc: '出差、費用、報銷類表單',
     forms: [
       { icon: Briefcase, name: '出差申請', desc: '外出辦公、洽公申請', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/travel' },
-      { icon: Wallet,    name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段（採購／預算／事項）', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/finance/expense-requests', tag: '兩階段' },
+      { icon: Wallet,    name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段（採購／預算／事項）', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/expense-requests', tag: '兩階段' },
       { icon: Receipt,   name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷）', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', action: '/hr/expenses' },
     ],
   },

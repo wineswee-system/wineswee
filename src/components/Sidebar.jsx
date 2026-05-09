@@ -295,7 +295,7 @@ const groupNav = {
         { icon: BarChart3, label: 'HR 報表', path: '/hr/report' },
         { icon: Plane, label: '公出差旅', path: '/hr/travel' },
         { icon: FileEdit, label: '費用申請與核銷', path: '/hr/expense-requests' },
-        { icon: Receipt, label: '費用核銷', path: '/hr/expenses' },
+        { icon: Receipt, label: '費用報銷', path: '/hr/expenses' },
         { icon: FolderOpen, label: '文件管理', path: '/hr/documents' },
         { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },
       ]

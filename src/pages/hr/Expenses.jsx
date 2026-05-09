@@ -227,7 +227,7 @@ export default function Expenses() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">🧾</span> 費用核銷</h2>
+            <h2><span className="header-icon">🧾</span> 費用報銷</h2>
             <p>報銷申請與審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

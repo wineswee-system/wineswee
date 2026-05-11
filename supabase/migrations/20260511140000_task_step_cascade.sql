@@ -166,54 +166,10 @@ CREATE TRIGGER trg_task_advance_next_step
   EXECUTE FUNCTION public._task_advance_next_step();
 
 
--- ═══ 3. 一次性 backfill：解開所有卡住的下游 task ═══
--- 條件：status IN ('待處理','待簽核')，workflow_instance_id 內前一 step 已完成
-DO $$
-DECLARE
-  r RECORD;
-  v_inst_name text;
-  v_line_uid  text;
-  v_liff_id   text;
-BEGIN
-  FOR r IN
-    SELECT t.id, t.title, t.assignee, t.assignee_id, t.workflow_instance_id
-      FROM public.tasks t
-     WHERE t.status IN ('待處理', '待簽核')
-       AND t.workflow_instance_id IS NOT NULL
-       AND t.step_order IS NOT NULL
-       AND t.approval_chain_id IS NULL                      -- 有 chain 的不動（chain trigger 自己處理）
-       AND t.confirmation_required IS NOT TRUE              -- 有 confirmation 的不動
-       AND EXISTS (
-         SELECT 1 FROM public.tasks prev
-          WHERE prev.workflow_instance_id = t.workflow_instance_id
-            AND prev.step_order = t.step_order - 1
-            AND prev.status = '已完成'
-       )
-       -- 上一關剛好是「完成的」才推；如果是再上一關完成、中間斷一個，不處理
-  LOOP
-    UPDATE public.tasks SET status = '進行中', started_at = COALESCE(started_at, now())
-     WHERE id = r.id;
-
-    -- 推 LINE
-    IF r.assignee_id IS NOT NULL OR r.assignee IS NOT NULL THEN
-      SELECT v.line_user_id, v.liff_id INTO v_line_uid, v_liff_id
-        FROM public.v_employee_line_resolved v
-       WHERE (r.assignee_id IS NOT NULL AND v.employee_id = r.assignee_id)
-          OR (r.assignee_id IS NULL     AND v.employee_name = r.assignee)
-       ORDER BY (v.channel_code = 'workflow') DESC, v.is_primary DESC NULLS LAST
-       LIMIT 1;
-
-      IF v_line_uid IS NOT NULL THEN
-        SELECT template_name INTO v_inst_name FROM public.workflow_instances WHERE id = r.workflow_instance_id;
-        PERFORM public._push_task_started_flex(
-          v_line_uid, v_liff_id, r.id, r.title, v_inst_name
-        );
-        RAISE NOTICE 'backfill: pushed LINE to task %', r.id;
-      END IF;
-    END IF;
-  END LOOP;
-END $$;
-
+-- ═══ 3. backfill — 故意不做 ═══
+-- 既有「卡住但 prev step 已完成」的 task 大多是 demo / 假資料，沒必要動。
+-- trigger 從現在開始監聽，新完成的任務會正常 cascade + LINE 通知。
+-- 若日後需要清理特定卡關，直接 UPDATE 那些 row 即可（沒 trigger 副作用）。
 
 COMMIT;
 

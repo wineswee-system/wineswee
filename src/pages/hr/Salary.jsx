@@ -446,12 +446,18 @@ export default function Salary() {
         const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
 
         // 投保金額（廠商規則）：
-        //   月薪人員 → base_salary + role_allowance（不含伙食/夜班/跨店等其他經常性津貼）
+        //   月薪人員 → min(base_salary + role_allowance, 45,800)
+        //              ↑ 廠商把健保也 cap 在勞保最高 45,800（實務簡化，非健保法規定）
         //   PT      → 走 PT 最低（payroll.js 內 fixed 11,100/29,500）
         // salary_structures.base_insured 若有值則覆寫（admin 可手動調）
         const insuredSalary = ss.base_insured != null && Number(ss.base_insured) > 0
           ? Number(ss.base_insured)
-          : (isHourly ? 0 : ((ss.base_salary || emp.base_salary || 0) + (ss.role_allowance || 0)))
+          : (isHourly
+              ? 0
+              : Math.min(
+                  (ss.base_salary || emp.base_salary || 0) + (ss.role_allowance || 0),
+                  45800
+                ))
 
         const result = calculateNetSalary(baseSalary, {
           insuredSalary,

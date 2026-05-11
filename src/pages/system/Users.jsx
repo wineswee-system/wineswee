@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Pencil } from 'lucide-react'
+import { Search, Pencil, UserCog, ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import Modal, { Field } from '../../components/Modal'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -19,7 +20,6 @@ const ROLE_LABEL = {
   super_admin:  '超級管理員',
 }
 const ROLES = Object.keys(ROLE_MAP)
-const DEPTS = ['研發部', '行銷部', '業務部', '人資部', '財務部', '客服部', '品牌行銷部', '門市運營部', '採購部', '行政部', '倉儲部']
 const roleColor = {
   '超級管理員': 'badge-danger',
   'HR 管理員':  'badge-purple',
@@ -32,16 +32,13 @@ const toLabel = r => ROLE_LABEL[r] ?? r ?? '—'
 
 export default function Users() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const orgId = profile?.organization_id
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [showAdd, setShowAdd] = useState(false)
   const [editUser, setEditUser] = useState(null)
-  const [form, setForm] = useState({ name: '', email: '', role: '門市人員', dept: DEPTS[0] })
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => { load() }, [orgId])
 
@@ -51,26 +48,10 @@ export default function Users() {
       .from('employees')
       .select('id, name, email, role, dept, status, position')
       .eq('organization_id', orgId)
+      .eq('status', '在職')          // 只列在職 — 離職的自動失權
       .order('id')
     setUsers(data ?? [])
     setLoading(false)
-  }
-
-  const handleAdd = async () => {
-    if (!form.name) return
-    const { role, role_id } = ROLE_MAP[form.role]
-    await supabase.from('employees').insert({
-      name: form.name,
-      email: form.email || null,
-      role,
-      role_id,
-      dept: form.dept,
-      organization_id: orgId,
-      status: '在職',
-    })
-    setShowAdd(false)
-    setForm({ name: '', email: '', role: '門市人員', dept: DEPTS[0] })
-    load()
   }
 
   const handleEditRole = async () => {
@@ -85,30 +66,41 @@ export default function Users() {
     (u.name ?? '').includes(search) || (u.email ?? '').includes(search)
   )
 
+  // 角色統計
+  const adminCount    = users.filter(u => u.role === 'admin' || u.role === 'super_admin').length
+  const managerCount  = users.filter(u => u.role === 'manager').length
+  const staffCount    = users.filter(u => u.role === 'store_staff' || u.role === 'office_staff' || !u.role).length
+
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">👥</span> 使用者管理</h2>
-            <p>系統帳號與權限管理</p>
+            <h2><span className="header-icon"><UserCog size={20} /></span> 角色與權限</h2>
+            <p>指派在職員工的系統權限 · 員工資料新增 / 離職請至「<a onClick={() => navigate('/org/employees')} style={{ color: 'var(--accent-cyan)', cursor: 'pointer', textDecoration: 'underline' }}>員工管理</a>」</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAdd(true)}><Plus size={14} /> 新增使用者</button>
+          <button className="btn btn-secondary" onClick={() => navigate('/org/employees')}>
+            到員工管理 <ArrowRight size={14} />
+          </button>
         </div>
       </div>
 
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
-          <div className="stat-card-label">啟用帳號</div>
-          <div className="stat-card-value">{users.filter(u => u.status === '在職').length}</div>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
+          <div className="stat-card-label">在職員工</div>
+          <div className="stat-card-value">{users.length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)' }}>
-          <div className="stat-card-label">停用帳號</div>
-          <div className="stat-card-value">{users.filter(u => u.status !== '在職').length}</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
           <div className="stat-card-label">管理員</div>
-          <div className="stat-card-value">{users.filter(u => u.role === 'admin' || u.role === 'super_admin').length}</div>
+          <div className="stat-card-value">{adminCount}</div>
+        </div>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-blue)', '--card-accent-dim': 'var(--accent-blue-dim)' }}>
+          <div className="stat-card-label">主管</div>
+          <div className="stat-card-value">{managerCount}</div>
+        </div>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+          <div className="stat-card-label">一般員工</div>
+          <div className="stat-card-value">{staffCount}</div>
         </div>
       </div>
 
@@ -123,11 +115,15 @@ export default function Users() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>姓名</th><th>Email</th><th>角色</th><th>部門</th><th>職稱</th><th>狀態</th><th></th></tr>
+              <tr><th>姓名</th><th>Email</th><th>角色</th><th>部門</th><th>職稱</th><th></th></tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>載入中…</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>載入中…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+                  沒有符合的員工
+                </td></tr>
               ) : filtered.map(u => {
                 const lbl = toLabel(u.role)
                 return (
@@ -138,13 +134,9 @@ export default function Users() {
                     <td>{u.dept ?? '—'}</td>
                     <td style={{ fontSize: 12 }}>{u.position ?? '—'}</td>
                     <td>
-                      <span className={`badge ${u.status === '在職' ? 'badge-success' : 'badge-neutral'}`}>
-                        <span className="badge-dot"></span>{u.status ?? '—'}
-                      </span>
-                    </td>
-                    <td>
                       <button className="btn btn-ghost" style={{ padding: '2px 8px' }}
-                        onClick={() => setEditUser({ ...u, newRole: lbl })}>
+                        onClick={() => setEditUser({ ...u, newRole: lbl })}
+                        title="變更角色">
                         <Pencil size={13} />
                       </button>
                     </td>
@@ -155,31 +147,6 @@ export default function Users() {
           </table>
         </div>
       </div>
-
-      {showAdd && (
-        <Modal title="新增使用者" onClose={() => setShowAdd(false)} onSubmit={handleAdd}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="姓名 *">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="王小明" value={form.name} onChange={e => set('name', e.target.value)} />
-            </Field>
-            <Field label="Email">
-              <input className="form-input" type="email" style={{ width: '100%' }} placeholder="user@company.com" value={form.email} onChange={e => set('email', e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="角色">
-              <select className="form-input" style={{ width: '100%' }} value={form.role} onChange={e => set('role', e.target.value)}>
-                {ROLES.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </Field>
-            <Field label="部門">
-              <select className="form-input" style={{ width: '100%' }} value={form.dept} onChange={e => set('dept', e.target.value)}>
-                {DEPTS.map(d => <option key={d}>{d}</option>)}
-              </select>
-            </Field>
-          </div>
-        </Modal>
-      )}
 
       {editUser && (
         <Modal title={`編輯角色 — ${editUser.name}`} onClose={() => setEditUser(null)} onSubmit={handleEditRole}>

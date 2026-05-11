@@ -20,13 +20,26 @@
 // ══════════════════════════════════════
 
 /**
- * 勞工保險投保薪資級距（2026/115年）
- * 11 級，最低 NT$29,500（基本工資）～ 最高 NT$45,800
- * 來源：勞動部勞工保險局 115/01/01 適用
+ * 勞工保險投保薪資級距（2025/114 + 2026/115 通用）
+ * 來源：勞動部勞工保險局公告
+ *
+ * 結構：
+ *  - PT 部分工時級距：11,100 ~ 28,590（17 級）
+ *  - 正職級距：29,500 ~ 45,800（最高 11 級，2026 基本工資 29,500 起）
+ *  - 註：2025/01 起最低 28,800、2026/01 起最低 29,500
  */
-export const LABOR_INSURANCE_BRACKETS = [
+export const LABOR_INSURANCE_PT_BRACKETS = [
+  11100, 12540, 13500, 15840, 16500, 17280, 17880,
+  19047, 20008, 21009, 22000, 23100, 24000, 25250,
+  26400, 27600, 28590,
+];
+export const LABOR_INSURANCE_FT_BRACKETS = [
   29500, 30300, 31800, 33300, 34800, 36300,
   38200, 40100, 42000, 43900, 45800,
+];
+export const LABOR_INSURANCE_BRACKETS = [
+  ...LABOR_INSURANCE_PT_BRACKETS,
+  ...LABOR_INSURANCE_FT_BRACKETS,
 ];
 
 /**
@@ -111,20 +124,30 @@ function matchBracket(salary, brackets) {
  * @returns {{ insured_salary: number, employee_share: number, employer_share: number, total: number }}
  */
 export function calculateLaborInsurance(monthlySalary, options = {}) {
-  // 向下相容：第二參數可傳數字（舊用法）或物件
   const opts = typeof options === 'number' ? { employeeAge: options } : options;
-  const { employeeAge = 30, isPartTime = false } = opts;
+  const {
+    employeeAge = 30,
+    isPartTime = false,
+    // 廠商實務：所有 PT 一律投保最低 11,100（即使實薪更高）
+    // 設 false 才按法規依實薪對齊 PT 級距
+    forcePartTimeMin = true,
+  } = opts;
 
   let insuredSalary;
   if (isPartTime) {
-    // PT 最低 11,100；超出按級距匹配（但 PT 級距表簡化用 11,100 起跳）
-    insuredSalary = Math.max(LABOR_INSURANCE_PT_MIN, matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS));
-    // 若實薪 < 29,500（最低正職級距），用 PT 最低 11,100
-    if (monthlySalary < LABOR_INSURANCE_BRACKETS[0]) {
+    if (forcePartTimeMin) {
+      // 廠商實務：固定 11,100（少投保，違反勞動部規定但常見）
       insuredSalary = LABOR_INSURANCE_PT_MIN;
+    } else {
+      // 法規：按實薪對齊 PT 級距 (11,100~28,590) 或正職級距 (29,500+)
+      insuredSalary = Math.max(
+        LABOR_INSURANCE_PT_MIN,
+        matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS)
+      );
     }
   } else {
-    insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS);
+    // 月薪正職：按 base+role 對齊正職級距 (29,500~45,800)
+    insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_FT_BRACKETS);
   }
 
   // 65 歲以上免就保 → 僅普通事故 11.5%

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ModalOverlay } from './Modal'
-import { createPortal } from 'react-dom'
-import { X, Save, Plus, Trash2 } from 'lucide-react'
+import { X, Save, Plus, Trash2, Upload, Eye } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
@@ -11,10 +9,9 @@ import DevelopmentTab from './employee/DevelopmentTab'
 import EmployeeChildTableEditor from '../pages/org/components/EmployeeChildTableEditor'
 import { empLabel } from '../lib/empLabel'
 import ChangelogPanel from './ChangelogPanel'
-
 import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
-// Mask sensitive fields for non-admin users
+
 const maskId = (v) => v ? v.slice(0, 3) + '****' + v.slice(-2) : ''
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
@@ -25,12 +22,57 @@ const AVATAR_FALLBACK = '#8b5cf6'
 // LINE brand green — not a CSS token, defined by LINE's brand guidelines
 const LINE_BRAND_GREEN = '#06C755'
 
+const MAIN_TABS = [
+  { key: 'profile',  label: '員工資料', icon: '👤' },
+  { key: 'hr',       label: '人事',     icon: '🏢' },
+  { key: 'schedule', label: '排班',     icon: '📅' },
+  { key: 'growth',   label: '發展',     icon: '🌱' },
+  { key: 'history',  label: '歷程',     icon: '📂' },
+]
+
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
   const { isAdmin, profile } = useAuth()
-  const [tab, setTab] = useState('personal')
+
+  const SUB_TABS = {
+    profile: [
+      { key: 'basic',      label: '基本資料' },
+      { key: 'contact',    label: '聯絡方式' },
+      ...(isAdmin ? [{ key: 'background', label: '背景資歷' }] : []),
+    ],
+    hr: [
+      { key: 'org',       label: '組織職務' },
+      { key: 'salary',    label: '薪資' },
+      { key: 'insurance', label: '勞健退' },
+    ],
+    schedule: [
+      { key: 'skills',       label: '技能 & 權限' },
+      { key: 'availability', label: '班表設定' },
+    ],
+    growth: [
+      { key: 'personality', label: '性格分析' },
+      { key: 'development', label: '能力發展' },
+    ],
+    history: [
+      { key: 'workflows',   label: '流程 & 任務' },
+      { key: 'assignments', label: '指派 & 異動' },
+      { key: 'reviews',     label: '評估 & 眷屬' },
+      ...(isAdmin ? [{ key: 'changelog', label: '變更日誌' }] : []),
+    ],
+  }
+
+  const [mainTab, setMainTab] = useState('profile')
+  const [subTab, setSubTab] = useState('basic')
+
+  const switchMainTab = (key) => {
+    setMainTab(key)
+    const subs = SUB_TABS[key]
+    if (subs?.length > 0) setSubTab(subs[0].key)
+  }
+
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [passbookUploading, setPassbookUploading] = useState(false)
 
   // Sub-data
   const [roles, setRoles] = useState([])
@@ -43,8 +85,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [availability, setAvailability] = useState([])
   const [onboardingTasks, setOnboardingTasks] = useState([])
   const [assignments, setAssignments] = useState([])
-  const [targetWorkflows, setTargetWorkflows] = useState([])  // 以此員工為對象的流程
-  const [targetWfTasks, setTargetWfTasks] = useState([])      // 上述流程下的所有任務
+  const [targetWorkflows, setTargetWorkflows] = useState([])
+  const [targetWfTasks, setTargetWfTasks] = useState([])
   const [lineAccounts, setLineAccounts] = useState([])
   const [lineChannels, setLineChannels] = useState([])
   const [newLineUserId, setNewLineUserId] = useState('')
@@ -52,13 +94,13 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [unboundLineUsers, setUnboundLineUsers] = useState([])
   const [manualLineInput, setManualLineInput] = useState(false)
 
-  // InputModal state (replaces window.prompt calls)
+  // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
   const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
     setInputModal({ open: true, title, label, placeholder, required, onConfirm })
   const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
 
-  // Inline add
+  // Inline add skill
   const [newSkill, setNewSkill] = useState('')
   const [newSkillLevel, setNewSkillLevel] = useState('基礎')
 
@@ -66,7 +108,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     if (!employee) return
     setForm({ ...employee })
     setIsDirty(false)
-    // Load sub-data
     Promise.all([
       supabase.from('employee_skills').select('*').eq('employee_id', employee.id).order('id'),
       supabase.from('employee_dependents').select('*').eq('employee_id', employee.id).order('id'),
@@ -88,26 +129,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
     }).catch(() => {})
-    // 載入「以此員工為對象」的流程實例 + 任務
+
     supabase.from('workflow_instances')
-      .select('*')
-      .eq('target_employee_id', employee.id)
-      .order('started_at', { ascending: false })
+      .select('*').eq('target_employee_id', employee.id).order('started_at', { ascending: false })
       .then(({ data: wfs }) => {
         setTargetWorkflows(wfs || [])
-        if (wfs && wfs.length > 0) {
-          const ids = wfs.map(w => w.id)
-          supabase.from('tasks').select('*').in('workflow_instance_id', ids).order('step_order')
+        if (wfs?.length > 0) {
+          supabase.from('tasks').select('*').in('workflow_instance_id', wfs.map(w => w.id)).order('step_order')
             .then(({ data: ts }) => setTargetWfTasks(ts || []))
         } else {
           setTargetWfTasks([])
         }
-      })
-      .catch(() => {})
-    // Load roles（角色下拉）
+      }).catch(() => {})
+
     supabase.from('roles').select('id, name, description, level').order('level', { ascending: false })
       .then(({ data }) => setRoles(data || []))
-    // Load LINE accounts
+
     Promise.all([
       supabase.from('employee_line_accounts').select('*, line_channels(id, code, name)').eq('employee_id', employee.id).order('is_primary', { ascending: false }),
       supabase.from('line_channels').select('id, code, name').eq('status', 'active').order('name'),
@@ -126,8 +163,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       .select('line_user_id, display_name')
       .eq('channel_id', parseInt(newLineChannel))
       .is('employee_id', null)
-      .order('display_name')
-      .limit(100)
+      .order('display_name').limit(100)
       .then(({ data }) => setUnboundLineUsers(data || []))
       .catch(() => {})
   }, [newLineChannel])
@@ -143,34 +179,24 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   const handleSave = async () => {
     setSaving(true)
-    // Check if store changed
     const storeChanged = form.store !== employee.store && employee.store && form.store
-
-    // ★ 修：表單收集的是文字 (supervisor / dept / store) 但 DB 還有對應的 _id FK 欄
-    //   直接送 form 不會更新 _id → UI 看似改了但下次重整又跳回（因為 *_id 沒動）
-    //   這裡同步對齊：
     const dataToSave = { ...form }
-    // supervisor name → supervisor_id
     if ('supervisor' in form) {
       const sup = (allEmployees || []).find(e => e.name === form.supervisor)
       dataToSave.supervisor_id = sup ? sup.id : null
     }
-    // dept name → department_id
     if ('dept' in form) {
       const d = (departments || []).find(x => x.name === form.dept)
       dataToSave.department_id = d ? d.id : null
     }
-    // store name → store_id
     if ('store' in form) {
       const s = (stores || []).find(x => x.name === form.store)
       dataToSave.store_id = s ? s.id : null
     }
-
     const { data, error } = await updateEmployee(employee.id, dataToSave)
     if (error) { toast.error('儲存失敗，請稍後再試'); setSaving(false); return }
     if (data) {
       onUpdate(data); setIsDirty(false)
-      // If store changed, remove future schedules (shifts may not exist at new store)
       if (storeChanged) {
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
@@ -185,7 +211,25 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     onClose()
   }
 
-  // Sub-data handlers
+  const handlePassbookUpload = async (file) => {
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('圖片不可超過 5MB'); return }
+    setPassbookUploading(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `passbooks/${employee.id}/存摺封面.${ext}`
+      const { error: upErr } = await supabase.storage.from('employee-docs').upload(path, file, { upsert: true })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('employee-docs').getPublicUrl(path)
+      set('passbook_image_url', urlData.publicUrl)
+      toast.success('存摺封面已上傳')
+    } catch (e) {
+      toast.error('上傳失敗，請稍後再試')
+    }
+    setPassbookUploading(false)
+  }
+
+  // Skills
   const addSkill = async () => {
     if (!newSkill.trim()) return
     try {
@@ -193,7 +237,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (data) { setSkills(prev => [...prev, data]); setNewSkill('') }
     } catch (e) { toast.error('新增失敗') }
   }
-
   const deleteSkill = async (id) => {
     try {
       await supabase.from('employee_skills').delete().eq('id', id)
@@ -201,16 +244,15 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     } catch (e) { toast.error('刪除失敗') }
   }
 
+  // Dependents
   const [showDepForm, setShowDepForm] = useState(false)
   const [depForm, setDepForm] = useState({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
-
   const addDependent = async () => {
     if (!depForm.name) return
     try {
       const { data } = await supabase.from('employee_dependents').insert({
         employee_id: employee.id, name: depForm.name, relationship: depForm.relationship,
-        id_number: depForm.id_number || null, birth_date: depForm.birth_date || null,
-        health_ins: depForm.health_ins,
+        id_number: depForm.id_number || null, birth_date: depForm.birth_date || null, health_ins: depForm.health_ins,
       }).select().single()
       if (data) {
         setDependents(prev => [...prev, data])
@@ -219,7 +261,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       }
     } catch (e) { toast.error('新增失敗') }
   }
-
   const deleteDependent = async (id) => {
     try {
       await supabase.from('employee_dependents').delete().eq('id', id)
@@ -268,7 +309,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       } catch (e) { toast.error('新增失敗') }
     }, { placeholder: '例如：週六不排晚班' })
   }
-
   const deleteSchedPref = async (id) => {
     const { error } = await supabase.from('employee_schedule_prefs').delete().eq('id', id)
     if (error) { toast.error('刪除失敗，請稍後再試'); return }
@@ -289,7 +329,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (data) setAvailability(prev => [...prev, data])
     }
   }
-
   const setAvailShift = async (dayIdx, shift) => {
     const existing = availability.find(a => a.day_of_week === dayIdx)
     if (existing) {
@@ -300,43 +339,31 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   const toggleSpecial = (cat) => {
     const current = form.special_categories || []
-    const next = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat]
-    set('special_categories', next)
+    set('special_categories', current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat])
   }
 
+  // Style helpers
   const L = { fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, marginTop: 14, letterSpacing: '0.3px' }
   const SectionTitle = ({ icon, text }) => (
     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 22, marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ fontSize: 15 }}>{icon}</span> {text}
     </div>
   )
+  const Toggle = ({ checked, onChange }) => (
+    <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer', flexShrink: 0 }}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ opacity: 0, width: 0, height: 0 }} />
+      <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: checked ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
+        <span style={{ position: 'absolute', top: 2, left: checked ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+      </span>
+    </label>
+  )
 
-  const TABS = [
-    { key: 'personal',   label: '個人資訊', icon: '👤' },
-    { key: 'org',        label: '組織',     icon: '🏢' },
-    // HR 資料子表（admin 才看得到）
-    ...(isAdmin ? [
-      { key: 'family',    label: '家庭', icon: '👪' },
-      { key: 'education', label: '學歷', icon: '🎓' },
-      { key: 'work',      label: '經歷', icon: '💼' },
-      { key: 'cert',      label: '證照', icon: '📜' },
-    ] : []),
-    { key: 'skills',     label: '技能',     icon: '🏷️' },
-    { key: 'workflows',  label: '進行中流程', icon: '🚀' },
-    { key: 'assignments',label: '指派歷史', icon: '📋' },
-    { key: 'personality',label: '性格分析', icon: '🧬' },
-    { key: 'development',label: '能力發展', icon: '📚' },
-    { key: 'schedule',   label: '排班',     icon: '📅' },
-    { key: 'records',    label: '紀錄',     icon: '🗂️' },
-    ...(isAdmin ? [{ key: 'changelog', label: '變更日誌', icon: '📝' }] : []),
-  ]
-
-  const empTypeColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green)' : 'var(--accent-orange)'
+  const empTypeColor    = (form.employment_type || '全職') === '全職' ? 'var(--accent-green)'     : 'var(--accent-orange)'
   const empTypeDimColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)'
-  const statusColor = (form.status || '在職') === '在職' ? 'var(--accent-green)' : form.status === '留職停薪' ? 'var(--accent-orange)' : 'var(--accent-red)'
-  const statusDimColor = (form.status || '在職') === '在職' ? 'var(--accent-green-dim)' : form.status === '留職停薪' ? 'var(--accent-orange-dim)' : 'var(--accent-red-dim)'
+  const statusColor     = (form.status || '在職') === '在職' ? 'var(--accent-green)' : form.status === '留職停薪' ? 'var(--accent-orange)' : 'var(--accent-red)'
+  const statusDimColor  = (form.status || '在職') === '在職' ? 'var(--accent-green-dim)' : form.status === '留職停薪' ? 'var(--accent-orange-dim)' : 'var(--accent-red-dim)'
 
-  const QuickInfo = ({ icon, label, value }) => (
+  const QuickInfo = ({ icon, value }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
       <span style={{ fontSize: 12 }}>{icon}</span>
       <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{value || '—'}</span>
@@ -350,10 +377,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
         onMouseDown={handleClose} />
 
-      {/* Panel — 根據點擊位置定位 */}
+      {/* Panel */}
       <div style={{
-        position: 'absolute',
-        left: '50%', transform: 'translateX(-50%)',
+        position: 'absolute', left: '50%', transform: 'translateX(-50%)',
         top: Math.max(16, Math.min(clickY ? clickY - 120 : window.innerHeight * 0.06, window.innerHeight - window.innerHeight * 0.88 - 16)),
         width: '94vw', maxWidth: 960, height: '88vh',
         background: 'var(--bg-primary)', borderRadius: 16,
@@ -362,9 +388,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         animation: 'fadeIn 0.2s ease-out',
       }}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{ flexShrink: 0, background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)', borderBottom: '1px solid var(--border-subtle)' }}>
-          {/* Top bar: close + save */}
+          {/* Top bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px 0' }}>
             <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 0' }}>
               <X size={16} /> 關閉
@@ -401,7 +427,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           </div>
 
           {/* Quick info bar */}
-          <div style={{ display: 'flex', gap: 16, padding: '12px 24px 14px', overflowX: 'auto', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, padding: '12px 24px 0', overflowX: 'auto', flexWrap: 'wrap' }}>
             <QuickInfo icon="💼" value={[employee.position, employee.position_secondary, employee.position_third].filter(Boolean).join(' / ') || '未設定'} />
             <QuickInfo icon="🏪" value={employee.store || '未指派'} />
             <QuickInfo icon="🏢" value={employee.dept || '未指派'} />
@@ -409,41 +435,52 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             {employee.phone && <QuickInfo icon="📱" value={employee.phone} />}
           </div>
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 0, padding: '0 24px', overflowX: 'auto' }}>
-            {TABS.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                padding: '10px 16px', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: 'transparent', display: 'flex', alignItems: 'center', gap: 5,
-                color: tab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                borderBottom: tab === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                transition: 'color 0.15s, border-color 0.15s',
-                whiteSpace: 'nowrap',
+          {/* ── Main tab bar ── */}
+          <div style={{ display: 'flex', gap: 0, padding: '10px 24px 0', overflowX: 'auto' }}>
+            {MAIN_TABS.map(t => (
+              <button key={t.key} onClick={() => switchMainTab(t.key)} style={{
+                padding: '8px 18px', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                background: 'transparent', display: 'flex', alignItems: 'center', gap: 6,
+                color: mainTab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                borderBottom: mainTab === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                transition: 'color 0.15s, border-color 0.15s', whiteSpace: 'nowrap',
               }}>
-                <span style={{ fontSize: 13 }}>{t.icon}</span> {t.label}
+                <span style={{ fontSize: 14 }}>{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Sub tab bar ── */}
+          <div style={{ display: 'flex', gap: 0, padding: '0 24px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-subtle)', overflowX: 'auto' }}>
+            {(SUB_TABS[mainTab] || []).map(t => (
+              <button key={t.key} onClick={() => setSubTab(t.key)} style={{
+                padding: '7px 14px', border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                background: 'transparent',
+                color: subTab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                borderBottom: subTab === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                transition: 'color 0.15s, border-color 0.15s', whiteSpace: 'nowrap',
+              }}>
+                {t.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Body */}
+        {/* ── Body ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 32px' }}>
+          <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-        {/* Slide-in animation */}
-        <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }`}</style>
-
-          {/* ═══ 個人資訊 ═══ */}
-          {tab === 'personal' && (
+          {/* ════════════════════════════════════════
+              員工資料 / 基本資料
+          ════════════════════════════════════════ */}
+          {mainTab === 'profile' && subTab === 'basic' && (
             <>
               <SectionTitle icon="👤" text="姓名" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div><div style={L}>姓</div><input className="form-input" style={{ width: '100%' }} value={form.last_name || ''} onChange={e => set('last_name', e.target.value)} /></div>
                 <div><div style={L}>名</div><input className="form-input" style={{ width: '100%' }} value={form.first_name || ''} onChange={e => set('first_name', e.target.value)} /></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div><div style={L}>英文名</div><input className="form-input" style={{ width: '100%' }} value={form.name_en || ''} onChange={e => set('name_en', e.target.value)} /></div>
-                <div><div style={L}>職等</div><input className="form-input" style={{ width: '100%' }} value={form.grade || ''} onChange={e => set('grade', e.target.value)} placeholder="M1/S3" /></div>
-              </div>
+              <div><div style={L}>英文名</div><input className="form-input" style={{ width: '50%' }} value={form.name_en || ''} onChange={e => set('name_en', e.target.value)} /></div>
 
               <SectionTitle icon="📋" text="個人資料" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -460,18 +497,6 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
               <div><div style={L}>地址</div><input className="form-input" style={{ width: '100%' }} value={form.address || ''} onChange={e => set('address', e.target.value)} /></div>
 
-              <SectionTitle icon="🚨" text="緊急聯絡人" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_name || ''} onChange={e => set('emergency_name', e.target.value)} /></div>
-                <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_phone || ''} onChange={e => set('emergency_phone', e.target.value)} /></div>
-              </div>
-
-              <SectionTitle icon="🏦" text="銀行帳戶" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                <div><div style={L}>銀行代碼</div><input className="form-input" style={{ width: '100%' }} value={form.bank_code || '004'} onChange={e => set('bank_code', e.target.value)} readOnly={!isAdmin} /></div>
-                <div><div style={L}>帳號</div><input className="form-input" style={{ width: '100%' }} value={isAdmin ? (form.bank_account || '') : maskBank(form.bank_account)} onChange={e => set('bank_account', e.target.value)} readOnly={!isAdmin} /></div>
-              </div>
-
               <SectionTitle icon="🏷️" text="特殊身分類別" />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {SPECIAL_CATEGORIES.map(cat => (
@@ -484,8 +509,127 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             </>
           )}
 
-          {/* ═══ 組織 ═══ */}
-          {tab === 'org' && (
+          {/* ════════════════════════════════════════
+              員工資料 / 聯絡方式
+          ════════════════════════════════════════ */}
+          {mainTab === 'profile' && subTab === 'contact' && (
+            <>
+              <SectionTitle icon="📱" text="聯絡方式" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div><div style={L}>工作電話</div><input className="form-input" style={{ width: '100%' }} value={form.phone || ''} onChange={e => set('phone', e.target.value)} /></div>
+              </div>
+
+              <SectionTitle icon="🚨" text="緊急聯絡人" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_name || ''} onChange={e => set('emergency_name', e.target.value)} /></div>
+                <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_phone || ''} onChange={e => set('emergency_phone', e.target.value)} /></div>
+              </div>
+
+              <SectionTitle icon="💬" text="LINE 帳號綁定" />
+              {lineAccounts.length === 0 ? (
+                <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+                  尚未綁定任何 LINE 帳號
+                </div>
+              ) : lineAccounts.map(la => (
+                <div key={la.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {la.picture_url
+                      ? <img src={la.picture_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                      : <div style={{ width: 32, height: 32, borderRadius: '50%', background: LINE_BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>L</div>
+                    }
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{la.display_name || 'LINE 使用者'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{la.line_user_id?.slice(0, 12)}...</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: la.is_primary ? 'var(--accent-green-dim)' : 'var(--glass-light)', color: la.is_primary ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {la.line_channels?.name || la.channel_id}{la.is_primary ? ' · 主要' : ''}
+                    </span>
+                    <button onClick={async () => {
+                      if (!(await confirm({ message: '確定解除此 LINE 綁定？' }))) return
+                      await supabase.from('employee_line_accounts').delete().eq('id', la.id)
+                      setLineAccounts(prev => prev.filter(x => x.id !== la.id))
+                    }} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' }}>
+                <select className="form-input" style={{ flex: '0 0 140px', fontSize: 12 }} value={newLineChannel} onChange={e => setNewLineChannel(e.target.value)}>
+                  <option value="">選擇頻道</option>
+                  {lineChannels.map(ch => <option key={ch.id} value={String(ch.id)}>{ch.name}</option>)}
+                </select>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {!manualLineInput && unboundLineUsers.length > 0 ? (
+                    <select className="form-input" style={{ fontSize: 12 }} value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)}>
+                      <option value="">從系統選擇 LINE 使用者…</option>
+                      {unboundLineUsers.map(u => <option key={u.line_user_id} value={u.line_user_id}>{u.display_name || u.line_user_id.slice(0, 14) + '…'}</option>)}
+                    </select>
+                  ) : (
+                    <input className="form-input" type="text" style={{ fontSize: 12 }} placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />
+                  )}
+                  {newLineChannel && unboundLineUsers.length > 0 && (
+                    <button type="button" onClick={() => { setManualLineInput(m => !m); setNewLineUserId('') }}
+                      style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 10, textAlign: 'left', padding: 0 }}>
+                      {manualLineInput ? '← 從系統已知名單選擇' : '✏️ 手動輸入 LINE ID'}
+                    </button>
+                  )}
+                </div>
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap' }}
+                  disabled={!newLineUserId || !newLineChannel}
+                  onClick={async () => {
+                    const uid = newLineUserId.trim()
+                    if (!uid.startsWith('U') || uid.length < 20) { toast.error('LINE User ID 格式錯誤（應以 U 開頭且至少 20 字元）'); return }
+                    const chId = parseInt(newLineChannel)
+                    const { data, error } = await supabase.from('employee_line_accounts').insert({
+                      employee_id: employee.id, channel_id: chId, line_user_id: uid,
+                      is_primary: lineAccounts.length === 0, is_verified: true,
+                    }).select('*, line_channels(id, code, name)').single()
+                    if (error) { toast.error('儲存失敗，請稍後再試'); return }
+                    await supabase.from('line_users').update({ employee_id: employee.id, is_verified: true })
+                      .eq('channel_id', chId).eq('line_user_id', uid).catch(() => {})
+                    setLineAccounts(prev => [...prev, data])
+                    setUnboundLineUsers(prev => prev.filter(u => u.line_user_id !== uid))
+                    setNewLineUserId('')
+                  }}>
+                  <Plus size={12} /> 綁定
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                員工也可在 LINE 輸入 <code style={{ background: 'var(--glass-light)', padding: '1px 6px', borderRadius: 3 }}>/註冊 {employee.name}</code> 自助綁定
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginTop: 10, border: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>LINE 管理員權限</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>開啟後可在 LINE 使用管理指令</div>
+                </div>
+                <Toggle checked={form.line_admin || false} onChange={e => set('line_admin', e.target.checked)} />
+              </div>
+            </>
+          )}
+
+          {/* ════════════════════════════════════════
+              員工資料 / 背景資歷 (admin)
+          ════════════════════════════════════════ */}
+          {mainTab === 'profile' && subTab === 'background' && isAdmin && (
+            <>
+              <SectionTitle icon="🎓" text="學歷紀錄" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="education_records" />
+              <SectionTitle icon="💼" text="工作經歷" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="work_experiences" />
+              <SectionTitle icon="👪" text="家庭成員" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="family_members" />
+              <SectionTitle icon="📜" text="證照清單" />
+              <EmployeeChildTableEditor employeeId={employee.id} table="certifications" />
+            </>
+          )}
+
+          {/* ════════════════════════════════════════
+              人事 / 組織職務
+          ════════════════════════════════════════ */}
+          {mainTab === 'hr' && subTab === 'org' && (
             <>
               <SectionTitle icon="💼" text="僱用資訊" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -501,16 +645,15 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.phone || ''} onChange={e => set('phone', e.target.value)} /></div>
                 <div><div style={L}>入職日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date || ''} onChange={e => set('join_date', e.target.value)} /></div>
+                <div><div style={L}>試用期結束</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end || ''} onChange={e => set('probation_end', e.target.value)} /></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div><div style={L}>試用期結束</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end || ''} onChange={e => set('probation_end', e.target.value)} /></div>
                 <div><div style={L}>離職日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.resign_date || ''} onChange={e => set('resign_date', e.target.value)} /></div>
               </div>
               <div><div style={L}>離職原因</div><textarea className="form-input" style={{ width: '100%', minHeight: 50, resize: 'vertical' }} value={form.resign_reason || ''} onChange={e => set('resign_reason', e.target.value)} /></div>
 
-              <SectionTitle icon="🏪" text="門市 / 公司 / 部門" />
+              <SectionTitle icon="🏪" text="門市 / 部門" />
               <div><div style={L}>主要門市</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.store || ''} onChange={e => set('store', e.target.value)}>
                   <option value="">未指派</option>
@@ -524,10 +667,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                     const checked = (form.additional_stores || []).includes(s.name)
                     return (
                       <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: checked ? 'var(--accent-cyan-dim)' : 'var(--glass-light)', border: `1px solid ${checked ? 'rgba(6,182,212,0.3)' : 'var(--border-subtle)'}` }}>
-                        <input type="checkbox" checked={checked} onChange={() => {
+                        <input type="checkbox" checked={checked} style={{ width: 14, height: 14 }} onChange={() => {
                           const current = form.additional_stores || []
                           set('additional_stores', checked ? current.filter(n => n !== s.name) : [...current, s.name])
-                        }} style={{ width: 14, height: 14 }} />
+                        }} />
                         {s.name}
                       </label>
                     )
@@ -551,51 +694,53 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   </select>
                 </div>
               </div>
+
+              <SectionTitle icon="👔" text="職位" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <div style={L}>主職位</div>
-                  <input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" />
-                </div>
-                <div><div style={L}>角色（系統權限）</div>
-                  <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}
-                    onChange={e => {
-                      const id = e.target.value ? Number(e.target.value) : null
-                      const r = roles.find(x => x.id === id)
-                      set('role_id', id)
-                      if (r) set('role', r.name)
-                    }}>
-                    <option value="">— 未指派 —</option>
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}{r.description ? `（${r.description}）` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div><div style={L}>主職位</div><input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入職位" /></div>
+                <div><div style={L}>職等</div><input className="form-input" style={{ width: '100%' }} value={form.grade || ''} onChange={e => set('grade', e.target.value)} placeholder="M1 / S3" /></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div><div style={L}>副職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_secondary || ''} onChange={e => set('position_secondary', e.target.value)} placeholder="選填" /></div>
                 <div><div style={L}>第三職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_third || ''} onChange={e => set('position_third', e.target.value)} placeholder="選填" /></div>
               </div>
+              <div style={{ marginTop: 14 }}>
+                <div style={L}>角色（系統權限）</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}
+                  onChange={e => {
+                    const id = e.target.value ? Number(e.target.value) : null
+                    const r = roles.find(x => x.id === id)
+                    set('role_id', id)
+                    if (r) set('role', r.name)
+                  }}>
+                  <option value="">— 未指派 —</option>
+                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}{r.description ? `（${r.description}）` : ''}</option>)}
+                </select>
+              </div>
+            </>
+          )}
 
+          {/* ════════════════════════════════════════
+              人事 / 薪資
+          ════════════════════════════════════════ */}
+          {mainTab === 'hr' && subTab === 'salary' && (
+            <>
               <SectionTitle icon="💰" text="薪資" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div><div style={L}>計薪方式</div>
                   <select className="form-input" style={{ width: '100%' }} value={form.salary_type || 'monthly'} onChange={e => set('salary_type', e.target.value)}>
-                    <option value="monthly">月薪制</option>
-                    <option value="hourly">時薪制</option>
+                    <option value="monthly">月薪制</option><option value="hourly">時薪制</option>
                   </select>
                 </div>
-                {(form.salary_type || 'monthly') === 'monthly' ? (
-                  <div><div style={L}>月底薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：28000" value={form.base_salary || ''} onChange={e => set('base_salary', e.target.value)} /></div>
-                ) : (
-                  <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：183" value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
-                )}
+                {(form.salary_type || 'monthly') === 'monthly'
+                  ? <div><div style={L}>月底薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：28000" value={form.base_salary || ''} onChange={e => set('base_salary', e.target.value)} /></div>
+                  : <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：183" value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
+                }
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div><div style={L}>每週工時上限</div><input className="form-input" type="number" style={{ width: '100%' }} value={form.weekly_hours || 40} onChange={e => set('weekly_hours', e.target.value)} /></div>
                 {(form.salary_type || 'monthly') === 'monthly' && (
-                  <div><div style={L}>月底薪換算時薪</div>
+                  <div><div style={L}>換算時薪</div>
                     <div className="form-input" style={{ width: '100%', background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
                       NT$ {form.base_salary ? Math.round(Number(form.base_salary) / 30 / 8) : '—'} /hr
                     </div>
@@ -603,224 +748,115 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 )}
               </div>
 
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginTop: 14, marginBottom: 6 }}>津貼</div>
+              <SectionTitle icon="🎁" text="津貼" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div><div style={L}>伙食津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.meal_allowance || ''} onChange={e => set('meal_allowance', e.target.value)} /></div>
                 <div><div style={L}>交通津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.transport_allowance || ''} onChange={e => set('transport_allowance', e.target.value)} /></div>
                 <div><div style={L}>住房津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.housing_allowance || ''} onChange={e => set('housing_allowance', e.target.value)} /></div>
               </div>
 
-              <SectionTitle icon="🏥" text="勞健保" />
+              <SectionTitle icon="🏦" text="銀行帳戶" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><div style={L}>銀行名稱</div><input className="form-input" style={{ width: '100%' }} placeholder="例：台灣銀行" value={form.bank_name || ''} onChange={e => set('bank_name', e.target.value)} readOnly={!isAdmin} /></div>
+                <div><div style={L}>銀行代碼</div><input className="form-input" style={{ width: '100%' }} value={form.bank_code || '004'} onChange={e => set('bank_code', e.target.value)} readOnly={!isAdmin} /></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><div style={L}>分行名稱</div><input className="form-input" style={{ width: '100%' }} placeholder="例：忠孝分行" value={form.bank_branch || ''} onChange={e => set('bank_branch', e.target.value)} readOnly={!isAdmin} /></div>
+                <div><div style={L}>帳號</div><input className="form-input" style={{ width: '100%' }} value={isAdmin ? (form.bank_account || '') : maskBank(form.bank_account)} onChange={e => set('bank_account', e.target.value)} readOnly={!isAdmin} /></div>
+              </div>
 
-              {/* 勞工保險 */}
-              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.labor_insurance ? 10 : 0 }}>
+              {/* 存摺封面上傳 */}
+              {isAdmin && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={L}>存摺封面</div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    {form.passbook_image_url ? (
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <img src={form.passbook_image_url} alt="存摺封面" style={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-subtle)' }} />
+                        <a href={form.passbook_image_url} target="_blank" rel="noopener noreferrer"
+                          style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 4, padding: '2px 5px', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}>
+                          <Eye size={10} /> 查看
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ width: 120, height: 80, borderRadius: 8, border: '2px dashed var(--border-medium)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+                        未上傳
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', cursor: passbookUploading ? 'not-allowed' : 'pointer', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        <Upload size={13} /> {passbookUploading ? '上傳中...' : '選擇圖片'}
+                        <input type="file" accept="image/*" style={{ display: 'none' }} disabled={passbookUploading}
+                          onChange={e => handlePassbookUpload(e.target.files?.[0])} />
+                      </label>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>支援 JPG / PNG，最大 5MB</div>
+                      {form.passbook_image_url && (
+                        <button onClick={() => set('passbook_image_url', null)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11, textAlign: 'left', padding: 0 }}>
+                          移除圖片
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!isAdmin && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>銀行資訊需管理員權限方可查看與修改</div>}
+            </>
+          )}
+
+          {/* ════════════════════════════════════════
+              人事 / 勞健退
+          ════════════════════════════════════════ */}
+          {mainTab === 'hr' && subTab === 'insurance' && (
+            <>
+              <SectionTitle icon="🏥" text="勞健保 / 退休金" />
+
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 10, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.labor_insurance ? 12 : 0 }}>
                   <span style={{ fontSize: 14, fontWeight: 700 }}>勞工保險</span>
-                  <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.labor_insurance || false} onChange={e => set('labor_insurance', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.labor_insurance ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
-                      <span style={{ position: 'absolute', top: 2, left: form.labor_insurance ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
-                    </span>
-                  </label>
+                  <Toggle checked={form.labor_insurance || false} onChange={e => set('labor_insurance', e.target.checked)} />
                 </div>
                 {form.labor_insurance && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div>
-                      <input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} />
-                    </div>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div>
-                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_start || ''} onChange={e => set('labor_ins_start', e.target.value)} />
-                    </div>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div>
-                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_end || ''} onChange={e => set('labor_ins_end', e.target.value)} />
-                    </div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} /></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_start || ''} onChange={e => set('labor_ins_start', e.target.value)} /></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_end || ''} onChange={e => set('labor_ins_end', e.target.value)} /></div>
                   </div>
                 )}
               </div>
 
-              {/* 全民健康保險 */}
-              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.health_insurance ? 10 : 0 }}>
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 10, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.health_insurance ? 12 : 0 }}>
                   <span style={{ fontSize: 14, fontWeight: 700 }}>全民健康保險</span>
-                  <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.health_insurance || false} onChange={e => set('health_insurance', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.health_insurance ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
-                      <span style={{ position: 'absolute', top: 2, left: form.health_insurance ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
-                    </span>
-                  </label>
+                  <Toggle checked={form.health_insurance || false} onChange={e => set('health_insurance', e.target.checked)} />
                 </div>
                 {form.health_insurance && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div>
-                      <input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} />
-                    </div>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div>
-                      <input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_start || ''} onChange={e => set('health_ins_start', e.target.value)} />
-                    </div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} /></div>
+                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_start || ''} onChange={e => set('health_ins_start', e.target.value)} /></div>
                   </div>
                 )}
               </div>
 
-              {/* 勞工退休金 */}
-              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.pension ? 10 : 0 }}>
+              <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.pension ? 12 : 0 }}>
                   <span style={{ fontSize: 14, fontWeight: 700 }}>勞工退休金</span>
-                  <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.pension || false} onChange={e => set('pension', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.pension ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
-                      <span style={{ position: 'absolute', top: 2, left: form.pension ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
-                    </span>
-                  </label>
+                  <Toggle checked={form.pension || false} onChange={e => set('pension', e.target.checked)} />
                 </div>
                 {form.pension && (
                   <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳率 (%)</div>
-                    <input className="form-input" type="number" style={{ width: '100%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} />
+                    <input className="form-input" type="number" style={{ width: '50%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} />
                   </div>
                 )}
               </div>
-
-              <SectionTitle icon="💬" text="LINE 帳號綁定" />
-
-              {/* 已綁定的 LINE 帳號 */}
-              {lineAccounts.length === 0 ? (
-                <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
-                  尚未綁定任何 LINE 帳號
-                </div>
-              ) : lineAccounts.map(la => (
-                <div key={la.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {la.picture_url ? (
-                      <img src={la.picture_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
-                    ) : (
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: LINE_BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>L</div>
-                    )}
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{la.display_name || 'LINE 使用者'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{la.line_user_id?.slice(0, 12)}...</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: la.is_primary ? 'var(--accent-green-dim)' : 'var(--glass-light)', color: la.is_primary ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
-                      {la.line_channels?.name || la.channel_id}{la.is_primary ? ' · 主要' : ''}
-                    </span>
-                    <button onClick={async () => {
-                      if (!(await confirm({ message: '確定解除此 LINE 綁定？' }))) return
-                      await supabase.from('employee_line_accounts').delete().eq('id', la.id)
-                      setLineAccounts(prev => prev.filter(x => x.id !== la.id))
-                    }} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* 新增綁定 */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' }}>
-                <select className="form-input" style={{ flex: '0 0 140px', fontSize: 12 }}
-                  value={newLineChannel} onChange={e => setNewLineChannel(e.target.value)}>
-                  <option value="">選擇頻道</option>
-                  {lineChannels.map(ch => <option key={ch.id} value={String(ch.id)}>{ch.name}</option>)}
-                </select>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {!manualLineInput && unboundLineUsers.length > 0 ? (
-                    <select className="form-input" style={{ fontSize: 12 }}
-                      value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)}>
-                      <option value="">從系統選擇 LINE 使用者…</option>
-                      {unboundLineUsers.map(u => (
-                        <option key={u.line_user_id} value={u.line_user_id}>
-                          {u.display_name || u.line_user_id.slice(0, 14) + '…'}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input className="form-input" type="text" style={{ fontSize: 12 }}
-                      placeholder="LINE User ID（U 開頭）" value={newLineUserId} onChange={e => setNewLineUserId(e.target.value)} />
-                  )}
-                  {newLineChannel && unboundLineUsers.length > 0 && (
-                    <button type="button" onClick={() => { setManualLineInput(m => !m); setNewLineUserId('') }}
-                      style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 10, textAlign: 'left', padding: 0 }}>
-                      {manualLineInput ? '← 從系統已知名單選擇' : '✏️ 手動輸入 LINE ID'}
-                    </button>
-                  )}
-                </div>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap' }}
-                  disabled={!newLineUserId || !newLineChannel}
-                  onClick={async () => {
-                    const uid = newLineUserId.trim()
-                    if (!uid.startsWith('U') || uid.length < 20) { toast.error('LINE User ID 格式錯誤（應以 U 開頭且至少 20 字元）'); return }
-                    const chId = parseInt(newLineChannel)
-                    const { data, error } = await supabase.from('employee_line_accounts').insert({
-                      employee_id: employee.id,
-                      channel_id: chId,
-                      line_user_id: uid,
-                      is_primary: lineAccounts.length === 0,
-                      is_verified: true,
-                    }).select('*, line_channels(id, code, name)').single()
-                    if (error) { toast.error('儲存失敗，請稍後再試'); return }
-                    // Sync line_users so the webhook recognises this user going forward
-                    await supabase.from('line_users').update({ employee_id: employee.id, is_verified: true })
-                      .eq('channel_id', chId).eq('line_user_id', uid).catch(() => {})
-                    setLineAccounts(prev => [...prev, data])
-                    setUnboundLineUsers(prev => prev.filter(u => u.line_user_id !== uid))
-                    setNewLineUserId('')
-                  }}>
-                  <Plus size={12} /> 綁定
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                員工也可在 LINE 輸入 <code style={{ background: 'var(--glass-light)', padding: '1px 6px', borderRadius: 3 }}>/註冊 {employee.name}</code> 自助綁定
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginTop: 10, border: '1px solid var(--border-subtle)' }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>LINE 管理員權限</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>開啟後可在 LINE 使用管理指令</div>
-                </div>
-                <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={form.line_admin || false} onChange={e => set('line_admin', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                  <span style={{ position: 'absolute', inset: 0, borderRadius: 12, background: form.line_admin ? 'var(--accent-cyan)' : 'var(--border-medium)', transition: '0.2s' }}>
-                    <span style={{ position: 'absolute', top: 2, left: form.line_admin ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
-                  </span>
-                </label>
-              </div>
             </>
           )}
 
-          {/* ═══ 技能 ═══ */}
-          {/* ═══ 家庭（admin 才看得到）═══ */}
-          {tab === 'family' && isAdmin && (
+          {/* ════════════════════════════════════════
+              排班 / 技能 & 權限
+          ════════════════════════════════════════ */}
+          {mainTab === 'schedule' && subTab === 'skills' && (
             <>
-              <SectionTitle icon="👪" text="家庭成員" />
-              <EmployeeChildTableEditor employeeId={employee.id} table="family_members" />
-            </>
-          )}
-
-          {/* ═══ 學歷 ═══ */}
-          {tab === 'education' && isAdmin && (
-            <>
-              <SectionTitle icon="🎓" text="學歷紀錄" />
-              <EmployeeChildTableEditor employeeId={employee.id} table="education_records" />
-            </>
-          )}
-
-          {/* ═══ 經歷 ═══ */}
-          {tab === 'work' && isAdmin && (
-            <>
-              <SectionTitle icon="💼" text="工作經歷" />
-              <EmployeeChildTableEditor employeeId={employee.id} table="work_experiences" />
-            </>
-          )}
-
-          {/* ═══ 證照 ═══ */}
-          {tab === 'cert' && isAdmin && (
-            <>
-              <SectionTitle icon="📜" text="證照清單" />
-              <EmployeeChildTableEditor employeeId={employee.id} table="certifications" />
-            </>
-          )}
-
-          {tab === 'skills' && (
-            <>
-              <SectionTitle icon="🏷️" text="技能 / 證照" />
+              <SectionTitle icon="🏷️" text="技能" />
               {skills.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>尚未新增技能</div>}
               {skills.map(s => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)' }}>
@@ -853,11 +889,11 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               <SectionTitle icon="⭐" text="排班優先級" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {[
-                  { value: 1, label: '最優先', color: 'var(--accent-red)', desc: '王牌員工，優先排熱門時段' },
-                  { value: 2, label: '優先', color: 'var(--accent-orange)', desc: '表現優秀' },
-                  { value: 3, label: '一般', color: 'var(--accent-cyan)', desc: '預設' },
-                  { value: 4, label: '低', color: 'var(--text-tertiary)', desc: '新進/訓練中' },
-                  { value: 5, label: '最低', color: 'var(--text-muted)', desc: '備用人力' },
+                  { value: 1, label: '最優先', color: 'var(--accent-red)',    desc: '王牌員工，優先排熱門時段' },
+                  { value: 2, label: '優先',   color: 'var(--accent-orange)', desc: '表現優秀' },
+                  { value: 3, label: '一般',   color: 'var(--accent-cyan)',   desc: '預設' },
+                  { value: 4, label: '低',     color: 'var(--text-tertiary)', desc: '新進/訓練中' },
+                  { value: 5, label: '最低',   color: 'var(--text-muted)',    desc: '備用人力' },
                 ].map(p => (
                   <button key={p.value} onClick={() => set('schedule_priority', p.value)} title={p.desc} style={{
                     flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -865,153 +901,17 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                     color: (form.schedule_priority || 3) === p.value ? '#fff' : 'var(--text-muted)',
                     fontSize: 12, fontWeight: 700,
                     outline: (form.schedule_priority || 3) === p.value ? `2px solid ${p.color}` : '1px solid var(--border-subtle)',
-                  }}>
-                    {p.label}
-                  </button>
+                  }}>{p.label}</button>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                AI 排班會根據優先級決定排班順序，優先級高的員工會先被排入尖峰時段
-              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>AI 排班會根據優先級決定排班順序，優先級高的員工會先被排入尖峰時段</div>
             </>
           )}
 
-          {/* ═══ 進行中流程（以此員工為對象的 SOP 部署）═══ */}
-          {tab === 'workflows' && (
-            <>
-              <SectionTitle icon="🚀" text={`進行中 / 已完成的相關流程 (${targetWorkflows.length})`} />
-              {targetWorkflows.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32, fontSize: 13 }}>
-                  尚無以此員工為對象的流程<br />
-                  <span style={{ fontSize: 11 }}>（部署 SOP 時若選擇此員工為對象，會在這裡顯示）</span>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {targetWorkflows.map(wf => {
-                    const wfTasks = targetWfTasks.filter(t => t.workflow_instance_id === wf.id)
-                    const done = wfTasks.filter(t => t.status === '已完成').length
-                    const total = wfTasks.length || 1
-                    const pct = Math.round((done / total) * 100)
-                    const statusColor = wf.status === '進行中' ? 'var(--accent-cyan)'
-                      : wf.status === '已完成' ? 'var(--accent-green)'
-                      : 'var(--accent-orange)'
-                    return (
-                      <div key={wf.id} style={{
-                        padding: 14, borderRadius: 10,
-                        background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700 }}>
-                            {wf.template_name}
-                            {wf.priority && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>優先：{wf.priority}</span>}
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: statusColor }}>
-                            {wf.status}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <div style={{ flex: 1, height: 6, background: 'rgba(148,163,184,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: statusColor }} />
-                          </div>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 60, textAlign: 'right' }}>
-                            {done} / {total} ({pct}%)
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                          {wf.store && <span>📍 {wf.store}</span>}
-                          {wf.planned_start_date && <span>🗓 {wf.planned_start_date}{wf.planned_end_date ? ` ~ ${wf.planned_end_date}` : ''}</span>}
-                          {wf.started_by && <span>👤 由 {wf.started_by} 發起</span>}
-                        </div>
-                        {wf.notes && (
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic' }}>
-                            📝 {wf.notes}
-                          </div>
-                        )}
-                        {/* 步驟細節（前 3 個 + 摘要）*/}
-                        {wfTasks.length > 0 && (
-                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
-                            {wfTasks.slice(0, 5).map(t => (
-                              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
-                                <span>
-                                  {t.status === '已完成' ? '✅' : t.status === '進行中' ? '⏳' : '⚪'}
-                                  <span style={{ marginLeft: 6, color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: t.status === '已完成' ? 'line-through' : 'none' }}>
-                                    {t.title}
-                                  </span>
-                                </span>
-                                <span style={{ color: 'var(--text-muted)' }}>{t.assignee || '—'}</span>
-                              </div>
-                            ))}
-                            {wfTasks.length > 5 && (
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
-                                ...另有 {wfTasks.length - 5} 個步驟
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ═══ 性格分析 ═══ */}
-          {tab === 'assignments' && (
-            <>
-              <SectionTitle icon="📜" text={`指派歷史 (${assignments.length})`} />
-              {assignments.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無指派紀錄</div>
-              ) : (
-                <div className="data-table-wrapper">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>主/次</th>
-                        <th>部門</th>
-                        <th>門市</th>
-                        <th>職稱</th>
-                        <th>職等</th>
-                        <th>類型</th>
-                        <th>部分工時</th>
-                        <th>週時數</th>
-                        <th>起始</th>
-                        <th>結束</th>
-                        <th>生效</th>
-                        <th>修改人</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignments.map(a => (
-                        <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.7 }}>
-                          <td><span className={`badge ${a.department_type === '主要' ? 'badge-cyan' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.department_type}</span></td>
-                          <td style={{ fontSize: 12 }}>{a.departments?.name || '—'}</td>
-                          <td style={{ fontSize: 12 }}>{a.stores?.name || '—'}</td>
-                          <td style={{ fontSize: 12 }}>{a.position || '—'}</td>
-                          <td style={{ fontSize: 12 }}>{a.job_grade || '—'}</td>
-                          <td style={{ fontSize: 12 }}>{a.employment_type || '—'}</td>
-                          <td style={{ fontSize: 12 }}>{a.is_part_time ? '是' : '否'}</td>
-                          <td style={{ fontSize: 12 }}>{a.avg_weekly_hours || 0}</td>
-                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.start_date}</td>
-                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.end_date || '—'}</td>
-                          <td><span className={`badge ${a.is_active ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.is_active ? '是' : '否'}</span></td>
-                          <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.updated_by_emp?.name || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-
-          {tab === 'personality' && <PersonalityTab employee={employee} />}
-
-          {/* ═══ 能力發展 ═══ */}
-          {tab === 'development' && <DevelopmentTab employee={employee} />}
-
-          {/* ═══ 排班 ═══ */}
-          {tab === 'schedule' && (
+          {/* ════════════════════════════════════════
+              排班 / 班表設定
+          ════════════════════════════════════════ */}
+          {mainTab === 'schedule' && subTab === 'availability' && (
             <>
               <SectionTitle icon="📅" text="每週可排班時間" />
               <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
@@ -1046,10 +946,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                             <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: 'auto', minWidth: 80 }}
                               value={av?.preferred_shift || ''} onChange={e => setAvailShift(idx, e.target.value)}>
                               <option value="">—</option>
-                              <option value="早班">早班</option>
-                              <option value="午班">午班</option>
-                              <option value="晚班">晚班</option>
-                              <option value="全天">全天</option>
+                              <option value="早班">早班</option><option value="午班">午班</option>
+                              <option value="晚班">晚班</option><option value="全天">全天</option>
                             </select>
                           </td>
                         </tr>
@@ -1060,38 +958,48 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>AI 排班會參考此設定，避免在「不可」的時段安排班表</div>
 
-              <SectionTitle icon="📋" text="請假 / 排除日期" />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <button className="btn btn-sm btn-secondary" onClick={() => {}}><Plus size={13} /></button>
-              </div>
-              {leaveRecords.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無請假紀錄</div>
-              ) : leaveRecords.map(lv => (
-                <div key={lv.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
-                  <span>{lv.type} · {lv.start_date} · {lv.days}天</span>
-                  <span className={`badge ${lv.status === '已核准' ? 'badge-success' : lv.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 11 }}>{lv.status}</span>
-                </div>
-              ))}
-
-              <SectionTitle icon="📅" text="排班偏好" />
+              <SectionTitle icon="📋" text="排班偏好" />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                 <button className="btn btn-sm btn-secondary" onClick={addSchedPref}><Plus size={13} /></button>
               </div>
-              {schedPrefs.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無排班偏好</div>
-              ) : schedPrefs.map(p => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
-                  <span>{p.notes || p.pref_type}</span>
-                  <button onClick={() => deleteSchedPref(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
-                </div>
-              ))}
+              {schedPrefs.length === 0
+                ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無排班偏好</div>
+                : schedPrefs.map(p => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                    <span>{p.notes || p.pref_type}</span>
+                    <button onClick={() => deleteSchedPref(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
+                  </div>
+                ))
+              }
+
+              <SectionTitle icon="🏖️" text="請假紀錄" />
+              {leaveRecords.length === 0
+                ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無請假紀錄</div>
+                : leaveRecords.map(lv => (
+                  <div key={lv.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                    <span>{lv.type} · {lv.start_date} · {lv.days}天</span>
+                    <span className={`badge ${lv.status === '已核准' ? 'badge-success' : lv.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 11 }}>{lv.status}</span>
+                  </div>
+                ))
+              }
             </>
           )}
 
-          {/* ═══ 紀錄 ═══ */}
-          {tab === 'records' && (
+          {/* ════════════════════════════════════════
+              發展 / 性格分析
+          ════════════════════════════════════════ */}
+          {mainTab === 'growth' && subTab === 'personality' && <PersonalityTab employee={employee} />}
+
+          {/* ════════════════════════════════════════
+              發展 / 能力發展
+          ════════════════════════════════════════ */}
+          {mainTab === 'growth' && subTab === 'development' && <DevelopmentTab employee={employee} />}
+
+          {/* ════════════════════════════════════════
+              歷程 / 流程 & 任務
+          ════════════════════════════════════════ */}
+          {mainTab === 'history' && subTab === 'workflows' && (
             <>
-              {/* 到職任務 */}
               {onboardingTasks.length > 0 && (() => {
                 const completed = onboardingTasks.filter(t => t.status === '已完成').length
                 const total = onboardingTasks.length
@@ -1116,30 +1024,145 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                             {t.workflow_instances?.template_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.workflow_instances.template_name}</div>}
                           </div>
                         </div>
-                        <span className={`badge ${t.status === '已完成' ? 'badge-success' : t.status === '進行中' ? 'badge-warning' : 'badge-cyan'}`} style={{ fontSize: 11 }}>
-                          {t.status}
-                        </span>
+                        <span className={`badge ${t.status === '已完成' ? 'badge-success' : t.status === '進行中' ? 'badge-warning' : 'badge-cyan'}`} style={{ fontSize: 11 }}>{t.status}</span>
                       </div>
                     ))}
                   </>
                 )
               })()}
 
+              <SectionTitle icon="🚀" text={`進行中 / 已完成流程 (${targetWorkflows.length})`} />
+              {targetWorkflows.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32, fontSize: 13 }}>
+                  尚無以此員工為對象的流程<br />
+                  <span style={{ fontSize: 11 }}>（部署 SOP 時若選擇此員工為對象，會在這裡顯示）</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {targetWorkflows.map(wf => {
+                    const wfTasks = targetWfTasks.filter(t => t.workflow_instance_id === wf.id)
+                    const done = wfTasks.filter(t => t.status === '已完成').length
+                    const total = wfTasks.length || 1
+                    const pct = Math.round((done / total) * 100)
+                    const wfColor = wf.status === '進行中' ? 'var(--accent-cyan)' : wf.status === '已完成' ? 'var(--accent-green)' : 'var(--accent-orange)'
+                    return (
+                      <div key={wf.id} style={{ padding: 14, borderRadius: 10, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>
+                            {wf.template_name}
+                            {wf.priority && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>優先：{wf.priority}</span>}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: wfColor }}>{wf.status}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <div style={{ flex: 1, height: 6, background: 'rgba(148,163,184,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: wfColor }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 60, textAlign: 'right' }}>{done} / {total} ({pct}%)</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {wf.store && <span>📍 {wf.store}</span>}
+                          {wf.planned_start_date && <span>🗓 {wf.planned_start_date}{wf.planned_end_date ? ` ~ ${wf.planned_end_date}` : ''}</span>}
+                          {wf.started_by && <span>👤 由 {wf.started_by} 發起</span>}
+                        </div>
+                        {wf.notes && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, fontStyle: 'italic' }}>📝 {wf.notes}</div>}
+                        {wfTasks.length > 0 && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
+                            {wfTasks.slice(0, 5).map(t => (
+                              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                                <span>
+                                  {t.status === '已完成' ? '✅' : t.status === '進行中' ? '⏳' : '⚪'}
+                                  <span style={{ marginLeft: 6, color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: t.status === '已完成' ? 'line-through' : 'none' }}>{t.title}</span>
+                                </span>
+                                <span style={{ color: 'var(--text-muted)' }}>{t.assignee || '—'}</span>
+                              </div>
+                            ))}
+                            {wfTasks.length > 5 && <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>...另有 {wfTasks.length - 5} 個步驟</div>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ════════════════════════════════════════
+              歷程 / 指派 & 異動
+          ════════════════════════════════════════ */}
+          {mainTab === 'history' && subTab === 'assignments' && (
+            <>
+              <SectionTitle icon="📋" text={`指派歷史 (${assignments.length})`} />
+              {assignments.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無指派紀錄</div>
+              ) : (
+                <div className="data-table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>主/次</th><th>部門</th><th>門市</th><th>職稱</th><th>職等</th>
+                        <th>類型</th><th>部分工時</th><th>週時數</th><th>起始</th><th>結束</th><th>生效</th><th>修改人</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignments.map(a => (
+                        <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.7 }}>
+                          <td><span className={`badge ${a.department_type === '主要' ? 'badge-cyan' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.department_type}</span></td>
+                          <td style={{ fontSize: 12 }}>{a.departments?.name || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.stores?.name || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.position || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.job_grade || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.employment_type || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{a.is_part_time ? '是' : '否'}</td>
+                          <td style={{ fontSize: 12 }}>{a.avg_weekly_hours || 0}</td>
+                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.start_date}</td>
+                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.end_date || '—'}</td>
+                          <td><span className={`badge ${a.is_active ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.is_active ? '是' : '否'}</span></td>
+                          <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.updated_by_emp?.name || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <SectionTitle icon="📦" text={`異動紀錄 (${transfers.length})`} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <button className="btn btn-sm btn-secondary" onClick={addTransfer}><Plus size={13} /></button>
+              </div>
+              {transfers.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無異動紀錄</div>
+              ) : transfers.map(t => (
+                <div key={t.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 600 }}>{t.transfer_date}</div>
+                  <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{t.from_store || '—'} → {t.to_store || '—'}{t.reason && <span> · {t.reason}</span>}</div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ════════════════════════════════════════
+              歷程 / 評估 & 眷屬
+          ════════════════════════════════════════ */}
+          {mainTab === 'history' && subTab === 'reviews' && (
+            <>
               <SectionTitle icon="🎯" text="績效評估" />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                 <button className="btn btn-sm btn-secondary" onClick={addReview}><Plus size={13} /></button>
               </div>
-              {reviews.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無紀錄</div>
-              ) : reviews.map(r => (
-                <div key={r.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ fontWeight: 600 }}>{r.review_date} · {r.reviewer}</span>
-                    <span style={{ color: 'var(--accent-orange)', fontWeight: 700 }}>{'⭐'.repeat(r.score || 0)}</span>
+              {reviews.length === 0
+                ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無紀錄</div>
+                : reviews.map(r => (
+                  <div key={r.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ fontWeight: 600 }}>{r.review_date} · {r.reviewer}</span>
+                      <span style={{ color: 'var(--accent-orange)', fontWeight: 700 }}>{'⭐'.repeat(r.score || 0)}</span>
+                    </div>
+                    {r.notes && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{r.notes}</div>}
                   </div>
-                  {r.notes && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{r.notes}</div>}
-                </div>
-              ))}
+                ))
+              }
 
               <SectionTitle icon="👥" text={`眷屬 (${dependents.length})`} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
@@ -1179,53 +1202,38 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   </div>
                 </div>
               )}
-              {dependents.length === 0 && !showDepForm ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無眷屬</div>
-              ) : dependents.map(d => (
-                <div key={d.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
-                      <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
-                      {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
+              {dependents.length === 0 && !showDepForm
+                ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無眷屬</div>
+                : dependents.map(d => (
+                  <div key={d.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
+                        <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
+                        {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
+                      </div>
+                      <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
                     </div>
-                    <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
+                    {(d.id_number || d.birth_date) && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        {d.id_number && <span>ID: {d.id_number.slice(0, 3)}***</span>}
+                        {d.id_number && d.birth_date && <span> · </span>}
+                        {d.birth_date && <span>生日: {d.birth_date}</span>}
+                      </div>
+                    )}
                   </div>
-                  {(d.id_number || d.birth_date) && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {d.id_number && <span>ID: {d.id_number.slice(0, 3)}***</span>}
-                      {d.id_number && d.birth_date && <span> · </span>}
-                      {d.birth_date && <span>生日: {d.birth_date}</span>}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              <SectionTitle icon="📦" text={`異動紀錄 (${transfers.length})`} />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <button className="btn btn-sm btn-secondary" onClick={addTransfer}><Plus size={13} /></button>
-              </div>
-              {transfers.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無異動紀錄</div>
-              ) : transfers.map(t => (
-                <div key={t.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
-                  <div style={{ fontWeight: 600 }}>{t.transfer_date}</div>
-                  <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                    {t.from_store || '—'} → {t.to_store || '—'}
-                    {t.reason && <span> · {t.reason}</span>}
-                  </div>
-                </div>
-              ))}
+                ))
+              }
             </>
           )}
 
-          {tab === 'changelog' && isAdmin && (
-            <ChangelogPanel
-              tables={['employees']}
-              targetId={employee?.id}
-              orgId={employee?.organization_id}
-            />
+          {/* ════════════════════════════════════════
+              歷程 / 變更日誌 (admin)
+          ════════════════════════════════════════ */}
+          {mainTab === 'history' && subTab === 'changelog' && isAdmin && (
+            <ChangelogPanel tables={['employees']} targetId={employee?.id} orgId={employee?.organization_id} />
           )}
+
         </div>
       </div>
 

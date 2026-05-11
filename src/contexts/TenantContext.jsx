@@ -1,45 +1,39 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
 
 const TenantContext = createContext(null)
 
 export function TenantProvider({ children }) {
+  // Derive authorized org from AuthContext — avoids a redundant employees table query
+  const { profile, profileReady } = useAuth()
+  const authorizedOrgId = profile?.organization_id ?? null
   const [tenant, setTenant] = useState(null)
   const [organization, setOrganization] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Returns the authenticated user's authorized organization_id from the server.
-  // The tenant is always server-validated: localStorage is used only as a fast-path
-  // cache. Any mismatch or missing entry triggers automatic re-initialization from
-  // the server, so an attacker cannot force a cross-tenant read by manipulating
-  // localStorage, and deleting the localStorage key cannot produce a blank-tenant DoS.
-  const getAuthorizedOrgId = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return null
-    // Try auth_user_id first (LINE-login users have synthetic auth email)
-    let { data: emp } = await supabase
-      .from('employees').select('organization_id').eq('auth_user_id', session.user.id).maybeSingle()
-    if (!emp) {
-      const { data: byEmail } = await supabase
-        .from('employees').select('organization_id').eq('email', session.user.email).maybeSingle()
-      emp = byEmail
-    }
-    return emp?.organization_id ?? null
-  }
-
   useEffect(() => {
+    if (!profileReady) return
+
     const restoreTenant = async () => {
-      const authorizedOrgId = await getAuthorizedOrgId()
+      // User logged out or has no org — clear state and localStorage
+      if (authorizedOrgId === null) {
+        setTenant(null)
+        setOrganization(null)
+        localStorage.removeItem('sme_tenant')
+        setLoading(false)
+        return
+      }
+
       const savedTenant = localStorage.getItem('sme_tenant')
       let usedCache = false
 
       if (savedTenant) {
         try {
           const parsed = JSON.parse(savedTenant)
-          // Reject stored tenant if org doesn't match the authenticated user's org.
-          // Fall back to parsed.id for entries cached before the organization_id normalization.
+          // Fall back to parsed.id for entries cached before organization_id normalization
           const storedOrgId = parsed?.organization_id ?? parsed?.id ?? null
-          if (authorizedOrgId !== null && storedOrgId !== authorizedOrgId) {
+          if (storedOrgId !== authorizedOrgId) {
             localStorage.removeItem('sme_tenant')
           } else {
             setTenant(parsed)
@@ -54,10 +48,8 @@ export function TenantProvider({ children }) {
         } catch { localStorage.removeItem('sme_tenant') }
       }
 
-      // If localStorage was empty or was rejected (mismatch/corrupt), auto-initialize
-      // from the server so the user is never left with a null tenant after a valid login.
-      // This also closes the DoS window where deleting the localStorage key breaks the UI.
-      if (!usedCache && authorizedOrgId !== null) {
+      // No valid cache — initialize from server
+      if (!usedCache) {
         const { data: org } = await supabase.from('organizations').select('*').eq('id', authorizedOrgId).single()
         if (org) {
           const tenantData = { organization_id: authorizedOrgId, organization: org }
@@ -70,15 +62,13 @@ export function TenantProvider({ children }) {
       setLoading(false)
     }
     restoreTenant()
-  }, [])
+  }, [profileReady, authorizedOrgId])
 
   const switchTenant = async (tenantData) => {
     // Normalize: organizations rows from getTenants() have .id not .organization_id
     tenantData = { ...tenantData, organization_id: tenantData.organization_id ?? tenantData.id ?? null }
 
-    // Verify the user belongs to the target org before accepting the switch
     if (tenantData.organization_id) {
-      const authorizedOrgId = await getAuthorizedOrgId()
       if (authorizedOrgId !== null && tenantData.organization_id !== authorizedOrgId) {
         return { error: 'Tenant switch denied: org mismatch' }
       }
@@ -100,17 +90,6 @@ export function TenantProvider({ children }) {
     setOrganization(null)
     localStorage.removeItem('sme_tenant')
   }
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        setTenant(null)
-        setOrganization(null)
-        localStorage.removeItem('sme_tenant')
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, [])
 
   return (
     <TenantContext.Provider value={{ tenant, organization, loading, switchTenant, clearTenant }}>

@@ -351,21 +351,22 @@ export default function InstanceDetailView({
             {taskForm.approval_mode === 'people' && (
               <>
                 <Field label="加入審批人員">
-                  <select className="form-input" style={{ width: '100%' }} value=""
-                    onChange={e => {
-                      const name = e.target.value
+                  <SearchableSelect
+                    value=""
+                    onChange={(name) => {
                       if (!name) return
                       setTaskForm(f => {
                         const cur = f.confirmation_approvers || []
                         if (cur.includes(name)) return f
                         return { ...f, confirmation_approvers: [...cur, name] }
                       })
-                    }}>
-                    <option value="">+ 從員工挑一位</option>
-                    {employees
-                      .filter(e => !(taskForm.confirmation_approvers || []).includes(e.name))
-                      .map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                  </select>
+                    }}
+                    options={empOptions(
+                      employees.filter(e => !(taskForm.confirmation_approvers || []).includes(e.name)),
+                      { keyBy: 'name' }
+                    )}
+                    placeholder="🔍 搜尋姓名 / 職稱 / 部門 / 門市..."
+                  />
                 </Field>
                 {(taskForm.confirmation_approvers || []).length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>

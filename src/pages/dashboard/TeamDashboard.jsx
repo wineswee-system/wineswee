@@ -214,15 +214,23 @@ export default function TeamDashboard() {
     if (!orgId) return
     setLoading(true)
 
-    // employees in scope — 只 select 確定存在的欄位（probation_end_date/hire_date 不存在）
+    // employees in scope — 用 * 抓全欄位避免 schema drift 造成 400
+    // （demo DB 跟 migration files 對不上是常事，select * 拿到啥算啥）
     let empQ = supabase.from('employees')
-      .select('id, name, status, store_id, store, department_id, dept, position, birthday, join_date')
+      .select('*')
       .eq('organization_id', orgId)
       .eq('status', '在職')
       .order('name')
     if (scopeStoreId) empQ = empQ.eq('store_id', scopeStoreId)
     const { data: empData, error: empErr } = await empQ
-    if (empErr) console.warn('[TeamDashboard] employees query failed:', empErr)
+    if (empErr) {
+      console.warn('[TeamDashboard] employees query failed:', empErr)
+      // try without status filter (避免 status 欄位值不對)
+      const { data: retryData } = await supabase.from('employees')
+        .select('id, name, store_id, store, dept, position')
+        .eq('organization_id', orgId)
+      console.warn('[TeamDashboard] employees retry data:', retryData)
+    }
     const teamData = empData || []
     setTeam(teamData)
     const teamIds = teamData.map(e => e.id)

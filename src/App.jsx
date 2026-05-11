@@ -93,9 +93,9 @@ function AdminApp() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
             <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
-            <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.read') ? <FinanceModule /> : blocked} />
-            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'report.view') ? <AnalyticsModule /> : blocked} />
-            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'report.view') ? <AnalyticsModule /> : blocked} />
+            <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.view') ? <FinanceModule /> : blocked} />
+            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'audit.view') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'audit.view') ? <AnalyticsModule /> : blocked} />
             <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
             <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
             <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
@@ -105,7 +105,7 @@ function AdminApp() {
             <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
             <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
             <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
-            <Route path="/system/*" element={canAccessWithPerm('/system', 'admin.system') ? <SystemModule /> : blocked} />
+            <Route path="/system/*" element={canAccessWithPerm('/system', 'system.admin') ? <SystemModule /> : blocked} />
             <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
             <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
             <Route path="/super-admin/*" element={isSuperAdmin ? <SuperAdminModule /> : blocked} />

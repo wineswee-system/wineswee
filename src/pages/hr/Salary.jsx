@@ -294,13 +294,13 @@ export default function Salary() {
         : employees
 
       // Fetch all data in parallel (correct field names)
-      const [attRes, otRes, lvRes, ssRes] = await Promise.all([
+      const [attRes, otRes, lvRes, ssRes, holRes] = await Promise.all([
         supabase.from('attendance_records')
-          .select('employee_id, total_hours, is_late, late_minutes')
+          .select('employee_id, date, total_hours, is_late, late_minutes')
           .eq('organization_id', orgId)
           .gte('date', monthStart).lte('date', monthEnd),
         supabase.from('overtime_requests')
-          .select('employee_id, ot_hours, ot_type')
+          .select('employee_id, ot_hours, ot_type, ot_category, request_date')
           .eq('status', '已核准')
           .eq('organization_id', orgId)
           .gte('request_date', monthStart).lte('request_date', monthEnd),
@@ -312,26 +312,50 @@ export default function Salary() {
         supabase.from('salary_structures')
           .select('*')
           .in('employee_id', scopedEmployees.map(e => e.id)),
+        // 國定假日清單：用來判定打卡那天是否該加倍計薪（勞基法 §39）
+        supabase.from('holidays')
+          .select('date, is_workday')
+          .gte('date', monthStart).lte('date', monthEnd),
       ])
 
-      // attendance map: employee_id → { hours, lateMins, days }
+      // 國定假日 Set（is_workday=false）→ 該日上班自動加倍，不需申請加班
+      const holidayDates = new Set(
+        (holRes.data || [])
+          .filter(h => h.is_workday === false)
+          .map(h => h.date)
+      )
+
+      // attendance map: employee_id → { hours, holidayHours, lateMins, days }
+      // hours        = 平日 + 補班日 + 例假/休息日 (打卡正常 1 倍工資)
+      // holidayHours = 國定假日打卡工時 (要額外加 1 倍 → 合計 2 倍)
       const attMap = {}
       for (const a of (attRes.data || [])) {
         const id = a.employee_id
-        if (!attMap[id]) attMap[id] = { hours: 0, lateMins: 0, days: 0 }
-        attMap[id].hours    += Number(a.total_hours || 0)
+        if (!attMap[id]) attMap[id] = { hours: 0, holidayHours: 0, lateMins: 0, days: 0 }
+        const h = Number(a.total_hours || 0)
+        if (holidayDates.has(a.date)) {
+          attMap[id].holidayHours += h
+        }
+        attMap[id].hours    += h
         attMap[id].days     += 1
         if (a.is_late) attMap[id].lateMins += Number(a.late_minutes || 0)
       }
 
-      // overtime map: employee_id → { weekday, restday }
+      // overtime map: employee_id → { weekday, restday, holiday }
+      // ot_category 由 DB trigger 依 holidays 表 + 星期幾自動分類（勞基法 §36）：
+      //   weekday=平日 ×1.34/1.67、restday=休息日 ×1.34/1.67/2.67、holiday=例假/國定 ×2
+      // 舊資料若 ot_category 為 NULL，fallback：用 request_date 的星期幾粗略分類
       const otMap = {}
       for (const o of (otRes.data || [])) {
         const id = o.employee_id
-        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0 }
-        const isRestday = ['restday', 'holiday'].includes(o.ot_type)
-        if (isRestday) otMap[id].restday += Number(o.ot_hours || 0)
-        else           otMap[id].weekday += Number(o.ot_hours || 0)
+        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0, holiday: 0 }
+        let cat = o.ot_category
+        if (!cat && o.request_date) {
+          const dow = new Date(o.request_date).getDay()  // 0=Sun, 6=Sat
+          cat = dow === 0 ? 'holiday' : dow === 6 ? 'restday' : 'weekday'
+        }
+        cat = cat || 'weekday'
+        otMap[id][cat] = (otMap[id][cat] || 0) + Number(o.ot_hours || 0)
       }
 
       // leave map: employee_id → { absence days }
@@ -366,12 +390,13 @@ export default function Salary() {
       const preview = scopedEmployees.map(emp => {
         const ss              = ssMap[emp.id] || {}
         const isHourly        = ss.salary_type === 'hourly'
-        const att          = attMap[emp.id] || { hours: 0, lateMins: 0, days: 0 }
-        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0 }
+        const att          = attMap[emp.id] || { hours: 0, holidayHours: 0, lateMins: 0, days: 0 }
+        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0 }
         const absenceDays  = lvMap[emp.id]?.absence || 0
         const policyBonus  = bonusMap[emp.id] || 0
 
         // 時薪制：本薪 = 時薪 × 當月工時；月薪制：本薪 = 設定值
+        // att.hours 已含國定假日 1 倍工時；國定假日的額外 1 倍透過下面 holidayBonus 加給
         const baseSalary      = isHourly
           ? Math.round((ss.hourly_rate || 0) * att.hours)
           : (ss.base_salary || emp.base_salary || 0)
@@ -389,18 +414,28 @@ export default function Salary() {
           ? (Number(ss.hourly_rate) || 0)
           : Math.round((ss.base_salary || emp.base_salary || 0) / 30 / 8)
 
-        // Weekday OT: tiered 1.34 / 1.67
+        // 加班費：勞基法 §24 三桶階梯
+        // 平日延長工時：前 2h × 1.34，第 3~4h × 1.67
         const otPayWeekday = ot.weekday <= 2
           ? Math.round(ot.weekday * hourlyRate * 1.34)
           : Math.round(2 * hourlyRate * 1.34 + (ot.weekday - 2) * hourlyRate * 1.67)
 
-        // Rest-day OT: tiered 1.34 / 1.67 / 2.67
+        // 休息日加班：前 2h × 1.34，第 3~8h × 1.67，第 9~12h × 2.67
         const rd1 = Math.min(ot.restday, 2)
         const rd2 = Math.min(Math.max(ot.restday - 2, 0), 6)
         const rd3 = Math.max(ot.restday - 8, 0)
         const otPayRestday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
 
-        const overtimePay = otPayWeekday + otPayRestday
+        // 例假日/國定假日「加班申請」：全額加倍 × 2
+        const otPayHoliday = Math.round(ot.holiday * hourlyRate * 2)
+
+        // 國定假日「正常打卡上班」加給（勞基法 §39，不需申請加班）
+        // 員工該日打卡的工時，於 baseSalary 計過 1 倍後，這裡額外加 1 倍 → 合計 ×2
+        // - 時薪制：1 倍已在 baseSalary 內，這裡加 hourly × holidayHours × 1
+        // - 月薪制：月薪已含整月工資（含該日），這裡同樣加 hourly × holidayHours × 1
+        const holidayBonus = Math.round((att.holidayHours || 0) * hourlyRate * 1)
+
+        const overtimePay = otPayWeekday + otPayRestday + otPayHoliday + holidayBonus
 
         // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5
         const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
@@ -435,8 +470,14 @@ export default function Salary() {
           pension_self_pct: ss.voluntary_pension_rate || 0,
           workDays:         att.days,
           workHours:        att.hours,
+          holidayHours:     att.holidayHours || 0,
+          holidayBonus,
           otWeekday:        ot.weekday,
           otRestday:        ot.restday,
+          otHoliday:        ot.holiday,
+          otPayWeekday,
+          otPayRestday,
+          otPayHoliday,
           absenceDays,
           lateMins:         att.lateMins,
           overtimePay,

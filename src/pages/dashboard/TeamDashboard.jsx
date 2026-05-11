@@ -214,14 +214,15 @@ export default function TeamDashboard() {
     if (!orgId) return
     setLoading(true)
 
-    // employees in scope
+    // employees in scope — 只 select 確定存在的欄位（probation_end_date/hire_date 不存在）
     let empQ = supabase.from('employees')
-      .select('id, name, status, store_id, store, department_id, dept, position, birthday, probation_end_date, hire_date')
+      .select('id, name, status, store_id, store, department_id, dept, position, birthday, join_date')
       .eq('organization_id', orgId)
       .eq('status', '在職')
       .order('name')
     if (scopeStoreId) empQ = empQ.eq('store_id', scopeStoreId)
-    const { data: empData } = await empQ
+    const { data: empData, error: empErr } = await empQ
+    if (empErr) console.warn('[TeamDashboard] employees query failed:', empErr)
     const teamData = empData || []
     setTeam(teamData)
     const teamIds = teamData.map(e => e.id)
@@ -278,15 +279,21 @@ export default function TeamDashboard() {
     // ── 警示 ──
     const al = []
 
-    // 試用期 7 天內到期
+    // 試用期 7 天內到期（預設試用期 3 個月，從 join_date 推算）
     const soon = new Date()
     soon.setDate(soon.getDate() + 7)
     const soonStr = soon.toISOString().slice(0, 10)
-    teamData.filter(e => e.probation_end_date && e.probation_end_date >= today && e.probation_end_date <= soonStr)
-      .forEach(e => al.push({
-        type: 'probation', icon: '📅', color: C.orange,
-        text: `試用期到期：${e.name}（${fmtDate(e.probation_end_date)}）`,
-      }))
+    teamData.filter(e => e.join_date).forEach(e => {
+      const probEnd = new Date(e.join_date)
+      probEnd.setMonth(probEnd.getMonth() + 3)
+      const probEndStr = probEnd.toISOString().slice(0, 10)
+      if (probEndStr >= today && probEndStr <= soonStr) {
+        al.push({
+          type: 'probation', icon: '📅', color: C.orange,
+          text: `試用期到期：${e.name}（${fmtDate(probEndStr)}）`,
+        })
+      }
+    })
 
     // 本月加班接近上限（>= 36h；46h 法定上限）
     const { data: monthOT } = await supabase.from('overtime_requests')

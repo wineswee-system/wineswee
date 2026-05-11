@@ -429,11 +429,12 @@ export default function Salary() {
         // 例假日/國定假日「加班申請」：全額加倍 × 2
         const otPayHoliday = Math.round(ot.holiday * hourlyRate * 2)
 
-        // 國定假日「正常打卡上班」加給（勞基法 §39，不需申請加班）
-        // 員工該日打卡的工時，於 baseSalary 計過 1 倍後，這裡額外加 1 倍 → 合計 ×2
-        // - 時薪制：1 倍已在 baseSalary 內，這裡加 hourly × holidayHours × 1
-        // - 月薪制：月薪已含整月工資（含該日），這裡同樣加 hourly × holidayHours × 1
-        const holidayBonus = Math.round((att.holidayHours || 0) * hourlyRate * 1)
+        // 國定假日「正常打卡上班」加給：僅時薪制適用
+        //   時薪制：baseSalary 已含 1 倍（hourly × hours），這裡再加 1 倍 → 合計 ×2
+        //   月薪制：月薪固定值已含整月工資（含國定假日），廠商實務上不另外加給 → 0
+        const holidayBonus = isHourly
+          ? Math.round((att.holidayHours || 0) * hourlyRate * 1)
+          : 0
 
         const overtimePay = otPayWeekday + otPayRestday + otPayHoliday + holidayBonus
 

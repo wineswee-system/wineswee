@@ -411,13 +411,24 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, supabaseKey);
 
-    // ── Auth check: require service_role key or admin JWT ──
+    // ── Auth check: require service_role token (any) or admin JWT ──
+    // Note: decode JWT 看 role claim，不對 env var 做 strict 字串比對 —
+    // 專案 key 輪換 / vault 跟 env 不同步時，strict 比對會誤殺 PG trigger 呼叫。
     const authHeader = req.headers.get("Authorization");
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
-      // If it's not the service_role_key, validate as admin
-      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      if (token !== serviceKey) {
+      let isServiceRole = false;
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
+          const payload = JSON.parse(atob(padded));
+          isServiceRole = payload?.role === "service_role";
+        }
+      } catch (_e) { /* fall through to user check */ }
+
+      if (!isServiceRole) {
         const { data: { user } } = await db.auth.getUser(token);
         if (!user) {
           return new Response(JSON.stringify({ error: "未授權" }), {

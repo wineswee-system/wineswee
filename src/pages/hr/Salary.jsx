@@ -365,7 +365,16 @@ export default function Salary() {
 
       const preview = scopedEmployees.map(emp => {
         const ss              = ssMap[emp.id] || {}
-        const baseSalary      = ss.base_salary      || emp.base_salary || 0
+        const isHourly        = ss.salary_type === 'hourly'
+        const att          = attMap[emp.id] || { hours: 0, lateMins: 0, days: 0 }
+        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0 }
+        const absenceDays  = lvMap[emp.id]?.absence || 0
+        const policyBonus  = bonusMap[emp.id] || 0
+
+        // 時薪制：本薪 = 時薪 × 當月工時；月薪制：本薪 = 設定值
+        const baseSalary      = isHourly
+          ? Math.round((ss.hourly_rate || 0) * att.hours)
+          : (ss.base_salary || emp.base_salary || 0)
         const roleAllowance   = ss.role_allowance    || 0
         const mealAllowance   = ss.meal_allowance    || 0
         const transportAllow  = ss.transport_allowance || 0
@@ -375,12 +384,10 @@ export default function Salary() {
         const dependents       = ss.health_ins_dependents || 0
         const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
 
-        const att          = attMap[emp.id] || { hours: 0, lateMins: 0, days: 0 }
-        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0 }
-        const absenceDays  = lvMap[emp.id]?.absence || 0
-        const policyBonus  = bonusMap[emp.id] || 0
-
-        const hourlyRate = Math.round(baseSalary / 30 / 8)
+        // 時薪基準：時薪制直接用設定值；月薪制用 base/30/8 換算
+        const hourlyRate = isHourly
+          ? (Number(ss.hourly_rate) || 0)
+          : Math.round((ss.base_salary || emp.base_salary || 0) / 30 / 8)
 
         // Weekday OT: tiered 1.34 / 1.67
         const otPayWeekday = ot.weekday <= 2

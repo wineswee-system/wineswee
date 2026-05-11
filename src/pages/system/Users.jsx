@@ -18,6 +18,8 @@ const ROLE_LABEL = {
   manager:      '主管',
   admin:        'HR 管理員',
   super_admin:  '超級管理員',
+  // legacy：舊資料把所有人都標 'employee'，視為行政人員顯示
+  employee:     '行政人員',
 }
 const ROLES = Object.keys(ROLE_MAP)
 const roleColor = {
@@ -66,10 +68,10 @@ export default function Users() {
     (u.name ?? '').includes(search) || (u.email ?? '').includes(search)
   )
 
-  // 角色統計
+  // 角色統計（legacy 'employee' 視為 office_staff）
   const adminCount    = users.filter(u => u.role === 'admin' || u.role === 'super_admin').length
   const managerCount  = users.filter(u => u.role === 'manager').length
-  const staffCount    = users.filter(u => u.role === 'store_staff' || u.role === 'office_staff' || !u.role).length
+  const staffCount    = users.filter(u => ['store_staff', 'office_staff', 'employee'].includes(u.role) || !u.role).length
 
   return (
     <div className="fade-in">

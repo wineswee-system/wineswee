@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import TeamDashboard from './dashboard/TeamDashboard'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
   ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
@@ -834,6 +836,13 @@ function AdminDashboard({ profile }) {
 export default function Dashboard() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
-  if (userRole === 'store_staff' && profile) return <StaffDashboard profile={profile} />
+  // 2026-05-11 角色分流：
+  //   store_staff → 跳到 /portal（員工 portal 是他們的「家」）
+  //   office_staff → 原本的 StaffDashboard（用 admin UI 的員工）
+  //   manager / admin / super_admin → 新的 TeamDashboard（團隊視角）
+  if (userRole === 'store_staff') return <Navigate to="/portal" replace />
+  if (userRole === 'office_staff' && profile) return <StaffDashboard profile={profile} />
+  if (['manager', 'admin', 'super_admin'].includes(userRole)) return <TeamDashboard />
+  // fallback
   return <AdminDashboard profile={profile} />
 }

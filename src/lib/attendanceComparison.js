@@ -24,7 +24,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
   // Build queries
   const schedQ = supabase.from('schedules').select('employee, date, shift, actual_start, actual_end')
     .gte('date', dateStart).lte('date', dateEnd)
-  const attQ = supabase.from('attendance_records').select('employee_name, date, clock_in, clock_out, status')
+  const attQ = supabase.from('attendance_records').select('employee, date, clock_in, clock_out, status')
     .gte('date', dateStart).lte('date', dateEnd)
 
   // Load late tolerance + store_id from stores table
@@ -64,7 +64,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     if (!scheduledStart || !scheduledEnd) continue
 
     // Find matching attendance record
-    const att = (attendance || []).find(a => a.employee_name === sched.employee && a.date === sched.date)
+    const att = (attendance || []).find(a => a.employee === sched.employee && a.date === sched.date)
 
     const scheduledStartH = parseTime(scheduledStart)
     const scheduledEndH = parseTime(scheduledEnd)

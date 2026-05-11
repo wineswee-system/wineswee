@@ -1,20 +1,24 @@
 /**
  * 共用簽核鏈設定 modal
  *
- * 兩種模式：
+ * 三種模式：
  *   mode='single'         → 一張表 = 一條 chain，寫 form_chain_configs
  *                            （請假/加班/出差/補打卡/離職/異動/費用報銷/自訂表單）
  *   mode='amount_grouped' → 一張表 = 多條 chain（依金額區間分流），不碰 form_chain_configs
  *                            （申請費用 ExpenseRequests）
+ *   mode='library'        → chain library 中央管理（task/workflow/HR 表單共用同一個 pool）
+ *                            列出整個 org 的所有 chain，不寫 form_chain_configs
+ *                            editor 允許設定 category（free text）
  *
  * Props:
  *   open: boolean
  *   onClose: () => void
- *   formType: 'leave' | 'overtime' | 'expense' | 'expense_request' | ...
+ *   formType: 'leave' | 'overtime' | 'expense' | 'expense_request' | ...  (library 模式可省略)
  *   formLabel: 顯示用的中文 ('請假' / '申請費用' / ...)
  *               amount_grouped 模式下也是 approval_chains.category 的值
+ *               library 模式下只當 modal 標題
  *   organizationId: number
- *   mode: 'single' | 'amount_grouped' (default 'single')
+ *   mode: 'single' | 'amount_grouped' | 'library' (default 'single')
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -57,9 +61,11 @@ const blankStep = (idx) => ({
 const fmtAmount = (n) => n == null ? '無上限' : `$${Number(n).toLocaleString()}`
 
 export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single' }) {
-  // ── view state（amount_grouped 才會切 list ↔ editor） ──
-  const [view, setView] = useState(mode === 'amount_grouped' ? 'list' : 'editor')
+  // ── view state（amount_grouped / library 才會切 list ↔ editor） ──
+  const hasListView = mode === 'amount_grouped' || mode === 'library'
+  const [view, setView] = useState(hasListView ? 'list' : 'editor')
   const [chainsList, setChainsList] = useState([])
+  const [libraryCategory, setLibraryCategory] = useState('')  // library editor 用
 
   // ── editor state ──
   const [loading, setLoading] = useState(true)
@@ -96,14 +102,18 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     setSections(sectionRes.data || [])
   }, [organizationId])
 
-  // ── 載入 amount_grouped 列表 ──
+  // ── 載入 amount_grouped / library 列表 ──
   const loadList = useCallback(async () => {
-    // 抓 category=formLabel 的所有 chain（org 範圍內 + 全域 NULL），含 step 數
+    // amount_grouped: 只抓 category=formLabel；library: 全 org 所有 chain
     let q = supabase
       .from('approval_chains')
-      .select('id, name, description, min_amount, max_amount, is_active, organization_id')
-      .eq('category', formLabel)
-      .order('min_amount', { ascending: true, nullsFirst: true })
+      .select('id, name, description, category, min_amount, max_amount, is_active, organization_id')
+    if (mode === 'amount_grouped') {
+      q = q.eq('category', formLabel).order('min_amount', { ascending: true, nullsFirst: true })
+    } else {
+      // library: 依 category, name 排序
+      q = q.order('category', { ascending: true, nullsFirst: false }).order('name')
+    }
     if (organizationId) {
       q = q.or(`organization_id.eq.${organizationId},organization_id.is.null`)
     }
@@ -127,7 +137,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       ...c,
       steps: stepsByChain[c.id] || [],
     })))
-  }, [formLabel, organizationId])
+  }, [mode, formLabel, organizationId])
 
   // ── 載入 single 模式：form_chain_configs → chain ──
   const loadSingle = useCallback(async () => {
@@ -143,12 +153,13 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   // ── 載入 editor（指定 chain id 或新建） ──
   const loadEditor = async (cid) => {
     const [chainRes, stepsRes] = await Promise.all([
-      supabase.from('approval_chains').select('name, description, min_amount, max_amount').eq('id', cid).maybeSingle(),
+      supabase.from('approval_chains').select('name, description, category, min_amount, max_amount').eq('id', cid).maybeSingle(),
       supabase.from('approval_chain_steps').select('*').eq('chain_id', cid).order('step_order'),
     ])
     setChainId(cid)
     setChainName(chainRes.data?.name || '')
     setChainDescription(chainRes.data?.description || '')
+    setLibraryCategory(chainRes.data?.category || '')
     setMinAmount(chainRes.data?.min_amount != null ? String(chainRes.data.min_amount) : '')
     setMaxAmount(chainRes.data?.max_amount != null ? String(chainRes.data.max_amount) : '')
     setSteps((stepsRes.data || []).map(s => ({
@@ -166,8 +177,9 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
 
   const resetEditorBlank = () => {
     setChainId(null)
-    setChainName(`${formLabel}簽核鏈`)
+    setChainName(mode === 'library' ? '' : `${formLabel}簽核鏈`)
     setChainDescription('')
+    setLibraryCategory('')
     setMinAmount('')
     setMaxAmount('')
     setSteps([blankStep(0)])
@@ -178,7 +190,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     if (!open) return
     setLoading(true)
     await loadOptions()
-    if (mode === 'amount_grouped') {
+    if (hasListView) {
       if (view === 'list') {
         await loadList()
       }
@@ -188,16 +200,16 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       await loadSingle()
     }
     setLoading(false)
-  }, [open, mode, view, loadOptions, loadList, loadSingle])
+  }, [open, hasListView, view, loadOptions, loadList, loadSingle])
 
   useEffect(() => { load() }, [load])
 
   // 開啟時重設 view（避免上次開的狀態殘留）
   useEffect(() => {
     if (open) {
-      setView(mode === 'amount_grouped' ? 'list' : 'editor')
+      setView(hasListView ? 'list' : 'editor')
     }
-  }, [open, mode])
+  }, [open, hasListView])
 
   // ── List view: 操作 ──
   const handleNewChain = async () => {
@@ -217,7 +229,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   const handleDeleteChain = async (cid, name) => {
     // 防呆 1：先檢查是否有 in-flight 申請正在引用此 chain
     // expense_requests.approval_chain_id FK 沒 ON DELETE → 直接刪會 throw FK error
-    if (formType === 'expense_request') {
+    if (formType === 'expense_request' || mode === 'amount_grouped') {
       const { count } = await supabase
         .from('expense_requests')
         .select('id', { count: 'exact', head: true })
@@ -225,6 +237,19 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         .in('status', ['申請中', '待審'])
       if ((count || 0) > 0) {
         toast.error(`無法刪除「${name}」\n\n目前有 ${count} 筆「申請中/待審」的費用申請正在使用此鏈。\n請等這些申請走完流程後再刪除，或先把它們處理掉。`)
+        return
+      }
+    }
+
+    // 防呆 2 (library)：檢查是否有 form_chain_configs 仍綁定此 chain
+    if (mode === 'library') {
+      const { data: refs } = await supabase
+        .from('form_chain_configs')
+        .select('form_type')
+        .eq('chain_id', cid)
+        .eq('is_active', true)
+      if (refs && refs.length > 0) {
+        toast.error(`無法刪除「${name}」\n\n此 chain 仍被 ${refs.length} 張表單綁定：${refs.map(r => r.form_type).join('、')}\n請先到對應的表單頁改用其他 chain。`)
         return
       }
     }
@@ -346,7 +371,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   const handleSave = async () => {
     const missing = []
     if (!chainName?.trim()) missing.push('簽核鏈名稱不能空白')
-    steps.forEachasync ((s, i) => {
+    steps.forEach((s, i) => {
       if (!s.label?.trim()) missing.push(`第 ${i+1} 關沒填標籤`)
       const preview = stepPreview(s)
       if (!preview.ok) missing.push(`第 ${i+1} 關：${preview.text}`)
@@ -391,8 +416,8 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       // 防呆：既有 chain（org_id=NULL 全域 seed）編輯時不覆寫 organization_id，避免把
       // 全域 chain 偷偷變成 org A 專屬，影響其他 org（trigger 不 filter org）。
       const chainPayload = {
-        name: chainName.trim() || `${formLabel}簽核鏈`,
-        category: formLabel,
+        name: chainName.trim() || (mode === 'library' ? '未命名簽核鏈' : `${formLabel}簽核鏈`),
+        category: mode === 'library' ? (libraryCategory.trim() || null) : formLabel,
       }
       if (!cid) {
         // 新建才寫 organization_id
@@ -402,6 +427,10 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         chainPayload.description = chainDescription || null
         chainPayload.min_amount = minAmount === '' ? 0 : Number(minAmount)
         chainPayload.max_amount = maxAmount === '' ? null : Number(maxAmount)
+        chainPayload.is_active = true
+      }
+      if (mode === 'library') {
+        chainPayload.description = chainDescription || null
         chainPayload.is_active = true
       }
 
@@ -444,11 +473,11 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         }, { onConflict: 'form_type,organization_id' })
         if (cfgErr) throw cfgErr
 
-        toast.error(`「${formLabel}」簽核鏈已儲存（${steps.length} 關）`)
+        toast.success(`「${formLabel}」簽核鏈已儲存（${steps.length} 關）`)
         onClose()
       } else {
-        // amount_grouped：存完回列表
-        toast.error(`「${chainPayload.name}」已儲存（${steps.length} 關）`)
+        // amount_grouped / library：存完回列表
+        toast.success(`「${chainPayload.name}」已儲存（${steps.length} 關）`)
         await handleBackToList()
       }
     } catch (err) {
@@ -474,7 +503,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         {/* Header */}
         <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {mode === 'amount_grouped' && view === 'editor' && (
+            {hasListView && view === 'editor' && (
               <button onClick={handleBackToList} title="返回列表"
                 style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 <ArrowLeft size={16} />
@@ -482,13 +511,15 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
             )}
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                ⚙️ 簽核設定 — {formLabel}
+                ⚙️ {mode === 'library' ? '簽核鏈設定' : `簽核設定 — ${formLabel}`}
                 {mode === 'amount_grouped' && view === 'list' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>（依金額分組）</span>}
-                {mode === 'amount_grouped' && view === 'editor' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{chainId ? '編輯區間' : '新增區間'}</span>}
+                {hasListView && view === 'editor' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{chainId ? (mode === 'library' ? '編輯' : '編輯區間') : (mode === 'library' ? '新增' : '新增區間')}</span>}
               </h3>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 {mode === 'amount_grouped'
                   ? '依申請金額自動套用對應簽核鏈，可設定多組金額區間'
+                  : mode === 'library'
+                  ? '簽核鏈中央管理 — 流程、任務、HR 表單共用同一個池子'
                   : '設定這張表的簽核流程，可串多關 + 動態目標（套牢組織圖）'}
               </div>
             </div>
@@ -501,8 +532,9 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
           {loading ? <LoadingSpinner /> : view === 'list' ? (
-            // ────────────── List view (amount_grouped only) ──────────────
+            // ────────────── List view (amount_grouped / library) ──────────────
             <ListView
+              mode={mode}
               chainsList={chainsList}
               shortStepDesc={shortStepDesc}
               onNew={handleNewChain}
@@ -515,6 +547,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
               mode={mode}
               chainName={chainName} setChainName={setChainName}
               chainDescription={chainDescription} setChainDescription={setChainDescription}
+              libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory}
               minAmount={minAmount} setMinAmount={setMinAmount}
               maxAmount={maxAmount} setMaxAmount={setMaxAmount}
               steps={steps}
@@ -552,7 +585,8 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
 // Sub-components
 // ════════════════════════════════════════════════════════
 
-function ListView({ chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
+function ListView({ mode, chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
+  const isLibrary = mode === 'library'
   return (
     <div>
       {/* 提示卡 */}
@@ -562,15 +596,17 @@ function ListView({ chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
         fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 4 }}>
-          <DollarSign size={14} /> 金額分流自動指派
+          <DollarSign size={14} /> {isLibrary ? '簽核鏈中央管理' : '金額分流自動指派'}
         </div>
-        員工送出申請時，系統依「預估金額」自動找符合區間的簽核鏈並套用。最精準（min_amount 最大）的區間會優先被選中。
+        {isLibrary
+          ? '這裡是整個組織的簽核鏈池子。流程任務、HR 表單、自訂表單會從這裡選 chain 來用。同一條 chain 可被多處引用，編輯後立即生效。'
+          : '員工送出申請時，系統依「預估金額」自動找符合區間的簽核鏈並套用。最精準（min_amount 最大）的區間會優先被選中。'}
       </div>
 
       {/* 新增按鈕 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button className="btn btn-primary" onClick={onNew} style={{ fontSize: 13 }}>
-          <Plus size={14} /> 新增金額區間
+          <Plus size={14} /> {isLibrary ? '新增簽核鏈' : '新增金額區間'}
         </button>
       </div>
 
@@ -581,8 +617,8 @@ function ListView({ chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
           color: 'var(--text-muted)', fontSize: 13,
           border: '2px dashed var(--border-medium)', borderRadius: 10,
         }}>
-          尚未設定任何金額區間 <br />
-          <span style={{ fontSize: 11 }}>點擊「新增金額區間」建立第一條簽核鏈</span>
+          {isLibrary ? '尚未建立任何簽核鏈' : '尚未設定任何金額區間'} <br />
+          <span style={{ fontSize: 11 }}>點擊上方「{isLibrary ? '新增簽核鏈' : '新增金額區間'}」建立第一條</span>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -603,9 +639,17 @@ function ListView({ chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{c.description}</div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                    <span style={{ fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                      {fmtAmount(c.min_amount)} ~ {fmtAmount(c.max_amount)}
-                    </span>
+                    {isLibrary ? (
+                      c.category && (
+                        <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim, rgba(167,139,250,0.15))', color: 'var(--accent-purple)', fontWeight: 600 }}>
+                          {c.category}
+                        </span>
+                      )
+                    ) : (
+                      <span style={{ fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                        {fmtAmount(c.min_amount)} ~ {fmtAmount(c.max_amount)}
+                      </span>
+                    )}
                     <span>{c.steps.length} 關</span>
                   </div>
                   {/* 流程預覽 */}
@@ -648,6 +692,7 @@ function ListView({ chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
 
 function EditorView({
   mode, chainName, setChainName, chainDescription, setChainDescription,
+  libraryCategory, setLibraryCategory,
   minAmount, setMinAmount, maxAmount, setMaxAmount,
   steps, updateStep, addStep, removeStep, moveStep,
   changeTargetType, stepPreview,
@@ -655,37 +700,45 @@ function EditorView({
 }) {
   return (
     <>
-      {/* Chain name + (amount_grouped) description + amount range */}
+      {/* Chain name + (amount_grouped) amount + (library) category */}
       <div style={{ marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>簽核鏈名稱 *</label>
           <input className="form-input" style={{ width: '100%' }}
             value={chainName} onChange={e => setChainName(e.target.value)}
-            placeholder={`例：小額${formLabel}`} />
+            placeholder={mode === 'library' ? '例：員工請假簽核 / 採購簽核 / 執行長簽核' : `例：小額${formLabel}`} />
         </div>
+        {(mode === 'amount_grouped' || mode === 'library') && (
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>說明（選填）</label>
+            <input className="form-input" style={{ width: '100%' }}
+              value={chainDescription} onChange={e => setChainDescription(e.target.value)}
+              placeholder={mode === 'library' ? '描述這條 chain 的用途或適用情境' : '例：3,000 以下由直屬主管核准'} />
+          </div>
+        )}
+        {mode === 'library' && (
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>分類（選填）</label>
+            <input className="form-input" style={{ width: '100%' }}
+              value={libraryCategory} onChange={e => setLibraryCategory(e.target.value)}
+              placeholder="例：請假 / 採購 / 費用 / 行政 — 用來分組顯示" />
+          </div>
+        )}
         {mode === 'amount_grouped' && (
-          <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>說明（選填）</label>
-              <input className="form-input" style={{ width: '100%' }}
-                value={chainDescription} onChange={e => setChainDescription(e.target.value)}
-                placeholder="例：3,000 以下由直屬主管核准" />
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最低金額（含）</label>
+              <input className="form-input" type="number" style={{ width: '100%' }}
+                value={minAmount} onChange={e => setMinAmount(e.target.value)}
+                placeholder="0（無下限）" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最低金額（含）</label>
-                <input className="form-input" type="number" style={{ width: '100%' }}
-                  value={minAmount} onChange={e => setMinAmount(e.target.value)}
-                  placeholder="0（無下限）" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最高金額（含）</label>
-                <input className="form-input" type="number" style={{ width: '100%' }}
-                  value={maxAmount} onChange={e => setMaxAmount(e.target.value)}
-                  placeholder="留空 = 無上限" />
-              </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最高金額（含）</label>
+              <input className="form-input" type="number" style={{ width: '100%' }}
+                value={maxAmount} onChange={e => setMaxAmount(e.target.value)}
+                placeholder="留空 = 無上限" />
             </div>
-          </>
+          </div>
         )}
       </div>
 

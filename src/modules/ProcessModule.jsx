@@ -8,11 +8,13 @@ import Approvals from '../pages/process/Approvals'
 import Projects from '../pages/process/Projects'
 import Categories from '../pages/process/settings/Categories'
 import Tags from '../pages/process/settings/Tags'
+import Chains from '../pages/process/settings/Chains'
+import ExpenseChains from '../pages/process/settings/ExpenseChains'
 
-// 老頁面已下架（2026-05-08）：
-//   /process/approval-chains  → ApprovalChains.jsx (deleted)
-//   /process/expense-approval → ExpenseApprovalSettings.jsx (deleted)
-// 替代入口：各表單頁面右上「⚙ 簽核設定」按鈕（透過 ChainConfigModal）
+// 老頁面已下架（2026-05-08），但 2026-05-11 重做為中央 library 管理：
+//   /process/settings/chains         → 全 chain library（取代舊 /process/approval-chains）
+//   /process/settings/expense-chains → 費用金額分流（取代舊 /process/expense-approval）
+// 各表單頁右上「⚙ 簽核設定」按鈕仍可用（per-form 快捷入口）。
 
 export default function ProcessModule() {
   return (
@@ -26,6 +28,8 @@ export default function ProcessModule() {
       <Route path="approvals" element={<Approvals />} />
       <Route path="settings/categories" element={<Categories />} />
       <Route path="settings/tags" element={<Tags />} />
+      <Route path="settings/chains" element={<Chains />} />
+      <Route path="settings/expense-chains" element={<ExpenseChains />} />
     </Routes>
   )
 }

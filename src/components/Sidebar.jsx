@@ -319,8 +319,10 @@ const groupNav = {
       label: '設定管理',
       icon: Settings,
       children: [
-        // 簽核鏈設定 / 費用簽核設定 已下架（2026-05-08）— 改用各表單頁右上「⚙ 簽核設定」
         { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
+        // 2026-05-11 重做為中央 library 管理（取代 2026-05-08 下架的舊頁）
+        { icon: Workflow, label: '簽核鏈設定', path: '/process/settings/chains' },
+        { icon: DollarSign, label: '費用簽核設定', path: '/process/settings/expense-chains' },
         { icon: FolderTree, label: '分類管理', path: '/process/settings/categories' },
         { icon: Tag, label: '標籤管理', path: '/process/settings/tags' },
       ]

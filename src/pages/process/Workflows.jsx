@@ -247,7 +247,8 @@ export default function Workflows() {
           role: s.role || null,
           assignee: an, assignee_id: an ? (empByName.get(an) || null) : null,
           store: sourceTask.store || null,
-          status: i === 0 ? '進行中' : '待簽核',
+          // 第 1 步「進行中」直接開工；後面用「待處理」（等前一步），不要 '待簽核'（那是有 chain 才用）
+          status: i === 0 ? '進行中' : '待處理',
           started_at: i === 0 ? new Date().toISOString() : null,
           bucket: 'Workflow', category: 'Workflow',
           priority: s.priority || '中',
@@ -343,7 +344,9 @@ export default function Workflows() {
     const instTasks = getInstanceTasks(instId)
     const maxOrder = instTasks.length > 0 ? Math.max(...instTasks.map(t => t.step_order || 0)) : 0
 
-    // 1. 建新 task（status 一律 '待簽核'，避免複製到 '進行中'/'已完成' 等狀態）
+    // 1. 建新 task — 複製的 task 加在流程最後，依是否有簽核決定初始狀態
+    //    有 chain / confirmation → '待簽核'；沒有 → '待處理'（會等前一步 cascade 過來）
+    const cloneNeedsApproval = !!(origTask.approval_chain_id || origTask.confirmation_required)
     const { data: newTask, error } = await createTask({
       workflow_instance_id: instId,
       step_order: maxOrder + 1,
@@ -357,7 +360,7 @@ export default function Workflows() {
       due_time: origTask.due_time || '17:00',
       priority: origTask.priority || '中',
       role: origTask.role || null,
-      status: '待簽核',
+      status: cloneNeedsApproval ? '待簽核' : '待處理',
       bucket: origTask.bucket || 'Workflow',
       category: origTask.category || 'Workflow',
       organization_id: profile?.organization_id || null,
@@ -429,6 +432,16 @@ export default function Workflows() {
     const useChain   = taskForm.approval_mode === 'chain' && taskForm.approval_chain_id
     const usePeople  = taskForm.approval_mode === 'people' && (taskForm.confirmation_approvers || []).length > 0
 
+    // 狀態規則：
+    //   - 有 chain 或 approvers → '待簽核'（要等簽）
+    //   - 第一個 step（前面沒任務）→ '進行中'（直接開工）
+    //   - 第二步以後 → '待處理'（等前一步 cascade 推進來）
+    const needsApproval = useChain || usePeople
+    const isFirstStep = instTasks.length === 0
+    const initStatus = needsApproval
+      ? '待簽核'
+      : (isFirstStep ? '進行中' : '待處理')
+
     const { data, error: taskError } = await createTask({
       workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,
       title: taskForm.title,
@@ -441,7 +454,9 @@ export default function Workflows() {
       due_time: taskForm.due_time || '17:00',
       priority: taskForm.priority || '中',
       role: taskForm.role || null,
-      status: '待簽核', bucket: 'Workflow', category: 'Workflow',
+      status: initStatus,
+      started_at: initStatus === '進行中' ? new Date().toISOString() : null,
+      bucket: 'Workflow', category: 'Workflow',
       organization_id: profile?.organization_id || null,
       approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
       confirmation_required: !!(useChain || usePeople),
@@ -767,7 +782,9 @@ export default function Workflows() {
         const taskRows = tplSteps.map((step, i) => {
           const assigneeName = deployForm.assignees[i] || ''
           const offset = deployForm.step_offsets?.[i] ?? (i + 1)
-          const stepStatus = i === 0 ? '進行中' : '待簽核'
+          // 第 1 步直接開工；後面用「待處理」等 cascade 推進來。
+          // 有 chain / confirmation 的 step 由 cfg 判斷另外處理（後面 spread cfg 會覆蓋）
+          const stepStatus = i === 0 ? '進行中' : '待處理'
           const titleWithTarget = targetEmp
             ? `${step.title}（${targetEmp.name}）`
             : step.title

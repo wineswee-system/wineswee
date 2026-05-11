@@ -32,6 +32,24 @@ async function resolveLineId(db: any, employeeId: number): Promise<string | null
   return data?.line_user_id || null;
 }
 
+async function resolveLineAccount(db: any, employeeId: number): Promise<{ lineUserId: string | null; liffId: string | null }> {
+  const { data } = await db.from("v_employee_line_resolved")
+    .select("line_user_id, liff_id")
+    .eq("employee_id", employeeId)
+    .order("channel_code", { ascending: false })  // 'workflow' channel first
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { lineUserId: data?.line_user_id || null, liffId: data?.liff_id || null };
+}
+
+// ── LIFF URL builders（跟 src/lib/lineNotify.js getLiffTaskUrl / buildLiffTaskUrl 對齊）──
+function buildLiffTaskUrl(taskId: number, liffId: string | null, action?: string): string {
+  const toPath = `/tasks?task=${taskId}${action ? `&action=${action}` : ''}`;
+  if (!liffId) return `https://line.me/`;
+  return `https://liff.line.me/${liffId}?to=${encodeURIComponent(toPath)}`;
+}
+
 // ── Label helpers ──────────────────────────────────────────────
 const leaveLabels: Record<string, string> = {
   annual: "特休", sick: "病假", personal: "事假",
@@ -264,32 +282,109 @@ function buildScheduleNotification(details: {
   };
 }
 
-// ── 6. 任務自動開始通知 ─────────────────────────────────────
+// ── 6. 任務自動開始通知（對齊 src/lib/lineNotify.js notifyTaskAssignee 格式）────
+// rich version：📋 任務通知 header + 完整 body + 「回報完成」+「查看任務」雙按鈕
 function buildTaskAutoStarted(details: {
-  task_title?: string; completed_tasks?: string[]; workflow_name?: string;
+  task_id?: number;
+  task_title?: string;
+  assignee_name?: string;
+  department?: string;
+  store?: string;
+  workflow_name?: string;
+  due_date?: string;      // YYYY-MM-DD
+  due_time?: string;      // HH:MM
+  description?: string;
+  notes?: string;
+  completed_tasks?: string[];
+  liff_id?: string | null;
 }) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', warning: '#f59e0b',
+    danger: '#ef4444', muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+
+  // 到期 label（Asia/Taipei，MM/DD HH:MM）
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const dt = new Date(`${details.due_date}T${details.due_time || '17:00'}:00+08:00`);
+    if (!isNaN(dt.getTime())) {
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const hh = String(dt.getHours()).padStart(2, '0');
+      const mi = String(dt.getMinutes()).padStart(2, '0');
+      dueLabel = `${mm}/${dd} ${hh}:${mi}`;
+      isOverdue = dt < new Date();
+    }
+  }
+
+  // 姓名 | 部門 | 門市
+  const infoParts = [details.assignee_name, details.department, details.store].filter((x) => x && String(x).trim());
+  const infoLine = infoParts.join('  |  ');
+
+  // body contents
+  const body: any[] = [
+    { type: 'text', text: details.task_title || '未命名任務', weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (infoLine) body.push({ type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true });
+  if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
+  if (Array.isArray(details.completed_tasks) && details.completed_tasks.length > 0) {
+    body.push({ type: 'text', text: `前置已完成：${details.completed_tasks.join('、')}`, size: 'xs', color: LC.soft, wrap: true });
+  }
+  const desc = details.description && String(details.description).trim();
+  if (desc) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: desc, size: 'sm', color: LC.dark, wrap: true, margin: 'sm' });
+  }
+  const note = details.notes && String(details.notes).trim();
+  if (note) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: '📌 備註', size: 'sm', color: LC.soft, margin: 'sm' });
+    body.push({ type: 'text', text: note, size: 'sm', color: LC.dark, wrap: true });
+  }
+
+  // footer 雙按鈕（只在有 task_id 時建 LIFF URL）
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const actionUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null, 'complete') : null;
+  const footer = (liffUrl && actionUrl) ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.success,
+        action: { type: 'uri', label: '回報完成', uri: actionUrl } },
+      { type: 'button', style: 'secondary', height: 'sm',
+        action: { type: 'uri', label: '查看任務', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  // header（含 optional 逾期 badge）
+  const headerContents: any[] = [
+    { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
+  ];
+  if (isOverdue) {
+    headerContents.push({
+      type: 'box', layout: 'vertical', backgroundColor: LC.danger, cornerRadius: '4px',
+      paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
+      contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
+    });
+  }
+
   return {
-    type: "flex",
-    altText: `🚀 任務「${details.task_title}」已自動開始`,
+    type: 'flex',
+    altText: `${isOverdue ? '⚠️ [逾期] ' : ''}📋 任務通知：${details.task_title || ''}`,
     contents: {
-      type: "bubble", size: "kilo",
+      type: 'bubble', size: 'kilo',
       header: {
-        type: "box", layout: "vertical", backgroundColor: "#3B82F6", paddingAll: "14px",
-        contents: [
-          ...(details.workflow_name ? [{ type: "text", text: details.workflow_name, size: "xs", color: "#DBEAFE" }] : []),
-          { type: "text", text: "🚀 任務自動開始", weight: "bold", color: "#FFFFFF", size: "md" },
-        ],
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'box', layout: 'horizontal', alignItems: 'center', contents: headerContents }],
       },
-      body: {
-        type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
-        contents: [
-          { type: "text", text: details.task_title || "未命名任務", weight: "bold", size: "md", wrap: true },
-          { type: "text", text: "所有前置條件已完成，任務已自動設為「進行中」。", size: "sm", color: "#666666", wrap: true },
-          ...(Array.isArray(details.completed_tasks) && details.completed_tasks.length > 0
-            ? [{ type: "text", text: `前置任務：${details.completed_tasks.join("、")}`, size: "xs", color: "#888888", wrap: true, margin: "sm" }]
-            : []),
-        ],
-      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
     },
   };
 }
@@ -464,7 +559,10 @@ serve(async (req) => {
     }
 
     // ── All remaining: send to the employee_id ──
-    const lineUserId = await resolveLineId(db, employee_id);
+    // task_auto_started 需要 liff_id（建 LIFF URL），多走一條 resolveLineAccount
+    const isTaskAutoStarted = type === "task_auto_started";
+    const acct = isTaskAutoStarted ? await resolveLineAccount(db, employee_id) : null;
+    const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
       console.log(`No LINE mapping for employee ${employee_id}, skipping`);
       return new Response(JSON.stringify({ ok: true, sent: false }), {
@@ -487,7 +585,39 @@ serve(async (req) => {
     } else if (type === "correction_rejected") {
       message = buildCorrectionNotification("rejected", details);
     } else if (type === "task_auto_started") {
-      message = buildTaskAutoStarted(details);
+      // 補抓 task 完整欄位（trigger 只丟 task_id + 簡單 details，這裡 hydrate）
+      let enriched = { ...details, liff_id: acct?.liffId || null };
+      if (details?.task_id && !details?.due_date) {
+        const { data: task } = await db.from("tasks")
+          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id")
+          .eq("id", details.task_id).maybeSingle();
+        if (task) {
+          // 抓 workflow_instance template_name
+          let workflowName: string | undefined = details.workflow_name;
+          if (!workflowName && task.workflow_instance_id) {
+            const { data: inst } = await db.from("workflow_instances")
+              .select("template_name").eq("id", task.workflow_instance_id).maybeSingle();
+            workflowName = inst?.template_name || undefined;
+          }
+          // 抓 employee dept
+          const { data: emp } = await db.from("employees")
+            .select("name, dept").eq("id", employee_id).maybeSingle();
+          enriched = {
+            ...enriched,
+            task_id: task.id,
+            task_title: enriched.task_title || task.title,
+            due_date: task.due_date,
+            due_time: task.due_time,
+            description: task.description,
+            notes: task.notes,
+            store: task.store,
+            assignee_name: emp?.name || task.assignee,
+            department: emp?.dept,
+            workflow_name: workflowName,
+          };
+        }
+      }
+      message = buildTaskAutoStarted(enriched);
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

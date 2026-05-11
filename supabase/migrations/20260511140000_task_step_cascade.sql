@@ -67,6 +67,7 @@ BEGIN
         'employee_id', v_next.assignee_id,
         'type', 'task_auto_started',
         'details', jsonb_build_object(
+          'task_id', v_next.id,                     -- edge function hydrate 用
           'task_title', v_next.title,
           'workflow_name', v_inst_name,
           'completed_tasks', jsonb_build_array(NEW.title)

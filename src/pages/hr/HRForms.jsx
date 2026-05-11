@@ -124,7 +124,15 @@ export default function HRForms() {
             {[...cat.forms, ...(customByCategory[cat.key] || [])].map((f) => {
               const Icon = f.icon
               return (
-                <div key={f.name} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16 }}>
+                <div key={f.name} className="card"
+                  onClick={() => navigate(f.action)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: 10, padding: 16,
+                    cursor: 'pointer', transition: 'transform .12s, box-shadow .12s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = '' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 10,
@@ -147,7 +155,7 @@ export default function HRForms() {
                     </div>
                   </div>
                   <button className="btn btn-primary" style={{ alignSelf: 'flex-start', fontSize: 11, padding: '4px 12px' }}
-                    onClick={() => navigate(f.action)}>
+                    onClick={(e) => { e.stopPropagation(); navigate(f.action) }}>
                     申請
                   </button>
                 </div>

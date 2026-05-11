@@ -654,10 +654,16 @@ function ListView({ mode, chainsList, shortStepDesc, onNew, onEdit, onDelete }) 
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {chainsList.map(c => (
-            <div key={c.id} style={{
-              padding: 16, borderRadius: 10,
-              background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
-            }}>
+            <div key={c.id}
+              onClick={() => onEdit(c.id)}
+              style={{
+                padding: 16, borderRadius: 10,
+                background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
+                cursor: 'pointer', transition: 'transform .12s, border-color .12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.borderColor = 'var(--accent-cyan)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-medium)' }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
@@ -703,11 +709,11 @@ function ListView({ mode, chainsList, shortStepDesc, onNew, onEdit, onDelete }) 
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  <button onClick={() => onEdit(c.id)} title="編輯"
+                  <button onClick={(e) => { e.stopPropagation(); onEdit(c.id) }} title="編輯"
                     style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => onDelete(c.id, c.name)} title="刪除"
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(c.id, c.name) }} title="刪除"
                     style={{ background: 'transparent', border: '1px solid var(--accent-red-dim)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--accent-red)' }}>
                     <Trash2 size={14} />
                   </button>

@@ -4,6 +4,7 @@ import {
   Users, Calendar, Clock, FileCheck, AlertTriangle, Cake,
   ChevronRight, CheckCircle2, XCircle, MessageSquare,
   Building2, RefreshCw, Briefcase, Plane,
+  ListChecks, Workflow as WorkflowIcon, FolderOpen, Hourglass,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -178,9 +179,15 @@ export default function TeamDashboard() {
   const isManager = userRole === 'manager'
   const isAdminPlus = ['admin', 'super_admin'].includes(userRole)
 
+  const [tab, setTab] = useState('hr')  // 'hr' | 'process'
   const [stores, setStores] = useState([])
   const [storeFilter, setStoreFilter] = useState(null)  // admin 才會用
   const [team, setTeam] = useState([])
+  // ── process tab data ──
+  const [myTasks, setMyTasks] = useState([])
+  const [activeWorkflows, setActiveWorkflows] = useState([])
+  const [activeProjects, setActiveProjects] = useState([])
+  const [processLoading, setProcessLoading] = useState(false)
   const [attendance, setAttendance] = useState([])
   const [todayLeaves, setTodayLeaves] = useState([])
   const [todayOvertimes, setTodayOvertimes] = useState([])
@@ -334,11 +341,77 @@ export default function TeamDashboard() {
 
   useEffect(() => { loadAll() }, [loadAll, refreshTick])
 
+  // ── process tab 資料：只在第一次切到 process tab 或 refresh 時 load ──
+  const loadProcessData = useCallback(async () => {
+    if (!orgId || !profile?.name) return
+    setProcessLoading(true)
+    const today = todayStr()
+    const teamNames = team.map(e => e.name).filter(Boolean)
+
+    try {
+      // 我的待辦任務（assignee = 我，未完成）
+      const { data: tasksData } = await supabase.from('tasks')
+        .select('*')
+        .eq('assignee', profile.name)
+        .neq('status', '已完成')
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .limit(20)
+      setMyTasks(tasksData || [])
+
+      // 進行中流程（status = 進行中），scope by assignee/started_by 在 team 內 (若 manager)
+      let wfQ = supabase.from('workflow_instances')
+        .select('*')
+        .eq('status', '進行中')
+        .order('started_at', { ascending: false })
+        .limit(30)
+      // manager 才 scope；admin 看全公司
+      if (isManager && teamNames.length > 0) {
+        wfQ = wfQ.or(`started_by.in.(${teamNames.map(n => `"${n}"`).join(',')}),assignee.in.(${teamNames.map(n => `"${n}"`).join(',')})`)
+      }
+      const { data: wfData } = await wfQ
+      setActiveWorkflows(wfData || [])
+
+      // 進行中專案
+      const { data: prjData } = await supabase.from('projects')
+        .select('*')
+        .eq('status', '進行中')
+        .order('created_at', { ascending: false })
+        .limit(20)
+      setActiveProjects(prjData || [])
+    } catch (e) {
+      console.warn('[TeamDashboard] process query failed:', e)
+    }
+    setProcessLoading(false)
+  }, [orgId, profile?.name, team, isManager])
+
+  useEffect(() => {
+    if (tab === 'process') loadProcessData()
+  }, [tab, loadProcessData, refreshTick])
+
   // ── 自動 refresh (每 60 秒) ──
   useEffect(() => {
     const t = setInterval(() => setRefreshTick(x => x + 1), 60000)
     return () => clearInterval(t)
   }, [])
+
+  // ── 流程 KPI / list 計算 ──
+  const processKpi = useMemo(() => {
+    const today = todayStr()
+    const myActiveStarted = activeWorkflows.filter(w => w.started_by === profile?.name).length
+    const overdue = activeWorkflows.filter(w => {
+      if (!w.started_at) return false
+      return daysBetween(today, w.started_at.slice(0, 10)) >= 3
+    }).length
+    const overdueTasks = myTasks.filter(t => t.due_date && t.due_date < today).length
+    return {
+      myTasks: myTasks.length,
+      myActiveStarted,
+      activeWfTotal: activeWorkflows.length,
+      overdue,
+      overdueTasks,
+      activeProjects: activeProjects.length,
+    }
+  }, [activeWorkflows, myTasks, activeProjects, profile?.name])
 
   // ── 計算今日狀態 per emp ──
   const teamWithStatus = useMemo(() => {
@@ -465,7 +538,38 @@ export default function TeamDashboard() {
         </div>
       </div>
 
-      {/* ─── KPI Bar ─── */}
+      {/* ─── Tab switcher ─── */}
+      <div style={{ display: 'flex', gap: 4, background: C.bg2, padding: 4, borderRadius: 10, width: 'fit-content', border: `1px solid ${C.borderSubtle}` }}>
+        <button
+          onClick={() => setTab('hr')}
+          style={{
+            padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: tab === 'hr' ? C.card : 'transparent',
+            color: tab === 'hr' ? 'var(--text-primary)' : C.muted,
+            fontSize: 13, fontWeight: 600,
+            boxShadow: tab === 'hr' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <Users size={14} /> 人 · HR
+        </button>
+        <button
+          onClick={() => setTab('process')}
+          style={{
+            padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: tab === 'process' ? C.card : 'transparent',
+            color: tab === 'process' ? 'var(--text-primary)' : C.muted,
+            fontSize: 13, fontWeight: 600,
+            boxShadow: tab === 'process' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <WorkflowIcon size={14} /> 事 · 流程
+        </button>
+      </div>
+
+      {tab === 'hr' && <>
+      {/* ─── KPI Bar (HR) ─── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
@@ -593,6 +697,237 @@ export default function TeamDashboard() {
           </div>
         )}
       </div>
+      </>}
+
+      {tab === 'process' && <>
+      {/* ─── KPI Bar (Process) ─── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 12,
+      }}>
+        <KpiCard icon={ListChecks} label="我的待辦任務" value={processKpi.myTasks}
+                 badge={processKpi.overdueTasks > 0 ? `${processKpi.overdueTasks} 逾期` : null}
+                 color={C.cyan} colorDim={C.cyanDim}
+                 onClick={() => navigate('/process/tasks')} />
+        <KpiCard icon={WorkflowIcon} label="我發起進行中" value={processKpi.myActiveStarted}
+                 color={C.blue} colorDim={C.blueDim}
+                 onClick={() => navigate('/process/workflows')} />
+        <KpiCard icon={Hourglass} label="流程卡關 ≥3 天" value={processKpi.overdue}
+                 color={C.red} colorDim={C.redDim} />
+        <KpiCard icon={FolderOpen} label="進行中專案" value={processKpi.activeProjects}
+                 color={C.green} colorDim={C.greenDim}
+                 onClick={() => navigate('/process/projects')} />
+      </div>
+
+      {/* ─── 我的待辦任務 + 卡關流程（main + side） ─── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
+        gap: 16,
+      }} className="dash-two-col">
+        {/* 我的待辦任務 */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ListChecks size={16} style={{ color: C.cyan }} /> 我的待辦任務
+              {myTasks.length > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>({myTasks.length})</span>
+              )}
+            </h3>
+            <button onClick={() => navigate('/process/tasks')}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
+              全部 <ChevronRight size={12} />
+            </button>
+          </div>
+
+          {processLoading ? <LoadingSpinner /> : myTasks.length === 0 ? (
+            <div style={{ padding: '32px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+              <CheckCircle2 size={28} style={{ color: C.green, marginBottom: 8 }} /><br />
+              🎉 沒有待辦任務
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {myTasks.slice(0, 8).map(t => {
+                const today = todayStr()
+                const overdue = t.due_date && t.due_date < today
+                const due = t.due_date ? daysBetween(t.due_date, today) : null
+                return (
+                  <div key={t.id}
+                    onClick={() => navigate('/process/tasks')}
+                    style={{
+                      padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
+                      background: C.bg2, cursor: 'pointer',
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.cyan }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
+                  >
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, flexShrink: 0,
+                      background: t.priority === '高' ? C.redDim : t.priority === '低' ? C.greenDim : C.orangeDim,
+                      color: t.priority === '高' ? C.red : t.priority === '低' ? C.green : C.orange,
+                    }}>{t.priority || '中'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: 'flex', gap: 8 }}>
+                        {t.workflow && <span>📋 {t.workflow}</span>}
+                        <span>狀態：{t.status}</span>
+                      </div>
+                    </div>
+                    {t.due_date && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        color: overdue ? C.red : due <= 3 ? C.orange : C.muted,
+                      }}>
+                        {overdue ? `🚨 逾期 ${Math.abs(due)}天` : `⏰ ${fmtDate(t.due_date)}`}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              {myTasks.length > 8 && (
+                <div style={{ textAlign: 'center', fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  還有 {myTasks.length - 8} 個任務 → 看全部
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 卡關流程 */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Hourglass size={16} style={{ color: C.red }} /> 卡關提示
+          </h3>
+          {(() => {
+            const today = todayStr()
+            const stuck = activeWorkflows.filter(w => w.started_at && daysBetween(today, w.started_at.slice(0, 10)) >= 3)
+            if (stuck.length === 0) return (
+              <div style={{ padding: '20px 8px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+                ✅ 沒有卡關流程
+              </div>
+            )
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {stuck.slice(0, 6).map(w => {
+                  const days = daysBetween(today, w.started_at.slice(0, 10))
+                  return (
+                    <div key={w.id} style={{
+                      padding: '8px 10px', borderRadius: 8,
+                      background: C.bg2, border: `1px solid ${C.borderSubtle}`,
+                      fontSize: 12,
+                    }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                        {w.template_name || '未命名流程'}
+                      </div>
+                      <div style={{ color: C.muted, fontSize: 11, display: 'flex', gap: 6 }}>
+                        <span>發起：{w.started_by || '—'}</span>
+                        <span style={{ color: days >= 7 ? C.red : C.orange, fontWeight: 700 }}>
+                          🚨 {days} 天
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {stuck.length > 6 && (
+                  <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 4 }}>
+                    還有 {stuck.length - 6} 個
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+      </div>
+
+      {/* ─── 進行中流程 list ─── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <WorkflowIcon size={16} style={{ color: C.blue }} /> 進行中流程
+            {activeWorkflows.length > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>({activeWorkflows.length})</span>
+            )}
+          </h3>
+          <button onClick={() => navigate('/process/workflows')}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
+            全部 <ChevronRight size={12} />
+          </button>
+        </div>
+
+        {processLoading ? <LoadingSpinner /> : activeWorkflows.length === 0 ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+            目前沒有進行中流程
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {activeWorkflows.slice(0, 9).map(w => {
+              const today = todayStr()
+              const days = w.started_at ? daysBetween(today, w.started_at.slice(0, 10)) : 0
+              return (
+                <div key={w.id}
+                  onClick={() => navigate('/process/workflows')}
+                  style={{
+                    padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
+                    background: C.bg2, cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    {w.template_name || '未命名流程'}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted }}>
+                    <span>發起：{w.started_by || '—'}</span>
+                    <span style={{ color: days >= 3 ? C.orange : C.muted }}>
+                      已 {days} 天
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── 進行中專案 ─── */}
+      {activeProjects.length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FolderOpen size={16} style={{ color: C.green }} /> 進行中專案
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>({activeProjects.length})</span>
+            </h3>
+            <button onClick={() => navigate('/process/projects')}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
+              全部 <ChevronRight size={12} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+            {activeProjects.slice(0, 8).map(p => (
+              <div key={p.id}
+                onClick={() => navigate('/process/projects')}
+                style={{
+                  padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
+                  background: C.bg2, cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.green }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
+                {p.description && (
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  }}>{p.description}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      </>}
 
       {/* RWD 微調 */}
       <style>{`

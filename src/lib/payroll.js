@@ -20,30 +20,43 @@
 // ══════════════════════════════════════
 
 /**
- * 勞工保險投保薪資級距（2026）
- * 最低 NT$29,500 ～ 最高 NT$45,800
+ * 勞工保險投保薪資級距（2026/115年）
+ * 11 級，最低 NT$29,500（基本工資）～ 最高 NT$45,800
+ * 來源：勞動部勞工保險局 115/01/01 適用
  */
 export const LABOR_INSURANCE_BRACKETS = [
-  29500, 30300, 31100, 31900, 32700, 33500,
-  34300, 35100, 36300, 37500, 38700, 39900,
-  41100, 42300, 43500, 44700, 45800,
+  29500, 30300, 31800, 33300, 34800, 36300,
+  38200, 40100, 42000, 43900, 45800,
 ];
 
 /**
- * 全民健保投保薪資級距（2026）
- * 最低 NT$29,500 ～ 最高 NT$219,500
+ * 部分工時勞工最低投保級距（勞保）
+ * 時薪 PT 實際薪資不滿基本工資時適用
+ */
+export const LABOR_INSURANCE_PT_MIN = 11100;
+
+/**
+ * 全民健保投保薪資級距（2026/115年）
+ * 53 級，最低 NT$29,500 ～ 最高 NT$313,000
+ * 來源：衛福部中央健康保險署 115/01/01 適用
  */
 export const HEALTH_INSURANCE_BRACKETS = [
-  29500, 30300, 31100, 31900, 32700, 33500,
-  34300, 35100, 36300, 37500, 38700, 39900,
-  41100, 42300, 43500, 44700, 45800, 48200,
+  29500, 30300, 31800, 33300, 34800, 36300,
+  38200, 40100, 42000, 43900, 45800, 48200,
   50600, 53000, 55400, 57800, 60800, 63800,
   66800, 69800, 72800, 76500, 80200, 83900,
   87600, 92100, 96600, 101100, 105600, 110100,
   115500, 120900, 126300, 131700, 137100, 142500,
-  147900, 150000, 156400, 162800, 169200, 175600,
-  182000, 189500, 197000, 204500, 212000, 219500,
+  147900, 156400, 162800, 169200, 175600, 182000,
+  189500, 197000, 204500, 212000, 219500, 228000,
+  240000, 252000, 264000, 276000, 288000, 300000,
+  313000,
 ];
+
+/**
+ * 部分工時健保最低投保級距（= 健保第 1 級）
+ */
+export const HEALTH_INSURANCE_PT_MIN = 29500;
 
 /**
  * 勞退月提繳工資級距（2026）
@@ -82,35 +95,46 @@ function matchBracket(salary, brackets) {
 // ══════════════════════════════════════
 
 /**
- * 計算勞工保險費
+ * 計算勞工保險費（2026/115年）
  *
- * 2026 費率：
- * - 保險費率：12%（普通事故 10.5% + 就業保險 1.5%）
+ * 費率：
+ * - 普通事故保險 11.5% + 就業保險 1% = 12.5%
  * - 分攤比例：勞工 20%、雇主 70%、政府 10%
+ * - 65 歲以上免就保 → 11.5%
+ *
+ * 部分工時 PT：強制最低投保 NT$11,100
  *
  * @param {number} monthlySalary - 月薪
- * @param {number} [employeeAge=30] - 員工年齡（65歲以上免就業保險）
+ * @param {object} [options={}]
+ * @param {number} [options.employeeAge=30] - 員工年齡
+ * @param {boolean} [options.isPartTime=false] - 是否部分工時 PT
  * @returns {{ insured_salary: number, employee_share: number, employer_share: number, total: number }}
  */
-export function calculateLaborInsurance(monthlySalary, employeeAge = 30) {
-  const insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS);
+export function calculateLaborInsurance(monthlySalary, options = {}) {
+  // 向下相容：第二參數可傳數字（舊用法）或物件
+  const opts = typeof options === 'number' ? { employeeAge: options } : options;
+  const { employeeAge = 30, isPartTime = false } = opts;
 
-  // 65歲以上不適用就業保險，費率為 10.5%（僅普通事故）
-  const premiumRate = employeeAge >= 65 ? 0.105 : 0.12;
+  let insuredSalary;
+  if (isPartTime) {
+    // PT 最低 11,100；超出按級距匹配（但 PT 級距表簡化用 11,100 起跳）
+    insuredSalary = Math.max(LABOR_INSURANCE_PT_MIN, matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS));
+    // 若實薪 < 29,500（最低正職級距），用 PT 最低 11,100
+    if (monthlySalary < LABOR_INSURANCE_BRACKETS[0]) {
+      insuredSalary = LABOR_INSURANCE_PT_MIN;
+    }
+  } else {
+    insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS);
+  }
 
-  // 勞工自付 20%
+  // 65 歲以上免就保 → 僅普通事故 11.5%
+  const premiumRate = employeeAge >= 65 ? 0.115 : 0.125;
+
   const employeeShare = Math.round(insuredSalary * premiumRate * 0.2);
-  // 雇主負擔 70%
   const employerShare = Math.round(insuredSalary * premiumRate * 0.7);
-  // 合計（含政府 10%）
   const total = Math.round(insuredSalary * premiumRate);
 
-  return {
-    insured_salary: insuredSalary,
-    employee_share: employeeShare,
-    employer_share: employerShare,
-    total,
-  };
+  return { insured_salary: insuredSalary, employee_share: employeeShare, employer_share: employerShare, total };
 }
 
 // ══════════════════════════════════════
@@ -118,43 +142,39 @@ export function calculateLaborInsurance(monthlySalary, employeeAge = 30) {
 // ══════════════════════════════════════
 
 /**
- * 計算全民健康保險費
+ * 計算全民健康保險費（2026/115年）
  *
- * 2026 費率：
- * - 保險費率：5.17%
- * - 分攤比例：被保險人 30%、雇主 60%、政府 10%
- * - 眷屬：被保險人需連同眷屬一起繳納（最多3人）
- * - 雇主：以平均眷口數 0.57 計算
+ * 費率：5.17%
+ * 分攤比例：被保險人 30%、雇主 60%、政府 10%
+ * 眷屬：本人 + 眷屬（最多計 3 口）
+ * 雇主：以平均眷口數 0.57 計算
+ *
+ * 部分工時 PT：強制最低投保 NT$29,500
  *
  * @param {number} monthlySalary - 月薪
- * @param {number} [dependents=0] - 眷屬人數（最多計 3 人）
+ * @param {object|number} [options=0] - 眷屬數（舊用法）或物件 { dependents, isPartTime }
  * @returns {{ insured_salary: number, employee_share: number, employer_share: number, dependents: number }}
  */
-export function calculateHealthInsurance(monthlySalary, dependents = 0) {
-  const insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
+export function calculateHealthInsurance(monthlySalary, options = 0) {
+  const opts = typeof options === 'number' ? { dependents: options } : options;
+  const { dependents = 0, isPartTime = false } = opts;
+
+  let insuredSalary;
+  if (isPartTime) {
+    // PT 最低 29,500；超過依級距匹配
+    insuredSalary = Math.max(HEALTH_INSURANCE_PT_MIN, matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS));
+  } else {
+    insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
+  }
 
   const premiumRate = 0.0517;
-  // 眷屬最多計收 3 口
   const cappedDependents = Math.min(dependents, 3);
-  // 平均眷口數（用於雇主計算）
-  const avgDependentsRatio = 1.57; // 1 + 平均眷口 0.57
+  const avgDependentsRatio = 1.57;
 
-  // 被保險人自付 30%（含本人 + 眷屬）
-  const employeeShare = Math.round(
-    insuredSalary * premiumRate * 0.3 * (1 + cappedDependents)
-  );
+  const employeeShare = Math.round(insuredSalary * premiumRate * 0.3 * (1 + cappedDependents));
+  const employerShare = Math.round(insuredSalary * premiumRate * 0.6 * avgDependentsRatio);
 
-  // 雇主負擔 60%（以平均眷口數計算）
-  const employerShare = Math.round(
-    insuredSalary * premiumRate * 0.6 * avgDependentsRatio
-  );
-
-  return {
-    insured_salary: insuredSalary,
-    employee_share: employeeShare,
-    employer_share: employerShare,
-    dependents: cappedDependents,
-  };
+  return { insured_salary: insuredSalary, employee_share: employeeShare, employer_share: employerShare, dependents: cappedDependents };
 }
 
 // ══════════════════════════════════════
@@ -359,26 +379,35 @@ export function calculateNetSalary(grossSalary, options = {}) {
     bonus = 0,
     otherDeductions = 0,
     employeeAge = 30,
+    // 新增：投保薪資基數（不傳就用 grossSalary）
+    // 廠商規則：月薪人員用 base + role_allowance，PT 用 PT 最低
+    insuredSalary,
+    // 新增：是否部分工時 PT
+    isPartTime = false,
+    // 新增：是否扣所得稅（個人申報為主，預設不扣）
+    withholdTax = false,
   } = options;
 
   // 應發薪資總額
   const totalGross = grossSalary + overtimePay + bonus;
 
-  // 勞保（以底薪計算投保薪資）
-  const labor = calculateLaborInsurance(grossSalary, employeeAge);
+  // 投保金額（沒傳就 fallback 用 grossSalary）
+  const insuranceBase = insuredSalary != null ? insuredSalary : grossSalary;
+
+  // 勞保
+  const labor = calculateLaborInsurance(insuranceBase, { employeeAge, isPartTime });
   const laborInsurance = labor.employee_share;
 
-  // 健保（以底薪計算投保薪資）
-  const health = calculateHealthInsurance(grossSalary, dependents);
+  // 健保
+  const health = calculateHealthInsurance(insuranceBase, { dependents, isPartTime });
   const healthInsurance = health.employee_share;
 
   // 勞退自提（以底薪計算）
   const pension = calculateLaborPension(grossSalary, voluntaryPensionRate);
   const pensionSelfContribution = pension.employee_voluntary;
 
-  // 所得稅扣繳（以應發總額計算每月扣繳）
-  const tax = calculateMonthlyWithholding(totalGross);
-  const incomeTax = tax.withholding_amount;
+  // 所得稅：預設不扣（個人 5 月自行申報）；若公司要代扣可設 withholdTax: true
+  const incomeTax = withholdTax ? calculateMonthlyWithholding(totalGross).withholding_amount : 0;
 
   // 扣除合計
   const totalDeductions =

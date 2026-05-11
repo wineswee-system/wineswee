@@ -859,13 +859,17 @@ export default function TeamDashboard() {
         gap: 12,
       }}>
         <KpiCard icon={Users}         label="團隊在班"  value={kpi.presentCount} suffix={`/ ${kpi.total}`} color={C.green}  colorDim={C.greenDim} />
-        <KpiCard icon={Calendar}      label="今日請假"  value={kpi.leaveCount}  color={C.cyan}   colorDim={C.cyanDim} />
-        <KpiCard icon={Clock}         label="今日加班"  value={kpi.otCount}     color={C.orange} colorDim={C.orangeDim} />
-        <KpiCard icon={Plane}         label="今日出差"  value={kpi.tripCount}   color={C.blue}   colorDim={C.blueDim} />
+        <KpiCard icon={Calendar}      label="今日請假"  value={kpi.leaveCount}  color={C.cyan}   colorDim={C.cyanDim}
+                 onClick={() => navigate('/hr/leave')} />
+        <KpiCard icon={Clock}         label="今日加班"  value={kpi.otCount}     color={C.orange} colorDim={C.orangeDim}
+                 onClick={() => navigate('/hr/overtime')} />
+        <KpiCard icon={Plane}         label="今日出差"  value={kpi.tripCount}   color={C.blue}   colorDim={C.blueDim}
+                 onClick={() => navigate('/hr/travel')} />
         <KpiCard icon={FileCheck}     label="待我簽核"  value={kpi.pendingCount} color={C.purple} colorDim={C.purpleDim}
                  badge={pendingUnified.some(p => p.daysOpen >= 3) ? '逾期' : null}
                  onClick={() => navigate('/process/approvals')} />
-        <KpiCard icon={AlertTriangle} label="未打卡"    value={kpi.lateCount}   color={C.red}    colorDim={C.redDim} />
+        <KpiCard icon={AlertTriangle} label="未打卡"    value={kpi.lateCount}   color={C.red}    colorDim={C.redDim}
+                 onClick={() => navigate('/hr/attendance')} />
       </div>
 
       {/* ─── 待簽核 + 警示（main + side） ─── */}
@@ -949,37 +953,63 @@ export default function TeamDashboard() {
       </div>
 
       {/* ─── 團隊狀態 grid ─── */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Users size={16} style={{ color: C.cyan }} /> 團隊狀態
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>（{team.length} 人）</span>
-          </h3>
-          <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.muted, flexWrap: 'wrap' }}>
-            {Object.entries(STATUS_META).filter(([k]) => ['on','leave','sick','overtime','trip','late'].includes(k)).map(([k, m]) => (
-              <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <span>{m.icon}</span>{m.label}
-              </span>
-            ))}
-          </div>
-        </div>
+      {/* 顯示規則：
+       *   - manager → 看自己 store（人數少，全列出含 unknown）
+       *   - admin/super_admin 有選 store → 看該 store 的（全列出含 unknown）
+       *   - admin/super_admin 沒選 store → 全公司視角，只列「異常」(休假/請假/出差/加班中/未打卡)
+       *     原因：全公司 N 十人 punch grid 是噪音；GM 想看誰異常，不是看誰正常
+       */}
+      {(() => {
+        const showAll = isManager || (isAdminPlus && scopeStoreId)
+        // 全公司視角時排除 'late'：未打卡有專屬 KPI（紅卡），點 KPI 可下鑽 /hr/attendance
+        // 這邊只列「在班的特殊狀態」(休假/請假/加班中/出差)，避免 dashboard 被未打卡淹沒
+        const visible = showAll
+          ? teamWithStatus
+          : teamWithStatus.filter(t => ['leave', 'sick', 'overtime', 'trip'].includes(t.status))
+        const title = showAll ? '團隊狀態' : '今日特殊狀態'
+        const countLabel = showAll ? `${team.length} 人` : `${visible.length} 人`
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Users size={16} style={{ color: C.cyan }} /> {title}
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>（{countLabel}）</span>
+              </h3>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.muted, flexWrap: 'wrap' }}>
+                {Object.entries(STATUS_META)
+                  .filter(([k]) => showAll
+                    ? ['on','leave','sick','overtime','trip','late'].includes(k)
+                    : ['leave','sick','overtime','trip'].includes(k))
+                  .map(([k, m]) => (
+                    <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span>{m.icon}</span>{m.label}
+                    </span>
+                  ))}
+              </div>
+            </div>
 
-        {team.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
-            尚無團隊成員
+            {team.length === 0 ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+                尚無團隊成員
+              </div>
+            ) : visible.length === 0 ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
+                ✅ 今日無人請假／出差／加班
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+                gap: 10,
+              }}>
+                {visible.map(({ emp, status }) => (
+                  <TeamMemberCard key={emp.id} emp={emp} status={status} />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
-            gap: 10,
-          }}>
-            {teamWithStatus.map(({ emp, status }) => (
-              <TeamMemberCard key={emp.id} emp={emp} status={status} />
-            ))}
-          </div>
-        )}
-      </div>
+        )
+      })()}
       </>}
 
       {tab === 'process' && <>

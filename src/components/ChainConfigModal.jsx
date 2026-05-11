@@ -60,7 +60,7 @@ const blankStep = (idx) => ({
 
 const fmtAmount = (n) => n == null ? '無上限' : `$${Number(n).toLocaleString()}`
 
-export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single' }) {
+export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false }) {
   // ── view state（amount_grouped / library 才會切 list ↔ editor） ──
   const hasListView = mode === 'amount_grouped' || mode === 'library'
   const [view, setView] = useState(hasListView ? 'list' : 'editor')
@@ -493,6 +493,110 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   // ════════════════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════════════════
+  const headerNode = (
+    <div style={{
+      padding: embedded ? '0 0 16px 0' : '16px 22px',
+      borderBottom: embedded ? 'none' : '1px solid var(--border-subtle)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {hasListView && view === 'editor' && (
+          <button onClick={handleBackToList} title="返回列表"
+            style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+            <ArrowLeft size={16} />
+          </button>
+        )}
+        <div>
+          <h3 style={{ margin: 0, fontSize: embedded ? 22 : 18, fontWeight: 700 }}>
+            ⚙️ {mode === 'library' ? '簽核鏈設定' : `簽核設定 — ${formLabel}`}
+            {mode === 'amount_grouped' && view === 'list' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>（依金額分組）</span>}
+            {hasListView && view === 'editor' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{chainId ? (mode === 'library' ? '編輯' : '編輯區間') : (mode === 'library' ? '新增' : '新增區間')}</span>}
+          </h3>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            {mode === 'amount_grouped'
+              ? '依申請金額自動套用對應簽核鏈，可設定多組金額區間'
+              : mode === 'library'
+              ? '簽核鏈中央管理 — 流程、任務、HR 表單共用同一個池子'
+              : '設定這張表的簽核流程，可串多關 + 動態目標（套牢組織圖）'}
+          </div>
+        </div>
+      </div>
+      {!embedded && (
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+          <X size={22} />
+        </button>
+      )}
+    </div>
+  )
+
+  const bodyNode = (
+    <div style={{
+      flex: 1,
+      overflowY: embedded ? 'visible' : 'auto',
+      padding: embedded ? 0 : 22,
+    }}>
+      {loading ? <LoadingSpinner /> : view === 'list' ? (
+        <ListView
+          mode={mode}
+          chainsList={chainsList}
+          shortStepDesc={shortStepDesc}
+          onNew={handleNewChain}
+          onEdit={handleEditChain}
+          onDelete={handleDeleteChain}
+        />
+      ) : (
+        <EditorView
+          mode={mode}
+          chainName={chainName} setChainName={setChainName}
+          chainDescription={chainDescription} setChainDescription={setChainDescription}
+          libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory}
+          minAmount={minAmount} setMinAmount={setMinAmount}
+          maxAmount={maxAmount} setMaxAmount={setMaxAmount}
+          steps={steps}
+          updateStep={updateStep}
+          addStep={addStep}
+          removeStep={removeStep}
+          moveStep={moveStep}
+          changeTargetType={changeTargetType}
+          stepPreview={stepPreview}
+          employees={employees}
+          roles={roles}
+          depts={depts}
+          stores={stores}
+          sections={sections}
+          formLabel={formLabel}
+        />
+      )}
+    </div>
+  )
+
+  // editor 模式才需要 footer save 按鈕；list 模式由 ListView 內部的「新增簽核鏈」處理新增
+  const footerNode = view === 'editor' ? (
+    <div style={{
+      padding: embedded ? '16px 0 0 0' : '14px 22px',
+      borderTop: embedded ? '1px solid var(--border-subtle)' : '1px solid var(--border-subtle)',
+      marginTop: embedded ? 20 : 0,
+      display: 'flex', justifyContent: 'flex-end', gap: 8,
+    }}>
+      {!embedded && <button className="btn btn-secondary" onClick={onClose}>取消</button>}
+      <button className="btn btn-primary" onClick={handleSave} disabled={loading || saving}>
+        <Save size={14} /> {saving ? '儲存中...' : '儲存簽核鏈'}
+      </button>
+    </div>
+  ) : null
+
+  // ── Embedded：直接 inline render，不包 ModalOverlay ──
+  if (embedded) {
+    return (
+      <div>
+        {headerNode}
+        {bodyNode}
+        {footerNode}
+      </div>
+    )
+  }
+
+  // ── Modal：原本行為 ──
   return (
     <ModalOverlay onClose={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
@@ -500,82 +604,9 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         maxHeight: '92vh', display: 'flex', flexDirection: 'column',
         border: '1px solid var(--border-medium)', overflow: 'hidden',
       }}>
-        {/* Header */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {hasListView && view === 'editor' && (
-              <button onClick={handleBackToList} title="返回列表"
-                style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                <ArrowLeft size={16} />
-              </button>
-            )}
-            <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                ⚙️ {mode === 'library' ? '簽核鏈設定' : `簽核設定 — ${formLabel}`}
-                {mode === 'amount_grouped' && view === 'list' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>（依金額分組）</span>}
-                {hasListView && view === 'editor' && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{chainId ? (mode === 'library' ? '編輯' : '編輯區間') : (mode === 'library' ? '新增' : '新增區間')}</span>}
-              </h3>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                {mode === 'amount_grouped'
-                  ? '依申請金額自動套用對應簽核鏈，可設定多組金額區間'
-                  : mode === 'library'
-                  ? '簽核鏈中央管理 — 流程、任務、HR 表單共用同一個池子'
-                  : '設定這張表的簽核流程，可串多關 + 動態目標（套牢組織圖）'}
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
-            <X size={22} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
-          {loading ? <LoadingSpinner /> : view === 'list' ? (
-            // ────────────── List view (amount_grouped / library) ──────────────
-            <ListView
-              mode={mode}
-              chainsList={chainsList}
-              shortStepDesc={shortStepDesc}
-              onNew={handleNewChain}
-              onEdit={handleEditChain}
-              onDelete={handleDeleteChain}
-            />
-          ) : (
-            // ────────────── Editor view ──────────────
-            <EditorView
-              mode={mode}
-              chainName={chainName} setChainName={setChainName}
-              chainDescription={chainDescription} setChainDescription={setChainDescription}
-              libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory}
-              minAmount={minAmount} setMinAmount={setMinAmount}
-              maxAmount={maxAmount} setMaxAmount={setMaxAmount}
-              steps={steps}
-              updateStep={updateStep}
-              addStep={addStep}
-              removeStep={removeStep}
-              moveStep={moveStep}
-              changeTargetType={changeTargetType}
-              stepPreview={stepPreview}
-              employees={employees}
-              roles={roles}
-              depts={depts}
-              stores={stores}
-              sections={sections}
-              formLabel={formLabel}
-            />
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          {view === 'editor' && (
-            <button className="btn btn-primary" onClick={handleSave} disabled={loading || saving}>
-              <Save size={14} /> {saving ? '儲存中...' : '儲存簽核鏈'}
-            </button>
-          )}
-        </div>
+        {headerNode}
+        {bodyNode}
+        {footerNode}
       </div>
     </ModalOverlay>
   )

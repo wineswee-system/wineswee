@@ -311,7 +311,6 @@ export default function Salary() {
           .gte('start_date', monthStart).lte('start_date', monthEnd),
         supabase.from('salary_structures')
           .select('*')
-          .eq('organization_id', orgId)
           .in('employee_id', scopedEmployees.map(e => e.id)),
       ])
 

@@ -92,6 +92,8 @@ function KpiCard({ icon: Icon, label, value, suffix, color = C.cyan, colorDim = 
 // ──────────────────────────────────────────────
 function PendingRow({ item, onClick }) {
   const isOverdue = item.daysOpen >= 3
+  const p = item.progress
+  const pct = p && p.total > 0 ? Math.round((p.current / p.total) * 100) : 0
   return (
     <div
       onClick={() => onClick?.(item)}
@@ -114,6 +116,21 @@ function PendingRow({ item, onClick }) {
           </div>
           {item.subtitle && (
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{item.subtitle}</div>
+          )}
+          {p && p.total > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <div style={{
+                flex: 1, height: 4, borderRadius: 2, background: C.borderSubtle, overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', width: `${pct}%`, background: item.kindColor,
+                  transition: 'width .3s',
+                }} />
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: item.kindColor, minWidth: 30, textAlign: 'right' }}>
+                {p.current}/{p.total} 關
+              </span>
+            </div>
           )}
         </div>
         {isOverdue && (
@@ -170,6 +187,149 @@ function TeamMemberCard({ emp, status }) {
 }
 
 // ──────────────────────────────────────────────
+// 子元件：流程進度卡（可展開看每關）
+// ──────────────────────────────────────────────
+const TASK_STATUS_META = {
+  '已完成': { icon: '✓', color: C.green, bg: C.greenDim },
+  '進行中': { icon: '▶', color: C.blue, bg: C.blueDim },
+  '待簽核': { icon: '◐', color: C.orange, bg: C.orangeDim },
+  '待處理': { icon: '○', color: C.muted, bg: C.bg2 },
+  '已擱置': { icon: '⏸', color: C.red, bg: C.redDim },
+}
+
+function WorkflowProgressCard({ w, tasks, days, onJump }) {
+  const [expanded, setExpanded] = useState(false)
+  const total = tasks.length
+  const done = tasks.filter(t => t.status === '已完成').length
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const current = tasks.find(t => ['進行中', '待簽核'].includes(t.status))
+  const currentStep = current?.step_order ?? (done > 0 ? done : 1)
+  const stuck = days >= 3
+  const allDone = total > 0 && done === total
+
+  return (
+    <div style={{
+      padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
+      background: C.bg2, transition: 'border-color .12s',
+    }}>
+      {/* header — 點 toggle expand */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {w.template_name || '未命名流程'}
+          </div>
+          <ChevronRight size={14} style={{
+            color: C.muted, flexShrink: 0,
+            transform: expanded ? 'rotate(90deg)' : 'none',
+            transition: 'transform .15s',
+          }} />
+        </div>
+
+        {/* 進度條 */}
+        {total > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              flex: 1, height: 6, borderRadius: 3, background: C.borderSubtle, overflow: 'hidden',
+              position: 'relative',
+            }}>
+              <div style={{
+                height: '100%', width: `${pct}%`,
+                background: allDone ? C.green : C.blue, transition: 'width .3s',
+              }} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: allDone ? C.green : C.blue, minWidth: 36, textAlign: 'right' }}>
+              {done}/{total}
+            </span>
+          </div>
+        )}
+
+        {/* meta */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted, gap: 8 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            發起：{w.started_by || '—'}
+          </span>
+          <span style={{ color: stuck ? C.red : C.muted, fontWeight: stuck ? 700 : 500, flexShrink: 0 }}>
+            {stuck && '🚨 '}已 {days} 天
+          </span>
+        </div>
+
+        {/* 當前關卡 */}
+        {current && !expanded && (
+          <div style={{
+            marginTop: 2, padding: '6px 8px', borderRadius: 6,
+            background: TASK_STATUS_META[current.status]?.bg || C.bg2,
+            fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ color: TASK_STATUS_META[current.status]?.color, fontWeight: 700 }}>
+              第 {currentStep} 關
+            </span>
+            <span style={{ color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {current.title}
+            </span>
+            {current.assignee && (
+              <span style={{ color: C.muted, flexShrink: 0 }}>· {current.assignee}</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 展開：每關細節 */}
+      {expanded && total > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {tasks.map(t => {
+            const meta = TASK_STATUS_META[t.status] || TASK_STATUS_META['待處理']
+            const overdue = t.due_date && t.status !== '已完成' && t.due_date < todayStr()
+            return (
+              <div key={t.id} style={{
+                padding: '6px 8px', borderRadius: 6,
+                background: meta.bg,
+                fontSize: 11, display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{
+                  width: 18, height: 18, borderRadius: '50%',
+                  background: meta.color, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, flexShrink: 0,
+                }}>{t.step_order}</span>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.title}
+                  </span>
+                  {t.assignee && (
+                    <span style={{ color: C.muted, fontSize: 10 }}>{t.assignee}</span>
+                  )}
+                </div>
+                <span style={{ color: meta.color, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>
+                  {t.status}
+                </span>
+                {overdue && (
+                  <span style={{ color: C.red, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>逾期</span>
+                )}
+              </div>
+            )
+          })}
+          <button
+            onClick={(e) => { e.stopPropagation(); onJump?.() }}
+            style={{
+              marginTop: 4, width: '100%', background: 'transparent',
+              border: `1px solid ${C.borderSubtle}`, borderRadius: 6,
+              padding: '6px 8px', cursor: 'pointer',
+              fontSize: 11, color: C.cyan, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            }}
+          >
+            前往流程頁 <ChevronRight size={12} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────
 // 主元件
 // ──────────────────────────────────────────────
 export default function TeamDashboard() {
@@ -186,6 +346,7 @@ export default function TeamDashboard() {
   // ── process tab data ──
   const [myTasks, setMyTasks] = useState([])
   const [activeWorkflows, setActiveWorkflows] = useState([])
+  const [wfTasksMap, setWfTasksMap] = useState({})  // wf_instance_id -> tasks[]
   const [activeProjects, setActiveProjects] = useState([])
   const [processLoading, setProcessLoading] = useState(false)
   const [attendance, setAttendance] = useState([])
@@ -196,6 +357,11 @@ export default function TeamDashboard() {
   const [pendingOvertimes, setPendingOvertimes] = useState([])
   const [pendingTrips, setPendingTrips] = useState([])
   const [pendingCorrections, setPendingCorrections] = useState([])
+  const [pendingResignations, setPendingResignations] = useState([])
+  const [pendingLoas, setPendingLoas] = useState([])
+  const [pendingTransfers, setPendingTransfers] = useState([])
+  const [pendingExpenses, setPendingExpenses] = useState([])
+  const [chainStepsMap, setChainStepsMap] = useState({})  // chain_id -> step count
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -245,6 +411,8 @@ export default function TeamDashboard() {
     if (teamIds.length === 0) {
       setAttendance([]); setTodayLeaves([]); setTodayOvertimes([]); setTodayTrips([])
       setPendingLeaves([]); setPendingOvertimes([]); setPendingTrips([]); setPendingCorrections([])
+      setPendingResignations([]); setPendingLoas([]); setPendingTransfers([]); setPendingExpenses([])
+      setChainStepsMap({})
       setAlerts([]); setLoading(false); return
     }
 
@@ -290,6 +458,50 @@ export default function TeamDashboard() {
     setPendingOvertimes(po.data || [])
     setPendingTrips(pt.data || [])
     setPendingCorrections(pc.data || [])
+
+    // ── HR B 類（chain-based）── 離職 / 留停 / 異動 / 費用申請
+    const [pr, plo, ptr, per] = await Promise.all([
+      supabase.from('resignation_requests')
+        .select('id, employee_id, planned_resign_date, reason, status, current_step, approval_chain_id, created_at')
+        .eq('status', '申請中').in('employee_id', teamIds)
+        .order('created_at', { ascending: false }).limit(15),
+      supabase.from('leave_of_absence_requests')
+        .select('id, employee_id, start_date, planned_end_date, reason_type, status, current_step, approval_chain_id, created_at')
+        .eq('status', '申請中').in('employee_id', teamIds)
+        .order('created_at', { ascending: false }).limit(15),
+      supabase.from('personnel_transfer_requests')
+        .select('id, employee_id, transfer_type, effective_date, status, current_step, approval_chain_id, created_at')
+        .eq('status', '申請中').in('employee_id', teamIds)
+        .order('created_at', { ascending: false }).limit(15),
+      supabase.from('expense_requests')
+        .select('id, employee_id, employee, title, estimated_amount, status, current_step, approval_chain_id, created_at')
+        .eq('status', '申請中').in('employee_id', teamIds)
+        .order('created_at', { ascending: false }).limit(15),
+    ])
+    setPendingResignations(pr.data || [])
+    setPendingLoas(plo.data || [])
+    setPendingTransfers(ptr.data || [])
+    setPendingExpenses(per.data || [])
+
+    // 撈所有出現的 chain，算每條有幾關
+    const chainIds = [...new Set([
+      ...(pr.data || []).map(r => r.approval_chain_id),
+      ...(plo.data || []).map(r => r.approval_chain_id),
+      ...(ptr.data || []).map(r => r.approval_chain_id),
+      ...(per.data || []).map(r => r.approval_chain_id),
+    ].filter(Boolean))]
+    if (chainIds.length > 0) {
+      const { data: chains } = await supabase.from('approval_chains')
+        .select('id, approval_chain_steps(id)')
+        .in('id', chainIds)
+      const map = {}
+      for (const c of chains || []) {
+        map[c.id] = (c.approval_chain_steps || []).length
+      }
+      setChainStepsMap(map)
+    } else {
+      setChainStepsMap({})
+    }
 
     // ── 警示 ──
     const al = []
@@ -371,6 +583,23 @@ export default function TeamDashboard() {
       const { data: wfData } = await wfQ
       setActiveWorkflows(wfData || [])
 
+      // 批次撈所有 active wf 的 tasks，算進度
+      if (wfData && wfData.length > 0) {
+        const wfIds = wfData.map(w => w.id)
+        const { data: allTasks } = await supabase.from('tasks')
+          .select('id, workflow_instance_id, step_order, title, assignee, assignee_id, status, due_date, completed_at')
+          .in('workflow_instance_id', wfIds)
+          .order('step_order', { ascending: true })
+        const map = {}
+        for (const t of allTasks || []) {
+          if (!map[t.workflow_instance_id]) map[t.workflow_instance_id] = []
+          map[t.workflow_instance_id].push(t)
+        }
+        setWfTasksMap(map)
+      } else {
+        setWfTasksMap({})
+      }
+
       // 進行中專案
       const { data: prjData } = await supabase.from('projects')
         .select('*')
@@ -451,12 +680,23 @@ export default function TeamDashboard() {
     const tripCount = todayTrips.length
     const lateCount = teamWithStatus.filter(t => t.status === 'late').length
     const pendingCount = pendingLeaves.length + pendingOvertimes.length + pendingTrips.length + pendingCorrections.length
+      + pendingResignations.length + pendingLoas.length + pendingTransfers.length + pendingExpenses.length
     return { total, presentCount, leaveCount, otCount, tripCount, lateCount, pendingCount }
-  }, [team, teamWithStatus, todayOvertimes, todayTrips, pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections])
+  }, [team, teamWithStatus, todayOvertimes, todayTrips,
+      pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections,
+      pendingResignations, pendingLoas, pendingTransfers, pendingExpenses])
 
   // ── 待簽核 unified list（排序：逾期優先 → 新到舊） ──
   const pendingUnified = useMemo(() => {
     const today = todayStr()
+    const empNameMap = Object.fromEntries(team.map(e => [e.id, e.name]))
+    // chain progress：current_step 是 0-indexed (剛建= 0 表示等第 1 關)，顯示加 1
+    const progressOf = (r) => {
+      const total = chainStepsMap[r.approval_chain_id] || 0
+      if (total === 0) return null
+      const current = Math.min((r.current_step ?? 0) + 1, total)
+      return { current, total }
+    }
     const items = [
       ...pendingLeaves.map(r => ({
         id: `leave-${r.id}`, kindLabel: '請假', kindColor: C.cyan,
@@ -486,10 +726,53 @@ export default function TeamDashboard() {
         daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
         target: '/hr/punch-correction',
       })),
+      // ── B 類 chain-based ──
+      ...pendingResignations.map(r => {
+        const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
+        return {
+          id: `resign-${r.id}`, kindLabel: '離職', kindColor: C.red,
+          title: `${name} 申請離職（${r.reason || '—'}）`,
+          subtitle: `預計 ${fmtDate(r.planned_resign_date)}`,
+          daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
+          target: '/hr/forms/resignation', progress: progressOf(r),
+        }
+      }),
+      ...pendingLoas.map(r => {
+        const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
+        return {
+          id: `loa-${r.id}`, kindLabel: '留停', kindColor: C.purple,
+          title: `${name} 申請留停（${r.reason_type || '—'}）`,
+          subtitle: `${fmtDate(r.start_date)}–${fmtDate(r.planned_end_date)}`,
+          daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
+          target: '/hr/forms/submissions', progress: progressOf(r),
+        }
+      }),
+      ...pendingTransfers.map(r => {
+        const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
+        return {
+          id: `transfer-${r.id}`, kindLabel: '異動', kindColor: C.blue,
+          title: `${name} ${r.transfer_type || '人事異動'}`,
+          subtitle: `生效 ${fmtDate(r.effective_date)}`,
+          daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
+          target: '/hr/forms/transfer', progress: progressOf(r),
+        }
+      }),
+      ...pendingExpenses.map(r => {
+        const name = r.employee || empNameMap[r.employee_id] || `員工 ${r.employee_id}`
+        return {
+          id: `expense-${r.id}`, kindLabel: '費用', kindColor: C.green,
+          title: `${name}：${r.title || '費用申請'}`,
+          subtitle: `預估 NT$ ${Number(r.estimated_amount || 0).toLocaleString()}`,
+          daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
+          target: '/hr/expense-requests', progress: progressOf(r),
+        }
+      }),
     ]
     items.sort((a, b) => b.daysOpen - a.daysOpen)
     return items
-  }, [pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections])
+  }, [pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections,
+      pendingResignations, pendingLoas, pendingTransfers, pendingExpenses,
+      chainStepsMap, team])
 
   const [showAllPending, setShowAllPending] = useState(false)
   const pendingDisplay = showAllPending ? pendingUnified : pendingUnified.slice(0, 5)
@@ -812,17 +1095,32 @@ export default function TeamDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {stuck.slice(0, 6).map(w => {
                   const days = daysBetween(today, w.started_at.slice(0, 10))
+                  const tasks = wfTasksMap[w.id] || []
+                  const total = tasks.length
+                  const done = tasks.filter(t => t.status === '已完成').length
+                  const current = tasks.find(t => ['進行中', '待簽核'].includes(t.status))
                   return (
-                    <div key={w.id} style={{
-                      padding: '8px 10px', borderRadius: 8,
-                      background: C.bg2, border: `1px solid ${C.borderSubtle}`,
-                      fontSize: 12,
-                    }}>
+                    <div key={w.id}
+                      onClick={() => navigate('/process/workflows')}
+                      style={{
+                        padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                        background: C.bg2, border: `1px solid ${C.borderSubtle}`,
+                        fontSize: 12, transition: 'border-color .12s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.red }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
+                    >
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
                         {w.template_name || '未命名流程'}
                       </div>
-                      <div style={{ color: C.muted, fontSize: 11, display: 'flex', gap: 6 }}>
-                        <span>發起：{w.started_by || '—'}</span>
+                      {current && (
+                        <div style={{ color: C.orange, fontSize: 11, marginBottom: 2 }}>
+                          卡在第 {current.step_order}/{total} 關：{current.title}
+                          {current.assignee && <span style={{ color: C.muted }}> · 等 {current.assignee}</span>}
+                        </div>
+                      )}
+                      <div style={{ color: C.muted, fontSize: 11, display: 'flex', gap: 6, justifyContent: 'space-between' }}>
+                        <span>發起：{w.started_by || '—'}{total > 0 && ` · ${done}/${total}`}</span>
                         <span style={{ color: days >= 7 ? C.red : C.orange, fontWeight: 700 }}>
                           🚨 {days} 天
                         </span>
@@ -861,30 +1159,19 @@ export default function TeamDashboard() {
             目前沒有進行中流程
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
             {activeWorkflows.slice(0, 9).map(w => {
               const today = todayStr()
               const days = w.started_at ? daysBetween(today, w.started_at.slice(0, 10)) : 0
+              const tasks = wfTasksMap[w.id] || []
               return (
-                <div key={w.id}
-                  onClick={() => navigate('/process/workflows')}
-                  style={{
-                    padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
-                    background: C.bg2, cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    {w.template_name || '未命名流程'}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted }}>
-                    <span>發起：{w.started_by || '—'}</span>
-                    <span style={{ color: days >= 3 ? C.orange : C.muted }}>
-                      已 {days} 天
-                    </span>
-                  </div>
-                </div>
+                <WorkflowProgressCard
+                  key={w.id}
+                  w={w}
+                  tasks={tasks}
+                  days={days}
+                  onJump={() => navigate('/process/workflows')}
+                />
               )
             })}
           </div>

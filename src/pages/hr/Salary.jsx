@@ -283,7 +283,15 @@ export default function Salary() {
   const handleBatchPayroll = async () => {
     try {
       const monthStart = month + '-01'
-      const monthEnd   = month + '-31'
+      // 算當月最後一天（避開 4/6/9/11 月沒 31 號的問題）
+      const [_y, _m] = month.split('-').map(Number)
+      const _lastDay = new Date(_y, _m, 0).getDate()  // 0 = 上個月最後一天 = 當月最後一天
+      const monthEnd = `${month}-${String(_lastDay).padStart(2, '0')}`
+
+      // 用 storeFilter 過濾員工（store_staff/manager 已預設過；admin 選了門市才會帶值）
+      const scopedEmployees = storeFilter
+        ? employees.filter(e => e.store === storeFilter)
+        : employees
 
       // Fetch all data in parallel (correct field names)
       const [attRes, otRes, lvRes, ssRes] = await Promise.all([
@@ -304,7 +312,7 @@ export default function Salary() {
         supabase.from('salary_structures')
           .select('*')
           .eq('organization_id', orgId)
-          .in('employee_id', employees.map(e => e.id)),
+          .in('employee_id', scopedEmployees.map(e => e.id)),
       ])
 
       // attendance map: employee_id → { hours, lateMins, days }
@@ -342,12 +350,12 @@ export default function Salary() {
       for (const ss of (ssRes.data || [])) ssMap[ss.employee_id] = ss
 
       // bonus policies
-      const storeNames = [...new Set(employees.map(e => e.store).filter(Boolean))]
+      const storeNames = [...new Set(scopedEmployees.map(e => e.store).filter(Boolean))]
       const storeIdMap = {}
       for (const name of storeNames) storeIdMap[name] = await getStoreIdByName(name)
 
       const bonusMap = {}
-      await Promise.all(employees.map(async (emp) => {
+      await Promise.all(scopedEmployees.map(async (emp) => {
         const storeId = storeIdMap[emp.store] || null
         const bonusBenefits = await getEffectiveBenefits(emp.id, storeId, 'bonus')
         let total = 0
@@ -356,7 +364,7 @@ export default function Salary() {
         bonusMap[emp.id] = total
       }))
 
-      const preview = employees.map(emp => {
+      const preview = scopedEmployees.map(emp => {
         const ss              = ssMap[emp.id] || {}
         const baseSalary      = ss.base_salary      || emp.base_salary || 0
         const roleAllowance   = ss.role_allowance    || 0

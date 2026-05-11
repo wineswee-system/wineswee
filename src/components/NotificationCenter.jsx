@@ -175,29 +175,45 @@ export default function NotificationCenter() {
       }
 
       // Pending approval form steps assigned to this user (by name or position/role)
+      // 拆成 2 個 query：先抓 steps，再抓 forms — 避免 embedded relation 因 RLS 整個 400
       if (profile?.name || profile?.position) {
         const orParts = []
         if (profile.name)     orParts.push(`approver.eq.${profile.name}`)
         if (profile.position) orParts.push(`role.eq.${profile.position}`)
-        const { data: approvalSteps } = await supabase
-          .from('approval_form_steps')
-          .select('id, form_id, role, approver, approval_forms!form_id(id, title, applicant)')
-          .eq('status', '待簽')
-          .or(orParts.join(','))
-          .limit(10)
-        if (approvalSteps) {
-          approvalSteps.forEach(s => {
-            const form = s.approval_forms
-            items.push({
-              id: `approval-${s.id}`, type: 'approval', icon: ClipboardList,
-              color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
-              title: '待您簽核',
-              desc: form?.title
-                ? `${form.title}${form.applicant ? `（${form.applicant}）` : ''}`
-                : `簽核表單 #${s.form_id}`,
-              time: '',
+        try {
+          const { data: approvalSteps, error: stepsErr } = await supabase
+            .from('approval_form_steps')
+            .select('id, form_id, role, approver')
+            .eq('status', '待簽')
+            .or(orParts.join(','))
+            .limit(10)
+          if (stepsErr) throw stepsErr
+          if (approvalSteps && approvalSteps.length > 0) {
+            const formIds = [...new Set(approvalSteps.map(s => s.form_id).filter(Boolean))]
+            const formsById = {}
+            if (formIds.length > 0) {
+              const { data: forms } = await supabase
+                .from('approval_forms')
+                .select('id, title, applicant')
+                .in('id', formIds)
+              ;(forms || []).forEach(f => { formsById[f.id] = f })
+            }
+            approvalSteps.forEach(s => {
+              const form = formsById[s.form_id]
+              items.push({
+                id: `approval-${s.id}`, type: 'approval', icon: ClipboardList,
+                color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)',
+                title: '待您簽核',
+                desc: form?.title
+                  ? `${form.title}${form.applicant ? `（${form.applicant}）` : ''}`
+                  : `簽核表單 #${s.form_id}`,
+                time: '',
+              })
             })
-          })
+          }
+        } catch (e) {
+          // 整段 silent — 通知中心不該因為一段查詢失敗壞掉
+          console.warn('[NotificationCenter] approval_form_steps query failed:', e.message)
         }
       }
     } catch (e) { /* ignore */ }

@@ -5,10 +5,20 @@ import {
   ChevronRight, CheckCircle2, XCircle, MessageSquare,
   Building2, RefreshCw, Briefcase, Plane,
   ListChecks, Workflow as WorkflowIcon, FolderOpen, Hourglass,
+  TrendingUp, PieChart as PieIcon, Sparkles, Bot,
 } from 'lucide-react'
+import {
+  Chart as ChartJS, ArcElement, Tooltip, Legend,
+  CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler,
+} from 'chart.js'
+import { Line, Bar, Doughnut } from 'react-chartjs-2'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { chartPalette, chartTextTokens } from '../../lib/theme/tokens'
+import { chat, isConfigured, clearSession } from '../../lib/gemini'
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
 // ──────────────────────────────────────────────
 // helpers
@@ -50,7 +60,7 @@ const C = {
 // ──────────────────────────────────────────────
 // 子元件：KPI 卡片
 // ──────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, suffix, color = C.cyan, colorDim = C.cyanDim, badge, onClick }) {
+function KpiCard({ icon: Icon, label, value, suffix, sub, subColor, color = C.cyan, colorDim = C.cyanDim, badge, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -82,6 +92,9 @@ function KpiCard({ icon: Icon, label, value, suffix, color = C.cyan, colorDim = 
           {value}{suffix && <span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 4 }}>{suffix}</span>}
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{label}</div>
+        {sub && (
+          <div style={{ fontSize: 10, color: subColor || C.muted, marginTop: 4, fontWeight: 600 }}>{sub}</div>
+        )}
       </div>
     </div>
   )
@@ -362,6 +375,16 @@ export default function TeamDashboard() {
   const [pendingTransfers, setPendingTransfers] = useState([])
   const [pendingExpenses, setPendingExpenses] = useState([])
   const [chainStepsMap, setChainStepsMap] = useState({})  // chain_id -> step count
+  // ── Phase 1+2 補充：月累計、昨日對比、近 7 天 ──
+  const [monthLeaveDays, setMonthLeaveDays] = useState(0)
+  const [monthOtHours, setMonthOtHours] = useState(0)
+  const [monthTripCount, setMonthTripCount] = useState(0)
+  const [yesterdayLateCount, setYesterdayLateCount] = useState(0)
+  const [last7Att, setLast7Att] = useState([])  // [{date, normal, late, leave}]
+  const [taskStatusDist, setTaskStatusDist] = useState({})  // status -> count
+  // ── Phase 3 AI 洞察 ──
+  const [aiInsight, setAiInsight] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -522,12 +545,61 @@ export default function TeamDashboard() {
       }
     })
 
-    // 本月加班接近上限（>= 36h；46h 法定上限）
+    // 本月加班接近上限（>= 36h；46h 法定上限）+ 本月累計
     const { data: monthOT } = await supabase.from('overtime_requests')
       .select('employee, hours').eq('status', '已核准').in('employee_id', teamIds)
       .gte('date', month + '-01').lte('date', today)
     const otSum = {}
     for (const r of monthOT || []) otSum[r.employee] = (otSum[r.employee] || 0) + Number(r.hours || 0)
+    setMonthOtHours((monthOT || []).reduce((s, r) => s + Number(r.hours || 0), 0))
+
+    // 本月請假累計 / 出差累計
+    const [{ data: monthLeave }, { data: monthTrip }] = await Promise.all([
+      supabase.from('leave_requests').select('days')
+        .eq('status', '已核准').in('employee_id', teamIds)
+        .gte('start_date', month + '-01'),
+      supabase.from('business_trips').select('id')
+        .eq('status', '已核准').in('employee_id', teamIds)
+        .gte('start_date', month + '-01'),
+    ])
+    setMonthLeaveDays((monthLeave || []).reduce((s, r) => s + Number(r.days || 0), 0))
+    setMonthTripCount((monthTrip || []).length)
+
+    // 昨日未打卡（vs 今日對比）— 簡單算法：在職 - 昨日有 attendance 紀錄的人數
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().slice(0, 10)
+    const { data: yAtt } = await supabase.from('attendance_records')
+      .select('employee_id').eq('date', yesterdayStr).in('employee_id', teamIds)
+    setYesterdayLateCount(Math.max(0, teamData.length - (yAtt || []).length))
+
+    // 近 7 天出勤趨勢
+    const last7Start = new Date()
+    last7Start.setDate(last7Start.getDate() - 6)
+    const { data: weekAtt } = await supabase.from('attendance_records')
+      .select('date, status').gte('date', last7Start.toISOString().slice(0, 10))
+      .lte('date', today).in('employee_id', teamIds)
+    const days7 = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const ds = d.toISOString().slice(0, 10)
+      const rows = (weekAtt || []).filter(a => a.date === ds)
+      days7.push({
+        date: ds,
+        label: `${d.getMonth() + 1}/${d.getDate()}`,
+        normal: rows.filter(a => a.status === '正常' || (a.status && !['遲到', '早退', '異常'].includes(a.status))).length,
+        late: rows.filter(a => a.status === '遲到').length,
+      })
+    }
+    // 加每日請假人數（從 leave_requests 算今日生效）
+    const { data: weekLeaves } = await supabase.from('leave_requests')
+      .select('start_date, end_date').eq('status', '已核准').in('employee_id', teamIds)
+      .lte('start_date', today).gte('end_date', last7Start.toISOString().slice(0, 10))
+    for (const day of days7) {
+      day.leave = (weekLeaves || []).filter(l => l.start_date <= day.date && l.end_date >= day.date).length
+    }
+    setLast7Att(days7)
     Object.entries(otSum).filter(([, h]) => h >= 36).forEach(([emp, h]) =>
       al.push({
         type: 'ot_cap', icon: '💸', color: h >= 46 ? C.red : C.orange,
@@ -607,6 +679,18 @@ export default function TeamDashboard() {
         .order('created_at', { ascending: false })
         .limit(20)
       setActiveProjects(prjData || [])
+
+      // 任務狀態分佈（scope = team 的 task）
+      const teamIds = team.map(e => e.id)
+      if (teamIds.length > 0) {
+        const { data: allTasks } = await supabase.from('tasks')
+          .select('status').in('assignee_id', teamIds).limit(2000)
+        const dist = {}
+        for (const t of allTasks || []) dist[t.status] = (dist[t.status] || 0) + 1
+        setTaskStatusDist(dist)
+      } else {
+        setTaskStatusDist({})
+      }
     } catch (e) {
       console.warn('[TeamDashboard] process query failed:', e)
     }
@@ -681,7 +765,17 @@ export default function TeamDashboard() {
     const lateCount = teamWithStatus.filter(t => t.status === 'late').length
     const pendingCount = pendingLeaves.length + pendingOvertimes.length + pendingTrips.length + pendingCorrections.length
       + pendingResignations.length + pendingLoas.length + pendingTransfers.length + pendingExpenses.length
-    return { total, presentCount, leaveCount, otCount, tripCount, lateCount, pendingCount }
+    const attendRate = total > 0 ? Math.round((presentCount + leaveCount + tripCount) / total * 100) : 0
+    // 平均待簽天數（從 pendingUnified 算，但 pendingUnified 在這個 memo 後，先用各 pending 的 created_at 算）
+    const todayStrLocal = todayStr()
+    const allPending = [
+      ...pendingLeaves, ...pendingOvertimes, ...pendingTrips, ...pendingCorrections,
+      ...pendingResignations, ...pendingLoas, ...pendingTransfers, ...pendingExpenses,
+    ]
+    const avgPendingDays = allPending.length > 0
+      ? Math.round(allPending.reduce((s, p) => s + daysBetween(todayStrLocal, p.created_at?.slice(0, 10)), 0) / allPending.length)
+      : 0
+    return { total, presentCount, leaveCount, otCount, tripCount, lateCount, pendingCount, attendRate, avgPendingDays }
   }, [team, teamWithStatus, todayOvertimes, todayTrips,
       pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections,
       pendingResignations, pendingLoas, pendingTransfers, pendingExpenses])
@@ -777,6 +871,64 @@ export default function TeamDashboard() {
   const [showAllPending, setShowAllPending] = useState(false)
   const pendingDisplay = showAllPending ? pendingUnified : pendingUnified.slice(0, 5)
 
+  // ── Phase 2：chart 顏色 / options ──
+  const chartC = useMemo(() => chartPalette(), [])
+  const chartT = useMemo(() => chartTextTokens(), [])
+  const chartOpts = useMemo(() => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: chartT.tertiary, font: { size: 11, weight: 600 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 },
+      },
+      tooltip: {
+        backgroundColor: chartT.card, titleColor: chartT.primary, bodyColor: chartT.secondary,
+        borderColor: chartT.border, borderWidth: 1, padding: 10, cornerRadius: 8,
+      },
+    },
+  }), [chartT])
+  const chartGrid = useMemo(() => ({ color: chartT.border }), [chartT])
+  const chartTick = useMemo(() => ({ color: chartT.tertiary, font: { size: 11 } }), [chartT])
+
+  // 部門人力分佈（從 team 算）
+  const deptCounts = useMemo(() => {
+    const m = {}
+    for (const e of team) m[e.dept || '未分類'] = (m[e.dept || '未分類'] || 0) + 1
+    return m
+  }, [team])
+
+  // ── Phase 3：Gemini AI 洞察 ──
+  const fetchAiInsight = useCallback(async () => {
+    if (!isConfigured()) return
+    setAiLoading(true)
+    try {
+      clearSession('team-dashboard')
+      const summary = {
+        scope: scopeStoreId ? `門市 ${stores.find(s => s.id === scopeStoreId)?.name || scopeStoreId}` : '全公司',
+        team: { total: kpi.total, presentToday: kpi.presentCount, attendRate: kpi.attendRate + '%' },
+        today: { onLeave: kpi.leaveCount, ot: kpi.otCount, trip: kpi.tripCount, unclocked: kpi.lateCount },
+        month: { leaveDays: monthLeaveDays, otHours: monthOtHours, tripCount: monthTripCount },
+        approvals: {
+          pending: kpi.pendingCount,
+          avgPendingDays: kpi.avgPendingDays,
+          overdueCount: pendingUnified.filter(p => p.daysOpen >= 3).length,
+        },
+        alerts: alerts.length,
+        workflowsActive: activeWorkflows.length,
+        workflowsStuck: activeWorkflows.filter(w => w.started_at && daysBetween(todayStr(), w.started_at.slice(0, 10)) >= 3).length,
+      }
+      const result = await chat(
+        `你是 HR / 流程主管的助理。以下是 ${summary.scope} 今日的營運摘要 JSON，請給 3-5 條觀察與建議，每條 30 字內，用條列「•」開頭。\n${JSON.stringify(summary, null, 2)}`,
+        'team-dashboard'
+      )
+      setAiInsight(result)
+    } catch (e) {
+      setAiInsight(`AI 分析失敗：${e.message}`)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [scopeStoreId, stores, kpi, monthLeaveDays, monthOtHours, monthTripCount,
+      pendingUnified, alerts, activeWorkflows])
+
   if (loading && team.length === 0) return <LoadingSpinner />
 
   return (
@@ -858,19 +1010,80 @@ export default function TeamDashboard() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 12,
       }}>
-        <KpiCard icon={Users}         label="團隊在班"  value={kpi.presentCount} suffix={`/ ${kpi.total}`} color={C.green}  colorDim={C.greenDim} />
-        <KpiCard icon={Calendar}      label="今日請假"  value={kpi.leaveCount}  color={C.cyan}   colorDim={C.cyanDim}
+        <KpiCard icon={Users} label="團隊在班" value={kpi.presentCount} suffix={`/ ${kpi.total}`}
+                 sub={`出勤率 ${kpi.attendRate}%`}
+                 color={C.green} colorDim={C.greenDim} />
+        <KpiCard icon={Calendar} label="今日請假" value={kpi.leaveCount}
+                 sub={monthLeaveDays > 0 ? `本月累計 ${monthLeaveDays} 天` : '本月零請假'}
+                 color={C.cyan} colorDim={C.cyanDim}
                  onClick={() => navigate('/hr/leave')} />
-        <KpiCard icon={Clock}         label="今日加班"  value={kpi.otCount}     color={C.orange} colorDim={C.orangeDim}
+        <KpiCard icon={Clock} label="今日加班" value={kpi.otCount}
+                 sub={monthOtHours > 0 ? `本月累計 ${monthOtHours.toFixed(1)}h` : '本月零加班'}
+                 color={C.orange} colorDim={C.orangeDim}
                  onClick={() => navigate('/hr/overtime')} />
-        <KpiCard icon={Plane}         label="今日出差"  value={kpi.tripCount}   color={C.blue}   colorDim={C.blueDim}
+        <KpiCard icon={Plane} label="今日出差" value={kpi.tripCount}
+                 sub={monthTripCount > 0 ? `本月 ${monthTripCount} 人次` : '本月零出差'}
+                 color={C.blue} colorDim={C.blueDim}
                  onClick={() => navigate('/hr/travel')} />
-        <KpiCard icon={FileCheck}     label="待我簽核"  value={kpi.pendingCount} color={C.purple} colorDim={C.purpleDim}
+        <KpiCard icon={FileCheck} label="待我簽核" value={kpi.pendingCount}
+                 sub={kpi.avgPendingDays > 0 ? `平均待簽 ${kpi.avgPendingDays} 天` : null}
+                 subColor={kpi.avgPendingDays >= 3 ? C.red : C.muted}
+                 color={C.purple} colorDim={C.purpleDim}
                  badge={pendingUnified.some(p => p.daysOpen >= 3) ? '逾期' : null}
                  onClick={() => navigate('/process/approvals')} />
-        <KpiCard icon={AlertTriangle} label="未打卡"    value={kpi.lateCount}   color={C.red}    colorDim={C.redDim}
+        <KpiCard icon={AlertTriangle} label="未打卡" value={kpi.lateCount}
+                 sub={(() => {
+                   const diff = kpi.lateCount - yesterdayLateCount
+                   if (diff === 0) return `與昨日相同`
+                   return diff > 0 ? `比昨日 +${diff}` : `比昨日 ${diff}`
+                 })()}
+                 subColor={kpi.lateCount > yesterdayLateCount ? C.red : C.green}
+                 color={C.red} colorDim={C.redDim}
                  onClick={() => navigate('/hr/attendance')} />
       </div>
+
+      {/* ─── AI 智慧洞察（Gemini）─── */}
+      {isConfigured() && (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={16} style={{ color: C.purple }} /> AI 智慧洞察
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: C.purpleDim, padding: '2px 6px', borderRadius: 4 }}>
+                Gemini
+              </span>
+            </h3>
+            <button
+              onClick={fetchAiInsight}
+              disabled={aiLoading}
+              style={{
+                background: aiLoading ? C.bg2 : C.purpleDim,
+                color: C.purple, border: 'none', borderRadius: 8,
+                padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                cursor: aiLoading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {aiLoading
+                ? <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> 分析中…</>
+                : <><Bot size={12} /> {aiInsight ? '重新分析' : '產生洞察'}</>
+              }
+            </button>
+          </div>
+          {aiInsight ? (
+            <div style={{
+              fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)',
+              background: C.bg2, padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap',
+            }}>{aiInsight}</div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Bot size={14} style={{ opacity: 0.5 }} /> 點「產生洞察」讓 Gemini 分析當日營運摘要並給建議
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── 待簽核 + 警示（main + side） ─── */}
       <div style={{
@@ -952,6 +1165,82 @@ export default function TeamDashboard() {
         </div>
       </div>
 
+      {/* ─── Charts row：近 7 天出勤 + 部門人力 ─── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)',
+        gap: 16,
+      }} className="dash-two-col">
+        {/* 近 7 天出勤趨勢 */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TrendingUp size={16} style={{ color: C.cyan }} /> 近 7 天出勤趨勢
+          </h3>
+          <div style={{ height: 220 }}>
+            <Line
+              data={{
+                labels: last7Att.map(d => d.label),
+                datasets: [
+                  {
+                    label: '出勤', data: last7Att.map(d => d.normal),
+                    borderColor: chartC.green, backgroundColor: `${chartC.green}20`,
+                    fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.green, borderWidth: 2,
+                  },
+                  {
+                    label: '請假', data: last7Att.map(d => d.leave || 0),
+                    borderColor: chartC.cyan, backgroundColor: `${chartC.cyan}14`,
+                    fill: false, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.cyan, borderWidth: 2,
+                  },
+                  {
+                    label: '遲到', data: last7Att.map(d => d.late),
+                    borderColor: chartC.orange, backgroundColor: `${chartC.orange}14`,
+                    fill: false, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.orange, borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                ...chartOpts,
+                scales: {
+                  x: { grid: { display: false }, ticks: chartTick },
+                  y: { beginAtZero: true, grid: chartGrid, ticks: { ...chartTick, stepSize: 1 } },
+                },
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 部門人力分佈 */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Building2 size={16} style={{ color: C.purple }} /> 部門人力
+          </h3>
+          <div style={{ height: 220 }}>
+            {Object.keys(deptCounts).length === 0 ? (
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>無資料</div>
+            ) : (
+              <Bar
+                data={{
+                  labels: Object.keys(deptCounts),
+                  datasets: [{
+                    data: Object.values(deptCounts),
+                    backgroundColor: [chartC.cyan, chartC.blue, chartC.purple, chartC.green, chartC.orange, chartC.pink || chartC.red].map(c => `${c}cc`),
+                    borderRadius: 6, barThickness: 24,
+                  }],
+                }}
+                options={{
+                  ...chartOpts,
+                  plugins: { ...chartOpts.plugins, legend: { display: false } },
+                  scales: {
+                    x: { grid: { display: false }, ticks: chartTick },
+                    y: { beginAtZero: true, grid: chartGrid, ticks: { ...chartTick, stepSize: 1 } },
+                  },
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ─── 團隊狀態 grid ─── */}
       {/* 顯示規則：
        *   - manager → 看自己 store（人數少，全列出含 unknown）
@@ -1020,15 +1309,21 @@ export default function TeamDashboard() {
         gap: 12,
       }}>
         <KpiCard icon={ListChecks} label="我的待辦任務" value={processKpi.myTasks}
+                 sub={processKpi.overdueTasks > 0 ? `逾期 ${processKpi.overdueTasks} 件` : '無逾期'}
+                 subColor={processKpi.overdueTasks > 0 ? C.red : C.green}
                  badge={processKpi.overdueTasks > 0 ? `${processKpi.overdueTasks} 逾期` : null}
                  color={C.cyan} colorDim={C.cyanDim}
                  onClick={() => navigate('/process/tasks')} />
-        <KpiCard icon={WorkflowIcon} label="我發起進行中" value={processKpi.myActiveStarted}
+        <KpiCard icon={WorkflowIcon} label="進行中流程" value={processKpi.activeWfTotal}
+                 sub={processKpi.myActiveStarted > 0 ? `我發起 ${processKpi.myActiveStarted}` : null}
                  color={C.blue} colorDim={C.blueDim}
                  onClick={() => navigate('/process/workflows')} />
         <KpiCard icon={Hourglass} label="流程卡關 ≥3 天" value={processKpi.overdue}
+                 sub={processKpi.overdue > 0 ? '需追蹤' : '一切順暢'}
+                 subColor={processKpi.overdue > 0 ? C.red : C.green}
                  color={C.red} colorDim={C.redDim} />
         <KpiCard icon={FolderOpen} label="進行中專案" value={processKpi.activeProjects}
+                 sub={processKpi.activeProjects > 0 ? null : '無進行中專案'}
                  color={C.green} colorDim={C.greenDim}
                  onClick={() => navigate('/process/projects')} />
       </div>
@@ -1169,6 +1464,61 @@ export default function TeamDashboard() {
         </div>
       </div>
 
+      {/* ─── 任務狀態分佈 doughnut ─── */}
+      {Object.keys(taskStatusDist).length > 0 && (() => {
+        const total = Object.values(taskStatusDist).reduce((a, b) => a + b, 0)
+        const done = taskStatusDist['已完成'] || 0
+        const pct = total > 0 ? Math.round(done / total * 100) : 0
+        const labels = Object.keys(taskStatusDist)
+        const data = Object.values(taskStatusDist)
+        const colorMap = {
+          '已完成': chartC.green, '進行中': chartC.blue,
+          '待簽核': chartC.orange, '待處理': chartC.purple,
+          '已擱置': chartC.red,
+        }
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <PieIcon size={16} style={{ color: C.purple }} /> 任務狀態分佈
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>（共 {total}）</span>
+            </h3>
+            <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ width: 180, height: 180, position: 'relative', flexShrink: 0 }}>
+                <Doughnut
+                  data={{
+                    labels,
+                    datasets: [{
+                      data,
+                      backgroundColor: labels.map(l => colorMap[l] || chartC.cyan),
+                      borderWidth: 0, hoverOffset: 6,
+                    }],
+                  }}
+                  options={{ ...chartOpts, cutout: '68%', plugins: { ...chartOpts.plugins, legend: { display: false } } }}
+                />
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{pct}%</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>完成率</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {labels.map((l, i) => (
+                  <div key={l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: colorMap[l] || chartC.cyan, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{l}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{data[i]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ─── 進行中流程 list ─── */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -1250,6 +1600,10 @@ export default function TeamDashboard() {
       <style>{`
         @media (max-width: 768px) {
           .dash-two-col { grid-template-columns: 1fr !important; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

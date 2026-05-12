@@ -129,14 +129,17 @@ function buildTaskBody(taskTitle, assigneeName, department, store, instanceName,
   return contents
 }
 
-function buildTaskFooter(liffUrl, actionUrl, approvalRequired) {
+function buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl) {
+  const primaryAction = approvalRequired
+    ? { type: 'uri', label: '請求簽核', uri: approvalUrl }
+    : { type: 'postback', label: '回報完成', data: `action=complete&type=task&id=${taskId}`, displayText: '回報完成' }
   return {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
     contents: [
       {
         type: 'button', style: 'primary', height: 'sm',
         color: approvalRequired ? LC.warning : LC.success,
-        action: { type: 'uri', label: approvalRequired ? '請求簽核' : '回報完成', uri: actionUrl },
+        action: primaryAction,
       },
       {
         type: 'button', style: 'secondary', height: 'sm',
@@ -164,7 +167,7 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
   const department = extras.department || await resolveEmployeeDept(assigneeName)
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
-  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
+  const approvalUrl = approvalRequired ? buildLiffTaskUrl(taskId, account.liffId, 'request_approval') : null
 
   const messages = [{
     type: 'flex',
@@ -189,7 +192,7 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
         contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
       },
-      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
+      footer: buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl),
     },
   }]
 
@@ -210,7 +213,7 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
   const department = extras.department || await resolveEmployeeDept(assigneeName)
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
-  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
+  const approvalUrl = approvalRequired ? buildLiffTaskUrl(taskId, account.liffId, 'request_approval') : null
 
   const messages = [{
     type: 'flex',
@@ -225,7 +228,7 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
         contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
       },
-      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
+      footer: buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl),
     },
   }]
 
@@ -254,7 +257,7 @@ export async function notifyTaskDailySummary(assigneeName, tasks) {
 
   const bubbles = tasks.slice(0, 10).map(task => {
     const liffUrl = getLiffTaskUrl(task.id, account.liffId)
-    const actionUrl = buildLiffTaskUrl(task.id, account.liffId, task.approvalRequired ? 'request_approval' : 'complete')
+    const approvalUrl = task.approvalRequired ? buildLiffTaskUrl(task.id, account.liffId, 'request_approval') : null
     return {
       type: 'bubble', size: 'kilo',
       header: {
@@ -266,7 +269,7 @@ export async function notifyTaskDailySummary(assigneeName, tasks) {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
         contents: buildTaskBody(task.title, assigneeName, department, task.store, task.instanceName || '', task.due_date, task.description, task.notes, task.isOverdue),
       },
-      footer: buildTaskFooter(liffUrl, actionUrl, task.approvalRequired),
+      footer: buildTaskFooter(liffUrl, task.id, task.approvalRequired, approvalUrl),
     }
   })
 
@@ -384,7 +387,7 @@ export async function notifyTaskDue(assigneeName, taskTitle, dueDate, extras = {
   const department = extras.department || await resolveEmployeeDept(assigneeName)
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
-  const actionUrl = buildLiffTaskUrl(taskId, account.liffId, approvalRequired ? 'request_approval' : 'complete')
+  const approvalUrl = approvalRequired ? buildLiffTaskUrl(taskId, account.liffId, 'request_approval') : null
 
   const messages = [{
     type: 'flex',
@@ -399,7 +402,7 @@ export async function notifyTaskDue(assigneeName, taskTitle, dueDate, extras = {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
         contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
       },
-      footer: buildTaskFooter(liffUrl, actionUrl, approvalRequired),
+      footer: buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl),
     },
   }]
 

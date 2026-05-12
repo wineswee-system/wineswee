@@ -351,12 +351,11 @@ function buildTaskAutoStarted(details: {
   // footer 雙按鈕（只在有 task_id 時建 LIFF URL）
   const taskId = details.task_id;
   const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
-  const actionUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null, 'complete') : null;
-  const footer = (liffUrl && actionUrl) ? {
+  const footer = liffUrl ? {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
     contents: [
       { type: 'button', style: 'primary', height: 'sm', color: LC.success,
-        action: { type: 'uri', label: '回報完成', uri: actionUrl } },
+        action: { type: 'postback', label: '回報完成', data: `action=complete&type=task&id=${taskId}`, displayText: '回報完成' } },
       { type: 'button', style: 'secondary', height: 'sm',
         action: { type: 'uri', label: '查看任務', uri: liffUrl } },
     ],

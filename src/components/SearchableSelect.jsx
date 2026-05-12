@@ -188,13 +188,21 @@ export default function SearchableSelect({
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="搜尋..."
+              placeholder={options.length > 10 ? `搜尋（共 ${options.length} 筆，可下拉檢視）` : '搜尋...'}
               style={{
                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
                 color: 'var(--text-primary)', fontSize: 13,
               }}
             />
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{filtered.length}/{options.length}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600,
+              color: query ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              background: 'var(--bg-secondary)',
+              padding: '2px 6px', borderRadius: 6,
+              flexShrink: 0,
+            }}>
+              {filtered.length}/{options.length}
+            </span>
           </div>
 
           {/* List */}
@@ -214,7 +222,9 @@ export default function SearchableSelect({
                 if (!groupMap.has(g)) groupMap.set(g, [])
                 groupMap.get(g).push({ opt, idx })
               })
-              return [...groupMap.entries()].map(([groupName, items], gi) => (
+              // 按該 group 內成員數降冪排序，多人的部門排前面，admin 一打開就看到主要員工
+              const sortedGroups = [...groupMap.entries()].sort((a, b) => b[1].length - a[1].length)
+              return sortedGroups.map(([groupName, items], gi) => (
                 <Fragment key={groupName}>
                   <div style={{
                     padding: '6px 12px', fontSize: 11, fontWeight: 700,

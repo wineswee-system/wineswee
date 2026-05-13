@@ -68,7 +68,9 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // 開啟期間每幀都 re-capture trigger 位置，避免任何時序問題
+  // 開啟期間每幀都 re-capture trigger 位置，並補償祖先 transform 造成的 offset
+  // （某些頁面 body 層被加 transform 後，position:fixed 變成相對於該祖先，
+  //   導致 popup style top 跟實際渲染位置差 N px → 飄掉）
   useLayoutEffect(() => {
     if (!open) return
     let rafId = 0
@@ -77,13 +79,25 @@ export default function SearchableSelect({
       const el = triggerRef.current
       if (!el) { rafId = requestAnimationFrame(tick); return }
       const rect = el.getBoundingClientRect()
-      const top = rect.bottom + 4
-      const left = rect.left
-      const width = rect.width
-      // 變動才 setState 避免無限 render loop
-      if (top !== lastTop || left !== lastLeft || width !== lastWidth) {
-        lastTop = top; lastLeft = left; lastWidth = width
-        setPopupPos({ top, left, width })
+      let desiredTop = rect.bottom + 4
+      let desiredLeft = rect.left
+
+      // 補償：量 popup 實際 viewport 位置 vs 我們設定的 style top，差值反推 offset
+      const pop = popupRef.current
+      if (pop) {
+        const popRect = pop.getBoundingClientRect()
+        const styleTop = parseFloat(pop.style.top) || 0
+        const styleLeft = parseFloat(pop.style.left) || 0
+        const offsetY = popRect.top - styleTop
+        const offsetX = popRect.left - styleLeft
+        // 1px 容忍誤差避免次像素抖動
+        if (Math.abs(offsetY) > 0.5) desiredTop -= offsetY
+        if (Math.abs(offsetX) > 0.5) desiredLeft -= offsetX
+      }
+
+      if (desiredTop !== lastTop || desiredLeft !== lastLeft || rect.width !== lastWidth) {
+        lastTop = desiredTop; lastLeft = desiredLeft; lastWidth = rect.width
+        setPopupPos({ top: desiredTop, left: desiredLeft, width: rect.width })
       }
       rafId = requestAnimationFrame(tick)
     }

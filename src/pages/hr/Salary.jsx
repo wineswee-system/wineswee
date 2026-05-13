@@ -409,10 +409,22 @@ export default function Salary() {
         const dependents       = ss.health_ins_dependents || 0
         const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
 
-        // 時薪基準：時薪制直接用設定值；月薪制用 base/30/8 換算
+        // 業務鐵則 v3：正職時薪 / 日薪 / 投保 都以「本薪 + 所有經常性津貼」為基準
+        //   = base_salary + role + meal + transport + attendance(基準值) + custom
+        //   不含加班費、不含獎金
+        const baseForInsure = (ss.base_salary || emp.base_salary || 0)
+          + (ss.role_allowance || 0)
+          + (ss.meal_allowance || 0)
+          + (ss.transport_allowance || 0)
+          + (ss.attendance_bonus || 0)
+          + customTotal
+
+        // 時薪基準（業務鐵則 v3）：
+        //   時薪制 PT → 直接用 ss.hourly_rate
+        //   月薪正職   → (本薪 + 所有津貼) / 30 / 8
         const hourlyRate = isHourly
           ? (Number(ss.hourly_rate) || 0)
-          : Math.round((ss.base_salary || emp.base_salary || 0) / 30 / 8)
+          : Math.round(baseForInsure / 30 / 8)
 
         // 加班費：勞基法 §24 三桶階梯
         // 平日延長工時：前 2h × 1.34，第 3~4h × 1.67
@@ -438,26 +450,28 @@ export default function Salary() {
 
         const overtimePay = otPayWeekday + otPayRestday + otPayHoliday + holidayBonus
 
-        // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5
+        // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5（hourlyRate 已用新基準）
         const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
-        const absenceDeduction = Math.round(absenceDays * (baseSalary / 30))
+        // Absence deduction:
+        //   PT → 0（缺勤已透過 att.hours 自動反映在 baseSalary）
+        //   正職 → absentDays × (本薪+津貼)/30 ＝ absentDays × 日薪
+        const absenceDeduction = isHourly
+          ? 0
+          : Math.round(absenceDays * (baseForInsure / 30))
 
         // Attendance bonus: zero if late or absent
         const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
 
-        // 投保金額（廠商規則）：
-        //   月薪人員 → min(base_salary + role_allowance, 45,800)
+        // 投保金額（業務鐵則 v3）：
+        //   月薪人員 → min(baseForInsure, 45,800)
         //              ↑ 廠商把健保也 cap 在勞保最高 45,800（實務簡化，非健保法規定）
-        //   PT      → 走 PT 最低（payroll.js 內 fixed 11,100/29,500）
+        //   PT      → 走 PT 最低（payroll.js 內 fixed 11,100）
         // salary_structures.base_insured 若有值則覆寫（admin 可手動調）
         const insuredSalary = ss.base_insured != null && Number(ss.base_insured) > 0
           ? Number(ss.base_insured)
           : (isHourly
               ? 0
-              : Math.min(
-                  (ss.base_salary || emp.base_salary || 0) + (ss.role_allowance || 0),
-                  45800
-                ))
+              : Math.min(baseForInsure, 45800))
 
         const result = calculateNetSalary(baseSalary, {
           insuredSalary,

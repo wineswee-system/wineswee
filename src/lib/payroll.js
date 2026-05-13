@@ -8,11 +8,21 @@
  * 4. 所得稅扣繳（薪資所得扣繳稅額表）
  * 5. 每月實領薪資計算
  *
- * 2026 適用費率與級距
+ * 2026/115 適用費率與級距
  * - 基本工資：月薪 NT$29,500
- * - 勞保費率：12%（普通事故 + 就業保險）
+ * - 勞保費率：12.5%（普通事故 11.5% + 就業保險 1%）
  * - 健保費率：5.17%
- * - 勞退雇主提繳：6%
+ * - 勞退雇主強制：6%
+ * - 健保平均眷口數：0.56（2026 沿用 113 年調整值）
+ *
+ * 業務鐵則（與法規差異）：
+ * - PT 勞保一律投保 11,100（forcePartTimeMin: true 預設）
+ * - 投保基數 = 本薪 + 所有經常性津貼（不含加班費、不含獎金）
+ * - 所得稅預設不代扣（員工 5 月自行申報）
+ * - 加班費 / 遲到扣 / 缺勤扣 的時薪基準：
+ *     正職 = (本薪 + 所有經常性津貼) / 30 / 8
+ *     PT   = salary_structures.hourly_rate（如：220）
+ *   （日薪同 hourly × 8）
  */
 
 // ══════════════════════════════════════
@@ -20,19 +30,20 @@
 // ══════════════════════════════════════
 
 /**
- * 勞工保險投保薪資級距（2025/114 + 2026/115 通用）
+ * 勞工保險投保薪資級距（2026/115）
  * 來源：勞動部勞工保險局公告
  *
- * 結構：
- *  - PT 部分工時級距：11,100 ~ 28,590（17 級）
- *  - 正職級距：29,500 ~ 45,800（最高 11 級，2026 基本工資 29,500 起）
- *  - 註：2025/01 起最低 28,800、2026/01 起最低 29,500
+ * 法規結構：
+ *  - 部分工時級距 (PT)：2 級 — 11,100、12,540
+ *    （月薪資總額 ≤ 11,100 投 11,100；11,101~12,540 投 12,540；
+ *      超過 12,540 必須回到全時表，最低 29,500）
+ *  - 全時級距：11 級 — 29,500 ~ 45,800（2026 基本工資 29,500 起）
+ *
+ * 業務鐵則：PT 一律投保 11,100（forcePartTimeMin: true 預設）。
+ *           實務上 PT_BRACKETS 第 2 級 (12,540) 因此不會用到，
+ *           但仍保留陣列以對齊法規定義（避免未來改業務規則需要）。
  */
-export const LABOR_INSURANCE_PT_BRACKETS = [
-  11100, 12540, 13500, 15840, 16500, 17280, 17880,
-  19047, 20008, 21009, 22000, 23100, 24000, 25250,
-  26400, 27600, 28590,
-];
+export const LABOR_INSURANCE_PT_BRACKETS = [11100, 12540];
 export const LABOR_INSURANCE_FT_BRACKETS = [
   29500, 30300, 31800, 33300, 34800, 36300,
   38200, 40100, 42000, 43900, 45800,
@@ -44,7 +55,7 @@ export const LABOR_INSURANCE_BRACKETS = [
 
 /**
  * 部分工時勞工最低投保級距（勞保）
- * 時薪 PT 實際薪資不滿基本工資時適用
+ * 業務鐵則：PT 一律以此投保。
  */
 export const LABOR_INSURANCE_PT_MIN = 11100;
 
@@ -80,6 +91,54 @@ const PENSION_WAGE_CEILING = 150000;
 // ══════════════════════════════════════
 //  工具函數
 // ══════════════════════════════════════
+
+/**
+ * 按在職天數比例縮減金額（給在職不滿月使用）
+ *
+ * @param {number} amount - 原始金額
+ * @param {number} inServiceDays - 當月在職天數
+ * @param {number} monthDays - 當月總天數 (28/29/30/31)
+ * @returns {number} 縮減後金額（四捨五入）
+ *
+ * 範例：8/15 入職、8 月 31 天、月薪 30,000
+ *   prorateAmount(30000, 17, 31) → round(30000 × 17/31) = 16,452
+ */
+export function prorateAmount(amount, inServiceDays, monthDays) {
+  if (!Number.isFinite(amount) || !Number.isFinite(inServiceDays) || !Number.isFinite(monthDays) || monthDays <= 0) {
+    return amount;
+  }
+  const ratio = Math.max(0, Math.min(1, inServiceDays / monthDays));
+  return Math.round(amount * ratio);
+}
+
+/**
+ * 計算當月在職天數（給新進、離職、留停切換月使用）
+ *
+ * @param {string|Date} hireDate - 到職日（含當天）
+ * @param {string|Date|null} resignDate - 離職日（含當天），null 表示在職中
+ * @param {string} payPeriod - 'YYYY-MM' 計薪月份
+ * @returns {{ inServiceDays: number, monthDays: number }}
+ */
+export function calculateInServiceDays(hireDate, resignDate, payPeriod) {
+  const [year, month] = payPeriod.split('-').map(Number);
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0); // 該月最後一天
+  const monthDays = monthEnd.getDate();
+
+  const hire = hireDate ? new Date(hireDate) : monthStart;
+  const resign = resignDate ? new Date(resignDate) : monthEnd;
+
+  // 該月在職起訖（取交集）
+  const periodStart = hire > monthStart ? hire : monthStart;
+  const periodEnd = resign < monthEnd ? resign : monthEnd;
+
+  if (periodEnd < periodStart) {
+    return { inServiceDays: 0, monthDays };
+  }
+
+  const inServiceDays = Math.floor((periodEnd - periodStart) / (1000 * 60 * 60 * 24)) + 1;
+  return { inServiceDays, monthDays };
+}
 
 /**
  * 對應投保薪資級距 — 取不低於實際薪資的最近級距
@@ -128,25 +187,23 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
   const {
     employeeAge = 30,
     isPartTime = false,
-    // 廠商實務：所有 PT 一律投保最低 11,100（即使實薪更高）
-    // 設 false 才按法規依實薪對齊 PT 級距
+    // 業務鐵則：所有 PT 一律投保 11,100（不論實薪多少）。
+    // 設 false 才走法規版本（依實薪對齊 PT 2 級或全時級距）。
     forcePartTimeMin = true,
   } = opts;
 
   let insuredSalary;
   if (isPartTime) {
     if (forcePartTimeMin) {
-      // 廠商實務：固定 11,100（少投保，違反勞動部規定但常見）
+      // 業務鐵則：PT 一律 11,100
       insuredSalary = LABOR_INSURANCE_PT_MIN;
     } else {
-      // 法規：按實薪對齊 PT 級距 (11,100~28,590) 或正職級距 (29,500+)
-      insuredSalary = Math.max(
-        LABOR_INSURANCE_PT_MIN,
-        matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS)
-      );
+      // 法規：實薪 ≤ 11,100 → 11,100；11,101~12,540 → 12,540；
+      //       超過 12,540 → 回全時表，最低 29,500
+      insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS);
     }
   } else {
-    // 月薪正職：按 base+role 對齊正職級距 (29,500~45,800)
+    // 月薪正職：對齊全時級距 (29,500~45,800)，自動 cap 在 45,800
     insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_FT_BRACKETS);
   }
 
@@ -170,9 +227,10 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
  * 費率：5.17%
  * 分攤比例：被保險人 30%、雇主 60%、政府 10%
  * 眷屬：本人 + 眷屬（最多計 3 口）
- * 雇主：以平均眷口數 0.57 計算
+ * 雇主端：以「1 + 全國平均眷口數 0.56」= 1.56 計算（2026 沿用 113 年調整值）
  *
- * 部分工時 PT：強制最低投保 NT$29,500
+ * 健保無 PT 例外 — 受僱者一律從第 1 級 29,500 起跳。
+ * （isPartTime flag 保留參數但不影響邏輯，等同於最低 29,500 起級距匹配）
  *
  * @param {number} monthlySalary - 月薪
  * @param {object|number} [options=0] - 眷屬數（舊用法）或物件 { dependents, isPartTime }
@@ -180,22 +238,19 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
  */
 export function calculateHealthInsurance(monthlySalary, options = 0) {
   const opts = typeof options === 'number' ? { dependents: options } : options;
-  const { dependents = 0, isPartTime = false } = opts;
+  const { dependents = 0 } = opts;
+  // isPartTime 對健保無實質影響（最低就是 29,500），保留 options 為向下相容
 
-  let insuredSalary;
-  if (isPartTime) {
-    // PT 最低 29,500；超過依級距匹配
-    insuredSalary = Math.max(HEALTH_INSURANCE_PT_MIN, matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS));
-  } else {
-    insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
-  }
+  // 對齊級距：最低 29,500（不論 PT/FT 自然落第 1 級），最高 313,000
+  const insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
 
   const premiumRate = 0.0517;
   const cappedDependents = Math.min(dependents, 3);
-  const avgDependentsRatio = 1.57;
+  // 雇主端係數：1 (被保險人本人) + 0.56 (全國平均眷口數，2026)
+  const employerCoefficient = 1.56;
 
   const employeeShare = Math.round(insuredSalary * premiumRate * 0.3 * (1 + cappedDependents));
-  const employerShare = Math.round(insuredSalary * premiumRate * 0.6 * avgDependentsRatio);
+  const employerShare = Math.round(insuredSalary * premiumRate * 0.6 * employerCoefficient);
 
   return { insured_salary: insuredSalary, employee_share: employeeShare, employer_share: employerShare, dependents: cappedDependents };
 }

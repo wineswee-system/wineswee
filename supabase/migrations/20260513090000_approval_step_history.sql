@@ -47,6 +47,18 @@ CREATE TABLE IF NOT EXISTS public.approval_step_history (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 防 Studio drift：表可能已存在但缺欄位，全部 ADD COLUMN IF NOT EXISTS 補齊
+ALTER TABLE public.approval_step_history
+  ADD COLUMN IF NOT EXISTS organization_id  INT,
+  ADD COLUMN IF NOT EXISTS chain_id         INT,
+  ADD COLUMN IF NOT EXISTS step_label       TEXT,
+  ADD COLUMN IF NOT EXISTS target_type      TEXT,
+  ADD COLUMN IF NOT EXISTS exited_at        TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS approver_id      INT,
+  ADD COLUMN IF NOT EXISTS approver_name    TEXT,
+  ADD COLUMN IF NOT EXISTS action           TEXT,
+  ADD COLUMN IF NOT EXISTS notes            TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_ash_request
   ON public.approval_step_history(request_type, request_id);
 CREATE INDEX IF NOT EXISTS idx_ash_org

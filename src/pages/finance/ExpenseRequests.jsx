@@ -620,12 +620,12 @@ export default function ExpenseRequests() {
       {/* New Request Modal */}
       {showModal && (
         <ModalOverlay onClose={() => { setShowModal(false); setErrors({}) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-card)' }}>
               <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowModal(false); setErrors({}) }}><X size={20} /></button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className={errors.employee ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
                 <SearchableSelect
@@ -767,7 +767,7 @@ export default function ExpenseRequests() {
                 )}
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-card)' }}>
               <button className="btn btn-secondary" onClick={() => { setShowModal(false); setErrors({}) }}>取消</button>
               <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '提交中...' : '提交申請'}</button>
             </div>
@@ -778,11 +778,12 @@ export default function ExpenseRequests() {
       {/* Settlement Modal */}
       {showSettleModal && showDetail && (
         <ModalOverlay onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 480, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-card)' }}>
               <h3 style={{ margin: 0 }}>核銷：{showDetail.title}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}><X size={20} /></button>
             </div>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
               預估金額：<strong>{fmt(showDetail.estimated_amount)}</strong>
             </div>
@@ -821,7 +822,8 @@ export default function ExpenseRequests() {
                 )}
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-card)' }}>
               <button className="btn btn-secondary" onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>取消</button>
               <button className="btn btn-primary" onClick={handleSettle} disabled={saving}>{saving ? '提交中...' : '提交核銷'}</button>
             </div>

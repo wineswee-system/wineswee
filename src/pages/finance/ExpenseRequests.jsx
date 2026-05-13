@@ -504,7 +504,15 @@ export default function ExpenseRequests() {
                 </button>
               </>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ ...emptyForm, employee: profile?.name || '' })
+              setLineItems([emptyItem()])
+              setIsExpense(true)
+              setFiles([])
+              setErrors({})
+              setShowModal(true)
+            }}>
               <Plus size={14} /> 新增申請
             </button>
           </div>

@@ -173,7 +173,7 @@ export default function PunchCorrection() {
       } catch (e) { console.error('[resume_workflow] failed:', e) }
       setCorrections(prev => prev.map(c => c.id === editingId ? { ...c, ...payload, status: '待審核', reject_reason: null } : c))
       setShowModal(false); setEditingId(null)
-      setForm({ employee: '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
+      setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
       return
     }
 
@@ -188,7 +188,7 @@ export default function PunchCorrection() {
       }
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ employee: '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
+      setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
       await createApprovalWorkflow('clock_correction', data, form.employee)
     }
   }
@@ -294,7 +294,12 @@ export default function PunchCorrection() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增補登</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
+              setErrors({})
+              setShowModal(true)
+            }}><Plus size={14} /> 新增補登</button>
           </div>
         </div>
       </div>

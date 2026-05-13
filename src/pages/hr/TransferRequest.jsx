@@ -169,10 +169,13 @@ export default function TransferRequest() {
 
   const handleSubmit = async () => {
     const empId = isAdmin ? form.employee_id : profile?.id
+    // 必填：員工 / 異動類型 / 生效日 / 異動原因
     const validateForm = isAdmin
-      ? { employee_id: empId, effective_date: form.effective_date }
-      : { effective_date: form.effective_date }
-    const validateKeys = isAdmin ? ['employee_id', 'effective_date'] : ['effective_date']
+      ? { employee_id: empId, transfer_type: form.transfer_type, effective_date: form.effective_date, reason: form.reason }
+      : { transfer_type: form.transfer_type, effective_date: form.effective_date, reason: form.reason }
+    const validateKeys = isAdmin
+      ? ['employee_id', 'transfer_type', 'effective_date', 'reason']
+      : ['transfer_type', 'effective_date', 'reason']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
     const payload = {
       employee_id: Number(empId),
@@ -299,7 +302,12 @@ export default function TransferRequest() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={14} /> 新增異動</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ ...emptyForm(), employee_id: profile?.id || '' })
+              setErrors({})
+              setShowForm(true)
+            }}><Plus size={14} /> 新增異動</button>
           </div>
         </div>
       </div>

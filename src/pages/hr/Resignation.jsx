@@ -133,11 +133,13 @@ export default function Resignation() {
 
   const handleSubmit = async () => {
     const empId = isAdmin ? form.employee_id : profile?.id
-    // 用 validateRequired 統一處理：admin 模式需要 employee_id；非 admin 自動帶 profile.id
+    // 必填：員工 / 離職日 / 離職原因
     const validateForm = isAdmin
-      ? { employee_id: empId, planned_resign_date: form.planned_resign_date }
-      : { planned_resign_date: form.planned_resign_date }
-    const validateKeys = isAdmin ? ['employee_id', 'planned_resign_date'] : ['planned_resign_date']
+      ? { employee_id: empId, planned_resign_date: form.planned_resign_date, reason: form.reason }
+      : { planned_resign_date: form.planned_resign_date, reason: form.reason }
+    const validateKeys = isAdmin
+      ? ['employee_id', 'planned_resign_date', 'reason']
+      : ['planned_resign_date', 'reason']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
     const payload = {
       employee_id: Number(empId),

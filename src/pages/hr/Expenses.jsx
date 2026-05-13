@@ -97,7 +97,7 @@ export default function Expenses() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setOrganization(orgRes?.data || null)
-      setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -109,7 +109,7 @@ export default function Expenses() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!validateRequired(form, ['employee', 'amount', 'date'], setErrors)) return
+    if (!validateRequired(form, ['employee', 'category', 'amount', 'date', 'description'], setErrors)) return
     const payload = { ...form, amount: Number(form.amount) }
 
     // ── 編輯重送路徑 ──
@@ -252,7 +252,12 @@ export default function Expenses() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增報銷</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+              setErrors({})
+              setShowModal(true)
+            }}><Plus size={14} /> 新增報銷</button>
           </div>
         </div>
       </div>
@@ -361,8 +366,8 @@ export default function Expenses() {
             />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="類別">
-              <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => set('category', e.target.value)}>
+            <Field label="類別" required error={errors.category} errorMsg="請選類別">
+              <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
             </Field>
@@ -373,8 +378,8 @@ export default function Expenses() {
           <Field label="日期 *" error={errors.date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>
-          <Field label="說明">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="費用說明" value={form.description} onChange={e => set('description', e.target.value)} />
+          <Field label="說明" required error={errors.description} errorMsg="請填寫費用說明">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="費用說明" value={form.description} onChange={e => { set('description', e.target.value); clearError('description', setErrors) }} />
           </Field>
           <Field label="收據">
             <select className="form-input" style={{ width: '100%' }} value={form.receipt} onChange={e => set('receipt', e.target.value === 'true')}>

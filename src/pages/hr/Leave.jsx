@@ -114,7 +114,7 @@ export default function Leave() {
         map[k][row.leave_code] = { step: Number(row.step), unit: row.unit }
       })
       setStepSettings(map)
-      setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -151,7 +151,11 @@ export default function Leave() {
 
   const handleSubmit = async () => {
     try {
-    if (!validateRequired(form, ['employee', 'start_date'], setErrors)) return
+    // 必填：員工 / 假別 / 開始日 / 事由；以日為單位時 結束日也必填；以小時為單位時 起訖時間必填
+    const requiredKeys = ['employee', 'type', 'start_date', 'reason']
+    if (form.unit === 'day') requiredKeys.push('end_date')
+    if (form.unit === 'hour') requiredKeys.push('start_time', 'end_time')
+    if (!validateRequired(form, requiredKeys, setErrors)) return
 
     // 取此假別此員工的 step 設定（先看員工所屬店覆寫，沒有則全公司預設，再沒有用 leavePolicy.js）
     const empForStep = employees.find(em => em.name === form.employee)
@@ -431,7 +435,12 @@ export default function Leave() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增假單</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
+              setErrors({})
+              setShowModal(true)
+            }}><Plus size={14} /> 新增假單</button>
           </div>
         </div>
       </div>
@@ -643,23 +652,23 @@ export default function Leave() {
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
             {form.unit === 'day' && (
-              <Field label="結束日期">
-                <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
+              <Field label="結束日期" required error={errors.end_date} errorMsg="請選結束日期">
+                <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => { set('end_date', e.target.value); clearError('end_date', setErrors) }} />
               </Field>
             )}
           </div>
           {form.unit === 'hour' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="開始時間">
-                <input className="form-input" type="time" style={{ width: '100%' }} value={form.start_time} onChange={e => set('start_time', e.target.value)} />
+              <Field label="開始時間" required error={errors.start_time} errorMsg="請選開始時間">
+                <input className="form-input" type="time" style={{ width: '100%' }} value={form.start_time} onChange={e => { set('start_time', e.target.value); clearError('start_time', setErrors) }} />
               </Field>
-              <Field label="結束時間">
-                <input className="form-input" type="time" style={{ width: '100%' }} value={form.end_time} onChange={e => set('end_time', e.target.value)} />
+              <Field label="結束時間" required error={errors.end_time} errorMsg="請選結束時間">
+                <input className="form-input" type="time" style={{ width: '100%' }} value={form.end_time} onChange={e => { set('end_time', e.target.value); clearError('end_time', setErrors) }} />
               </Field>
             </div>
           )}
-          <Field label="事由">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入請假事由" value={form.reason} onChange={e => set('reason', e.target.value)} />
+          <Field label="事由" required error={errors.reason} errorMsg="請填寫請假事由">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入請假事由" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>
           <Field label="附件（最多 5 個）">
             <div>

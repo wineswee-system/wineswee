@@ -48,7 +48,7 @@ export default function BusinessTravel() {
       setEmployees(emps)
       setDepartments(d.data || [])
       setOrganization(orgRes?.data || null)
-      setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -60,7 +60,7 @@ export default function BusinessTravel() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!validateRequired(form, ['employee', 'destination', 'start_date'], setErrors)) return
+    if (!validateRequired(form, ['employee', 'destination', 'start_date', 'end_date', 'purpose'], setErrors)) return
     const payload = { ...form, budget: Number(form.budget) || 0 }
 
     // ── 編輯重送路徑 ──
@@ -183,7 +183,12 @@ export default function BusinessTravel() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增差旅</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ employee: profile?.name || employees[0]?.name || '', destination: '', start_date: '', end_date: '', purpose: '', budget: '' })
+              setErrors({})
+              setShowModal(true)
+            }}><Plus size={14} /> 新增差旅</button>
           </div>
         </div>
       </div>
@@ -298,12 +303,12 @@ export default function BusinessTravel() {
             <Field label="出發日 *" error={errors.start_date} errorMsg="請選日期">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
-            <Field label="回程日">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
+            <Field label="回程日" required error={errors.end_date} errorMsg="請選回程日">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => { set('end_date', e.target.value); clearError('end_date', setErrors) }} />
             </Field>
           </div>
-          <Field label="事由">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：客戶拜訪" value={form.purpose} onChange={e => set('purpose', e.target.value)} />
+          <Field label="事由" required error={errors.purpose} errorMsg="請填寫出差事由">
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：客戶拜訪" value={form.purpose} onChange={e => { set('purpose', e.target.value); clearError('purpose', setErrors) }} />
           </Field>
           <Field label="預算 (NT$)">
             <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.budget} onChange={e => set('budget', e.target.value)} />

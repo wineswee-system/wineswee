@@ -88,7 +88,7 @@ export default function Overtime() {
       setStoreSteps(steps)
       setStores(s.data || [])
       setOrganization(orgRes?.data || null)
-      setForm(f => ({ ...f, employee: emps[0]?.name || '' }))
+      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -101,7 +101,7 @@ export default function Overtime() {
 
   const handleSubmit = async () => {
     try {
-      if (!validateRequired(form, ['employee', 'date', 'store'], setErrors)) return
+      if (!validateRequired(form, ['employee', 'date', 'store', 'hours', 'reason'], setErrors)) return
 
       // ── 編輯重送路徑 ──
       if (editingId) {
@@ -300,7 +300,12 @@ export default function Overtime() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true) }}><Plus size={14} /> 新增加班</button>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingId(null)
+              setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
+              setErrors({})
+              setShowModal(true)
+            }}><Plus size={14} /> 新增加班</button>
           </div>
         </div>
       </div>
@@ -415,7 +420,7 @@ export default function Overtime() {
               💡 跨門市加班請選實際支援門市
             </div>
           </Field>
-          <Field label="加班時數">
+          <Field label="加班時數" required error={errors.hours} errorMsg="請選加班時數">
             {(() => {
               const selectedEmp = employees.find(e => e.name === form.employee)
               const step = (selectedEmp && storeSteps[selectedEmp.store_id]) || 0.5
@@ -442,8 +447,8 @@ export default function Overtime() {
               )
             })()}
           </Field>
-          <Field label="原因">
-            <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => set('reason', e.target.value)} />
+          <Field label="原因" required error={errors.reason} errorMsg="請填寫加班原因">
+            <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>
           <Field label="附件（最多 5 個）">
             <div>

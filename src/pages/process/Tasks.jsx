@@ -4,6 +4,7 @@ import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInst
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskKanban from '../../components/tasks/TaskKanban'
 import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
@@ -422,16 +423,12 @@ export default function Tasks() {
               </select>
             </Field>
             <Field label="負責人">
-              <select className="form-input" style={{ width: '100%' }} value={form.assignee} onChange={e => set('assignee', e.target.value)}>
-                <option value="">請選擇</option>
-                <optgroup label="員工">
-            {employees.map(e => {
-              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
-              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
-              return <option key={e.id} value={e.name}>{label}</option>
-            })}
-          </optgroup>
-              </select>
+              <SearchableSelect
+                value={form.assignee}
+                onChange={(v) => set('assignee', v || '')}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="搜尋員工姓名/職稱..."
+              />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

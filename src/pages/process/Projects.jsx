@@ -1237,10 +1237,12 @@ export default function Projects() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="負責人">
-              <select className="form-input" style={{ width: '100%' }} value={form.owner} onChange={e => set('owner', e.target.value)}>
-                <option value="">請選擇</option>
-                {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}（{e.dept || e.position}）</option>)}
-              </select>
+              <SearchableSelect
+                value={form.owner}
+                onChange={(v) => set('owner', v || '')}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="搜尋員工姓名/職稱..."
+              />
             </Field>
             <Field label="門市">
               <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>

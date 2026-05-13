@@ -498,6 +498,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       padding: embedded ? '0 0 16px 0' : '16px 22px',
       borderBottom: embedded ? 'none' : '1px solid var(--border-subtle)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      flexShrink: 0, background: embedded ? 'transparent' : 'var(--bg-card)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {hasListView && view === 'editor' && (
@@ -533,7 +534,9 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     <div style={{
       flex: 1,
       overflowY: embedded ? 'visible' : 'auto',
+      overflowX: 'hidden',
       padding: embedded ? 0 : 22,
+      minHeight: 0,  // 關鍵：flex child 要設 minHeight:0 才會正確 shrink + scroll
     }}>
       {loading ? <LoadingSpinner /> : view === 'list' ? (
         <ListView
@@ -574,9 +577,10 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   const footerNode = view === 'editor' ? (
     <div style={{
       padding: embedded ? '16px 0 0 0' : '14px 22px',
-      borderTop: embedded ? '1px solid var(--border-subtle)' : '1px solid var(--border-subtle)',
+      borderTop: '1px solid var(--border-subtle)',
       marginTop: embedded ? 20 : 0,
       display: 'flex', justifyContent: 'flex-end', gap: 8,
+      flexShrink: 0, background: embedded ? 'transparent' : 'var(--bg-card)',
     }}>
       {!embedded && <button className="btn btn-secondary" onClick={onClose}>取消</button>}
       <button className="btn btn-primary" onClick={handleSave} disabled={loading || saving}>

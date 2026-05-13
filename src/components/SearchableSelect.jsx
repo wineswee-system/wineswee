@@ -68,39 +68,27 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Compute popup position when opened, and reposition on scroll/resize/animate
+  // 開啟期間每幀都 re-capture trigger 位置，避免任何時序問題
   useLayoutEffect(() => {
     if (!open) return
-    const updatePos = () => {
+    let rafId = 0
+    let lastTop = -1, lastLeft = -1, lastWidth = -1
+    const tick = () => {
       const el = triggerRef.current
-      if (!el) return
+      if (!el) { rafId = requestAnimationFrame(tick); return }
       const rect = el.getBoundingClientRect()
-      setPopupPos({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      })
+      const top = rect.bottom + 4
+      const left = rect.left
+      const width = rect.width
+      // 變動才 setState 避免無限 render loop
+      if (top !== lastTop || left !== lastLeft || width !== lastWidth) {
+        lastTop = top; lastLeft = left; lastWidth = width
+        setPopupPos({ top, left, width })
+      }
+      rafId = requestAnimationFrame(tick)
     }
-    updatePos()
-    // 防止 Modal fadeIn 動畫期間 capture 到位移前位置 → 動畫跑完再 recalc 數次
-    const raf1 = requestAnimationFrame(updatePos)
-    const t1 = setTimeout(updatePos, 50)
-    const t2 = setTimeout(updatePos, 200)  // > Modal fadeIn 0.15s
-    // 同時用 ResizeObserver 監聽 trigger 大小變動（modal layout shift）
-    let ro
-    if (triggerRef.current && typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(updatePos)
-      ro.observe(triggerRef.current)
-    }
-    window.addEventListener('scroll', updatePos, true)
-    window.addEventListener('resize', updatePos)
-    return () => {
-      cancelAnimationFrame(raf1)
-      clearTimeout(t1); clearTimeout(t2)
-      ro?.disconnect()
-      window.removeEventListener('scroll', updatePos, true)
-      window.removeEventListener('resize', updatePos)
-    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
   }, [open])
 
   // Reset highlight when filter changes

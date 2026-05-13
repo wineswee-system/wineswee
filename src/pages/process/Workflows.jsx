@@ -780,7 +780,17 @@ export default function Workflows() {
         // ★ 取每步的「關聯與簽核」extras
         const stepExtras = deployForm.step_extras || {}
         const taskRows = tplSteps.map((step, i) => {
-          const assigneeName = deployForm.assignees[i] || ''
+          // 廠商反映：admin 發起後 step 2/3 沒人。
+          // UI 雖有驗證但仍可能漏，這邊加 fallback：
+          // admin 沒填 → 從 step.title 反查（name / name_en，例：「Zoey 執行長」→ 陳虹）
+          let assigneeName = deployForm.assignees[i] || ''
+          if (!assigneeName && step.title) {
+            const matched = (employees || []).find(e =>
+              (e.name && step.title.includes(e.name)) ||
+              (e.name_en && step.title.toLowerCase().includes(e.name_en.toLowerCase()))
+            )
+            if (matched) assigneeName = matched.name
+          }
           const offset = deployForm.step_offsets?.[i] ?? (i + 1)
           // 第 1 步直接開工；後面用「待處理」等 cascade 推進來。
           // 有 chain / confirmation 的 step 由 cfg 判斷另外處理（後面 spread cfg 會覆蓋）

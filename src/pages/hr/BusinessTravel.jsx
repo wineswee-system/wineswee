@@ -340,6 +340,8 @@ export default function BusinessTravel() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            requestType="trip"
+            requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
           />
         )

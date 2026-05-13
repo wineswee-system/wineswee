@@ -769,6 +769,8 @@ export default function Leave() {
             attachments={atts}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            requestType="leave"
+            requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
           />
         )

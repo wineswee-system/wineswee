@@ -498,6 +498,8 @@ export default function Overtime() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            requestType="overtime"
+            requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
           />
         )

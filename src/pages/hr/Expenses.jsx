@@ -433,6 +433,8 @@ export default function Expenses() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            requestType="expense"
+            requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
           />
         )

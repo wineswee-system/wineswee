@@ -467,6 +467,8 @@ export default function PunchCorrection() {
             ]}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            requestType="correction"
+            requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
           />
         )

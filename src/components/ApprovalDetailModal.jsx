@@ -8,8 +8,10 @@
  * 對任何走簽核鏈或單關核可的表單都通用，每個 caller 把自己的 fields/chain mapping 過來即可。
  */
 
+import { useEffect, useMemo, useState } from 'react'
 import { X, Printer, FileText, Image as ImageIcon, User } from 'lucide-react'
 import { ModalOverlay } from './Modal'
+import { supabase } from '../lib/supabase'
 
 const STATUS_BADGE = {
   '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
@@ -54,7 +56,38 @@ export default function ApprovalDetailModal({
   createdAt,
   chainSteps = [],
   onPrint,
+  // 廠商 #7：簽核時間軸 — 傳 requestType + requestId 自動 fetch get_approval_timeline
+  //   requestType: 'leave' | 'overtime' | 'trip' | 'correction' | 'expense' | 'expense_request'
+  requestType,
+  requestId,
 }) {
+  const [timeline, setTimeline] = useState([])
+
+  // 拉 chain step 進站/出站時間（每關停留多久）
+  useEffect(() => {
+    if (!open || !requestType || !requestId) { setTimeline([]); return }
+    let cancelled = false
+    supabase.rpc('get_approval_timeline', {
+      p_request_type: requestType,
+      p_request_id: Number(requestId),
+    }).then(({ data, error }) => {
+      if (cancelled) return
+      if (error) { console.warn('get_approval_timeline failed:', error); return }
+      setTimeline(Array.isArray(data) ? data : [])
+    })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId])
+
+  // 把 timeline 的 duration_text 合併進 chainSteps（按 step_order 對應）
+  const mergedChainSteps = useMemo(() => {
+    if (!timeline.length) return chainSteps
+    return chainSteps.map((s, idx) => {
+      const t = timeline.find(x => x.step_order === idx) || timeline[idx]
+      if (!t) return s
+      return { ...s, durationText: t.duration_text }
+    })
+  }, [chainSteps, timeline])
+
   if (!open) return null
 
   const overallBadge = STATUS_BADGE[status] || STATUS_BADGE['申請中']
@@ -224,7 +257,7 @@ export default function ApprovalDetailModal({
               }}>{overallBadge.text}</span>
             </div>
 
-            <ChainTimeline steps={chainSteps} />
+            <ChainTimeline steps={mergedChainSteps} />
           </div>
         </div>
       </div>
@@ -326,6 +359,16 @@ function TimelineDot({ step, index, isLast }) {
       {step.completedAt && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
           {fmtDateTime(step.completedAt)}
+        </div>
+      )}
+      {step.durationText && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-secondary)', marginTop: 4,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 4,
+          background: step.status === 'current' ? 'rgba(99,102,241,0.08)' : 'transparent',
+        }}>
+          ⏱ 停留 {step.durationText}
         </div>
       )}
       {step.status === 'rejected' && step.rejectReason && (

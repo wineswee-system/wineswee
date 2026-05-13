@@ -780,13 +780,13 @@ function EditorView({
       </div>
 
       {/* Steps */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {/* 申請人（固定） */}
-        <div style={{ padding: 12, background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>👤</div>
+        <div style={{ padding: '8px 12px', background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>👤</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>申請人</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>送出表單者，自動帶</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>申請人</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>送出表單者，自動帶</div>
           </div>
         </div>
 
@@ -795,11 +795,11 @@ function EditorView({
           const preview = stepPreview(step)
           return (
             <div key={step._localId} style={{
-              padding: 14, background: 'var(--bg-secondary)',
+              padding: 10, background: 'var(--bg-secondary)',
               border: '1px solid var(--border-medium)', borderRadius: 10,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-purple)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-purple)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                   {idx + 1}
                 </div>
                 <input className="form-input" style={{ flex: 1, fontWeight: 600 }}
@@ -896,15 +896,15 @@ function EditorView({
               )}
 
               <div style={{
-                padding: '8px 12px', borderRadius: 6,
+                padding: '6px 10px', borderRadius: 6,
                 background: preview.ok ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)',
                 color: preview.ok ? 'var(--accent-green)' : 'var(--accent-orange)',
-                fontSize: 12, fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 11, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 5,
               }}>
-                {preview.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                {preview.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
                 本關會由：{preview.text}
-                {preview.dynamic && <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 6px', borderRadius: 3, background: 'rgba(255,255,255,0.4)' }}>動態</span>}
+                {preview.dynamic && <span style={{ fontSize: 9, marginLeft: 4, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.4)' }}>動態</span>}
               </div>
             </div>
           )
@@ -919,11 +919,11 @@ function EditorView({
           <Plus size={14} /> 新增關卡
         </button>
 
-        <div style={{ padding: 12, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-green)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>✅</div>
+        <div style={{ padding: '8px 12px', background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-green)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✅</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>簽核完成</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>所有關卡通過後通知申請人</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>簽核完成</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>所有關卡通過後通知申請人</div>
           </div>
         </div>
       </div>

@@ -23,6 +23,7 @@ const STATUS_COLORS = {
   '待核銷': { bg: 'var(--accent-yellow-dim)', color: 'var(--accent-yellow)' },
   '已核銷': { bg: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' },
   '已駁回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
+  '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
 }
 
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
@@ -35,8 +36,9 @@ const emptyForm = {
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
-  const { profile, role } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const [showChainModal, setShowChainModal] = useState(false)
+  const [showSettleChainModal, setShowSettleChainModal] = useState(false)
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -303,7 +305,11 @@ export default function ExpenseRequests() {
   // Open settle modal
   const openSettle = (req) => {
     setShowDetail(req)
-    setSettleForm({ actual_amount: req.estimated_amount, notes: '' })
+    // 重新核銷：保留原本填的金額；首次核銷：以申請金額為預設值
+    setSettleForm({
+      actual_amount: req.actual_amount ?? req.estimated_amount,
+      notes: req.notes || '',
+    })
     setSettleFiles([])
     setShowSettleModal(true)
   }
@@ -381,11 +387,20 @@ export default function ExpenseRequests() {
     if (!validateRequired(settleForm, ['actual_amount'], setErrors)) return
     setSaving(true)
     const req = showDetail
+    // 重新核銷：清掉 settle_chain_id + reject_reason，讓 trigger 依新金額重抓 chain
+    const isResubmit = req.status === '核銷已退回'
     const { error: upErr } = await supabase.from('expense_requests')
       .update({
         actual_amount: Number(settleForm.actual_amount),
         notes: settleForm.notes || null,
         status: '待核銷',
+        ...(isResubmit && {
+          settle_chain_id: null,
+          settle_current_step: 0,
+          settle_reject_reason: null,
+          settled_by: null,
+          settled_at: null,
+        }),
       }).eq('id', req.id)
     if (upErr) { setError(upErr.message); setSaving(false); return }
 
@@ -399,29 +414,44 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // Finance confirms settlement
+  // 核銷簽核：呼叫 RPC 推 settle chain 一步；最後一關通過 → 開分錄 + 已核銷
+  // 沒掛 settle_chain_id 時 RPC 內 fallback：直接 confirm（舊行為，admin 一鍵）
   const handleConfirmSettle = async (req) => {
-    // Create journal entry
-    try {
-      const amount = req.actual_amount || req.estimated_amount
-      await supabase.rpc('secure_create_journal_entry', {
-        p_entry_date: new Date().toISOString().slice(0, 10),
-        p_description: `費用申請核銷 - ${req.employee} (${req.title})`,
-        p_lines: [
-          { account_code: req.account_code, account_name: req.account_name, debit: amount, credit: 0, memo: `申請單 #${req.id}` },
-          { account_code: '1100', account_name: '現金', debit: 0, credit: amount, memo: '' },
-        ],
-        p_source: '費用申請',
-        p_source_id: req.id,
-        p_created_by: profile?.name || '財務',
-      })
-    } catch { /* journal entry is optional */ }
+    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
+      p_id: req.id,
+      p_action: 'approve',
+      p_reason: null,
+    })
+    if (error) { toast.error(error.message); return }
+    if (!data?.ok) {
+      const map = {
+        NOT_AUTHENTICATED: '尚未登入',
+        EMPLOYEE_NOT_FOUND: '找不到對應員工',
+        NOT_FOUND: '找不到此申請單',
+        NOT_PENDING_SETTLE: `狀態不是待核銷（${data?.current_status}）`,
+        NOT_AUTHORIZED_FOR_STEP: '此關不是你負責',
+        STEP_NOT_FOUND: 'chain step 設定異常',
+      }
+      toast.error(map[data?.error] || data?.error || '核銷失敗')
+      return
+    }
+    toast.success(data.fully_settled ? '核銷完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
+    load()
+  }
 
-    const { error } = await supabase.from('expense_requests')
-      .update({ status: '已核銷', settled_by: profile?.name || '財務', settled_at: new Date().toISOString() })
-      .eq('id', req.id)
-    if (error) setError(error.message)
-    else load()
+  // 核銷簽核：駁回
+  const handleRejectSettle = async (req) => {
+    const reason = window.prompt('退回原因？')
+    if (!reason || !reason.trim()) return
+    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
+      p_id: req.id,
+      p_action: 'reject',
+      p_reason: reason.trim(),
+    })
+    if (error) { toast.error(error.message); return }
+    if (!data?.ok) { toast.error(data?.error || '駁回失敗'); return }
+    toast.success('已退回')
+    load()
   }
 
   // View attachment
@@ -431,7 +461,7 @@ export default function ExpenseRequests() {
   }
 
   const deleteFile = async (att) => {
-    if (profile?.role !== 'admin' && profile?.role !== 'super_admin' && att.uploaded_by !== profile?.name) {
+    if (!isAdmin && att.uploaded_by !== profile?.name) {
       toast.error('僅能刪除自己上傳的檔案')
       return
     }
@@ -464,10 +494,15 @@ export default function ExpenseRequests() {
             <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷入帳</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用申請的金額分組簽核流程">
-                <Settings size={14} /> 簽核設定
-              </button>
+            {isAdmin && (
+              <>
+                <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用申請的金額分組簽核流程">
+                  <Settings size={14} /> 申請簽核
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowSettleChainModal(true)} title="設定費用核銷的金額分組簽核流程">
+                  <Settings size={14} /> 核銷簽核
+                </button>
+              </>
             )}
             <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setLineItems([emptyItem()]); setIsExpense(true); setFiles([]); setShowModal(true) }}>
               <Plus size={14} /> 新增申請
@@ -484,7 +519,7 @@ export default function ExpenseRequests() {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
-        {['申請中', '已核准', '待核銷', '已核銷', '已駁回'].map(s => (
+        {['申請中', '已核准', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
           <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: tab === s ? `2px solid ${STATUS_COLORS[s].color}` : undefined }}
             onClick={() => setTab(tab === s ? 'all' : s)}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s}</div>
@@ -546,8 +581,18 @@ export default function ExpenseRequests() {
                         </button>
                       )}
                       {r.status === '待核銷' && (
-                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-cyan)' }} onClick={() => handleConfirmSettle(r)}>
-                          <Check size={12} /> 確認
+                        <>
+                          <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-cyan)' }} onClick={() => handleConfirmSettle(r)} busyLabel="…">
+                            <Check size={12} /> 核准
+                          </AsyncButton>
+                          <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleRejectSettle(r)} busyLabel="…">
+                            <X size={12} />
+                          </AsyncButton>
+                        </>
+                      )}
+                      {r.status === '核銷已退回' && r.employee === profile?.name && (
+                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
+                          ✏️ 重新核銷
                         </button>
                       )}
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
@@ -908,6 +953,15 @@ export default function ExpenseRequests() {
         onClose={() => setShowChainModal(false)}
         formType="expense_request"
         formLabel="費用申請"
+        organizationId={profile?.organization_id}
+        mode="amount_grouped"
+      />
+
+      <ChainConfigModal
+        open={showSettleChainModal}
+        onClose={() => setShowSettleChainModal(false)}
+        formType="expense_settle"
+        formLabel="費用核銷"
         organizationId={profile?.organization_id}
         mode="amount_grouped"
       />

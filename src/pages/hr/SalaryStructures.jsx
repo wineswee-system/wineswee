@@ -152,7 +152,9 @@ export default function SalaryStructures() {
       employee_id: Number(form.employee_id),
       organization_id: orgId,
       base_salary: Number(form.base_salary) || 0,
-      base_insured: Number(form.base_insured) || Number(form.base_salary) || 0,  // 沒填投保底薪預設等於本薪
+      // base_insured 留空 → NULL，讓 Salary.jsx 自動算 min(本薪+所有津貼, 45,800)
+      // 只有當 admin 確實想覆寫時才填值
+      base_insured: form.base_insured && String(form.base_insured).trim() !== '' ? Number(form.base_insured) : null,
       role_allowance: Number(form.role_allowance) || 0,
       supervisor_allowance: Number(form.supervisor_allowance) || 0,
       meal_allowance: Number(form.meal_allowance) || 0,
@@ -244,7 +246,7 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '職務/餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
+                {['員工', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -277,8 +279,8 @@ export default function SalaryStructures() {
                       <div style={{ color: 'var(--text-muted)' }}>{fmt(s.night_shift_allowance)} / {fmt(s.cross_store_allowance)}</div>
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
-                      <div>{fmt(s.role_allowance)}</div>
-                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.meal_allowance)} / {fmt(s.transport_allowance)}</div>
+                      <div>{fmt(s.meal_allowance)}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.transport_allowance)}</div>
                     </td>
                     <td style={{ padding: '10px 14px' }}>{fmt(s.attendance_bonus)}</td>
                     <td style={{ padding: '10px 14px' }}>
@@ -329,7 +331,7 @@ export default function SalaryStructures() {
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
             </Field>
             <Field label="申報底薪 (投保用)">
-              <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="預設等於本薪" />
+              <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="留空＝自動 min(本薪+津貼, 45,800)" />
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
             </Field>
             {form.salary_type === 'hourly' && (
@@ -337,12 +339,11 @@ export default function SalaryStructures() {
                 <input className="form-input" type="number" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} placeholder="0" />
               </Field>
             )}
-            <Field label="主管加給">
+            <Field label="主管津貼">
               <input className="form-input" type="number" value={form.supervisor_allowance} onChange={e => set('supervisor_allowance', e.target.value)} placeholder="0" />
             </Field>
-            <Field label="職務津貼">
-              <input className="form-input" type="number" value={form.role_allowance} onChange={e => set('role_allowance', e.target.value)} placeholder="0" />
-            </Field>
+            {/* 職務津貼欄位 2026-05-13 移除（Plan A）— DB column role_allowance 保留向下相容，
+                Salary.jsx 仍 fallback 讀（老資料用），新資料只走 supervisor_allowance */}
             <Field label="夜班津貼">
               <input className="form-input" type="number" value={form.night_shift_allowance} onChange={e => set('night_shift_allowance', e.target.value)} placeholder="0" />
             </Field>

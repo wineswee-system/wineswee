@@ -149,7 +149,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                   {/* 加項 11 欄 */}
                   <th>本薪</th>
                   <th>伙食津貼</th>
-                  <th>主管加給</th>
+                  <th>主管津貼</th>
                   <th>夜間津貼</th>
                   <th>跨店津貼</th>
                   <th>其他津貼</th>

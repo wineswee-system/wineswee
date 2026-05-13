@@ -420,28 +420,42 @@ export default function Salary() {
         const baseSalary      = isHourly
           ? Math.round((ss.hourly_rate || 0) * att.hours)
           : (ss.base_salary || emp.base_salary || 0)
-        const roleAllowance   = ss.role_allowance    || 0
+        // 主管津貼（Plan A 2026-05-13）：
+        //   - 新資料走 supervisor_allowance
+        //   - 老資料 role_allowance > 0（永春 setup script 把主管放這欄）也吃，fallback 相容
+        const roleAllowance   = Number(ss.supervisor_allowance || 0) + Number(ss.role_allowance || 0)
         const mealAllowance   = ss.meal_allowance    || 0
         const transportAllow  = ss.transport_allowance || 0
         const attendanceBonusBase = ss.attendance_bonus || 0
         const customAllowances = Array.isArray(ss.custom_allowances) ? ss.custom_allowances : []
         const customTotal      = customAllowances.reduce((s, c) => s + (Number(c.amount) || 0), 0)
-        // 從 custom_allowances 拆出常見的「夜班/跨店」津貼（對齊廠商 PDF 欄位顯示）
-        const nightAllowance      = customAllowances.find(c => /夜班|夜間/.test(c.name || ''))?.amount || 0
-        const crossStoreAllowance = customAllowances.find(c => /跨店/.test(c.name || ''))?.amount || 0
-        const otherCustomTotal    = customTotal - Number(nightAllowance) - Number(crossStoreAllowance)
+        // 從結構化欄位 + custom_allowances 取出夜班/跨區，結構化欄位優先
+        const nightStructured  = Number(ss.night_shift_allowance) || 0
+        const crossStructured  = Number(ss.cross_store_allowance) || 0
+        const nightCustom      = Number(customAllowances.find(c => /夜班|夜間/.test(c.name || ''))?.amount || 0)
+        const crossCustom      = Number(customAllowances.find(c => /跨店|跨區/.test(c.name || ''))?.amount || 0)
+        const nightAllowance      = nightStructured > 0 ? nightStructured : nightCustom
+        const crossStoreAllowance = crossStructured > 0 ? crossStructured : crossCustom
+        // 其他自訂津貼（扣掉已歸類的夜班/跨區）
+        const otherCustomTotal = customAllowances.reduce((s, c) => {
+          if (/夜班|夜間|跨店|跨區/.test(c.name || '')) return s
+          return s + (Number(c.amount) || 0)
+        }, 0)
         const dependents       = ss.health_ins_dependents || 0
         const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
 
         // 業務鐵則 v3：正職時薪 / 日薪 / 投保 都以「本薪 + 所有經常性津貼」為基準
-        //   = base_salary + role + meal + transport + attendance(基準值) + custom
+        //   = base + 主管 + 夜班 + 跨區 + 餐費 + 交通 + 全勤 + 其他自訂
         //   不含加班費、不含獎金
+        //   用上面解析後的變數（已避開 結構化+custom 重複算）
         const baseForInsure = (ss.base_salary || emp.base_salary || 0)
-          + (ss.role_allowance || 0)
-          + (ss.meal_allowance || 0)
-          + (ss.transport_allowance || 0)
-          + (ss.attendance_bonus || 0)
-          + customTotal
+          + roleAllowance       // 主管 + 職務
+          + nightAllowance      // 夜班（結構化 or custom）
+          + crossStoreAllowance // 跨區（結構化 or custom）
+          + mealAllowance
+          + transportAllow
+          + attendanceBonusBase
+          + otherCustomTotal    // custom_allowances 扣除已歸類的夜班/跨區
 
         // 時薪基準（業務鐵則 v3）：
         //   時薪制 PT → 直接用 ss.hourly_rate
@@ -506,7 +520,8 @@ export default function Salary() {
           dependents,
           voluntaryPensionRate: voluntaryRate,
           // 「應發」放進 overtimePay 參數（calculateNetSalary 內 totalGross = base + overtimePay + bonus）
-          overtimePay: overtimePay + roleAllowance + mealAllowance + transportAllow + attendanceBonus + customTotal,
+          // 這裡用解析後的津貼（避免結構化+custom 重複算）
+          overtimePay: overtimePay + roleAllowance + nightAllowance + crossStoreAllowance + mealAllowance + transportAllow + attendanceBonus + otherCustomTotal,
           bonus: policyBonus,
           // 扣項：出勤扣 + 法扣
           otherDeductions: absenceDeduction + lateDeduction + legalDeductionTotal,

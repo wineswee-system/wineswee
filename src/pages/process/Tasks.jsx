@@ -158,6 +158,14 @@ export default function Tasks() {
           </div>
           <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增任務</button>
         </div>
+        <div style={{
+          marginTop: 10, padding: '10px 14px', borderRadius: 8,
+          background: 'var(--accent-cyan-dim)', fontSize: 12,
+          color: 'var(--text-secondary)', lineHeight: 1.6,
+        }}>
+          💡 <strong>什麼是「任務」？</strong>單一待辦事項 — 一個人在期限前要完成的具體工作（例：「明天前盤點 A 區商品」）。
+          需要多步驟、跨人協作的工作請建「流程」。
+        </div>
       </div>
 
       {/* View switcher */}

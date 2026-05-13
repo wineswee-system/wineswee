@@ -20,7 +20,7 @@ import { toast } from '../../lib/toast'
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
-  const { profile, role } = useAuth()
+  const { profile, hasPermission, isAdmin } = useAuth()
   const [showChainModal, setShowChainModal] = useState(false)
   const [expenses, setExpenses] = useState([])
   const [employees, setEmployees] = useState([])
@@ -247,7 +247,7 @@ export default function Expenses() {
             <p>報銷申請與審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {(isAdmin || hasPermission('finance.edit')) && (
               <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用報銷簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>

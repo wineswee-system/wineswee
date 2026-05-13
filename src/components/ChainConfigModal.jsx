@@ -532,11 +532,10 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
 
   const bodyNode = (
     <div style={{
-      flex: 1,
       overflowY: embedded ? 'visible' : 'auto',
       overflowX: 'hidden',
       padding: embedded ? 0 : 22,
-      minHeight: 0,  // 關鍵：flex child 要設 minHeight:0 才會正確 shrink + scroll
+      minHeight: 0,  // grid 子項要 minHeight:0 才會正確 shrink + scroll
     }}>
       {loading ? <LoadingSpinner /> : view === 'list' ? (
         <ListView
@@ -600,12 +599,13 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     )
   }
 
-  // ── Modal：原本行為 ──
+  // ── Modal：強制固定高度 + grid 3 段，避免 flex 沒 clip ──
   return (
     <ModalOverlay onClose={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: 'var(--bg-card)', borderRadius: 12, width: 'min(820px, 96vw)',
-        maxHeight: '92vh', display: 'flex', flexDirection: 'column',
+        height: 'calc(100vh - 48px)',
+        display: 'grid', gridTemplateRows: 'auto 1fr auto',
         border: '1px solid var(--border-medium)', overflow: 'hidden',
       }}>
         {headerNode}

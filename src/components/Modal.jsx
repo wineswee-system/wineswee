@@ -98,11 +98,12 @@ export default function Modal({
           borderRadius: 16,
           width: '100%', maxWidth,
           maxHeight: 'calc(100vh - 48px)',
-          display: 'flex', flexDirection: 'column',
+          overflowY: 'auto', overflowX: 'hidden',
+          position: 'relative',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           animation: 'fadeIn 0.15s ease',
         }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg-secondary)' }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h3>
           <button onClick={handleClose} aria-label="Close" disabled={submitting}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.4 : 1, padding: 4 }}>
@@ -110,11 +111,11 @@ export default function Modal({
           </button>
         </div>
         {headerExtra && (
-          <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-secondary)' }}>
+          <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', position: 'sticky', top: 56, zIndex: 2, background: 'var(--bg-secondary)' }}>
             {headerExtra}
           </div>
         )}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1, minHeight: 0, position: 'relative' }}>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
           {success ? (
             <SuccessState title={success.title} hint={success.hint} />
           ) : (
@@ -131,7 +132,7 @@ export default function Modal({
           )}
         </div>
         {!success && (
-          <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+          <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--bg-secondary)' }}>
             <button className="btn btn-secondary" onClick={handleClose} disabled={submitting}
               style={submitting ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
               {onSubmit ? '取消' : '關閉'}

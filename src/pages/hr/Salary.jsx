@@ -294,7 +294,7 @@ export default function Salary() {
         : employees
 
       // Fetch all data in parallel (correct field names)
-      const [attRes, otRes, lvRes, ssRes, holRes] = await Promise.all([
+      const [attRes, otRes, lvRes, ssRes, holRes, legalRes] = await Promise.all([
         supabase.from('attendance_records')
           .select('employee_id, date, total_hours, is_late, late_minutes')
           .eq('organization_id', orgId)
@@ -316,6 +316,12 @@ export default function Salary() {
         supabase.from('holidays')
           .select('date, is_workday')
           .gte('date', monthStart).lte('date', monthEnd),
+        // 法扣（民事執行命令 / 養育費 / 債務）— 進行中 + 起始月 ≤ 計薪月
+        supabase.from('legal_deductions')
+          .select('employee_id, monthly_amount, monthly_percent, deduction_type, status, started_month')
+          .eq('organization_id', orgId)
+          .eq('status', '進行中')
+          .lte('started_month', month),
       ])
 
       // 國定假日 Set（is_workday=false）→ 該日上班自動加倍，不需申請加班
@@ -372,6 +378,19 @@ export default function Salary() {
       const ssMap = {}
       for (const ss of (ssRes.data || [])) ssMap[ss.employee_id] = ss
 
+      // legal deductions map: employee_id → total monthly amount
+      // 暫不支援 percent 型 — 需要先算出 gross 才能套，目前批次計薪流程中
+      // 法扣 percent 計算需要 gross 已知，先 stage #1.5 只算 fixed amount。
+      const legalMap = {}
+      for (const ld of (legalRes.data || [])) {
+        const id = ld.employee_id
+        if (!legalMap[id]) legalMap[id] = 0
+        if (ld.deduction_type === 'fixed' || !ld.deduction_type) {
+          legalMap[id] += Number(ld.monthly_amount || 0)
+        }
+        // percent 型暫存 monthly_percent，後續加 stage #2 處理
+      }
+
       // bonus policies
       const storeNames = [...new Set(scopedEmployees.map(e => e.store).filter(Boolean))]
       const storeIdMap = {}
@@ -394,6 +413,7 @@ export default function Salary() {
         const ot           = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0 }
         const absenceDays  = lvMap[emp.id]?.absence || 0
         const policyBonus  = bonusMap[emp.id] || 0
+        const legalDeductionTotal = legalMap[emp.id] || 0
 
         // 時薪制：本薪 = 時薪 × 當月工時；月薪制：本薪 = 設定值
         // att.hours 已含國定假日 1 倍工時；國定假日的額外 1 倍透過下面 holidayBonus 加給
@@ -406,6 +426,10 @@ export default function Salary() {
         const attendanceBonusBase = ss.attendance_bonus || 0
         const customAllowances = Array.isArray(ss.custom_allowances) ? ss.custom_allowances : []
         const customTotal      = customAllowances.reduce((s, c) => s + (Number(c.amount) || 0), 0)
+        // 從 custom_allowances 拆出常見的「夜班/跨店」津貼（對齊廠商 PDF 欄位顯示）
+        const nightAllowance      = customAllowances.find(c => /夜班|夜間/.test(c.name || ''))?.amount || 0
+        const crossStoreAllowance = customAllowances.find(c => /跨店/.test(c.name || ''))?.amount || 0
+        const otherCustomTotal    = customTotal - Number(nightAllowance) - Number(crossStoreAllowance)
         const dependents       = ss.health_ins_dependents || 0
         const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
 
@@ -448,7 +472,10 @@ export default function Salary() {
           ? Math.round((att.holidayHours || 0) * hourlyRate * 1)
           : 0
 
-        const overtimePay = otPayWeekday + otPayRestday + otPayHoliday + holidayBonus
+        // 對齊廠商 PDF：加班費 = 平日 + 休息日；額外加班費 = 國定/例假 + 國定打卡加給
+        const regularOvertimePay = otPayWeekday + otPayRestday
+        const extraOvertimePay   = otPayHoliday + holidayBonus
+        const overtimePay        = regularOvertimePay + extraOvertimePay
 
         // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5（hourlyRate 已用新基準）
         const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
@@ -478,9 +505,11 @@ export default function Salary() {
           isPartTime: isHourly,
           dependents,
           voluntaryPensionRate: voluntaryRate,
+          // 「應發」放進 overtimePay 參數（calculateNetSalary 內 totalGross = base + overtimePay + bonus）
           overtimePay: overtimePay + roleAllowance + mealAllowance + transportAllow + attendanceBonus + customTotal,
           bonus: policyBonus,
-          otherDeductions: absenceDeduction + lateDeduction,
+          // 扣項：出勤扣 + 法扣
+          otherDeductions: absenceDeduction + lateDeduction + legalDeductionTotal,
           withholdTax: false,  // 所得稅由個人 5 月申報，公司不代扣
         })
 
@@ -489,15 +518,26 @@ export default function Salary() {
           employee_id:      emp.id,
           dept:             emp.dept || emp.departments?.name || '',
           department_id:    emp.department_id,
+          position:         emp.position || '',
+          store:            emp.store || '',
+
+          // ── 加項 ──
           base_salary:      baseSalary,
           role_allowance:   roleAllowance,
           meal_allowance:   mealAllowance,
           transport_allowance: transportAllow,
+          night_allowance:    Number(nightAllowance) || 0,
+          cross_store_allowance: Number(crossStoreAllowance) || 0,
+          other_custom_total: Math.max(0, otherCustomTotal),
           attendance_bonus: attendanceBonus,
           custom_allowances: customAllowances,
           custom_allowances_total: customTotal,
-          health_ins_dependents: dependents,
-          pension_self_pct: ss.voluntary_pension_rate || 0,
+          regular_overtime_pay: regularOvertimePay,  // 平日+休息日加班
+          extra_overtime_pay:   extraOvertimePay,    // 國定/例假加班 + 國定打卡加給
+          overtimePay,                                // = regular + extra
+          policyBonus,                                // 績效獎金
+
+          // ── 出勤資訊（給 audit）──
           workDays:         att.days,
           workHours:        att.hours,
           holidayHours:     att.holidayHours || 0,
@@ -510,10 +550,17 @@ export default function Salary() {
           otPayHoliday,
           absenceDays,
           lateMins:         att.lateMins,
-          overtimePay,
+
+          // ── 扣項明細 ──
           absenceDeduction,
           lateDeduction,
-          policyBonus,
+          legal_deduction:  legalDeductionTotal,
+
+          // ── 配置 ──
+          health_ins_dependents: dependents,
+          pension_self_pct: ss.voluntary_pension_rate || 0,
+
+          // ── calculateNetSalary 回傳：gross / 投保 / 員工自付 / 雇主負擔 / netSalary 等 ──
           ...result,
         }
       })

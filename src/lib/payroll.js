@@ -494,14 +494,26 @@ export function calculateNetSalary(grossSalary, options = {}) {
   // 實領薪資
   const netSalary = totalGross - totalDeductions;
 
+  // 雇主負擔合計（不計入員工扣項，僅供 audit 報表用）
+  const employerTotalCost = totalGross + labor.employer_share + health.employer_share + pension.employer_contribution;
+
   return {
     gross: totalGross,
+    // 投保金額（給薪資單顯示）
+    insuredLabor: labor.insured_salary,
+    insuredHealth: health.insured_salary,
+    // 員工自付
     laborInsurance,
     healthInsurance,
     pension: pensionSelfContribution,
     incomeTax,
     totalDeductions,
     netSalary,
+    // 雇主負擔（給薪資單顯示，不影響 netSalary）
+    laborEmployer: labor.employer_share,
+    healthEmployer: health.employer_share,
+    pensionEmployer: pension.employer_contribution,
+    employerTotalCost,
   };
 }
 

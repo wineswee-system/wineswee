@@ -47,8 +47,8 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-medium)',
         borderRadius: 16,
-        width: '100%', maxWidth: 960,
-        maxHeight: '90vh',
+        width: '98%', maxWidth: 1600,
+        maxHeight: '92vh',
         boxShadow: 'var(--shadow-xl)',
         animation: 'fadeIn 0.15s ease',
         display: 'flex', flexDirection: 'column',
@@ -127,51 +127,130 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
             </div>
           )}
 
-          <div className="data-table-wrapper">
-            <table className="data-table" style={{ fontSize: 12 }}>
+          {/* 對齊廠商 PDF 欄位順序：加項 → 應領 → 扣項 → 減項合計 → 實領 → 雇主負擔 */}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" style={{ fontSize: 11, whiteSpace: 'nowrap', minWidth: 2000 }}>
               <thead>
+                {/* 第 1 列：分組標題 */}
+                <tr style={{ background: 'var(--bg-card)' }}>
+                  <th colSpan={3} style={{ position: 'sticky', left: 0, background: 'var(--bg-card)', borderRight: '2px solid var(--border-medium)' }}>員工</th>
+                  <th colSpan={11} style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>薪資項目（加項）</th>
+                  <th style={{ textAlign: 'center', background: 'var(--bg-secondary)' }}>應領</th>
+                  <th colSpan={6} style={{ textAlign: 'center', color: 'var(--accent-orange)' }}>扣款項目</th>
+                  <th style={{ textAlign: 'center', color: 'var(--accent-red)' }}>減項</th>
+                  <th style={{ textAlign: 'center', color: 'var(--accent-green)' }}>實領</th>
+                  <th colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>雇主負擔</th>
+                </tr>
+                {/* 第 2 列：細欄位 */}
                 <tr>
-                  <th>員工</th>
-                  <th>部門</th>
-                  <th>底薪</th>
-                  <th>總薪資</th>
+                  <th style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)', zIndex: 1 }}>姓名</th>
+                  <th style={{ position: 'sticky', left: 60, background: 'var(--bg-secondary)', zIndex: 1, color: 'var(--text-muted)' }}>職稱</th>
+                  <th style={{ position: 'sticky', left: 140, background: 'var(--bg-secondary)', zIndex: 1, borderRight: '2px solid var(--border-medium)', color: 'var(--text-muted)' }}>部門</th>
+                  {/* 加項 11 欄 */}
+                  <th>本薪</th>
+                  <th>伙食津貼</th>
+                  <th>主管加給</th>
+                  <th>夜間津貼</th>
+                  <th>跨店津貼</th>
+                  <th>其他津貼</th>
+                  <th>全勤</th>
+                  <th>加班費</th>
+                  <th>額外加班</th>
+                  <th>獎金</th>
+                  <th>請假折現</th>
+                  {/* 應領 */}
+                  <th style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>應領合計</th>
+                  {/* 扣項 6 欄 */}
+                  <th style={{ color: 'var(--accent-orange)' }}>投保</th>
                   <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
                   <th style={{ color: 'var(--accent-orange)' }}>健保</th>
-                  <th style={{ color: 'var(--accent-red)' }}>所得稅</th>
-                  <th style={{ color: 'var(--accent-red)' }}>扣除合計</th>
+                  <th style={{ color: 'var(--accent-orange)' }}>勞退自提</th>
+                  <th style={{ color: 'var(--accent-orange)' }}>請假扣</th>
+                  <th style={{ color: 'var(--accent-orange)' }}>法扣</th>
+                  {/* 減項 + 實領 */}
+                  <th style={{ color: 'var(--accent-red)', fontWeight: 700 }}>減項合計</th>
                   <th style={{ color: 'var(--accent-green)', fontWeight: 800 }}>實領</th>
+                  {/* 雇主負擔 4 欄 */}
+                  <th style={{ color: 'var(--text-muted)' }}>勞保(公司)</th>
+                  <th style={{ color: 'var(--text-muted)' }}>健保(公司)</th>
+                  <th style={{ color: 'var(--text-muted)' }}>勞退(公司)</th>
+                  <th style={{ color: 'var(--text-muted)', fontWeight: 700 }}>合計</th>
                 </tr>
               </thead>
               <tbody>
                 {batchPreview.map((p, i) => {
                   const hasAnomaly = anomalyReport?.anomalies?.some(a => a.employee === p.employee)
+                  const employerTotal = (p.laborEmployer || 0) + (p.healthEmployer || 0) + (p.pensionEmployer || 0)
+                  const leaveDeduction = (p.absenceDeduction || 0) + (p.lateDeduction || 0)
+                  const rowBg = hasAnomaly ? 'rgba(245,158,11,0.06)' : undefined
                   return (
-                    <tr key={i} style={hasAnomaly ? { background: 'rgba(245,158,11,0.06)' } : undefined}>
-                      <td style={{ fontWeight: 600 }}>
-                        {hasAnomaly && <AlertTriangle size={11} style={{ color: 'var(--accent-orange)', marginRight: 4 }} />}
+                    <tr key={i} style={rowBg ? { background: rowBg } : undefined}>
+                      <td style={{ position: 'sticky', left: 0, background: rowBg || 'var(--bg-secondary)', fontWeight: 600 }}>
+                        {hasAnomaly && <AlertTriangle size={10} style={{ color: 'var(--accent-orange)', marginRight: 3 }} />}
                         {p.employee}
                       </td>
-                      <td style={{ color: 'var(--text-muted)' }}>{p.dept || '-'}</td>
-                      <td>{fmt(p.base_salary)}</td>
-                      <td>{fmt(p.gross)}</td>
-                      <td style={{ color: 'var(--accent-orange)' }}>-{p.laborInsurance.toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-orange)' }}>-{p.healthInsurance.toLocaleString()}</td>
-                      <td style={{ color: 'var(--accent-red)' }}>{p.incomeTax > 0 ? `-${p.incomeTax.toLocaleString()}` : '—'}</td>
-                      <td style={{ color: 'var(--accent-red)', fontWeight: 600 }}>-{p.totalDeductions.toLocaleString()}</td>
+                      <td style={{ position: 'sticky', left: 60, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{p.position || '-'}</td>
+                      <td style={{ position: 'sticky', left: 140, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)', borderRight: '2px solid var(--border-medium)' }}>{p.dept || '-'}</td>
+                      {/* 加項 */}
+                      <td>{p.base_salary?.toLocaleString() || 0}</td>
+                      <td>{p.meal_allowance?.toLocaleString() || 0}</td>
+                      <td>{p.role_allowance?.toLocaleString() || 0}</td>
+                      <td>{p.night_allowance?.toLocaleString() || 0}</td>
+                      <td>{p.cross_store_allowance?.toLocaleString() || 0}</td>
+                      <td>{p.other_custom_total?.toLocaleString() || 0}</td>
+                      <td>{p.attendance_bonus?.toLocaleString() || 0}</td>
+                      <td>{p.regular_overtime_pay?.toLocaleString() || 0}</td>
+                      <td>{p.extra_overtime_pay?.toLocaleString() || 0}</td>
+                      <td>{p.policyBonus?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>0</td>{/* 請假折現（特休未休） — Stage #5 補 */}
+                      {/* 應領 */}
+                      <td style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>{fmt(p.gross)}</td>
+                      {/* 扣項 */}
+                      <td style={{ color: 'var(--text-muted)' }}>{p.insuredLabor?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--accent-orange)' }}>{p.laborInsurance > 0 ? `-${p.laborInsurance.toLocaleString()}` : 0}</td>
+                      <td style={{ color: 'var(--accent-orange)' }}>{p.healthInsurance > 0 ? `-${p.healthInsurance.toLocaleString()}` : 0}</td>
+                      <td style={{ color: 'var(--accent-orange)' }}>{p.pension > 0 ? `-${p.pension.toLocaleString()}` : 0}</td>
+                      <td style={{ color: 'var(--accent-orange)' }}>{leaveDeduction > 0 ? `-${leaveDeduction.toLocaleString()}` : 0}</td>
+                      <td style={{ color: 'var(--accent-orange)' }}>{p.legal_deduction > 0 ? `-${p.legal_deduction.toLocaleString()}` : 0}</td>
+                      {/* 減項合計 + 實領 */}
+                      <td style={{ color: 'var(--accent-red)', fontWeight: 600 }}>-{p.totalDeductions?.toLocaleString() || 0}</td>
                       <td style={{ color: 'var(--accent-green)', fontWeight: 800 }}>{fmt(p.netSalary)}</td>
+                      {/* 雇主負擔 */}
+                      <td style={{ color: 'var(--text-muted)' }}>{p.laborEmployer?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{p.healthEmployer?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{p.pensionEmployer?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{employerTotal.toLocaleString()}</td>
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
-                  <td colSpan={3}>合計</td>
-                  <td>{fmt(batchPreview.reduce((s, p) => s + p.gross, 0))}</td>
-                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + p.laborInsurance, 0).toLocaleString()}</td>
-                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + p.healthInsurance, 0).toLocaleString()}</td>
-                  <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + p.incomeTax, 0).toLocaleString()}</td>
-                  <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + p.totalDeductions, 0).toLocaleString()}</td>
-                  <td style={{ color: 'var(--accent-green)' }}>{fmt(batchPreview.reduce((s, p) => s + p.netSalary, 0))}</td>
+                  <td colSpan={3} style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)' }}>合計</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.base_salary || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.meal_allowance || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.role_allowance || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.night_allowance || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.cross_store_allowance || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.other_custom_total || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.attendance_bonus || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.regular_overtime_pay || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.extra_overtime_pay || 0), 0).toLocaleString()}</td>
+                  <td>{batchPreview.reduce((s, p) => s + (p.policyBonus || 0), 0).toLocaleString()}</td>
+                  <td>0</td>
+                  <td style={{ background: 'var(--bg-secondary)' }}>{fmt(batchPreview.reduce((s, p) => s + (p.gross || 0), 0))}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>—</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.laborInsurance || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.healthInsurance || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.pension || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.absenceDeduction || 0) + (p.lateDeduction || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.legal_deduction || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + (p.totalDeductions || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-green)' }}>{fmt(batchPreview.reduce((s, p) => s + (p.netSalary || 0), 0))}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{batchPreview.reduce((s, p) => s + (p.laborEmployer || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{batchPreview.reduce((s, p) => s + (p.healthEmployer || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{batchPreview.reduce((s, p) => s + (p.pensionEmployer || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{batchPreview.reduce((s, p) => s + (p.laborEmployer || 0) + (p.healthEmployer || 0) + (p.pensionEmployer || 0), 0).toLocaleString()}</td>
                 </tr>
               </tfoot>
             </table>
@@ -180,7 +259,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            使用員工底薪計算，不含加班費 / 獎金 / 扣款。儲存後可逐筆編輯調整。
+            已含加班費 / 績效獎金 / 出勤扣 / 法扣。橫向滑動看完整欄位。儲存後可逐筆編輯調整。
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {aiReady() && (

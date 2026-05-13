@@ -161,7 +161,8 @@ export default function SalaryStructures() {
       cross_store_allowance: Number(form.cross_store_allowance) || 0,
       attendance_bonus: Number(form.attendance_bonus) || 0,
       salary_type: form.salary_type,
-      hourly_rate: form.salary_type === 'hourly' ? (Number(form.hourly_rate) || 0) : null,
+      // hourly_rate DB 為 NOT NULL DEFAULT 0；月薪人員直接送 0，PT 才送實際值
+      hourly_rate: form.salary_type === 'hourly' ? (Number(form.hourly_rate) || 0) : 0,
       health_ins_dependents: Number(form.health_ins_dependents) || 0,
       insurance_grade_id: form.insurance_grade_id ? Number(form.insurance_grade_id) : null,
       effective_from: form.effective_from,

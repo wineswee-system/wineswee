@@ -188,6 +188,14 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                       <td style={{ position: 'sticky', left: 0, background: rowBg || 'var(--bg-secondary)', fontWeight: 600 }}>
                         {hasAnomaly && <AlertTriangle size={10} style={{ color: 'var(--accent-orange)', marginRight: 3 }} />}
                         {p.employee}
+                        {p.is_partial_month && (
+                          <span
+                            title={`在保 ${p.in_service_days}/${p.month_days} 天 · 入職 ${p.join_date || '-'}${p.resign_date ? ` · 離職 ${p.resign_date}` : ''}`}
+                            style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 4, fontSize: 9, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}
+                          >
+                            {p.in_service_days}/{p.month_days}
+                          </span>
+                        )}
                       </td>
                       <td style={{ position: 'sticky', left: 60, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{p.position || '-'}</td>
                       <td style={{ position: 'sticky', left: 140, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)', borderRight: '2px solid var(--border-medium)' }}>{p.dept || '-'}</td>

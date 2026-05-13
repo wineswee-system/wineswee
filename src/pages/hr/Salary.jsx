@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Download, Plus, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary } from '../../lib/payroll'
+import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
 import { exportSalaryPdf } from '../../lib/exportPdf'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -123,7 +123,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').eq('organization_id', orgId).order('id'),
       supabase.from('bonus_records').select('*').eq('organization_id', orgId),
-      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, b, e, d, st]) => {
@@ -500,7 +500,7 @@ export default function Salary() {
               ? 0
               : Math.min(baseForInsure, 45800))
 
-        const result = calculateNetSalary(baseSalary, {
+        const fullMonthResult = calculateNetSalary(baseSalary, {
           insuredSalary,
           isPartTime: isHourly,
           dependents,
@@ -512,6 +512,41 @@ export default function Salary() {
           otherDeductions: absenceDeduction + lateDeduction + legalDeductionTotal,
           withholdTax: false,  // 所得稅由個人 5 月申報，公司不代扣
         })
+
+        // ─── 在職不滿月 proration（業務鐵則 #5B 嚴格按天）───
+        // 新進當月：join_date → 月底；離職當月：月初 → resign_date
+        // 勞健保 / 勞退 按 在保天數/當月天數 比例縮減。
+        // 本薪/津貼/加班費 不 prorate（PT 已由 att.hours 反映；月薪員工的津貼是契約給定）
+        const { inServiceDays, monthDays } = calculateInServiceDays(emp.join_date, emp.resign_date, month)
+        const prorationRatio = monthDays > 0 ? inServiceDays / monthDays : 1
+        const isPartialMonth = prorationRatio < 1 && prorationRatio > 0
+
+        let result = fullMonthResult
+        if (isPartialMonth) {
+          const proratedLabor   = Math.round(fullMonthResult.laborInsurance * prorationRatio)
+          const proratedHealth  = Math.round(fullMonthResult.healthInsurance * prorationRatio)
+          const proratedPension = Math.round(fullMonthResult.pension * prorationRatio)
+          const proratedLaborE  = Math.round(fullMonthResult.laborEmployer * prorationRatio)
+          const proratedHealthE = Math.round(fullMonthResult.healthEmployer * prorationRatio)
+          const proratedPensionE= Math.round(fullMonthResult.pensionEmployer * prorationRatio)
+          // 重算 totalDeductions / netSalary（其他扣項不變）
+          const insuranceDelta =
+            (fullMonthResult.laborInsurance + fullMonthResult.healthInsurance + fullMonthResult.pension)
+            - (proratedLabor + proratedHealth + proratedPension)
+          const newTotalDeductions = fullMonthResult.totalDeductions - insuranceDelta
+          result = {
+            ...fullMonthResult,
+            laborInsurance:    proratedLabor,
+            healthInsurance:   proratedHealth,
+            pension:           proratedPension,
+            laborEmployer:     proratedLaborE,
+            healthEmployer:    proratedHealthE,
+            pensionEmployer:   proratedPensionE,
+            totalDeductions:   newTotalDeductions,
+            netSalary:         fullMonthResult.gross - newTotalDeductions,
+            employerTotalCost: fullMonthResult.gross + proratedLaborE + proratedHealthE + proratedPensionE,
+          }
+        }
 
         return {
           employee:         emp.name,
@@ -559,6 +594,14 @@ export default function Salary() {
           // ── 配置 ──
           health_ins_dependents: dependents,
           pension_self_pct: ss.voluntary_pension_rate || 0,
+
+          // ── 在職天數（給 UI 顯示「在保 24/30」標示用）──
+          in_service_days: inServiceDays,
+          month_days:      monthDays,
+          proration_ratio: prorationRatio,
+          is_partial_month: isPartialMonth,
+          join_date:       emp.join_date || null,
+          resign_date:     emp.resign_date || null,
 
           // ── calculateNetSalary 回傳：gross / 投保 / 員工自付 / 雇主負擔 / netSalary 等 ──
           ...result,

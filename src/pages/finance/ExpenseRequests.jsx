@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
 import { Plus, X, Check, Upload, FileText, Image, Send, Settings } from 'lucide-react'
@@ -8,7 +9,6 @@ import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
@@ -37,8 +37,7 @@ const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
   const { profile, isAdmin } = useAuth()
-  const [showChainModal, setShowChainModal] = useState(false)
-  const [showSettleChainModal, setShowSettleChainModal] = useState(false)
+  const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -496,10 +495,10 @@ export default function ExpenseRequests() {
           <div style={{ display: 'flex', gap: 8 }}>
             {isAdmin && (
               <>
-                <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用申請的金額分組簽核流程">
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=費用申請&mode=amount_grouped')} title="設定費用申請的金額分組簽核流程">
                   <Settings size={14} /> 申請簽核
                 </button>
-                <button className="btn btn-secondary" onClick={() => setShowSettleChainModal(true)} title="設定費用核銷的金額分組簽核流程">
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">
                   <Settings size={14} /> 核銷簽核
                 </button>
               </>
@@ -958,23 +957,6 @@ export default function ExpenseRequests() {
         )
       })()}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="expense_request"
-        formLabel="費用申請"
-        organizationId={profile?.organization_id}
-        mode="amount_grouped"
-      />
-
-      <ChainConfigModal
-        open={showSettleChainModal}
-        onClose={() => setShowSettleChainModal(false)}
-        formType="expense_settle"
-        formLabel="費用核銷"
-        organizationId={profile?.organization_id}
-        mode="amount_grouped"
-      />
     </div>
   )
 }

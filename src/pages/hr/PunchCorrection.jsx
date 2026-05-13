@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Check, X, Printer, Settings, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -9,7 +10,6 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
@@ -25,9 +25,9 @@ const normalizeType = (t) => {
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
+  const navigate = useNavigate()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
-  const [showChainModal, setShowChainModal] = useState(false)
 
   const [corrections, setCorrections] = useState([])
   const [employees, setEmployees] = useState([])
@@ -290,7 +290,7 @@ export default function PunchCorrection() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定補打卡簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=punch&label=補打卡')} title="設定補打卡簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -479,13 +479,6 @@ export default function PunchCorrection() {
         )
       })()}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="punch"
-        formLabel="補打卡"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

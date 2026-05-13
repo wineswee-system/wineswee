@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Printer, Settings } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -11,14 +12,13 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printTripSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
 import { toast } from '../../lib/toast'
 export default function BusinessTravel() {
   const { profile, role } = useAuth()
-  const [showChainModal, setShowChainModal] = useState(false)
+  const navigate = useNavigate()
   const [trips, setTrips] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -179,7 +179,7 @@ export default function BusinessTravel() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定出差簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=trip&label=出差')} title="設定出差簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -352,13 +352,6 @@ export default function BusinessTravel() {
         )
       })()}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="trip"
-        formLabel="出差"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

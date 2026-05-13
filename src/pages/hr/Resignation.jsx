@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -13,7 +14,6 @@ import {
 } from '../../lib/hrChain'
 import { printResignationSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
@@ -29,8 +29,8 @@ const STATUS_BADGE = {
 
 export default function Resignation() {
   const { profile, role } = useAuth()
+  const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
-  const [showChainModal, setShowChainModal] = useState(false)
   const [list, setList] = useState([])
   const [employees, setEmployees] = useState([])
   const [chainSteps, setChainSteps] = useState({})  // { chainId: [steps] }
@@ -267,7 +267,7 @@ export default function Resignation() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定離職簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=resignation&label=離職')} title="設定離職簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -457,13 +457,6 @@ export default function Resignation() {
         />
       )}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="resignation"
-        formLabel="離職"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

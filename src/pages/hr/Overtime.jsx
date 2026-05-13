@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
@@ -11,7 +12,6 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
@@ -19,7 +19,7 @@ import { uploadFormAttachments } from '../../lib/formAttachments'
 import { toast } from '../../lib/toast'
 export default function Overtime() {
   const { profile, role } = useAuth()
-  const [showChainModal, setShowChainModal] = useState(false)
+  const navigate = useNavigate()
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -296,7 +296,7 @@ export default function Overtime() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定加班簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=overtime&label=加班')} title="設定加班簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -510,13 +510,6 @@ export default function Overtime() {
         )
       })()}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="overtime"
-        formLabel="加班"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

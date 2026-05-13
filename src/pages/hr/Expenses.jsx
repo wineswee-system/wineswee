@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -12,7 +13,6 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 
@@ -21,7 +21,7 @@ const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
   const { profile, hasPermission, isAdmin } = useAuth()
-  const [showChainModal, setShowChainModal] = useState(false)
+  const navigate = useNavigate()
   const [expenses, setExpenses] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -248,7 +248,7 @@ export default function Expenses() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(isAdmin || hasPermission('finance.edit')) && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定費用報銷簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=費用報銷')} title="設定費用報銷簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -445,13 +445,6 @@ export default function Expenses() {
         )
       })()}
 
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="expense"
-        formLabel="費用報銷"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

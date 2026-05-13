@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'  // Paperclip 已經有
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
@@ -13,7 +14,6 @@ import AsyncButton from '../../components/AsyncButton'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-import ChainConfigModal from '../../components/ChainConfigModal'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
@@ -23,7 +23,7 @@ import { validateRequired, clearError } from '../../lib/formValidation'
 
 export default function Leave() {
   const { profile, role } = useAuth()
-  const [showChainModal, setShowChainModal] = useState(false)
+  const navigate = useNavigate()
   const [leaves, setLeaves] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -431,7 +431,7 @@ export default function Leave() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowPolicyModal(true)}><Info size={14} /> 法規說明</button>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => setShowChainModal(true)} title="設定請假表單的簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=leave&label=請假')} title="設定請假表單的簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -785,14 +785,6 @@ export default function Leave() {
         )
       })()}
 
-      {/* 簽核鏈設定 modal — 只 admin 看得到入口 */}
-      <ChainConfigModal
-        open={showChainModal}
-        onClose={() => setShowChainModal(false)}
-        formType="leave"
-        formLabel="請假"
-        organizationId={profile?.organization_id}
-      />
     </div>
   )
 }

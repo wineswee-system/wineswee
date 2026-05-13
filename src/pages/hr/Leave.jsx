@@ -563,8 +563,13 @@ export default function Leave() {
 
       {/* New Leave Modal */}
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'} onClose={() => { setShowModal(false); setValidationMsg(''); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
+        <Modal
+          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增假單'}
+          onClose={() => { setShowModal(false); setValidationMsg(''); setErrors({}); setEditingId(null) }}
+          onSubmit={handleSubmit}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '請假申請已送出，等待主管簽核'}
+        >
+          <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
               onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
@@ -572,7 +577,7 @@ export default function Leave() {
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <Field label="假別 *">
+          <Field label="假別" required>
             <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>
               {LEAVE_TYPES.map(t => (
                 <option key={t.code} value={t.code}>{t.shortName}（{t.law}）</option>
@@ -634,7 +639,7 @@ export default function Leave() {
             </Field>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: form.unit === 'hour' ? '1fr' : '1fr 1fr', gap: 12 }}>
-            <Field label={form.unit === 'hour' ? '日期 *' : '開始日期 *'} error={errors.start_date} errorMsg="請選日期">
+            <Field label={form.unit === 'hour' ? '日期' : '開始日期'} required error={errors.start_date} errorMsg="請選日期">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
             {form.unit === 'day' && (

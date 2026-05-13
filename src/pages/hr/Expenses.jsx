@@ -54,8 +54,9 @@ export default function Expenses() {
     })
   }
   const uploadAttachments = async (expenseId, empId) => {
-    if (attachFiles.length === 0) return
+    if (attachFiles.length === 0) return []
     setUploading(true)
+    const urls = []
     try {
       for (const { file } of attachFiles) {
         const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
@@ -63,11 +64,24 @@ export default function Expenses() {
         const { error } = await supabase.storage.from('expense-receipts').upload(path, file, {
           cacheControl: '3600', upsert: true,
         })
-        if (error) console.warn('upload fail:', error)
+        if (error) {
+          console.warn('upload fail:', error)
+          continue
+        }
+        const { data } = supabase.storage.from('expense-receipts').getPublicUrl(path)
+        if (data?.publicUrl) urls.push(data.publicUrl)
+      }
+      // ★ 修補：URL 寫回 expenses.attachments，不然審核人看不到
+      if (urls.length > 0) {
+        const { error: updErr } = await supabase.from('expenses')
+          .update({ attachments: urls })
+          .eq('id', expenseId)
+        if (updErr) console.warn('attach urls update fail:', updErr)
       }
     } finally {
       setUploading(false)
     }
+    return urls
   }
 
   useEffect(() => {
@@ -332,8 +346,13 @@ export default function Expenses() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
+        <Modal
+          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onSubmit={handleSubmit}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '報銷申請已送出，等待主管簽核'}
+        >
+          <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
               onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}

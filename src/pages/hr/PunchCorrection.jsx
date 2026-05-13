@@ -372,9 +372,14 @@ export default function PunchCorrection() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯補登申請' : '新增補登申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
+        <Modal
+          title={editingId ? '✏️ 編輯補登申請' : '新增補登申請'}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onSubmit={handleSubmit}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '補登申請已送出，等待主管簽核'}
+        >
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
+            <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
               <SearchableSelect
                 value={form.employee}
                 onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}

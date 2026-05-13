@@ -388,8 +388,13 @@ export default function Overtime() {
       </div>
 
       {showModal && (
-        <Modal title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'} onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="員工 *" error={errors.employee} errorMsg="請選擇員工">
+        <Modal
+          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onSubmit={handleSubmit}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '加班申請已送出，等待主管簽核'}
+        >
+          <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
               value={form.employee}
               onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}

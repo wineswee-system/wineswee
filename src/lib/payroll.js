@@ -114,19 +114,35 @@ export function prorateAmount(amount, inServiceDays, monthDays) {
 /**
  * 計算當月在職天數（給新進、離職、留停切換月使用）
  *
+ * 全部用 local midnight 比對，避開 JS Date 'YYYY-MM-DD' 字串會被當 UTC 解析的時區陷阱
+ * （例：'2026-04-07' 在 UTC+8 會解成 4/7 早上 8 點，跟 4/30 午夜相減少 1 天）。
+ *
  * @param {string|Date} hireDate - 到職日（含當天）
  * @param {string|Date|null} resignDate - 離職日（含當天），null 表示在職中
  * @param {string} payPeriod - 'YYYY-MM' 計薪月份
  * @returns {{ inServiceDays: number, monthDays: number }}
  */
 export function calculateInServiceDays(hireDate, resignDate, payPeriod) {
+  // 把 Date 或 'YYYY-MM-DD' 字串都拉到「該日的 local midnight」整數時間戳，
+  // 用整數天數差直接算，避開時區/小時誤差。
+  const toLocalMidnight = (input) => {
+    if (input == null) return null;
+    if (input instanceof Date) {
+      return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+    }
+    // 字串 → 切 'YYYY-MM-DD'（也能容忍 'YYYY-MM-DDTHH:MM:SS'）
+    const m = String(input).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  };
+
   const [year, month] = payPeriod.split('-').map(Number);
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 0); // 該月最後一天
   const monthDays = monthEnd.getDate();
 
-  const hire = hireDate ? new Date(hireDate) : monthStart;
-  const resign = resignDate ? new Date(resignDate) : monthEnd;
+  const hire = toLocalMidnight(hireDate) || monthStart;
+  const resign = toLocalMidnight(resignDate) || monthEnd;
 
   // 該月在職起訖（取交集）
   const periodStart = hire > monthStart ? hire : monthStart;
@@ -136,7 +152,8 @@ export function calculateInServiceDays(hireDate, resignDate, payPeriod) {
     return { inServiceDays: 0, monthDays };
   }
 
-  const inServiceDays = Math.floor((periodEnd - periodStart) / (1000 * 60 * 60 * 24)) + 1;
+  // 兩個 date 都是 local midnight，相減一定是整數天 × 86400000
+  const inServiceDays = Math.round((periodEnd - periodStart) / (1000 * 60 * 60 * 24)) + 1;
   return { inServiceDays, monthDays };
 }
 

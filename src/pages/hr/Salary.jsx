@@ -513,38 +513,41 @@ export default function Salary() {
           withholdTax: false,  // 所得稅由個人 5 月申報，公司不代扣
         })
 
-        // ─── 在職不滿月 proration（業務鐵則 #5B 嚴格按天）───
+        // ─── 在職不滿月 proration（業務鐵則 v3 #5B）───
         // 新進當月：join_date → 月底；離職當月：月初 → resign_date
-        // 勞健保 / 勞退 按 在保天數/當月天數 比例縮減。
-        // 本薪/津貼/加班費 不 prorate（PT 已由 att.hours 反映；月薪員工的津貼是契約給定）
+        // 業務鐵則：
+        //   勞保 → 按天 (在保天數/當月天數)
+        //   勞退 → 按天 (同勞保)
+        //   健保 → 全月不打折（廠商實務：當月加保扣整月健保費）
+        //   本薪/津貼/加班費 → 不 prorate
+        //     （PT 已由 att.hours 反映；月薪員工的津貼是契約給定）
         const { inServiceDays, monthDays } = calculateInServiceDays(emp.join_date, emp.resign_date, month)
         const prorationRatio = monthDays > 0 ? inServiceDays / monthDays : 1
         const isPartialMonth = prorationRatio < 1 && prorationRatio > 0
 
         let result = fullMonthResult
         if (isPartialMonth) {
+          // 勞保 + 勞退 按天，健保不動
           const proratedLabor   = Math.round(fullMonthResult.laborInsurance * prorationRatio)
-          const proratedHealth  = Math.round(fullMonthResult.healthInsurance * prorationRatio)
           const proratedPension = Math.round(fullMonthResult.pension * prorationRatio)
           const proratedLaborE  = Math.round(fullMonthResult.laborEmployer * prorationRatio)
-          const proratedHealthE = Math.round(fullMonthResult.healthEmployer * prorationRatio)
           const proratedPensionE= Math.round(fullMonthResult.pensionEmployer * prorationRatio)
-          // 重算 totalDeductions / netSalary（其他扣項不變）
+          // 重算 totalDeductions / netSalary（健保不變，所以只算勞保 + 勞退的 delta）
           const insuranceDelta =
-            (fullMonthResult.laborInsurance + fullMonthResult.healthInsurance + fullMonthResult.pension)
-            - (proratedLabor + proratedHealth + proratedPension)
+            (fullMonthResult.laborInsurance + fullMonthResult.pension)
+            - (proratedLabor + proratedPension)
           const newTotalDeductions = fullMonthResult.totalDeductions - insuranceDelta
           result = {
             ...fullMonthResult,
             laborInsurance:    proratedLabor,
-            healthInsurance:   proratedHealth,
+            // healthInsurance:   不動（全月）
             pension:           proratedPension,
             laborEmployer:     proratedLaborE,
-            healthEmployer:    proratedHealthE,
+            // healthEmployer:    不動（全月）
             pensionEmployer:   proratedPensionE,
             totalDeductions:   newTotalDeductions,
             netSalary:         fullMonthResult.gross - newTotalDeductions,
-            employerTotalCost: fullMonthResult.gross + proratedLaborE + proratedHealthE + proratedPensionE,
+            employerTotalCost: fullMonthResult.gross + proratedLaborE + fullMonthResult.healthEmployer + proratedPensionE,
           }
         }
 

@@ -63,8 +63,9 @@ export default function Leave() {
     })
   }
   const uploadAttachments = async (leaveId, empId) => {
-    if (attachFiles.length === 0) return
+    if (attachFiles.length === 0) return []
     setUploading(true)
+    const urls = []
     try {
       for (const { file } of attachFiles) {
         const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
@@ -72,11 +73,24 @@ export default function Leave() {
         const { error } = await supabase.storage.from('leave-attachments').upload(path, file, {
           cacheControl: '3600', upsert: true,
         })
-        if (error) console.warn('upload fail:', error)
+        if (error) {
+          console.warn('upload fail:', error)
+          continue
+        }
+        const { data } = supabase.storage.from('leave-attachments').getPublicUrl(path)
+        if (data?.publicUrl) urls.push(data.publicUrl)
+      }
+      // ★ 修補：把 URL 寫回 leave_requests.attachments，不然審核人看不到
+      if (urls.length > 0) {
+        const { error: updErr } = await supabase.from('leave_requests')
+          .update({ attachments: urls })
+          .eq('id', leaveId)
+        if (updErr) console.warn('attach urls update fail:', updErr)
       }
     } finally {
       setUploading(false)
     }
+    return urls
   }
   useEffect(() => {
     const orgId = profile?.organization_id

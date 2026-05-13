@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { empLabel } from '../lib/empLabel'
+import SearchableSelect, { empOptions } from './SearchableSelect'
 import { toast } from '../lib/toast'
 import {
   updateTask, deleteTask,
@@ -664,11 +665,12 @@ export default function TaskDetailPanel({
             <div style={fieldGrid}>
               <div>
                 <div style={labelStyle}>負責人</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.assignee}
-                  onChange={e => setAndDirty('assignee', e.target.value)}>
-                  <option value="">未指定</option>
-                  {employees.map(e => <option key={e.id} value={e.name}>{empLabel(e)}{e.position ? ` - ${e.position}` : ''}</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.assignee}
+                  onChange={(v) => setAndDirty('assignee', v || '')}
+                  options={empOptions(employees, { keyBy: 'name' })}
+                  placeholder="搜尋員工姓名/職稱..."
+                />
               </div>
               <div>
                 <div style={labelStyle}>歸屬門市</div>
@@ -861,12 +863,17 @@ export default function TaskDetailPanel({
 
             {/* Add confirmation */}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <select className="form-input" style={{ flex: 1, fontSize: 12 }}
-                value={newConfirmApprover} onChange={e => setNewConfirmApprover(e.target.value)}>
-                <option value="">＋ 選擇員工...</option>
-                {employees.filter(emp => !confirmations.some(c => c.approver === emp.name))
-                  .map(emp => <option key={emp.id} value={emp.name}>{empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}</option>)}
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={newConfirmApprover}
+                  onChange={(v) => setNewConfirmApprover(v || '')}
+                  options={empOptions(
+                    employees.filter(emp => !confirmations.some(c => c.approver === emp.name)),
+                    { keyBy: 'name' }
+                  )}
+                  placeholder="＋ 搜尋員工..."
+                />
+              </div>
               <select className="form-input" style={{ width: 90, fontSize: 12 }}
                 value={newConfirmPriority} onChange={e => setNewConfirmPriority(e.target.value)}>
                 {PRIORITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}

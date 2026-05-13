@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { UserPlus, X, Users } from 'lucide-react'
 import { getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember } from '../../lib/db'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 import { confirm } from '../../lib/confirm'
 const ROLE_OPTIONS = [
@@ -85,12 +86,17 @@ export default function ProjectMembers({ projectId, employees = [], currentUser,
 
       {adding && (
         <div className="card" style={{ padding: 10, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
-          <select value={pick} onChange={e => setPick(e.target.value)} className="form-input" style={{ flex: 1, fontSize: 12 }} autoFocus>
-            <option value="">選擇員工...</option>
-            {employees.filter(e => !members.some(m => m.employee_id === e.id)).map(e => (
-              <option key={e.id} value={e.id}>{empLabel(e)}{e.dept ? `（${e.dept}）` : ''}</option>
-            ))}
-          </select>
+          <div style={{ flex: 1 }}>
+            <SearchableSelect
+              value={pick || null}
+              onChange={(v) => setPick(v || '')}
+              options={empOptions(
+                employees.filter(e => !members.some(m => m.employee_id === e.id)),
+                { keyBy: 'id' }
+              )}
+              placeholder="搜尋員工..."
+            />
+          </div>
           <select value={role} onChange={e => setRole(e.target.value)} className="form-input" style={{ fontSize: 12 }}>
             {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>

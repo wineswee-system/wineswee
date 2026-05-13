@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import { Rocket, Calendar, User, AlertTriangle, CheckCircle2, Bell, Settings, Copy, ChevronDown, ChevronRight } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { empLabel } from '../../../lib/empLabel'
 
 import { toast } from '../../../lib/toast'
@@ -84,6 +85,8 @@ export default function DeployModal({
   const tplSteps = deployTemplate?.steps || []
   // 哪些步驟展開了「進階設定」
   const [expandedSteps, setExpandedSteps] = useState(new Set())
+  // 「加審批人員」picker 暫存：{ [stepIndex]: { emp, pri } }
+  const [confPick, setConfPick] = useState({})
   const toggleExpand = (i) => {
     setExpandedSteps(prev => {
       const next = new Set(prev)
@@ -546,25 +549,30 @@ export default function DeployModal({
                         )}
                         {/* 新增審批人 */}
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <select className="form-input" style={{ flex: 2, fontSize: 11 }}
-                            id={`add-conf-emp-${i}`} defaultValue="">
-                            <option value="">+ 加員工</option>
-                            {employees.filter(e => !(deployForm.step_extras?.[i]?.confirmations || []).some(c => c.approver === e.name))
-                              .map(e => <option key={e.id} value={e.name}>{empLabel(e)}</option>)}
-                          </select>
+                          <div style={{ flex: 2 }}>
+                            <SearchableSelect
+                              value={confPick[i]?.emp || null}
+                              onChange={(v) => setConfPick(p => ({ ...p, [i]: { ...(p[i] || {}), emp: v || '' } }))}
+                              options={empOptions(
+                                employees.filter(e => !(deployForm.step_extras?.[i]?.confirmations || []).some(c => c.approver === e.name)),
+                                { keyBy: 'name' }
+                              )}
+                              placeholder="+ 搜尋員工..."
+                            />
+                          </div>
                           <select className="form-input" style={{ flex: 1, fontSize: 11 }}
-                            id={`add-conf-pri-${i}`} defaultValue="中">
+                            value={confPick[i]?.pri || '中'}
+                            onChange={e => setConfPick(p => ({ ...p, [i]: { ...(p[i] || {}), pri: e.target.value } }))}>
                             <option value="高">高</option><option value="中">中</option><option value="低">低</option>
                           </select>
                           <button type="button" style={{
                             padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                             border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan)', color: '#fff',
                           }} onClick={() => {
-                            const empSel = document.getElementById(`add-conf-emp-${i}`)
-                            const priSel = document.getElementById(`add-conf-pri-${i}`)
-                            if (empSel?.value) {
-                              addConfirmation(i, empSel.value, priSel?.value || '中')
-                              empSel.value = ''
+                            const picked = confPick[i]
+                            if (picked?.emp) {
+                              addConfirmation(i, picked.emp, picked.pri || '中')
+                              setConfPick(p => ({ ...p, [i]: { emp: '', pri: '中' } }))
                             }
                           }}>加入</button>
                         </div>

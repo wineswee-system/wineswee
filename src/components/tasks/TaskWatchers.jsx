@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Eye, UserPlus, X } from 'lucide-react'
 import { getTaskWatchers, addTaskWatcher, removeTaskWatcher } from '../../lib/db'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 export default function TaskWatchers({ taskId, employees = [], currentUser, onChange }) {
   const [watchers, setWatchers] = useState([])
@@ -83,16 +84,18 @@ export default function TaskWatchers({ taskId, employees = [], currentUser, onCh
           </div>
         ))}
         {adding ? (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <select
-              value={pick} onChange={e => setPick(e.target.value)} autoFocus
-              style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)' }}
-            >
-              <option value="">選擇員工...</option>
-              {employees
-                .filter(e => !watchers.some(w => w.employees?.id === e.id))
-                .map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
-            </select>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <div style={{ width: 220 }}>
+              <SearchableSelect
+                value={pick || null}
+                onChange={(v) => setPick(v || '')}
+                options={empOptions(
+                  employees.filter(e => !watchers.some(w => w.employees?.id === e.id)),
+                  { keyBy: 'id' }
+                )}
+                placeholder="搜尋員工..."
+              />
+            </div>
             <button
               className="btn btn-primary"
               style={{ padding: '2px 8px', fontSize: 11 }}

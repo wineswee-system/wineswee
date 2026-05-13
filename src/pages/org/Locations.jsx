@@ -4,6 +4,7 @@ import { getStores, createStore, updateStore, deleteStore, getEmployees, getComp
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -220,10 +221,12 @@ export default function Locations() {
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="02-1234-5678" value={form.phone} onChange={e => set('phone', e.target.value)} />
             </Field>
             <Field label="負責人">
-              <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
-                <option value="">請選擇</option>
-                {employees.filter(emp => emp.status === '在職').map(emp => <option key={emp.id} value={emp.id}>{empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.manager_id || null}
+                onChange={(v) => set('manager_id', v || '')}
+                options={empOptions(employees.filter(emp => emp.status === '在職'), { keyBy: 'id' })}
+                placeholder="搜尋員工..."
+              />
             </Field>
           </div>
           <Field label="狀態">

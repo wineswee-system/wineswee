@@ -9,6 +9,7 @@ import { processCommentMentions, notifyWatchers } from '../../lib/mentions'
 import { describeRule, materializeNextInstance } from '../../lib/recurrence'
 import TaskWatchers from './TaskWatchers'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../SearchableSelect'
 import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
 import MentionInput, { MentionText } from './MentionInput'
@@ -190,23 +191,16 @@ export default function TaskModal({ task, employees = [], sections = [], current
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>負責人</label>
-                  <select
-                    className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={form.assignee_id ? String(form.assignee_id) : (form.assignee ? `name:${form.assignee}` : '')}
-                    onChange={e => {
-                      const v = e.target.value
-                      if (v.startsWith('name:')) return
-                      const emp = employees.find(x => String(x.id) === v)
+                  <SearchableSelect
+                    value={form.assignee_id || null}
+                    onChange={(v) => {
+                      const emp = employees.find(x => String(x.id) === String(v))
                       set('assignee_id', emp?.id || null); set('assignee', emp?.name || '')
                       saveField({ assignee_id: emp?.id || null, assignee: emp?.name || null })
                     }}
-                  >
-                    <option value="">未指派</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
-                    {form.assignee && !form.assignee_id && !employees.some(e => e.name === form.assignee) && (
-                      <option value={`name:${form.assignee}`} disabled>{form.assignee}（非員工）</option>
-                    )}
-                  </select>
+                    options={empOptions(employees, { keyBy: 'id' })}
+                    placeholder="搜尋員工姓名/職稱..."
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>截止日</label>

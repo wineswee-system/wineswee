@@ -696,17 +696,13 @@ export default function LineIntegration() {
                           <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                             {c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('zh-TW') : '—'}
                           </td>
-                          <td>
-                            <select className="form-input" style={{ fontSize: 12, minWidth: 160 }}
-                              value={selected}
-                              onChange={e => setCandidateOverrides(prev => ({ ...prev, [key]: e.target.value ? Number(e.target.value) : null }))}>
-                              <option value="">— 請選擇 —</option>
-                              {employees.map(emp => (
-                                <option key={emp.id} value={emp.id}>
-                                  {empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}{emp.id === c.matched_employee_id ? ' ★' : ''}
-                                </option>
-                              ))}
-                            </select>
+                          <td style={{ minWidth: 180 }}>
+                            <SearchableSelect
+                              value={selected || null}
+                              onChange={(v) => setCandidateOverrides(prev => ({ ...prev, [key]: v ? Number(v) : null }))}
+                              options={empOptions(employees, { keyBy: 'id' })}
+                              placeholder="— 搜尋員工 —"
+                            />
                           </td>
                           <td>
                             <button className="btn btn-sm btn-primary" onClick={() => bindCandidate(c)}

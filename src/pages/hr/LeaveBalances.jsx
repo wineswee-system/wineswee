@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { toast } from '../../lib/toast'
 const LEAVE_TYPES = ['特休', '病假', '事假', '喪假', '婚假', '產假', '陪產假', '無薪假']
@@ -431,12 +432,13 @@ export default function LeaveBalances() {
       {showModal && (
         <Modal title={editingId ? '編輯假別餘額' : '新增假別餘額'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="員工 *">
-            <select className="form-input" style={{ width: '100%' }} value={form.employee_id} onChange={e => set('employee_id', e.target.value)} disabled={!!editingId}>
-              <option value="">請選擇</option>
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>{empLabel(e)}（{e.dept || '無部門'}）</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.employee_id || null}
+              onChange={(v) => set('employee_id', v || '')}
+              options={empOptions(employees, { keyBy: 'id' })}
+              placeholder="搜尋員工姓名/職稱..."
+              disabled={!!editingId}
+            />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="年度 *">

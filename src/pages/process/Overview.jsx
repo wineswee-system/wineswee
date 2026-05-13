@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
 import { checkAndNotifyDailyTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
@@ -422,17 +423,12 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
               <Row label="所屬流程" value={inst.template_name} />
               <Row label="申請人" value={inst.started_by} />
               <Field label="負責人">
-                <select value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })} style={inputStyle}>
-                  <option value="">未指派</option>
-                  {form.assignee && !employees.some(emp => emp.name === form.assignee) && (
-                    <option value={form.assignee}>{form.assignee}（目前值）</option>
-                  )}
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.name}>
-                      {empLabel(emp)}{emp.position ? ` - ${emp.position}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  value={form.assignee}
+                  onChange={(v) => setForm({ ...form, assignee: v || '' })}
+                  options={empOptions(employees, { keyBy: 'name' })}
+                  placeholder="搜尋員工姓名/職稱..."
+                />
               </Field>
               <Field label="角色">
                 <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} style={inputStyle} />

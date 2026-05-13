@@ -7,6 +7,7 @@ import { getBenefitPolicies, createBenefitPolicy, updateBenefitPolicy, deleteBen
 import { LEAVE_TYPES } from '../../lib/leavePolicy'
 import { validateBenefitPolicy, BONUS_TYPE_LABELS, getLeaveLabel } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { confirm } from '../../lib/confirm'
 const TABS = [
@@ -303,17 +304,15 @@ export default function BenefitSettings() {
             </label>
             <label>
               <User size={14} style={{ marginRight: 4 }} />適用員工
-              <select
-                className="input"
-                value={selectedEmployeeId || ''}
-                onChange={e => setSelectedEmployeeId(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">所有員工</option>
-                {employees
-                  .filter(emp => !selectedStoreId || stores.find(s => s.id === selectedStoreId)?.name === emp.store)
-                  .map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)
-                }
-              </select>
+              <SearchableSelect
+                value={selectedEmployeeId || null}
+                onChange={(v) => setSelectedEmployeeId(v ? Number(v) : null)}
+                options={empOptions(
+                  employees.filter(emp => !selectedStoreId || stores.find(s => s.id === selectedStoreId)?.name === emp.store),
+                  { keyBy: 'id' }
+                )}
+                placeholder="搜尋員工... (空白=所有員工)"
+              />
             </label>
           </div>
 

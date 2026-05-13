@@ -9,6 +9,7 @@ import Modal, { Field } from '../../components/Modal'
 import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -720,10 +721,14 @@ export default function Employees() {
               <option value="">無（頂層）</option>
               {departments.filter(d => d.id !== editingDept?.id).map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
             </select></Field>
-            <Field label="部門主管"><select className="form-input" style={{ width: '100%' }} value={deptForm.manager_id} onChange={e => setDept('manager_id', e.target.value)}>
-              <option value="">請選擇</option>
-              {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={String(e.id)}>{empLabel(e)}{e.position ? ` (${e.position})` : ''}</option>)}
-            </select></Field>
+            <Field label="部門主管">
+              <SearchableSelect
+                value={deptForm.manager_id || null}
+                onChange={(v) => setDept('manager_id', v || '')}
+                options={empOptions(employees.filter(e => e.status === '在職'), { keyBy: 'id' })}
+                placeholder="搜尋員工..."
+              />
+            </Field>
           </div>
           <Field label="描述"><textarea className="form-input" style={{ width: '100%', height: 80 }} value={deptForm.description} onChange={e => setDept('description', e.target.value)} /></Field>
         </Modal>

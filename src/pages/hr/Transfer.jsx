@@ -5,6 +5,7 @@ import { updateEmployee } from '../../lib/db'
 import { rotatePrimary } from '../../lib/assignments'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
@@ -559,18 +560,12 @@ export default function Transfer() {
           submitDisabled={submitting}
         >
           <Field label="選擇員工 *">
-            <select
-              className="form-input"
-              value={transferForm.employee_id}
-              onChange={e => setTF('employee_id', e.target.value)}
-            >
-              <option value="">請選擇員工</option>
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>
-                  {e.name}（{e.dept || '-'} / {e.store || '-'}）
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={transferForm.employee_id || null}
+              onChange={(v) => setTF('employee_id', v || '')}
+              options={empOptions(employees, { keyBy: 'id' })}
+              placeholder="搜尋員工姓名/職稱..."
+            />
           </Field>
 
           <Field label="異動類型 *">
@@ -702,18 +697,12 @@ export default function Transfer() {
           submitDisabled={salarySubmitting}
         >
           <Field label="選擇員工 *">
-            <select
-              className="form-input"
-              value={salaryForm.employee_id}
-              onChange={e => setSF('employee_id', e.target.value)}
-            >
-              <option value="">請選擇員工</option>
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>
-                  {e.name}（{e.dept || '-'} / {e.store || '-'}）
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={salaryForm.employee_id || null}
+              onChange={(v) => setSF('employee_id', v || '')}
+              options={empOptions(employees, { keyBy: 'id' })}
+              placeholder="搜尋員工姓名/職稱..."
+            />
           </Field>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

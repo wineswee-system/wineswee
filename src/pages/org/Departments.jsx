@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -267,10 +268,12 @@ export default function Departments() {
               </select>
             </Field>
             <Field label="部門主管">
-              <select className="form-input" style={{ width: '100%' }} value={form.manager_id} onChange={e => set('manager_id', e.target.value)}>
-                <option value="">請選擇</option>
-                {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{empLabel(e)}{e.position ? ` (${e.position})` : ''}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.manager_id || null}
+                onChange={(v) => set('manager_id', v || '')}
+                options={empOptions(employees.filter(e => e.status === '在職'), { keyBy: 'id' })}
+                placeholder="搜尋員工..."
+              />
             </Field>
           </div>
           <Field label="部門描述">
@@ -323,10 +326,12 @@ export default function Departments() {
                 <input className="form-input" type="text" placeholder="例：營運四課" value={secForm.name} onChange={e => setSec('name', e.target.value)} style={{ width: '100%' }} />
               </Field>
               <Field label="督導">
-                <select className="form-input" value={secForm.supervisor_id} onChange={e => setSec('supervisor_id', e.target.value)} style={{ width: '100%' }}>
-                  <option value="">無</option>
-                  {employees.filter(e => e.status === '在職').map(e => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
-                </select>
+                <SearchableSelect
+                  value={secForm.supervisor_id || null}
+                  onChange={(v) => setSec('supervisor_id', v || '')}
+                  options={empOptions(employees.filter(e => e.status === '在職'), { keyBy: 'id' })}
+                  placeholder="搜尋員工..."
+                />
               </Field>
               <Field label="排序">
                 <input className="form-input" type="number" value={secForm.sort_order} onChange={e => setSec('sort_order', e.target.value)} style={{ width: '100%' }} />

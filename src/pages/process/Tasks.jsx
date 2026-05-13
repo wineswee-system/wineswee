@@ -215,16 +215,14 @@ export default function Tasks() {
           <Search className="search-icon" />
           <input type="text" placeholder="搜尋任務..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="form-input" style={{ fontSize: 13, flex: '0 0 130px' }} value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
-          <option value="">全部人員</option>
-          <optgroup label="員工">
-            {employees.map(e => {
-              const dept = departments.find(d => d.id === e.department_id)?.name || e.dept || ''
-              const label = `${empLabel(e)}｜${e.position || ''}${dept ? `（${dept}）` : ''}`
-              return <option key={e.id} value={e.name}>{label}</option>
-            })}
-          </optgroup>
-        </select>
+        <div style={{ flex: '0 0 180px' }}>
+          <SearchableSelect
+            value={filterAssignee}
+            onChange={(v) => setFilterAssignee(v || '')}
+            options={empOptions(employees, { keyBy: 'name' })}
+            placeholder="🔍 篩選人員..."
+          />
+        </div>
         <select className="form-input" style={{ fontSize: 13, flex: '0 0 120px' }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
           <option value="">全部門市</option>
           {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}

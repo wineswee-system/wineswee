@@ -123,22 +123,38 @@ export async function buildChainBasedSteps({
     return [applicantStep, { label: '主管核示', name: '', status: 'current' }]
   }
 
-  // 抓 chain template 步驟
-  const { data: chainSteps } = await supabase
-    .from('approval_chain_steps')
-    .select('id, step_order, label, role_name, target_emp_id')
-    .eq('chain_id', row.approval_chain_id)
-    .order('step_order')
+  // 用 RPC 拿 chain step 清單 + 動態解出來的 approver 名字（fixed_emp / applicant_dept_manager / specific_store_manager 等 9 種都解）
+  const applicantEmpId = row.employee_id || row.employee_emp_id || null
+  let chainSteps = []
+  try {
+    const { data } = await supabase.rpc('get_chain_step_display_names', {
+      p_chain_id: row.approval_chain_id,
+      p_applicant_emp_id: applicantEmpId,
+    })
+    chainSteps = Array.isArray(data) ? data : []
+  } catch (e) {
+    console.warn('[buildChainBasedSteps] get_chain_step_display_names failed, fallback:', e)
+    // fallback：只抓 chain step template，不解動態名字
+    const { data } = await supabase
+      .from('approval_chain_steps')
+      .select('id, step_order, label, role_name, target_emp_id, target_type')
+      .eq('chain_id', row.approval_chain_id)
+      .order('step_order')
+    chainSteps = (data || []).map(s => ({
+      step_order: s.step_order, label: s.label, role_name: s.role_name,
+      target_type: s.target_type, target_emp_id: s.target_emp_id,
+      names: s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || ''),
+    }))
+  }
 
   // current_step 慣例：0 = 還沒進任何關，1 = 在第一關，N+1 = 全部完成
-  // sanity check：超出範圍時 clamp 並 warn
   const totalSteps = chainSteps?.length || 0
   let cur = row.current_step || 0
   if (cur < 0 || cur > totalSteps + 1) {
     console.warn('[buildChainBasedSteps] current_step out of range:', cur, 'total:', totalSteps)
     cur = Math.max(0, Math.min(cur, totalSteps + 1))
   }
-  const steps = (chainSteps || []).map((s) => {
+  const steps = chainSteps.map((s) => {
     const idx = s.step_order
     let status
     if (row.status === '已駁回' || row.status === '已拒絕' || row.status === '已退回') {
@@ -146,18 +162,16 @@ export async function buildChainBasedSteps({
     } else if (row.status === '已核准' || row.status === '已核銷') {
       status = 'completed'
     } else {
-      // 進行中：cur 之前 = completed, cur = current, 之後 = pending
       status = idx < cur ? 'completed' : (idx === cur ? 'current' : 'pending')
     }
-    const targetName = s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || '')
+    const targetName = s.names || (s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || ''))
     return {
       label: s.label || s.role_name || `第${idx}關`,
       name: targetName,
       target_emp_id: s.target_emp_id || null,
       role_name: s.role_name || null,
       status,
-      // 最後一關核可的時間用 row.approved_at
-      completedAt: status === 'completed' && idx === (chainSteps?.length || 0) ? row.approved_at : undefined,
+      completedAt: status === 'completed' && idx === totalSteps ? row.approved_at : undefined,
       completedBy: status === 'completed' ? targetName : null,
       rejectReason: status === 'rejected' ? row.reject_reason : '',
     }

@@ -305,7 +305,7 @@ export default function Salary() {
           .eq('organization_id', orgId)
           .gte('request_date', monthStart).lte('request_date', monthEnd),
         supabase.from('leave_requests')
-          .select('employee_id, days, leave_type')
+          .select('employee_id, days, hours, type')
           .eq('status', '已核准')
           .eq('organization_id', orgId)
           .gte('start_date', monthStart).lte('start_date', monthEnd),
@@ -364,14 +364,27 @@ export default function Salary() {
         otMap[id][cat] = (otMap[id][cat] || 0) + Number(o.ot_hours || 0)
       }
 
-      // leave map: employee_id → { absence days }
+      // leave map: employee_id → { unpaidHours, halfPayHours, unpaidDays }
+      // 依勞基法 / 性平法分類：
+      //   全薪（不扣）：特休、婚假、喪假、公假、產假、公傷病假、陪產假、補休
+      //   半薪 0.5 扣  ：普通病假（前30天）、生理假
+      //   無薪 1.0 扣  ：事假、無薪假
+      const UNPAID_TYPES   = ['事假', 'personal', '無薪假', 'unpaid']
+      const HALF_PAY_TYPES = ['病假', 'sick', '生理假', 'menstrual']
       const lvMap = {}
       for (const l of (lvRes.data || [])) {
         const id = l.employee_id
-        if (!lvMap[id]) lvMap[id] = { absence: 0 }
-        if (['事假', 'personal', '無薪假', 'unpaid'].includes(l.leave_type)) {
-          lvMap[id].absence += (Number(l.days) || 0)
+        if (!lvMap[id]) lvMap[id] = { unpaidHours: 0, halfPayHours: 0, unpaidDays: 0 }
+        const t = l.type
+        const h = Number(l.hours) || (Number(l.days) || 0) * 8  // 沒填 hours 用 days×8 推估
+        const d = Number(l.days) || 0
+        if (UNPAID_TYPES.includes(t)) {
+          lvMap[id].unpaidHours += h
+          lvMap[id].unpaidDays  += d
+        } else if (HALF_PAY_TYPES.includes(t)) {
+          lvMap[id].halfPayHours += h
         }
+        // 其他類別（特休等）→ 全薪，不入帳
       }
 
       // salary structures map: employee_id → record
@@ -411,7 +424,10 @@ export default function Salary() {
         const isHourly        = ss.salary_type === 'hourly'
         const att          = attMap[emp.id] || { hours: 0, holidayHours: 0, lateMins: 0, days: 0 }
         const ot           = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0 }
-        const absenceDays  = lvMap[emp.id]?.absence || 0
+        const leaveStats   = lvMap[emp.id]  || { unpaidHours: 0, halfPayHours: 0, unpaidDays: 0 }
+        const absenceDays  = leaveStats.unpaidDays         // 全日無薪天數（給 attendance bonus 判定用）
+        const unpaidHours  = leaveStats.unpaidHours        // 無薪假時數（事假/無薪假）
+        const halfPayHours = leaveStats.halfPayHours       // 半薪假時數（生理假/病假）
         const policyBonus  = bonusMap[emp.id] || 0
         const legalDeductionTotal = legalMap[emp.id] || 0
 
@@ -493,12 +509,14 @@ export default function Salary() {
 
         // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5（hourlyRate 已用新基準）
         const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
-        // Absence deduction:
-        //   PT → 0（缺勤已透過 att.hours 自動反映在 baseSalary）
-        //   正職 → absentDays × (本薪+津貼)/30 ＝ absentDays × 日薪
-        const absenceDeduction = isHourly
-          ? 0
-          : Math.round(absenceDays * (baseForInsure / 30))
+        // 請假扣款（按小時）：
+        //   PT → 0（請假沒上班 → 沒工時 → 自然不算薪）
+        //   正職：
+        //     無薪假（事假/無薪假）→ hours × hourlyRate × 1.0
+        //     半薪假（病假/生理假）→ hours × hourlyRate × 0.5（性平法 §14 / 勞基法 §43）
+        const unpaidDeduction   = isHourly ? 0 : Math.round(unpaidHours * hourlyRate)
+        const halfPayDeduction  = isHourly ? 0 : Math.round(halfPayHours * hourlyRate * 0.5)
+        const absenceDeduction  = unpaidDeduction + halfPayDeduction
 
         // Attendance bonus: zero if late or absent
         const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
@@ -602,10 +620,14 @@ export default function Salary() {
           otPayRestday,
           otPayHoliday,
           absenceDays,
+          unpaidHours,
+          halfPayHours,
           lateMins:         att.lateMins,
 
           // ── 扣項明細 ──
-          absenceDeduction,
+          absenceDeduction,           // = unpaid + half-pay 合計
+          unpaidDeduction,            // 無薪假扣款
+          halfPayDeduction,           // 半薪假扣款（生理假/病假）
           lateDeduction,
           legal_deduction:  legalDeductionTotal,
 

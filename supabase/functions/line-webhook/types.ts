@@ -12,6 +12,7 @@ export type ApprovalRequestType =
   | "trip"
   | "expense"
   | "expense_request"
+  | "expense_settle"
   | "correction"
   | "cover"
   | "off_request";

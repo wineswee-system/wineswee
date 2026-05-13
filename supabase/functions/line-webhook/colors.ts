@@ -21,6 +21,7 @@ export const COLOR_EXPENSE     = "#ec4899"; // 經費 — 桃紅
 export const COLOR_CORRECTION  = "#8b5cf6"; // 補卡 — 紫
 export const COLOR_COVER       = "#06b6d4"; // 代班 — 青
 export const COLOR_OFF_REQUEST = "#84cc16"; // 希望休 — 萊姆
+export const COLOR_SETTLE      = "#06b6d4"; // 核銷 — 青（跟申請桃紅區分）
 
 // ── Text on colored backgrounds ───────────────────────────────────────────────
 export const TEXT_ON_COLOR        = "#FFFFFF";
@@ -64,6 +65,7 @@ export const REQUEST_TYPE_COLORS: Record<string, { header: string; subtitle: str
   trip:            { header: COLOR_TRIP,        subtitle: TEXT_DIM_TRIP,        emoji: "✈️", label: "出差申請"   },
   expense:         { header: COLOR_EXPENSE,     subtitle: TEXT_DIM_EXPENSE,     emoji: "💰", label: "報帳申請"   },
   expense_request: { header: COLOR_EXPENSE,     subtitle: TEXT_DIM_EXPENSE,     emoji: "💳", label: "經費申請"   },
+  expense_settle:  { header: COLOR_SETTLE,      subtitle: TEXT_DIM_ATTENDANCE,  emoji: "🧾", label: "費用核銷"   },
   correction:      { header: COLOR_CORRECTION,  subtitle: TEXT_DIM_APPROVAL,    emoji: "🔧", label: "補打卡申請" },
   cover:           { header: COLOR_COVER,       subtitle: TEXT_DIM_ATTENDANCE,  emoji: "🔄", label: "代班邀請"   },
   off_request:     { header: COLOR_OFF_REQUEST, subtitle: TEXT_DIM_OFF_REQUEST, emoji: "🌴", label: "希望休申請" },

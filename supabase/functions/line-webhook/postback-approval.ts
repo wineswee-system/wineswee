@@ -19,7 +19,7 @@ function txt(s: string) { return { type: "text", text: s }; }
 
 function parseRequestType(s: string | undefined): ApprovalRequestType | null {
   const valid: ApprovalRequestType[] = [
-    "leave", "overtime", "trip", "expense", "expense_request",
+    "leave", "overtime", "trip", "expense", "expense_request", "expense_settle",
     "correction", "cover", "off_request",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
@@ -142,12 +142,17 @@ const handleReject: PostbackHandler = async (params, ctx) => {
   const tableMap: Record<ApprovalRequestType, string> = {
     leave: "leave_requests", overtime: "overtime_requests", trip: "business_trips",
     expense: "expenses", expense_request: "expense_requests",
+    expense_settle: "expense_requests",
     correction: "clock_corrections", cover: "shift_cover_requests",
     off_request: "off_requests",
   };
   const { data: rec } = await ctx.db.from(tableMap[rt]).select("status, employee").eq("id", id).maybeSingle();
   if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
-  if (rec.status !== "待審核" && rec.status !== "申請中") {
+  // expense_settle 期待狀態是「待核銷」；其他類型是「待審核/申請中」
+  const validStatus = rt === "expense_settle"
+    ? rec.status === "待核銷"
+    : (rec.status === "待審核" || rec.status === "申請中");
+  if (!validStatus) {
     return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
   }
 

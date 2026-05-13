@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, Fragment } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Search, X, ChevronDown, Check } from 'lucide-react'
 
@@ -68,8 +68,8 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Compute popup position when opened, and reposition on scroll/resize
-  useEffect(() => {
+  // Compute popup position when opened, and reposition on scroll/resize/animate
+  useLayoutEffect(() => {
     if (!open) return
     const updatePos = () => {
       const el = triggerRef.current
@@ -82,9 +82,22 @@ export default function SearchableSelect({
       })
     }
     updatePos()
+    // 防止 Modal fadeIn 動畫期間 capture 到位移前位置 → 動畫跑完再 recalc 數次
+    const raf1 = requestAnimationFrame(updatePos)
+    const t1 = setTimeout(updatePos, 50)
+    const t2 = setTimeout(updatePos, 200)  // > Modal fadeIn 0.15s
+    // 同時用 ResizeObserver 監聽 trigger 大小變動（modal layout shift）
+    let ro
+    if (triggerRef.current && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(updatePos)
+      ro.observe(triggerRef.current)
+    }
     window.addEventListener('scroll', updatePos, true)
     window.addEventListener('resize', updatePos)
     return () => {
+      cancelAnimationFrame(raf1)
+      clearTimeout(t1); clearTimeout(t2)
+      ro?.disconnect()
       window.removeEventListener('scroll', updatePos, true)
       window.removeEventListener('resize', updatePos)
     }

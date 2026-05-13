@@ -532,10 +532,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
 
   const bodyNode = (
     <div style={{
-      overflowY: embedded ? 'visible' : 'auto',
-      overflowX: 'hidden',
-      padding: embedded ? 0 : 22,
-      minHeight: 0,  // grid 子項要 minHeight:0 才會正確 shrink + scroll
+      padding: embedded ? 0 : '0 22px',
     }}>
       {loading ? <LoadingSpinner /> : view === 'list' ? (
         <ListView
@@ -599,18 +596,25 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     )
   }
 
-  // ── Modal：強制固定高度 + grid 3 段，避免 flex 沒 clip ──
+  // ── Modal：position: sticky 釘 header / footer 在外層 scroll container 內 ──
   return (
     <ModalOverlay onClose={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: 'var(--bg-card)', borderRadius: 12, width: 'min(820px, 96vw)',
-        height: 'calc(100vh - 48px)',
-        display: 'grid', gridTemplateRows: 'auto 1fr auto',
-        border: '1px solid var(--border-medium)', overflow: 'hidden',
+        maxHeight: 'calc(100vh - 48px)',
+        overflowY: 'auto', overflowX: 'hidden',
+        border: '1px solid var(--border-medium)',
+        position: 'relative',
       }}>
-        {headerNode}
+        <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg-card)' }}>
+          {headerNode}
+        </div>
         {bodyNode}
-        {footerNode}
+        {footerNode && (
+          <div style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--bg-card)' }}>
+            {footerNode}
+          </div>
+        )}
       </div>
     </ModalOverlay>
   )

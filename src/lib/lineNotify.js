@@ -54,8 +54,44 @@ export async function drainNotificationQueue() {
   supabase.functions.invoke('task-reminder', { body: { mode: 'drain_queue' } }).catch(() => {})
 }
 
+/**
+ * Drain the quiet-hours queue (normally handled by the 00:00 UTC daily cron).
+ * Can be called manually as an escape hatch.
+ */
+export async function drainQuietQueue() {
+  supabase.functions.invoke('task-reminder', { body: { mode: 'drain_quiet_queue' } }).catch(() => {})
+}
+
+// Taiwan = UTC+8. Quiet hours: 20:00–07:59 Taiwan = 12:00–23:59 UTC.
+function isQuietHours() {
+  return new Date().getUTCHours() >= 12
+}
+
+// Next 8am Taiwan = next 00:00 UTC
+function nextMorning8amUTC() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString()
+}
+
+async function queueForMorning(lineUserId, messages) {
+  try {
+    await supabase.from('notification_quiet_queue').insert({
+      line_user_id: lineUserId,
+      messages,
+      send_after: nextMorning8amUTC(),
+    })
+    await logMessage(lineUserId, messages, 'queued_quiet')
+    return { ok: true, queued: true }
+  } catch (err) {
+    logger.error('[LINE] Quiet queue error', { module: 'lineNotify', err: err?.message })
+    return { ok: false, error: err.message }
+  }
+}
+
 async function sendLinePush(lineUserId, messages) {
   if (!lineUserId) return { ok: false, reason: 'no_user_id' }
+
+  if (isQuietHours()) return queueForMorning(lineUserId, messages)
 
   try {
     const { data, error } = await supabase.functions.invoke('line-push', {

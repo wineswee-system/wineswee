@@ -545,6 +545,28 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── 6. Drain notification_quiet_queue (08:00 Taiwan morning send) ──
+    let quietQueueCount = 0;
+    if (mode === "all" || mode === "drain_quiet_queue") {
+      const { data: queued } = await sb
+        .from("notification_quiet_queue")
+        .select("id, line_user_id, messages")
+        .is("sent_at", null)
+        .lte("send_after", new Date().toISOString())
+        .limit(100);
+
+      if (Array.isArray(queued)) {
+        for (const item of queued as Array<{ id: number; line_user_id: string; messages: object[] }>) {
+          const sent = await pushLine(item.line_user_id, item.messages, lineToken);
+          await sb
+            .from("notification_quiet_queue")
+            .update({ sent_at: new Date().toISOString() })
+            .eq("id", item.id);
+          if (sent) quietQueueCount++;
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       ok: true, mode,
       reminders_sent: reminderCount,
@@ -553,6 +575,7 @@ serve(async (req: Request) => {
       sla_sent: slaCount,
       task_started_sent: startedNotifyCount,
       skipped_no_line_id: skippedCount,
+      quiet_queue_sent: quietQueueCount,
       drain_debug: drainDebug,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

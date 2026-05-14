@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from './Modal'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Upload, Clock, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Upload, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { empLabel } from '../lib/empLabel'
 import SearchableSelect, { empOptions } from './SearchableSelect'
@@ -85,7 +85,6 @@ export default function TaskDetailPanel({
       notes: task.notes || '',
     })
     setTitleDraft(task.title)
-    setShowTime(!!task.due_time)
     setEditingTitle(false)
 
     const safe = (promise) => Promise.resolve(promise).then(r => r?.error ? { data: null } : r, () => ({ data: null }))

@@ -105,13 +105,23 @@ export default function ExpenseRequests() {
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
   const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
+  // 把檔名清成 storage 接受的 ASCII 安全格式（保留原檔名給 DB / UI 顯示）
+  // Supabase Storage 不接受中文 / 空格 / 全形符號當 key
+  const safeStorageName = (name) => {
+    const dot = name.lastIndexOf('.')
+    const base = dot > 0 ? name.slice(0, dot) : name
+    const ext = dot > 0 ? name.slice(dot + 1).replace(/[^a-zA-Z0-9]/g, '') : 'bin'
+    const safe = base.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'file'
+    return `${safe}.${ext}`
+  }
+
   // Upload files to Supabase Storage
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
     const results = []
     for (const file of fileList) {
       if (!ALLOWED_TYPES.includes(file.type)) { toast.error(`「${file.name}」不支援此檔案類型`); continue }
       if (file.size > MAX_SIZE) { toast.error(`「${file.name}」檔案大小超過 10MB`); continue }
-      const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${file.name}`
+      const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${safeStorageName(file.name)}`
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
       if (upErr) {
         toast.error(`「${file.name}」上傳失敗：${upErr.message || '未知錯誤'}`)

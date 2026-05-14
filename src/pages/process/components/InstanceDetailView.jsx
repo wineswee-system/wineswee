@@ -180,7 +180,16 @@ export default function InstanceDetailView({
                 return (
                   <tr key={step.id} style={{ borderLeft: `3px solid ${sc.color}`, cursor: 'pointer' }} onClick={() => setSelectedStep(step)}>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{step.step_order}</td>
-                    <td><div style={{ fontWeight: 600 }}>{step.title}</div></td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {step.task_code && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
+                            {step.task_code}
+                          </span>
+                        )}
+                        <div style={{ fontWeight: 600 }}>{step.title}</div>
+                      </div>
+                    </td>
                     <td><span style={{ fontSize: 12 }}>{step.assignee || '—'}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{step.store || inst.store || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{step.planned_start || <span style={{ color: 'var(--border-medium)' }}>年/月/日</span>}</td>

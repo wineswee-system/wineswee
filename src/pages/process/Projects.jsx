@@ -210,7 +210,10 @@ export default function Projects() {
           const taskRows = pendingTasks.map((t, i) => ({
             title: t.title, project_id: data.id,
             assignee: t.assignee || null, due_date: t.due_date || null,
-            priority: t.priority || '中', status: '未開始',
+            priority: t.priority || '中',
+            // step 1 直接開工 進行中、step 2+ 待處理（等前一步 trigger 自動 advance）
+            status: i === 0 ? '進行中' : '待處理',
+            started_at: i === 0 ? new Date().toISOString() : null,
             step_order: i + 1, bucket: 'Project',
             store: payload.store || null,
             organization_id: profile?.organization_id || null,
@@ -431,7 +434,9 @@ export default function Projects() {
             workflow_instance_id: instance.id,
             project_id: project.id,
             organization_id: orgId,  // ★ 補 org_id
-            status: '未開始',
+            // step 1 直接開工 進行中、step 2+ 待處理（等 trg_task_advance_next_step 推進）
+            status: j === 0 ? '進行中' : '待處理',
+            started_at: j === 0 ? new Date().toISOString() : null,
             role: t.role || null,
             step_order: j + 1,
             priority: t.priority || '中',

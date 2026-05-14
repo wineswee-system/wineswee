@@ -501,7 +501,10 @@ export default function TaskDetailPanel({
           role: s.role || null,
           assignee: i === 0 ? (task.assignee || null) : null,
           store: task.store || null,
-          status: i === 0 ? '進行中' : '待簽核',
+          // step 1 開工進行中、step 2+ 待處理（trg_task_advance_next_step 等前一步完成推進）
+          // 注意：'待簽核' 是 HR 簽核任務用、不是執行任務用
+          status: i === 0 ? '進行中' : '待處理',
+          started_at: i === 0 ? new Date().toISOString() : null,
           bucket: 'Workflow',
           category: 'Workflow',
           priority: s.priority || '中',

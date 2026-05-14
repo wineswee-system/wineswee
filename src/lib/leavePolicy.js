@@ -305,7 +305,7 @@ export function getLeaveTypeInfo(code) {
 //  驗證請假規則
 // ══════════════════════════════════════
 
-export function validateLeaveRequest({ type, days, hours, usedDays, gender, customPolicy }) {
+export function validateLeaveRequest({ type, days, hours, usedDays, gender, customPolicy, joinDate }) {
   const policy = getLeaveTypeInfo(type)
   if (!policy) return { valid: false, error: '無效的假別' }
 
@@ -314,7 +314,30 @@ export function validateLeaveRequest({ type, days, hours, usedDays, gender, cust
     return { valid: false, error: `${policy.name}僅限女性員工申請` }
   }
 
-  // 天數上限（法定 + 門市/員工加給）
+  // 特休年資檢查（勞基法 §38：須滿 6 個月才有特休）
+  if (policy.code === 'annual') {
+    if (!joinDate) {
+      return { valid: false, error: '員工資料缺到職日，無法計算特休年資' }
+    }
+    const { days: entitlement, yearsWorked } = getAnnualLeaveEntitlement(joinDate)
+    if (entitlement === 0) {
+      return { valid: false, error: `未滿 6 個月年資（目前 ${yearsWorked} 年），尚無特休資格` }
+    }
+    const extraDays = Math.max(0, customPolicy?.extra_days || 0)
+    const totalEntitlement = entitlement + extraDays
+    const requestDays = days || (hours ? hours / 8 : 0)
+    const used = usedDays || 0
+    if (used + requestDays > totalEntitlement) {
+      const suffix = extraDays > 0 ? `（含加給 ${extraDays} 天）` : ''
+      const remaining = totalEntitlement - used
+      return {
+        valid: false,
+        error: `特休餘額不足：年度 ${totalEntitlement} 天${suffix}，已用 ${used} 天，剩餘 ${remaining} 天，不足申請 ${requestDays} 天`,
+      }
+    }
+  }
+
+  // 其他假別天數上限（法定 + 門市/員工加給）
   if (policy.maxDays && usedDays !== undefined) {
     const extraDays = Math.max(0, customPolicy?.extra_days || 0)
     const effectiveMax = policy.maxDays + extraDays

@@ -208,6 +208,7 @@ export default function Leave() {
       hours,
       usedDays: usedThisYear,
       customPolicy,
+      joinDate: emp?.join_date,
     })
 
     if (!result.valid) {

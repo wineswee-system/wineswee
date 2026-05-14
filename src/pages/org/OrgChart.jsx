@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react'
-import { LayoutGrid, GitBranch } from 'lucide-react'
-import { Tree, TreeNode } from 'react-organizational-chart'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-
-const VIEW_KEY = 'sme_orgchart_view_mode'
 
 export default function OrgChart() {
   const { profile } = useAuth()
@@ -15,12 +11,6 @@ export default function OrgChart() {
   const [stores, setStores] = useState([])
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem(VIEW_KEY) || 'detail')
-
-  const switchMode = (m) => {
-    setViewMode(m)
-    localStorage.setItem(VIEW_KEY, m)
-  }
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -166,72 +156,14 @@ export default function OrgChart() {
   }
   const totalCompanyHeadcount = employees.length
 
-  // ─── 模式切換按鈕 ───
-  const ModeToggle = () => (
-    <div style={{ display: 'inline-flex', gap: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, padding: 3 }}>
-      {[
-        { key: 'detail', label: '詳細', icon: LayoutGrid, hint: '完整人員配置' },
-        { key: 'compact', label: '精簡', icon: GitBranch, hint: '僅部門結構' },
-      ].map(m => {
-        const Icon = m.icon
-        const active = viewMode === m.key
-        return (
-          <button key={m.key} onClick={() => switchMode(m.key)} title={m.hint} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            fontSize: 13, fontWeight: 600,
-            background: active ? 'var(--accent-cyan)' : 'transparent',
-            color: active ? '#fff' : 'var(--text-muted)',
-          }}>
-            <Icon size={13} /> {m.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-
-  if (viewMode === 'compact') {
-    return (
-      <div className="fade-in">
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <h2><span className="header-icon">🌐</span> 組織架構</h2>
-              <p>精簡模式 — 部門結構樹（共 {totalCompanyHeadcount} 人）</p>
-            </div>
-            <ModeToggle />
-          </div>
-        </div>
-        <CompactTreeView
-          departments={departments}
-          sections={sections}
-          employees={employees}
-          stores={stores}
-          headcountOf={headcountOf}
-          sectionHeadcount={sectionHeadcount}
-          managerName={managerName}
-          deptStores={deptStores}
-          deptSections={deptSections}
-          sectionStores={sectionStores}
-          storeManagerOf={storeManagerOf}
-          storeEmployees={storeEmployees}
-          totalCompanyHeadcount={totalCompanyHeadcount}
-          execBoardMembers={execBoardMembers}
-          labelOf={labelOf}
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="fade-in">
       <div className="page-header">
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">🌐</span> 組織架構</h2>
-            <p>詳細模式 — 完整人員配置（共 {totalCompanyHeadcount} 人）</p>
+            <p>完整人員配置（共 {totalCompanyHeadcount} 人）</p>
           </div>
-          <ModeToggle />
         </div>
       </div>
 
@@ -672,153 +604,3 @@ export default function OrgChart() {
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  精簡模式 — 104 風樹狀圖
-//  每個 node 只顯示「部門名 + 主管 + 人數」，靠細線連接
-// ═══════════════════════════════════════════════════════════════
-const TREE_COLORS = ['#0ea5e9', '#14b8a6', '#f59e0b', '#a855f7', '#ec4899', '#10b981', '#ef4444']
-
-function NodeBox({ color = '#14b8a6', title, subtitle, footnote, big = false }) {
-  return (
-    <div style={{
-      background: '#fff',
-      border: '1px solid #d1d5db',
-      borderRadius: 4,
-      width: big ? 180 : 138,
-      textAlign: 'center',
-      overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      flexShrink: 0,
-    }}>
-      <div style={{
-        background: color, color: '#fff',
-        fontSize: 9, fontWeight: 600,
-        padding: '3px 6px', letterSpacing: 2,
-      }}>　</div>
-      <div style={{ padding: '8px 6px' }}>
-        <div style={{ fontSize: big ? 14 : 12, fontWeight: 700, color: '#111', lineHeight: 1.3 }}>
-          {title || '—'}
-        </div>
-        {subtitle && (
-          <div style={{ fontSize: 11, fontWeight: 500, color: '#374151', marginTop: 4, lineHeight: 1.3 }}>
-            {subtitle}
-          </div>
-        )}
-        {footnote && (
-          <div style={{ fontSize: 9.5, color: '#6b7280', marginTop: 3 }}>
-            {footnote}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function CompactTreeView({
-  departments, sections, employees, stores,
-  headcountOf, sectionHeadcount, managerName,
-  deptStores, deptSections, sectionStores,
-  storeManagerOf, storeEmployees,
-  totalCompanyHeadcount, execBoardMembers, labelOf,
-}) {
-  const visibleDepts = departments.filter(d => d.name !== '總經理室')
-  const apex = departments.find(d => d.name === '總經理室')
-  const apexMgr = apex ? managerName(apex) : ''
-
-  // ── 渲染 helpers（用 react-organizational-chart 的 Tree/TreeNode 自動畫線、自動對齊）──
-  const renderStore = (store, color) => {
-    const sMgr = storeManagerOf(store)
-    return (
-      <TreeNode key={store.id} label={
-        <NodeBox color={color}
-          title={store.name}
-          subtitle={sMgr ? `店長 ${sMgr.name}` : ''}
-          footnote={`部門人數：${storeEmployees(store).length}`} />
-      } />
-    )
-  }
-
-  const renderSection = (sec, color) => {
-    const secMgr = sec.supervisor_id
-      ? employees.find(e => e.id === sec.supervisor_id)?.name || ''
-      : ''
-    const secStores = sectionStores(sec)
-    return (
-      <TreeNode key={sec.id} label={
-        <NodeBox color={color}
-          title={sec.name}
-          subtitle={secMgr}
-          footnote={`部門人數：${sectionHeadcount(sec)}`} />
-      }>
-        {secStores.map(s => renderStore(s, color))}
-      </TreeNode>
-    )
-  }
-
-  const renderDept = (dept, i) => {
-    const color = TREE_COLORS[i % TREE_COLORS.length]
-    const mgr = managerName(dept)
-    const cnt = headcountOf(dept)
-    const secs = deptSections(dept)
-    const dStores = deptStores(dept).filter(s => !s.section_id)
-    return (
-      <TreeNode key={dept.id} label={
-        <NodeBox color={color}
-          title={dept.name}
-          subtitle={mgr !== '-' ? mgr : ''}
-          footnote={`部門人數：${cnt}`} />
-      }>
-        {secs.map(sec => renderSection(sec, color))}
-        {dStores.map(s => renderStore(s, color))}
-      </TreeNode>
-    )
-  }
-
-  return (
-    <div className="card">
-      <div className="card-body" style={{ padding: 24, overflowX: 'auto', background: '#fafafa' }}>
-        <div style={{ minWidth: 'fit-content' }}>
-          <Tree
-            lineWidth="1.5px"
-            lineColor="#9ca3af"
-            lineBorderRadius="6px"
-            label={
-              <NodeBox color="#0e7490"
-                title={apex?.name || '公司'}
-                subtitle={apexMgr || ''}
-                footnote={`共 ${totalCompanyHeadcount} 人`}
-                big />
-            }
-          >
-            {visibleDepts.map(renderDept)}
-          </Tree>
-        </div>
-
-        {/* 高管 */}
-        {execBoardMembers.length > 0 && (
-          <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#6b7280' }}>
-            高管：{execBoardMembers.map(e => e.name).join('、')}
-          </div>
-        )}
-
-        {/* 未分配門市 */}
-        {(() => {
-          const unassigned = stores.filter(s => !s.department_id && !s.section_id && s.is_active !== false)
-          if (unassigned.length === 0) return null
-          return (
-            <div style={{ marginTop: 28, paddingTop: 16, borderTop: '1px dashed #d1d5db' }}>
-              <div style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
-                未分配門市（{unassigned.length}）
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-                {unassigned.map(s => (
-                  <NodeBox key={s.id} color="#9ca3af" title={s.name} footnote={`${storeEmployees(s).length} 人`} />
-                ))}
-              </div>
-            </div>
-          )
-        })()}
-      </div>
-    </div>
-  )
-}

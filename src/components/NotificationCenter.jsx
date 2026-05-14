@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, X, AlertTriangle, Clock, Package, Calendar, Check, FileText, Scale, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { todayTW } from '../lib/datetime'
 
 // Each notification type maps to a route
 const ROUTES = {
@@ -54,7 +55,7 @@ export default function NotificationCenter() {
   const fetchNotifications = useCallback(async () => {
     setLoading(true)
     const items = []
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTW()
 
     try {
       // 0. 從 notifications 表撈我自己的（cron / system 寄的，例如年度法令提醒）

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
+import { todayTW } from '../../lib/datetime'
 
 const ALL_QUICK_ACTIONS = [
   { icon: Calendar, label: '請假', desc: '假單申請', path: '/hr/leave', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
@@ -25,7 +26,7 @@ export default function PortalHome() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTW()
   const hour = new Date().getHours()
   const greeting = hour < 12 ? '早安' : hour < 18 ? '午安' : '晚安'
 

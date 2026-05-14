@@ -24,6 +24,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import DataTable from '../components/ui/DataTable'
 import { chartPalette, chartTextTokens } from '../lib/theme/tokens'
+import { todayTW, monthStartTW } from '../lib/datetime'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
@@ -60,8 +61,8 @@ function StaffDashboard({ profile }) {
   const [loading, setLoading] = useState(true)
   const [clockTime, setClockTime] = useState(new Date())
   const empName = profile?.name || ''
-  const today = new Date().toISOString().slice(0, 10)
-  const monthStart = today.slice(0, 7) + '-01'
+  const today = todayTW()
+  const monthStart = monthStartTW()
 
   useEffect(() => {
     if (!empName) { setLoading(false); return }
@@ -390,7 +391,7 @@ function AdminDashboard({ profile }) {
   const onLeave = leaves.filter(l => l.status === '已核准').length
 
   // Today's real-time metrics
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTW()
   const todayAttendance = attendance.filter(a => a.date === today)
   const todayClockedIn = todayAttendance.length
   const todayAttRate = active > 0 ? Math.round(todayClockedIn / active * 100) : 0

@@ -3,6 +3,7 @@ import { Calendar, Clock, ChevronLeft, ChevronRight, CalendarOff, ArrowLeftRight
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours } from '../../lib/scheduleUtils'
+import { todayTW } from '../../lib/datetime'
 
 import { toast } from '../../lib/toast'
 export default function MySchedule() {
@@ -196,7 +197,7 @@ export default function MySchedule() {
               const sched = schedules.find(s => s.date === date)
               const shift = sched?.shift
               const def = shift ? shiftDefMap[shift] : null
-              const isToday = date === now.toISOString().slice(0, 10)
+              const isToday = date === todayTW()
               const dow = new Date(date).getDay()
               const isWeekend = isWeekendDay(dow)
               const isRest = shift && isAbsence(shift)
@@ -301,7 +302,7 @@ function OffRequestForm({ empName, empId, employmentType }) {
 
   // Deadline: 16th of current month
   const deadlineDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-16`
-  const today = now.toISOString().slice(0, 10)
+  const today = todayTW()
   const isLocked = today > deadlineDate
   const deadlineLabel = `${now.getMonth() + 1}/16`
 
@@ -456,7 +457,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
   }
 
   const futureDates = monthDates.filter(d => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTW()
     if (d <= today) return false
     const sched = schedules.find(s => s.date === d)
     return sched && !isAbsence(sched.shift)

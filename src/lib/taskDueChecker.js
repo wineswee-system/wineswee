@@ -7,6 +7,7 @@
 
 import { supabase } from './supabase'
 import { notifyTaskDailySummary } from './lineNotify'
+import { todayTW } from './datetime'
 
 const DAILY_SESSION_KEY = 'task_daily_notified'
 
@@ -18,7 +19,7 @@ export async function checkAndNotifyDailyTasks() {
   if (sessionStorage.getItem(DAILY_SESSION_KEY)) return { skipped: true }
   sessionStorage.setItem(DAILY_SESSION_KEY, new Date().toISOString())
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTW()
 
   const { data: tasks } = await supabase
     .from('tasks')

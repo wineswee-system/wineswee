@@ -3,6 +3,7 @@ import { Search, Download, MapPin, Wifi, Clock, CalendarCheck } from 'lucide-rea
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
+import { todayTW, monthStartTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
@@ -57,7 +58,7 @@ export default function Attendance() {
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
   const getEmpStore = useCallback((name) => employees.find(e => e.name === name)?.store || '', [employees])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTW()
 
   const filtered = useMemo(() => records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
@@ -100,7 +101,7 @@ export default function Attendance() {
       // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
 
-      const dateStr = new Date().toISOString().slice(0, 10)
+      const dateStr = todayTW()
       const existing = records.find(r => r.employee === employeeName && r.date === dateStr)
       const action = (existing?.clock_in && !existing?.clock_out) ? 'clock_out' : 'clock_in'
 
@@ -379,12 +380,10 @@ export default function Attendance() {
 function ScheduleComparisonTab({ storeFilter }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date()
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-    const end = now.toISOString().slice(0, 10)
-    return { start, end }
-  })
+  const [dateRange, setDateRange] = useState(() => ({
+    start: monthStartTW(),
+    end: todayTW(),
+  }))
 
   useEffect(() => {
     setLoading(true)

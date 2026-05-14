@@ -24,13 +24,8 @@ const STATUS_BADGE = {
   '已取消': { bg: 'rgba(156,163,175,0.12)', color: '#6b7280', text: '已取消' },
 }
 
-const fmtDateTime = (s) => {
-  if (!s) return ''
-  const d = new Date(s)
-  if (isNaN(d.getTime())) return s
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+import { fmtDateTimeTW } from '../lib/datetime'
+const fmtDateTime = fmtDateTimeTW
 
 /**
  * @param {Object} props

@@ -13,6 +13,18 @@ export default function ConfirmDialog() {
     _registerConfirmState(setState)
   }, [])
 
+  useEffect(() => {
+    if (!state.open) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        _resolveConfirm(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [state.open])
+
   if (!state.open) return null
 
   return (

@@ -42,6 +42,11 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  {inst.workflow_code && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid rgba(168,85,247,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
+                      {inst.workflow_code}
+                    </span>
+                  )}
                   <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {inst.template_name}
                   </span>

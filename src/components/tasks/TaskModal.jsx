@@ -125,6 +125,11 @@ export default function TaskModal({ task, employees = [], sections = [], current
       }}>
         {/* Header */}
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {task.task_code && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
+              {task.task_code}
+            </span>
+          )}
           <input
             value={form.title}
             onChange={e => set('title', e.target.value)}

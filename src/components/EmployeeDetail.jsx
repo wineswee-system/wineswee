@@ -387,10 +387,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         {/* ── Header ── */}
         <div style={{ flexShrink: 0, background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)', borderBottom: '1px solid var(--border-subtle)' }}>
           {/* Top bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px 0' }}>
-            <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 0' }}>
-              <X size={16} /> 關閉
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '12px 24px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isDirty && <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>未儲存變更</span>}
               <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '6px 16px', borderRadius: 8 }}>

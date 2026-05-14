@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { LayoutGrid, GitBranch } from 'lucide-react'
 import { Tree, TreeNode } from 'react-organizational-chart'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
 const VIEW_KEY = 'sme_orgchart_view_mode'
@@ -12,6 +13,7 @@ export default function OrgChart() {
   const [sections, setSections] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
+  const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem(VIEW_KEY) || 'detail')
 
@@ -22,12 +24,22 @@ export default function OrgChart() {
 
   useEffect(() => {
     const orgId = profile?.organization_id
-    Promise.all([getDepartments(orgId), getDepartmentSections(orgId), getEmployees(orgId), getStores(orgId)])
-      .then(([dRes, secRes, eRes, sRes]) => {
+    Promise.all([
+      getDepartments(orgId),
+      getDepartmentSections(orgId),
+      getEmployees(orgId),
+      getStores(orgId),
+      // active 任職紀錄 — 用來查「某員工在某部門掛的職位」（主要 / 次要 都拿）
+      supabase.from('employee_assignments')
+        .select('employee_id, department_id, position, department_type, is_active')
+        .eq('is_active', true),
+    ])
+      .then(([dRes, secRes, eRes, sRes, aRes]) => {
         setDepartments(dRes.data || [])
         setSections(secRes.data || [])
         setEmployees((eRes.data || []).filter(e => e.status === '在職'))
         setStores((sRes.data || []).filter(s => s.is_active !== false))
+        setAssignments(aRes.data || [])
       })
       .finally(() => setLoading(false))
   }, [profile?.organization_id])
@@ -49,6 +61,14 @@ export default function OrgChart() {
   const managerOf = (dept) => {
     if (dept.manager_id) return employees.find(e => e.id === dept.manager_id) || null
     return null
+  }
+
+  // 找該員工在指定部門掛的職位：先看 employee_assignments（次要也算），fallback 員工主職位
+  // 用於「總經理掛行銷部主管」這類情境，顯示他在那個部門的職稱（例如「行銷總監」）而非主職「總經理」
+  const positionInDept = (emp, deptId) => {
+    if (!emp) return ''
+    const a = assignments.find(x => x.employee_id === emp.id && x.department_id === deptId)
+    return a?.position || emp.position || ''
   }
   const managerName = (dept) => {
     const mgr = managerOf(dept)
@@ -302,27 +322,18 @@ export default function OrgChart() {
                         textAlign: 'center',
                         background: 'var(--glass-light)',
                         minWidth: 80,
+                        display: 'flex', flexDirection: 'column', gap: 6,
                       }}>
-                        {(() => {
-                          const mgr = managerOf(dept)
-                          if (!mgr) return null
+                        {[managerOf(dept), ...subs].filter(Boolean).map(m => {
+                          const pos = positionInDept(m, dept.id)
                           return (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
-                              {mgr.position && (
-                                <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>{mgr.position}</span>
-                              )}
-                              {labelOf(mgr)}
+                            <div key={m.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, lineHeight: 1.35 }}>
+                              {pos && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pos}</div>}
+                              <div>{m.name}</div>
+                              {m.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.name_en}</div>}
                             </div>
                           )
-                        })()}
-                        {subs.map(s => (
-                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
-                            {s.position && (
-                              <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>{s.position}</span>
-                            )}
-                            {labelOf(s)}
-                          </div>
-                        ))}
+                        })}
                       </div>
                     </>
                   )}

@@ -168,24 +168,30 @@ export default function ExpenseRequests() {
   const handleSubmit = async () => {
     const validItems = lineItems.filter(li => li.name && li.qty > 0)
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
-    // 把 total（合計金額）也納入驗證 — _total 必須 > 0，所以用 zeroInvalid: true
-    const validateForm = { ...form, _total: total }
-    if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors, { zeroInvalid: true })) return
+
+    // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計
+    if (isExpense) {
+      const validateForm = { ...form, _total: total }
+      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors, { zeroInvalid: true })) return
+    } else {
+      if (!validateRequired(form, ['employee', 'title'], setErrors)) return
+    }
     setSaving(true)
     const emp = employees.find(e => e.name === form.employee)
-    const acc = accounts.find(a => a.code === form.account_code)
+    const acc = isExpense ? accounts.find(a => a.code === form.account_code) : null
     const payload = {
       employee: form.employee,
       employee_id: emp?.id || null,
       department: emp?.dept || null,
-      account_code: form.account_code,
-      account_name: acc?.name || '',
+      is_expense: isExpense,
+      account_code: isExpense ? form.account_code : null,
+      account_name: isExpense ? (acc?.name || '') : null,
       title: form.title,
       description: form.description || null,
-      estimated_amount: total,
-      supplier: form.supplier || null,
-      items: validItems,
-      store: form.store || null,
+      estimated_amount: isExpense ? total : null,
+      supplier: isExpense ? (form.supplier || null) : null,
+      items: isExpense ? validItems : null,
+      store: isExpense ? (form.store || null) : null,
       organization_id: profile?.organization_id ?? null,
     }
     if (!payload.organization_id) {
@@ -542,6 +548,9 @@ export default function ExpenseRequests() {
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">
                   <Settings size={14} /> 核銷簽核
                 </button>
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
+                  <Settings size={14} /> 非費用簽核
+                </button>
               </>
             )}
             <button className="btn btn-primary" onClick={() => {
@@ -598,11 +607,15 @@ export default function ExpenseRequests() {
               return (
                 <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
                   <td style={{ fontWeight: 600 }}>{r.employee}</td>
-                  <td><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.account_code}</span> {r.account_name}</td>
+                  <td>
+                    {r.is_expense === false
+                      ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontWeight: 600 }}>非費用</span>
+                      : <><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.account_code}</span> {r.account_name}</>}
+                  </td>
                   <td style={{ fontWeight: 500 }}>{r.title}</td>
-                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.estimated_amount)}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{r.is_expense === false ? '—' : fmt(r.estimated_amount)}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-                    {r.actual_amount != null ? fmt(r.actual_amount) : '-'}
+                    {r.is_expense === false ? '—' : (r.actual_amount != null ? fmt(r.actual_amount) : '-')}
                     {r.difference != null && r.difference !== 0 && (
                       <span style={{ fontSize: 11, color: r.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)', marginLeft: 4 }}>
                         ({r.difference > 0 ? '+' : ''}{fmt(r.difference)})
@@ -623,7 +636,7 @@ export default function ExpenseRequests() {
                           </AsyncButton>
                         </>
                       )}
-                      {r.status === '已核准' && r.employee_id === profile?.id && (
+                      {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
                           <Send size={12} /> 核銷
                         </button>
@@ -694,51 +707,56 @@ export default function ExpenseRequests() {
                   ))}
                 </div>
               </div>
-              <div className={errors.account_code ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                <select value={form.account_code} onChange={e => { set('account_code', e.target.value); clearError('account_code', setErrors) }}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                  <option value="">請選擇科目</option>
-                  {Object.entries(
-                    accounts.filter(a => isExpense ? a.type === '費用' : a.type !== '費用')
-                      .reduce((groups, a) => {
-                        const group = a.parent_code ? `${a.type} ─ 子科目` : a.type || '其他'
-                        if (!groups[group]) groups[group] = []
-                        groups[group].push(a)
-                        return groups
-                      }, {})
-                  ).map(([group, items]) => (
-                    <optgroup key={group} label={`── ${group} ──`}>
-                      {items.map(a => (
-                        <option key={a.id} value={a.code}>
-                          {a.parent_code ? '  └ ' : ''}{a.code}  {a.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {errors.account_code && <div className="field-error-msg">⚠ 請選擇會計科目</div>}
-              </div>
+              {isExpense && (
+                <div className={errors.account_code ? 'field-error' : undefined}>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+                  <select value={form.account_code} onChange={e => { set('account_code', e.target.value); clearError('account_code', setErrors) }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                    <option value="">請選擇科目</option>
+                    {Object.entries(
+                      accounts.filter(a => a.type === '費用')
+                        .reduce((groups, a) => {
+                          const group = a.parent_code ? `${a.type} ─ 子科目` : a.type || '其他'
+                          if (!groups[group]) groups[group] = []
+                          groups[group].push(a)
+                          return groups
+                        }, {})
+                    ).map(([group, items]) => (
+                      <optgroup key={group} label={`── ${group} ──`}>
+                        {items.map(a => (
+                          <option key={a.id} value={a.code}>
+                            {a.parent_code ? '  └ ' : ''}{a.code}  {a.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {errors.account_code && <div className="field-error-msg">⚠ 請選擇會計科目</div>}
+                </div>
+              )}
               <div className={errors.title ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>項目名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                <input type="text" value={form.title} onChange={e => { set('title', e.target.value); clearError('title', setErrors) }} placeholder="例：採購辦公椅 x5"
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>{isExpense ? '項目名稱' : '主旨'} <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+                <input type="text" value={form.title} onChange={e => { set('title', e.target.value); clearError('title', setErrors) }} placeholder={isExpense ? '例：採購辦公椅 x5' : '例：派員出席外部研討會'}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                {errors.title && <div className="field-error-msg">⚠ 請填寫項目名稱</div>}
+                {errors.title && <div className="field-error-msg">⚠ 請填寫{isExpense ? '項目名稱' : '主旨'}</div>}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
-                  <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+              {isExpense && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
+                    <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>門市</label>
+                    <input type="text" value={form.store} onChange={e => set('store', e.target.value)} placeholder="選填"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>門市</label>
-                  <input type="text" value={form.store} onChange={e => set('store', e.target.value)} placeholder="選填"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                </div>
-              </div>
+              )}
 
-              {/* Line items */}
+              {/* Line items — 非費用不需要 */}
+              {isExpense && (
               <div className={errors._total ? 'field-error' : undefined}>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}
@@ -778,6 +796,7 @@ export default function ExpenseRequests() {
                   </table>
                 </div>
               </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>說明</label>
@@ -874,17 +893,25 @@ export default function ExpenseRequests() {
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
       {showDetail && !showSettleModal && (() => {
         const empRow = employees.find(e => e.name === showDetail.employee)
-        const fields = [
-          { label: '部門', value: showDetail.department || '—' },
-          { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
-          { label: '門市', value: showDetail.store || '—' },
-          { label: '供應商', value: showDetail.supplier || '—' },
-          { label: '項目', value: showDetail.title || '—' },
-          ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
-        ]
+        const isNonExpense = showDetail.is_expense === false
+        const fields = isNonExpense
+          ? [
+              { label: '類型', value: '非費用申請' },
+              { label: '部門', value: showDetail.department || '—' },
+              { label: '主旨', value: showDetail.title || '—' },
+              ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+            ]
+          : [
+              { label: '部門', value: showDetail.department || '—' },
+              { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
+              { label: '門市', value: showDetail.store || '—' },
+              { label: '供應商', value: showDetail.supplier || '—' },
+              { label: '項目', value: showDetail.title || '—' },
+              ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+            ]
 
-        // 明細表格 — 始終顯示，無品項時顯示空白提示
-        fields.push({
+        // 明細表格 — 始終顯示，無品項時顯示空白提示（非費用整段隱藏）
+        if (!isNonExpense) fields.push({
           label: '品項明細',
           value: (
             <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
@@ -919,8 +946,8 @@ export default function ExpenseRequests() {
           ),
         })
 
-        // 三欄金額卡片
-        fields.push({
+        // 三欄金額卡片（非費用隱藏）
+        if (!isNonExpense) fields.push({
           label: '金額',
           value: (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8 }}>

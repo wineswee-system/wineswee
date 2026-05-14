@@ -21,6 +21,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps, buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { countWorkDays, snapToStep, diffHours, findDateOverlap } from '../../lib/leaveDaysCalc'
 
 export default function Leave() {
   const { profile, role } = useAuth()
@@ -48,6 +49,8 @@ export default function Leave() {
   // 請假最小單位設定 → 用 Map: { storeKey: { leaveCode: {step, unit} } }
   // storeKey: 'all' = 全公司預設、其他 = store id
   const [stepSettings, setStepSettings] = useState({ all: {} })
+  // 國定假日清單（給 countWorkDays 用，扣除週末+國假後算實際工作天）
+  const [holidays, setHolidays] = useState([])
   // 附件（對齊 LIFF）：上傳到 Supabase Storage bucket `leave-attachments`
   const [attachFiles, setAttachFiles] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -102,12 +105,14 @@ export default function Leave() {
       getDepartments(orgId),
       getLeaveStepSettings(),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
-    ]).then(([l, e, d, ls, orgRes]) => {
+      supabase.from('holidays').select('date'),
+    ]).then(([l, e, d, ls, orgRes, hd]) => {
       const emps = e.data || []
       setLeaves(l.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
       setOrganization(orgRes?.data || null)
+      setHolidays((hd.data || []).map(h => h.date))
       // 整理 stepSettings
       const map = { all: {} }
       ;(ls.data || []).forEach(row => {
@@ -166,22 +171,23 @@ export default function Leave() {
     const globalOverride = stepSettings.all?.[form.type] || null
     const stepCfg = storeOverride || globalOverride || { step: selectedPolicy?.minUnit || 0.5, unit: selectedPolicy?.unit || 'day' }
 
-    // Calculate days/hours
+    // Calculate days/hours — 跟 LIFF 對齊：日 mode 扣週末+國假
     let days, hours
     if (form.unit === 'hour') {
-      const [sh, sm] = form.start_time.split(':').map(Number)
-      const [eh, em] = form.end_time.split(':').map(Number)
-      hours = Math.max(0.5, (eh + em / 60) - (sh + sm / 60))
-      // 對齊 step（小時模式）
-      if (stepCfg.unit === 'hour') hours = Math.ceil(hours / stepCfg.step - 1e-9) * stepCfg.step
+      hours = Math.max(0.5, diffHours(form.start_time, form.end_time))
+      if (stepCfg.unit === 'hour') hours = snapToStep(hours, stepCfg.step)
       days = Math.round(hours / 8 * 10) / 10
     } else {
-      const start = new Date(form.start_date)
-      const end = new Date(form.end_date || form.start_date)
-      days = Math.max(1, Math.ceil((end - start) / 86400000) + 1)
-      // 對齊 step（天模式）
-      if (stepCfg.unit === 'day') days = Math.ceil(days / stepCfg.step - 1e-9) * stepCfg.step
+      const workDays = countWorkDays(form.start_date, form.end_date || form.start_date, holidays)
+      days = stepCfg.unit === 'day' ? snapToStep(workDays, stepCfg.step) : workDays
       hours = days * 8
+    }
+
+    // 日期衝突檢查（同申請人）— 跟 LIFF 對齊
+    const overlap = findDateOverlap(form, leaves.filter(l => l.employee === form.employee), editingId)
+    if (overlap) {
+      toast.error(`日期與已申請的「${overlap.type}」(${overlap.start_date}${overlap.end_date && overlap.end_date !== overlap.start_date ? ' ~ ' + overlap.end_date : ''}) 重疊`)
+      return
     }
 
     // Validate
@@ -669,6 +675,46 @@ export default function Leave() {
               </Field>
             </div>
           )}
+          {/* 天數預覽：扣週末/國假 + step 進位後的實際天/時 */}
+          {(() => {
+            const empForStep = employees.find(em => em.name === form.employee)
+            const sKey = empForStep?.store_id || null
+            const cfg = (sKey && stepSettings[sKey]?.[form.type]) || stepSettings.all?.[form.type] || { step: 0.5, unit: form.unit }
+            let preview
+            if (form.unit === 'hour') {
+              if (!form.start_time || !form.end_time) preview = null
+              else {
+                const h = diffHours(form.start_time, form.end_time)
+                const snapped = cfg.unit === 'hour' ? snapToStep(h, cfg.step) : h
+                preview = { value: snapped, unit: '小時' }
+              }
+            } else {
+              if (!form.start_date) preview = null
+              else {
+                const wd = countWorkDays(form.start_date, form.end_date || form.start_date, holidays)
+                const snapped = cfg.unit === 'day' ? snapToStep(wd, cfg.step) : wd
+                preview = { value: snapped, unit: '天' }
+              }
+            }
+            return (
+              <Field label="總計">
+                <div style={{
+                  padding: '10px 14px', borderRadius: 8,
+                  background: preview ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
+                  color: preview ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                  fontWeight: 700, fontSize: 18,
+                  border: '1px solid var(--border-subtle)',
+                }}>
+                  {preview ? `${preview.value} ${preview.unit}` : '請填日期 / 時間'}
+                </div>
+                {form.unit === 'day' && preview && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    已扣除週末 + 國定假日 · 最小單位 {cfg.step} {cfg.unit === 'day' ? '天' : '小時'}
+                  </div>
+                )}
+              </Field>
+            )
+          })()}
           <Field label="事由" required error={errors.reason} errorMsg="請填寫請假事由">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入請假事由" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>

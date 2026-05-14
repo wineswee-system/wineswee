@@ -178,7 +178,7 @@ export default function Subcontracting() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>加工廠商 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>加工廠商 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <select value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -193,7 +193,7 @@ export default function Subcontracting() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>工序名稱 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>工序名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="text" value={form.operation_name} onChange={e => set('operation_name', e.target.value)} placeholder="例：電鍍處理" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
               </div>

@@ -107,7 +107,7 @@ export default function DevelopmentTab({ employee }) {
         <div style={{ padding: 14, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--accent-cyan)', marginBottom: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
             <div>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>技能名稱 *</label>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>技能名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
               <input className="form-input" style={{ width: '100%', fontSize: 12 }} value={form.skill_name} onChange={e => setF('skill_name', e.target.value)} placeholder="例：Python、領導力" />
             </div>
             <div>

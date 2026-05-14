@@ -341,7 +341,7 @@ export default function FormBuilder() {
               <div className="card-header"><h3>表單資訊</h3></div>
               <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>表單名稱 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, color: 'var(--text-secondary)' }}>表單名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input className="form-input" value={editingForm.name} onChange={e => setEditingForm(p => ({ ...p, name: e.target.value }))} placeholder="例：官網聯繫表單" />
                 </div>
                 <div>
@@ -384,7 +384,7 @@ export default function FormBuilder() {
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: 2, fontSize: 12, color: 'var(--text-secondary)' }}>標籤 *</label>
+                        <label style={{ display: 'block', marginBottom: 2, fontSize: 12, color: 'var(--text-secondary)' }}>標籤 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                         <input className="form-input" value={field.label} onChange={e => updateField(field.id, 'label', e.target.value)} placeholder="欄位名稱" />
                       </div>
                       <div>

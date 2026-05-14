@@ -748,7 +748,7 @@ function EditorView({
       {/* Chain name + (amount_grouped) amount + (library) category */}
       <div style={{ marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>簽核鏈名稱 *</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>簽核鏈名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
           <input className="form-input" style={{ width: '100%' }}
             value={chainName} onChange={e => setChainName(e.target.value)}
             placeholder={mode === 'library' ? '例：員工請假簽核 / 採購簽核 / 執行長簽核' : `例：小額${formLabel}`} />

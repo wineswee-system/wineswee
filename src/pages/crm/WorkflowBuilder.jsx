@@ -428,7 +428,7 @@ export default function WorkflowBuilder() {
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>流程名稱 *</label>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>流程名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input
                     className="form-input"
                     value={builderName}
@@ -438,7 +438,7 @@ export default function WorkflowBuilder() {
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>觸發條件 *</label>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>觸發條件 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <select
                     className="form-input"
                     value={builderTrigger}

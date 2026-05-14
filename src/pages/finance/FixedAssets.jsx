@@ -317,7 +317,7 @@ export default function FixedAssets() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>資產名稱 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>資產名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：辦公電腦" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>
@@ -341,7 +341,7 @@ export default function FixedAssets() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>原始成本 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>原始成本 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="number" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>
@@ -351,7 +351,7 @@ export default function FixedAssets() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>耐用年數 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>耐用年數 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="number" value={form.useful_life} onChange={e => set('useful_life', e.target.value)} placeholder="年" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>

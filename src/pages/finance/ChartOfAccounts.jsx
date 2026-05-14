@@ -233,13 +233,13 @@ export default function ChartOfAccounts() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>代號 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>代號 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="text" value={form.code} onChange={e => set('code', e.target.value)} placeholder="例：001"
                     disabled={!!editingId}
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: editingId ? 'var(--bg-main-dim)' : 'var(--bg-main)' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>類型 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>類型 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <select value={form.type} onChange={e => set('type', e.target.value)}
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                     {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -247,7 +247,7 @@ export default function ChartOfAccounts() {
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：租金費用"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
               </div>

@@ -248,11 +248,11 @@ export default function WorkCenters() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>代碼 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>代碼 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="text" value={form.code} onChange={e => set('code', e.target.value)} placeholder="WC-XXX" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="工作中心名稱" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
               </div>

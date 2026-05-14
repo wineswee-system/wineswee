@@ -226,7 +226,7 @@ export default function BlanketOrders() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <select value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -234,7 +234,7 @@ export default function BlanketOrders() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>合約金額 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>合約金額 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="number" value={form.total_amount} onChange={e => set('total_amount', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>

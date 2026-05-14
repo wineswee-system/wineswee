@@ -629,7 +629,7 @@ export default function Approvals() {
             <h3 style={{ marginBottom: 20, fontSize: 16, fontWeight: 700 }}>新增簽核單</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>主旨 *</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>主旨 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input
                   className="form-input" style={{ width: '100%' }}
                   value={createFormData.title}
@@ -638,7 +638,7 @@ export default function Approvals() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>簽核鏈 *</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>簽核鏈 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <select
                   className="form-input" style={{ width: '100%' }}
                   value={createFormData.chain_id}

@@ -240,7 +240,7 @@ export default function PickPackShip() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>銷售訂單 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>銷售訂單 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <select value={pickForm.sales_order_id} onChange={e => setPickForm(f => ({ ...f, sales_order_id: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇</option>
                   {salesOrders.filter(o => o.shipping_status !== '已出貨').map(o => (

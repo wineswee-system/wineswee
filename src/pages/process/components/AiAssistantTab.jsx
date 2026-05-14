@@ -74,7 +74,7 @@ function StepInterviewCard({ step, stepIndex, totalSteps, employees, onConfirm }
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>步驟名稱 *</label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>步驟名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
           <input
             className="form-input"
             value={form.title}

@@ -464,7 +464,7 @@ export default function Segments() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>分群名稱 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>分群名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：高消費 VIP" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
               </div>
               <div>

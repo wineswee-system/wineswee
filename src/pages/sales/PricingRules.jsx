@@ -202,7 +202,7 @@ export default function PricingRules() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input type="text" value={listForm.name} onChange={e => setL('name', e.target.value)} placeholder="例：VIP 客戶價格" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -250,7 +250,7 @@ export default function PricingRules() {
                   <input type="number" value={ruleForm.min_qty} onChange={e => setR('min_qty', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>單價 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>單價 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <input type="number" value={ruleForm.unit_price} onChange={e => setR('unit_price', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 </div>
               </div>

@@ -130,14 +130,14 @@ export default function Transfers() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>來源倉庫 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>來源倉庫 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <select value={form.from_warehouse_id} onChange={e => setForm(f => ({ ...f, from_warehouse_id: e.target.value }))} className="form-input" style={{ width: '100%' }}>
                     <option value="">請選擇</option>
                     {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>目的倉庫 *</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>目的倉庫 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                   <select value={form.to_warehouse_id} onChange={e => setForm(f => ({ ...f, to_warehouse_id: e.target.value }))} className="form-input" style={{ width: '100%' }}>
                     <option value="">請選擇</option>
                     {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} - {w.name}</option>)}

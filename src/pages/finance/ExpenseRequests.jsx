@@ -626,7 +626,7 @@ export default function ExpenseRequests() {
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className={errors.employee ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <SearchableSelect
                   value={form.employee}
                   onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
@@ -654,7 +654,7 @@ export default function ExpenseRequests() {
                 </div>
               </div>
               <div className={errors.account_code ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <select value={form.account_code} onChange={e => { set('account_code', e.target.value); clearError('account_code', setErrors) }}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
                   <option value="">請選擇科目</option>
@@ -679,7 +679,7 @@ export default function ExpenseRequests() {
                 {errors.account_code && <div className="field-error-msg">⚠ 請選擇會計科目</div>}
               </div>
               <div className={errors.title ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>項目名稱 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>項目名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input type="text" value={form.title} onChange={e => { set('title', e.target.value); clearError('title', setErrors) }} placeholder="例：採購辦公椅 x5"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 {errors.title && <div className="field-error-msg">⚠ 請填寫項目名稱</div>}
@@ -699,7 +699,7 @@ export default function ExpenseRequests() {
 
               {/* Line items */}
               <div className={errors._total ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                   <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
@@ -788,7 +788,7 @@ export default function ExpenseRequests() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className={errors.actual_amount ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>實際金額 *</label>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>實際金額 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
                 <input type="number" value={settleForm.actual_amount} onChange={e => { setSettleForm(f => ({ ...f, actual_amount: e.target.value })); clearError('actual_amount', setErrors) }}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
                 {errors.actual_amount && <div className="field-error-msg">⚠ 請填寫實際金額</div>}

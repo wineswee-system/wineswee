@@ -700,9 +700,9 @@ function AdminDashboard({ profile }) {
                 <tbody>
                   {activeWf.length === 0 ? (
                     <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>尚無已啟用流程</td></tr>
-                  ) : activeWf.map(w => (
+                  ) : activeWf.map((w, i) => (
                     <tr key={w.id}>
-                      <td style={{ color: 'var(--text-muted)', width: 40 }}>{w.id}</td>
+                      <td style={{ color: 'var(--text-muted)', width: 40 }}>{i + 1}</td>
                       <td style={{ fontWeight: 600 }}>{w.name}</td>
                       <td><span className="badge badge-info">{w.category || '一般'}</span></td>
                       <td>{w.steps}</td>

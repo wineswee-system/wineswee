@@ -210,7 +210,7 @@ const TASK_STATUS_META = {
   '已擱置': { icon: '⏸', color: C.red, bg: C.redDim },
 }
 
-function WorkflowProgressCard({ w, tasks, days, onJump }) {
+function WorkflowProgressCard({ w, tasks, days, onJump, index }) {
   const [expanded, setExpanded] = useState(false)
   const total = tasks.length
   const done = tasks.filter(t => t.status === '已完成').length
@@ -232,6 +232,9 @@ function WorkflowProgressCard({ w, tasks, days, onJump }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 700, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {index != null && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600, marginRight: 6 }}>#{index}</span>
+            )}
             {w.template_name || '未命名流程'}
           </div>
           <ChevronRight size={14} style={{
@@ -1540,13 +1543,14 @@ export default function TeamDashboard() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-            {activeWorkflows.slice(0, 9).map(w => {
+            {activeWorkflows.slice(0, 9).map((w, i) => {
               const today = todayStr()
               const days = w.started_at ? daysBetween(today, w.started_at.slice(0, 10)) : 0
               const tasks = wfTasksMap[w.id] || []
               return (
                 <WorkflowProgressCard
                   key={w.id}
+                  index={i + 1}
                   w={w}
                   tasks={tasks}
                   days={days}
@@ -1572,7 +1576,7 @@ export default function TeamDashboard() {
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-            {activeProjects.slice(0, 8).map(p => (
+            {activeProjects.slice(0, 8).map((p, i) => (
               <div key={p.id}
                 onClick={() => navigate('/process/projects')}
                 style={{
@@ -1582,7 +1586,10 @@ export default function TeamDashboard() {
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.green }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                  <span style={{ color: C.muted, fontWeight: 600, marginRight: 6 }}>#{i + 1}</span>
+                  {p.name}
+                </div>
                 {p.description && (
                   <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4,
                     overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',

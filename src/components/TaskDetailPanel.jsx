@@ -26,7 +26,7 @@ import ChangelogPanel from './ChangelogPanel'
 
 import { confirm } from '../lib/confirm'
 import { logChanges } from '../lib/auditLogger'
-const STATUS_LIST = ['待簽核', '進行中', '已完成', '已擱置']
+const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
 export default function TaskDetailPanel({
@@ -203,6 +203,7 @@ export default function TaskDetailPanel({
     const payload = {
       ...form,
       title: titleDraft,
+      assignee_id: employees.find(e => e.name === form.assignee)?.id ?? null,
       planned_start: form.planned_start || null,
       due_date: form.due_date || null,
       due_time: form.due_time || null,

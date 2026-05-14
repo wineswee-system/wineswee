@@ -326,17 +326,23 @@ export default function Projects() {
     const instTasks = tasks.filter(t => t.workflow_instance_id === wfId)
     const maxOrder = instTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
     const wf = workflows.find(w => w.id === wfId)
+    const empId = addTaskForm.assignee
+      ? (employees.find(e => e.name === addTaskForm.assignee)?.id || null)
+      : null
+    const isFirstStep = instTasks.length === 0
     const { data } = await createTask({
       workflow_instance_id: wfId,
       project_id: selected?.id || null,
       title: addTaskForm.title.trim(),
       assignee: addTaskForm.assignee || null,
+      assignee_id: empId,
       due_date: addTaskForm.due_date || null,
-      status: '待處理',
+      status: isFirstStep ? '進行中' : '待處理',
       step_order: maxOrder + 1,
       bucket: 'Workflow',
       category: 'Workflow',
       priority: '中',
+      organization_id: profile?.organization_id || null,
     })
     if (data) {
       setTasks(prev => [...prev, data])

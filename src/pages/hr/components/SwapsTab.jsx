@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import AsyncButton from '../../../components/AsyncButton'
+import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
@@ -15,6 +16,7 @@ const STATUS_CLASS = {
 
 export default function SwapsTab({ swaps, setSwaps }) {
   const [processing, setProcessing] = useState(null)
+  const { canApprove } = usePendingApprovals()
 
   // 主管核准 — 抓 schedules 真實值，互換 shift + actual_*
   const handleApprove = async (s) => {
@@ -160,7 +162,7 @@ export default function SwapsTab({ swaps, setSwaps }) {
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {s.status === '待主管核准' && (
+                    {s.status === '待主管核准' && canApprove('shift_swaps', s.id) && (
                       <>
                         <AsyncButton className="btn btn-sm btn-primary" disabled={processing === s.id}
                           onClick={() => handleApprove(s)} busyLabel="處理中…">核准</AsyncButton>
@@ -171,9 +173,11 @@ export default function SwapsTab({ swaps, setSwaps }) {
                     {s.status === '待對方同意' && (
                       <>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>等 {s.target} 回覆</span>
-                        <AsyncButton className="btn btn-sm btn-secondary" disabled={processing === s.id}
-                          onClick={() => handleReject(s)} busyLabel="處理中…"
-                          style={{ fontSize: 11 }}>駁回</AsyncButton>
+                        {canApprove('shift_swaps', s.id) && (
+                          <AsyncButton className="btn btn-sm btn-secondary" disabled={processing === s.id}
+                            onClick={() => handleReject(s)} busyLabel="處理中…"
+                            style={{ fontSize: 11 }}>駁回</AsyncButton>
+                        )}
                       </>
                     )}
                     {['待對方同意', '待主管核准'].includes(s.status) && (

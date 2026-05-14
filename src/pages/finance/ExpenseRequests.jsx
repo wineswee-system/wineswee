@@ -14,6 +14,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -37,6 +38,7 @@ const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
   const { profile, isAdmin } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -572,7 +574,7 @@ export default function ExpenseRequests() {
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {r.status === '申請中' && (
+                      {r.status === '申請中' && canApprove('expense_requests', r.id) && (
                         <>
                           <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)} busyLabel="處理中…">
                             <Check size={12} /> 核准
@@ -587,7 +589,7 @@ export default function ExpenseRequests() {
                           <Send size={12} /> 核銷
                         </button>
                       )}
-                      {r.status === '待核銷' && (
+                      {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
                         <>
                           <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-cyan)' }} onClick={() => handleConfirmSettle(r)} busyLabel="…">
                             <Check size={12} /> 核准

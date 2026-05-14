@@ -14,10 +14,12 @@ import { printTripSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 export default function BusinessTravel() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [trips, setTrips] = useState([])
   const [employees, setEmployees] = useState([])
@@ -248,7 +250,7 @@ export default function BusinessTravel() {
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {t.status === '待審核' && (
+                      {t.status === '待審核' && canApprove('business_trips', t.id) && (
                         <>
                           <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)} busyLabel="處理中…">核准</AsyncButton>
                           <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)} busyLabel="處理中…">駁回</AsyncButton>

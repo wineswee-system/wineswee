@@ -16,6 +16,7 @@ import { printResignationSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { confirm } from '../../lib/confirm'
 const REASONS = ['個人因素', '家庭因素', '健康因素', '另謀高就', '進修', '退休', '其他']
@@ -29,6 +30,7 @@ const STATUS_BADGE = {
 
 export default function Resignation() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
@@ -244,14 +246,9 @@ export default function Resignation() {
   if (loading) return <LoadingSpinner />
 
   // 我是不是當前 step 的合法簽核人
-  const canIApprove = (req) => {
-    if (req.status !== '申請中') return false
-    const steps = chainSteps[req.approval_chain_id] || []
-    const cur = steps.find(s => s.step_order === (req.current_step || 0))
-    if (!cur) return isAdmin  // 沒 chain → 退回 admin 老邏輯
-    // 簡化：暫時以 target_emp_id 為主，dept/role 之後再加（gitnexus 不確定 employees 有 role_id）
-    return cur.target_emp_id === profile?.id || isAdmin
-  }
+  // 用 web_list_my_pending_approval_ids RPC 判定（chain step 動態解人 + 自己不能簽自己）
+  // 取代原本只看 target_emp_id 又 || isAdmin 的簡陋邏輯
+  const canIApprove = (req) => canApprove('resignation_requests', req.id)
 
   return (
     <div className="fade-in">

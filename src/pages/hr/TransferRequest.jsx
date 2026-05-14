@@ -16,6 +16,7 @@ import { printTransferSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { confirm } from '../../lib/confirm'
 const TRANSFER_TYPES = ['調職', '升遷', '降調', '部門調動', '跨店調動', '調薪']
@@ -29,6 +30,7 @@ const STATUS_BADGE = {
 
 export default function TransferRequest() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
@@ -276,13 +278,8 @@ export default function TransferRequest() {
 
   if (loading) return <LoadingSpinner />
 
-  const canIApprove = (req) => {
-    if (req.status !== '申請中') return false
-    const steps = chainSteps[req.approval_chain_id] || []
-    const cur = steps.find(s => s.step_order === (req.current_step || 0))
-    if (!cur) return isAdmin
-    return cur.target_emp_id === profile?.id || isAdmin
-  }
+  // 改走 web_list_my_pending_approval_ids RPC（chain step 動態解人 + 自己不能簽自己）
+  const canIApprove = (req) => canApprove('personnel_transfer_requests', req.id)
 
   return (
     <div className="fade-in">

@@ -14,6 +14,7 @@ import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 // LIFF 既有 row 可能有中文 type，Web 這邊統一解到 clock_in / clock_out 顯示
@@ -25,6 +26,7 @@ const normalizeType = (t) => {
 
 export default function PunchCorrection() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
@@ -343,7 +345,7 @@ export default function PunchCorrection() {
                   </td>
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {c.status === '待審核' ? (
+                      {c.status === '待審核' && canApprove('clock_corrections', c.id) ? (
                         <>
                           <AsyncButton className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)} busyLabel="處理中…">
                             <Check size={12} /> 核准

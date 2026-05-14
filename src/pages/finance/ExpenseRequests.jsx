@@ -377,6 +377,33 @@ export default function ExpenseRequests() {
       console.error('buildChainBasedSteps failed:', e)
     }
 
+    // 合併簽核時間軸（每關完成時間）：approval_step_history 由 trigger 自動寫入
+    try {
+      const { data: timeline } = await supabase.rpc('get_approval_timeline', {
+        p_request_type: 'expense_request',
+        p_request_id: req.id,
+      })
+      const tlByStep = {}
+      ;(timeline || []).forEach(t => { tlByStep[t.step_order] = t })
+      baseSteps = baseSteps.map(s => {
+        // 申請人 step 不動 (createdAt 已設)
+        if (s.isApplicant) return s
+        // chain 各關 step_order 是 0-based；申請人 step 不算 step_order，所以要對齊
+        // buildChainBasedSteps 返回 [申請人, step0, step1, ...] → step index = i - 1
+        return s
+      })
+      // 用 step_order 對應，直接 mapping 進 baseSteps（跳過第 0 個 applicant）
+      for (let i = 1; i < baseSteps.length; i++) {
+        const tl = tlByStep[i - 1]
+        if (!tl) continue
+        if (tl.exited_at && (baseSteps[i].status === 'completed' || baseSteps[i].status === 'rejected')) {
+          baseSteps[i] = { ...baseSteps[i], completedAt: tl.exited_at, durationText: tl.duration_text }
+        }
+      }
+    } catch (e) {
+      console.warn('[get_approval_timeline] failed:', e)
+    }
+
     // 「財務核章」只在實際進入核銷階段（待核銷/已核銷）才顯示。
     // 沒設核銷需求 / chain 是最終決定的流程，不顯示這關。
     let finalSteps = baseSteps

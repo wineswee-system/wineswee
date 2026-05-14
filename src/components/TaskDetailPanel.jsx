@@ -558,7 +558,7 @@ export default function TaskDetailPanel({
   }
   const fieldGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       zIndex: 10000,
@@ -1444,6 +1444,7 @@ export default function TaskDetailPanel({
         onConfirm={inputModal.onConfirm || (() => {})}
         onCancel={closeInput}
       />
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -216,25 +216,38 @@ export function exportTaxReportPdf(reportData) {
 export function exportExpenseRequestPdf(req, opts = {}) {
   if (!req) return
   const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+  const isNonExpense = req.is_expense === false
 
   const rawItems = req.items
   const items = Array.isArray(rawItems)
     ? rawItems
     : (typeof rawItems === 'string' ? (() => { try { return JSON.parse(rawItems) } catch { return [] } })() : [])
 
-  const sections = [
-    {
-      title: '說明',
-      rows: [
-        ['事由', req.description || ''],
-        ['供應商', req.supplier || ''],
-        ['會計科目', req.account_code ? `${req.account_code}　${req.account_name || ''}` : ''],
-        ['門市', req.store || ''],
-      ],
-    },
-  ]
+  // 非費用：只放主旨 + 說明；費用：完整 4 列說明 + 品項表 + 金額
+  const sections = isNonExpense
+    ? [
+        {
+          title: '申請事項',
+          rows: [
+            ['類型', '非費用申請'],
+            ['主旨', req.title || ''],
+            ['說明', req.description || ''],
+          ],
+        },
+      ]
+    : [
+        {
+          title: '說明',
+          rows: [
+            ['事由', req.description || ''],
+            ['供應商', req.supplier || ''],
+            ['會計科目', req.account_code ? `${req.account_code}　${req.account_name || ''}` : ''],
+            ['門市', req.store || ''],
+          ],
+        },
+      ]
 
-  if (items.length > 0) {
+  if (!isNonExpense && items.length > 0) {
     sections.push({
       title: '品項明細',
       table: {
@@ -251,25 +264,27 @@ export function exportExpenseRequestPdf(req, opts = {}) {
     })
   }
 
-  sections.push({
-    title: '金額',
-    rows: [
-      ['預估金額', fmt(req.estimated_amount)],
-      ['實際金額', req.actual_amount != null ? fmt(req.actual_amount) : ''],
-      ['差異', req.difference != null && req.difference !== 0
-        ? `${req.difference > 0 ? '+' : ''}${fmt(req.difference)}`
-        : ''],
-    ],
-  })
+  if (!isNonExpense) {
+    sections.push({
+      title: '金額',
+      rows: [
+        ['預估金額', fmt(req.estimated_amount)],
+        ['實際金額', req.actual_amount != null ? fmt(req.actual_amount) : ''],
+        ['差異', req.difference != null && req.difference !== 0
+          ? `${req.difference > 0 ? '+' : ''}${fmt(req.difference)}`
+          : ''],
+      ],
+    })
+  }
 
-  if (req.notes) {
+  if (!isNonExpense && req.notes) {
     sections.push({ title: '核銷備註', text: req.notes })
   }
 
   printSignOff({
     companyName: opts.companyName || '',
     logoUrl: opts.logoUrl || '',
-    docTitle: '費用申請',
+    docTitle: isNonExpense ? '非費用申請' : '費用申請',
     docNo: req.id,
     applicant: { name: req.employee, dept: req.department },
     date: req.created_at ? String(req.created_at).slice(0, 10).replace(/-/g, '/') : '',
@@ -280,8 +295,8 @@ export function exportExpenseRequestPdf(req, opts = {}) {
     chainSteps: opts.chainSteps || [],
     approverMap: opts.approverMap || {},
     finalApprover: req.approved_by ? { name: req.approved_by, approved_at: req.approved_at } : undefined,
-    simpleSign: ['呈文者', '主管核示', '財務核章'],
-    simpleSignApproverIdx: 1,  // 主管核示位置（核可者）；settled_by 簽章 v2 再做
+    simpleSign: isNonExpense ? ['呈文者', '主管核示'] : ['呈文者', '主管核示', '財務核章'],
+    simpleSignApproverIdx: 1,
     attachments: opts.attachments || [],
     signatures: opts.signatures || {},
     _win: opts._win,

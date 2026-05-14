@@ -32,6 +32,7 @@ import ArchivedInstancesList from './components/ArchivedInstancesList'
 import { generateFlowByRules } from './components/flowTemplates'
 
 import { confirm } from '../../lib/confirm'
+import { HR_APPROVAL_TEMPLATE_NAMES } from '../../lib/workflowIntegration'
 export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
   const currentUser = profile?.name || '管理員'
@@ -1000,8 +1001,10 @@ export default function Workflows() {
     setSelectedInstance(null)
   }
 
-  // ── Filtered instances ──
+  // ── Filtered instances (HR 簽核由各 HR 模組頁面處理，此頁不顯示) ──
+  const HR_TEMPLATE_SET = new Set(HR_APPROVAL_TEMPLATE_NAMES)
   const filteredInstances = instances.filter(i => {
+    if (HR_TEMPLATE_SET.has(i.template_name)) return false
     if (filterStore && i.store !== filterStore) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true

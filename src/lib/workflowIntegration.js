@@ -20,6 +20,8 @@ const DEFAULT_TEMPLATES = {
   clock_correction: { name: '補打卡簽核', steps: ['直屬主管審核'] },
 }
 
+export const HR_APPROVAL_TEMPLATE_NAMES = Object.values(DEFAULT_TEMPLATES).map(t => t.name)
+
 // approval_chains 的 category → type 對照
 const CHAIN_CATEGORY_MAP = {
   leave: 'HR', overtime: 'HR', expense: 'HR',

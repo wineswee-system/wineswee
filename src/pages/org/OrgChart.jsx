@@ -63,12 +63,16 @@ export default function OrgChart() {
     return null
   }
 
-  // 找該員工在指定部門掛的職位：先看 employee_assignments（次要也算），fallback 員工主職位
-  // 用於「總經理掛行銷部主管」這類情境，顯示他在那個部門的職稱（例如「行銷總監」）而非主職「總經理」
+  // 找該員工在指定部門掛的職位：
+  //   - 若是員工「主部門」(employees.department_id === deptId) → 直接用員工卡上填的「主職位」 (employees.position)
+  //     避免 employee_assignments 內留下「部門主管」這類 default 值蓋掉真正主職位
+  //   - 若是「次要部門」 → 找該部門的 assignment.position（次要任職的職稱）
+  //   - 都查不到 → 空字串（不再 fallback 主職位，避免「老闆」「總經理」洩漏到次要部門）
   const positionInDept = (emp, deptId) => {
     if (!emp) return ''
+    if (emp.department_id === deptId) return emp.position || ''
     const a = assignments.find(x => x.employee_id === emp.id && x.department_id === deptId)
-    return a?.position || emp.position || ''
+    return a?.position || ''
   }
   const managerName = (dept) => {
     const mgr = managerOf(dept)

@@ -37,7 +37,6 @@ export default function TaskDetailPanel({
   const [form, setForm] = useState({})
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const [showTime, setShowTime] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
 
   // Sub-data
@@ -717,61 +716,51 @@ export default function TaskDetailPanel({
           {activeTab === 'basic' && (
           <div style={sectionStyle}>
             <div style={fieldGrid}>
+              {/* 計畫開始日 */}
               <div>
                 <div style={labelStyle}>計畫開始日</div>
                 <input className="form-input" type="date" style={{ width: '100%' }}
                   value={form.planned_start} onChange={e => setAndDirty('planned_start', e.target.value)} />
               </div>
-              <div>
+              {/* 預計完成日 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={labelStyle}>預計完成日</div>
                 <input className="form-input" type="date" style={{ width: '100%' }}
                   value={form.due_date} onChange={e => setAndDirty('due_date', e.target.value)} />
+                <input className="form-input" type="time" style={{ width: '100%' }}
+                  value={form.due_time || ''} onChange={e => setAndDirty('due_time', e.target.value)} />
               </div>
+              {/* 提醒時間 */}
+              <div>
+                <div style={labelStyle}>
+                  <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
+                </div>
+                <input className="form-input" type="datetime-local" style={{ width: '100%' }}
+                  value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
+                  onChange={e => setAndDirty('reminder_at', e.target.value)} />
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '1hr前', type: '1hr' },
+                    { label: '1天前', type: '1day' },
+                    { label: '09:00', type: 'morning' },
+                  ].map(r => (
+                    <button key={r.type} onClick={() => setReminder(r.type)} style={{
+                      padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                    }}>{r.label}</button>
+                  ))}
+                </div>
+              </div>
+              {/* 實際完成日 */}
               <div>
                 <div style={labelStyle}>實際完成日</div>
-                <input className="form-input" type="date" style={{ width: '100%', opacity: 0.7 }}
+                <input className="form-input" type="datetime-local" style={{ width: '100%', opacity: 0.7 }}
                   readOnly
-                  value={task.completed_at ? task.completed_at.slice(0, 10) : ''}
+                  value={task.completed_at ? task.completed_at.slice(0, 16) : ''}
                   placeholder="標記已完成時自動填入"
                 />
               </div>
-            </div>
-
-            {!showTime ? (
-              <button onClick={() => setShowTime(true)} style={{
-                background: 'none', border: 'none', color: 'var(--accent-cyan)',
-                fontSize: 12, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4, marginTop: 10,
-              }}>
-                <Clock size={13} /> 設定時間
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                <input className="form-input" type="time" value={form.due_time}
-                  onChange={e => setAndDirty('due_time', e.target.value)} style={{ width: 160 }} />
-                <button onClick={() => { setShowTime(false); setAndDirty('due_time', '') }} style={{
-                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer',
-                }}><X size={16} /></button>
-              </div>
-            )}
-
-            <div style={labelStyle}>
-              <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
-            </div>
-            <input className="form-input" type="datetime-local" style={{ width: '100%' }}
-              value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
-              onChange={e => setAndDirty('reminder_at', e.target.value)} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              {[
-                { label: '到期前1hr', type: '1hr' },
-                { label: '到期前1天', type: '1day' },
-                { label: '當天09:00', type: 'morning' },
-              ].map(r => (
-                <button key={r.type} onClick={() => setReminder(r.type)} style={{
-                  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
-                  color: 'var(--text-secondary)', cursor: 'pointer',
-                }}>{r.label}</button>
-              ))}
             </div>
           </div>
           )}

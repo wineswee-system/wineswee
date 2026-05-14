@@ -584,7 +584,7 @@ export default function ExpenseRequests() {
                           </AsyncButton>
                         </>
                       )}
-                      {r.status === '已核准' && (
+                      {r.status === '已核准' && r.employee_id === profile?.id && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
                           <Send size={12} /> 核銷
                         </button>

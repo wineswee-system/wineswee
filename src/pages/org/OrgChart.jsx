@@ -34,9 +34,9 @@ export default function OrgChart() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
 
-  // 顏色順序：紅 → 黃 → 綠 → 藍 → 紫，5 色循環
-  const colors = ['var(--accent-red)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-blue)', 'var(--accent-purple)']
-  const dims = ['var(--accent-red-dim)', 'var(--accent-yellow-dim)', 'var(--accent-green-dim)', 'var(--accent-blue-dim)', 'var(--accent-purple-dim)']
+  // 顏色順序：青 → 黃 → 綠 → 藍 → 紫（拿掉紅色，避免「部門/人名紅字」誤判成警告/異常）
+  const colors = ['var(--accent-cyan)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-blue)', 'var(--accent-purple)']
+  const dims = ['var(--accent-cyan-dim)', 'var(--accent-yellow-dim)', 'var(--accent-green-dim)', 'var(--accent-blue-dim)', 'var(--accent-purple-dim)']
 
   // 兼總經理室：讀 employees.is_executive_board 旗標 (DB 端標記)
   // 之前硬寫 [48, 52] 員工 id，老闆換人就壞 → 改用旗標
@@ -230,15 +230,15 @@ export default function OrgChart() {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
-                background: 'var(--accent-red-dim)',
-                border: '2px solid var(--accent-red)',
+                background: 'var(--accent-purple-dim)',
+                border: '2px solid var(--accent-purple)',
                 borderRadius: 10,
                 padding: '8px 14px',
                 minWidth: 120,
               }}>
-                <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>高管</div>
+                <div style={{ fontSize: 10, color: 'var(--accent-purple)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>高管</div>
                 {execBoardMembers.map(emp => (
-                  <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-red)', textAlign: 'center' }}>
+                  <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-purple)', textAlign: 'center' }}>
                     {labelOf(emp)}
                   </div>
                 ))}
@@ -303,11 +303,25 @@ export default function OrgChart() {
                         background: 'var(--glass-light)',
                         minWidth: 80,
                       }}>
-                        {head !== '-' && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{head}</div>
-                        )}
+                        {(() => {
+                          const mgr = managerOf(dept)
+                          if (!mgr) return null
+                          return (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                              {mgr.position && (
+                                <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>{mgr.position}</span>
+                              )}
+                              {labelOf(mgr)}
+                            </div>
+                          )
+                        })()}
                         {subs.map(s => (
-                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{labelOf(s)}</div>
+                          <div key={s.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            {s.position && (
+                              <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>{s.position}</span>
+                            )}
+                            {labelOf(s)}
+                          </div>
                         ))}
                       </div>
                     </>
@@ -589,7 +603,7 @@ export default function OrgChart() {
                                             borderRadius: 5,
                                             padding: '3px 8px',
                                             textAlign: 'center',
-                                            color: emp.employment_type === '兼職' ? 'var(--accent-red)' : 'var(--text-secondary)',
+                                            color: emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)',
                                             fontWeight: 500,
                                           }}>
                                             {labelOf(emp)}

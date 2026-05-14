@@ -101,7 +101,7 @@ export default function Workflows() {
   useEffect(() => {
     Promise.all([
       getWorkflows(),
-      getWorkflowInstances(),
+      getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES }),
       getTasks(),
       supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('stores').select('*').order('name'),
@@ -1011,6 +1011,7 @@ export default function Workflows() {
   })
   // ★ 進行中 = status='進行中' AND 未封存（archived_at IS NULL）
   const activeInstances = filteredInstances.filter(i => i.status === '進行中' && !i.archived_at)
+  const notStartedInstances = filteredInstances.filter(i => i.status === '未開始' && !i.archived_at)
   const archivedInstances = filteredInstances.filter(i => i.status === '已完成' || i.archived_at)
 
   if (loading) return <LoadingSpinner />
@@ -1107,6 +1108,7 @@ export default function Workflows() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
           { key: 'active', label: `🟢 進行中流程 (${activeInstances.length})` },
+          { key: 'notstarted', label: `⏳ 未開始 (${notStartedInstances.length})` },
           { key: 'templates', label: `📁 流程範本 (${templates.length})` },
           { key: 'ai', label: '🤖 AI 助手' },
           { key: 'archived', label: `📦 封存流程 (${archivedInstances.length})` },
@@ -1125,6 +1127,19 @@ export default function Workflows() {
       {tab === 'active' && (
         <ActiveInstancesList
           instances={activeInstances}
+          getStats={getStats}
+          onSelect={setSelectedInstance}
+          onArchive={handleArchiveInstance}
+          onDelete={handleDeleteInstance}
+          projects={projects}
+          lineGroups={lineGroups}
+        />
+      )}
+
+      {/* ══ Not Started Instances ══ */}
+      {tab === 'notstarted' && (
+        <ActiveInstancesList
+          instances={notStartedInstances}
           getStats={getStats}
           onSelect={setSelectedInstance}
           onArchive={handleArchiveInstance}

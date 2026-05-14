@@ -25,6 +25,7 @@ import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
 
 import { confirm } from '../lib/confirm'
+import { logChanges } from '../lib/auditLogger'
 const STATUS_LIST = ['待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
@@ -215,6 +216,16 @@ export default function TaskDetailPanel({
     if (data) {
       onUpdate(data)
       setIsDirty(false)
+      logChanges({
+        user: profile?.name || 'unknown',
+        action: '任務更新',
+        target: task.title,
+        targetTable: 'tasks',
+        targetId: task.id,
+        oldData: task,
+        newData: data,
+        orgId: profile?.organization_id || null,
+      }).catch(() => {})
       // Task completed — cascade next tasks and notify their assignees
       if (form.status === '已完成' && prevStatus !== '已完成') {
         // trigger-type: frontend activates the next task + notifies
@@ -712,9 +723,17 @@ export default function TaskDetailPanel({
                   value={form.planned_start} onChange={e => setAndDirty('planned_start', e.target.value)} />
               </div>
               <div>
-                <div style={labelStyle}>計畫完成日</div>
+                <div style={labelStyle}>預計完成日</div>
                 <input className="form-input" type="date" style={{ width: '100%' }}
                   value={form.due_date} onChange={e => setAndDirty('due_date', e.target.value)} />
+              </div>
+              <div>
+                <div style={labelStyle}>實際完成日</div>
+                <input className="form-input" type="date" style={{ width: '100%', opacity: 0.7 }}
+                  readOnly
+                  value={task.completed_at ? task.completed_at.slice(0, 10) : ''}
+                  placeholder="標記已完成時自動填入"
+                />
               </div>
             </div>
 

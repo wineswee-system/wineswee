@@ -21,6 +21,9 @@ export const deleteWorkflow = (id, orgId) => {
 export const getWorkflowInstances = (options = {}) => {
   let q = supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
   if (options.orgId) q = q.eq('organization_id', options.orgId)
+  if (options.excludeTemplates?.length) {
+    q = q.not('template_name', 'in', `(${options.excludeTemplates.map(n => `"${n}"`).join(',')})`)
+  }
   return q.limit(options.limit ?? 200)
 }
 

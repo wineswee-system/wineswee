@@ -18,6 +18,19 @@ import { uploadFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
+
+// 算加班時數：依起訖時間 + 商店最小單位（step）
+// 跨日：end < start 自動 +24h（例 22:00 -> 02:00 = 4 小時）
+function computeOvertimeHours(start, end, step = 0.5) {
+  if (!start || !end) return 0
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  let mins = (eh * 60 + em) - (sh * 60 + sm)
+  if (mins <= 0) mins += 24 * 60
+  const hours = mins / 60
+  return Math.round(hours / step) * step
+}
+
 export default function Overtime() {
   const { profile, role } = useAuth()
   const { canApprove } = usePendingApprovals()
@@ -29,7 +42,7 @@ export default function Overtime() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ employee: '', date: '', hours: 1, reason: '', store: '' })
+  const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
   const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
   const [errors, setErrors] = useState({})
@@ -103,7 +116,8 @@ export default function Overtime() {
 
   const handleSubmit = async () => {
     try {
-      if (!validateRequired(form, ['employee', 'date', 'store', 'hours', 'reason'], setErrors)) return
+      if (!validateRequired(form, ['employee', 'date', 'store', 'start_time', 'end_time', 'reason'], setErrors)) return
+      if (!form.hours || form.hours <= 0) { toast.error('加班時數計算為 0，請檢查起訖時間'); return }
 
       // ── 編輯重送路徑 ──
       if (editingId) {
@@ -117,7 +131,7 @@ export default function Overtime() {
         setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
         setShowModal(false)
         setEditingId(null)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
         return
       }
 
@@ -132,7 +146,7 @@ export default function Overtime() {
         }
         setRecords(prev => [...prev, data])
         setShowModal(false)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
         await createApprovalWorkflow('overtime', data, form.employee)
       }
     } catch (err) {
@@ -304,7 +318,7 @@ export default function Overtime() {
             )}
             <button className="btn btn-primary" onClick={() => {
               setEditingId(null)
-              setForm({ employee: profile?.name || employees[0]?.name || '', date: '', hours: 1, reason: '', store: '' })
+              setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
               setErrors({})
               setShowModal(true)
             }}><Plus size={14} /> 新增加班</button>
@@ -377,7 +391,7 @@ export default function Overtime() {
                       {['待審核','申請中','已拒絕','已駁回','已退回'].includes(o.status) && o.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(o.id)
-                          setForm({ employee: o.employee, date: o.date || '', hours: o.hours || 1, reason: o.reason || '', store: o.store || '' })
+                          setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '' })
                           setShowModal(true)
                         }}>✏️ {(['已拒絕','已駁回','已退回'].includes(o.status)) ? '編輯重送' : '編輯'}</button>
                       )}
@@ -422,33 +436,51 @@ export default function Overtime() {
               💡 跨門市加班請選實際支援門市
             </div>
           </Field>
-          <Field label="加班時數" required error={errors.hours} errorMsg="請選加班時數">
-            {(() => {
-              const selectedEmp = employees.find(e => e.name === form.employee)
-              const step = (selectedEmp && storeSteps[selectedEmp.store_id]) || 0.5
-              const opts = []
-              for (let v = step; v <= 12 + 1e-9; v += step) opts.push(Math.round(v * 100) / 100)
-              // 若 form.hours 不在 opts 內，自動進位到最近合法值
-              const safeHours = opts.includes(form.hours)
-                ? form.hours
-                : (opts.find(o => o >= form.hours) || opts[opts.length - 1])
-              return (
-                <>
-                  <select
-                    className="form-input"
-                    style={{ width: '100%' }}
-                    value={safeHours}
-                    onChange={e => set('hours', Number(e.target.value))}
-                  >
-                    {opts.map(h => <option key={h} value={h}>{h} 小時</option>)}
-                  </select>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    本店加班最小單位 <b style={{ color: 'var(--accent-cyan)' }}>{step}</b> 小時（可在「工時/假別單位」設定）
+          {(() => {
+            const selectedEmp = employees.find(e => e.name === form.employee)
+            const step = (selectedEmp && storeSteps[selectedEmp.store_id]) || 0.5
+            const crossDay = form.start_time && form.end_time
+              && (form.end_time <= form.start_time)
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <Field label="加班起時" required error={errors.start_time} errorMsg="請選起始時間">
+                    <input className="form-input" type="time" style={{ width: '100%' }}
+                      value={form.start_time || ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        setForm(f => ({ ...f, start_time: v, hours: computeOvertimeHours(v, f.end_time, step) }))
+                        clearError('start_time', setErrors)
+                      }} />
+                  </Field>
+                  <Field label="加班訖時" required error={errors.end_time} errorMsg="請選結束時間">
+                    <input className="form-input" type="time" style={{ width: '100%' }}
+                      value={form.end_time || ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        setForm(f => ({ ...f, end_time: v, hours: computeOvertimeHours(f.start_time, v, step) }))
+                        clearError('end_time', setErrors)
+                      }} />
+                  </Field>
+                </div>
+                <Field label="總時數">
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 8,
+                    background: form.hours > 0 ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
+                    color: form.hours > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontWeight: 700, fontSize: 18,
+                    border: '1px solid var(--border-subtle)',
+                  }}>
+                    {form.hours > 0 ? `${form.hours} 小時` : '請選擇起訖時間'}
+                    {crossDay && <span style={{ fontSize: 11, fontWeight: 500, marginLeft: 8, color: 'var(--accent-orange)' }}>（跨日）</span>}
                   </div>
-                </>
-              )
-            })()}
-          </Field>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    本店加班最小單位 <b style={{ color: 'var(--accent-cyan)' }}>{step}</b> 小時 · 訖時 ≤ 起時自動視為跨日
+                  </div>
+                </Field>
+              </>
+            )
+          })()}
           <Field label="原因" required error={errors.reason} errorMsg="請填寫加班原因">
             <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>

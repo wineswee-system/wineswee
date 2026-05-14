@@ -109,12 +109,16 @@ export default function ExpenseRequests() {
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
     const results = []
     for (const file of fileList) {
-      if (!ALLOWED_TYPES.includes(file.type)) { toast.error('不支援此檔案類型'); continue }
-      if (file.size > MAX_SIZE) { toast.error('檔案大小不可超過 10MB'); continue }
+      if (!ALLOWED_TYPES.includes(file.type)) { toast.error(`「${file.name}」不支援此檔案類型`); continue }
+      if (file.size > MAX_SIZE) { toast.error(`「${file.name}」檔案大小超過 10MB`); continue }
       const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${file.name}`
       const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
-      if (upErr) continue
-      const { data } = await supabase.from('expense_request_attachments').insert({
+      if (upErr) {
+        toast.error(`「${file.name}」上傳失敗：${upErr.message || '未知錯誤'}`)
+        console.error('[uploadFiles] storage upload error:', upErr)
+        continue
+      }
+      const { data, error: insertErr } = await supabase.from('expense_request_attachments').insert({
         request_id: requestId,
         file_name: file.name,
         storage_path: path,
@@ -123,6 +127,11 @@ export default function ExpenseRequests() {
         stage,
         uploaded_by: form.employee || '系統',
       }).select().single()
+      if (insertErr) {
+        toast.error(`「${file.name}」寫入失敗：${insertErr.message || '未知錯誤'}`)
+        console.error('[uploadFiles] db insert error:', insertErr)
+        continue
+      }
       if (data) results.push(data)
     }
     return results

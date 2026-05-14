@@ -30,13 +30,16 @@ import SearchableSelect, { empOptions } from './SearchableSelect'
 
 import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
-// ─── target_type 選項（9 種，砍了 applicant_supervisor 因為組織圖夠用）───
+// ─── target_type 選項 ───
+// applicant_supervisor 加回（行政員工 vs 門市員工 一條 chain 解兩情境，
+// 各員工各自設「直屬主管」即可）
 const TARGET_TYPES = [
   // 寫死
   { value: 'fixed_emp',   group: '🔒 寫死指定', label: '指定員工',           needs: 'emp'   },
   { value: 'fixed_role',  group: '🔒 寫死指定', label: '指定角色（全部人）', needs: 'role'  },
   { value: 'fixed_dept',  group: '🔒 寫死指定', label: '指定部門（全部人）', needs: 'dept'  },
   // 申請人連動（依組織圖動態解）
+  { value: 'applicant_supervisor',          group: '👤 申請人連動', label: '申請人的直屬主管（依員工卡設定）', needs: null },
   { value: 'applicant_dept_manager',        group: '👤 申請人連動', label: '申請人部門的主管',   needs: null },
   { value: 'applicant_store_manager',       group: '👤 申請人連動', label: '申請人門市的店長',   needs: null },
   { value: 'applicant_section_supervisor',  group: '👤 申請人連動', label: '申請人課別的督導',   needs: null },

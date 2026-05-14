@@ -545,7 +545,9 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── 6. Drain notification_quiet_queue (08:00 Taiwan morning send) ──
+    // ── 6. Drain notification_quiet_queue — combined carousel per user ──
+    // Groups all queued bubbles for a recipient into one horizontal-scroll
+    // carousel so they receive a single morning digest instead of many pushes.
     let quietQueueCount = 0;
     if (mode === "all" || mode === "drain_quiet_queue") {
       const { data: queued } = await sb
@@ -553,16 +555,58 @@ serve(async (req: Request) => {
         .select("id, line_user_id, messages")
         .is("sent_at", null)
         .lte("send_after", new Date().toISOString())
-        .limit(100);
+        .limit(200);
 
       if (Array.isArray(queued)) {
-        for (const item of queued as Array<{ id: number; line_user_id: string; messages: object[] }>) {
-          const sent = await pushLine(item.line_user_id, item.messages, lineToken);
-          await sb
-            .from("notification_quiet_queue")
-            .update({ sent_at: new Date().toISOString() })
-            .eq("id", item.id);
-          if (sent) quietQueueCount++;
+        type QueueRow = { id: number; line_user_id: string; messages: any[] };
+
+        // Group rows by recipient
+        const byUser = new Map<string, QueueRow[]>();
+        for (const row of queued as QueueRow[]) {
+          const list = byUser.get(row.line_user_id) ?? [];
+          list.push(row);
+          byUser.set(row.line_user_id, list);
+        }
+
+        const nowIso = new Date().toISOString();
+
+        for (const [userId, rows] of byUser) {
+          // Extract every bubble from each queued flex message
+          const bubbles: object[] = [];
+          for (const row of rows) {
+            for (const msg of row.messages) {
+              if (msg?.type === "flex" && msg.contents) {
+                if (msg.contents.type === "bubble") {
+                  bubbles.push(msg.contents);
+                } else if (msg.contents.type === "carousel") {
+                  bubbles.push(...(msg.contents.contents ?? []));
+                }
+              }
+            }
+          }
+
+          if (bubbles.length === 0) {
+            // nothing to send — still mark sent so they don't re-queue
+            for (const row of rows) {
+              await sb.from("notification_quiet_queue").update({ sent_at: nowIso }).eq("id", row.id);
+            }
+            continue;
+          }
+
+          const altText = `📬 早安！您有 ${bubbles.length} 則昨晚通知待查`;
+
+          // LINE carousel max 12 bubbles; single bubble skips carousel wrapper
+          const contents = bubbles.length === 1
+            ? bubbles[0]
+            : { type: "carousel", contents: bubbles.slice(0, 12) };
+
+          const sent = await pushLine(userId, [{ type: "flex", altText, contents }], lineToken);
+
+          // Mark all rows for this user as sent regardless of LINE result
+          for (const row of rows) {
+            await sb.from("notification_quiet_queue").update({ sent_at: nowIso }).eq("id", row.id);
+          }
+          if (sent) quietQueueCount += rows.length;
         }
       }
     }

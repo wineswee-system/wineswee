@@ -355,7 +355,7 @@ function AdminDashboard({ profile }) {
       supabase.from('opportunities').select('stage, amount'),
       supabase.from('stock_levels').select('*'),
       supabase.from('workflow_instances').select('id, status').eq('status', '進行中'),
-      supabase.from('tasks').select('id, status, assignee, due_date').not('workflow_instance_id', 'is', null).in('status', ['待處理', '進行中']),
+      supabase.from('tasks').select('id, status, assignee, due_date').not('workflow_instance_id', 'is', null).in('status', ['進行中', '待簽核', '待確認', '待處理']),
       supabase.from('clock_corrections').select('id').eq('status', '待審核'),
       supabase.from('overtime_requests').select('id').eq('status', '待審核'),
     ])
@@ -382,8 +382,9 @@ function AdminDashboard({ profile }) {
 
   const active = employees.filter(e => e.status === '在職').length
   const done = tasks.filter(t => t.status === '已完成').length
-  const doing = tasks.filter(t => t.status === '進行中').length
-  const todo = tasks.filter(t => t.status === '未開始').length
+  // task 一發起即「進行中」，有 chain 時 trigger 立刻改為「待簽核/待確認」 → 全算 doing
+  const doing = tasks.filter(t => ['進行中', '待簽核', '待確認'].includes(t.status)).length
+  const todo = Math.max(0, tasks.length - done - doing)
   const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0
   const late = attendance.filter(a => a.status === '遲到').length
   const onLeave = leaves.filter(l => l.status === '已核准').length

@@ -588,7 +588,7 @@ export default function TeamDashboard() {
       days7.push({
         date: ds,
         label: `${d.getMonth() + 1}/${d.getDate()}`,
-        normal: rows.filter(a => a.status === '正常' || (a.status && !['遲到', '早退', '異常'].includes(a.status))).length,
+        normal: rows.filter(a => ['正常', '補登'].includes(a.status)).length,
         late: rows.filter(a => a.status === '遲到').length,
       })
     }

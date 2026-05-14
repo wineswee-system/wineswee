@@ -269,7 +269,7 @@ export default function DeployModal({
         <>
           {/* ─── 對象 + 分店（基本資訊）─── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部署到哪個分店 *">
+            <Field label="部署到哪個分店" required>
               <select className="form-input" style={{ width: '100%' }}
                 value={deployForm.location}
                 onChange={e => setDeployForm(f => ({ ...f, location: e.target.value }))}>

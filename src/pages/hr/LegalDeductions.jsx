@@ -346,7 +346,7 @@ export default function LegalDeductions() {
       {/* Add/Edit Modal */}
       {showModal && (
         <Modal title={editingId ? '編輯法扣' : '新增法扣'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+          <Field label="員工" required>
             <SearchableSelect
               value={form.employee_id}
               onChange={(v) => set('employee_id', v || '')}
@@ -355,14 +355,14 @@ export default function LegalDeductions() {
               disabled={!!editingId}
             />
           </Field>
-          <Field label="標題 *">
+          <Field label="標題" required>
             <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：養育費 / 信用卡欠款扣薪 / 法院強制執行" />
           </Field>
-          <Field label="總額 *">
+          <Field label="總額" required>
             <input className="form-input" type="number" value={form.total_amount} onChange={e => set('total_amount', e.target.value)} placeholder="例：120000" />
           </Field>
 
-          <Field label="扣款方式 *">
+          <Field label="扣款方式" required>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
@@ -390,12 +390,12 @@ export default function LegalDeductions() {
           </Field>
 
           {form.deduction_type === 'fixed' ? (
-            <Field label="每月扣款金額 *">
+            <Field label="每月扣款金額" required>
               <input className="form-input" type="number" value={form.monthly_amount}
                 onChange={e => set('monthly_amount', e.target.value)} placeholder="例：10000" />
             </Field>
           ) : (
-            <Field label="每月扣款比例 *">
+            <Field label="每月扣款比例" required>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input className="form-input" type="number" step="0.01" value={form.monthly_percent}
                   onChange={e => set('monthly_percent', e.target.value)}
@@ -428,7 +428,7 @@ export default function LegalDeductions() {
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="開始月份 *">
+            <Field label="開始月份" required>
               <input className="form-input" type="month" value={form.started_month} onChange={e => set('started_month', e.target.value)} />
             </Field>
             <Field label="案號">

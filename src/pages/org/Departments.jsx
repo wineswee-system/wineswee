@@ -251,7 +251,7 @@ export default function Departments() {
       {showModal && (
         <Modal title={editingDept ? `編輯部門 — ${editingDept.name}` : '新增部門'} onClose={() => { setShowModal(false); setEditingDept(null) }} onSubmit={handleSubmit} submitLabel={editingDept ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門名稱 *">
+            <Field label="部門名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：研發部" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <Field label="層級">
@@ -322,7 +322,7 @@ export default function Departments() {
               )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: 10 }}>
-              <Field label="課別名稱 *">
+              <Field label="課別名稱" required>
                 <input className="form-input" type="text" placeholder="例：營運四課" value={secForm.name} onChange={e => setSec('name', e.target.value)} style={{ width: '100%' }} />
               </Field>
               <Field label="督導">

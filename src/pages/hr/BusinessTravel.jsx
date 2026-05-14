@@ -296,11 +296,11 @@ export default function BusinessTravel() {
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <Field label="目的地 *" error={errors.destination} errorMsg="請填寫目的地">
+          <Field label="目的地" required error={errors.destination} errorMsg="請填寫目的地">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：東京" value={form.destination} onChange={e => { set('destination', e.target.value); clearError('destination', setErrors) }} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="出發日 *" error={errors.start_date} errorMsg="請選日期">
+            <Field label="出發日" required error={errors.start_date} errorMsg="請選日期">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => { set('start_date', e.target.value); clearError('start_date', setErrors) }} />
             </Field>
             <Field label="回程日" required error={errors.end_date} errorMsg="請選回程日">

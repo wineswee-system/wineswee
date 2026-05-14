@@ -289,8 +289,8 @@ export default function SKUs() {
       {showModal && (
         <Modal title="新增商品" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="品號 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={form.code} onChange={e => set('code', e.target.value)} /></Field>
-            <Field label="品名 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="商品名稱" value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+            <Field label="品號" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={form.code} onChange={e => set('code', e.target.value)} /></Field>
+            <Field label="品名" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="商品名稱" value={form.name} onChange={e => set('name', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="條碼">

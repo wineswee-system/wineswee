@@ -140,7 +140,7 @@ export default function Companies() {
       {showModal && (
         <Modal title={editingCompany ? `編輯公司 — ${editingCompany.name}` : '新增公司'} onClose={() => { setShowModal(false); setEditingCompany(null) }} onSubmit={handleSubmit} submitLabel={editingCompany ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="公司名稱 *">
+            <Field label="公司名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="XX股份有限公司" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <Field label="簡稱">

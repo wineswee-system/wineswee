@@ -269,8 +269,8 @@ export default function Outbound() {
       {showModal && (
         <Modal title="新增出貨單" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="訂單號 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="ORD-2026-001" value={form.order_number} onChange={e => set('order_number', e.target.value)} /></Field>
-            <Field label="客戶 *">
+            <Field label="訂單號" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="ORD-2026-001" value={form.order_number} onChange={e => set('order_number', e.target.value)} /></Field>
+            <Field label="客戶" required>
               <input className="form-input" type="text" style={{ width: '100%' }} list="cust-list" placeholder="客戶名稱" value={form.customer} onChange={e => set('customer', e.target.value)} />
               <datalist id="cust-list">{customers.map(c => <option key={c.id} value={c.name} />)}</datalist>
             </Field>

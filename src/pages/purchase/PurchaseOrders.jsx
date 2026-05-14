@@ -372,10 +372,10 @@ export default function PurchaseOrders() {
       {showModal && (
         <Modal title="新增採購單" onClose={() => { setShowModal(false); setLineItems([emptyLineItem()]) }} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="PO 編號 *">
+            <Field label="PO 編號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="PO-20260401-001" value={form.po_number} onChange={e => set('po_number', e.target.value)} />
             </Field>
-            <Field label="供應商 *">
+            <Field label="供應商" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="供應商名稱" value={form.supplier} onChange={e => set('supplier', e.target.value)} />
             </Field>
           </div>

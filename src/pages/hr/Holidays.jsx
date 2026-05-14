@@ -176,11 +176,11 @@ export default function Holidays() {
 
       {showModal && (
         <Modal title="新增假日" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="假日名稱 *">
+          <Field label="假日名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：勞動節" value={form.name} onChange={e => set('name', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="日期 *">
+            <Field label="日期" required>
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => set('date', e.target.value)} />
             </Field>
             <Field label="類型">

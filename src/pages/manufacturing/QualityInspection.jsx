@@ -185,12 +185,12 @@ export default function QualityInspection() {
                 {TYPE_OPTIONS.map(t => <option key={t}>{t}</option>)}
               </select>
             </Field>
-            <Field label="參考單號 *">
+            <Field label="參考單號" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="PO-001" value={form.reference} onChange={e => set('reference', e.target.value)} />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="檢驗員 *">
+            <Field label="檢驗員" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="檢驗員姓名" value={form.inspector} onChange={e => set('inspector', e.target.value)} />
             </Field>
             <Field label="檢驗日期">

@@ -268,12 +268,12 @@ export default function TaxForms() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 10, borderRadius: 6, marginBottom: 12 }}>
             列印扣繳憑單時會自動帶入這些資料。儲存於瀏覽器本機（每台電腦各自設定）。
           </div>
-          <Field label="公司名稱 *">
+          <Field label="公司名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={company.name || ''}
               onChange={e => setCompany(c => ({ ...c, name: e.target.value }))}
               placeholder="例：○○有限公司" />
           </Field>
-          <Field label="統一編號 *">
+          <Field label="統一編號" required>
             <input className="form-input" style={{ width: '100%' }} value={company.tax_id || ''}
               onChange={e => setCompany(c => ({ ...c, tax_id: e.target.value }))}
               placeholder="8 位數" maxLength={8} />

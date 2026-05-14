@@ -229,8 +229,8 @@ export default function Inbound() {
       {showModal && (
         <Modal title="新增進貨單" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="採購單號 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="PO-2026-001" value={form.po_number} onChange={e => set('po_number', e.target.value)} /></Field>
-            <Field label="供應商 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="供應商名稱" value={form.supplier} onChange={e => set('supplier', e.target.value)} /></Field>
+            <Field label="採購單號" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="PO-2026-001" value={form.po_number} onChange={e => set('po_number', e.target.value)} /></Field>
+            <Field label="供應商" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="供應商名稱" value={form.supplier} onChange={e => set('supplier', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="倉庫">

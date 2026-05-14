@@ -406,12 +406,12 @@ export default function StockCount() {
             <Field label="盤點日期">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.count_date} onChange={e => set('count_date', e.target.value)} />
             </Field>
-            <Field label="倉庫 *">
+            <Field label="倉庫" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="主倉庫" value={form.warehouse} onChange={e => set('warehouse', e.target.value)} />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="盤點人 *">
+            <Field label="盤點人" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="王大明" value={form.counter} onChange={e => set('counter', e.target.value)} />
             </Field>
             <Field label="狀態">
@@ -439,7 +439,7 @@ export default function StockCount() {
       {showScheduleModal && (
         <Modal title="新增循環盤點排程" onClose={() => setShowScheduleModal(false)} onSubmit={handleScheduleSubmit} submitLabel="建立排程">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="倉庫 *">
+            <Field label="倉庫" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="主倉庫" value={scheduleForm.warehouse} onChange={e => setSch('warehouse', e.target.value)} />
             </Field>
             <Field label="區域">
@@ -452,7 +452,7 @@ export default function StockCount() {
                 {CYCLE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </Field>
-            <Field label="下次盤點日 *">
+            <Field label="下次盤點日" required>
               <input className="form-input" type="date" style={{ width: '100%' }} value={scheduleForm.next_date} onChange={e => setSch('next_date', e.target.value)} />
             </Field>
           </div>

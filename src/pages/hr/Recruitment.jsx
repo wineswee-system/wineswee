@@ -135,7 +135,7 @@ export default function Recruitment() {
 
       {showModal && (
         <Modal title="新增職缺" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="職稱 *">
+          <Field label="職稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：資深前端工程師" value={form.title} onChange={e => set('title', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

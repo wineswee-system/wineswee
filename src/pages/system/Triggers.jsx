@@ -96,7 +96,7 @@ export default function Triggers() {
       {showModal && (
         <Modal title="新增觸發器" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="名稱 *">
+            <Field label="名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="每日打卡提醒" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <Field label="類型">
@@ -108,7 +108,7 @@ export default function Triggers() {
           <Field label="排程 (Cron)">
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="0 9 * * 1-5" value={form.schedule} onChange={e => set('schedule', e.target.value)} />
           </Field>
-          <Field label="執行動作 *">
+          <Field label="執行動作" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="發送打卡提醒通知" value={form.action} onChange={e => set('action', e.target.value)} />
           </Field>
         </Modal>

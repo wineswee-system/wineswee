@@ -249,7 +249,7 @@ export default function ProbationTracker() {
       {showModal && (
         <Modal title="新增試用紀錄" onClose={() => setShowModal(false)} onSubmit={handleCreate}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
+            <Field label="員工" required>
               <SearchableSelect
                 value={form.employee}
                 onChange={(v) => {
@@ -274,10 +274,10 @@ export default function ProbationTracker() {
                 placeholder="搜尋指導人..."
               />
             </Field>
-            <Field label="開始日期 *">
+            <Field label="開始日期" required>
               <input type="date" className="form-input" style={{ width: '100%' }} value={form.start_date} onChange={e => setF('start_date', e.target.value)} />
             </Field>
-            <Field label="結束日期 *">
+            <Field label="結束日期" required>
               <input type="date" className="form-input" style={{ width: '100%' }} value={form.end_date} onChange={e => setF('end_date', e.target.value)} />
             </Field>
           </div>

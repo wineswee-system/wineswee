@@ -7,7 +7,7 @@ export default function MarketingUnsubscribeModal({
 }) {
   return (
     <Modal title="新增退訂" onClose={onClose} onSubmit={handleAddUnsub}>
-      <Field label="客戶 *">
+      <Field label="客戶" required>
         <select className="form-input" style={{ width: '100%' }} value={unsubForm.customer_id} onChange={e => setUnsubForm(prev => ({ ...prev, customer_id: e.target.value }))}>
           <option value="">-- 選擇客戶 --</option>
           {allCustomers.filter(c => !isUnsubscribed(unsubscribeList, c.id, 'all')).map(c => (

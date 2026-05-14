@@ -189,7 +189,7 @@ export default function Locations() {
       {showModal && (
         <Modal title={editingStore ? `編輯門市 — ${editingStore.name}` : '新增門市'} onClose={() => { setShowModal(false); setEditingStore(null) }} onSubmit={handleSubmit} submitLabel={editingStore ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="門市名稱 *">
+            <Field label="門市名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北忠孝店" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <Field label="門市代碼">

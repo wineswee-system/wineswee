@@ -16,7 +16,7 @@ export default function MarketingSegmentModal({
 
   return (
     <Modal title="建立自訂分群" onClose={onClose} onSubmit={saveSegment}>
-      <Field label="分群名稱 *">
+      <Field label="分群名稱" required>
         <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：高消費活躍客戶" value={segmentBuilder.name} onChange={e => setSegmentBuilder(prev => ({ ...prev, name: e.target.value }))} />
       </Field>
 

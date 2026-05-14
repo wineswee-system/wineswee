@@ -931,7 +931,7 @@ export default function Service() {
       {showModal && (
         <Modal title="新增客服工單" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="客戶名稱 *">
+            <Field label="客戶名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} list="cust-list" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
               <datalist id="cust-list">{customers.map(c => <option key={c.id} value={c.name} />)}</datalist>
             </Field>
@@ -942,7 +942,7 @@ export default function Service() {
               </select>
             </Field>
           </div>
-          <Field label="主旨 *">
+          <Field label="主旨" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="問題簡述..." value={form.subject} onChange={e => set('subject', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -1035,7 +1035,7 @@ export default function Service() {
           onClose={() => { setShowSLAForm(false); setEditingSLAId(null) }}
           onSubmit={handleSLASave}
         >
-          <Field label="政策名稱 *">
+          <Field label="政策名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={slaForm.name} onChange={e => setSlaForm(f => ({ ...f, name: e.target.value }))} placeholder="例：VIP 客戶 SLA" />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

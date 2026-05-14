@@ -623,7 +623,7 @@ export default function Contacts() {
           onSubmit={handleSave}
           submitLabel={editingContact ? '更新' : '新增'}
         >
-          <Field label="姓名 *">
+          <Field label="姓名" required>
             <input
               className="input"
               placeholder="聯絡人姓名"

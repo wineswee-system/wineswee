@@ -476,11 +476,11 @@ export default function Inventory() {
       {showAdjModal && (
         <Modal title="庫存調整" onClose={() => setShowAdjModal(false)} onSubmit={handleAdjust}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="品號 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={adjForm.sku_code} onChange={e => setA('sku_code', e.target.value)} /></Field>
+            <Field label="品號" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={adjForm.sku_code} onChange={e => setA('sku_code', e.target.value)} /></Field>
             <Field label="品名"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="商品名稱" value={adjForm.sku_name} onChange={e => setA('sku_name', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="倉庫 *">
+            <Field label="倉庫" required>
               <select className="form-input" style={{ width: '100%' }} value={adjForm.warehouse} onChange={e => setA('warehouse', e.target.value)}>
                 <option value="">— 自動偵測或選擇 —</option>
                 {warehouses.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
@@ -488,20 +488,20 @@ export default function Inventory() {
             </Field>
             <Field label="儲位"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="A-01-01（選填，僅 audit 用）" value={adjForm.bin_code} onChange={e => setA('bin_code', e.target.value)} /></Field>
           </div>
-          <Field label="調整數量 *"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="負數=減少，正數=增加" value={adjForm.quantity} onChange={e => setA('quantity', e.target.value)} /></Field>
-          <Field label="原因 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="損壞/遺失/盤點調整..." value={adjForm.reason} onChange={e => setA('reason', e.target.value)} /></Field>
+          <Field label="調整數量" required><input className="form-input" type="number" style={{ width: '100%' }} placeholder="負數=減少，正數=增加" value={adjForm.quantity} onChange={e => setA('quantity', e.target.value)} /></Field>
+          <Field label="原因" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="損壞/遺失/盤點調整..." value={adjForm.reason} onChange={e => setA('reason', e.target.value)} /></Field>
           <Field label="操作人"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={adjForm.operator} onChange={e => setA('operator', e.target.value)} /></Field>
         </Modal>
       )}
 
       {showTransferModal && (
         <Modal title="庫內移倉" onClose={() => setShowTransferModal(false)} onSubmit={handleTransfer} submitLabel="確認移倉">
-          <Field label="品號 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={transferForm.sku_code} onChange={e => setT('sku_code', e.target.value)} /></Field>
+          <Field label="品號" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="SKU-001" value={transferForm.sku_code} onChange={e => setT('sku_code', e.target.value)} /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="來源儲位 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="A-01-01" value={transferForm.from_bin} onChange={e => setT('from_bin', e.target.value)} /></Field>
-            <Field label="目標儲位 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="B-02-03" value={transferForm.to_bin} onChange={e => setT('to_bin', e.target.value)} /></Field>
+            <Field label="來源儲位" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="A-01-01" value={transferForm.from_bin} onChange={e => setT('from_bin', e.target.value)} /></Field>
+            <Field label="目標儲位" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="B-02-03" value={transferForm.to_bin} onChange={e => setT('to_bin', e.target.value)} /></Field>
           </div>
-          <Field label="移倉數量 *"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={transferForm.quantity} onChange={e => setT('quantity', e.target.value)} /></Field>
+          <Field label="移倉數量" required><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={transferForm.quantity} onChange={e => setT('quantity', e.target.value)} /></Field>
         </Modal>
       )}
     </div>

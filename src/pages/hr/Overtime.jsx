@@ -407,10 +407,10 @@ export default function Overtime() {
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <Field label="加班日期 *" error={errors.date} errorMsg="請選日期">
+          <Field label="加班日期" required error={errors.date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>
-          <Field label="加班門市 *" error={errors.store} errorMsg="請選門市">
+          <Field label="加班門市" required error={errors.store} errorMsg="請選門市">
             <select className="form-input" style={{ width: '100%' }} value={form.store || ''}
               onChange={e => { set('store', e.target.value); clearError('store', setErrors) }}>
               <option value="">— 選擇加班門市 —</option>

@@ -16,7 +16,7 @@ export default function CreateTemplateModal({
   return (
     <Modal title="新增流程範本" onClose={onClose} onSubmit={onSubmit} submitLabel="建立範本">
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-        <Field label="範本名稱 *">
+        <Field label="範本名稱" required>
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"
             value={newTpl.name} onChange={e => setNewTpl(t => ({ ...t, name: e.target.value }))} />
         </Field>

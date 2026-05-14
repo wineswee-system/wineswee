@@ -257,7 +257,7 @@ export default function Severance() {
       {showCalcModal && (
         <Modal title="新增資遣計算" onClose={() => { setShowCalcModal(false); setCalcResult(null) }} onSubmit={null} maxWidth={680}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
+            <Field label="員工" required>
               <SearchableSelect
                 value={form.employee_id}
                 options={empOptions(employees.filter(e => e.status === '在職' || e.status === '留職停薪'))}
@@ -265,7 +265,7 @@ export default function Severance() {
                 placeholder="搜尋員工..."
               />
             </Field>
-            <Field label="離職日期 *">
+            <Field label="離職日期" required>
               <input type="date" className="form-input" style={{ width: '100%' }}
                 value={form.termination_date}
                 onChange={e => setForm(f => ({ ...f, termination_date: e.target.value }))} />

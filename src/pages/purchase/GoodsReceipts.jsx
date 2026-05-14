@@ -319,10 +319,10 @@ export default function GoodsReceipts() {
       {showModal && (
         <Modal title="新增驗收單" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="對應 PO ID *">
+            <Field label="對應 PO ID" required>
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="PO ID" value={form.po_id} onChange={e => set('po_id', e.target.value)} />
             </Field>
-            <Field label="驗收人 *">
+            <Field label="驗收人" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="驗收人姓名" value={form.receiver} onChange={e => set('receiver', e.target.value)} />
             </Field>
           </div>

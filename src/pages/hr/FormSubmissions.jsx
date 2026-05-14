@@ -336,7 +336,7 @@ export default function FormSubmissions() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 10, borderRadius: 6, marginBottom: 12 }}>
             這是列印簽呈時的標題公司名稱。儲存於瀏覽器本機（每台電腦設定一次）。
           </div>
-          <Field label="公司名稱 *">
+          <Field label="公司名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="例：威耀時代股份有限公司" />
           </Field>
         </Modal>

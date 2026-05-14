@@ -412,7 +412,7 @@ export default function Tasks() {
 
       {showModal && (
         <Modal title="新增任務" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="任務名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} /></Field>
+          <Field label="任務名稱" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="所屬流程">
               <select className="form-input" style={{ width: '100%' }} value={form.workflow} onChange={e => set('workflow', e.target.value)}>

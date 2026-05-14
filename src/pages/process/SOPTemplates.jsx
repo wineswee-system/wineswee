@@ -370,7 +370,7 @@ export default function SOPTemplates() {
             </div>
           ) : (
             <>
-              <Field label="部署到哪個分店 *">
+              <Field label="部署到哪個分店" required>
                 <select className="form-input" style={{ width: '100%' }} value={deployForm.location} onChange={e => setDeployForm(f => ({ ...f, location: e.target.value }))}>
                   <option value="">請選擇分店</option>
                   {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
@@ -405,7 +405,7 @@ export default function SOPTemplates() {
       {showCreateModal && (
         <Modal title="新增 SOP 範本" onClose={() => setShowCreateModal(false)} onSubmit={handleCreateTemplate} submitText="建立範本">
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-            <Field label="範本名稱 *">
+            <Field label="範本名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"
                 value={newTemplate.name} onChange={e => setNewTemplate(t => ({ ...t, name: e.target.value }))} />
             </Field>

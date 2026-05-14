@@ -18,7 +18,7 @@ export default function InvoiceFormModal({
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="發票號碼 *">
+        <Field label="發票號碼" required>
           <div style={{ display: 'flex', gap: 6 }}>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="AB12345678" value={form.invoice_number} onChange={e => set('invoice_number', e.target.value)} />
             <button type="button" className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }} onClick={handleAutoNumber}>
@@ -31,7 +31,7 @@ export default function InvoiceFormModal({
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="買受人 *">
+        <Field label="買受人" required>
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="買受人名稱" value={form.buyer_name} onChange={e => set('buyer_name', e.target.value)} />
         </Field>
         <Field label="統一編號">

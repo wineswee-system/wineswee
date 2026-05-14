@@ -597,11 +597,11 @@ export default function LineIntegration() {
       {showAddChannel && (
         <Modal title="新增 LINE 官方帳號" onClose={() => setShowAddChannel(false)} onSubmit={handleAddChannel}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="帳號代碼 *">
+            <Field label="帳號代碼" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="e.g. sme-ops"
                 value={channelForm.code} onChange={e => setChannelForm(f => ({ ...f, code: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))} />
             </Field>
-            <Field label="帳號名稱 *">
+            <Field label="帳號名稱" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="e.g. SME Ops 官方帳號"
                 value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} />
             </Field>
@@ -724,7 +724,7 @@ export default function LineIntegration() {
       {/* ══ Link Employee Modal ══ */}
       {showLinkModal && (
         <Modal title="綁定員工到 LINE 官方帳號" onClose={() => setShowLinkModal(false)} onSubmit={handleLinkEmployee}>
-          <Field label="員工 *">
+          <Field label="員工" required>
             <SearchableSelect
               value={linkForm.employee_id}
               onChange={(v) => setLinkForm(f => ({ ...f, employee_id: v || '' }))}
@@ -732,14 +732,14 @@ export default function LineIntegration() {
               placeholder="搜尋員工..."
             />
           </Field>
-          <Field label="官方帳號 *">
+          <Field label="官方帳號" required>
             <select className="form-input" style={{ width: '100%' }} value={linkForm.channel_id}
               onChange={e => setLinkForm(f => ({ ...f, channel_id: e.target.value }))}>
               <option value="">請選擇官方帳號</option>
               {channels.map(ch => <option key={ch.id} value={ch.id}>{ch.name} ({ch.code})</option>)}
             </select>
           </Field>
-          <Field label="LINE User ID *">
+          <Field label="LINE User ID" required>
             <input className="form-input" style={{ width: '100%' }} placeholder="U1234567890abcdef..."
               value={linkForm.line_user_id} onChange={e => setLinkForm(f => ({ ...f, line_user_id: e.target.value }))} />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>

@@ -383,26 +383,26 @@ export default function CompensationBenchmark() {
       {showBandModal && (
         <Modal title={editingId ? '編輯薪資帶' : '新增薪資帶'} onClose={() => { setShowBandModal(false); setEditingId(null) }} onSubmit={handleSaveBand}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門 *">
+            <Field label="部門" required>
               <select className="form-input" style={{ width: '100%' }} value={bandForm.dept} onChange={e => setB('dept', e.target.value)}>
                 <option value="">選擇部門</option>
                 {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
               </select>
             </Field>
-            <Field label="職位 *">
+            <Field label="職位" required>
               <input className="form-input" style={{ width: '100%' }} value={bandForm.position} onChange={e => setB('position', e.target.value)} placeholder="例：店長、課長" />
             </Field>
             <Field label="帶名">
               <input className="form-input" style={{ width: '100%' }} value={bandForm.band_name} onChange={e => setB('band_name', e.target.value)} placeholder="例：L3" />
             </Field>
             <div />
-            <Field label="最低薪 *">
+            <Field label="最低薪" required>
               <input type="number" className="form-input" style={{ width: '100%' }} value={bandForm.min_salary} onChange={e => setB('min_salary', e.target.value)} />
             </Field>
-            <Field label="中位薪 *">
+            <Field label="中位薪" required>
               <input type="number" className="form-input" style={{ width: '100%' }} value={bandForm.mid_salary} onChange={e => setB('mid_salary', e.target.value)} />
             </Field>
-            <Field label="最高薪 *">
+            <Field label="最高薪" required>
               <input type="number" className="form-input" style={{ width: '100%' }} value={bandForm.max_salary} onChange={e => setB('max_salary', e.target.value)} />
             </Field>
           </div>

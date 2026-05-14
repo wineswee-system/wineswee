@@ -389,7 +389,7 @@ export default function Resignation() {
               <input className="form-input" style={{ width: '100%' }} value={`${profile?.name || ''}${profile?.name_en ? ' ' + profile.name_en : ''}`} disabled />
             )}
           </Field>
-          <Field label="預計離職日 *" error={errors.planned_resign_date} errorMsg="請選日期">
+          <Field label="預計離職日" required error={errors.planned_resign_date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_resign_date} onChange={e => { setForm(f => ({ ...f, planned_resign_date: e.target.value })); clearError('planned_resign_date', setErrors) }} />
           </Field>
           <Field label="離職原因">

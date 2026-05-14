@@ -371,11 +371,11 @@ export default function Expenses() {
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="金額 (NT$) *" error={errors.amount} errorMsg="請填寫金額">
+            <Field label="金額 (NT$)" required error={errors.amount} errorMsg="請填寫金額">
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.amount} onChange={e => { set('amount', e.target.value); clearError('amount', setErrors) }} />
             </Field>
           </div>
-          <Field label="日期 *" error={errors.date} errorMsg="請選日期">
+          <Field label="日期" required error={errors.date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>
           <Field label="說明" required error={errors.description} errorMsg="請填寫費用說明">

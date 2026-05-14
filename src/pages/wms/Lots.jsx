@@ -119,8 +119,8 @@ export default function Lots() {
       {showModal && (
         <Modal title="新增批號" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="批號 *"><input className="form-input" style={{ width: '100%' }} placeholder="LOT-2026-001" value={form.lot_number} onChange={e => set('lot_number', e.target.value)} /></Field>
-            <Field label="SKU 代碼 *"><input className="form-input" style={{ width: '100%' }} placeholder="SKU001" value={form.sku_code} onChange={e => set('sku_code', e.target.value)} /></Field>
+            <Field label="批號" required><input className="form-input" style={{ width: '100%' }} placeholder="LOT-2026-001" value={form.lot_number} onChange={e => set('lot_number', e.target.value)} /></Field>
+            <Field label="SKU 代碼" required><input className="form-input" style={{ width: '100%' }} placeholder="SKU001" value={form.sku_code} onChange={e => set('sku_code', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="數量"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} /></Field>

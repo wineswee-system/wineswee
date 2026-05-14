@@ -574,10 +574,10 @@ export default function Quotations() {
       {showModal && (
         <Modal title="新增報價單" onClose={() => { setShowModal(false); setLineItems([emptyLineItem()]) }} onSubmit={handleSubmit} width={820}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="報價單號 *">
+            <Field label="報價單號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="Q-2026-001" value={form.quote_number} onChange={e => set('quote_number', e.target.value)} />
             </Field>
-            <Field label="客戶 *">
+            <Field label="客戶" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="客戶名稱" value={form.customer} onChange={e => set('customer', e.target.value)} />
             </Field>
           </div>

@@ -167,10 +167,10 @@ export default function VendorCategories() {
       {showModal && (
         <Modal title={editingId ? '編輯分類' : '新增分類'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="分類名稱 *">
+            <Field label="分類名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：原物料" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
-            <Field label="代碼 *">
+            <Field label="代碼" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：RAW" value={form.code} onChange={e => set('code', e.target.value.toUpperCase())} />
             </Field>
           </div>

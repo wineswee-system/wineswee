@@ -392,7 +392,7 @@ export default function PunchCorrection() {
                 placeholder="搜尋員工姓名..."
               />
             </Field>
-            <Field label="日期 *" error={errors.date} errorMsg="請選日期">
+            <Field label="日期" required error={errors.date} errorMsg="請選日期">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
             </Field>
           </div>
@@ -403,11 +403,11 @@ export default function PunchCorrection() {
                 <option value="clock_out">下班打卡</option>
               </select>
             </Field>
-            <Field label="補登時間 *" error={errors.correction_time} errorMsg="請選時間">
+            <Field label="補登時間" required error={errors.correction_time} errorMsg="請選時間">
               <input className="form-input" type="time" style={{ width: '100%' }} value={form.correction_time} onChange={e => { set('correction_time', e.target.value); clearError('correction_time', setErrors) }} />
             </Field>
           </div>
-          <Field label="補打卡門市 *" error={errors.store} errorMsg="請選門市">
+          <Field label="補打卡門市" required error={errors.store} errorMsg="請選門市">
             <select className="form-input" style={{ width: '100%' }} value={form.store || ''}
               onChange={e => { set('store', e.target.value); clearError('store', setErrors) }}>
               <option value="">— 選擇實際門市 —</option>
@@ -417,7 +417,7 @@ export default function PunchCorrection() {
               💡 跨門市支援請選實際門市
             </div>
           </Field>
-          <Field label="原因 *" error={errors.reason} errorMsg="請填寫原因">
+          <Field label="原因" required error={errors.reason} errorMsg="請填寫原因">
             <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="例：忘記打卡、系統異常..."
               value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>

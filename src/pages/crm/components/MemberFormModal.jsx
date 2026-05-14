@@ -6,10 +6,10 @@ export default function MemberFormModal({ form, set, onClose, onSubmit }) {
   return (
     <Modal title="新增會員" onClose={onClose} onSubmit={onSubmit}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="會員編號 *">
+        <Field label="會員編號" required>
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="MEM-001" value={form.member_number} onChange={e => set('member_number', e.target.value)} />
         </Field>
-        <Field label="姓名 *">
+        <Field label="姓名" required>
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="會員姓名" value={form.name} onChange={e => set('name', e.target.value)} />
         </Field>
       </div>

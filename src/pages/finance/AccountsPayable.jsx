@@ -137,8 +137,8 @@ export default function AccountsPayable() {
       {showModal && (
         <Modal title="新增應付帳款" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="帳單號碼 *"><input className="form-input" style={{ width: '100%' }} value={form.bill_number} onChange={e => set('bill_number', e.target.value)} placeholder="BILL-2026-001" /></Field>
-            <Field label="供應商 *"><input className="form-input" style={{ width: '100%' }} value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="供應商名稱" /></Field>
+            <Field label="帳單號碼" required><input className="form-input" style={{ width: '100%' }} value={form.bill_number} onChange={e => set('bill_number', e.target.value)} placeholder="BILL-2026-001" /></Field>
+            <Field label="供應商" required><input className="form-input" style={{ width: '100%' }} value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="供應商名稱" /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="採購單參考"><input className="form-input" style={{ width: '100%' }} value={form.po_ref} onChange={e => set('po_ref', e.target.value)} placeholder="PO-001" /></Field>

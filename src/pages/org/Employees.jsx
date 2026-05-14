@@ -512,7 +512,7 @@ export default function Employees() {
       {showModal && (
         <Modal title="新增員工（到職）" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="姓名 *">
+            <Field label="姓名" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="王小明" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <Field label="英文姓名">
@@ -586,7 +586,7 @@ export default function Employees() {
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </Field>
-          <Field label="Email *">
+          <Field label="Email" required>
             <input className="form-input" type="email" style={{ width: '100%' }} placeholder="example@company.com" value={form.email} onChange={e => set('email', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -711,7 +711,7 @@ export default function Employees() {
           }}
           submitLabel={editingDept ? '儲存' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} value={deptForm.name} onChange={e => setDept('name', e.target.value)} /></Field>
+            <Field label="部門名稱" required><input className="form-input" type="text" style={{ width: '100%' }} value={deptForm.name} onChange={e => setDept('name', e.target.value)} /></Field>
             <Field label="層級"><select className="form-input" style={{ width: '100%' }} value={deptForm.level} onChange={e => setDept('level', e.target.value)}>
               <option value="部">部</option><option value="組">組</option><option value="課">課</option><option value="董事長">董事長室</option>
             </select></Field>

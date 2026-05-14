@@ -1219,7 +1219,7 @@ export default function Workflows() {
           onSubmit={handleCreateBlankWorkflow}
           submitLabel="建立"
         >
-          <Field label="流程名稱 *">
+          <Field label="流程名稱" required>
             <input className="form-input" placeholder="例：新店開幕準備" autoFocus
               value={blankWorkflowForm.name}
               onChange={e => setBlankWorkflowForm(p => ({ ...p, name: e.target.value }))}

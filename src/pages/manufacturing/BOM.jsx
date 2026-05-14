@@ -519,10 +519,10 @@ export default function BOM() {
       {showModal && (
         <Modal title="新增 BOM" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="產品名稱 *">
+            <Field label="產品名稱" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="產品名稱" value={form.product_name} onChange={e => set('product_name', e.target.value)} />
             </Field>
-            <Field label="產品代碼 *">
+            <Field label="產品代碼" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="P-001" value={form.product_code} onChange={e => set('product_code', e.target.value)} />
             </Field>
           </div>

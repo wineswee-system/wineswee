@@ -123,10 +123,10 @@ export default function Contracts() {
       {showModal && (
         <Modal title="新增合約" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="合約編號 *">
+            <Field label="合約編號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="CTR-001" value={form.contract_number} onChange={e => set('contract_number', e.target.value)} />
             </Field>
-            <Field label="供應商ID *">
+            <Field label="供應商ID" required>
               <select className="form-input" style={{ width: '100%' }} value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)}>
                 <option value="">請選擇供應商</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

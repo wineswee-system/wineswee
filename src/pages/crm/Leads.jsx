@@ -349,7 +349,7 @@ export default function Leads() {
       {showModal && (
         <Modal title="新增線索" onClose={() => setShowModal(false)} onSubmit={handleCreate} submitLabel={saving ? '建立中...' : '建立'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="姓名 *"><input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="聯絡人姓名" /></Field>
+            <Field label="姓名" required><input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="聯絡人姓名" /></Field>
             <Field label="公司"><input className="form-input" style={{ width: '100%' }} value={form.company} onChange={e => set('company', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

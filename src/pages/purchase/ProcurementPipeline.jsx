@@ -341,7 +341,7 @@ export default function ProcurementPipeline() {
       {showModal && (
         <Modal title="新增採購項目" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="項目名稱 *">
+            <Field label="項目名稱" required>
               <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：辦公室設備採購" />
             </Field>
             <Field label="優先度">
@@ -349,7 +349,7 @@ export default function ProcurementPipeline() {
                 {PRIORITIES.map(p => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="申請人 *">
+            <Field label="申請人" required>
               <input className="form-input" value={form.requester} onChange={e => set('requester', e.target.value)} placeholder="申請人姓名" />
             </Field>
             <Field label="部門">

@@ -53,7 +53,7 @@ export default function MarketingCampaignModal({
   return (
     <Modal title="新增行銷活動" onClose={onClose} onSubmit={handleSubmit}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="活動名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="夏季促銷活動..." value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+        <Field label="活動名稱" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="夏季促銷活動..." value={form.name} onChange={e => set('name', e.target.value)} /></Field>
         <Field label="所屬分店">
           <select className="form-input" style={{ width: '100%' }} value={form.location_id} onChange={e => set('location_id', e.target.value)}>
             <option value="">全部分店</option>
@@ -138,7 +138,7 @@ export default function MarketingCampaignModal({
           </button>
           {showAiPanel && (
             <div style={{ marginTop: 8, padding: 14, borderRadius: 10, background: 'var(--glass-light)', border: '1px solid var(--accent-purple)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Field label="行銷目標 *">
+              <Field label="行銷目標" required>
                 <input className="form-input" style={{ width: '100%' }} placeholder="例：推廣夏季新品、母親節促銷、會員回購..." value={aiGoal} onChange={e => setAiGoal(e.target.value)} />
               </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -166,7 +166,7 @@ export default function MarketingCampaignModal({
         </div>
       )}
 
-      <Field label="訊息內容 *">
+      <Field label="訊息內容" required>
         <textarea
           className="form-input"
           style={{ width: '100%', minHeight: 100, fontFamily: 'monospace', fontSize: 13 }}

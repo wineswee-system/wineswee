@@ -126,7 +126,7 @@ export default function Budgets() {
       {showModal && (
         <Modal title="新增預算" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門 *">
+            <Field label="部門" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="業務部" value={form.department} onChange={e => set('department', e.target.value)} />
             </Field>
             <Field label="類別">
@@ -146,7 +146,7 @@ export default function Budgets() {
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="預算金額 *">
+            <Field label="預算金額" required>
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="500000" value={form.budget_amount} onChange={e => set('budget_amount', e.target.value)} />
             </Field>
             <Field label="已使用金額">

@@ -115,7 +115,7 @@ export default function Documents() {
 
       {showModal && (
         <Modal title="上傳文件" onClose={() => setShowModal(false)} onSubmit={handleUpload}>
-          <Field label="文件名稱 *">
+          <Field label="文件名稱" required>
             <input className="form-input" style={{ width: '100%' }} placeholder="例：2026 Q1 技術報告" value={form.name} onChange={e => set('name', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

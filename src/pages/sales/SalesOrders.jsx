@@ -574,10 +574,10 @@ export default function SalesOrders() {
       {showModal && (
         <Modal title="新增銷售訂單" onClose={() => { setShowModal(false); setLineItems([emptyLineItem()]) }} onSubmit={handleSubmit} width={820}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="訂單編號 *">
+            <Field label="訂單編號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="SO-2026-001" value={form.order_number} onChange={e => set('order_number', e.target.value)} />
             </Field>
-            <Field label="客戶 *">
+            <Field label="客戶" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="客戶名稱" value={form.customer} onChange={e => set('customer', e.target.value)} />
             </Field>
           </div>

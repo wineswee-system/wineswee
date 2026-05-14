@@ -11,7 +11,7 @@ export default function ContactFormModal({ contactForm, setC, onClose, onSubmit 
           {CONTACT_TYPES.map(t => <option key={t} value={t}>{CONTACT_TYPE_LABELS[t]}</option>)}
         </select>
       </Field>
-      <Field label="內容 *"><textarea className="form-input" style={{ width: '100%', minHeight: 80 }} placeholder="紀錄溝通內容..." value={contactForm.content} onChange={e => setC('content', e.target.value)} /></Field>
+      <Field label="內容" required><textarea className="form-input" style={{ width: '100%', minHeight: 80 }} placeholder="紀錄溝通內容..." value={contactForm.content} onChange={e => setC('content', e.target.value)} /></Field>
       <Field label="操作人"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="業務姓名" value={contactForm.operator} onChange={e => setC('operator', e.target.value)} /></Field>
     </Modal>
   )

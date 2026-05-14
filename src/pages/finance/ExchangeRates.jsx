@@ -273,7 +273,7 @@ export default function ExchangeRates() {
               {formError}
             </div>
           )}
-          <Field label="幣別 *">
+          <Field label="幣別" required>
             <select className="form-input" style={{ width: '100%' }} value={form.from_currency} onChange={e => set('from_currency', e.target.value)}>
               {foreignCurrencies.map(c => (
                 <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
@@ -290,7 +290,7 @@ export default function ExchangeRates() {
               )}
             </select>
           </Field>
-          <Field label="匯率 (1 外幣 = ? NTD) *">
+          <Field label="匯率 (1 外幣 = ? NTD)" required>
             <input
               className="form-input"
               type="number"
@@ -307,7 +307,7 @@ export default function ExchangeRates() {
               </div>
             )}
           </Field>
-          <Field label="生效日期 *">
+          <Field label="生效日期" required>
             <input
               className="form-input"
               type="date"

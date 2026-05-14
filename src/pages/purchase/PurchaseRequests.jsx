@@ -142,10 +142,10 @@ export default function PurchaseRequests() {
       {showModal && (
         <Modal title="新增採購申請" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="PR 編號 *">
+            <Field label="PR 編號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="PR-20260401-001" value={form.pr_number} onChange={e => set('pr_number', e.target.value)} />
             </Field>
-            <Field label="申請人 *">
+            <Field label="申請人" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="申請人姓名" value={form.requester} onChange={e => set('requester', e.target.value)} />
             </Field>
           </div>

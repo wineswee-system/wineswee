@@ -122,7 +122,7 @@ export default function ActivityTimeline({ entityType, entityId }) {
               </select>
             </Field>
           </div>
-          <Field label="主題 *">
+          <Field label="主題" required>
             <input className="form-input" style={{ width: '100%' }} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="例：跟進客戶" />
           </Field>
           <Field label="到期日">

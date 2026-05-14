@@ -281,7 +281,7 @@ export default function Checklists() {
             </div>
             {/* Name + assignee */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <Field label="清單名稱 *">
+              <Field label="清單名稱" required>
                 <input className="form-input" style={{ width: '100%' }} autoFocus
                   value={editName} onChange={e => setEditName(e.target.value)} />
               </Field>

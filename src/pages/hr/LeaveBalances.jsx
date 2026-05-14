@@ -431,7 +431,7 @@ export default function LeaveBalances() {
       {/* Add/Edit Modal */}
       {showModal && (
         <Modal title={editingId ? '編輯假別餘額' : '新增假別餘額'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="員工 *">
+          <Field label="員工" required>
             <SearchableSelect
               value={form.employee_id || null}
               onChange={(v) => set('employee_id', v || '')}
@@ -441,19 +441,19 @@ export default function LeaveBalances() {
             />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="年度 *">
+            <Field label="年度" required>
               <select className="form-input" style={{ width: '100%' }} value={form.year} onChange={e => set('year', e.target.value)}>
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </Field>
-            <Field label="假別 *">
+            <Field label="假別" required>
               <select className="form-input" style={{ width: '100%' }} value={form.leave_type} onChange={e => set('leave_type', e.target.value)}>
                 {LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="總天數 *">
+            <Field label="總天數" required>
               <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：7" value={form.total_days} onChange={e => set('total_days', e.target.value)} />
             </Field>
             <Field label="遞延天數">

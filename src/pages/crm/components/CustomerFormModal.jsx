@@ -8,7 +8,7 @@ export default function CustomerFormModal({ form, set, toggleTag, locations, com
   return (
     <Modal title="新增客戶" onClose={onClose} onSubmit={onSubmit}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="姓名 *"><input className="form-input" type="text" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+        <Field label="姓名" required><input className="form-input" type="text" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} /></Field>
         <Field label="公司"><input className="form-input" type="text" style={{ width: '100%' }} value={form.company} onChange={e => set('company', e.target.value)} /></Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

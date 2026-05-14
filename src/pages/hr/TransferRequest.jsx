@@ -409,7 +409,7 @@ export default function TransferRequest() {
       {showForm && (
         <Modal title={editingId ? '✏️ 編輯人事異動申請' : '新增人事異動申請'} onClose={() => { setShowForm(false); setEditingId(null); setForm(emptyForm()); setErrors({}) }} onSubmit={handleSubmit} submitLabel={editingId ? '更新送出' : '送出申請'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *" error={errors.employee_id} errorMsg="請選擇員工">
+            <Field label="員工" required error={errors.employee_id} errorMsg="請選擇員工">
               <SearchableSelect
                 value={form.employee_id}
                 onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}
@@ -423,7 +423,7 @@ export default function TransferRequest() {
               </select>
             </Field>
           </div>
-          <Field label="生效日 *" error={errors.effective_date} errorMsg="請選日期">
+          <Field label="生效日" required error={errors.effective_date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.effective_date} onChange={e => { setForm(f => ({ ...f, effective_date: e.target.value })); clearError('effective_date', setErrors) }} />
           </Field>
           {selectedEmp && (

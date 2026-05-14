@@ -683,10 +683,10 @@ export default function StoreSettingsTab({
       {showShiftModal && (
         <Modal title={editingShift ? `編輯班別 — ${editingShift.name}` : '新增班別'} onClose={resetShiftForm} onSubmit={handleShiftSubmit} submitLabel={editingShift ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="班別名稱 *">
+            <Field label="班別名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：夜班" value={shiftForm.name} onChange={e => setField('name', e.target.value)} />
             </Field>
-            <Field label="類型 *">
+            <Field label="類型" required>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" onClick={() => setField('shift_type', 'morning')} style={{
                   flex: 1, padding: '8px 12px', borderRadius: 8, border: '2px solid',
@@ -710,10 +710,10 @@ export default function StoreSettingsTab({
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="上班時間 *">
+            <Field label="上班時間" required>
               <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.start_time} onChange={e => setField('start_time', e.target.value)} />
             </Field>
-            <Field label="下班時間 *">
+            <Field label="下班時間" required>
               <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.end_time} onChange={e => setField('end_time', e.target.value)} />
             </Field>
           </div>

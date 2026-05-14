@@ -353,7 +353,7 @@ export default function Activities() {
           submitLabel={saving ? '儲存中...' : editingId ? '更新' : '建立'}
         >
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="類型 *">
+            <Field label="類型" required>
               <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>
                 {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -364,7 +364,7 @@ export default function Activities() {
               </select>
             </Field>
           </div>
-          <Field label="主題 *">
+          <Field label="主題" required>
             <input className="form-input" style={{ width: '100%' }} value={form.subject} onChange={e => set('subject', e.target.value)} placeholder="例：跟客戶確認報價" />
           </Field>
           <Field label="說明">

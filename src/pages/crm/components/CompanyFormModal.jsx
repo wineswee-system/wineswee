@@ -6,7 +6,7 @@ export default function CompanyFormModal({ companyForm, setComp, onClose, onSubm
   return (
     <Modal title="新增公司帳戶" onClose={onClose} onSubmit={onSubmit}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="公司名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} value={companyForm.name} onChange={e => setComp('name', e.target.value)} /></Field>
+        <Field label="公司名稱" required><input className="form-input" type="text" style={{ width: '100%' }} value={companyForm.name} onChange={e => setComp('name', e.target.value)} /></Field>
         <Field label="產業"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：製造業" value={companyForm.industry} onChange={e => setComp('industry', e.target.value)} /></Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

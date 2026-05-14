@@ -338,10 +338,10 @@ export default function POSShifts() {
       {showModal && (
         <Modal title="新增班別" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="門市 *">
+            <Field label="門市" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="門市名稱" value={form.store} onChange={e => set('store', e.target.value)} />
             </Field>
-            <Field label="收銀員 *">
+            <Field label="收銀員" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="收銀員姓名" value={form.cashier} onChange={e => set('cashier', e.target.value)} />
             </Field>
           </div>

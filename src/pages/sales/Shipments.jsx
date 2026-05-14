@@ -124,7 +124,7 @@ export default function Shipments() {
       {showModal && (
         <Modal title="新增出貨" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="出貨單號 *">
+            <Field label="出貨單號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="SHP-001" value={form.shipment_number} onChange={e => set('shipment_number', e.target.value)} />
             </Field>
             <Field label="訂單參考">
@@ -145,7 +145,7 @@ export default function Shipments() {
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="配送地址" value={form.destination} onChange={e => set('destination', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="收件人 *">
+            <Field label="收件人" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="收件人姓名" value={form.recipient} onChange={e => set('recipient', e.target.value)} />
             </Field>
             <Field label="預計到貨日">

@@ -136,10 +136,10 @@ export default function ManufacturingOrders() {
       {showModal && (
         <Modal title="新增製令" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="製令編號 *">
+            <Field label="製令編號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="MO-001" value={form.mo_number} onChange={e => set('mo_number', e.target.value)} />
             </Field>
-            <Field label="產品名稱 *">
+            <Field label="產品名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="產品A" value={form.product_name} onChange={e => set('product_name', e.target.value)} />
             </Field>
           </div>

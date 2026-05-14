@@ -201,7 +201,7 @@ export default function Kitting() {
       {showCreate && (
         <Modal title="新增組合商品" onClose={() => setShowCreate(false)} onSubmit={handleCreate}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="組合品號 (SKU) *">
+            <Field label="組合品號 (SKU)" required>
               <select className="form-input" style={{ width: '100%' }} value={form.kit_sku_id} onChange={e => set('kit_sku_id', e.target.value)}>
                 <option value="">-- 選擇 SKU --</option>
                 {skus.map(s => <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
@@ -214,7 +214,7 @@ export default function Kitting() {
               </select>
             </Field>
           </div>
-          <Field label="組合名稱 *"><input className="form-input" style={{ width: '100%' }} placeholder="如：新年禮盒組" value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+          <Field label="組合名稱" required><input className="form-input" style={{ width: '100%' }} placeholder="如：新年禮盒組" value={form.name} onChange={e => set('name', e.target.value)} /></Field>
           <Field label="說明"><input className="form-input" style={{ width: '100%' }} placeholder="組合說明" value={form.description} onChange={e => set('description', e.target.value)} /></Field>
 
           <div style={{ marginTop: 12 }}>

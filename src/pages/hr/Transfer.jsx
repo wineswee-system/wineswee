@@ -559,7 +559,7 @@ export default function Transfer() {
           submitLabel={submitting ? '處理中…' : '確認異動'}
           submitDisabled={submitting}
         >
-          <Field label="選擇員工 *">
+          <Field label="選擇員工" required>
             <SearchableSelect
               value={transferForm.employee_id || null}
               onChange={(v) => setTF('employee_id', v || '')}
@@ -568,7 +568,7 @@ export default function Transfer() {
             />
           </Field>
 
-          <Field label="異動類型 *">
+          <Field label="異動類型" required>
             <select
               className="form-input"
               value={transferForm.change_type}
@@ -627,7 +627,7 @@ export default function Transfer() {
 
           {transferForm.change_type === '薪資調整' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="新基本薪資 *">
+              <Field label="新基本薪資" required>
                 <input
                   className="form-input"
                   type="number"
@@ -666,7 +666,7 @@ export default function Transfer() {
             </div>
           )}
 
-          <Field label="生效日 *">
+          <Field label="生效日" required>
             <input
               className="form-input"
               type="date"
@@ -696,7 +696,7 @@ export default function Transfer() {
           submitLabel={salarySubmitting ? '處理中…' : '確認調整'}
           submitDisabled={salarySubmitting}
         >
-          <Field label="選擇員工 *">
+          <Field label="選擇員工" required>
             <SearchableSelect
               value={salaryForm.employee_id || null}
               onChange={(v) => setSF('employee_id', v || '')}
@@ -706,7 +706,7 @@ export default function Transfer() {
           </Field>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="新基本薪資 *">
+            <Field label="新基本薪資" required>
               <input
                 className="form-input"
                 type="number"
@@ -744,7 +744,7 @@ export default function Transfer() {
             </Field>
           </div>
 
-          <Field label="生效日 *">
+          <Field label="生效日" required>
             <input
               className="form-input"
               type="date"

@@ -532,7 +532,7 @@ export default function EngagementSurveys() {
       {/* Create/Edit Survey Modal */}
       {showModal && (
         <Modal title={editingId ? '編輯問卷' : '建立問卷'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleCreateSurvey}>
-          <Field label="問卷標題 *">
+          <Field label="問卷標題" required>
             <input className="form-input" style={{ width: '100%' }} value={surveyForm.title} onChange={e => setS('title', e.target.value)} placeholder="例：2026 Q2 員工脈搏調查" />
           </Field>
           <Field label="說明">
@@ -577,7 +577,7 @@ export default function EngagementSurveys() {
       {showFillModal && selectedSurvey && (
         <Modal title={`填寫：${selectedSurvey.title}`} onClose={() => setShowFillModal(false)} onSubmit={handleSubmitResponse}>
           {!selectedSurvey.is_anonymous && (
-            <Field label="員工 *">
+            <Field label="員工" required>
               <SearchableSelect
                 value={fillEmployee}
                 onChange={(v) => setFillEmployee(v || '')}

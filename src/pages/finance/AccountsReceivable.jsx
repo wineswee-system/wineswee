@@ -137,8 +137,8 @@ export default function AccountsReceivable() {
       {showModal && (
         <Modal title="新增應收帳款" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="發票號碼 *"><input className="form-input" style={{ width: '100%' }} value={form.invoice_number} onChange={e => set('invoice_number', e.target.value)} placeholder="INV-2026-001" /></Field>
-            <Field label="客戶 *"><input className="form-input" style={{ width: '100%' }} value={form.customer} onChange={e => set('customer', e.target.value)} placeholder="客戶名稱" /></Field>
+            <Field label="發票號碼" required><input className="form-input" style={{ width: '100%' }} value={form.invoice_number} onChange={e => set('invoice_number', e.target.value)} placeholder="INV-2026-001" /></Field>
+            <Field label="客戶" required><input className="form-input" style={{ width: '100%' }} value={form.customer} onChange={e => set('customer', e.target.value)} placeholder="客戶名稱" /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="訂單參考"><input className="form-input" style={{ width: '100%' }} value={form.order_ref} onChange={e => set('order_ref', e.target.value)} placeholder="SO-001" /></Field>

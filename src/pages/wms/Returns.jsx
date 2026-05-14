@@ -235,7 +235,7 @@ export default function Returns() {
       {showCreate && (
         <Modal title="新增退貨單" onClose={() => setShowCreate(false)} onSubmit={handleCreate}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="客戶 *"><input className="form-input" style={{ width: '100%' }} placeholder="客戶名稱" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} /></Field>
+            <Field label="客戶" required><input className="form-input" style={{ width: '100%' }} placeholder="客戶名稱" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} /></Field>
             <Field label="退貨原因"><select className="form-input" style={{ width: '100%' }} value={form.reason} onChange={e => set('reason', e.target.value)}>{REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}</select></Field>
           </div>
           <Field label="倉庫"><input className="form-input" style={{ width: '100%' }} placeholder="退回倉庫" value={form.warehouse} onChange={e => set('warehouse', e.target.value)} /></Field>
@@ -264,7 +264,7 @@ export default function Returns() {
       {showInspect && (
         <Modal title={`品檢 — ${showInspect.return_number}`} onClose={() => setShowInspect(null)} onSubmit={handleInspection}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="品檢人員 *"><input className="form-input" style={{ width: '100%' }} placeholder="品檢人員" value={inspectForm.inspector} onChange={e => setInspectForm(f => ({ ...f, inspector: e.target.value }))} /></Field>
+            <Field label="品檢人員" required><input className="form-input" style={{ width: '100%' }} placeholder="品檢人員" value={inspectForm.inspector} onChange={e => setInspectForm(f => ({ ...f, inspector: e.target.value }))} /></Field>
             <Field label="品檢備註"><input className="form-input" style={{ width: '100%' }} placeholder="備註" value={inspectForm.notes} onChange={e => setInspectForm(f => ({ ...f, notes: e.target.value }))} /></Field>
           </div>
           <div style={{ marginTop: 12 }}>

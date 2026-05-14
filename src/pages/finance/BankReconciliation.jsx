@@ -229,6 +229,10 @@ export default function BankReconciliation() {
 
   const handleCreateAdjustEntry = async () => {
     if (!adjustTarget) return
+    if (!adjustForm.description?.trim()) {
+      toast.warning('請填寫調整說明')
+      return
+    }
     const amount = (adjustTarget.debit || 0) - (adjustTarget.credit || 0)
     try {
       const { data, error } = await createJournalEntry({
@@ -573,7 +577,7 @@ export default function BankReconciliation() {
               {adjustTarget.transaction_date} | {adjustTarget.debit ? fmt(adjustTarget.debit) + ' (借方)' : fmt(adjustTarget.credit) + ' (貸方)'}
             </div>
           </div>
-          <Field label="分錄說明 *">
+          <Field label="分錄說明" required>
             <input
               className="form-input"
               type="text"

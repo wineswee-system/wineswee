@@ -44,7 +44,7 @@ export default function SalaryFormModal({
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="員工 *">
+        <Field label="員工" required>
           <EmpSelect value={form.employee} onChange={v => set('employee', v)} employees={employees} departments={departments} />
         </Field>
         <Field label="月份">

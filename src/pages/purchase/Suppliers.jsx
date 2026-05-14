@@ -208,7 +208,7 @@ export default function Suppliers() {
 
       {showModal && (
         <Modal title={editingId ? '編輯供應商' : '新增供應商'} onClose={() => { setShowModal(false); setEditingId(null) }} onSubmit={handleSubmit}>
-          <Field label="供應商名稱 *">
+          <Field label="供應商名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="供應商名稱" value={form.name} onChange={e => set('name', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

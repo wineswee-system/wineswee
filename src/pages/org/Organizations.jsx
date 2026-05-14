@@ -184,10 +184,10 @@ export default function Organizations() {
       {showModal && (
         <Modal title={editingOrg ? `編輯組織 — ${editingOrg.name}` : '新增組織'} onClose={() => { setShowModal(false); setEditingOrg(null) }} onSubmit={handleSubmit} submitLabel={editingOrg ? '儲存變更' : '新增'}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="組織名稱 *">
+            <Field label="組織名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：好日子餐飲集團" value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
-            <Field label="代碼 (slug) *">
+            <Field label="代碼 (slug)" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：haorizi-group" value={form.slug} onChange={e => set('slug', e.target.value)} />
             </Field>
           </div>

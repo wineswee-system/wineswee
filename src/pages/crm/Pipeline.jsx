@@ -497,9 +497,9 @@ export default function Pipeline() {
 
           {modalTab === 'details' && (
             <>
-              <Field label="商機名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="Q3 大單採購..." value={form.title} onChange={e => set('title', e.target.value)} /></Field>
+              <Field label="商機名稱" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="Q3 大單採購..." value={form.title} onChange={e => set('title', e.target.value)} /></Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="客戶名稱 *">
+                <Field label="客戶名稱" required>
                   <input className="form-input" type="text" style={{ width: '100%' }} list="customer-list" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
                   <datalist id="customer-list">{customers.map(c => <option key={c.id} value={c.name} />)}</datalist>
                 </Field>

@@ -109,7 +109,7 @@ export default function Promotions() {
 
       {showModal && (
         <Modal title="新增促銷活動" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="活動名稱 *">
+          <Field label="活動名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="活動名稱" value={form.name} onChange={e => set('name', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

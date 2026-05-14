@@ -141,7 +141,7 @@ export default function Returns() {
       {showModal && (
         <Modal title="新增退貨" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="退貨單號 *">
+            <Field label="退貨單號" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="RT-2026-001" value={form.return_number} onChange={e => set('return_number', e.target.value)} />
             </Field>
             <Field label="原始訂單">
@@ -149,7 +149,7 @@ export default function Returns() {
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="客戶 *">
+            <Field label="客戶" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="客戶名稱" value={form.customer} onChange={e => set('customer', e.target.value)} />
             </Field>
             <Field label="退款金額">

@@ -488,7 +488,7 @@ export default function Bonus() {
       {showRecordModal && (
         <Modal title="發放獎金紀錄" onClose={() => { setShowRecordModal(false); setPolicyBonus(0); setPerfReview(null) }} onSubmit={handleAddRecord} submitLabel="確認發放">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工姓名 *">
+            <Field label="員工姓名" required>
               <SearchableSelect
                 value={recordForm.employee_name}
                 onChange={(v) => handleEmployeeSelect(v || '')}
@@ -531,7 +531,7 @@ export default function Bonus() {
                 {ROLE_TYPES.map(r => <option key={r}>{r}</option>)}
               </select>
             </Field>
-            <Field label="指標名稱 *"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="零錯誤率獎金..." value={settingForm.metric_name} onChange={e => setS('metric_name', e.target.value)} /></Field>
+            <Field label="指標名稱" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="零錯誤率獎金..." value={settingForm.metric_name} onChange={e => setS('metric_name', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="目標值"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0.05" value={settingForm.target_value} onChange={e => setS('target_value', e.target.value)} /></Field>

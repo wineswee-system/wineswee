@@ -443,7 +443,7 @@ export default function MRP() {
       {showModal && (
         <Modal title="手動新增 MRP 記錄" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-            <Field label="產品名稱 *">
+            <Field label="產品名稱" required>
               <input className="form-input" style={{ width: '100%' }} placeholder="產品名稱" value={form.product_name} onChange={e => set('product_name', e.target.value)} />
             </Field>
             <Field label="訂單數量">

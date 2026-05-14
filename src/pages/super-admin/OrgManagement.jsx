@@ -335,14 +335,14 @@ export default function OrgManagement() {
       {/* Create/Edit Modal */}
       {showModal && (
         <Modal title={editId ? '編輯組織' : '新增組織'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="組織名稱 *">
+          <Field label="組織名稱" required>
             <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：台灣科技股份有限公司" />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <Field label="統一編號 *">
+            <Field label="統一編號" required>
               <input className="form-input" value={form.tax_id} onChange={e => set('tax_id', e.target.value)} placeholder="8 碼統一編號" maxLength={8} />
             </Field>
-            <Field label="管理員 Email *">
+            <Field label="管理員 Email" required>
               <input className="form-input" type="email" value={form.admin_email} onChange={e => set('admin_email', e.target.value)} placeholder="admin@example.com" />
             </Field>
           </div>

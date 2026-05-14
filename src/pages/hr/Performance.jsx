@@ -277,7 +277,7 @@ export default function Performance() {
       {showReviewModal && (
         <Modal title="新增績效考核" onClose={() => setShowReviewModal(false)} onSubmit={handleAddReview}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
+            <Field label="員工" required>
               <EmpSelect value={reviewForm.employee} onChange={v => setR('employee', v)} />
             </Field>
             <Field label="考核期">
@@ -287,7 +287,7 @@ export default function Performance() {
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="總分 *">
+            <Field label="總分" required>
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0-100" min="0" max="100" value={reviewForm.overall_score} onChange={e => setR('overall_score', e.target.value)} />
             </Field>
             <Field label="達成目標數">
@@ -321,7 +321,7 @@ export default function Performance() {
       {showGoalModal && (
         <Modal title="新增績效目標" onClose={() => setShowGoalModal(false)} onSubmit={handleAddGoal}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="員工 *">
+            <Field label="員工" required>
               <EmpSelect value={goalForm.employee} onChange={v => setG('employee', v)} />
             </Field>
             <Field label="分類">
@@ -330,11 +330,11 @@ export default function Performance() {
               </select>
             </Field>
           </div>
-          <Field label="目標名稱 *">
+          <Field label="目標名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：完成 5 個客戶提案" value={goalForm.title} onChange={e => setG('title', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="目標值 *">
+            <Field label="目標值" required>
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="5" value={goalForm.target} onChange={e => setG('target', e.target.value)} />
             </Field>
             <Field label="目前進度">

@@ -74,7 +74,7 @@ export default function Templates() {
 
       {showModal && (
         <Modal title="新增模板" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="模板名稱 *">
+          <Field label="模板名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：加班申請通知" value={form.name} onChange={e => set('name', e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -89,7 +89,7 @@ export default function Templates() {
               </select>
             </Field>
           </div>
-          <Field label="訊息內容 *">
+          <Field label="訊息內容" required>
             <textarea className="form-input" style={{ width: '100%', height: 100, resize: 'vertical' }} placeholder="使用 {{變數名稱}} 作為動態欄位" value={form.content} onChange={e => set('content', e.target.value)} />
           </Field>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--glass-light)', padding: '8px 10px', borderRadius: 6 }}>

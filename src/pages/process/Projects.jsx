@@ -943,7 +943,7 @@ export default function Projects() {
               )
             ) : (
               <>
-                <Field label="流程名稱 *">
+                <Field label="流程名稱" required>
                   <input className="form-input" style={{ width: '100%' }} placeholder="例：開店前準備流程" value={newWfForm.template_name} onChange={e => setNewWfForm(f => ({ ...f, template_name: e.target.value }))} />
                 </Field>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -973,7 +973,7 @@ export default function Projects() {
         {/* Modal in detail view */}
         {showModal && (
           <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
-            <Field label="專案名稱 *">
+            <Field label="專案名稱" required>
               <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -1128,7 +1128,7 @@ export default function Projects() {
       {/* Deploy Modal */}
       {showDeployModal && deployTpl && (
         <Modal title={`部署專案 — ${deployTpl.name}`} onClose={() => setShowDeployModal(false)} onSubmit={handleDeploy} submitLabel={deploying ? '部署中...' : '🚀 部署'}>
-          <Field label="專案名稱 *">
+          <Field label="專案名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={deployForm.name} onChange={e => setDeployForm(f => ({ ...f, name: e.target.value }))} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1217,7 +1217,7 @@ export default function Projects() {
       {/* Modal */}
       {showModal && (
         <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => { setShowModal(false); setEditingId(null); resetNewProjectState() }} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
-          <Field label="專案名稱 *">
+          <Field label="專案名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：南京門市裝潢翻新" />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>

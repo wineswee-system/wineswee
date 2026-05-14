@@ -481,7 +481,7 @@ export default function JournalEntries() {
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Entry header fields */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="傳票編號 *">
+                <Field label="傳票編號" required>
                   <input className="form-input" style={{ width: '100%' }} value={form.entry_number} onChange={e => set('entry_number', e.target.value)} placeholder="JE-2026-001" />
                 </Field>
                 <Field label="日期">

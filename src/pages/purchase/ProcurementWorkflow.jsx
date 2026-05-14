@@ -336,7 +336,7 @@ export default function ProcurementWorkflow() {
       {showModal && (
         <Modal title="新增工作流程" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="流程名稱 *">
+            <Field label="流程名稱" required>
               <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：大額採購審批" />
             </Field>
             <Field label="狀態">

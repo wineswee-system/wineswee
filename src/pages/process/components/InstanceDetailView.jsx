@@ -234,7 +234,7 @@ export default function InstanceDetailView({
       )}
       {showAddTaskModal && (
         <Modal title="新增任務" onClose={() => setShowAddTaskModal(false)} onSubmit={onAddTask}>
-          <Field label="任務名稱 *">
+          <Field label="任務名稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：電力申請"
               value={taskForm.title}
               onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />

@@ -168,10 +168,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       .catch(() => {})
   }, [newLineChannel])
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
+  // body overflow 不再 lock（page 模式不是 modal）
 
   if (!employee) return null
 
@@ -373,23 +370,17 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 10000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
-    }}
-      onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
-      {/* Backdrop */}
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
-        onMouseDown={handleClose} />
-
-      {/* Panel — 永遠在 viewport 正中央 */}
+      width: '100%',
+      maxWidth: 1200,
+      margin: '0 auto',
+      padding: 16,
+    }}>
+      {/* Panel — page content (沒 fixed overlay，自然 page 滾動) */}
       <div style={{
-        position: 'relative',
-        width: '94vw', maxWidth: 960,
-        maxHeight: '80vh', minHeight: 0,
         background: 'var(--bg-primary)', borderRadius: 16,
         border: '1px solid var(--border-medium)',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        display: 'flex', flexDirection: 'column',
         animation: 'fadeIn 0.2s ease-out',
       }}>
 

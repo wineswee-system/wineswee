@@ -6,6 +6,7 @@ import Companies from '../pages/org/Companies'
 import Locations from '../pages/org/Locations'
 import Departments from '../pages/org/Departments'
 import Employees from '../pages/org/Employees'
+import EmployeeProfile from '../pages/org/EmployeeProfile'
 import LineIntegration from '../pages/org/LineIntegration'
 import Templates from '../pages/org/Templates'
 
@@ -19,6 +20,7 @@ export default function OrgModule() {
       <Route path="locations" element={<Locations />} />
       <Route path="departments" element={<Departments />} />
       <Route path="employees" element={<Employees />} />
+      <Route path="employees/:id" element={<EmployeeProfile />} />
       <Route path="line" element={<LineIntegration />} />
       <Route path="templates" element={<Templates />} />
     </Routes>

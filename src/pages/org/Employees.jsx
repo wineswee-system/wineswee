@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -6,7 +7,6 @@ import { createAssignment, rotatePrimary } from '../../lib/assignments'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
-import EmployeeDetail from '../../components/EmployeeDetail'
 import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -77,8 +77,8 @@ export default function Employees() {
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
   const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '', bank_code: '', bank_account: '' })
-  const [detailEmp, setDetailEmp] = useState(null)
-  const [detailClickY, setDetailClickY] = useState(null)
+  const navigate = useNavigate()
+  const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [pageTab, setPageTab] = useState('employees')
   const [showDeptModal, setShowDeptModal] = useState(false)
@@ -335,7 +335,7 @@ export default function Employees() {
                 {members.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {members.slice(0, 8).map(m => (
-                      <button key={m.id} onClick={ev => { setDetailClickY(ev.clientY); setDetailEmp(m) }} style={{
+                      <button key={m.id} onClick={() => openDetail(m)} style={{
                         display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px 3px 3px',
                         borderRadius: 20, border: '1px solid var(--border-subtle)', background: 'var(--glass-light)',
                         cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
@@ -438,7 +438,7 @@ export default function Employees() {
               {filtered.map(e => {
                 const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '全職'))
                 return (
-                <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={ev => { setDetailClickY(ev.clientY); setDetailEmp(e) }}>
+                <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={() => openDetail(e)}>
                   <td><span style={{ fontFamily: 'monospace', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>{e.employee_number || `EMP-${String(e.id).padStart(3, '0')}`}</span></td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -744,21 +744,7 @@ export default function Employees() {
         </Modal>
       )}
 
-      {/* Employee Detail Modal */}
-      {detailEmp && (
-        <EmployeeDetail
-          employee={detailEmp}
-          employees={employees}
-          stores={locations}
-          departments={departments}
-          clickY={detailClickY}
-          onUpdate={(updated) => {
-            setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e))
-            setDetailEmp(updated)
-          }}
-          onClose={() => setDetailEmp(null)}
-        />
-      )}
+      {/* 員工詳情改成獨立路由頁面 /org/employees/:id (見 EmployeeProfile.jsx) */}
     </div>
   )
 }

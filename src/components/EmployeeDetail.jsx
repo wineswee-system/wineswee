@@ -521,9 +521,25 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
 
               <SectionTitle icon="🚨" text="緊急聯絡人" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                 <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_name || ''} onChange={e => set('emergency_name', e.target.value)} /></div>
                 <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_phone || ''} onChange={e => set('emergency_phone', e.target.value)} /></div>
+                <div>
+                  <div style={L}>關係</div>
+                  <select className="form-input" style={{ width: '100%' }}
+                    value={form.emergency_contact_relation || ''}
+                    onChange={e => set('emergency_contact_relation', e.target.value)}>
+                    <option value="">請選擇</option>
+                    <option value="父母">父母</option>
+                    <option value="配偶">配偶</option>
+                    <option value="子女">子女</option>
+                    <option value="兄弟姊妹">兄弟姊妹</option>
+                    <option value="祖父母">祖父母</option>
+                    <option value="親戚">親戚</option>
+                    <option value="朋友">朋友</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
               </div>
 
               <SectionTitle icon="💬" text="LINE 帳號綁定" />

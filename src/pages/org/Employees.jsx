@@ -76,7 +76,7 @@ export default function Employees() {
   const [selectedEmp, setSelectedEmp] = useState(null)
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
-  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', bank_code: '', bank_account: '' })
+  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '', bank_code: '', bank_account: '' })
   const [detailEmp, setDetailEmp] = useState(null)
   const [detailClickY, setDetailClickY] = useState(null)
   const [showCsvImport, setShowCsvImport] = useState(false)
@@ -140,7 +140,7 @@ export default function Employees() {
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
-        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', bank_code: '', bank_account: '' })
+        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '', bank_code: '', bank_account: '' })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
@@ -595,12 +595,25 @@ export default function Employees() {
           {/* 緊急聯絡人 & 薪轉帳戶 */}
           <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🆘 緊急聯絡人 &amp; 薪轉帳戶</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="緊急聯絡人">
                 <input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={form.emergency_contact_name} onChange={e => set('emergency_contact_name', e.target.value)} />
               </Field>
               <Field label="緊急聯絡電話">
                 <input className="form-input" type="tel" style={{ width: '100%' }} placeholder="0912-345-678" value={form.emergency_contact_phone} onChange={e => set('emergency_contact_phone', e.target.value)} />
+              </Field>
+              <Field label="關係">
+                <select className="form-input" style={{ width: '100%' }} value={form.emergency_contact_relation} onChange={e => set('emergency_contact_relation', e.target.value)}>
+                  <option value="">請選擇</option>
+                  <option value="父母">父母</option>
+                  <option value="配偶">配偶</option>
+                  <option value="子女">子女</option>
+                  <option value="兄弟姊妹">兄弟姊妹</option>
+                  <option value="祖父母">祖父母</option>
+                  <option value="親戚">親戚</option>
+                  <option value="朋友">朋友</option>
+                  <option value="其他">其他</option>
+                </select>
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

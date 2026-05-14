@@ -63,6 +63,10 @@ export default function TaskDetailPanel({
   const [triggerTemplateId, setTriggerTemplateId] = useState('')
   const [triggering, setTriggering] = useState(false)
 
+  // Project & workflow dropdowns
+  const [allProjects, setAllProjects] = useState([])
+  const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
+
   // InputModal state (replaces window.prompt calls)
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
   const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
@@ -83,6 +87,8 @@ export default function TaskDetailPanel({
       reminder_at: task.reminder_at || '',
       confirmation_mode: task.confirmation_mode || 'parallel',
       notes: task.notes || '',
+      workflow_instance_id: task.workflow_instance_id || '',
+      project_id: task.project_id || '',
     })
     setTitleDraft(task.title)
     setEditingTitle(false)
@@ -98,7 +104,9 @@ export default function TaskDetailPanel({
       safe(getTaskConfirmations(task.id)),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
-    ]).then(([c, a, cl, d, ac, af, tc, tpl, trig]) => {
+      safe(supabase.from('projects').select('id, name').order('name')),
+      safe(supabase.from('workflow_instances').select('id, template_name, status').order('id')),
+    ]).then(([c, a, cl, d, ac, af, tc, tpl, trig, proj, wfAll]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
@@ -107,6 +115,8 @@ export default function TaskDetailPanel({
       setConfirmations(tc.data || [])
       setSopTemplates(tpl.data || [])
       setTriggeredInstances(trig.data || [])
+      setAllProjects(proj.data || [])
+      setAllWorkflowInstances(wfAll.data || [])
       // Load approval form & steps
       if (af.data) {
         setApprovalForm(af.data)
@@ -210,6 +220,8 @@ export default function TaskDetailPanel({
       reminder_at: form.reminder_at || null,
       confirmation_mode: form.confirmation_mode || 'parallel',
       completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
+      workflow_instance_id: form.workflow_instance_id || null,
+      project_id: form.project_id || null,
     }
     const { data } = await updateTask(task.id, payload)
     if (data) {
@@ -658,7 +670,7 @@ export default function TaskDetailPanel({
           {/* ═══ Section: Basic Fields ═══ */}
           {activeTab === 'basic' && (
           <div style={sectionStyle}>
-            <div style={fieldGrid}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 1fr', gap: 12 }}>
               <div>
                 <div style={labelStyle}>狀態</div>
                 <select className="form-input" style={{ width: '100%' }} value={form.status}
@@ -671,6 +683,13 @@ export default function TaskDetailPanel({
                 <select className="form-input" style={{ width: '100%' }} value={form.priority}
                   onChange={e => setAndDirty('priority', e.target.value)}>
                   {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>分類</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.category}
+                  onChange={e => setAndDirty('category', e.target.value)}>
+                  {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </div>
@@ -698,14 +717,22 @@ export default function TaskDetailPanel({
             <div style={fieldGrid}>
               <div>
                 <div style={labelStyle}>工作流</div>
-                <input className="form-input" style={{ width: '100%' }} readOnly
-                  value={instance?.store || instance?.template_name || ''} />
+                <select className="form-input" style={{ width: '100%' }} value={form.workflow_instance_id}
+                  onChange={e => setAndDirty('workflow_instance_id', e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">未指定</option>
+                  {allWorkflowInstances.map(w => (
+                    <option key={w.id} value={w.id}>{w.template_name}{w.status ? ` (${w.status})` : ''}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <div style={labelStyle}>分類</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.category}
-                  onChange={e => setAndDirty('category', e.target.value)}>
-                  {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
+                <div style={labelStyle}>專案</div>
+                <select className="form-input" style={{ width: '100%' }} value={form.project_id}
+                  onChange={e => setAndDirty('project_id', e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">未指定</option>
+                  {allProjects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -5,7 +5,7 @@ import { toast } from '../../lib/toast'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns, GitBranch, MoreHorizontal
+  Users, Settings, Columns, GitBranch, MoreVertical
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
@@ -93,6 +93,7 @@ export default function Projects() {
   const [collapsedWfIds, setCollapsedWfIds] = useState(new Set())
   const toggleWf = (id) => setCollapsedWfIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const [wfMenuId, setWfMenuId] = useState(null)
+  const [projMenuId, setProjMenuId] = useState(null)
 
   const handleWfRename = async (w) => {
     const name = window.prompt('流程名稱', w.template_name)
@@ -148,6 +149,12 @@ export default function Projects() {
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [wfMenuId])
+  useEffect(() => {
+    if (!projMenuId) return
+    const close = () => setProjMenuId(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [projMenuId])
 
   useEffect(() => {
     if (!selected) return
@@ -536,7 +543,27 @@ export default function Projects() {
               </h2>
               <p>{p.description || '無說明'}</p>
             </div>
-            <button className="btn btn-secondary" onClick={(e) => openEdit(p, e)}><Edit3 size={14} /> 編輯</button>
+            <div style={{ position: 'relative' }}>
+              <button className="btn btn-secondary" style={{ padding: '6px 8px' }} onClick={e => { e.stopPropagation(); setProjMenuId(projMenuId === p.id ? null : p.id) }}>
+                <MoreVertical size={15} />
+              </button>
+              {projMenuId === p.id && (
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }} onClick={e => e.stopPropagation()}>
+                  <button
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    onClick={(e) => { setProjMenuId(null); openEdit(p, e) }}
+                  ><Edit3 size={13} /> 編輯專案</button>
+                  <button
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    onClick={(e) => { setProjMenuId(null); handleDelete(p.id, e) }}
+                  ><Trash2 size={13} /> 刪除專案</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -744,7 +771,7 @@ export default function Projects() {
                       className="btn btn-secondary"
                       style={{ padding: '4px 6px', lineHeight: 1 }}
                       onClick={() => setWfMenuId(wfMenuId === w.id ? null : w.id)}
-                    ><MoreHorizontal size={14} /></button>
+                    ><MoreVertical size={14} /></button>
                     {wfMenuId === w.id && (
                       <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
                         <button
@@ -1267,9 +1294,26 @@ export default function Projects() {
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{stats.pct}%</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                  <button className="btn btn-secondary" style={{ padding: '3px 7px' }} onClick={(e) => openEdit(p, e)}><Edit3 size={12} /></button>
-                  <button className="btn btn-secondary" style={{ padding: '3px 7px', color: 'var(--accent-red)' }} onClick={(e) => handleDelete(p.id, e)}><Trash2 size={12} /></button>
+                <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                  <button className="btn btn-secondary" style={{ padding: '3px 6px' }} onClick={() => setProjMenuId(projMenuId === p.id ? null : p.id)}>
+                    <MoreVertical size={13} />
+                  </button>
+                  {projMenuId === p.id && (
+                    <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
+                      <button
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={(e) => { setProjMenuId(null); openEdit(p, e) }}
+                      ><Edit3 size={13} /> 編輯專案</button>
+                      <button
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={(e) => { setProjMenuId(null); handleDelete(p.id, e) }}
+                      ><Trash2 size={13} /> 刪除專案</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

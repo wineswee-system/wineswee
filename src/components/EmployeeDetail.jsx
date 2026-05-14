@@ -372,17 +372,21 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 10000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}
       onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       {/* Backdrop */}
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
         onMouseDown={handleClose} />
 
-      {/* Panel */}
+      {/* Panel — 永遠在 viewport 正中央 */}
       <div style={{
-        position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-        top: Math.max(16, Math.min(clickY ? clickY - 120 : window.innerHeight * 0.06, window.innerHeight - window.innerHeight * 0.88 - 16)),
-        width: '94vw', maxWidth: 960, height: '88vh',
+        position: 'relative',
+        width: '94vw', maxWidth: 960,
+        height: '88vh', maxHeight: 'calc(100vh - 48px)', minHeight: 0,
         background: 'var(--bg-primary)', borderRadius: 16,
         border: '1px solid var(--border-medium)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column',

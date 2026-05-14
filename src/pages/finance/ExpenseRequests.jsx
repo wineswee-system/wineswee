@@ -346,6 +346,8 @@ export default function ExpenseRequests() {
     const fakeRow = {
       approval_chain_id: req.approval_chain_id || null,
       current_step: req.current_step || 0,
+      // ★ 必須帶 employee_id 給 get_chain_step_display_names 解動態 target（applicant_dept_manager 等）
+      employee_id: req.employee_id,
       // 待核銷 視為 chain 全完，讓 buildChainBasedSteps 把所有 chain step 標 completed
       status: req.status === '待核銷' ? '已核准' : req.status,
       approved_at: req.approved_at,

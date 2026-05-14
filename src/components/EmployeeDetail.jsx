@@ -216,8 +216,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     if (file.size > 5 * 1024 * 1024) { toast.error('圖片不可超過 5MB'); return }
     setPassbookUploading(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `passbooks/${employee.id}/存摺封面.${ext}`
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')
+      // path 寫死 ASCII（不能用中文，Storage 會擋）
+      const path = `passbooks/${employee.id}/passbook.${ext || 'jpg'}`
       const { error: upErr } = await supabase.storage.from('employee-docs').upload(path, file, { upsert: true })
       if (upErr) throw upErr
       const { data: urlData } = supabase.storage.from('employee-docs').getPublicUrl(path)

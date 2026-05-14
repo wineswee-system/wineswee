@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, FileText, Image, File } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { getCRMAttachments, createCRMAttachment, deleteCRMAttachment } from '../../../lib/db'
+import { safeStorageName } from '../../../lib/storageSanitize'
 
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
@@ -45,7 +46,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
     if (file.size > MAX_SIZE) { toast.error('檔案大小不可超過 10MB'); return }
     setUploading(true)
     try {
-      const path = `crm/${entityType}/${entityId}/${Date.now()}_${file.name}`
+      const path = `crm/${entityType}/${entityId}/${Date.now()}_${safeStorageName(file.name)}`
       const { error: uploadErr } = await supabase.storage.from('attachments').upload(path, file)
       if (uploadErr) throw uploadErr
 

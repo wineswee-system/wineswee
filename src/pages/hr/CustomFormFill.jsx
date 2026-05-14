@@ -4,6 +4,7 @@ import { ArrowLeft, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { safeStorageName } from '../../lib/storageSanitize'
 
 import { toast } from '../../lib/toast'
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
@@ -156,7 +157,7 @@ function FieldRender({ field, value, onChange }) {
           const file = e.target.files?.[0]
           if (!file) return
           // 上傳到 Supabase Storage
-          const path = `form-uploads/${Date.now()}_${file.name}`
+          const path = `form-uploads/${Date.now()}_${safeStorageName(file.name)}`
           const { data: upload, error } = await supabase.storage.from('uploads').upload(path, file)
           if (error) return toast.error('上傳失敗：' + error.message)
           const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(upload.path)

@@ -623,7 +623,7 @@ export default function ExpenseRequests() {
       {/* New Request Modal */}
       {showModal && (
         <ModalOverlay onClose={() => { setShowModal(false); setErrors({}) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 520, maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 520, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
               <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowModal(false); setErrors({}) }}><X size={20} /></button>
@@ -781,7 +781,7 @@ export default function ExpenseRequests() {
       {/* Settlement Modal */}
       {showSettleModal && showDetail && (
         <ModalOverlay onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 480, maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 480, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
               <h3 style={{ margin: 0 }}>核銷：{showDetail.title}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}><X size={20} /></button>

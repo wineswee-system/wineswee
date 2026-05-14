@@ -97,7 +97,8 @@ export default function Modal({
           border: '1px solid var(--border-medium)',
           borderRadius: 16,
           width: '100%', maxWidth,
-          maxHeight: 'calc(100vh - 48px)',
+          maxHeight: '80vh',
+          minHeight: 0,
           // ★ flex column：header / headerExtra / footer 不縮，body 拿剩餘空間並 scroll
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',

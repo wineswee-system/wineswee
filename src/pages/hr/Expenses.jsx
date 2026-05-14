@@ -15,12 +15,14 @@ import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
   const { profile, hasPermission, isAdmin } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [expenses, setExpenses] = useState([])
   const [employees, setEmployees] = useState([])
@@ -317,7 +319,7 @@ export default function Expenses() {
                   </td>
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {e.status === '待審核' && (
+                      {e.status === '待審核' && canApprove('expenses', e.id) && (
                         <>
                           <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)} busyLabel="處理中…">核銷</AsyncButton>
                           <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)} busyLabel="處理中…">駁回</AsyncButton>

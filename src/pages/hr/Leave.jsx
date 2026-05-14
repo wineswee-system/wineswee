@@ -20,9 +20,11 @@ import { printLeaveSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps, buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 export default function Leave() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [leaves, setLeaves] = useState([])
   const [employees, setEmployees] = useState([])
@@ -533,7 +535,7 @@ export default function Leave() {
                   </div>
                   <div style={{ padding: '4px 8px' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {l.status === '待審核' && (
+                      {l.status === '待審核' && canApprove('leave_requests', l.id) && (
                         <>
                           <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)} busyLabel="處理中…">核准</AsyncButton>
                           <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)} busyLabel="處理中…">拒絕</AsyncButton>

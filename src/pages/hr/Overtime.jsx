@@ -15,10 +15,12 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 export default function Overtime() {
   const { profile, role } = useAuth()
+  const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
@@ -366,7 +368,7 @@ export default function Overtime() {
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {o.status === '待審核' && (
+                      {o.status === '待審核' && canApprove('overtime_requests', o.id) && (
                         <>
                           <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)} busyLabel="處理中…">核准</AsyncButton>
                           <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)} busyLabel="處理中…">駁回</AsyncButton>

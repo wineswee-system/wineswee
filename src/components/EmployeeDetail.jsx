@@ -386,7 +386,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       <div style={{
         position: 'relative',
         width: '94vw', maxWidth: 960,
-        height: '88vh', maxHeight: 'calc(100vh - 48px)', minHeight: 0,
+        maxHeight: '80vh', minHeight: 0,
         background: 'var(--bg-primary)', borderRadius: 16,
         border: '1px solid var(--border-medium)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column',

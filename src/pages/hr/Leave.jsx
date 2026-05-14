@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'  // Paperclip 已經有
 import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmployees, getDepartments, getLeaveStepSettings } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -564,6 +565,17 @@ export default function Leave() {
                           })
                           setShowModal(true)
                         }}>✏️ {(['已拒絕','已駁回','已退回'].includes(l.status)) ? '編輯重送' : '編輯'}</button>
+                      )}
+                      {l.status === '待審核' && l.employee === profile?.name && (
+                        <AsyncButton className="btn btn-sm btn-secondary"
+                          style={{ color: 'var(--accent-red)' }}
+                          onClick={async () => {
+                            if (!await confirm({ message: `確定撤回這筆「${l.type}」申請？` })) return
+                            const { error } = await supabase.from('leave_requests').update({ status: '已取消' }).eq('id', l.id)
+                            if (error) { toast.error('撤回失敗：' + error.message); return }
+                            setLeaves(prev => prev.map(x => x.id === l.id ? { ...x, status: '已取消' } : x))
+                            toast.success('已撤回')
+                          }} busyLabel="處理中…">撤回</AsyncButton>
                       )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(l)}>

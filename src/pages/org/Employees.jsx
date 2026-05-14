@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
 import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { createAssignment, rotatePrimary, closeActivePrimary } from '../../lib/assignments'
+import { createAssignment, rotatePrimary } from '../../lib/assignments'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MaskedText from '../../components/MaskedText'
 import Modal, { Field } from '../../components/Modal'
@@ -199,23 +199,20 @@ export default function Employees() {
   const handleResign = async () => {
     if (!selectedEmp) return
     try {
-      const { data, error } = await updateEmployee(selectedEmp.id, {
-        status: '離職',
-        resign_date: resignDate,
-        resign_reason: resignReason,
+      // 統一走 apply_employee_resignation RPC：一次做完 employees + assignment + schedules + 待審單 cleanup
+      const { data: result, error } = await supabase.rpc('apply_employee_resignation', {
+        p_emp_id: selectedEmp.id,
+        p_resign_date: resignDate,
+        p_resign_reason: resignReason,
+        p_resign_type: 'voluntary',
       })
       if (error) throw error
-      if (data) {
-        setEmployees(prev => prev.map(e => e.id === selectedEmp.id ? data : e))
-        setShowResignModal(false)
-        // Close active 主要 assignment with the resignation date
-        await closeActivePrimary(data.id, resignDate)
-        // Cleanup: remove future schedules, cancel pending leaves/tasks
-        const today = new Date().toISOString().slice(0, 10)
-        await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-        await supabase.from('leave_requests').update({ status: '已取消' }).eq('employee_id', data.id).eq('status', '待審核')
-        await supabase.from('tasks').update({ status: '已擱置' }).eq('assignee_id', data.id).in('status', ['未開始', '進行中'])
-      }
+      if (!result?.ok) throw new Error(result?.error || 'RESIGN_FAILED')
+
+      setEmployees(prev => prev.map(e => e.id === selectedEmp.id
+        ? { ...e, status: '離職', resign_date: resignDate, resign_reason: resignReason, resign_type: 'voluntary' }
+        : e))
+      setShowResignModal(false)
     } catch (err) {
       console.error('Operation failed:', err)
       toast.error('操作失敗：' + (err.message || '未知錯誤'))

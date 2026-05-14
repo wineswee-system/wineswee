@@ -101,8 +101,22 @@ export default function Severance() {
       organization_id: profile?.organization_id || null,
       created_by: profile?.name || null,
     })
+    if (error) { setSaving(false); toast.error(`儲存失敗：${error.message}`); return }
+
+    // 同步把員工 cascade 為「離職」(resign_type='involuntary' = 資遣)
+    // 涵蓋：employees.status / resign_date / 主要 assignment 關閉 / 刪未來班表 / 取消待審單
+    const { data: cascadeResult, error: cascadeErr } = await supabase.rpc('apply_employee_resignation', {
+      p_emp_id: calcResult.employee_id,
+      p_resign_date: calcResult.termination_date,
+      p_resign_reason: form.reason || '資遣',
+      p_resign_type: 'involuntary',
+    })
     setSaving(false)
-    if (error) { toast.error(`儲存失敗：${error.message}`); return }
+    if (cascadeErr || !cascadeResult?.ok) {
+      toast.error(`資遣紀錄已存但員工狀態未同步：${cascadeErr?.message || cascadeResult?.error || '未知錯誤'}`)
+    } else {
+      toast.success('資遣紀錄已建立，員工狀態已同步為離職')
+    }
     setShowCalcModal(false)
     setForm({ employee_id: '', termination_date: '', reason: '', notice_paid: true, unused_leave_days: 0, unused_leave_wage: 0, avg_wage_override: '', notes: '' })
     setCalcResult(null)

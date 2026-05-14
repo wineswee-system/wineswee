@@ -5,7 +5,7 @@ import { toast } from '../../lib/toast'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns, GitBranch
+  Users, Settings, Columns, GitBranch, MoreHorizontal
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
@@ -92,6 +92,25 @@ export default function Projects() {
   const [directTaskForm, setDirectTaskForm] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
   const [collapsedWfIds, setCollapsedWfIds] = useState(new Set())
   const toggleWf = (id) => setCollapsedWfIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  const [wfMenuId, setWfMenuId] = useState(null)
+
+  const handleWfRename = async (w) => {
+    const name = window.prompt('流程名稱', w.template_name)
+    if (!name || name === w.template_name) return
+    const { error } = await supabase.from('workflow_instances').update({ template_name: name }).eq('id', w.id)
+    if (error) { toast('重命名失敗', 'error'); return }
+    setWorkflows(prev => prev.map(x => x.id === w.id ? { ...x, template_name: name } : x))
+    toast('已更新')
+  }
+
+  const handleWfDelete = async (w) => {
+    if (!(await confirm({ message: `確定刪除流程「${w.template_name}」？此操作無法復原。` }))) return
+    const { error } = await supabase.from('workflow_instances').delete().eq('id', w.id)
+    if (error) { toast('刪除失敗', 'error'); return }
+    setWorkflows(prev => prev.filter(x => x.id !== w.id))
+    setTasks(prev => prev.filter(t => t.workflow_instance_id !== w.id))
+    toast('已刪除')
+  }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -123,6 +142,12 @@ export default function Projects() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (!wfMenuId) return
+    const close = () => setWfMenuId(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [wfMenuId])
 
   useEffect(() => {
     if (!selected) return
@@ -688,7 +713,10 @@ export default function Projects() {
                     : <ChevronDown size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0, transition: 'transform 0.2s' }} />
                   }
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{w.template_name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginRight: 5 }}>#{w.id}</span>
+                      {w.template_name}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {w.started_by && `${w.started_by} · `}{w.started_at?.slice(0, 10)}
                       <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: wColor, background: `color-mix(in srgb, ${wColor} 15%, transparent)` }}>{w.status}</span>
@@ -709,6 +737,30 @@ export default function Projects() {
                     <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(${wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)'} ${wPct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{wPct}%</div>
                     </div>
+                  </div>
+                  {/* Workflow kebab menu */}
+                  <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 6px', lineHeight: 1 }}
+                      onClick={() => setWfMenuId(wfMenuId === w.id ? null : w.id)}
+                    ><MoreHorizontal size={14} /></button>
+                    {wfMenuId === w.id && (
+                      <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
+                        <button
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          onClick={() => { setWfMenuId(null); handleWfRename(w) }}
+                        ><Edit3 size={13} /> 編輯名稱</button>
+                        <button
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          onClick={() => { setWfMenuId(null); handleWfDelete(w) }}
+                        ><Trash2 size={13} /> 刪除流程</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -741,7 +793,7 @@ export default function Projects() {
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => setSelectedTask(t)}
                     >
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>#{t.id}</span>
                       <span style={{
                         flex: 1, fontWeight: 500, lineHeight: 1.4,
                         textDecoration: t.status === '已完成' ? 'line-through' : 'none',
@@ -820,7 +872,7 @@ export default function Projects() {
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => setSelectedTask(t)}
                     >
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>#{t.id}</span>
                       <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
                       <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>

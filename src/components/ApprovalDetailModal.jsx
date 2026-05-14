@@ -315,27 +315,27 @@ function ChainTimeline({ steps }) {
 }
 
 function TimelineDot({ step, index, isLast }) {
-  const colors = {
-    completed: '#0ea5e9',  // cyan filled
-    current: '#0ea5e9',
-    pending: 'transparent',
-    rejected: '#ef4444',
-  }
+  // current 改成「藍色空心圈」跟 completed 的「藍色實心」做區分，讓現在輪到誰簽一目了然
+  const dotStyle = {
+    completed: { fill: '#0ea5e9', border: '#0ea5e9' },         // 實心 cyan
+    current:   { fill: 'transparent', border: '#0ea5e9' },     // ★ 空心 cyan（藍）
+    pending:   { fill: 'transparent', border: 'var(--border-medium)' },
+    rejected:  { fill: '#ef4444', border: '#ef4444' },
+  }[step.status] || { fill: 'transparent', border: 'var(--border-medium)' }
   const labelColors = {
     completed: '#0ea5e9',
     current: '#0ea5e9',
     pending: 'var(--text-muted)',
     rejected: '#ef4444',
   }
-  const borderColor = step.status === 'pending' ? 'var(--border-medium)' : (colors[step.status] || 'var(--border-medium)')
 
   return (
     <div style={{ position: 'relative', marginBottom: 22 }}>
       <div style={{
         position: 'absolute', left: -25, top: 4,
         width: 22, height: 22, borderRadius: '50%',
-        background: colors[step.status] || 'transparent',
-        border: `3px solid ${borderColor}`,
+        background: dotStyle.fill,
+        border: `3px solid ${dotStyle.border}`,
         boxShadow: '0 0 0 4px var(--bg-secondary)',
       }} />
       <div style={{

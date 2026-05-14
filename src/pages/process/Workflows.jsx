@@ -145,20 +145,10 @@ export default function Workflows() {
 
   // ── Handlers ──
   const handleStatusChange = async (taskId, newStatus) => {
-    // ★ Block direct completion if task has an approval chain and it hasn't passed yet
-    if (newStatus === '已完成') {
-      const task = tasks.find(t => t.id === taskId)
-      if (task?.approval_chain_id) {
-        const { data: forms } = await supabase
-          .from('approval_forms').select('id')
-          .eq('ref_task_id', taskId).eq('status', '已通過').limit(1)
-        if (!forms?.length) {
-          const { data: updated } = await updateTask(taskId, { status: '待簽核' })
-          if (updated) setAllTasks(prev => prev.map(t => t.id === taskId ? updated : t))
-          return
-        }
-      }
-    }
+    // ★ 修正 2026-05-14：移除前端攔截「已完成 + 有 chain → 強塞 待簽核」邏輯
+    //   trigger trg_task_intercept_complete_for_chain 會自動把
+    //   「已完成 + 有 chain」攔截轉 '待確認' + 建 task_confirmations，
+    //   前端不需要繞道，直接送 '已完成' 讓 DB 處理。
     const completedAt = newStatus === '已完成' ? new Date().toISOString() : null
     const { data } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
     if (data) {
@@ -432,15 +422,12 @@ export default function Workflows() {
     const useChain   = taskForm.approval_mode === 'chain' && taskForm.approval_chain_id
     const usePeople  = taskForm.approval_mode === 'people' && (taskForm.confirmation_approvers || []).length > 0
 
-    // 狀態規則：
-    //   - 有 chain 或 approvers → '待簽核'（要等簽）
-    //   - 第一個 step（前面沒任務）→ '進行中'（直接開工）
-    //   - 第二步以後 → '待處理'（等前一步 cascade 推進來）
-    const needsApproval = useChain || usePeople
+    // 狀態規則（修正 2026-05-14 — 對齊使用者設計）：
+    //   - 一律先看 step_order：第 1 步 '進行中'（執行人開工）、第 2+ 步 '待處理'（等前一步推進）
+    //   - 有 chain / approvers 不影響初始狀態 — chain 在「執行人按完成」後才介入
+    //     （trg_task_intercept_complete_for_chain 會把 '已完成' 攔截轉 '待確認' + 建 confirmations）
     const isFirstStep = instTasks.length === 0
-    const initStatus = needsApproval
-      ? '待簽核'
-      : (isFirstStep ? '進行中' : '待處理')
+    const initStatus = isFirstStep ? '進行中' : '待處理'
 
     const { data, error: taskError } = await createTask({
       workflow_instance_id: selectedInstance.id, step_order: maxOrder + 1,

@@ -507,13 +507,13 @@ function renderApprovedCell({ name, signatureUrl, approvedAt }) {
     return `
       <img src="${safe(signatureUrl)}" alt="${safe(name)}" class="signature-img" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'approved',textContent:'✓'}))" />
       <div class="signature-name">${safe(name)}</div>
-      ${approvedAt ? `<div class="date">${safe(fmtDate(approvedAt))}</div>` : ''}
+      ${approvedAt ? `<div class="date">${safe(fmtDateTime(approvedAt))}</div>` : ''}
     `
   }
   return `
     <div class="approved">✓</div>
     <div style="font-weight:700;font-size:10.5pt">${safe(name)}</div>
-    ${approvedAt ? `<div class="date">${safe(fmtDate(approvedAt))}</div>` : ''}
+    ${approvedAt ? `<div class="date">${safe(fmtDateTime(approvedAt))}</div>` : ''}
   `
 }
 
@@ -606,6 +606,15 @@ function fmtDate(s) {
   if (!s) return ''
   const d = typeof s === 'string' ? s.slice(0, 10) : new Date(s).toISOString().slice(0, 10)
   return d.replace(/-/g, '/')
+}
+
+// 完整日期時間 — 簽核欄印章用，要看到「幾點幾分簽的」
+function fmtDateTime(s) {
+  if (!s) return ''
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return safe(String(s))
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function isImageAttachment(att) {

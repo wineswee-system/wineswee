@@ -125,6 +125,13 @@ export default function EmployeePermissions() {
   const [loadingPerms, setLoadingPerms] = useState(false)
   const [savingIds, setSavingIds] = useState(new Set())  // 哪些 permission_id 正在 save
 
+  // 批次模式：勾選多位員工一起套用同樣的開/關
+  // 規則：單擊員工 row → 切換為單選編輯（清空 batch set）
+  //      勾 checkbox → 加入/移出批次（不影響 selectedEmp）
+  //      batchSelectedIds.size >= 2 時，右側切換成批次操作 UI
+  const [batchSelectedIds, setBatchSelectedIds] = useState(new Set())
+  const [batchSaving, setBatchSaving] = useState(false)
+
   useEffect(() => {
     if (!orgId) { setLoading(false); return }
     supabase.from('employees')
@@ -160,8 +167,119 @@ export default function EmployeePermissions() {
   }
 
   const handleSelectEmp = (emp) => {
+    // 單擊員工 row → 單選編輯，清空批次選擇
+    setBatchSelectedIds(new Set())
     setSelectedEmp(emp)
     loadPermissions(emp.id)
+  }
+
+  // 勾 checkbox → 加入/移出批次選擇（不切到單選編輯）
+  const handleToggleBatchSelect = (empId) => {
+    setBatchSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(empId)) next.delete(empId)
+      else next.add(empId)
+      return next
+    })
+  }
+
+  // 批次套用：對選中的 N 人 × M perm，用指定 mode 寫進去
+  // perms: [{ permission_id, code }]
+  // mode: 'grant' / 'revoke' / 'reset'
+  const batchApplyPerms = async (perms, mode) => {
+    if (batchSelectedIds.size === 0 || perms.length === 0) return
+    if (!isSuperAdmin) {
+      // admin 不能對自己 / 其他 admin / super_admin 動手
+      const targetEmps = employees.filter(e => batchSelectedIds.has(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}（超管 / 其他管理員 / 自己）`)
+        return
+      }
+    }
+
+    setBatchSaving(true)
+    const tasks = []
+    for (const empId of batchSelectedIds) {
+      for (const perm of perms) {
+        tasks.push(supabase.rpc('set_employee_permission_override', {
+          p_emp_id: empId,
+          p_perm_id: perm.permission_id,
+          p_mode: mode,
+          p_reason: null,
+        }))
+      }
+    }
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+
+    const failures = results.filter(r => r.error || r.data?.ok === false)
+    if (failures.length > 0) {
+      toast.error(`部分失敗：${failures.length}/${tasks.length}（${failures[0].error?.message || failures[0].data?.error || ''}）`)
+    } else {
+      const actionText = mode === 'grant' ? '開啟' : mode === 'revoke' ? '關閉' : '重置'
+      toast.success(`已對 ${batchSelectedIds.size} 位員工 ${actionText} ${perms.length} 項權限`)
+    }
+  }
+
+  // 批次：對 feature 套用「開啟查詢」「關閉查詢」「開啟修改」「關閉修改」
+  // 套用連動規則：開啟修改自動帶查詢；關閉查詢自動帶修改關閉
+  const handleBatchFeatureAction = async (feature, kind, action) => {
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+    let perms = []
+    if (kind === 'view') {
+      if (action === 'grant') {
+        // 開啟查詢 → 只動 view
+        if (viewPerm) perms.push(viewPerm)
+      } else {
+        // 關閉查詢 → view + edit 都關（不能看不能改）
+        if (viewPerm) perms.push(viewPerm)
+        if (editPerm) perms.push(editPerm)
+      }
+    } else {
+      if (action === 'grant') {
+        // 開啟修改 → view + edit 都開
+        if (viewPerm) perms.push(viewPerm)
+        if (editPerm) perms.push(editPerm)
+      } else {
+        // 關閉修改 → 只動 edit
+        if (editPerm) perms.push(editPerm)
+      }
+    }
+    await batchApplyPerms(perms, action)
+  }
+
+  const handleBatchFeatureReset = async (feature) => {
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+    const perms = [viewPerm, editPerm].filter(Boolean)
+    await batchApplyPerms(perms, 'reset')
+  }
+
+  const handleBatchResetAll = async () => {
+    if (batchSelectedIds.size === 0) return
+    if (!confirm(`確定要清除 ${batchSelectedIds.size} 位員工的所有個別權限調整，全部恢復為各自角色預設嗎？`)) return
+    if (!isSuperAdmin) {
+      const targetEmps = employees.filter(e => batchSelectedIds.has(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}`)
+        return
+      }
+    }
+    setBatchSaving(true)
+    const tasks = Array.from(batchSelectedIds).map(empId =>
+      supabase.rpc('reset_all_employee_permission_overrides', { p_emp_id: empId })
+    )
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+    const totalDeleted = results.reduce((s, r) => s + (r.data?.deleted || 0), 0)
+    toast.success(`已恢復 ${batchSelectedIds.size} 位員工的 ${totalDeleted} 項權限`)
   }
 
   // 全部恢復角色預設（清光該員工所有 override）
@@ -380,41 +498,174 @@ export default function EmployeePermissions() {
                 style={{ paddingLeft: 32, fontSize: 13 }} />
             </div>
           </div>
+          {/* 批次模式提示 + 全部恢復 */}
+          {batchSelectedIds.size > 0 && (
+            <div style={{
+              padding: '8px 12px', background: 'var(--accent-cyan-dim)',
+              fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <span>已勾選 {batchSelectedIds.size} 位（批次操作）</span>
+              <button onClick={() => setBatchSelectedIds(new Set())}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent-cyan)', padding: 2 }}>
+                清空
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredEmployees.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>
             ) : filteredEmployees.map(e => {
               const roleLbl = ROLE_LABEL[e.role] || e.role || '—'
               const isSelected = selectedEmp?.id === e.id
+              const isBatchChecked = batchSelectedIds.has(e.id)
               return (
-                <button key={e.id} onClick={() => handleSelectEmp(e)}
+                <div key={e.id}
                   style={{
-                    textAlign: 'left', padding: '10px 14px', border: 'none', cursor: 'pointer',
-                    background: isSelected ? 'var(--accent-cyan-dim)' : 'transparent',
-                    borderLeft: isSelected ? '3px solid var(--accent-cyan)' : '3px solid transparent',
+                    padding: '10px 14px',
+                    background: isBatchChecked ? 'var(--accent-cyan-dim)'
+                              : isSelected ? 'var(--glass-light)' : 'transparent',
+                    borderLeft: isSelected || isBatchChecked
+                      ? '3px solid var(--accent-cyan)' : '3px solid transparent',
                     borderBottom: '1px solid var(--border-subtle)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    display: 'flex', alignItems: 'center', gap: 10,
                   }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {[e.dept, e.position].filter(Boolean).join(' · ')}
+                  {/* checkbox 加入批次 */}
+                  <input type="checkbox" checked={isBatchChecked}
+                    onChange={() => handleToggleBatchSelect(e.id)}
+                    onClick={(ev) => ev.stopPropagation()}
+                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                    title="勾選加入批次操作" />
+                  {/* 點 row 進入單選編輯 */}
+                  <button onClick={() => handleSelectEmp(e)}
+                    style={{
+                      flex: 1, textAlign: 'left', border: 'none', cursor: 'pointer',
+                      background: 'transparent', padding: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {[e.dept, e.position].filter(Boolean).join(' · ')}
+                      </div>
                     </div>
-                  </div>
-                  <span className={`badge ${roleColor[e.role] || 'badge-neutral'}`} style={{ fontSize: 10 }}>{roleLbl}</span>
-                </button>
+                    <span className={`badge ${roleColor[e.role] || 'badge-neutral'}`} style={{ fontSize: 10 }}>{roleLbl}</span>
+                  </button>
+                </div>
               )
             })}
           </div>
         </div>
 
-        {/* ── 右側：權限編輯（窄屏會 wrap 到下一行全寬） ── */}
+        {/* ── 右側：權限編輯 / 批次操作（窄屏會 wrap 到下一行全寬） ── */}
         <div className="card" style={{ flex: '2 1 460px', minWidth: 0 }}>
-          {!selectedEmp ? (
+          {batchSelectedIds.size > 0 ? (
+            // ── 批次操作 UI ──
+            <>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--accent-cyan-dim)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                      🔧 批次操作 · 已選 {batchSelectedIds.size} 位員工
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, maxWidth: 600 }}>
+                      {employees.filter(e => batchSelectedIds.has(e.id)).map(e => e.name).join('、')}
+                    </div>
+                  </div>
+                  <button onClick={handleBatchResetAll}
+                    disabled={batchSaving}
+                    style={{
+                      padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      background: 'transparent', color: 'var(--accent-red)',
+                      border: '1px solid var(--accent-red)',
+                      cursor: batchSaving ? 'wait' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                    <RotateCcw size={12} /> 全部恢復角色預設
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.6 }}>
+                  · 點 <b style={{ color: 'var(--accent-green)' }}>+開</b> 一次對選中員工開啟該權限 · 點 <b style={{ color: 'var(--accent-red)' }}>−關</b> 一次關閉<br />
+                  · 連動規則同單一模式：開修改自動帶查詢、關查詢自動帶關修改
+                </div>
+              </div>
+
+              <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {Object.entries(groupedFeatures).map(([module, features]) => (
+                  <div key={module}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
+                      letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
+                      borderBottom: '1px dashed var(--border-medium)',
+                    }}>
+                      {module}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {features.map(f => (
+                        <div key={(f.view || '') + (f.edit || '') + f.label} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                          padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)',
+                        }}>
+                          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 1 }}>
+                              {[f.view, f.edit].filter(Boolean).join(' · ')}
+                            </div>
+                          </div>
+                          {f.view && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, marginRight: 4 }}>查詢</span>
+                              <button onClick={() => handleBatchFeatureAction(f, 'view', 'grant')} disabled={batchSaving}
+                                style={{
+                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
+                                  border: '1px solid var(--accent-green)', background: 'var(--accent-green)', color: '#fff',
+                                  cursor: batchSaving ? 'wait' : 'pointer',
+                                }}>+ 開</button>
+                              <button onClick={() => handleBatchFeatureAction(f, 'view', 'revoke')} disabled={batchSaving}
+                                style={{
+                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
+                                  border: '1px solid var(--accent-red)', background: 'var(--accent-red)', color: '#fff',
+                                  cursor: batchSaving ? 'wait' : 'pointer',
+                                }}>− 關</button>
+                            </div>
+                          )}
+                          {f.edit && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600, marginRight: 4 }}>修改</span>
+                              <button onClick={() => handleBatchFeatureAction(f, 'edit', 'grant')} disabled={batchSaving}
+                                style={{
+                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
+                                  border: '1px solid var(--accent-green)', background: 'var(--accent-green)', color: '#fff',
+                                  cursor: batchSaving ? 'wait' : 'pointer',
+                                }}>+ 開</button>
+                              <button onClick={() => handleBatchFeatureAction(f, 'edit', 'revoke')} disabled={batchSaving}
+                                style={{
+                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
+                                  border: '1px solid var(--accent-red)', background: 'var(--accent-red)', color: '#fff',
+                                  cursor: batchSaving ? 'wait' : 'pointer',
+                                }}>− 關</button>
+                            </div>
+                          )}
+                          <button onClick={() => handleBatchFeatureReset(f)} disabled={batchSaving}
+                            title="重置此 feature 的 override（恢復角色預設）"
+                            style={{
+                              padding: 4, background: 'transparent', border: 'none',
+                              color: 'var(--text-muted)', cursor: batchSaving ? 'wait' : 'pointer',
+                            }}>
+                            <RotateCcw size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : !selectedEmp ? (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
               <Shield size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
               <h3>請從左側選擇員工</h3>
-              <p style={{ fontSize: 13 }}>選擇後將顯示該員工的全部 15 項權限與覆蓋狀態</p>
+              <p style={{ fontSize: 13 }}>單擊員工 → 編輯該員工權限；勾 checkbox → 加入批次操作</p>
             </div>
           ) : loadingPerms ? (
             <LoadingSpinner />

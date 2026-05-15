@@ -424,7 +424,7 @@ const routeToGroup = (pathname) => {
 export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { profile, signOut, isSuperAdmin } = useAuth()
+  const { profile, signOut, isSuperAdmin, hasPermission } = useAuth()
   const [activeGroup, setActiveGroup] = useState(() => routeToGroup(location.pathname))
   const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
@@ -519,43 +519,106 @@ export default function Sidebar() {
   const matchChild = (child) => !q || child.label.toLowerCase().includes(q)
   const matchSection = (section) => !q || section.label.toLowerCase().includes(q) || section.children?.some(matchChild)
 
-  // Role-based module access control
-  const userRole = profile?.role || 'store_staff'
-  const ROLE_GROUPS = {
-    store_staff:  ['dashboard', 'people'],
-    office_staff: ['dashboard', 'people', 'project'],
-    manager:      ['dashboard', 'people', 'project'],
-    admin:        ['dashboard', 'people', 'project', 'analytics'],
-    super_admin:  null, // null = all
-  }
-  const allowedGroups = userRole in ROLE_GROUPS ? ROLE_GROUPS[userRole] : ROLE_GROUPS['store_staff']
-  const roleFiltered = allowedGroups === null
-    ? majorGroups
-    : majorGroups.filter(g => allowedGroups.includes(g.key))
+  // ──────────────────────────────────────────────────────────
+  // Phase 2 (2026-05-15)：Sidebar 改 DB perm 驅動
+  // 取代寫死的 ROLE_GROUPS / ROLE_ALLOWED_PATHS。
+  // perm 對照 + role_permissions 預設值在 migration
+  // 20260515130000_nav_permissions_phase1.sql 設好，
+  // 行為跟原本 ROLE_ALLOWED_PATHS 等同；admin 可透過權限頁
+  // 個別 grant nav.* 給單一員工，立刻多出該 sidebar 項。
+  // ──────────────────────────────────────────────────────────
 
-  // Sub-menu filtering for store_staff / office_staff
-  const ROLE_ALLOWED_PATHS = {
-    store_staff: [
-      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
-      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
-      '/hr/forms', '/hr/forms/submissions',
-    ],
-    office_staff: [
-      '/hr/attendance', '/hr/punch-correction', '/hr/leave', '/hr/overtime',
-      '/hr/my-schedule', '/hr/self-service', '/hr/leave-calendar', '/hr/leave-balances',
-      '/hr/schedule', '/hr/holidays', '/hr/salary', '/hr/salary-structures', '/hr/payroll',
-      '/hr/forms', '/hr/forms/submissions', '/hr/labor-law-rates', '/hr/insurance-grade',
-      '/org/employees', '/org/locations', '/org/departments',
-      '/process/overview', '/process/tasks', '/process/workflows',
-    ],
+  // Major group → required perm（null = 全員可見）
+  const GROUP_REQUIRES = {
+    dashboard: null,                 // 全員可見
+    commerce:  'nav.group.crm',
+    supply:    'nav.group.supply',
+    finance:   'finance.view',       // 既有舊 perm
+    people:    null,                 // 大家都有「個人 HR」section
+    project:   'nav.project.work',   // 有專案工作就能看到 group
+    analytics: 'nav.group.analytics',
   }
-  const pathFilter = ROLE_ALLOWED_PATHS[userRole]
+  const roleFiltered = majorGroups.filter(g => {
+    const required = GROUP_REQUIRES[g.key]
+    if (!required) return true
+    return hasPermission(required)
+  })
 
-  // Filter sections by role-allowed paths (pathFilter must be defined above)
+  // 各 path → required perm（缺項 = 全員可見，Tier 1 個人 HR 都在這）
+  const PATH_REQUIRES = {
+    // ── 組織架構 ──
+    '/org/overview':       'nav.org.full',
+    '/org/organizations':  'nav.org.full',
+    '/org/chart':          'nav.org.full',
+    '/org/companies':      'nav.org.full',
+    '/org/departments':    'nav.org.internal',
+    '/org/employees':      'nav.org.internal',
+    '/org/locations':      'nav.org.internal',
+    '/org/templates':      'nav.hr_form.builder',
+    // ── 排班管理 ──
+    '/hr/schedule':           'nav.schedule.basic',
+    '/hr/holidays':           'nav.schedule.basic',
+    '/hr/schedule-rules':     'nav.schedule.config',
+    '/hr/work-unit-settings': 'nav.schedule.config',
+    // ── 薪酬與福利 ──
+    '/hr/salary':            'nav.salary.basic',
+    '/hr/salary-structures': 'nav.salary.basic',
+    '/hr/payroll':           'nav.salary.basic',
+    '/hr/severance':         'nav.salary.advanced',
+    '/hr/legal-deductions':  'nav.salary.advanced',
+    '/hr/tax-forms':         'nav.salary.advanced',
+    '/hr/performance':       'nav.salary.advanced',
+    '/hr/bonus':             'nav.salary.advanced',
+    '/hr/compensation':      'nav.salary.advanced',
+    '/hr/benefit-settings':  'nav.salary.advanced',
+    '/hr/labor-law-rates':   'nav.salary.law',
+    '/hr/insurance-grade':   'nav.salary.law',
+    // ── 人才發展 ──
+    '/hr/recruitment': 'nav.talent',
+    '/hr/training':    'nav.talent',
+    '/hr/probation':   'nav.talent',
+    '/hr/transfer':    'nav.talent',
+    // ── 員工體驗（除員工自助）──
+    '/hr/surveys':   'nav.experience_mgr',
+    '/hr/assistant': 'nav.experience_mgr',
+    '/hr/attrition': 'nav.experience_mgr',
+    // ── HR 表單建立器 ──
+    '/hr/form-builder': 'nav.hr_form.builder',
+    // ── 行政庶務 ──
+    '/hr/report':           'nav.admin_office',
+    '/hr/travel':           'nav.admin_office',
+    '/hr/expense-requests': 'nav.admin_office',
+    '/hr/expenses':         'nav.admin_office',
+    '/hr/documents':        'nav.admin_office',
+    '/hr/labor-inspection': 'nav.admin_office',
+    // ── 專案流程 ──
+    '/process/overview':                'nav.project.work',
+    '/process/projects':                'nav.project.work',
+    '/process/workflows':               'nav.project.work',
+    '/process/approvals':               'nav.project.work',
+    '/process/tasks':                   'nav.project.work',
+    '/process/checklists':              'nav.project.work',
+    '/system/approval-rules':           'nav.project.admin',
+    '/process/settings/chains':         'nav.project.admin',
+    '/process/settings/expense-chains': 'nav.project.admin',
+    '/process/settings/categories':     'nav.project.admin',
+    '/process/settings/tags':           'nav.project.admin',
+    '/ai/nav-assistant': 'nav.project.admin',
+    '/ai/agent':         'nav.project.admin',
+    '/ai/help':          'nav.project.admin',
+    '/ai/tutorial':      'nav.project.admin',
+  }
+
   const filterSections = (sections) => {
-    if (!pathFilter) return sections
     return sections
-      .map(s => ({ ...s, children: s.children?.filter(c => pathFilter.includes(c.path)) }))
+      .map(s => ({
+        ...s,
+        children: s.children?.filter(c => {
+          const required = PATH_REQUIRES[c.path]
+          if (!required) return true        // 缺項 = 全員可見（Tier 1）
+          return hasPermission(required)
+        })
+      }))
       .filter(s => s.children?.length > 0)
   }
   const currentSections = filterSections(groupNav[activeGroup] || [])

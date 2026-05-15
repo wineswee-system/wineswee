@@ -79,6 +79,8 @@ export function printSignOff(opts = {}) {
   // 狀態 badge 顏色
   const statusBadge = renderStatusBadge(status)
   const signCellsHtml = renderSignCells({ status, rejectReason, chainSteps, approverMap, finalApprover, simpleSign, simpleSignApproverIdx, signatures })
+  // 簽核欄的格子數 — 動態傳給 CSS grid 強制 N 欄等寬，避免 auto-fit 在 PDF 渲染端誤判
+  const signCellCount = (chainSteps && chainSteps.length > 0) ? chainSteps.length : simpleSign.length
   const sectionsHtml = sections.map((sec, idx) => renderSection(sec, idx + 2)).join('')
   const attachmentsHtml = renderAttachments(attachments, sections.length + 2)
 
@@ -279,36 +281,54 @@ export function printSignOff(opts = {}) {
     color: #1a1a1a; letter-spacing: 2px;
     padding-right: 12px;
   }
+  /* ── 簽核欄：display: contents 把 sign-cell 攤平到 grid，
+        所有 header / target / stamp 都同行對齊 ──
+        最長 label 換行時，所有 header 一起變高 ── */
   .sign-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    /* 動態欄數：JSX 端設 --cell-count；fallback 5 欄 */
+    grid-template-columns: repeat(var(--cell-count, 5), minmax(0, 1fr));
+    grid-template-rows: auto auto 1fr;   /* header / target / stamp 三 row */
+    grid-auto-flow: column;
     gap: 0;
     border: 1.2px solid #2a2a2a;
     background: #fff;
   }
   .sign-cell {
+    display: contents;  /* wrapper 自己消失，子元素直接入 grid */
+  }
+  /* 邊框：套在子元素上（因為 .sign-cell 不存在於 layout） */
+  .sign-cell > .sign-header,
+  .sign-cell > .sign-target,
+  .sign-cell > .sign-stamp {
     border-right: 0.8px solid #888;
-    min-height: 88px;
-    display: flex; flex-direction: column;
     background: #fff;
   }
-  .sign-cell:last-child { border-right: none; }
+  .sign-cell:last-child > .sign-header,
+  .sign-cell:last-child > .sign-target,
+  .sign-cell:last-child > .sign-stamp {
+    border-right: none;
+  }
   .sign-cell .sign-header {
     background: #efeadc; border-bottom: 0.8px solid #888;
     padding: 5px 8px; font-size: 12pt; font-weight: 700;
     text-align: center; color: #4a3f1f; letter-spacing: 2px;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1.4;
   }
   .sign-cell .sign-target {
     background: #fdfcf8; padding: 3px 8px; font-size: 10.5pt;
     color: #6b6357; text-align: center;
     border-bottom: 1px dashed #b8a878;
     min-height: 20px;
+    display: flex; align-items: center; justify-content: center;
   }
   .sign-cell .sign-stamp {
-    flex: 1; padding: 8px 6px;
+    padding: 8px 6px;
     font-size: 11.5pt; text-align: center;
     display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
     gap: 2px;
+    min-height: 88px;
   }
   .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 16pt; }
   .sign-cell .rejected { color: #9c1f1f; font-weight: 700; font-size: 16pt; }
@@ -319,8 +339,15 @@ export function printSignOff(opts = {}) {
     font-size: 10.5pt; color: #9c1f1f; margin-top: 4px;
     padding: 0 6px; line-height: 1.4;
   }
-  .sign-cell.approved-bg { background: rgba(34,197,94,0.04); }
-  .sign-cell.rejected-bg { background: rgba(239,68,68,0.04); }
+  /* approved/rejected 背景套到三個子元素（因為 sign-cell 不存在於 layout） */
+  .sign-cell.approved-bg > .sign-header,
+  .sign-cell.approved-bg > .sign-target,
+  .sign-cell.approved-bg > .sign-stamp { background: rgba(34,197,94,0.04); }
+  .sign-cell.approved-bg > .sign-header { background: #d8e8d8; }   /* header 留原色但略偏綠 */
+  .sign-cell.rejected-bg > .sign-header,
+  .sign-cell.rejected-bg > .sign-target,
+  .sign-cell.rejected-bg > .sign-stamp { background: rgba(239,68,68,0.04); }
+  .sign-cell.rejected-bg > .sign-header { background: #e8d8d8; }
   .sign-cell .placeholder-line {
     color: #cfc7b0; font-size: 10.5pt; letter-spacing: 4px;
   }
@@ -434,7 +461,7 @@ export function printSignOff(opts = {}) {
 
     <div class="ending">以上，呈請核示。</div>
 
-    <div class="sign-row">${signCellsHtml}</div>
+    <div class="sign-row" style="--cell-count:${signCellCount}">${signCellsHtml}</div>
 
     <div class="footer">
       <div>產製日期：${new Date().toLocaleString('zh-TW')}</div>

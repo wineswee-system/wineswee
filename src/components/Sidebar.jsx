@@ -379,6 +379,7 @@ const groupNav = {
 const systemItems = [
   { icon: Settings, label: '系統設定', path: '/system/settings' },
   { icon: UserCog, label: '使用者管理', path: '/system/users' },
+  { icon: Shield, label: '員工個別權限', path: '/system/employee-permissions' },
   { icon: Building2, label: '租戶管理', path: '/system/tenants' },
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },

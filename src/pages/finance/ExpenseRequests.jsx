@@ -803,27 +803,76 @@ export default function ExpenseRequests() {
                 <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="用途、規格..."
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 50, resize: 'vertical' }} />
               </div>
-              {/* File upload */}
+              {/* File upload — 3 個紅虛線 slot */}
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>附件（訂購單、報價單...）</label>
-                <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                  onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files)])}
-                  style={{ display: 'none' }} />
-                <button className="btn btn-secondary" onClick={() => fileRef.current?.click()} style={{ fontSize: 12 }}>
-                  <Upload size={12} /> 選擇檔案
-                </button>
-                {files.length > 0 && (
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {files.map((f, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {f.type?.startsWith('image') ? <Image size={12} /> : <FileText size={12} />}
-                        {f.name}
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}
-                          onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}><X size={12} /></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>附件（訂購單、報價單...）</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[0, 1, 2].map(idx => {
+                    const file = files[idx]
+                    return (
+                      <label key={idx} style={{
+                        position: 'relative',
+                        border: '2px dashed var(--accent-red)',
+                        borderRadius: 8,
+                        padding: 10,
+                        minHeight: 92,
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        background: file ? 'var(--accent-red-dim)' : 'transparent',
+                        transition: 'background .15s',
+                      }}>
+                        <input type="file"
+                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            const f = e.target.files?.[0]
+                            if (!f) return
+                            setFiles(prev => {
+                              const next = [...prev]
+                              next[idx] = f
+                              return next
+                            })
+                            e.target.value = ''
+                          }}
+                        />
+                        {file ? (
+                          <>
+                            {file.type?.startsWith('image')
+                              ? <Image size={22} style={{ color: 'var(--accent-red)' }} />
+                              : <FileText size={22} style={{ color: 'var(--accent-red)' }} />}
+                            <div style={{ fontSize: 11, color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.3 }}>
+                              {file.name}
+                            </div>
+                            <button type="button"
+                              onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation()
+                                setFiles(prev => prev.filter((_, j) => j !== idx))
+                              }}
+                              style={{
+                                position: 'absolute', top: 4, right: 4,
+                                background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
+                                color: '#fff', width: 20, height: 20, padding: 0, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                              <X size={12} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={22} style={{ color: 'var(--accent-red)', opacity: 0.55 }} />
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>點此上傳</div>
+                          </>
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+                  支援格式：JPG / PNG / GIF / WebP / PDF / Excel (XLS、XLSX) / CSV
+                  <br />
+                  單檔最大 10MB · 最多 3 個附件
+                </div>
               </div>
             </div>
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>

@@ -48,6 +48,8 @@ export default function Severance() {
   const [calcResult, setCalcResult] = useState(null)  // RPC 試算結果
   const [calcing, setCalcing] = useState(false)
   const [saving, setSaving] = useState(false)
+  // 「資遣原因」select 選「其他」時開關自訂 input。reason 自身只存實際值
+  const [useOtherReason, setUseOtherReason] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -130,6 +132,7 @@ export default function Severance() {
     setShowCalcModal(false)
     setForm({ employee_id: '', termination_date: '', reason: '', notice_paid: true, unused_leave_days: 0, unused_leave_wage: 0, avg_wage_override: '', notes: '' })
     setCalcResult(null)
+    setUseOtherReason(false)
     load()
   }
 
@@ -298,12 +301,20 @@ export default function Severance() {
 
           <Field label="資遣原因（勞基法 §11 / §13 但書）">
             <select className="form-input" style={{ width: '100%' }}
-              value={LEGAL_REASONS.includes(form.reason) ? form.reason : (form.reason ? '__other__' : '')}
+              value={
+                useOtherReason ? '__other__' :
+                LEGAL_REASONS.includes(form.reason) ? form.reason : ''
+              }
               onChange={e => {
                 const v = e.target.value
                 if (v === '__other__') {
-                  setForm(f => ({ ...f, reason: f.reason && !LEGAL_REASONS.includes(f.reason) ? f.reason : '' }))
+                  setUseOtherReason(true)
+                  // 若原本是法定事由，切到「其他」要清空讓 user 重打
+                  if (LEGAL_REASONS.includes(form.reason)) {
+                    setForm(f => ({ ...f, reason: '' }))
+                  }
                 } else {
+                  setUseOtherReason(false)
                   setForm(f => ({ ...f, reason: v }))
                 }
               }}>
@@ -320,9 +331,10 @@ export default function Severance() {
               </optgroup>
               <option value="__other__">其他（自行填寫）</option>
             </select>
-            {(form.reason && !LEGAL_REASONS.includes(form.reason)) && (
+            {useOtherReason && (
               <input type="text" className="form-input" style={{ width: '100%', marginTop: 8 }}
                 placeholder="自行填寫資遣原因"
+                autoFocus
                 value={form.reason}
                 onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
             )}

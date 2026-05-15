@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw } from 'lucide-react'
+import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -109,6 +109,48 @@ const FEATURES = [
   { module: '導航顯示', label: '專案工作管理',          view: null, edit: 'nav.project.work' },
   { module: '導航顯示', label: '專案設定 / AI 助理',    view: null, edit: 'nav.project.admin' },
 ]
+
+// 批次模式單一動作的 pill：label + 開/關兩個圓形 icon button
+// 預設淡背景，hover 顯示完整顏色
+function BatchActionPill({ label, accent, onOpen, onClose, disabled }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 6px 3px 10px', borderRadius: 14,
+      background: 'var(--glass-light)',
+      border: `1px solid ${accent}`,
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, color: accent, fontWeight: 700, letterSpacing: 0.5 }}>{label}</span>
+      <button onClick={onOpen} disabled={disabled}
+        title={`對選中員工開啟「${label}」（grant）`}
+        style={{
+          width: 22, height: 22, borderRadius: '50%', padding: 0,
+          border: 'none', background: 'transparent',
+          color: 'var(--accent-green)', cursor: disabled ? 'wait' : 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--accent-green)'; e.currentTarget.style.color = '#fff' } }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent-green)' }}>
+        <Plus size={14} strokeWidth={3} />
+      </button>
+      <button onClick={onClose} disabled={disabled}
+        title={`對選中員工關閉「${label}」（revoke）`}
+        style={{
+          width: 22, height: 22, borderRadius: '50%', padding: 0,
+          border: 'none', background: 'transparent',
+          color: 'var(--accent-red)', cursor: disabled ? 'wait' : 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--accent-red)'; e.currentTarget.style.color = '#fff' } }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent-red)' }}>
+        <Minus size={14} strokeWidth={3} />
+      </button>
+    </div>
+  )
+}
 
 export default function EmployeePermissions() {
   const { profile, role } = useAuth()
@@ -605,7 +647,7 @@ export default function EmployeePermissions() {
                       {features.map(f => (
                         <div key={(f.view || '') + (f.edit || '') + f.label} style={{
                           display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                          padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)',
+                          padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)',
                         }}>
                           <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
@@ -614,44 +656,25 @@ export default function EmployeePermissions() {
                             </div>
                           </div>
                           {f.view && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, marginRight: 4 }}>查詢</span>
-                              <button onClick={() => handleBatchFeatureAction(f, 'view', 'grant')} disabled={batchSaving}
-                                style={{
-                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
-                                  border: '1px solid var(--accent-green)', background: 'var(--accent-green)', color: '#fff',
-                                  cursor: batchSaving ? 'wait' : 'pointer',
-                                }}>+ 開</button>
-                              <button onClick={() => handleBatchFeatureAction(f, 'view', 'revoke')} disabled={batchSaving}
-                                style={{
-                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
-                                  border: '1px solid var(--accent-red)', background: 'var(--accent-red)', color: '#fff',
-                                  cursor: batchSaving ? 'wait' : 'pointer',
-                                }}>− 關</button>
-                            </div>
+                            <BatchActionPill label="查詢" accent="var(--accent-cyan)"
+                              onOpen={() => handleBatchFeatureAction(f, 'view', 'grant')}
+                              onClose={() => handleBatchFeatureAction(f, 'view', 'revoke')}
+                              disabled={batchSaving} />
                           )}
                           {f.edit && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600, marginRight: 4 }}>修改</span>
-                              <button onClick={() => handleBatchFeatureAction(f, 'edit', 'grant')} disabled={batchSaving}
-                                style={{
-                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
-                                  border: '1px solid var(--accent-green)', background: 'var(--accent-green)', color: '#fff',
-                                  cursor: batchSaving ? 'wait' : 'pointer',
-                                }}>+ 開</button>
-                              <button onClick={() => handleBatchFeatureAction(f, 'edit', 'revoke')} disabled={batchSaving}
-                                style={{
-                                  padding: '3px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
-                                  border: '1px solid var(--accent-red)', background: 'var(--accent-red)', color: '#fff',
-                                  cursor: batchSaving ? 'wait' : 'pointer',
-                                }}>− 關</button>
-                            </div>
+                            <BatchActionPill label="修改" accent="var(--accent-orange)"
+                              onOpen={() => handleBatchFeatureAction(f, 'edit', 'grant')}
+                              onClose={() => handleBatchFeatureAction(f, 'edit', 'revoke')}
+                              disabled={batchSaving} />
                           )}
                           <button onClick={() => handleBatchFeatureReset(f)} disabled={batchSaving}
-                            title="重置此 feature 的 override（恢復角色預設）"
+                            title="重置此功能的 override（恢復角色預設）"
                             style={{
-                              padding: 4, background: 'transparent', border: 'none',
+                              width: 26, height: 26, borderRadius: '50%', padding: 0,
+                              background: 'transparent', border: '1px solid var(--border-medium)',
                               color: 'var(--text-muted)', cursor: batchSaving ? 'wait' : 'pointer',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              flexShrink: 0,
                             }}>
                             <RotateCcw size={12} />
                           </button>

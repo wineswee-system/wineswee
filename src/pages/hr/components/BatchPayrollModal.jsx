@@ -214,7 +214,17 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                       {/* 應領 */}
                       <td style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>{fmt(p.gross)}</td>
                       {/* 扣項 */}
-                      <td style={{ color: 'var(--text-muted)' }}>{p.insuredLabor?.toLocaleString() || 0}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>
+                        {(p.insuredLabor === p.insuredHealth)
+                          ? (p.insuredLabor?.toLocaleString() || 0)
+                          : (
+                            <span title="勞保上限 45,800 / 健保上限 313,000，高薪員工兩者不同">
+                              <span>勞 {p.insuredLabor?.toLocaleString() || 0}</span>
+                              <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
+                              <span>健 {p.insuredHealth?.toLocaleString() || 0}</span>
+                            </span>
+                          )}
+                      </td>
                       <td style={{ color: 'var(--accent-orange)' }}>{p.laborInsurance > 0 ? `-${p.laborInsurance.toLocaleString()}` : 0}</td>
                       <td style={{ color: 'var(--accent-orange)' }}>{p.healthInsurance > 0 ? `-${p.healthInsurance.toLocaleString()}` : 0}</td>
                       <td style={{ color: 'var(--accent-orange)' }}>{p.pension > 0 ? `-${p.pension.toLocaleString()}` : 0}</td>

@@ -115,6 +115,34 @@ describe('calculateLaborInsurance (DB brackets path)', () => {
     expect(result.employee_share).toBe(908 - Math.round(36300 * 0.01 * 0.2))
     expect(result.employer_share).toBe(3252 - Math.round(36300 * 0.01 * 0.7))
   })
+
+  // 高薪員工：勞保自己 cap 在 45,800，不需呼叫端先 cap
+  // 這是解 "Math.min(45800) cap 拖低健保" 的關鍵
+  it('high salary caps at 45800 internally (legal labor max)', () => {
+    const result = calculateLaborInsurance(60000, { brackets: MOCK_LABOR_2026 })
+    expect(result.insured_salary).toBe(45800)
+    expect(result.employee_share).toBe(1145)
+    expect(result.employer_share).toBe(4104)
+  })
+})
+
+// ═════════════════════════════════════════════════════════════
+//  整合：高薪員工 勞保健保 上限分離（生產 bug 復現）
+// ═════════════════════════════════════════════════════════════
+
+describe('high-salary labor/health cap separation', () => {
+  it('passes uncapped salary; labor self-caps, health uses real bracket', () => {
+    const salary = 57500
+    const labor = calculateLaborInsurance(salary, { brackets: MOCK_LABOR_2026 })
+    const health = calculateHealthInsurance(salary, { brackets: MOCK_HEALTH_2026 })
+
+    // 勞保 cap 45800
+    expect(labor.insured_salary).toBe(45800)
+    // 健保依實薪查 → 不被 45800 拖低（mock 含到 313000）
+    expect(health.insured_salary).toBeGreaterThanOrEqual(45800)
+    // 兩者不同 → BatchPayrollModal 會顯示「勞 X / 健 Y」
+    expect(labor.insured_salary).not.toBe(health.insured_salary)
+  })
 })
 
 // ═════════════════════════════════════════════════════════════

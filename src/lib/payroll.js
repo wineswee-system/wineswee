@@ -225,7 +225,11 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
       row = brackets.find(b => b.insured_salary === 11100)
     } else {
       // FT 從 29,500 起算
-      row = brackets.find(b => b.insured_salary >= 29500 && b.insured_salary >= monthlySalary)
+      // 勞保法定上限 45,800（grade 35）—— 在這裡 cap 月薪，
+      // 不依賴呼叫端先 cap，這樣健保用同一份 monthlySalary 才不會被誤拖低
+      const cappedSalary = Math.min(monthlySalary, 45800)
+      row = brackets.find(b => b.insured_salary >= 29500 && b.insured_salary >= cappedSalary)
+        || brackets.find(b => b.insured_salary === 45800)
         || brackets[brackets.length - 1]
     }
     if (row) {

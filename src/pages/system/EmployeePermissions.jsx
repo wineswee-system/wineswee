@@ -164,56 +164,33 @@ export default function EmployeePermissions() {
     loadPermissions(emp.id)
   }
 
-  // 切換 permission → 樂觀更新（先動 UI，失敗回滾）
-  // 避開 loadPermissions 切 loading spinner 導致 scroll 跳回頂端的問題
-  const handleToggle = async (perm) => {
+  // 全部恢復角色預設（清光該員工所有 override）
+  const handleResetAll = async () => {
     if (!canManage || !selectedEmp) return
     if (!isSuperAdmin && selectedEmp.id === profile?.id) {
-      toast.warning('您不能修改自己的權限，請聯絡超級管理員')
+      toast.warning('您不能修改自己的權限')
       return
     }
     if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
       toast.warning('管理員不能修改超管或其他管理員的權限')
       return
     }
-
-    // 計算 mode + 樂觀更新後的 source/effective
-    let nextMode, optimisticSource, optimisticEffective
-    if (perm.effective) {
-      // 目前 ON → 切 OFF
-      nextMode = perm.source === 'role' ? 'revoke' : 'reset'
-      optimisticSource = perm.source === 'role' ? 'role_revoke' : 'none'  // grant → reset → none
-      optimisticEffective = false
-    } else {
-      // 目前 OFF → 切 ON
-      nextMode = perm.source === 'none' ? 'grant' : 'reset'
-      optimisticSource = perm.source === 'none' ? 'grant' : 'role'  // role_revoke → reset → role
-      optimisticEffective = true
+    const overrideCount = permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length
+    if (overrideCount === 0) {
+      toast.info('沒有任何個別權限調整可恢復')
+      return
     }
+    if (!confirm(`確定要清除 ${selectedEmp.name} 的所有個別權限調整（${overrideCount} 項），全部恢復為「${ROLE_LABEL[selectedEmp.role] || selectedEmp.role}」的預設嗎？`)) return
 
-    setSavingIds(s => new Set([...s, perm.permission_id]))
-    // 樂觀更新：先動本地 state，UI 立刻反應
-    setPermissions(prev => prev.map(p =>
-      p.permission_id === perm.permission_id
-        ? { ...p, source: optimisticSource, effective: optimisticEffective }
-        : p
-    ))
-
-    const { data, error } = await supabase.rpc('set_employee_permission_override', {
-      p_emp_id:  selectedEmp.id,
-      p_perm_id: perm.permission_id,
-      p_mode:    nextMode,
-      p_reason:  null,
-    })
-    setSavingIds(s => { const n = new Set(s); n.delete(perm.permission_id); return n })
-
+    const { data, error } = await supabase.rpc('reset_all_employee_permission_overrides', { p_emp_id: selectedEmp.id })
     if (error || data?.ok === false) {
-      toast.error('儲存失敗：' + (error?.message || data?.error || '未知錯誤'))
-      // 失敗 → 重抓真實狀態回滾（不切 loading spinner，避免 scroll 跳）
-      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
-      if (refreshed) setPermissions(refreshed)
+      toast.error('恢復失敗：' + (error?.message || data?.error || '未知錯誤'))
+      return
     }
-    // 成功就不用重抓（樂觀更新已經對了）
+    toast.success(`已恢復 ${data?.deleted ?? 0} 項權限至角色預設`)
+    // 重抓
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
   }
 
   // 員工搜尋過濾
@@ -444,15 +421,35 @@ export default function EmployeePermissions() {
           ) : (
             <>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedEmp.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                       {[ROLE_LABEL[selectedEmp.role], selectedEmp.dept, selectedEmp.position].filter(Boolean).join(' · ')}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {permissions.filter(p => p.effective).length} / {permissions.length} 項權限
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {permissions.filter(p => p.effective).length} / {permissions.length} 項權限
+                      {permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length > 0 && (
+                        <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>
+                          ({permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length} 項個別調整)
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={handleResetAll}
+                      disabled={permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length === 0}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: 'transparent',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-medium)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="清除所有個別權限調整，全部恢復為該角色的預設">
+                      <RotateCcw size={12} /> 全部恢復角色預設
+                    </button>
                   </div>
                 </div>
               </div>

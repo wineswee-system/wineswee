@@ -901,7 +901,7 @@ export default function EmployeePermissions() {
                               if (overridePerm) {
                                 const d = new Date(overridePerm.override_at)
                                 const pad = n => String(n).padStart(2, '0')
-                                const dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+                                const dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
                                 return (
                                   <span style={{
                                     fontSize: 10, fontWeight: 600,

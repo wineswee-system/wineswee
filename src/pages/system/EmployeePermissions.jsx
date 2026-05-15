@@ -893,26 +893,40 @@ export default function EmployeePermissions() {
                               </button>
                             )}
 
-                            {/* override badge：「個人加給 · 5/15 14:30」加時間戳 */}
-                            <span style={{
-                              fontSize: 10, fontWeight: 600,
-                              padding: '2px 8px', borderRadius: 4,
-                              color: badge.color, background: badge.bg,
-                              border: `1px solid ${badge.color}`,
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {badge.label}
-                              {(() => {
-                                // 找有 override_at 的那個 perm（grant/revoke 的那個）
-                                const overridePerm = [viewPerm, editPerm].find(p =>
-                                  p && (p.source === 'grant' || p.source === 'role_revoke') && p.override_at
-                                )
-                                if (!overridePerm) return null
+                            {/* badge：override 顯示「日期 手動調整」；非 override 顯示「角色預設」「無」*/}
+                            {(() => {
+                              const overridePerm = [viewPerm, editPerm].find(p =>
+                                p && (p.source === 'grant' || p.source === 'role_revoke') && p.override_at
+                              )
+                              if (overridePerm) {
                                 const d = new Date(overridePerm.override_at)
                                 const pad = n => String(n).padStart(2, '0')
-                                return ` · ${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-                              })()}
-                            </span>
+                                const dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+                                return (
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 600,
+                                    padding: '2px 8px', borderRadius: 4,
+                                    color: badge.color, background: badge.bg,
+                                    border: `1px solid ${badge.color}`,
+                                    whiteSpace: 'nowrap',
+                                  }}>
+                                    {dateText} 手動調整
+                                  </span>
+                                )
+                              }
+                              // 非 override：顯示「角色預設」/「無」
+                              return (
+                                <span style={{
+                                  fontSize: 10, fontWeight: 600,
+                                  padding: '2px 8px', borderRadius: 4,
+                                  color: badge.color, background: badge.bg,
+                                  border: `1px solid ${badge.color}`,
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {badge.label}
+                                </span>
+                              )
+                            })()}
 
                             {/* reset button */}
                             {isOverride && (

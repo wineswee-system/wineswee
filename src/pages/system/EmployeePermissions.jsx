@@ -33,6 +33,8 @@ const SOURCE_BADGE = {
 export default function EmployeePermissions() {
   const { profile, role } = useAuth()
   const orgId = profile?.organization_id
+  // super_admin / admin 都可以用此頁；DB RPC 也對應放寬
+  const canManage = role?.name === 'super_admin' || role?.name === 'admin'
   const isSuperAdmin = role?.name === 'super_admin'
 
   const [employees, setEmployees] = useState([])
@@ -77,7 +79,17 @@ export default function EmployeePermissions() {
 
   // 切換 permission → 算出該下哪個 mode 給 set_*
   const handleToggle = async (perm) => {
-    if (!isSuperAdmin || !selectedEmp) return
+    if (!canManage || !selectedEmp) return
+    // admin 不能改自己的權限（防自己升自己權限）
+    if (!isSuperAdmin && selectedEmp.id === profile?.id) {
+      toast.warning('您不能修改自己的權限，請聯絡超級管理員')
+      return
+    }
+    // admin 不能改 super_admin / 其他 admin 的權限
+    if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
+      toast.warning('管理員不能修改超管或其他管理員的權限')
+      return
+    }
 
     // 計算這次操作要 set 什麼 mode
     let nextMode
@@ -129,12 +141,12 @@ export default function EmployeePermissions() {
 
   if (loading) return <LoadingSpinner />
 
-  if (!isSuperAdmin) {
+  if (!canManage) {
     return (
       <div style={{ padding: 32, textAlign: 'center', color: 'var(--accent-red)' }}>
         <Shield size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
         <h3>權限不足</h3>
-        <p style={{ color: 'var(--text-muted)' }}>此頁面僅限超級管理員使用</p>
+        <p style={{ color: 'var(--text-muted)' }}>此頁面僅限管理員 / 超級管理員使用</p>
       </div>
     )
   }
@@ -146,9 +158,16 @@ export default function EmployeePermissions() {
         <p>超級管理員可針對個別員工開放或關閉特定功能，覆蓋角色預設</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16 }}>
-        {/* ── 左側：員工列表 ── */}
-        <div className="card" style={{ padding: 0, maxHeight: 'calc(100vh - 220px)', overflow: 'auto' }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* ── 左側：員工列表（寬屏固定 320px；窄屏全寬 wrap 到下一行） ── */}
+        <div className="card" style={{
+          padding: 0,
+          flex: '1 1 280px',
+          minWidth: 0,
+          maxWidth: 360,
+          maxHeight: 'calc(100vh - 220px)',
+          overflow: 'auto',
+        }}>
           <div style={{ padding: 12, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -185,8 +204,8 @@ export default function EmployeePermissions() {
           </div>
         </div>
 
-        {/* ── 右側：權限編輯 ── */}
-        <div className="card">
+        {/* ── 右側：權限編輯（窄屏會 wrap 到下一行全寬） ── */}
+        <div className="card" style={{ flex: '2 1 460px', minWidth: 0 }}>
           {!selectedEmp ? (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
               <Shield size={48} style={{ marginBottom: 16, opacity: 0.4 }} />

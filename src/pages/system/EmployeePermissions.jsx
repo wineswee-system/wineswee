@@ -84,31 +84,41 @@ export default function EmployeePermissions() {
     loadPermissions(emp.id)
   }
 
-  // 切換 permission → 算出該下哪個 mode 給 set_*
+  // 切換 permission → 樂觀更新（先動 UI，失敗回滾）
+  // 避開 loadPermissions 切 loading spinner 導致 scroll 跳回頂端的問題
   const handleToggle = async (perm) => {
     if (!canManage || !selectedEmp) return
-    // admin 不能改自己的權限（防自己升自己權限）
     if (!isSuperAdmin && selectedEmp.id === profile?.id) {
       toast.warning('您不能修改自己的權限，請聯絡超級管理員')
       return
     }
-    // admin 不能改 super_admin / 其他 admin 的權限
     if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
       toast.warning('管理員不能修改超管或其他管理員的權限')
       return
     }
 
-    // 計算這次操作要 set 什麼 mode
-    let nextMode
+    // 計算 mode + 樂觀更新後的 source/effective
+    let nextMode, optimisticSource, optimisticEffective
     if (perm.effective) {
-      // 目前有權限 → 要變沒有
-      nextMode = perm.source === 'role' ? 'revoke' : 'reset'  // grant → reset = 回到角色預設(沒)
+      // 目前 ON → 切 OFF
+      nextMode = perm.source === 'role' ? 'revoke' : 'reset'
+      optimisticSource = perm.source === 'role' ? 'role_revoke' : 'none'  // grant → reset → none
+      optimisticEffective = false
     } else {
-      // 目前沒權限 → 要變有
-      nextMode = perm.source === 'none' ? 'grant' : 'reset'   // role_revoke → reset = 回到角色預設(有)
+      // 目前 OFF → 切 ON
+      nextMode = perm.source === 'none' ? 'grant' : 'reset'
+      optimisticSource = perm.source === 'none' ? 'grant' : 'role'  // role_revoke → reset → role
+      optimisticEffective = true
     }
 
     setSavingIds(s => new Set([...s, perm.permission_id]))
+    // 樂觀更新：先動本地 state，UI 立刻反應
+    setPermissions(prev => prev.map(p =>
+      p.permission_id === perm.permission_id
+        ? { ...p, source: optimisticSource, effective: optimisticEffective }
+        : p
+    ))
+
     const { data, error } = await supabase.rpc('set_employee_permission_override', {
       p_emp_id:  selectedEmp.id,
       p_perm_id: perm.permission_id,
@@ -119,10 +129,11 @@ export default function EmployeePermissions() {
 
     if (error || data?.ok === false) {
       toast.error('儲存失敗：' + (error?.message || data?.error || '未知錯誤'))
-      return
+      // 失敗 → 重抓真實狀態回滾（不切 loading spinner，避免 scroll 跳）
+      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+      if (refreshed) setPermissions(refreshed)
     }
-    // 重抓該員工權限
-    loadPermissions(selectedEmp.id)
+    // 成功就不用重抓（樂觀更新已經對了）
   }
 
   // 員工搜尋過濾

@@ -76,7 +76,19 @@ export default function Employees() {
   const [selectedEmp, setSelectedEmp] = useState(null)
   const [resignDate, setResignDate] = useState('')
   const [resignReason, setResignReason] = useState('')
-  const [form, setForm] = useState({ name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '', store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '', bank_code: '', bank_account: '' })
+  // 注意：role 預設空字串 → handleSubmit 會 fallback 用 position 判定
+  // 新加欄位（2026-05-15）：role / supervisor_id / id_number / birth_date /
+  //   gender / employee_number / probation_end_date / address
+  const [form, setForm] = useState({
+    name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '',
+    store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職',
+    salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+    emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
+    bank_code: '', bank_account: '',
+    role: '', supervisor_id: null,
+    id_number: '', birth_date: '', gender: '', employee_number: '',
+    probation_end_date: '', address: '',
+  })
   const navigate = useNavigate()
   const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)
   const [showCsvImport, setShowCsvImport] = useState(false)
@@ -117,13 +129,20 @@ export default function Employees() {
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
       const posInfo = POSITIONS.find(p => p.label === form.position)
-      const role = posInfo?.level || 'store_staff'
+      // 角色：UI 手動指定優先；沒指定則 fallback 用 position 推
+      const role = form.role || posInfo?.level || 'store_staff'
+      const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
       const payload = {
         ...form,
         department_id: form.department_id ? Number(form.department_id) : null,
         store_id: form.store_id ? Number(form.store_id) : null,
+        supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,
+        // 空字串日期改 null（DB 用 date 欄位，'' 會 cast 失敗）
+        birth_date: form.birth_date || null,
+        probation_end_date: form.probation_end_date || null,
         avatar,
         role,
+        role_id: ROLE_ID_MAP[role] || 5,
       }
       const { data, error } = await createEmployee(payload)
       if (error) throw error
@@ -140,7 +159,16 @@ export default function Employees() {
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
-        setForm({ name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '', store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40', emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '', bank_code: '', bank_account: '' })
+        setForm({
+          name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '',
+          store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職',
+          salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+          emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
+          bank_code: '', bank_account: '',
+          role: '', supervisor_id: null,
+          id_number: '', birth_date: '', gender: '', employee_number: '',
+          probation_end_date: '', address: '',
+        })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')
           .select('*').or('name.ilike.%新人%到職%,name.ilike.%onboarding%').limit(1).maybeSingle()
@@ -590,6 +618,72 @@ export default function Employees() {
             <Field label="手機">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="0912-345-678" value={form.phone} onChange={e => set('phone', e.target.value)} />
             </Field>
+          </div>
+
+          {/* 🆕 系統權限與組織 */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🔐 系統權限與組織</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="角色（系統權限）">
+                <select className="form-input" style={{ width: '100%' }} value={form.role} onChange={e => set('role', e.target.value)}>
+                  <option value="">依職稱自動判定</option>
+                  <option value="store_staff">門市人員</option>
+                  <option value="office_staff">行政人員</option>
+                  <option value="manager">主管</option>
+                  <option value="admin">HR 管理員</option>
+                  <option value="super_admin">超級管理員</option>
+                </select>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  影響系統內可進的頁面與按鈕。未指定則依職稱自動判定。
+                </div>
+              </Field>
+              <Field label="直屬主管">
+                <select className="form-input" style={{ width: '100%' }} value={form.supervisor_id ?? ''} onChange={e => set('supervisor_id', e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— 不指定 —</option>
+                  {employees.filter(e => e.status === '在職').map(e => (
+                    <option key={e.id} value={e.id}>{e.name} {e.position ? `(${e.position})` : ''}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  簽核流程「直屬主管」這關會解析到這個人。
+                </div>
+              </Field>
+            </div>
+          </div>
+
+          {/* 🆕 個人資料 */}
+          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>👤 個人資料</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="身分證字號">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="A123456789" maxLength={10}
+                  value={form.id_number} onChange={e => set('id_number', e.target.value.toUpperCase())} />
+              </Field>
+              <Field label="生日">
+                <input className="form-input" type="date" style={{ width: '100%' }} value={form.birth_date} onChange={e => set('birth_date', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="性別">
+                <select className="form-input" style={{ width: '100%' }} value={form.gender} onChange={e => set('gender', e.target.value)}>
+                  <option value="">未填</option>
+                  <option value="男">男</option>
+                  <option value="女">女</option>
+                  <option value="不公開">不公開</option>
+                </select>
+              </Field>
+              <Field label="員工編號">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="留空自動產生" value={form.employee_number} onChange={e => set('employee_number', e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="試用期結束日">
+                <input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end_date} onChange={e => set('probation_end_date', e.target.value)} />
+              </Field>
+              <Field label="通訊地址">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北市..." value={form.address} onChange={e => set('address', e.target.value)} />
+              </Field>
+            </div>
           </div>
 
           {/* 緊急聯絡人 & 薪轉帳戶 */}

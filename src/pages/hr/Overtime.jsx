@@ -441,6 +441,26 @@ export default function Overtime() {
             const step = (selectedEmp && storeSteps[selectedEmp.store_id]) || 0.5
             const crossDay = form.start_time && form.end_time
               && (form.end_time <= form.start_time)
+
+            // 勞基法 §32 軟提醒（不擋送單，僅警示）
+            //   單日加班一般 4h、勞資會議同意 12h
+            //   單月加班一般 46h、勞資會議同意 54h（每 3 個月 ≤ 138h）
+            let monthUsed = 0
+            if (form.employee && form.date && form.date.length >= 7) {
+              const ym = form.date.slice(0, 7)
+              monthUsed = records
+                .filter(r => r.employee === form.employee)
+                .filter(r => r.date && r.date.slice(0, 7) === ym)
+                .filter(r => r.id !== editingId)
+                .filter(r => ['已核准', '待審核', '申請中'].includes(r.status))
+                .reduce((s, r) => s + (Number(r.hours) || 0), 0)
+            }
+            const monthTotal = monthUsed + (Number(form.hours) || 0)
+            const dailyWarn = (Number(form.hours) || 0) > 4
+            const monthOver46 = monthTotal > 46
+            const monthOver54 = monthTotal > 54
+            const hasWarn = dailyWarn || monthOver46
+
             return (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -477,6 +497,34 @@ export default function Overtime() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     本店加班最小單位 <b style={{ color: 'var(--accent-cyan)' }}>{step}</b> 小時 · 訖時 ≤ 起時自動視為跨日
                   </div>
+                  {form.hours > 0 && form.date && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      本月已累計 <b style={{ color: monthOver46 ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>{monthTotal}h</b>
+                      <span style={{ opacity: 0.7 }}>（含本筆，已核准+待審）</span>
+                    </div>
+                  )}
+                  {hasWarn && (
+                    <div style={{
+                      marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                      background: monthOver54 ? 'var(--accent-red-dim)' : 'var(--accent-orange-dim)',
+                      color: monthOver54 ? 'var(--accent-red)' : 'var(--accent-orange)',
+                      fontSize: 12, lineHeight: 1.6,
+                      border: `1px solid ${monthOver54 ? 'var(--accent-red)' : 'var(--accent-orange)'}`,
+                    }}>
+                      {dailyWarn && (
+                        <div>⚠️ 單日加班 {form.hours}h 超過勞基法 §32 一般上限 4 小時</div>
+                      )}
+                      {monthOver46 && !monthOver54 && (
+                        <div>⚠️ 本月加班 {monthTotal}h 超過勞基法 §32 一般月上限 46 小時，須有工會 / 勞資會議同意</div>
+                      )}
+                      {monthOver54 && (
+                        <div>🚨 本月加班 {monthTotal}h 超過勞資會議同意上限 54 小時（季合計 ≤ 138h）</div>
+                      )}
+                      <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontWeight: 400 }}>
+                        ※ 僅提示，仍可送出，由主管裁量
+                      </div>
+                    </div>
+                  )}
                 </Field>
               </>
             )

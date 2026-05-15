@@ -135,7 +135,7 @@ export default function EmployeePermissions() {
   useEffect(() => {
     if (!orgId) { setLoading(false); return }
     supabase.from('employees')
-      .select('id, name, role, dept, position')
+      .select('id, name, name_en, role, dept, position')
       .eq('organization_id', orgId)
       .eq('status', '在職')
       .order('name')
@@ -311,12 +311,13 @@ export default function EmployeePermissions() {
     if (refreshed) setPermissions(refreshed)
   }
 
-  // 員工搜尋過濾
+  // 員工搜尋過濾（中文姓名 / 英文姓名 / 部門 / 職稱）
   const filteredEmployees = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return employees
     return employees.filter(e =>
       (e.name || '').toLowerCase().includes(q)
+      || (e.name_en || '').toLowerCase().includes(q)
       || (e.dept || '').toLowerCase().includes(q)
       || (e.position || '').toLowerCase().includes(q)
     )
@@ -493,7 +494,7 @@ export default function EmployeePermissions() {
           <div style={{ padding: 12, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input className="form-input" placeholder="搜尋姓名/部門/職稱"
+              <input className="form-input" placeholder="搜尋姓名 (中/英) / 部門 / 職稱"
                 value={search} onChange={e => setSearch(e.target.value)}
                 style={{ paddingLeft: 32, fontSize: 13 }} />
             </div>

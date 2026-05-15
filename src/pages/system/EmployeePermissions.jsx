@@ -23,10 +23,12 @@ const roleColor = {
 }
 
 // source → 顯示文字 & 顏色
+// 注意：grant / role_revoke 的 label 在 UI 上會被 badge 渲染邏輯替換成「MM/DD 手動調整」
+// 這裡 label 只在邏輯 fallback 時才會用到（理論上不會發生）
 const SOURCE_BADGE = {
   role:        { label: '角色預設', color: 'var(--text-muted)',    bg: 'var(--glass-light)' },
-  grant:       { label: '個人加給', color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)' },
-  role_revoke: { label: '個人禁用', color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)' },
+  grant:       { label: '手動調整', color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)' },
+  role_revoke: { label: '手動調整', color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)' },
   none:        { label: '無',       color: 'var(--text-muted)',    bg: 'transparent' },
 }
 
@@ -463,9 +465,16 @@ export default function EmployeePermissions() {
     }
 
     // 樂觀更新本地 state
+    // override_at 在 grant/revoke 時設成「現在」；reset (回 role/none) 時清 null
+    const isOverrideAfter = optimisticSource === 'grant' || optimisticSource === 'role_revoke'
     setPermissions(prev => prev.map(p =>
       p.permission_id === perm.permission_id
-        ? { ...p, source: optimisticSource, effective: targetEffective }
+        ? {
+            ...p,
+            source: optimisticSource,
+            effective: targetEffective,
+            override_at: isOverrideAfter ? new Date().toISOString() : null,
+          }
         : p
     ))
 
@@ -940,12 +949,15 @@ export default function EmployeePermissions() {
                             {/* badge：override 顯示「日期 手動調整」；非 override 顯示「角色預設」「無」*/}
                             {(() => {
                               const overridePerm = [viewPerm, editPerm].find(p =>
-                                p && (p.source === 'grant' || p.source === 'role_revoke') && p.override_at
+                                p && (p.source === 'grant' || p.source === 'role_revoke')
                               )
                               if (overridePerm) {
-                                const d = new Date(overridePerm.override_at)
-                                const pad = n => String(n).padStart(2, '0')
-                                const dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+                                let dateText = ''
+                                if (overridePerm.override_at) {
+                                  const d = new Date(overridePerm.override_at)
+                                  const pad = n => String(n).padStart(2, '0')
+                                  dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} `
+                                }
                                 return (
                                   <span style={{
                                     fontSize: 10, fontWeight: 600,
@@ -954,7 +966,7 @@ export default function EmployeePermissions() {
                                     border: `1px solid ${badge.color}`,
                                     whiteSpace: 'nowrap',
                                   }}>
-                                    {dateText} 手動調整
+                                    {dateText}手動調整
                                   </span>
                                 )
                               }
@@ -999,11 +1011,11 @@ export default function EmployeePermissions() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <AlertCircle size={12} /> <b>說明</b>
                 </div>
-                · <b>查詢</b>（青色）= 看得到，不能改 · <b>修改</b>（橘色）= 看得到 + 可以改<br />
+                · <b>查詢</b> = 看得到，不能改 · <b>修改</b> = 看得到 + 可以改<br />
                 · 點修改 ON 自動帶上查詢；點查詢 OFF 自動把修改也關掉<br />
-                · <span style={{ color: SOURCE_BADGE.grant.color }}>個人加給</span>：角色預設沒有，這人額外開放<br />
-                · <span style={{ color: SOURCE_BADGE.role_revoke.color }}>個人禁用</span>：角色預設有，這人特別禁用<br />
-                · 右側 ↻ 圖示：移除 override 回到角色預設
+                · <span style={{ color: SOURCE_BADGE.grant.color }}>綠色 手動調整</span>：角色預設沒有，被個別加給<br />
+                · <span style={{ color: SOURCE_BADGE.role_revoke.color }}>紅色 手動調整</span>：角色預設有，被個別禁用<br />
+                · 右側 ↻ 圖示：移除個別調整、回到角色預設
               </div>
             </>
           )}

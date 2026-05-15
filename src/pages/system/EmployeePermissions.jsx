@@ -538,10 +538,11 @@ export default function EmployeePermissions() {
     const failed = results.find(r => !r.ok)
     if (failed) {
       toast.error('儲存失敗：' + (failed.error?.message || failed.data?.error || '未知錯誤'))
-      // 失敗回滾 → 重抓真實狀態
-      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
-      if (refreshed) setPermissions(refreshed)
     }
+    // 成功 or 失敗都靜默重抓（不切 loading spinner 避免 scroll 跳）
+    // 重點：拿到 cascade 後的 nav perm 變化（feature 全關 → nav 自動關）
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
   }
 
   // 重置 feature（移除 view + edit 的 override）

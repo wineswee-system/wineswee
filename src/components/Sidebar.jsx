@@ -307,34 +307,33 @@ const groupNav = {
       label: '工作管理',
       icon: ListChecks,
       children: [
-        { icon: Eye, label: '總覽', path: '/process/overview' },
-        { icon: FolderOpen, label: '專案', path: '/process/projects' },
-        { icon: Workflow, label: '流程', path: '/process/workflows' },
-        { icon: ClipboardCheck, label: '簽核', path: '/process/approvals' },
-        { icon: ListChecks, label: '任務', path: '/process/tasks' },
-        { icon: CheckSquare, label: '查核清單', path: '/process/checklists' },
+        { icon: Eye, label: '總覽', path: '/process/overview', title: '所有專案、流程、任務的儀表板總覽' },
+        { icon: FolderOpen, label: '專案', path: '/process/projects', title: '專案管理：建立和追蹤多步驟的工作（例：新店開幕、系統上線）' },
+        { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
+        { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
+        { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },
+        { icon: CheckSquare, label: '查核清單', path: '/process/checklists', title: '標準作業檢查表（例：每日開店清單）' },
       ]
     },
     {
       label: '設定管理',
       icon: Settings,
       children: [
-        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules' },
-        // 2026-05-11 重做為中央 library 管理（取代 2026-05-08 下架的舊頁）
-        { icon: Workflow, label: '簽核鏈設定', path: '/process/settings/chains' },
-        { icon: DollarSign, label: '費用簽核設定', path: '/process/settings/expense-chains' },
-        { icon: FolderTree, label: '分類管理', path: '/process/settings/categories' },
-        { icon: Tag, label: '標籤管理', path: '/process/settings/tags' },
+        { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules', title: '簽核規則：定義「什麼條件觸發什麼簽核流程」（例：金額>1萬走 3 關）' },
+        { icon: Workflow, label: '簽核鏈設定', path: '/process/settings/chains', title: '簽核鏈：定義「一條簽核路徑有哪些關卡、誰簽」' },
+        { icon: DollarSign, label: '費用簽核設定', path: '/process/settings/expense-chains', title: '依費用金額分組設定不同簽核鏈（例：< 1 萬走簡易、>= 1 萬走完整）' },
+        { icon: FolderTree, label: '分類管理', path: '/process/settings/categories', title: '專案 / 任務的分類標籤管理' },
+        { icon: Tag, label: '標籤管理', path: '/process/settings/tags', title: '自訂標籤庫，給專案、任務貼標用' },
       ]
     },
     {
       label: 'AI 助理中心',
       icon: Sparkles,
       children: [
-        { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant' },
-        { icon: Bot, label: 'Agent 控制台', path: '/ai/agent' },
-        { icon: BookOpen, label: '說明中心', path: '/ai/help' },
-        { icon: BookOpen, label: '教學中心', path: '/ai/tutorial' },
+        { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant', title: 'AI 導覽：問它「如何申請假單」之類問題，跳到對應功能' },
+        { icon: Bot, label: 'Agent 控制台', path: '/ai/agent', title: 'AI Agent：執行多步驟自動化任務' },
+        { icon: BookOpen, label: '說明中心', path: '/ai/help', title: '系統使用說明文件' },
+        { icon: BookOpen, label: '教學中心', path: '/ai/tutorial', title: '操作教學影片與步驟指引' },
       ]
     },
   ],
@@ -748,6 +747,7 @@ export default function Sidebar() {
                             key={ci}
                             className={`mega-item ${isPathActive(child.path) ? 'active' : ''}`}
                             onClick={() => handleMegaItemClick(child.path)}
+                            title={child.title || child.label}
                           >
                             <CIcon size={13} className="mega-item-icon" />
                             <span>{child.label}</span>
@@ -824,6 +824,7 @@ export default function Sidebar() {
                       key={ci}
                       className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
                       onClick={handleNavClick}
+                      title={child.title || child.label}
                     >
                       <ChildIcon className="nav-sub-item-icon" />
                       <span>{child.label}</span>

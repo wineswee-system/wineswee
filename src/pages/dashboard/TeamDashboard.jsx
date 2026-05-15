@@ -14,6 +14,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { chartPalette, chartTextTokens } from '../../lib/theme/tokens'
 import { chat, isConfigured, clearSession } from '../../lib/gemini'
@@ -354,6 +355,10 @@ export default function TeamDashboard() {
   const userRole = role?.name || 'office_staff'
   const isManager = userRole === 'manager'
   const isAdminPlus = ['admin', 'super_admin'].includes(userRole)
+
+  // 「待我簽核」用 web_list_my_pending_approval_ids RPC 過濾，
+  // 只算當前 chain step 真的指派給我的單，跟 /process/approvals 頁面口徑一致
+  const { canApprove } = usePendingApprovals()
 
   const [tab, setTab] = useState('hr')  // 'hr' | 'process'
   const [stores, setStores] = useState([])
@@ -766,14 +771,30 @@ export default function TeamDashboard() {
     const otCount = todayOvertimes.length
     const tripCount = todayTrips.length
     const lateCount = teamWithStatus.filter(t => t.status === 'late').length
-    const pendingCount = pendingLeaves.length + pendingOvertimes.length + pendingTrips.length + pendingCorrections.length
-      + pendingResignations.length + pendingLoas.length + pendingTransfers.length + pendingExpenses.length
+
+    // ★ 「待我簽核」改用 canApprove() 嚴格過濾 → 跟 /process/approvals 同口徑
+    //   原本拿 team scope 內全部「待審核/申請中」直接加總會多算
+    //   （管理員看到底下員工的單，但不一定輪到他簽）
+    const myPendingLeaves       = pendingLeaves.filter(p => canApprove('leave_requests', p.id))
+    const myPendingOvertimes    = pendingOvertimes.filter(p => canApprove('overtime_requests', p.id))
+    const myPendingTrips        = pendingTrips.filter(p => canApprove('business_trips', p.id))
+    const myPendingCorrections  = pendingCorrections.filter(p => canApprove('clock_corrections', p.id))
+    const myPendingResignations = pendingResignations.filter(p => canApprove('resignation_requests', p.id))
+    const myPendingLoas         = pendingLoas.filter(p => canApprove('leave_of_absence_requests', p.id))
+    const myPendingTransfers    = pendingTransfers.filter(p => canApprove('personnel_transfer_requests', p.id))
+    const myPendingExpenses     = pendingExpenses.filter(p => canApprove('expense_requests', p.id))
+
+    const pendingCount = myPendingLeaves.length + myPendingOvertimes.length + myPendingTrips.length
+      + myPendingCorrections.length + myPendingResignations.length + myPendingLoas.length
+      + myPendingTransfers.length + myPendingExpenses.length
+
     const attendRate = total > 0 ? Math.round((presentCount + leaveCount + tripCount) / total * 100) : 0
-    // 平均待簽天數（從 pendingUnified 算，但 pendingUnified 在這個 memo 後，先用各 pending 的 created_at 算）
+
+    // 平均待簽天數：用過濾後的 allPending 算
     const todayStrLocal = todayStr()
     const allPending = [
-      ...pendingLeaves, ...pendingOvertimes, ...pendingTrips, ...pendingCorrections,
-      ...pendingResignations, ...pendingLoas, ...pendingTransfers, ...pendingExpenses,
+      ...myPendingLeaves, ...myPendingOvertimes, ...myPendingTrips, ...myPendingCorrections,
+      ...myPendingResignations, ...myPendingLoas, ...myPendingTransfers, ...myPendingExpenses,
     ]
     const avgPendingDays = allPending.length > 0
       ? Math.round(allPending.reduce((s, p) => s + daysBetween(todayStrLocal, p.created_at?.slice(0, 10)), 0) / allPending.length)
@@ -781,9 +802,11 @@ export default function TeamDashboard() {
     return { total, presentCount, leaveCount, otCount, tripCount, lateCount, pendingCount, attendRate, avgPendingDays }
   }, [team, teamWithStatus, todayOvertimes, todayTrips,
       pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections,
-      pendingResignations, pendingLoas, pendingTransfers, pendingExpenses])
+      pendingResignations, pendingLoas, pendingTransfers, pendingExpenses,
+      canApprove])
 
   // ── 待簽核 unified list（排序：逾期優先 → 新到舊） ──
+  // 同樣套 canApprove 過濾，保證列出的卡片都是「真的輪到我簽」的
   const pendingUnified = useMemo(() => {
     const today = todayStr()
     const empNameMap = Object.fromEntries(team.map(e => [e.id, e.name]))
@@ -795,28 +818,28 @@ export default function TeamDashboard() {
       return { current, total }
     }
     const items = [
-      ...pendingLeaves.map(r => ({
+      ...pendingLeaves.filter(p => canApprove('leave_requests', p.id)).map(r => ({
         id: `leave-${r.id}`, kindLabel: '請假', kindColor: C.cyan,
         title: `${r.employee} 申請 ${r.type}（${r.days || daysBetween(r.end_date, r.start_date) + 1} 天）`,
         subtitle: `${fmtDate(r.start_date)}–${fmtDate(r.end_date)} · ${r.reason || ''}`.trim(),
         daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
         target: '/hr/leave',
       })),
-      ...pendingOvertimes.map(r => ({
+      ...pendingOvertimes.filter(p => canApprove('overtime_requests', p.id)).map(r => ({
         id: `ot-${r.id}`, kindLabel: '加班', kindColor: C.orange,
         title: `${r.employee} 加班 ${r.hours}h`,
         subtitle: `${fmtDate(r.date)} · ${r.reason || ''}`.trim(),
         daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
         target: '/hr/overtime',
       })),
-      ...pendingTrips.map(r => ({
+      ...pendingTrips.filter(p => canApprove('business_trips', p.id)).map(r => ({
         id: `trip-${r.id}`, kindLabel: '出差', kindColor: C.blue,
         title: `${r.employee} 出差到 ${r.destination || '—'}`,
         subtitle: `${fmtDate(r.start_date)}–${fmtDate(r.end_date)} · ${r.purpose || ''}`.trim(),
         daysOpen: daysBetween(today, r.created_at?.slice(0, 10)), created_at: r.created_at,
         target: '/hr/travel',
       })),
-      ...pendingCorrections.map(r => ({
+      ...pendingCorrections.filter(p => canApprove('clock_corrections', p.id)).map(r => ({
         id: `corr-${r.id}`, kindLabel: '補打卡', kindColor: C.purple,
         title: `${r.employee} 補打卡`,
         subtitle: `${fmtDate(r.date)} · ${r.reason || ''}`.trim(),
@@ -824,7 +847,7 @@ export default function TeamDashboard() {
         target: '/hr/punch-correction',
       })),
       // ── B 類 chain-based ──
-      ...pendingResignations.map(r => {
+      ...pendingResignations.filter(p => canApprove('resignation_requests', p.id)).map(r => {
         const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
         return {
           id: `resign-${r.id}`, kindLabel: '離職', kindColor: C.red,
@@ -834,7 +857,7 @@ export default function TeamDashboard() {
           target: '/hr/forms/resignation', progress: progressOf(r),
         }
       }),
-      ...pendingLoas.map(r => {
+      ...pendingLoas.filter(p => canApprove('leave_of_absence_requests', p.id)).map(r => {
         const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
         return {
           id: `loa-${r.id}`, kindLabel: '留停', kindColor: C.purple,
@@ -844,7 +867,7 @@ export default function TeamDashboard() {
           target: '/hr/forms/submissions', progress: progressOf(r),
         }
       }),
-      ...pendingTransfers.map(r => {
+      ...pendingTransfers.filter(p => canApprove('personnel_transfer_requests', p.id)).map(r => {
         const name = empNameMap[r.employee_id] || `員工 ${r.employee_id}`
         return {
           id: `transfer-${r.id}`, kindLabel: '異動', kindColor: C.blue,
@@ -854,7 +877,7 @@ export default function TeamDashboard() {
           target: '/hr/forms/transfer', progress: progressOf(r),
         }
       }),
-      ...pendingExpenses.map(r => {
+      ...pendingExpenses.filter(p => canApprove('expense_requests', p.id)).map(r => {
         const name = r.employee || empNameMap[r.employee_id] || `員工 ${r.employee_id}`
         return {
           id: `expense-${r.id}`, kindLabel: '費用', kindColor: C.green,
@@ -869,7 +892,7 @@ export default function TeamDashboard() {
     return items
   }, [pendingLeaves, pendingOvertimes, pendingTrips, pendingCorrections,
       pendingResignations, pendingLoas, pendingTransfers, pendingExpenses,
-      chainStepsMap, team])
+      chainStepsMap, team, canApprove])
 
   const [showAllPending, setShowAllPending] = useState(false)
   const pendingDisplay = showAllPending ? pendingUnified : pendingUnified.slice(0, 5)

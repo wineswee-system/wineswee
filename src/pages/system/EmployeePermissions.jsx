@@ -64,7 +64,14 @@ export default function EmployeePermissions() {
     setLoadingPerms(true)
     const { data, error } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: empId })
     if (error) {
-      toast.error('載入失敗：' + (error.message || '未知錯誤'))
+      // 詳細記錄到 console 方便 debug
+      console.error('[EmployeePermissions] RPC error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      })
+      toast.error('載入失敗：' + (error.message || error.code || error.details || '未知錯誤'))
       setPermissions([])
     } else {
       setPermissions(data || [])

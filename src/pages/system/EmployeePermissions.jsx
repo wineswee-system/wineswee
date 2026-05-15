@@ -695,27 +695,27 @@ export default function EmployeePermissions() {
                       fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
                       letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
                       borderBottom: '1px dashed var(--border-medium)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      display: 'flex', alignItems: 'center', gap: 12,
                     }}>
                       <span>{module}</span>
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => handleModuleSelectAll(features, 'grant')}
-                          disabled={batchSaving}
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                            border: '1px solid var(--accent-green)',
-                            background: 'transparent', color: 'var(--accent-green)',
-                            cursor: batchSaving ? 'wait' : 'pointer',
-                          }}>全選</button>
-                        <button onClick={() => handleModuleSelectAll(features, 'revoke')}
-                          disabled={batchSaving}
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                            border: '1px solid var(--accent-red)',
-                            background: 'transparent', color: 'var(--accent-red)',
-                            cursor: batchSaving ? 'wait' : 'pointer',
-                          }}>全不選</button>
-                      </span>
+                      <button onClick={() => handleModuleSelectAll(features, 'grant')}
+                        disabled={batchSaving}
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                          border: '1px solid var(--accent-green)',
+                          background: 'transparent', color: 'var(--accent-green)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          letterSpacing: 'normal',
+                        }}>全選</button>
+                      <button onClick={() => handleModuleSelectAll(features, 'revoke')}
+                        disabled={batchSaving}
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                          border: '1px solid var(--accent-red)',
+                          background: 'transparent', color: 'var(--accent-red)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          letterSpacing: 'normal',
+                        }}>全不選</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => (
@@ -810,27 +810,27 @@ export default function EmployeePermissions() {
                       fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
                       letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
                       borderBottom: '1px dashed var(--border-medium)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      display: 'flex', alignItems: 'center', gap: 12,
                     }}>
                       <span>{module}</span>
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => handleModuleSelectAll(features, 'grant')}
-                          disabled={batchSaving}
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                            border: '1px solid var(--accent-green)',
-                            background: 'transparent', color: 'var(--accent-green)',
-                            cursor: batchSaving ? 'wait' : 'pointer',
-                          }}>全選</button>
-                        <button onClick={() => handleModuleSelectAll(features, 'revoke')}
-                          disabled={batchSaving}
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                            border: '1px solid var(--accent-red)',
-                            background: 'transparent', color: 'var(--accent-red)',
-                            cursor: batchSaving ? 'wait' : 'pointer',
-                          }}>全不選</button>
-                      </span>
+                      <button onClick={() => handleModuleSelectAll(features, 'grant')}
+                        disabled={batchSaving}
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                          border: '1px solid var(--accent-green)',
+                          background: 'transparent', color: 'var(--accent-green)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          letterSpacing: 'normal',
+                        }}>全選</button>
+                      <button onClick={() => handleModuleSelectAll(features, 'revoke')}
+                        disabled={batchSaving}
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                          border: '1px solid var(--accent-red)',
+                          background: 'transparent', color: 'var(--accent-red)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          letterSpacing: 'normal',
+                        }}>全不選</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => {

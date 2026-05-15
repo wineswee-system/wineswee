@@ -301,6 +301,61 @@ export default function EmployeePermissions() {
     await batchApplyPerms(perms, 'reset')
   }
 
+  // 區塊性「全選」「全不選」：對整個 module 內所有 feature 一次套用
+  // 自動用單選/批次模式（看 batchSelectedIds 是否有人）
+  const handleModuleSelectAll = async (features, action) => {
+    const targetIds = batchSelectedIds.size > 0
+      ? Array.from(batchSelectedIds)
+      : (selectedEmp ? [selectedEmp.id] : [])
+    if (targetIds.length === 0) return
+
+    // admin 防呆
+    if (!isSuperAdmin) {
+      const targetEmps = employees.filter(e => targetIds.includes(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}`)
+        return
+      }
+    }
+
+    // 蒐集這個 module 內所有 perm（view + edit）
+    const perms = []
+    for (const f of features) {
+      if (f.view && permByCode[f.view]) perms.push(permByCode[f.view])
+      if (f.edit && permByCode[f.edit]) perms.push(permByCode[f.edit])
+    }
+    if (perms.length === 0) return
+
+    setBatchSaving(true)
+    const tasks = []
+    for (const empId of targetIds) {
+      for (const perm of perms) {
+        tasks.push(supabase.rpc('set_employee_permission_override', {
+          p_emp_id: empId, p_perm_id: perm.permission_id, p_mode: action, p_reason: null,
+        }))
+      }
+    }
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+
+    const failures = results.filter(r => r.error || r.data?.ok === false)
+    if (failures.length > 0) {
+      toast.error(`部分失敗：${failures.length}/${tasks.length}`)
+    } else {
+      const verb = action === 'grant' ? '全選' : action === 'revoke' ? '全不選' : '重置'
+      toast.success(`已對 ${targetIds.length} 位員工的 ${perms.length} 項權限 ${verb}`)
+    }
+
+    // 單選模式 → 重抓選中員工狀態
+    if (batchSelectedIds.size === 0 && selectedEmp) {
+      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+      if (refreshed) setPermissions(refreshed)
+    }
+  }
+
   const handleBatchResetAll = async () => {
     if (batchSelectedIds.size === 0) return
     if (!confirm(`確定要清除 ${batchSelectedIds.size} 位員工的所有個別權限調整，全部恢復為各自角色預設嗎？`)) return
@@ -640,8 +695,27 @@ export default function EmployeePermissions() {
                       fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
                       letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
                       borderBottom: '1px dashed var(--border-medium)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     }}>
-                      {module}
+                      <span>{module}</span>
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => handleModuleSelectAll(features, 'grant')}
+                          disabled={batchSaving}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            border: '1px solid var(--accent-green)',
+                            background: 'transparent', color: 'var(--accent-green)',
+                            cursor: batchSaving ? 'wait' : 'pointer',
+                          }}>全選</button>
+                        <button onClick={() => handleModuleSelectAll(features, 'revoke')}
+                          disabled={batchSaving}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            border: '1px solid var(--accent-red)',
+                            background: 'transparent', color: 'var(--accent-red)',
+                            cursor: batchSaving ? 'wait' : 'pointer',
+                          }}>全不選</button>
+                      </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => (
@@ -736,8 +810,27 @@ export default function EmployeePermissions() {
                       fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
                       letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
                       borderBottom: '1px dashed var(--border-medium)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     }}>
-                      {module}
+                      <span>{module}</span>
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => handleModuleSelectAll(features, 'grant')}
+                          disabled={batchSaving}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            border: '1px solid var(--accent-green)',
+                            background: 'transparent', color: 'var(--accent-green)',
+                            cursor: batchSaving ? 'wait' : 'pointer',
+                          }}>全選</button>
+                        <button onClick={() => handleModuleSelectAll(features, 'revoke')}
+                          disabled={batchSaving}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            border: '1px solid var(--accent-red)',
+                            background: 'transparent', color: 'var(--accent-red)',
+                            cursor: batchSaving ? 'wait' : 'pointer',
+                          }}>全不選</button>
+                      </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => {
@@ -785,14 +878,14 @@ export default function EmployeePermissions() {
                               </button>
                             )}
 
-                            {/* 修改 button（只有 edit perm 才顯示）*/}
+                            {/* 修改 button（只有 edit perm 才顯示，跟查詢同色系青色）*/}
                             {editPerm && (
                               <button onClick={() => handleFeatureToggle(f, 'edit')} disabled={saving}
                                 style={{
                                   padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                                   cursor: saving ? 'wait' : 'pointer',
-                                  border: `1.5px solid ${editPerm.effective ? 'var(--accent-orange)' : 'var(--border-medium)'}`,
-                                  background: editPerm.effective ? 'var(--accent-orange)' : 'transparent',
+                                  border: `1.5px solid ${editPerm.effective ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                                  background: editPerm.effective ? 'var(--accent-cyan)' : 'transparent',
                                   color: editPerm.effective ? '#fff' : 'var(--text-muted)',
                                   minWidth: 56,
                                 }}>
@@ -800,7 +893,7 @@ export default function EmployeePermissions() {
                               </button>
                             )}
 
-                            {/* override badge */}
+                            {/* override badge：「個人加給 · 5/15 14:30」加時間戳 */}
                             <span style={{
                               fontSize: 10, fontWeight: 600,
                               padding: '2px 8px', borderRadius: 4,
@@ -809,6 +902,16 @@ export default function EmployeePermissions() {
                               whiteSpace: 'nowrap',
                             }}>
                               {badge.label}
+                              {(() => {
+                                // 找有 override_at 的那個 perm（grant/revoke 的那個）
+                                const overridePerm = [viewPerm, editPerm].find(p =>
+                                  p && (p.source === 'grant' || p.source === 'role_revoke') && p.override_at
+                                )
+                                if (!overridePerm) return null
+                                const d = new Date(overridePerm.override_at)
+                                const pad = n => String(n).padStart(2, '0')
+                                return ` · ${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+                              })()}
                             </span>
 
                             {/* reset button */}

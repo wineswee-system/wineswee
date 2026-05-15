@@ -307,7 +307,7 @@ export function printSignOff(opts = {}) {
   .sign-cell .sign-stamp {
     flex: 1; padding: 8px 6px;
     font-size: 11.5pt; text-align: center;
-    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
     gap: 2px;
   }
   .sign-cell .approved { color: #0a6b2e; font-weight: 700; font-size: 16pt; }
@@ -567,9 +567,9 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
 
     if (perStepStatus === 'completed') {
       if (isApplicantCell) {
-        // 申請人 cell：不蓋章，只顯示送出時間
+        // 申請人 cell：不蓋章，顯示姓名 + 送出時間（含時分，跟其他關卡格式一致）
         cellContent = `<div style="font-size:11pt;font-weight:700;color:#0a6b2e">${safe(step.name || stepTarget)}</div>` +
-                      (step.completedAt ? `<div class="date">${safe(fmtDate(step.completedAt))}　送出</div>` : '')
+                      (step.completedAt ? `<div class="date">${safe(fmtDateTime(step.completedAt))}　送出</div>` : '')
       } else {
         const signerName = step.completedBy || stepTarget
         // 簽章優先序：finalApprover.signature_url（最後關）→ signatures[signerName]

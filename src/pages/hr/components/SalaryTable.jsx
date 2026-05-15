@@ -4,10 +4,11 @@ import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPensio
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 // ── Deduction breakdown row items ──
-function buildBreakdownItems(r) {
+// brackets: { labor, health } from insuranceBrackets.loadInsuranceBrackets()，可為 null
+function buildBreakdownItems(r, brackets) {
   const base = r.base_salary || 0
-  const laborDetail = calculateLaborInsurance(base)
-  const healthDetail = calculateHealthInsurance(base, r.dependents || 0)
+  const laborDetail = calculateLaborInsurance(base, { brackets: brackets?.labor })
+  const healthDetail = calculateHealthInsurance(base, { dependents: r.dependents || 0, brackets: brackets?.health })
   const pensionDetail = calculateLaborPension(base, (r.voluntary_pension_rate || 0) / 100)
   const dailyRate = Math.round(base / 30)
   const hourlyRate = Math.round(dailyRate / 8)
@@ -36,7 +37,7 @@ function buildBreakdownItems(r) {
   ]
 }
 
-export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit }) {
+export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
   return (
     <div className="card">
       <div className="card-header">
@@ -69,7 +70,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
             {filtered.map(r => {
               const bonusDetail = getBonusDetail(r.employee)
               const isExpanded = expanded === r.id
-              const breakdownItems = buildBreakdownItems(r)
+              const breakdownItems = buildBreakdownItems(r, brackets)
               return (
                 <tbody key={r.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
@@ -184,8 +185,8 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🏢 雇主成本（參考）</div>
                                 <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                   {(() => {
-                                    const laborEr = calculateLaborInsurance(r.base_salary || 0).employer_share
-                                    const healthEr = calculateHealthInsurance(r.base_salary || 0, r.dependents || 0).employer_share
+                                    const laborEr = calculateLaborInsurance(r.base_salary || 0, { brackets: brackets?.labor }).employer_share
+                                    const healthEr = calculateHealthInsurance(r.base_salary || 0, { dependents: r.dependents || 0, brackets: brackets?.health }).employer_share
                                     const pensionEr = calculateLaborPension(r.base_salary || 0).employer_contribution
                                     return (
                                       <>

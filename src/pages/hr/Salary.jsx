@@ -3,6 +3,7 @@ import { Download, Plus, Calculator } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
+import { loadInsuranceBrackets } from '../../lib/insuranceBrackets'
 import { exportSalaryPdf } from '../../lib/exportPdf'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -28,7 +29,8 @@ function genMonthOptions(count = 24) {
 }
 
 // ── Real-time payroll deduction calculator ──
-function computeDeductions(f) {
+// brackets: { labor, health } from insuranceBrackets.loadInsuranceBrackets()，可為 null（fallback hardcoded）
+function computeDeductions(f, brackets) {
   const baseSalary = Number(f.base_salary) || 0
   const overtimePay = Number(f.overtime_pay) || 0
   // ★ 拆分津貼欄位（與 salary_structures 一致）
@@ -50,8 +52,8 @@ function computeDeductions(f) {
 
   const gross = baseSalary + overtimePay + allowancesTotal + bonus
 
-  const labor = calculateLaborInsurance(baseSalary)
-  const health = calculateHealthInsurance(baseSalary, dependents)
+  const labor = calculateLaborInsurance(baseSalary, { brackets: brackets?.labor })
+  const health = calculateHealthInsurance(baseSalary, { dependents, brackets: brackets?.health })
   const pension = calculateLaborPension(baseSalary, voluntaryRate)
   const tax = calculateMonthlyWithholding(gross)
 
@@ -117,6 +119,21 @@ export default function Salary() {
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchPreview, setBatchPreview] = useState([])
   const [batchSaving, setBatchSaving] = useState(false)
+
+  // 勞健保級距（從 DB 載入，year 隨 form.month / 篩選 month 變動）
+  // 結構：{ labor: [...], health: [...] } 或 null（DB 沒資料時 fallback hardcoded）
+  const [brackets, setBrackets] = useState(null)
+  const bracketYear = useMemo(() => {
+    const monthStr = form?.month || month || new Date().toISOString().slice(0, 7)
+    return parseInt(monthStr.slice(0, 4), 10) || new Date().getFullYear()
+  }, [form?.month, month])
+  useEffect(() => {
+    let cancelled = false
+    loadInsuranceBrackets(bracketYear).then(b => {
+      if (!cancelled) setBrackets(b)
+    })
+    return () => { cancelled = true }
+  }, [bracketYear])
 
   useEffect(() => {
     if (!orgId) { setLoading(false); return }
@@ -195,7 +212,7 @@ export default function Salary() {
   }, [form.employee, form.month, employees])
 
   // Real-time deduction preview
-  const deductions = useMemo(() => computeDeductions(form), [form])
+  const deductions = useMemo(() => computeDeductions(form, brackets), [form, brackets])
 
   // ── Create / Edit submit ──
   const handleSubmit = async () => {
@@ -287,6 +304,10 @@ export default function Salary() {
       const [_y, _m] = month.split('-').map(Number)
       const _lastDay = new Date(_y, _m, 0).getDate()  // 0 = 上個月最後一天 = 當月最後一天
       const monthEnd = `${month}-${String(_lastDay).padStart(2, '0')}`
+
+      // 載入該年度的勞健保級距（DB 為 single source of truth）
+      // 若 DB 沒資料則回 null，calculateNetSalary 會 fallback 到 hardcoded
+      const batchBrackets = await loadInsuranceBrackets(_y)
 
       // 用 storeFilter 過濾員工（store_staff/manager 已預設過；admin 選了門市才會帶值）
       const scopedEmployees = storeFilter
@@ -537,6 +558,7 @@ export default function Salary() {
           isPartTime: isHourly,
           dependents,
           voluntaryPensionRate: voluntaryRate,
+          brackets: batchBrackets,
           // 「應發」放進 overtimePay 參數（calculateNetSalary 內 totalGross = base + overtimePay + bonus）
           // 這裡用解析後的津貼（避免結構化+custom 重複算）
           overtimePay: overtimePay + roleAllowance + nightAllowance + crossStoreAllowance + mealAllowance + transportAllow + attendanceBonus + otherCustomTotal,
@@ -820,6 +842,7 @@ export default function Salary() {
         getEmpDept={getEmpDept}
         getBonusDetail={getBonusDetail}
         openEdit={openEdit}
+        brackets={brackets}
       />
 
       {/* ── Create / Edit Modal ── */}

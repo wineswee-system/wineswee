@@ -14,15 +14,15 @@ import {
 //  Bracket Tables Sanity
 // ═════════════════════════════════════════════════════════════
 
-describe('Bracket Tables', () => {
+describe('Bracket Tables (hardcoded fallback)', () => {
   it('labor insurance brackets are sorted ascending', () => {
     for (let i = 1; i < LABOR_INSURANCE_BRACKETS.length; i++) {
       expect(LABOR_INSURANCE_BRACKETS[i]).toBeGreaterThan(LABOR_INSURANCE_BRACKETS[i - 1])
     }
   })
 
-  it('labor insurance starts at 29500, ends at 45800', () => {
-    expect(LABOR_INSURANCE_BRACKETS[0]).toBe(29500)
+  it('labor insurance starts with PT min 11100, ends at 45800', () => {
+    expect(LABOR_INSURANCE_BRACKETS[0]).toBe(11100)
     expect(LABOR_INSURANCE_BRACKETS[LABOR_INSURANCE_BRACKETS.length - 1]).toBe(45800)
   })
 
@@ -32,8 +32,8 @@ describe('Bracket Tables', () => {
     }
   })
 
-  it('health insurance ends at 219500', () => {
-    expect(HEALTH_INSURANCE_BRACKETS[HEALTH_INSURANCE_BRACKETS.length - 1]).toBe(219500)
+  it('health insurance ends at 313000 (2026 cap)', () => {
+    expect(HEALTH_INSURANCE_BRACKETS[HEALTH_INSURANCE_BRACKETS.length - 1]).toBe(313000)
   })
 })
 
@@ -41,38 +41,79 @@ describe('Bracket Tables', () => {
 //  calculateLaborInsurance
 // ═════════════════════════════════════════════════════════════
 
-describe('calculateLaborInsurance', () => {
+describe('calculateLaborInsurance (hardcoded path)', () => {
+  // 2026 費率：普通事故 11.5% + 就保 1% = 12.5%；65+ 免就保 → 11.5%
   it('HR-U01: minimum bracket for low salary', () => {
     const result = calculateLaborInsurance(25000)
     expect(result.insured_salary).toBe(29500)
-    // 29500 * 0.12 * 0.2 = 708
-    expect(result.employee_share).toBe(Math.round(29500 * 0.12 * 0.2))
-    // 29500 * 0.12 * 0.7 = 2478
-    expect(result.employer_share).toBe(Math.round(29500 * 0.12 * 0.7))
+    expect(result.employee_share).toBe(Math.round(29500 * 0.125 * 0.2))
+    expect(result.employer_share).toBe(Math.round(29500 * 0.125 * 0.7))
   })
 
-  it('HR-U02: maximum bracket for high salary', () => {
+  it('HR-U02: maximum bracket for high salary (cap 45800)', () => {
     const result = calculateLaborInsurance(80000)
     expect(result.insured_salary).toBe(45800)
-    expect(result.employee_share).toBe(Math.round(45800 * 0.12 * 0.2))
+    expect(result.employee_share).toBe(Math.round(45800 * 0.125 * 0.2))
   })
 
   it('HR-U03: mid bracket lookup', () => {
     const result = calculateLaborInsurance(36000)
-    // 36000 falls between 35100 and 36300 → bracket = 36300
+    // 36000 落在 34800~36300 級 → 取 36300
     expect(result.insured_salary).toBe(36300)
   })
 
-  it('uses 10.5% rate for age >= 65', () => {
-    const result = calculateLaborInsurance(35000, 65)
-    expect(result.employee_share).toBe(Math.round(result.insured_salary * 0.105 * 0.2))
-    expect(result.employer_share).toBe(Math.round(result.insured_salary * 0.105 * 0.7))
+  it('uses 11.5% rate for age >= 65 (no 就保)', () => {
+    const result = calculateLaborInsurance(35000, { employeeAge: 65 })
+    expect(result.employee_share).toBe(Math.round(result.insured_salary * 0.115 * 0.2))
+    expect(result.employer_share).toBe(Math.round(result.insured_salary * 0.115 * 0.7))
   })
 
   it('employee + employer + gov = total', () => {
     const result = calculateLaborInsurance(40000)
-    // Total = insured * rate * 100%
-    expect(result.total).toBe(Math.round(result.insured_salary * 0.12))
+    expect(result.total).toBe(Math.round(result.insured_salary * 0.125))
+  })
+})
+
+// ═════════════════════════════════════════════════════════════
+//  calculateLaborInsurance — DB brackets path（新）
+// ═════════════════════════════════════════════════════════════
+
+// 模擬 DB labor_ins_brackets 列（2026 級距，含官方公告 premium）
+const MOCK_LABOR_2026 = [
+  { year: 2026, grade:  8, insured_salary: 11100, min_salary:  9901, employee_premium:  277, employer_premium: 1034 }, // PT min
+  { year: 2026, grade: 25, insured_salary: 29500, min_salary: 28591, employee_premium:  738, employer_premium: 2644 },
+  { year: 2026, grade: 30, insured_salary: 36300, min_salary: 34801, employee_premium:  908, employer_premium: 3252 },
+  { year: 2026, grade: 35, insured_salary: 45800, min_salary: 43901, employee_premium: 1145, employer_premium: 4104 }, // cap
+  { year: 2026, grade: 40, insured_salary: 57800, min_salary: 55401, employee_premium: 1145, employer_premium: 4129 }, // 凍結
+]
+
+describe('calculateLaborInsurance (DB brackets path)', () => {
+  it('uses DB employee_premium for FT min', () => {
+    const result = calculateLaborInsurance(25000, { brackets: MOCK_LABOR_2026 })
+    expect(result.insured_salary).toBe(29500)
+    expect(result.employee_share).toBe(738) // DB 官方值，不是公式算
+    expect(result.employer_share).toBe(2644)
+  })
+
+  it('uses DB employee_premium for mid bracket', () => {
+    const result = calculateLaborInsurance(36000, { brackets: MOCK_LABOR_2026 })
+    expect(result.insured_salary).toBe(36300)
+    expect(result.employee_share).toBe(908)
+    expect(result.employer_share).toBe(3252)
+  })
+
+  it('PT forcePartTimeMin uses 11100 DB row', () => {
+    const result = calculateLaborInsurance(15000, { brackets: MOCK_LABOR_2026, isPartTime: true })
+    expect(result.insured_salary).toBe(11100)
+    expect(result.employee_share).toBe(277)
+  })
+
+  it('65+ subtracts 就保 share from DB premium', () => {
+    const result = calculateLaborInsurance(35000, { brackets: MOCK_LABOR_2026, employeeAge: 65 })
+    // grade 30, insured 36300, employee 908 - round(36300*0.01*0.2) = 908 - 73 = 835
+    expect(result.insured_salary).toBe(36300)
+    expect(result.employee_share).toBe(908 - Math.round(36300 * 0.01 * 0.2))
+    expect(result.employer_share).toBe(3252 - Math.round(36300 * 0.01 * 0.7))
   })
 })
 
@@ -80,24 +121,21 @@ describe('calculateLaborInsurance', () => {
 //  calculateHealthInsurance
 // ═════════════════════════════════════════════════════════════
 
-describe('calculateHealthInsurance', () => {
+describe('calculateHealthInsurance (hardcoded path)', () => {
   it('HR-U04: single person (0 dependents)', () => {
     const result = calculateHealthInsurance(40000, 0)
-    // Bracket for 40000 → 41100
-    expect(result.insured_salary).toBe(41100)
-    // Employee: 41100 * 0.0517 * 0.3 * (1+0) = 637
-    expect(result.employee_share).toBe(Math.round(41100 * 0.0517 * 0.3 * 1))
+    // 月薪 40000 落在 38200~40100 級 → 取 40100
+    expect(result.insured_salary).toBe(40100)
+    expect(result.employee_share).toBe(Math.round(40100 * 0.0517 * 0.3 * 1))
     expect(result.dependents).toBe(0)
   })
 
   it('HR-U05: with 3 dependents', () => {
     const result = calculateHealthInsurance(40000, 3)
     expect(result.dependents).toBe(3)
-    // Employee share with 3 dependents = insured * 0.0517 * 0.3 * 4
     expect(result.employee_share).toBe(
       Math.round(result.insured_salary * 0.0517 * 0.3 * 4)
     )
-    // Should be significantly more than single
     const singleResult = calculateHealthInsurance(40000, 0)
     expect(result.employee_share).toBeGreaterThan(singleResult.employee_share * 3)
   })
@@ -107,11 +145,50 @@ describe('calculateHealthInsurance', () => {
     expect(result.dependents).toBe(3)
   })
 
-  it('employer uses average dependents ratio 1.57', () => {
+  it('employer uses average dependents ratio 1.56 (2026)', () => {
     const result = calculateHealthInsurance(40000, 0)
     expect(result.employer_share).toBe(
-      Math.round(result.insured_salary * 0.0517 * 0.6 * 1.57)
+      Math.round(result.insured_salary * 0.0517 * 0.6 * 1.56)
     )
+  })
+})
+
+// ═════════════════════════════════════════════════════════════
+//  calculateHealthInsurance — DB brackets path（新）
+// ═════════════════════════════════════════════════════════════
+
+// 模擬 DB health_ins_brackets 列（2026 級距）
+const MOCK_HEALTH_2026 = [
+  { year: 2026, grade: 25, insured_salary: 29500, min_salary: 28591, employee_premium:  458, employer_premium: 1428 },
+  { year: 2026, grade: 32, insured_salary: 40100, min_salary: 38201, employee_premium:  622, employer_premium: 1940 },
+  { year: 2026, grade: 35, insured_salary: 45800, min_salary: 43901, employee_premium:  710, employer_premium: 2216 },
+  { year: 2026, grade: 82, insured_salary: 313000, min_salary: 303001, employee_premium: 4855, employer_premium: 15146 },
+]
+
+describe('calculateHealthInsurance (DB brackets path)', () => {
+  it('uses DB employee_premium for solo', () => {
+    const result = calculateHealthInsurance(40000, { brackets: MOCK_HEALTH_2026 })
+    expect(result.insured_salary).toBe(40100)
+    expect(result.employee_share).toBe(622) // 官方值
+    expect(result.employer_share).toBe(1940) // 已含 1.56 倍係數
+  })
+
+  it('multiplies employee premium by (1 + dependents)', () => {
+    const result = calculateHealthInsurance(40000, { dependents: 2, brackets: MOCK_HEALTH_2026 })
+    expect(result.employee_share).toBe(622 * 3) // 本人 + 2 眷
+    expect(result.dependents).toBe(2)
+  })
+
+  it('caps dependents at 3', () => {
+    const result = calculateHealthInsurance(40000, { dependents: 10, brackets: MOCK_HEALTH_2026 })
+    expect(result.dependents).toBe(3)
+    expect(result.employee_share).toBe(622 * 4)
+  })
+
+  it('high salary lands on grade 82 (313000)', () => {
+    const result = calculateHealthInsurance(500000, { brackets: MOCK_HEALTH_2026 })
+    expect(result.insured_salary).toBe(313000)
+    expect(result.employee_share).toBe(4855)
   })
 })
 

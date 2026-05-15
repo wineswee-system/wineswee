@@ -61,8 +61,12 @@ export const LABOR_INSURANCE_PT_MIN = 11100;
 
 /**
  * 全民健保投保薪資級距（2026/115年）
- * 53 級，最低 NT$29,500 ～ 最高 NT$313,000
- * 來源：衛福部中央健康保險署 115/01/01 適用
+ * 來源：衛福部中央健康保險署 115/01/01 適用級距金額表
+ *
+ * 此為 hardcoded fallback；正式計算請從 DB 載入：
+ *   import { loadInsuranceBrackets } from './insuranceBrackets'
+ *   const b = await loadInsuranceBrackets(2026)
+ *   calculateHealthInsurance(salary, { dependents, brackets: b.health })
  */
 export const HEALTH_INSURANCE_BRACKETS = [
   29500, 30300, 31800, 33300, 34800, 36300,
@@ -71,10 +75,10 @@ export const HEALTH_INSURANCE_BRACKETS = [
   66800, 69800, 72800, 76500, 80200, 83900,
   87600, 92100, 96600, 101100, 105600, 110100,
   115500, 120900, 126300, 131700, 137100, 142500,
-  147900, 156400, 162800, 169200, 175600, 182000,
-  189500, 197000, 204500, 212000, 219500, 228000,
-  240000, 252000, 264000, 276000, 288000, 300000,
-  313000,
+  147900, 150000, 156400, 162800, 169200, 175600,
+  182000, 189500, 197000, 204500, 212000, 219500,
+  228200, 236900, 245600, 254300, 263000, 273000,
+  283000, 293000, 303000, 313000,
 ];
 
 /**
@@ -195,8 +199,12 @@ function matchBracket(salary, brackets) {
  *
  * @param {number} monthlySalary - 月薪
  * @param {object} [options={}]
- * @param {number} [options.employeeAge=30] - 員工年齡
- * @param {boolean} [options.isPartTime=false] - 是否部分工時 PT
+ * @param {number} [options.employeeAge=30]
+ * @param {boolean} [options.isPartTime=false]
+ * @param {boolean} [options.forcePartTimeMin=true] - PT 是否強制 11,100
+ * @param {Array} [options.brackets] - DB labor_ins_brackets 陣列（推薦）
+ *   若提供 → 用 DB 的 employee_premium/employer_premium（含災保，官方公告值）
+ *   若不提供 → fallback 走 hardcoded 級距 + 公式計算（向下相容）
  * @returns {{ insured_salary: number, employee_share: number, employer_share: number, total: number }}
  */
 export function calculateLaborInsurance(monthlySalary, options = {}) {
@@ -207,20 +215,46 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
     // 業務鐵則：所有 PT 一律投保 11,100（不論實薪多少）。
     // 設 false 才走法規版本（依實薪對齊 PT 2 級或全時級距）。
     forcePartTimeMin = true,
+    brackets,
   } = opts;
 
+  // ── 路徑 A：用 DB brackets（推薦）──
+  if (Array.isArray(brackets) && brackets.length > 0) {
+    let row
+    if (isPartTime && forcePartTimeMin) {
+      row = brackets.find(b => b.insured_salary === 11100)
+    } else {
+      // FT 從 29,500 起算
+      row = brackets.find(b => b.insured_salary >= 29500 && b.insured_salary >= monthlySalary)
+        || brackets[brackets.length - 1]
+    }
+    if (row) {
+      let empShare = row.employee_premium || 0
+      let erShare  = row.employer_premium || 0
+      // 65 歲以上免就保 → 員工/雇主皆扣掉就保 1% 對應份額
+      if (employeeAge >= 65) {
+        empShare = Math.max(0, empShare - Math.round(row.insured_salary * 0.01 * 0.2))
+        erShare  = Math.max(0, erShare  - Math.round(row.insured_salary * 0.01 * 0.7))
+      }
+      return {
+        insured_salary: row.insured_salary,
+        employee_share: empShare,
+        employer_share: erShare,
+        total: empShare + erShare,
+      }
+    }
+    // row 找不到 → 落到下面 hardcoded path
+  }
+
+  // ── 路徑 B：hardcoded fallback（向下相容）──
   let insuredSalary;
   if (isPartTime) {
     if (forcePartTimeMin) {
-      // 業務鐵則：PT 一律 11,100
       insuredSalary = LABOR_INSURANCE_PT_MIN;
     } else {
-      // 法規：實薪 ≤ 11,100 → 11,100；11,101~12,540 → 12,540；
-      //       超過 12,540 → 回全時表，最低 29,500
       insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_BRACKETS);
     }
   } else {
-    // 月薪正職：對齊全時級距 (29,500~45,800)，自動 cap 在 45,800
     insuredSalary = matchBracket(monthlySalary, LABOR_INSURANCE_FT_BRACKETS);
   }
 
@@ -244,26 +278,45 @@ export function calculateLaborInsurance(monthlySalary, options = {}) {
  * 費率：5.17%
  * 分攤比例：被保險人 30%、雇主 60%、政府 10%
  * 眷屬：本人 + 眷屬（最多計 3 口）
- * 雇主端：以「1 + 全國平均眷口數 0.56」= 1.56 計算（2026 沿用 113 年調整值）
+ * 雇主端：以「1 + 全國平均眷口數 0.56」= 1.56 計算（雇主負擔已內含此係數）
  *
  * 健保無 PT 例外 — 受僱者一律從第 1 級 29,500 起跳。
- * （isPartTime flag 保留參數但不影響邏輯，等同於最低 29,500 起級距匹配）
  *
- * @param {number} monthlySalary - 月薪
- * @param {object|number} [options=0] - 眷屬數（舊用法）或物件 { dependents, isPartTime }
+ * @param {number} monthlySalary
+ * @param {object|number} [options=0] - 眷屬數（舊用法）或物件 { dependents, brackets, isPartTime }
+ * @param {number} [options.dependents=0]
+ * @param {Array} [options.brackets] - DB health_ins_brackets 陣列（推薦）
+ *   若提供 → 用 DB 的 employee_premium（本人份額）× (1+眷屬數) 與 employer_premium（已含 1.56 倍係數）
+ *   若不提供 → fallback 走 hardcoded 級距 + 公式計算
  * @returns {{ insured_salary: number, employee_share: number, employer_share: number, dependents: number }}
  */
 export function calculateHealthInsurance(monthlySalary, options = 0) {
   const opts = typeof options === 'number' ? { dependents: options } : options;
-  const { dependents = 0 } = opts;
-  // isPartTime 對健保無實質影響（最低就是 29,500），保留 options 為向下相容
-
-  // 對齊級距：最低 29,500（不論 PT/FT 自然落第 1 級），最高 313,000
-  const insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
-
-  const premiumRate = 0.0517;
+  const { dependents = 0, brackets } = opts;
   const cappedDependents = Math.min(dependents, 3);
-  // 雇主端係數：1 (被保險人本人) + 0.56 (全國平均眷口數，2026)
+
+  // ── 路徑 A：用 DB brackets（推薦）──
+  if (Array.isArray(brackets) && brackets.length > 0) {
+    const row = brackets.find(b => b.insured_salary >= 29500 && b.insured_salary >= monthlySalary)
+      || brackets[brackets.length - 1]
+    if (row) {
+      // employee_premium = 本人份額（DB 已四捨五入過官方公告值）
+      // 眷屬以本人份額 × (1+N) 計算（official 健保表也是這樣定義）
+      const employeeShare = (row.employee_premium || 0) * (1 + cappedDependents)
+      // employer_premium 已內含 1.56 倍係數，不另乘
+      const employerShare = row.employer_premium || 0
+      return {
+        insured_salary: row.insured_salary,
+        employee_share: employeeShare,
+        employer_share: employerShare,
+        dependents: cappedDependents,
+      }
+    }
+  }
+
+  // ── 路徑 B：hardcoded fallback ──
+  const insuredSalary = matchBracket(monthlySalary, HEALTH_INSURANCE_BRACKETS);
+  const premiumRate = 0.0517;
   const employerCoefficient = 1.56;
 
   const employeeShare = Math.round(insuredSalary * premiumRate * 0.3 * (1 + cappedDependents));
@@ -481,6 +534,10 @@ export function calculateNetSalary(grossSalary, options = {}) {
     isPartTime = false,
     // 新增：是否扣所得稅（個人申報為主，預設不扣）
     withholdTax = false,
+    // 新增：DB brackets（推薦，從 insuranceBrackets.loadInsuranceBrackets() 拿）
+    //   { labor: [...], health: [...] }
+    //   未傳 → calculateLaborInsurance/HealthInsurance 走 hardcoded fallback
+    brackets,
   } = options;
 
   // 應發薪資總額
@@ -490,11 +547,17 @@ export function calculateNetSalary(grossSalary, options = {}) {
   const insuranceBase = insuredSalary != null ? insuredSalary : grossSalary;
 
   // 勞保
-  const labor = calculateLaborInsurance(insuranceBase, { employeeAge, isPartTime });
+  const labor = calculateLaborInsurance(insuranceBase, {
+    employeeAge, isPartTime,
+    brackets: brackets?.labor,
+  });
   const laborInsurance = labor.employee_share;
 
   // 健保
-  const health = calculateHealthInsurance(insuranceBase, { dependents, isPartTime });
+  const health = calculateHealthInsurance(insuranceBase, {
+    dependents, isPartTime,
+    brackets: brackets?.health,
+  });
   const healthInsurance = health.employee_share;
 
   // 勞退自提（以底薪計算）

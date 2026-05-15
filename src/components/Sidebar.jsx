@@ -28,6 +28,36 @@ if (typeof window !== 'undefined') {
   document.documentElement.setAttribute('data-theme', savedTheme || 'light')
 }
 
+// ── Sidebar tooltip：滑鼠 hover 後在 item 右側顯示，不擋游標 ──
+// 用一個 global state 記目前 hover 的提示（text + 錨點 rect），
+// render 時用 position:fixed 放在 rect 旁邊；rect 來自 getBoundingClientRect()，
+// 螢幕右側不夠就換到左側顯示。
+function SidebarTooltipLayer({ tip }) {
+  if (!tip || !tip.text) return null
+  // 預設右側顯示；如螢幕右邊空間不夠改左側
+  const tooltipWidth = 280
+  const margin = 10
+  const showRight = (tip.rect.right + margin + tooltipWidth) < window.innerWidth
+  const style = {
+    position: 'fixed',
+    top: tip.rect.top + tip.rect.height / 2,
+    transform: 'translateY(-50%)',
+    maxWidth: tooltipWidth,
+    background: 'rgba(31, 41, 55, 0.95)',
+    color: '#fff',
+    padding: '8px 12px',
+    borderRadius: 6,
+    fontSize: 12,
+    lineHeight: 1.5,
+    zIndex: 99999,
+    pointerEvents: 'none',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+  }
+  if (showRight) style.left = tip.rect.right + margin
+  else style.right = window.innerWidth - tip.rect.left + margin
+  return <div style={style}>{tip.text}</div>
+}
+
 // ── Major Groups for top bar ──
 const majorGroups = [
   { key: 'dashboard', icon: LayoutDashboard, label: '儀表板', color: '#22d3ee', path: '/' },
@@ -432,6 +462,13 @@ export default function Sidebar() {
   const [openDropdown, setOpenDropdown] = useState(null)
   const dropdownRef = useRef(null)
   const btnRefs = useRef({})
+  // Sidebar tooltip：{ text, rect } or null
+  const [tooltip, setTooltip] = useState(null)
+  const showTooltip = (e, text) => {
+    if (!text) return
+    setTooltip({ text, rect: e.currentTarget.getBoundingClientRect() })
+  }
+  const hideTooltip = () => setTooltip(null)
 
   // Sync active group when route changes
   useEffect(() => {
@@ -644,6 +681,8 @@ export default function Sidebar() {
 
   return (
     <>
+    {/* Sidebar 自訂 tooltip（顯示在 item 右側，不擋游標）*/}
+    <SidebarTooltipLayer tip={tooltip} />
     {/* ═══════ Top Navigation Bar ═══════ */}
     <header className="topnav">
       <div className="topnav-brand" onClick={() => { navigate('/'); setOpenDropdown(null) }} role="button" tabIndex={0}>
@@ -747,7 +786,8 @@ export default function Sidebar() {
                             key={ci}
                             className={`mega-item ${isPathActive(child.path) ? 'active' : ''}`}
                             onClick={() => handleMegaItemClick(child.path)}
-                            title={child.title || child.label}
+                            onMouseEnter={e => showTooltip(e, child.title)}
+                            onMouseLeave={hideTooltip}
                           >
                             <CIcon size={13} className="mega-item-icon" />
                             <span>{child.label}</span>
@@ -824,7 +864,8 @@ export default function Sidebar() {
                       key={ci}
                       className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
                       onClick={handleNavClick}
-                      title={child.title || child.label}
+                      onMouseEnter={e => showTooltip(e, child.title)}
+                      onMouseLeave={hideTooltip}
                     >
                       <ChildIcon className="nav-sub-item-icon" />
                       <span>{child.label}</span>

@@ -638,12 +638,12 @@ export default function Employees() {
                 </div>
               </Field>
               <Field label="直屬主管">
-                <select className="form-input" style={{ width: '100%' }} value={form.supervisor_id ?? ''} onChange={e => set('supervisor_id', e.target.value ? Number(e.target.value) : null)}>
-                  <option value="">— 不指定 —</option>
-                  {employees.filter(e => e.status === '在職').map(e => (
-                    <option key={e.id} value={e.id}>{e.name} {e.position ? `(${e.position})` : ''}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  value={form.supervisor_id}
+                  onChange={(v) => set('supervisor_id', v)}
+                  options={empOptions(employees.filter(e => e.status === '在職'))}
+                  placeholder="搜尋姓名 / 職稱 / 部門 / 門市..."
+                />
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                   簽核流程「直屬主管」這關會解析到這個人。
                 </div>

@@ -567,9 +567,9 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
 
     if (perStepStatus === 'completed') {
       if (isApplicantCell) {
-        // 申請人 cell：不蓋章，顯示姓名 + 送出時間（含時分，跟其他關卡格式一致）
+        // 申請人 cell：不蓋章，顯示姓名 + 送出時間（純日期時間，跟其他關卡一致）
         cellContent = `<div style="font-size:11pt;font-weight:700;color:#0a6b2e">${safe(step.name || stepTarget)}</div>` +
-                      (step.completedAt ? `<div class="date">${safe(fmtDateTime(step.completedAt))}　送出</div>` : '')
+                      (step.completedAt ? `<div class="date">${safe(fmtDateTime(step.completedAt))}</div>` : '')
       } else {
         const signerName = step.completedBy || stepTarget
         // 簽章優先序：finalApprover.signature_url（最後關）→ signatures[signerName]

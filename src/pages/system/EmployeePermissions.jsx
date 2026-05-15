@@ -30,6 +30,86 @@ const SOURCE_BADGE = {
   none:        { label: '無',       color: 'var(--text-muted)',    bg: 'transparent' },
 }
 
+// ── 主功能配置（104 風格）──
+// 每個 feature 對應 1 個查詢 perm 和/或 1 個修改 perm。
+// 沒有 view = 該功能本身就是動作（如「假單核可」），只顯示「修改」
+// 沒有 edit = 該功能只能查看（如「全公司薪資」），只顯示「查詢」
+// 規則：點修改 ON → 自動帶上查詢 ON；點查詢 OFF → 自動帶上修改 OFF
+const FEATURES = [
+  // 組織架構
+  { module: '組織架構', label: '員工基本資料',   view: 'org.employee.view',     edit: 'org.employee.edit' },
+  { module: '組織架構', label: '員工完整個資',   view: 'org.employee.view_full', edit: null },
+  { module: '組織架構', label: '刪除員工 / 離職', view: null, edit: 'org.employee.delete' },
+  { module: '組織架構', label: '組織架構編輯',   view: null, edit: 'org.structure.edit' },
+  // 出勤與請假
+  { module: '出勤與請假', label: '打卡紀錄', view: 'attendance.view_all', edit: 'attendance.edit' },
+  { module: '出勤與請假', label: '假單核可', view: null, edit: 'leave.approve' },
+  { module: '出勤與請假', label: '加班核可', view: null, edit: 'ot.approve' },
+  { module: '出勤與請假', label: '出差核可', view: null, edit: 'trip.approve' },
+  { module: '出勤與請假', label: '假別設定', view: null, edit: 'leave_type.edit' },
+  // 排班管理
+  { module: '排班管理', label: '排班',            view: 'schedule.view_all', edit: 'schedule.edit' },
+  { module: '排班管理', label: '排班演算法',      view: null, edit: 'schedule.algo' },
+  { module: '排班管理', label: '排班規則 / 班別', view: null, edit: 'schedule.rule_edit' },
+  // HR 表單
+  { module: 'HR 表單', label: '審核 HR 表單', view: 'hr_form.view', edit: 'hr_form.approve' },
+  { module: 'HR 表單', label: 'HR 表單範本',  view: null,           edit: 'hr_form.template_edit' },
+  // 薪酬與福利
+  { module: '薪酬與福利', label: '部門薪資',   view: 'salary.view_dept',     edit: null },
+  { module: '薪酬與福利', label: '全公司薪資', view: 'salary.view_all',      edit: null },
+  { module: '薪酬與福利', label: '薪資結構',   view: null,                   edit: 'salary.edit' },
+  { module: '薪酬與福利', label: '批次計薪',   view: null,                   edit: 'salary.compute' },
+  { module: '薪酬與福利', label: '薪資發放',   view: null,                   edit: 'salary.pay' },
+  { module: '薪酬與福利', label: '資遣',       view: 'severance.view',       edit: 'severance.execute' },
+  { module: '薪酬與福利', label: '法扣',       view: 'legal_deduction.view', edit: 'legal_deduction.edit' },
+  { module: '薪酬與福利', label: '績效獎金',   view: 'bonus.view',           edit: 'bonus.compute' },
+  { module: '薪酬與福利', label: '勞健保級距', view: 'insurance_rate.view',  edit: 'insurance_rate.edit' },
+  // 人才發展
+  { module: '人才發展', label: '招募管理',   view: 'recruit.view',   edit: 'recruit.manage' },
+  { module: '人才發展', label: '教育訓練',   view: 'training.view',  edit: 'training.manage' },
+  { module: '人才發展', label: '試用期評核', view: 'probation.view', edit: 'probation.evaluate' },
+  // 員工體驗
+  { module: '員工體驗', label: '滿意度調查結果', view: 'survey.view_result', edit: null },
+  { module: '員工體驗', label: 'AI 離職預測',    view: 'ai_attrition.view',  edit: null },
+  // 行政庶務
+  { module: '行政庶務', label: '費用申請審核', view: 'expense.view',         edit: 'expense.approve' },
+  { module: '行政庶務', label: '費用核銷',     view: 'expense.settle_view',  edit: 'expense.settle' },
+  { module: '行政庶務', label: '會計科目',     view: 'expense.account_view', edit: 'expense.account_edit' },
+  { module: '行政庶務', label: '文件',         view: 'doc.view',             edit: 'doc.delete' },
+  // 專案流程
+  { module: '專案流程', label: '專案',         view: 'project.view',         edit: 'project.manage' },
+  { module: '專案流程', label: '任務指派',     view: null,                   edit: 'task.assign' },
+  { module: '專案流程', label: '簽核鏈設定',   view: 'approval_chain.view',  edit: 'approval_chain.edit' },
+  // 系統設定
+  { module: '系統設定', label: '使用者管理',     view: 'system.user_view',       edit: 'system.user_manage' },
+  { module: '系統設定', label: '員工個別權限',   view: 'system.permission_view', edit: 'system.permission_manage' },
+  { module: '系統設定', label: '操作紀錄',       view: 'audit.view',             edit: null },
+  { module: '系統設定', label: '系統設定編輯',   view: null,                     edit: 'system.admin' },
+  { module: '系統設定', label: '租戶管理',       view: null,                     edit: 'system.tenant_manage' },
+  // 財務（未交付，super_admin 才看得到）
+  { module: '財務', label: '財務查看', view: 'finance.view', edit: null },
+  { module: '財務', label: '財務編輯', view: null,           edit: 'finance.edit' },
+  // 導航顯示（sidebar 顯示控制，單一 toggle）
+  { module: '導航顯示', label: 'CRM 群組顯示',          view: null, edit: 'nav.group.crm' },
+  { module: '導航顯示', label: '供應鏈群組顯示',        view: null, edit: 'nav.group.supply' },
+  { module: '導航顯示', label: '分析群組顯示',          view: null, edit: 'nav.group.analytics' },
+  { module: '導航顯示', label: '系統群組顯示',          view: null, edit: 'nav.group.system' },
+  { module: '導航顯示', label: '超管群組顯示',          view: null, edit: 'nav.group.super_admin' },
+  { module: '導航顯示', label: '組織完整管理',          view: null, edit: 'nav.org.full' },
+  { module: '導航顯示', label: '組織內部資料',          view: null, edit: 'nav.org.internal' },
+  { module: '導航顯示', label: '排班與假日',            view: null, edit: 'nav.schedule.basic' },
+  { module: '導航顯示', label: '排班規則 / 工時設定',   view: null, edit: 'nav.schedule.config' },
+  { module: '導航顯示', label: '薪資查看與發放',        view: null, edit: 'nav.salary.basic' },
+  { module: '導航顯示', label: '進階薪資',              view: null, edit: 'nav.salary.advanced' },
+  { module: '導航顯示', label: '法令工資設定',          view: null, edit: 'nav.salary.law' },
+  { module: '導航顯示', label: '人才發展',              view: null, edit: 'nav.talent' },
+  { module: '導航顯示', label: '員工體驗管理',          view: null, edit: 'nav.experience_mgr' },
+  { module: '導航顯示', label: '行政庶務',              view: null, edit: 'nav.admin_office' },
+  { module: '導航顯示', label: '表單建立器',            view: null, edit: 'nav.hr_form.builder' },
+  { module: '導航顯示', label: '專案工作管理',          view: null, edit: 'nav.project.work' },
+  { module: '導航顯示', label: '專案設定 / AI 助理',    view: null, edit: 'nav.project.admin' },
+]
+
 export default function EmployeePermissions() {
   const { profile, role } = useAuth()
   const orgId = profile?.organization_id
@@ -147,15 +227,144 @@ export default function EmployeePermissions() {
     )
   }, [employees, search])
 
-  // 按 module 分組
-  const groupedPerms = useMemo(() => {
+  // perm code → perm object（給 FEATURES lookup 用）
+  const permByCode = useMemo(() => {
+    const m = {}
+    for (const p of permissions) m[p.code] = p
+    return m
+  }, [permissions])
+
+  // 把 FEATURES 過濾掉「兩個 perm 都不存在」的（例：admin 看不到 finance.* 那兩個 feature 自動消失）
+  const visibleFeatures = useMemo(() => {
+    return FEATURES.filter(f => {
+      const hasView = f.view && permByCode[f.view]
+      const hasEdit = f.edit && permByCode[f.edit]
+      return hasView || hasEdit
+    })
+  }, [permByCode])
+
+  // 按 module 分組 features
+  const groupedFeatures = useMemo(() => {
     const groups = {}
-    for (const p of permissions) {
-      if (!groups[p.module]) groups[p.module] = []
-      groups[p.module].push(p)
+    for (const f of visibleFeatures) {
+      if (!groups[f.module]) groups[f.module] = []
+      groups[f.module].push(f)
     }
     return groups
-  }, [permissions])
+  }, [visibleFeatures])
+
+  // 對單一 perm 做樂觀切換（內部用，給 handleFeatureToggle 呼叫）
+  const togglePermOptimistic = async (perm, targetEffective) => {
+    let nextMode, optimisticSource
+    if (targetEffective && !perm.effective) {
+      // 要開但目前是關
+      nextMode = perm.source === 'none' ? 'grant' : 'reset'
+      optimisticSource = perm.source === 'none' ? 'grant' : 'role'
+    } else if (!targetEffective && perm.effective) {
+      // 要關但目前是開
+      nextMode = perm.source === 'role' ? 'revoke' : 'reset'
+      optimisticSource = perm.source === 'role' ? 'role_revoke' : 'none'
+    } else {
+      // 已經是目標狀態，不用動
+      return { ok: true }
+    }
+
+    // 樂觀更新本地 state
+    setPermissions(prev => prev.map(p =>
+      p.permission_id === perm.permission_id
+        ? { ...p, source: optimisticSource, effective: targetEffective }
+        : p
+    ))
+
+    const { data, error } = await supabase.rpc('set_employee_permission_override', {
+      p_emp_id:  selectedEmp.id,
+      p_perm_id: perm.permission_id,
+      p_mode:    nextMode,
+      p_reason:  null,
+    })
+    return { ok: !error && data?.ok !== false, error, data }
+  }
+
+  // 切換 feature 的「查詢」或「修改」
+  // kind: 'view' or 'edit'
+  // 規則：
+  //   點修改 ON → 自動帶上查詢 ON（要先看到才能改）
+  //   點查詢 OFF → 自動帶上修改 OFF（不能改但能看不合理）
+  const handleFeatureToggle = async (feature, kind) => {
+    if (!canManage || !selectedEmp) return
+    if (!isSuperAdmin && selectedEmp.id === profile?.id) {
+      toast.warning('您不能修改自己的權限，請聯絡超級管理員')
+      return
+    }
+    if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
+      toast.warning('管理員不能修改超管或其他管理員的權限')
+      return
+    }
+
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+
+    // 算目標 view/edit effective 狀態
+    let targetView = viewPerm?.effective ?? false
+    let targetEdit = editPerm?.effective ?? false
+    if (kind === 'view') {
+      targetView = !targetView
+      if (!targetView) targetEdit = false  // 查詢 OFF → 強制 修改 OFF
+    } else {
+      targetEdit = !targetEdit
+      if (targetEdit) targetView = true     // 修改 ON → 強制 查詢 ON
+    }
+
+    // 標記正在 save（讓兩個 toggle 都 disable）
+    const ids = []
+    if (viewPerm) ids.push(viewPerm.permission_id)
+    if (editPerm) ids.push(editPerm.permission_id)
+    setSavingIds(s => new Set([...s, ...ids]))
+
+    // 平行打 RPC
+    const tasks = []
+    if (viewPerm) tasks.push(togglePermOptimistic(viewPerm, targetView))
+    if (editPerm) tasks.push(togglePermOptimistic(editPerm, targetEdit))
+    const results = await Promise.all(tasks)
+
+    setSavingIds(s => {
+      const n = new Set(s)
+      ids.forEach(id => n.delete(id))
+      return n
+    })
+
+    const failed = results.find(r => !r.ok)
+    if (failed) {
+      toast.error('儲存失敗：' + (failed.error?.message || failed.data?.error || '未知錯誤'))
+      // 失敗回滾 → 重抓真實狀態
+      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+      if (refreshed) setPermissions(refreshed)
+    }
+  }
+
+  // 重置 feature（移除 view + edit 的 override）
+  const handleFeatureReset = async (feature) => {
+    if (!canManage || !selectedEmp) return
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+
+    const tasks = []
+    for (const perm of [viewPerm, editPerm]) {
+      if (!perm) continue
+      if (perm.source !== 'grant' && perm.source !== 'role_revoke') continue
+      tasks.push(supabase.rpc('set_employee_permission_override', {
+        p_emp_id: selectedEmp.id,
+        p_perm_id: perm.permission_id,
+        p_mode: 'reset',
+        p_reason: null,
+      }))
+    }
+    if (tasks.length === 0) return
+    await Promise.all(tasks)
+    // 重置完重抓一次（這個比較少用，可以接受抓）
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
+  }
 
   if (loading) return <LoadingSpinner />
 
@@ -249,7 +458,7 @@ export default function EmployeePermissions() {
               </div>
 
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {Object.entries(groupedPerms).map(([module, items]) => (
+                {Object.entries(groupedFeatures).map(([module, features]) => (
                   <div key={module}>
                     <div style={{
                       fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
@@ -259,43 +468,80 @@ export default function EmployeePermissions() {
                       {module}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {items.map(p => {
-                        const badge = SOURCE_BADGE[p.source] || SOURCE_BADGE.none
-                        const saving = savingIds.has(p.permission_id)
-                        const isOverride = p.source === 'grant' || p.source === 'role_revoke'
+                      {features.map(f => {
+                        const viewPerm = f.view ? permByCode[f.view] : null
+                        const editPerm = f.edit ? permByCode[f.edit] : null
+                        // 任一個 perm 是 override，整個 feature 就標 override 樣式
+                        const viewIsOverride = viewPerm && (viewPerm.source === 'grant' || viewPerm.source === 'role_revoke')
+                        const editIsOverride = editPerm && (editPerm.source === 'grant' || editPerm.source === 'role_revoke')
+                        const isOverride = viewIsOverride || editIsOverride
+                        // 整 feature 的「主 badge」優先採 edit；沒 edit 就用 view
+                        const primaryPerm = editPerm || viewPerm
+                        const badge = SOURCE_BADGE[primaryPerm?.source] || SOURCE_BADGE.none
+                        const saving = (viewPerm && savingIds.has(viewPerm.permission_id))
+                                    || (editPerm && savingIds.has(editPerm.permission_id))
+
+                        const featureKey = (viewPerm?.permission_id || editPerm?.permission_id) + '-' + (f.label || '')
+
                         return (
-                          <div key={p.permission_id} style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '8px 12px', borderRadius: 6,
+                          <div key={featureKey} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 8,
                             background: isOverride ? badge.bg : 'transparent',
-                            border: `1px solid ${isOverride ? badge.color : 'transparent'}`,
+                            border: `1px solid ${isOverride ? badge.color : 'var(--border-subtle)'}`,
                           }}>
-                            <button onClick={() => handleToggle(p)} disabled={saving}
-                              style={{
-                                width: 20, height: 20, borderRadius: 4, cursor: saving ? 'wait' : 'pointer',
-                                border: `1.5px solid ${p.effective ? 'var(--accent-green)' : 'var(--border-medium)'}`,
-                                background: p.effective ? 'var(--accent-green)' : 'transparent',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', padding: 0, flexShrink: 0,
-                              }}>
-                              {p.effective && <CheckCircle2 size={14} strokeWidth={3} />}
-                            </button>
+                            {/* feature label + 對應 perm code */}
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
                               <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 1 }}>
-                                {p.code}
+                                {[f.view, f.edit].filter(Boolean).join(' · ')}
                               </div>
                             </div>
+
+                            {/* 查詢 button（只有 view perm 才顯示）*/}
+                            {viewPerm && (
+                              <button onClick={() => handleFeatureToggle(f, 'view')} disabled={saving}
+                                style={{
+                                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                  cursor: saving ? 'wait' : 'pointer',
+                                  border: `1.5px solid ${viewPerm.effective ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                                  background: viewPerm.effective ? 'var(--accent-cyan)' : 'transparent',
+                                  color: viewPerm.effective ? '#fff' : 'var(--text-muted)',
+                                  minWidth: 56,
+                                }}>
+                                {viewPerm.effective ? '✓ 查詢' : '查詢'}
+                              </button>
+                            )}
+
+                            {/* 修改 button（只有 edit perm 才顯示）*/}
+                            {editPerm && (
+                              <button onClick={() => handleFeatureToggle(f, 'edit')} disabled={saving}
+                                style={{
+                                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                  cursor: saving ? 'wait' : 'pointer',
+                                  border: `1.5px solid ${editPerm.effective ? 'var(--accent-orange)' : 'var(--border-medium)'}`,
+                                  background: editPerm.effective ? 'var(--accent-orange)' : 'transparent',
+                                  color: editPerm.effective ? '#fff' : 'var(--text-muted)',
+                                  minWidth: 56,
+                                }}>
+                                {editPerm.effective ? '✓ 修改' : '修改'}
+                              </button>
+                            )}
+
+                            {/* override badge */}
                             <span style={{
                               fontSize: 10, fontWeight: 600,
                               padding: '2px 8px', borderRadius: 4,
                               color: badge.color, background: badge.bg,
                               border: `1px solid ${badge.color}`,
+                              whiteSpace: 'nowrap',
                             }}>
                               {badge.label}
                             </span>
+
+                            {/* reset button */}
                             {isOverride && (
-                              <button onClick={() => handleToggle({ ...p, source: 'reset_target' })}
+                              <button onClick={() => handleFeatureReset(f)}
                                 title="重置為角色預設"
                                 style={{
                                   background: 'transparent', border: 'none', cursor: 'pointer',
@@ -320,7 +566,8 @@ export default function EmployeePermissions() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <AlertCircle size={12} /> <b>說明</b>
                 </div>
-                · 點 checkbox 切換權限，立即生效（個人 override 寫進 employee_permissions 表）<br />
+                · <b>查詢</b>（青色）= 看得到，不能改 · <b>修改</b>（橘色）= 看得到 + 可以改<br />
+                · 點修改 ON 自動帶上查詢；點查詢 OFF 自動把修改也關掉<br />
                 · <span style={{ color: SOURCE_BADGE.grant.color }}>個人加給</span>：角色預設沒有，這人額外開放<br />
                 · <span style={{ color: SOURCE_BADGE.role_revoke.color }}>個人禁用</span>：角色預設有，這人特別禁用<br />
                 · 右側 ↻ 圖示：移除 override 回到角色預設

@@ -757,9 +757,6 @@ export default function EmployeePermissions() {
                         }}>
                           <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 1 }}>
-                              {[f.view, f.edit].filter(Boolean).join(' · ')}
-                            </div>
                           </div>
                           {f.view && (
                             <BatchActionPill label="查詢" accent="var(--accent-cyan)"
@@ -912,9 +909,6 @@ export default function EmployeePermissions() {
                             {/* feature label + 對應 perm code */}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 1 }}>
-                                {[f.view, f.edit].filter(Boolean).join(' · ')}
-                              </div>
                             </div>
 
                             {/* 查詢 button（只有 view perm 才顯示）*/}

@@ -18,6 +18,16 @@ const STATUS_BADGE = {
 
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '—'
 
+// 勞基法 §11 + §13 但書 法定資遣事由（select 下拉用）
+const LEGAL_REASONS = [
+  '§11-1 歇業或轉讓',
+  '§11-2 虧損或業務緊縮',
+  '§11-3 不可抗力暫停工作 1 個月以上',
+  '§11-4 業務性質變更，有減少勞工之必要，又無適當工作可供安置',
+  '§11-5 勞工對於所擔任之工作確不能勝任',
+  '§13 但書 天災事變',
+]
+
 export default function Severance() {
   const { profile } = useAuth()
   const [records, setRecords] = useState([])
@@ -286,11 +296,36 @@ export default function Severance() {
             </Field>
           </div>
 
-          <Field label="資遣原因">
-            <input type="text" className="form-input" style={{ width: '100%' }}
-              placeholder="例：業務縮編 / 不能勝任 / 虧損 / 不適任"
-              value={form.reason}
-              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+          <Field label="資遣原因（勞基法 §11 / §13 但書）">
+            <select className="form-input" style={{ width: '100%' }}
+              value={LEGAL_REASONS.includes(form.reason) ? form.reason : (form.reason ? '__other__' : '')}
+              onChange={e => {
+                const v = e.target.value
+                if (v === '__other__') {
+                  setForm(f => ({ ...f, reason: f.reason && !LEGAL_REASONS.includes(f.reason) ? f.reason : '' }))
+                } else {
+                  setForm(f => ({ ...f, reason: v }))
+                }
+              }}>
+              <option value="">— 選擇法定資遣事由 —</option>
+              <optgroup label="勞基法 §11 雇主預告終止勞動契約">
+                <option value="§11-1 歇業或轉讓">§11-1 歇業或轉讓</option>
+                <option value="§11-2 虧損或業務緊縮">§11-2 虧損或業務緊縮</option>
+                <option value="§11-3 不可抗力暫停工作 1 個月以上">§11-3 不可抗力暫停工作 1 個月以上</option>
+                <option value="§11-4 業務性質變更，有減少勞工之必要，又無適當工作可供安置">§11-4 業務性質變更，有減少勞工之必要，又無適當工作可供安置</option>
+                <option value="§11-5 勞工對於所擔任之工作確不能勝任">§11-5 勞工對於所擔任之工作確不能勝任</option>
+              </optgroup>
+              <optgroup label="其他法定">
+                <option value="§13 但書 天災事變">§13 但書 天災、事變或其他不可抗力（須主管機關核定）</option>
+              </optgroup>
+              <option value="__other__">其他（自行填寫）</option>
+            </select>
+            {(form.reason && !LEGAL_REASONS.includes(form.reason)) && (
+              <input type="text" className="form-input" style={{ width: '100%', marginTop: 8 }}
+                placeholder="自行填寫資遣原因"
+                value={form.reason}
+                onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+            )}
           </Field>
 
           <Field label="平均工資手動覆蓋（選填，留空則自動撈離職前 6 個月薪資平均）">

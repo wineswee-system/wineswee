@@ -700,22 +700,44 @@ export default function EmployeePermissions() {
                       <span>{module}</span>
                       <button onClick={() => handleModuleSelectAll(features, 'grant')}
                         disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部開啟"
                         style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                          border: '1px solid var(--accent-green)',
-                          background: 'transparent', color: 'var(--accent-green)',
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
                           cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
                           letterSpacing: 'normal',
-                        }}>全選</button>
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全選
+                      </button>
                       <button onClick={() => handleModuleSelectAll(features, 'revoke')}
                         disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部關閉"
                         style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                          border: '1px solid var(--accent-red)',
-                          background: 'transparent', color: 'var(--accent-red)',
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
                           cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
                           letterSpacing: 'normal',
-                        }}>全不選</button>
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全不選
+                      </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => (
@@ -815,22 +837,44 @@ export default function EmployeePermissions() {
                       <span>{module}</span>
                       <button onClick={() => handleModuleSelectAll(features, 'grant')}
                         disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部開啟"
                         style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                          border: '1px solid var(--accent-green)',
-                          background: 'transparent', color: 'var(--accent-green)',
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
                           cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
                           letterSpacing: 'normal',
-                        }}>全選</button>
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全選
+                      </button>
                       <button onClick={() => handleModuleSelectAll(features, 'revoke')}
                         disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部關閉"
                         style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                          border: '1px solid var(--accent-red)',
-                          background: 'transparent', color: 'var(--accent-red)',
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
                           cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
                           letterSpacing: 'normal',
-                        }}>全不選</button>
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全不選
+                      </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {features.map(f => {

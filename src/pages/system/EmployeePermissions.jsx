@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { toast } from '../../lib/toast'
+import PermissionModuleSection from './components/PermissionModuleSection'
 
 const ROLE_LABEL = {
   store_staff:  '門市人員',
@@ -20,16 +21,6 @@ const roleColor = {
   office_staff:'badge-neutral',
   store_staff: 'badge-neutral',
   employee:    'badge-neutral',
-}
-
-// source → 顯示文字 & 顏色
-// 注意：grant / role_revoke 的 label 在 UI 上會被 badge 渲染邏輯替換成「MM/DD 手動調整」
-// 這裡 label 只在邏輯 fallback 時才會用到（理論上不會發生）
-const SOURCE_BADGE = {
-  role:        { label: '角色預設', color: 'var(--text-muted)',    bg: 'var(--glass-light)' },
-  grant:       { label: '手動調整', color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)' },
-  role_revoke: { label: '手動調整', color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)' },
-  none:        { label: '無',       color: 'var(--text-muted)',    bg: 'transparent' },
 }
 
 // ── 主功能配置（104 風格）──
@@ -787,6 +778,7 @@ export default function EmployeePermissions() {
                   </div>
                 ))}
               </div>
+              {/* NOTE: batch mode uses its own pill UI (BatchActionPill) — PermissionModuleSection is used in single-select mode below */}
             </>
           ) : !selectedEmp ? (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -834,167 +826,17 @@ export default function EmployeePermissions() {
 
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {Object.entries(groupedFeatures).map(([module, features]) => (
-                  <div key={module}>
-                    <div style={{
-                      fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
-                      letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
-                      borderBottom: '1px dashed var(--border-medium)',
-                      display: 'flex', alignItems: 'center', gap: 12,
-                    }}>
-                      <span>{module}</span>
-                      <button onClick={() => handleModuleSelectAll(features, 'grant')}
-                        disabled={batchSaving}
-                        title="對此區塊所有功能 一次全部開啟"
-                        style={{
-                          fontSize: 12, fontWeight: 500,
-                          background: 'transparent', border: 'none',
-                          color: 'var(--text-primary)',
-                          cursor: batchSaving ? 'wait' : 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          padding: '2px 4px',
-                          letterSpacing: 'normal',
-                        }}>
-                        <span style={{
-                          width: 14, height: 14, borderRadius: 3,
-                          border: '1.5px solid var(--text-secondary)',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          background: 'transparent',
-                        }} />
-                        全選
-                      </button>
-                      <button onClick={() => handleModuleSelectAll(features, 'revoke')}
-                        disabled={batchSaving}
-                        title="對此區塊所有功能 一次全部關閉"
-                        style={{
-                          fontSize: 12, fontWeight: 500,
-                          background: 'transparent', border: 'none',
-                          color: 'var(--text-primary)',
-                          cursor: batchSaving ? 'wait' : 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          padding: '2px 4px',
-                          letterSpacing: 'normal',
-                        }}>
-                        <span style={{
-                          width: 14, height: 14, borderRadius: 3,
-                          border: '1.5px solid var(--text-secondary)',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          background: 'transparent',
-                        }} />
-                        全不選
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {features.map(f => {
-                        const viewPerm = f.view ? permByCode[f.view] : null
-                        const editPerm = f.edit ? permByCode[f.edit] : null
-                        // 任一個 perm 是 override，整個 feature 就標 override 樣式
-                        const viewIsOverride = viewPerm && (viewPerm.source === 'grant' || viewPerm.source === 'role_revoke')
-                        const editIsOverride = editPerm && (editPerm.source === 'grant' || editPerm.source === 'role_revoke')
-                        const isOverride = viewIsOverride || editIsOverride
-                        // 整 feature 的「主 badge」優先採 edit；沒 edit 就用 view
-                        const primaryPerm = editPerm || viewPerm
-                        const badge = SOURCE_BADGE[primaryPerm?.source] || SOURCE_BADGE.none
-                        const saving = (viewPerm && savingIds.has(viewPerm.permission_id))
-                                    || (editPerm && savingIds.has(editPerm.permission_id))
-
-                        const featureKey = (viewPerm?.permission_id || editPerm?.permission_id) + '-' + (f.label || '')
-
-                        return (
-                          <div key={featureKey} style={{
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '10px 12px', borderRadius: 8,
-                            background: isOverride ? badge.bg : 'transparent',
-                            border: `1px solid ${isOverride ? badge.color : 'var(--border-subtle)'}`,
-                          }}>
-                            {/* feature label + 對應 perm code */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
-                            </div>
-
-                            {/* 查詢 button（只有 view perm 才顯示）*/}
-                            {viewPerm && (
-                              <button onClick={() => handleFeatureToggle(f, 'view')} disabled={saving}
-                                style={{
-                                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                                  cursor: saving ? 'wait' : 'pointer',
-                                  border: `1.5px solid ${viewPerm.effective ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
-                                  background: viewPerm.effective ? 'var(--accent-cyan)' : 'transparent',
-                                  color: viewPerm.effective ? '#fff' : 'var(--text-muted)',
-                                  minWidth: 56,
-                                }}>
-                                {viewPerm.effective ? '✓ 查詢' : '查詢'}
-                              </button>
-                            )}
-
-                            {/* 修改 button（只有 edit perm 才顯示，跟查詢同色系青色）*/}
-                            {editPerm && (
-                              <button onClick={() => handleFeatureToggle(f, 'edit')} disabled={saving}
-                                style={{
-                                  padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                                  cursor: saving ? 'wait' : 'pointer',
-                                  border: `1.5px solid ${editPerm.effective ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
-                                  background: editPerm.effective ? 'var(--accent-cyan)' : 'transparent',
-                                  color: editPerm.effective ? '#fff' : 'var(--text-muted)',
-                                  minWidth: 56,
-                                }}>
-                                {editPerm.effective ? '✓ 修改' : '修改'}
-                              </button>
-                            )}
-
-                            {/* badge：override 顯示「日期 手動調整」；非 override 顯示「角色預設」「無」*/}
-                            {(() => {
-                              const overridePerm = [viewPerm, editPerm].find(p =>
-                                p && (p.source === 'grant' || p.source === 'role_revoke')
-                              )
-                              if (overridePerm) {
-                                let dateText = ''
-                                if (overridePerm.override_at) {
-                                  const d = new Date(overridePerm.override_at)
-                                  const pad = n => String(n).padStart(2, '0')
-                                  dateText = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} `
-                                }
-                                return (
-                                  <span style={{
-                                    fontSize: 10, fontWeight: 600,
-                                    padding: '2px 8px', borderRadius: 4,
-                                    color: badge.color, background: badge.bg,
-                                    border: `1px solid ${badge.color}`,
-                                    whiteSpace: 'nowrap',
-                                  }}>
-                                    {dateText}手動調整
-                                  </span>
-                                )
-                              }
-                              // 非 override：顯示「角色預設」/「無」
-                              return (
-                                <span style={{
-                                  fontSize: 10, fontWeight: 600,
-                                  padding: '2px 8px', borderRadius: 4,
-                                  color: badge.color, background: badge.bg,
-                                  border: `1px solid ${badge.color}`,
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                  {badge.label}
-                                </span>
-                              )
-                            })()}
-
-                            {/* reset button */}
-                            {isOverride && (
-                              <button onClick={() => handleFeatureReset(f)}
-                                title="重置為角色預設"
-                                style={{
-                                  background: 'transparent', border: 'none', cursor: 'pointer',
-                                  color: 'var(--text-muted)', padding: 2,
-                                }}>
-                                <RotateCcw size={12} />
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  <PermissionModuleSection
+                    key={module}
+                    module={module}
+                    features={features}
+                    empPerms={permByCode}
+                    onToggle={handleFeatureToggle}
+                    onReset={handleFeatureReset}
+                    savingIds={savingIds}
+                    onModuleSelectAll={handleModuleSelectAll}
+                    batchSaving={batchSaving}
+                  />
                 ))}
               </div>
 

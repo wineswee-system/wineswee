@@ -56,4 +56,15 @@ export const POS_EVENTS = {
       cash_difference: { type: 'number', required: false },
     },
   },
+  'pos.access.revoked': {
+    domain: 'pos',
+    action: 'access.revoked',
+    version: 1,
+    description: 'POS 存取權限撤銷（離職流程）',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      reason: { type: 'string', required: false },
+    },
+  },
 }

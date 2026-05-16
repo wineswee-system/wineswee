@@ -5,6 +5,8 @@ import {
   AlertTriangle, Clock, CheckCircle, Star, Shield, ArrowUpCircle,
   Users, Settings, Link2, Trash2, Edit3, History, Merge, Sparkles, Loader, Copy
 } from 'lucide-react'
+// Note: Shield, Edit3, Trash2, History, Sparkles, Loader, Copy are used in extracted sub-components
+// but kept here to avoid breaking any remaining usages in this file
 import { supabase } from '../../lib/supabase'
 import { getTicketHistory, createTicketHistoryEntry, getSLAPolicies, createSLAPolicy, updateSLAPolicy, deleteSLAPolicy } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -15,6 +17,9 @@ import {
 } from '../../lib/crmEngine'
 import { generateTicketReply, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
 import NotesPanel from './components/NotesPanel'
+import TicketFormModal from './components/TicketFormModal'
+import TicketDetailExpansionRows from './components/TicketDetailModal'
+import SLAConfigPanel from './components/SLAConfigPanel'
 
 import { confirm } from '../../lib/confirm'
 const TICKET_TYPES = ['商品瑕疵', '出貨錯誤', '退換貨', '付款問題', '諮詢', '其他']
@@ -410,65 +415,11 @@ export default function Service() {
 
       {/* ── SLA Policy Panel (Custom + Default) ──── */}
       {showSLAPanel && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header">
-            <div className="card-title"><span className="card-title-icon"><Shield size={16} /></span> SLA 服務水準政策</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => { setSlaForm({ name: '', priority: '一般', response_hours: 24, resolution_hours: 72, is_default: false }); setEditingSLAId(null); setShowSLAForm(true) }}>
-                <Plus size={12} /> 新增政策
-              </button>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }} onClick={() => setShowSLAPanel(false)}>✕</button>
-            </div>
-          </div>
-          {/* Custom SLAs */}
-          {customSLAs.length > 0 && (
-            <>
-              <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>自訂政策</div>
-              <div className="data-table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr><th>名稱</th><th>優先度</th><th>回應時限</th><th>解決時限</th><th>操作</th></tr>
-                  </thead>
-                  <tbody>
-                    {customSLAs.map(p => (
-                      <tr key={p.id}>
-                        <td style={{ fontWeight: 600 }}>{p.name}</td>
-                        <td><span className={`badge ${p.priority === '緊急' ? 'badge-danger' : p.priority === '高' ? 'badge-warning' : 'badge-neutral'}`}><span className="badge-dot"></span>{p.priority}</span></td>
-                        <td style={{ fontWeight: 600 }}>{p.response_hours} 小時</td>
-                        <td style={{ fontWeight: 600 }}>{p.resolution_hours} 小時</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn btn-sm" onClick={() => handleSLAEdit(p)}><Edit3 size={12} /></button>
-                            <button className="btn btn-sm" style={{ color: 'var(--accent-red)' }} onClick={() => handleSLADelete(p.id)}><Trash2 size={12} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-          {/* Default SLAs */}
-          <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>預設政策</div>
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr><th>優先度</th><th>回應時限</th><th>解決時限</th><th>說明</th></tr>
-              </thead>
-              <tbody>
-                {SLA_POLICIES.map(p => (
-                  <tr key={p.priority}>
-                    <td><span className={`badge ${p.priority === '緊急' ? 'badge-danger' : p.priority === '高' ? 'badge-warning' : 'badge-neutral'}`}><span className="badge-dot"></span>{p.priority}</span></td>
-                    <td style={{ fontWeight: 600 }}>{p.response_hours} 小時</td>
-                    <td style={{ fontWeight: 600 }}>{p.resolution_hours} 小時</td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.label}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <SLAConfigPanel
+          policies={customSLAs}
+          onUpdate={setCustomSLAs}
+          onClose={() => setShowSLAPanel(false)}
+        />
       )}
 
       {/* ── Agent Config Panel ────────────────────── */}
@@ -709,96 +660,17 @@ export default function Service() {
                         </div>
                       </td>
                     </tr>
-                    {/* AI Reply expansion row */}
-                    {aiReplyTicketId === t.id && (
-                      <tr key={`${t.id}-ai-reply`}>
-                        <td colSpan={14} style={{ padding: 0, background: 'linear-gradient(135deg, rgba(139,92,246,0.04), rgba(99,102,241,0.04))' }}>
-                          <div style={{ padding: '14px 20px' }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: 'var(--accent-purple)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <Sparkles size={14} /> AI 智慧回覆 — 工單 #{String(t.id).padStart(4, '0')}
-                            </div>
-                            {aiReplyLoading ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
-                                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> AI 正在分析工單並產生回覆...
-                              </div>
-                            ) : aiReplyError ? (
-                              <div style={{ fontSize: 12, color: 'var(--accent-red)', padding: '8px 12px', background: 'var(--accent-red-dim)', borderRadius: 8 }}>{aiReplyError}</div>
-                            ) : aiReplyResult ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                {/* Reply content */}
-                                <div style={{ padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-subtle)', position: 'relative' }}>
-                                  <button onClick={copyAiReply} title="複製回覆" style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                                    <Copy size={14} />
-                                  </button>
-                                  <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', paddingRight: 24 }}>{aiReplyResult.reply}</div>
-                                </div>
-                                {/* Sentiment + Actions */}
-                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                  {aiReplyResult.sentiment && (
-                                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <span style={{ color: 'var(--text-muted)' }}>客戶情緒：</span>
-                                      <span className={`badge ${aiReplyResult.sentiment === 'positive' ? 'badge-success' : aiReplyResult.sentiment === 'negative' ? 'badge-danger' : 'badge-neutral'}`}>
-                                        <span className="badge-dot"></span>
-                                        {aiReplyResult.sentiment === 'positive' ? '正面' : aiReplyResult.sentiment === 'negative' ? '負面' : '中性'}
-                                      </span>
-                                    </div>
-                                  )}
-                                  {aiReplyResult.suggestedActions?.length > 0 && (
-                                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                      <span style={{ color: 'var(--text-muted)' }}>建議動作：</span>
-                                      {aiReplyResult.suggestedActions.map((a, i) => (
-                                        <span key={i} style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim, rgba(139,92,246,0.1))', color: 'var(--accent-purple)', fontSize: 11, fontWeight: 600 }}>{a}</span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                {aiReplyResult.relevantKB?.length > 0 && (
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                    參考知識庫：{aiReplyResult.relevantKB.join('、')}
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {/* History expansion row */}
-                    {historyTicketId === t.id && (
-                      <tr key={`${t.id}-history`}>
-                        <td colSpan={14} style={{ padding: 0, background: 'var(--glass-light)' }}>
-                          <div style={{ padding: '12px 20px' }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text-secondary)' }}>
-                              <History size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> 異動紀錄 — 工單 #{String(t.id).padStart(4, '0')}
-                            </div>
-                            {historyLoading ? <LoadingSpinner /> : ticketHistory.length === 0 ? (
-                              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>尚無異動紀錄</div>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {ticketHistory.map(h => (
-                                  <div key={h.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
-                                    <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 130 }}>
-                                      {new Date(h.created_at).toLocaleString('zh-TW')}
-                                    </span>
-                                    <span style={{ fontWeight: 600, minWidth: 70 }}>
-                                      {h.action === 'status_changed' ? '狀態變更' : h.action === 'assigned' ? '指派變更' : h.action === 'created' ? '建立工單' : h.action === 'merged' ? '合併工單' : h.action}
-                                    </span>
-                                    <span style={{ color: 'var(--text-secondary)' }}>
-                                      {h.old_value && h.new_value ? `${h.old_value} → ${h.new_value}` : h.new_value || h.comment || ''}
-                                    </span>
-                                    <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{h.actor}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {/* Notes panel inline */}
-                            <div style={{ marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
-                              <NotesPanel entityType="service_ticket" entityId={t.id} />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
+                    <TicketDetailExpansionRows
+                      ticket={t}
+                      historyTicketId={historyTicketId}
+                      historyLoading={historyLoading}
+                      ticketHistory={ticketHistory}
+                      aiReplyTicketId={aiReplyTicketId}
+                      aiReplyLoading={aiReplyLoading}
+                      aiReplyResult={aiReplyResult}
+                      aiReplyError={aiReplyError}
+                      onCopyAiReply={copyAiReply}
+                    />
                     </>
                   )
                 })}
@@ -928,64 +800,19 @@ export default function Service() {
       )}
 
       {/* ════════════ MODAL: NEW TICKET ═══════════════ */}
-      {showModal && (
-        <Modal title="新增客服工單" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="客戶名稱" required>
-              <input className="form-input" type="text" style={{ width: '100%' }} list="cust-list" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
-              <datalist id="cust-list">{customers.map(c => <option key={c.id} value={c.name} />)}</datalist>
-            </Field>
-            <Field label="所屬分店">
-              <select className="form-input" style={{ width: '100%' }} value={form.location_id} onChange={e => set('location_id', e.target.value)}>
-                <option value="">請選擇分店</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="主旨" required>
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="問題簡述..." value={form.subject} onChange={e => set('subject', e.target.value)} />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="類型">
-              <select className="form-input" style={{ width: '100%' }} value={form.type} onChange={e => set('type', e.target.value)}>
-                {TICKET_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </Field>
-            <Field label="優先度">
-              <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
-                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
-              </select>
-            </Field>
-            <Field label="來源管道">
-              <select className="form-input" style={{ width: '100%' }} value={form.channel} onChange={e => set('channel', e.target.value)}>
-                {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.value}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責客服">
-              <select className="form-input" style={{ width: '100%' }} value={form.assignee} onChange={e => set('assignee', e.target.value)}>
-                <option value="">自動分配 (Round-Robin)</option>
-                {agents.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </Field>
-            <Field label="關聯商機">
-              <select className="form-input" style={{ width: '100%' }} value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
-                <option value="">無</option>
-                {deals.map(d => <option key={d.id} value={d.id}>{d.name}{d.customer_name ? ` (${d.customer_name})` : ''}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="問題描述">
-            <textarea className="form-input" style={{ width: '100%', minHeight: 80 }} value={form.description} onChange={e => set('description', e.target.value)} />
-          </Field>
-          {!form.assignee && (
-            <div style={{ fontSize: 12, color: 'var(--accent-cyan)', padding: '6px 10px', borderRadius: 8, background: 'var(--glass-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Users size={13} /> 未選擇負責人，將自動以 Round-Robin 分配給：<strong>{autoAssignTicket(agents, tickets) || '(無可用人員)'}</strong>
-            </div>
-          )}
-        </Modal>
-      )}
+      <TicketFormModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        form={form}
+        setForm={setForm}
+        employees={[]}
+        locations={locations}
+        customers={customers}
+        deals={deals}
+        agents={agents}
+        tickets={tickets}
+        onSubmit={handleSubmit}
+      />
 
       {/* ════════════ MODAL: BULK ACTION ═══════════════ */}
       {showBulkModal && (
@@ -1028,31 +855,7 @@ export default function Service() {
         </Modal>
       )}
 
-      {/* ════════════ MODAL: SLA FORM ═══════════════════ */}
-      {showSLAForm && (
-        <Modal
-          title={editingSLAId ? '編輯 SLA 政策' : '新增 SLA 政策'}
-          onClose={() => { setShowSLAForm(false); setEditingSLAId(null) }}
-          onSubmit={handleSLASave}
-        >
-          <Field label="政策名稱" required>
-            <input className="form-input" style={{ width: '100%' }} value={slaForm.name} onChange={e => setSlaForm(f => ({ ...f, name: e.target.value }))} placeholder="例：VIP 客戶 SLA" />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="適用優先度">
-              <select className="form-input" style={{ width: '100%' }} value={slaForm.priority} onChange={e => setSlaForm(f => ({ ...f, priority: e.target.value }))}>
-                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
-              </select>
-            </Field>
-            <Field label="回應時限 (小時)">
-              <input className="form-input" type="number" style={{ width: '100%' }} value={slaForm.response_hours} onChange={e => setSlaForm(f => ({ ...f, response_hours: Number(e.target.value) }))} />
-            </Field>
-            <Field label="解決時限 (小時)">
-              <input className="form-input" type="number" style={{ width: '100%' }} value={slaForm.resolution_hours} onChange={e => setSlaForm(f => ({ ...f, resolution_hours: Number(e.target.value) }))} />
-            </Field>
-          </div>
-        </Modal>
-      )}
+      {/* SLA form modal is now rendered inside SLAConfigPanel */}
 
       {/* ════════════ MODAL: CSAT RATING ═════════════ */}
       {csatModal && (

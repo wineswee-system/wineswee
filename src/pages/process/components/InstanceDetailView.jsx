@@ -18,7 +18,7 @@ const STATUS_CONFIG = {
   '待確認': { color: 'var(--accent-purple)', bg: 'var(--accent-purple-dim)' },
   '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
   '已退回': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
-  '已擱置': { color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },
+  '已擱置': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
 }
 // 任何 STATUS_CONFIG 沒對到的 status 都 fallback 到「未開始」（避免 sc.color 讀 undefined 崩）
 const FALLBACK_STATUS = STATUS_CONFIG['未開始']

@@ -120,4 +120,26 @@ export const WMS_EVENTS = {
       components: { type: 'array', required: true },
     },
   },
+  'wms.access.revoked': {
+    domain: 'wms',
+    action: 'access.revoked',
+    version: 1,
+    description: 'WMS 存取權限撤銷（離職流程）',
+    payload: {
+      employee_id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      reason: { type: 'string', required: false },
+    },
+  },
+  'wms.stock.reserved': {
+    domain: 'wms',
+    action: 'stock.reserved',
+    version: 1,
+    description: '庫存預留（銷售訂單確認）',
+    payload: {
+      order_id: { type: 'string', required: true },
+      order_number: { type: 'string', required: true },
+      items: { type: 'array', required: true },
+    },
+  },
 }

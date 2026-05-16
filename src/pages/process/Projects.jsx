@@ -21,12 +21,18 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 import { confirm } from '../../lib/confirm'
+import InputModal from '../../components/ui/InputModal'
+import ProjectDetailPanel from './components/ProjectDetailPanel'
+import ProjectDeployModal from './components/ProjectDeployModal'
+import ProjectFormModal from './components/ProjectFormModal'
+import ProjectListView from './components/ProjectListView'
+
 const STATUS_MAP = {
-  '規劃中': { color: 'var(--accent-blue)', icon: Clock },
-  '進行中': { color: 'var(--accent-cyan)', icon: Play },
-  '已完成': { color: 'var(--accent-green)', icon: Check },
-  '暫停':   { color: 'var(--accent-yellow)', icon: Pause },
-  '已取消': { color: 'var(--accent-red)', icon: Ban },
+  '規劃中': { color: 'var(--accent-blue)',   bg: 'var(--accent-blue-dim)',   icon: Clock },
+  '進行中': { color: 'var(--accent-cyan)',   bg: 'var(--accent-cyan-dim)',   icon: Play },
+  '已完成': { color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)',  icon: Check },
+  '暫停':   { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)', icon: Pause },
+  '已取消': { color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)',    icon: Ban },
 }
 
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
@@ -71,7 +77,6 @@ export default function Projects() {
   const [selected, setSelected] = useState(null)
   const [commentText, setCommentText] = useState('')
   const [tab, setTab] = useState('active')
-  const [detailTab, setDetailTab] = useState('overview')
   const [search, setSearch] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [filterStore, setFilterStore] = useState('')
@@ -86,14 +91,12 @@ export default function Projects() {
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [pendingWfAttach, setPendingWfAttach] = useState([])
   const [pendingWfCreate, setPendingWfCreate] = useState([])
-  const [inlineWfMode, setInlineWfMode] = useState(null) // null | 'attach' | 'create'
-  const [inlineWfAttachId, setInlineWfAttachId] = useState('')
-  const [inlineWfCreate, setInlineWfCreate] = useState({ template_name: '' })
   const [pendingTasks, setPendingTasks] = useState([])
-  const [inlineTaskMode, setInlineTaskMode] = useState(false)
-  const [inlineTask, setInlineTask] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
+  const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
+  const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
+    setInputModal({ open: true, title, label, placeholder, required, onConfirm })
+  const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
   // Task interaction in project detail
-  const [selectedTask, setSelectedTask] = useState(null)
   const [addingTaskWfId, setAddingTaskWfId] = useState(null)
   const [addTaskForm, setAddTaskForm] = useState({ title: '', assignee: '', due_date: '' })
   const [addingDirectTask, setAddingDirectTask] = useState(false)
@@ -107,13 +110,15 @@ export default function Projects() {
   const [dragTaskId, setDragTaskId] = useState(null)
   const [dragOverTaskId, setDragOverTaskId] = useState(null)
 
-  const handleWfRename = async (w) => {
-    const name = window.prompt('流程名稱', w.template_name)
-    if (!name || name === w.template_name) return
-    const { error } = await supabase.from('workflow_instances').update({ template_name: name }).eq('id', w.id)
-    if (error) { toast('重命名失敗', 'error'); return }
-    setWorkflows(prev => prev.map(x => x.id === w.id ? { ...x, template_name: name } : x))
-    toast('已更新')
+  const handleWfRename = (w) => {
+    openInput('重命名流程', '流程名稱', async (name) => {
+      closeInput()
+      if (!name || name === w.template_name) return
+      const { error } = await supabase.from('workflow_instances').update({ template_name: name }).eq('id', w.id)
+      if (error) { toast.error('重命名失敗'); return }
+      setWorkflows(prev => prev.map(x => x.id === w.id ? { ...x, template_name: name } : x))
+      toast.success('已更新')
+    }, { placeholder: w.template_name })
   }
 
   const handleWfDelete = async (w) => {
@@ -201,7 +206,6 @@ export default function Projects() {
   useEffect(() => {
     if (!selected) return
     getProjectSections(selected.id).then(({ data }) => setSections(data || []))
-    setDetailTab('overview')
   }, [selected?.id])
 
   const addSection = async () => {
@@ -209,7 +213,7 @@ export default function Projects() {
     const maxOrder = sections.reduce((m, s) => Math.max(m, s.sort_order || 0), 0)
     const { data } = await createProjectSection({
       project_id: selected.id, name: newSection.trim(),
-      sort_order: maxOrder + 1, color: '#64748b',
+      sort_order: maxOrder + 1, color: 'var(--text-muted)',
     })
     if (data) setSections(prev => [...prev, data])
     setNewSection('')
@@ -241,8 +245,9 @@ export default function Projects() {
   }
 
   const resetNewProjectState = () => {
-    setPendingWfAttach([]); setPendingWfCreate([]); setInlineWfMode(null); setInlineWfAttachId(''); setInlineWfCreate({ template_name: '' })
-    setPendingTasks([]); setInlineTaskMode(false); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' })
+    setPendingWfAttach([])
+    setPendingWfCreate([])
+    setPendingTasks([])
   }
 
   // CRUD
@@ -255,7 +260,8 @@ export default function Projects() {
       end_date: form.end_date || null,
       template_id: form.template_id ? Number(form.template_id) : null,
     }
-    if (profile?.organization_id) payload.organization_id = profile.organization_id
+    if (!profile?.organization_id) { toast.error('身份資訊未載入，請重新整理頁面'); return }
+    payload.organization_id = profile.organization_id
     if (editingId) {
       const oldProj = projects.find(p => p.id === editingId)
       const { data, error } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
@@ -565,7 +571,8 @@ export default function Projects() {
     setShowDeployModal(true)
   }
 
-  // Filter
+  if (loading) return <LoadingSpinner />
+
   const activeStatuses = tab === 'active' ? ['規劃中', '進行中'] : tab === 'completed' ? ['已完成'] : ['暫停', '已取消']
   const filtered = projects.filter(p => {
     if (!activeStatuses.includes(p.status)) return false
@@ -579,1024 +586,154 @@ export default function Projects() {
   const completedCount = projects.filter(p => p.status === '已完成').length
   const archivedCount = projects.filter(p => ['暫停', '已取消'].includes(p.status)).length
 
-  if (loading) return <LoadingSpinner />
-
   // Detail view
   if (selected) {
     const p = selected
     const stats = getStats(p.id)
     const pWorkflows = workflows.filter(w => w.project_id === p.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
     const pComments = comments.filter(c => c.project_id === p.id)
-    const sc = STATUS_MAP[p.status] || {}
 
     return (
-      <div className="fade-in">
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <button className="btn btn-secondary" style={{ marginBottom: 8, fontSize: 12 }} onClick={() => setSelected(null)}>← 返回專案列表</button>
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className="header-icon">📁</span>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>pj-{p.id}</span>
-                {p.name}
-                <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
-              </h2>
-              <p>{p.description || '無說明'}</p>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <button className="btn btn-secondary" style={{ padding: '6px 8px' }} onClick={e => { e.stopPropagation(); setProjMenuId(projMenuId === p.id ? null : p.id) }}>
-                <MoreVertical size={15} />
-              </button>
-              {projMenuId === p.id && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }} onClick={e => e.stopPropagation()}>
-                  <button
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    onClick={(e) => { setProjMenuId(null); openEdit(p, e) }}
-                  ><Edit3 size={13} /> 編輯專案</button>
-                  <button
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    onClick={(e) => { setProjMenuId(null); handleDelete(p.id, e) }}
-                  ><Trash2 size={13} /> 刪除專案</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats + Progress */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 1.5fr', gap: 10, marginBottom: 16 }}>
-          {[
-            { label: '流程', value: stats.workflows, color: 'var(--accent-cyan)' },
-            { label: '總任務', value: stats.total, color: 'var(--accent-blue)' },
-            { label: '已完成', value: stats.completed, color: 'var(--accent-green)' },
-            { label: '進行中', value: stats.inProgress, color: 'var(--accent-orange)' },
-          ].map(s => (
-            <div key={s.label} className="card" style={{ padding: '12px 14px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-            </div>
-          ))}
-          <div className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>{stats.pct}%</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>整體進度</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-cyan)' }}>{stats.pct}%</div>
-              <div style={{ height: 3, borderRadius: 2, background: 'var(--border-medium)', marginTop: 4, width: 80 }}>
-                <div style={{ height: '100%', borderRadius: 2, width: `${stats.pct}%`, background: 'var(--accent-cyan)' }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Meta info */}
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, padding: '10px 14px', background: 'var(--glass-light)', borderRadius: 10 }}>
-          {p.owner && <div><span style={{ color: 'var(--text-muted)' }}>負責人</span> <strong style={{ color: 'var(--text-primary)' }}>{p.owner}</strong></div>}
-          {p.department && <div><span style={{ color: 'var(--text-muted)' }}>部門</span> {p.department}</div>}
-          {p.store && <div><span style={{ color: 'var(--text-muted)' }}>門市</span> {p.store}</div>}
-          {p.start_date && <div><span style={{ color: 'var(--text-muted)' }}>開始</span> {p.start_date}</div>}
-          {p.end_date && <div><span style={{ color: 'var(--text-muted)' }}>預計完成</span> {p.end_date}</div>}
-          {p.budget && <div><span style={{ color: 'var(--text-muted)' }}>預算</span> {fmt(p.budget)}</div>}
-          {p.template_id && (() => { const tpl = templates.find(t => t.id === p.template_id); return tpl ? <div><span style={{ color: 'var(--text-muted)' }}>模板</span> {tpl.name}</div> : null })()}
-        </div>
-
-        {/* Detail tabs */}
-        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
-          {[
-            { k: 'overview',  label: '總覽',     icon: FolderOpen },
-            { k: 'members',   label: '成員',     icon: Users },
-            { k: 'sections',  label: '欄位',     icon: Columns },
-            { k: 'fields',    label: '自訂欄位', icon: Settings },
-            { k: 'changelog', label: '變更日誌', icon: GitBranch },
-          ].map(t => {
-            const Icon = t.icon
-            const active = detailTab === t.k
-            return (
-              <button key={t.k} onClick={() => setDetailTab(t.k)} style={{
-                padding: '8px 14px', border: 'none', background: 'transparent',
-                borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
-                <Icon size={13} />{t.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {detailTab === 'members' && (
-          <ProjectMembers
-            projectId={p.id}
-            employees={employees}
-            currentUser={profile}
-            autoMemberIds={(() => {
-              const ids = new Set()
-              const wfIds = new Set(pWorkflows.map(w => w.id))
-              // Canonical source: task assignee_id FKs
-              tasks.forEach(t => {
-                if (wfIds.has(t.workflow_instance_id) && t.assignee_id) ids.add(t.assignee_id)
-              })
-              // Name fallbacks: skip if that name is already represented by an id in the set
-              const nameAlreadyIn = (n) => [...ids].some(id => employees.find(e => e.id === id)?.name === n)
-              const byName = (n) => employees.find(e => e.name === n)?.id
-              if (p.owner_id) ids.add(p.owner_id)
-              else if (p.owner && !nameAlreadyIn(p.owner)) { const id = byName(p.owner); if (id) ids.add(id) }
-              pWorkflows.forEach(w => {
-                if (w.started_by_id) ids.add(w.started_by_id)
-                else if (w.started_by && !nameAlreadyIn(w.started_by)) { const id = byName(w.started_by); if (id) ids.add(id) }
-              })
-              return [...ids]
-            })()}
-          />
-        )}
-
-        {detailTab === 'fields' && (
-          <ProjectCustomFieldsAdmin projectId={p.id} />
-        )}
-
-        {detailTab === 'changelog' && (
-          <ChangelogPanel
-            tables={['projects', 'project_comments', 'project_sections']}
-            targetId={p.id}
-            orgId={profile?.organization_id}
-            currentUser={profile?.name}
-          />
-        )}
-
-        {detailTab === 'sections' && (
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-              <Columns size={14} /> 看板欄位 ({sections.length})
-            </div>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              <input
-                className="form-input" style={{ flex: 1, fontSize: 13 }}
-                placeholder="新欄位名稱，例：審核中"
-                value={newSection} onChange={e => setNewSection(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSection()}
-              />
-              <button className="btn btn-primary" onClick={addSection} disabled={!newSection.trim()}>
-                <Plus size={13} /> 新增
-              </button>
-            </div>
-            {sections.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
-                尚無自訂欄位。看板會使用預設狀態欄位。
-              </div>
-            ) : sections.map(s => (
-              <div key={s.id} className="card" style={{ padding: '8px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 3, background: s.color }} />
-                <input
-                  defaultValue={s.name}
-                  onBlur={e => e.target.value !== s.name && renameSection(s.id, e.target.value)}
-                  style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600, outline: 'none' }}
-                />
-                <button
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 7px', color: 'var(--accent-red)' }}
-                  onClick={() => removeSection(s.id)}
-                ><Trash2 size={12} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {detailTab === 'overview' && <>
-
-        {/* Workflows */}
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-            <Workflow size={15} /> 流程（{pWorkflows.length}）
-          </span>
-          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openWorkflowModal(p)}>
-            <Plus size={12} /> 連結 / 建立流程
-          </button>
-        </div>
-
-        {pWorkflows.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-            尚無流程。到「流程管理 → 流程」建立時可指定專案。
-          </div>
-        ) : pWorkflows.map(w => {
-          const wTasks = tasks.filter(t => t.workflow_instance_id === w.id).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
-          const wTotal = wTasks.length
-          const wDone = wTasks.filter(t => t.status === '已完成').length
-          const wInProgress = wTasks.filter(t => t.status === '進行中').length
-          const wPending = wTotal - wDone - wInProgress
-          const wPct = wTotal > 0 ? Math.round((wDone / wTotal) * 100) : 0
-          const wColor = w.status === '已完成' ? 'var(--accent-green)' : w.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-cyan)'
-
-          const wCollapsed = collapsedWfIds.has(w.id)
-          return (
-            <div key={w.id} className="card"
-              draggable
-              onDragStart={() => setDragWfId(w.id)}
-              onDragEnd={() => { setDragWfId(null); setDragOverWfId(null) }}
-              onDragOver={e => { e.preventDefault(); setDragOverWfId(w.id) }}
-              onDrop={e => { e.preventDefault(); handleWfReorder(dragWfId, w.id); setDragOverWfId(null) }}
-              style={{ marginBottom: 10, padding: '14px 16px', ...(dragOverWfId === w.id && dragWfId !== w.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: -2 } : {}) }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <GripVertical size={14} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.45 }} onClick={e => e.stopPropagation()} />
-                  {wCollapsed
-                    ? <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 0.2s' }} />
-                    : <ChevronDown size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0, transition: 'transform 0.2s' }} />
-                  }
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
-                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginRight: 5 }}>wf-{w.id}</span>
-                      {w.template_name}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {w.started_by && `${w.started_by} · `}{w.started_at?.slice(0, 10)}
-                      <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: wColor, background: `color-mix(in srgb, ${wColor} 15%, transparent)` }}>{w.status}</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ display: 'flex', gap: 10, fontSize: 12, whiteSpace: 'nowrap' }}>
-                    <span>⬜ {wPending}</span>
-                    <span style={{ color: 'var(--accent-cyan)' }}>🔄 {wInProgress}</span>
-                    <span style={{ color: 'var(--accent-green)' }}>✅ {wDone}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)', lineHeight: 1 }}>{wPct}%</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{wDone}/{wTotal}</div>
-                    </div>
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(${wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)'} ${wPct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{wPct}%</div>
-                    </div>
-                  </div>
-                  {/* Workflow kebab menu */}
-                  <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 6px', lineHeight: 1 }}
-                      onClick={() => setWfMenuId(wfMenuId === w.id ? null : w.id)}
-                    ><MoreVertical size={14} /></button>
-                    {wfMenuId === w.id && (
-                      <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
-                        <button
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          onClick={() => { setWfMenuId(null); handleWfRename(w) }}
-                        ><Edit3 size={13} /> 編輯名稱</button>
-                        <button
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          onClick={() => { setWfMenuId(null); handleWfDelete(w) }}
-                        ><Trash2 size={13} /> 刪除流程</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tasks section */}
-              {!wCollapsed && <div style={{ marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingLeft: 24 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <CheckSquare size={11} /> 步驟任務 ({wTasks.length})
-                  </span>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 3 }}
-                    onClick={e => { e.stopPropagation(); setAddingTaskWfId(addingTaskWfId === w.id ? null : w.id); setAddTaskForm({ title: '', assignee: '', due_date: '' }) }}
-                  >
-                    <Plus size={10} /> 新增任務
-                  </button>
-                </div>
-
-                {wTasks.length === 0 && addingTaskWfId !== w.id && (
-                  <div style={{ paddingLeft: 24, fontSize: 12, color: 'var(--text-muted)', paddingBottom: 4 }}>尚無步驟，點右側「新增任務」開始</div>
-                )}
-
-                {wTasks.map((t, idx) => {
-                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
-                  return (
-                    <div key={t.id}
-                      draggable
-                      onDragStart={() => setDragTaskId(t.id)}
-                      onDragEnd={() => { setDragTaskId(null); setDragOverTaskId(null) }}
-                      onDragOver={e => { e.preventDefault(); setDragOverTaskId(t.id) }}
-                      onDrop={e => { e.preventDefault(); handleTaskReorder(dragTaskId, t.id, w.id); setDragOverTaskId(null) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px 5px 4px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s',
-                        borderTop: dragOverTaskId === t.id && dragTaskId !== t.id ? '2px solid var(--accent-cyan)' : '2px solid transparent' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      onClick={() => setSelectedTask(t)}
-                    >
-                      <GripVertical size={12} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.4 }} onClick={e => e.stopPropagation()} />
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
-                      <span style={{
-                        flex: 1, fontWeight: 500, lineHeight: 1.4,
-                        textDecoration: t.status === '已完成' ? 'line-through' : 'none',
-                        color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)',
-                      }}>{t.title}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
-                      <select
-                        value={t.status}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => { e.stopPropagation(); handleTaskStatusChange(t.id, e.target.value) }}
-                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${sc.color}`, background: sc.bg, color: sc.color, cursor: 'pointer', outline: 'none', minWidth: 72 }}
-                      >
-                        {TASK_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  )
-                })}
-
-                {addingTaskWfId === w.id && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px 24px', flexWrap: 'wrap' }}>
-                    <input
-                      className="form-input"
-                      style={{ flex: '1 1 160px', fontSize: 12 }}
-                      placeholder="任務名稱 *"
-                      autoFocus
-                      value={addTaskForm.title}
-                      onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
-                    />
-                    <div style={{ flex: '0 0 130px' }}>
-                      <SearchableSelect
-                        value={addTaskForm.assignee}
-                        onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
-                        options={empOptions(employees, { keyBy: 'name' })}
-                        placeholder="負責人"
-                      />
-                    </div>
-                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
-                      value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                      disabled={!addTaskForm.title.trim()} onClick={() => handleAddTaskToWorkflow(w.id)}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
-                      onClick={() => setAddingTaskWfId(null)}>取消</button>
-                  </div>
-                )}
-              </div>}
-            </div>
-          )
-        })}
-
-        {/* Direct project tasks (not inside any workflow) */}
-        {(() => {
-          const directTasks = tasks.filter(t => t.project_id === p.id && !t.workflow_instance_id)
-          return (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-                  <CheckSquare size={15} /> 獨立任務（{directTasks.length}）
-                </span>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => { setAddingDirectTask(v => !v); setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中' }) }}>
-                  <Plus size={12} /> 新增任務
-                </button>
-              </div>
-              <div className="card" style={{ padding: '8px 12px' }}>
-                {directTasks.length === 0 && !addingDirectTask && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無獨立任務。點「新增任務」直接加入專案。</div>
-                )}
-                {directTasks.map((t, idx) => {
-                  const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
-                  return (
-                    <div key={t.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      onClick={() => setSelectedTask(t)}
-                    >
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
-                      <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
-                      <select
-                        value={t.status}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => { e.stopPropagation(); handleTaskStatusChange(t.id, e.target.value) }}
-                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${sc.color}`, background: sc.bg, color: sc.color, cursor: 'pointer', outline: 'none', minWidth: 72 }}
-                      >
-                        {TASK_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  )
-                })}
-                {addingDirectTask && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px', flexWrap: 'wrap' }}>
-                    <input
-                      className="form-input" style={{ flex: '1 1 160px', fontSize: 12 }}
-                      placeholder="任務名稱 *" autoFocus
-                      value={directTaskForm.title}
-                      onChange={e => setDirectTaskForm(f => ({ ...f, title: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && handleAddDirectTask()}
-                    />
-                    <div style={{ flex: '0 0 130px' }}>
-                      <SearchableSelect
-                        value={directTaskForm.assignee}
-                        onChange={(v) => setDirectTaskForm(f => ({ ...f, assignee: v || '' }))}
-                        options={empOptions(employees, { keyBy: 'name' })}
-                        placeholder="負責人"
-                      />
-                    </div>
-                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
-                      value={directTaskForm.due_date} onChange={e => setDirectTaskForm(f => ({ ...f, due_date: e.target.value }))} />
-                    <select className="form-input" style={{ flex: '0 0 70px', fontSize: 12 }}
-                      value={directTaskForm.priority} onChange={e => setDirectTaskForm(f => ({ ...f, priority: e.target.value }))}>
-                      <option>高</option><option>中</option><option>低</option>
-                    </select>
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                      disabled={!directTaskForm.title.trim()} onClick={handleAddDirectTask}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
-                      onClick={() => setAddingDirectTask(false)}>取消</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* Comments */}
-        <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-          <MessageSquare size={15} /> 備註（{pComments.length}）
-        </div>
-        <div className="card" style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10, maxWidth: 500 }}>
-            <input type="text" value={commentText} onChange={e => setCommentText(e.target.value)}
-              placeholder="新增備註..." onKeyDown={e => e.key === 'Enter' && addComment(p.id)}
-              style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13 }} />
-            <button className="btn btn-primary" style={{ padding: '7px 16px', fontSize: 13 }} onClick={() => addComment(p.id)}>送出</button>
-          </div>
-          {pComments.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>尚無備註</div>
-          ) : pComments.map(c => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 13 }}>
-              <strong style={{ color: 'var(--accent-cyan)', fontSize: 12, flexShrink: 0 }}>{c.author}</strong>
-              <span style={{ flex: 1 }}>{c.content}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
-            </div>
-          ))}
-        </div>
-
-        </>}
-
-        {/* Task detail panel */}
-        {selectedTask && (
-          <TaskDetailPanel
-            step={selectedTask}
-            instance={pWorkflows.find(w => w.id === selectedTask.workflow_instance_id) || null}
-            allSteps={selectedTask.workflow_instance_id
-              ? tasks.filter(t => t.workflow_instance_id === selectedTask.workflow_instance_id)
-              : [selectedTask]}
-            employees={employees}
-            stores={stores}
-            checklists={[]}
-            onUpdate={updated => {
-              setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
-              setSelectedTask(updated)
-            }}
-            onDelete={id => {
-              setTasks(prev => prev.filter(t => t.id !== id))
-              setSelectedTask(null)
-            }}
-            onClose={() => setSelectedTask(null)}
-          />
-        )}
-
-        {/* Workflow attach/create modal */}
-        {showWorkflowModal && (
-          <Modal
-            title="連結 / 建立流程"
-            onClose={() => setShowWorkflowModal(false)}
-            onSubmit={workflowTab === 'attach' ? attachWorkflow : createWorkflow}
-            submitLabel={workflowSaving ? '儲存中...' : workflowTab === 'attach' ? '連結' : '建立'}
-          >
-            <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
-              {[{ k: 'attach', label: '連結現有流程' }, { k: 'create', label: '建立新流程' }].map(t => (
-                <button key={t.k} onClick={() => setWorkflowTab(t.k)} style={{
-                  padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  background: workflowTab === t.k ? 'var(--accent-cyan)' : 'var(--bg-card)',
-                  color: workflowTab === t.k ? '#fff' : 'var(--text-muted)',
-                  border: workflowTab === t.k ? 'none' : '1px solid var(--border-medium)',
-                }}>{t.label}</button>
-              ))}
-            </div>
-            {workflowTab === 'attach' ? (
-              freeInstances.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
-                  沒有未連結的流程實例。請先在「流程管理」建立流程。
-                </div>
-              ) : (
-                <Field label="選擇要連結的流程">
-                  <select className="form-input" style={{ width: '100%' }} value={selectedAttachId} onChange={e => setSelectedAttachId(e.target.value)}>
-                    <option value="">請選擇…</option>
-                    {freeInstances.map(w => (
-                      <option key={w.id} value={w.id}>
-                        {w.template_name} — {w.status}{w.started_by ? ` (${w.started_by})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )
-            ) : (
-              <>
-                <Field label="流程名稱" required>
-                  <input className="form-input" style={{ width: '100%' }} placeholder="例：開店前準備流程" value={newWfForm.template_name} onChange={e => setNewWfForm(f => ({ ...f, template_name: e.target.value }))} />
-                </Field>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <Field label="負責人">
-                    <SearchableSelect
-                      value={newWfForm.assignee}
-                      onChange={(v) => setNewWfForm(f => ({ ...f, assignee: v || '' }))}
-                      options={empOptions(employees, { keyBy: 'name' })}
-                      placeholder="請選擇負責人"
-                    />
-                  </Field>
-                  <Field label="門市">
-                    <select className="form-input" style={{ width: '100%' }} value={newWfForm.store} onChange={e => setNewWfForm(f => ({ ...f, store: e.target.value }))}>
-                      <option value="">不指定</option>
-                      {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </Field>
-                </div>
-                <Field label="到期日">
-                  <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.due_date} onChange={e => setNewWfForm(f => ({ ...f, due_date: e.target.value }))} />
-                </Field>
-              </>
-            )}
-          </Modal>
-        )}
-
-        {/* Modal in detail view */}
-        {showModal && (
-          <Modal title="編輯專案" onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel="更新">
-            {editingId && (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>專案 ID：<strong style={{ color: 'var(--text-secondary)' }}>#{editingId}</strong></div>
-            )}
-            <Field label="專案名稱" required>
-              <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} />
-            </Field>
-            <Field label="說明">
-              <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="開始日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} /></Field>
-              <Field label="預計結束日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} /></Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <Field label="狀態">
-                <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
-                  {Object.keys(STATUS_MAP).map(s => <option key={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="優先級">
-                <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
-                  <option>高</option><option>中</option><option>低</option>
-                </select>
-              </Field>
-              <Field label="預算">
-                <input className="form-input" type="number" style={{ width: '100%' }} value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="選填" />
-              </Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="負責人">
-                <SearchableSelect
-                  value={form.owner}
-                  onChange={(v) => set('owner', v || '')}
-                  options={empOptions(employees, { keyBy: 'name' })}
-                  placeholder="搜尋專案負責人..."
-                />
-              </Field>
-              <Field label="部門">
-                <input className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)} placeholder="選填" />
-              </Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="門市">
-                <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
-                  <option value="">不指定</option>
-                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
-              </Field>
-              <Field label="模板">
-                <select className="form-input" style={{ width: '100%' }} value={form.template_id} onChange={e => set('template_id', e.target.value)}>
-                  <option value="">無</option>
-                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </Field>
-            </div>
-          </Modal>
-        )}
-      </div>
+      <ProjectDetailPanel
+        p={p}
+        stats={stats}
+        pWorkflows={pWorkflows}
+        pComments={pComments}
+        tasks={tasks}
+        setTasks={setTasks}
+        employees={employees}
+        stores={stores}
+        templates={templates}
+        sections={sections}
+        setSections={setSections}
+        newSection={newSection}
+        setNewSection={setNewSection}
+        addSection={addSection}
+        removeSection={removeSection}
+        renameSection={renameSection}
+        profile={profile}
+        comments={comments}
+        setComments={setComments}
+        commentText={commentText}
+        setCommentText={setCommentText}
+        addComment={addComment}
+        showModal={showModal}
+        setShowModal={setShowModal}
+        editingId={editingId}
+        setEditingId={setEditingId}
+        form={form}
+        setForm={setForm}
+        handleSubmit={handleSubmit}
+        openEdit={openEdit}
+        handleDelete={handleDelete}
+        showWorkflowModal={showWorkflowModal}
+        setShowWorkflowModal={setShowWorkflowModal}
+        workflowTab={workflowTab}
+        setWorkflowTab={setWorkflowTab}
+        freeInstances={freeInstances}
+        selectedAttachId={selectedAttachId}
+        setSelectedAttachId={setSelectedAttachId}
+        newWfForm={newWfForm}
+        setNewWfForm={setNewWfForm}
+        workflowSaving={workflowSaving}
+        attachWorkflow={attachWorkflow}
+        createWorkflow={createWorkflow}
+        openWorkflowModal={openWorkflowModal}
+        workflows={workflows}
+        setWorkflows={setWorkflows}
+        addingTaskWfId={addingTaskWfId}
+        setAddingTaskWfId={setAddingTaskWfId}
+        addTaskForm={addTaskForm}
+        setAddTaskForm={setAddTaskForm}
+        handleAddTaskToWorkflow={handleAddTaskToWorkflow}
+        handleTaskStatusChange={handleTaskStatusChange}
+        addingDirectTask={addingDirectTask}
+        setAddingDirectTask={setAddingDirectTask}
+        directTaskForm={directTaskForm}
+        setDirectTaskForm={setDirectTaskForm}
+        handleAddDirectTask={handleAddDirectTask}
+        collapsedWfIds={collapsedWfIds}
+        toggleWf={toggleWf}
+        wfMenuId={wfMenuId}
+        setWfMenuId={setWfMenuId}
+        projMenuId={projMenuId}
+        setProjMenuId={setProjMenuId}
+        dragWfId={dragWfId}
+        setDragWfId={setDragWfId}
+        dragOverWfId={dragOverWfId}
+        setDragOverWfId={setDragOverWfId}
+        dragTaskId={dragTaskId}
+        setDragTaskId={setDragTaskId}
+        dragOverTaskId={dragOverTaskId}
+        setDragOverTaskId={setDragOverTaskId}
+        handleWfReorder={handleWfReorder}
+        handleTaskReorder={handleTaskReorder}
+        handleWfRename={handleWfRename}
+        handleWfDelete={handleWfDelete}
+        inputModal={inputModal}
+        closeInput={closeInput}
+        onBack={() => setSelected(null)}
+        setSelected={setSelected}
+        pendingWfAttach={pendingWfAttach}
+        setPendingWfAttach={setPendingWfAttach}
+        pendingWfCreate={pendingWfCreate}
+        setPendingWfCreate={setPendingWfCreate}
+        pendingTasks={pendingTasks}
+        setPendingTasks={setPendingTasks}
+      />
     )
   }
 
   // List view
   return (
-    <div className="fade-in">
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <h2><span className="header-icon">📁</span> 專案管理</h2>
-            <p>Project → Workflow → Task 三層架構</p>
-          </div>
-          <button className="btn btn-primary" onClick={async () => {
-            const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
-            setFreeInstances(data || [])
-            resetNewProjectState()
-            setForm({ ...emptyForm, owner: profile?.name || '' }); setEditingId(null); setShowModal(true)
-          }}>
-            <Plus size={14} /> 新增專案
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <div className="search-bar" style={{ minWidth: 200 }}>
-          <Search className="search-icon" />
-          <input type="text" placeholder="搜尋專案..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
-          <FolderOpen size={14} /> 負責人
-          <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)}
-            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13, minWidth: 120 }}>
-            <option value="">全部人員</option>
-            {[...new Set(projects.map(p => p.owner).filter(Boolean))].map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
-          🏪 門市
-          <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
-            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13, minWidth: 120 }}>
-            <option value="">全部門市</option>
-            {[...new Set(projects.map(p => p.store).filter(Boolean))].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
-        {[
-          { key: 'active', label: `進行中專案 (${activeCount})`, color: 'var(--accent-cyan)' },
-          { key: 'templates', label: `專案模板 (${templates.length})`, color: 'var(--accent-purple)' },
-          { key: 'completed', label: `已完成 (${completedCount})`, color: 'var(--accent-green)' },
-          { key: 'archived', label: `封存 (${archivedCount})`, color: 'var(--accent-red)' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            background: tab === t.key ? t.color : 'var(--bg-card)',
-            color: tab === t.key ? '#fff' : 'var(--text-muted)',
-            border: tab === t.key ? 'none' : '1px solid var(--border-medium)',
-          }}>
-            {tab === t.key && '● '}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Templates tab */}
-      {tab === 'templates' && (
-        <div>
-          {templates.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無專案模板</div>
-          ) : templates.map(tpl => {
-            const tplWorkflows = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
-            const totalTasks = tplWorkflows.reduce((s, w) => s + (w.tasks?.length || 0), 0)
-            return (
-              <div key={tpl.id} className="card" style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📋</div>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700 }}>{tpl.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {tpl.category} · {tplWorkflows.length} 流程 · {totalTasks} 任務
-                        {tpl.estimated_days && ` · 預估 ${tpl.estimated_days} 天`}
-                        {tpl.estimated_budget && ` · 預算 NT$ ${Number(tpl.estimated_budget).toLocaleString()}`}
-                      </div>
-                    </div>
-                  </div>
-                  <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openDeploy(tpl)}>
-                    <Rocket size={14} /> 部署
-                  </button>
-                </div>
-                {tpl.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{tpl.description}</div>}
-                {/* Workflow preview */}
-                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {tplWorkflows.map((w, i) => (
-                    <div key={i} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', fontSize: 12 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>{w.name}</div>
-                      {(w.tasks || []).map((t, j) => (
-                        <div key={j} style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <CheckSquare size={10} /> {t.title}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Deploy Modal */}
-      {showDeployModal && deployTpl && (
-        <Modal title={`部署專案 — ${deployTpl.name}`} onClose={() => setShowDeployModal(false)} onSubmit={handleDeploy} submitLabel={deploying ? '部署中...' : '🚀 部署'}>
-          <Field label="專案名稱" required>
-            <input className="form-input" style={{ width: '100%' }} value={deployForm.name} onChange={e => setDeployForm(f => ({ ...f, name: e.target.value }))} />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人">
-              <SearchableSelect
-                value={deployForm.owner}
-                onChange={(v) => setDeployForm(f => ({ ...f, owner: v || '' }))}
-                options={empOptions(employees, { keyBy: 'name' })}
-                placeholder="搜尋負責人..."
-              />
-            </Field>
-            <Field label="門市">
-              <select className="form-input" style={{ width: '100%' }} value={deployForm.store} onChange={e => setDeployForm(f => ({ ...f, store: e.target.value }))}>
-                <option value="">不指定</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div style={{ background: 'var(--glass-light)', borderRadius: 8, padding: 12, fontSize: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>將自動建立：</div>
-            {(Array.isArray(deployTpl.workflows) ? deployTpl.workflows : JSON.parse(deployTpl.workflows || '[]')).map((w, i) => (
-              <div key={i} style={{ marginBottom: 4 }}>
-                <span style={{ color: 'var(--accent-cyan)' }}>📂 {w.name}</span>
-                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>({w.tasks?.length || 0} 任務)</span>
-              </div>
-            ))}
-          </div>
-        </Modal>
-      )}
-
-      {/* Project list */}
-      {tab !== 'templates' && filtered.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-          {tab === 'active' ? '目前沒有進行中的專案。點「新增專案」或從「專案模板」部署。' : '無資料'}
-        </div>
-      )}
-      {tab !== 'templates' && filtered.map(p => {
-        const stats = getStats(p.id)
-        const sc = STATUS_MAP[p.status] || {}
-
-        return (
-          <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.2s' }}
-            onClick={() => setSelected(p)}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = ''}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>pj-{p.id}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</span>
-                    <span style={{ padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {p.owner || '未指派'} · {p.start_date || '未定'}{p.end_date && ` ~ ${p.end_date}`}
-                    {p.department && ` · ${p.department}`}
-                    {p.store && ` · ${p.store}`}
-                    {stats.workflows > 0 && ` · ${stats.workflows} 流程`}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 10, fontSize: 12, whiteSpace: 'nowrap' }}>
-                  <span>⬜ {stats.pending}</span>
-                  <span style={{ color: 'var(--accent-cyan)' }}>🔄 {stats.inProgress}</span>
-                  <span style={{ color: 'var(--accent-green)' }}>✅ {stats.completed}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent-cyan)', lineHeight: 1 }}>{stats.pct}%</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{stats.completed}/{stats.total}</div>
-                  </div>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(var(--accent-cyan) ${stats.pct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{stats.pct}%</div>
-                  </div>
-                </div>
-                <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-                  <button className="btn btn-secondary" style={{ padding: '3px 6px' }} onClick={() => setProjMenuId(projMenuId === p.id ? null : p.id)}>
-                    <MoreVertical size={13} />
-                  </button>
-                  {projMenuId === p.id && (
-                    <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
-                      <button
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        onClick={(e) => { setProjMenuId(null); openEdit(p, e) }}
-                      ><Edit3 size={13} /> 編輯專案</button>
-                      <button
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        onClick={(e) => { setProjMenuId(null); handleDelete(p.id, e) }}
-                      ><Trash2 size={13} /> 刪除專案</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })}
-
-      {/* Modal */}
-      {showModal && (
-        <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => { setShowModal(false); setEditingId(null); resetNewProjectState() }} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
-          {editingId && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>專案 ID：<strong style={{ color: 'var(--text-secondary)' }}>#{editingId}</strong></div>
-          )}
-          <Field label="專案名稱" required>
-            <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：南京門市裝潢翻新" />
-          </Field>
-          <Field label="說明">
-            <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="開始日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
-            </Field>
-            <Field label="預計結束日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="狀態">
-              <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
-                {Object.keys(STATUS_MAP).map(s => <option key={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="優先級">
-              <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
-                <option>高</option><option>中</option><option>低</option>
-              </select>
-            </Field>
-            <Field label="預算">
-              <input className="form-input" type="number" style={{ width: '100%' }} value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="選填" />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人">
-              <SearchableSelect
-                value={form.owner}
-                onChange={(v) => set('owner', v || '')}
-                options={empOptions(employees, { keyBy: 'name' })}
-                placeholder="搜尋員工姓名/職稱..."
-              />
-            </Field>
-            <Field label="部門">
-              <input className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)} placeholder="選填" />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="門市">
-              <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
-                <option value="">不指定</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
-            </Field>
-            <Field label="模板">
-              <select className="form-input" style={{ width: '100%' }} value={form.template_id} onChange={e => set('template_id', e.target.value)}>
-                <option value="">無</option>
-                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          {!editingId && <>
-            {/* Workflows */}
-            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Workflow size={13} /> 流程（選填）
-              </div>
-              {(pendingWfAttach.length > 0 || pendingWfCreate.length > 0) && (
-                <div style={{ marginBottom: 8 }}>
-                  {pendingWfAttach.map(id => {
-                    const wf = freeInstances.find(w => w.id === id)
-                    return wf ? (
-                      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
-                        <Workflow size={11} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-                        <span style={{ flex: 1 }}>{wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（連結現有）</span></span>
-                        <button onClick={() => setPendingWfAttach(p => p.filter(x => x !== id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
-                      </div>
-                    ) : null
-                  })}
-                  {pendingWfCreate.map((wf, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
-                      <Plus size={11} style={{ color: 'var(--accent-purple)', flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>{wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（新建）</span></span>
-                      <button onClick={() => setPendingWfCreate(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {inlineWfMode === 'attach' && (
-                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-                  {freeInstances.filter(w => !pendingWfAttach.includes(w.id)).length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>沒有未連結的流程實例</div>
-                  ) : (
-                    <select className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} value={inlineWfAttachId} onChange={e => setInlineWfAttachId(e.target.value)}>
-                      <option value="">選擇現有流程…</option>
-                      {freeInstances.filter(w => !pendingWfAttach.includes(w.id)).map(w => (
-                        <option key={w.id} value={w.id}>{w.template_name} — {w.status}{w.started_by ? ` (${w.started_by})` : ''}</option>
-                      ))}
-                    </select>
-                  )}
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineWfAttachId}
-                      onClick={() => { if (inlineWfAttachId) { setPendingWfAttach(p => [...p, Number(inlineWfAttachId)]); setInlineWfAttachId(''); setInlineWfMode(null) } }}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setInlineWfMode(null); setInlineWfAttachId('') }}>取消</button>
-                  </div>
-                </div>
-              )}
-              {inlineWfMode === 'create' && (
-                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-                  <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="流程名稱 *"
-                    value={inlineWfCreate.template_name} onChange={e => setInlineWfCreate(f => ({ ...f, template_name: e.target.value }))} />
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineWfCreate.template_name}
-                      onClick={() => { if (inlineWfCreate.template_name) { setPendingWfCreate(p => [...p, { ...inlineWfCreate }]); setInlineWfCreate({ template_name: '' }); setInlineWfMode(null) } }}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setInlineWfMode(null); setInlineWfCreate({ template_name: '' }) }}>取消</button>
-                  </div>
-                </div>
-              )}
-              {!inlineWfMode && (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => setInlineWfMode('attach')}><Workflow size={11} /> 連結現有流程</button>
-                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => setInlineWfMode('create')}><Plus size={11} /> 建立新流程</button>
-                </div>
-              )}
-            </div>
-
-            {/* Tasks */}
-            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckSquare size={13} /> 任務（選填）
-              </div>
-              {pendingTasks.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  {pendingTasks.map((t, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
-                      <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}{t.due_date && <span style={{ color: 'var(--text-muted)' }}> · {t.due_date}</span>}</span>
-                      <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--glass-light)', color: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
-                      <button onClick={() => setPendingTasks(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {inlineTaskMode && (
-                <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-                  <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="任務名稱 *"
-                    value={inlineTask.title} onChange={e => setInlineTask(f => ({ ...f, title: e.target.value }))} />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <SearchableSelect
-                      value={inlineTask.assignee}
-                      onChange={(v) => setInlineTask(f => ({ ...f, assignee: v || '' }))}
-                      options={empOptions(employees, { keyBy: 'name' })}
-                      placeholder="負責人"
-                    />
-                    <input className="form-input" type="date" style={{ fontSize: 13 }} value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
-                    <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
-                      <option>高</option><option>中</option><option>低</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title}
-                      onClick={() => { if (inlineTask.title) { setPendingTasks(p => [...p, { ...inlineTask }]); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' }); setInlineTaskMode(false) } }}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setInlineTaskMode(false)}>取消</button>
-                  </div>
-                </div>
-              )}
-              {!inlineTaskMode && (
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setInlineTaskMode(true)}><Plus size={11} /> 新增任務</button>
-              )}
-            </div>
-          </>}
-        </Modal>
-      )}
-    </div>
+    <ProjectListView
+      projects={projects}
+      templates={templates}
+      employees={employees}
+      stores={stores}
+      filtered={filtered}
+      tab={tab}
+      setTab={setTab}
+      activeCount={activeCount}
+      completedCount={completedCount}
+      archivedCount={archivedCount}
+      search={search}
+      setSearch={setSearch}
+      filterOwner={filterOwner}
+      setFilterOwner={setFilterOwner}
+      filterStore={filterStore}
+      setFilterStore={setFilterStore}
+      getStats={getStats}
+      setSelected={setSelected}
+      openEdit={openEdit}
+      handleDelete={handleDelete}
+      projMenuId={projMenuId}
+      setProjMenuId={setProjMenuId}
+      showModal={showModal}
+      setShowModal={setShowModal}
+      editingId={editingId}
+      setEditingId={setEditingId}
+      form={form}
+      setForm={setForm}
+      handleSubmit={handleSubmit}
+      freeInstances={freeInstances}
+      setFreeInstances={setFreeInstances}
+      pendingWfAttach={pendingWfAttach}
+      setPendingWfAttach={setPendingWfAttach}
+      pendingWfCreate={pendingWfCreate}
+      setPendingWfCreate={setPendingWfCreate}
+      pendingTasks={pendingTasks}
+      setPendingTasks={setPendingTasks}
+      resetNewProjectState={resetNewProjectState}
+      profile={profile}
+      showDeployModal={showDeployModal}
+      setShowDeployModal={setShowDeployModal}
+      deployTpl={deployTpl}
+      deployForm={deployForm}
+      setDeployForm={setDeployForm}
+      deploying={deploying}
+      handleDeploy={handleDeploy}
+      openDeploy={openDeploy}
+    />
   )
 }

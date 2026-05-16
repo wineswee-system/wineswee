@@ -17,7 +17,9 @@ import { supabase } from '../../lib/supabase'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { chartPalette, chartTextTokens } from '../../lib/theme/tokens'
-import { chat, isConfigured, clearSession } from '../../lib/gemini'
+import KpiCard from './components/KpiCard'
+import DashboardAiChat from './components/DashboardAiChat'
+import DashboardCharts from './components/DashboardCharts'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
 
@@ -56,49 +58,6 @@ const C = {
   bg2: 'var(--bg-secondary)',
   border: 'var(--border-medium)',
   borderSubtle: 'var(--border-subtle)',
-}
-
-// ──────────────────────────────────────────────
-// 子元件：KPI 卡片
-// ──────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, suffix, sub, subColor, color = C.cyan, colorDim = C.cyanDim, badge, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-        padding: 16, cursor: onClick ? 'pointer' : 'default',
-        transition: 'transform .12s, border-color .12s',
-        display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
-      }}
-      onMouseEnter={(e) => { if (onClick) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.borderColor = color } }}
-      onMouseLeave={(e) => { if (onClick) { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = C.border } }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, background: colorDim,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color,
-        }}>
-          <Icon size={18} />
-        </div>
-        {badge && (
-          <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 12, fontWeight: 700,
-            background: C.redDim, color: C.red,
-          }}>{badge}</span>
-        )}
-      </div>
-      <div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
-          {value}{suffix && <span style={{ fontSize: 14, fontWeight: 500, color: C.muted, marginLeft: 4 }}>{suffix}</span>}
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{label}</div>
-        {sub && (
-          <div style={{ fontSize: 10, color: subColor || C.muted, marginTop: 4, fontWeight: 600 }}>{sub}</div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 // ──────────────────────────────────────────────
@@ -390,9 +349,6 @@ export default function TeamDashboard() {
   const [yesterdayLateCount, setYesterdayLateCount] = useState(0)
   const [last7Att, setLast7Att] = useState([])  // [{date, normal, late, leave}]
   const [taskStatusDist, setTaskStatusDist] = useState({})  // status -> count
-  // ── Phase 3 AI 洞察 ──
-  const [aiInsight, setAiInsight] = useState(null)
-  const [aiLoading, setAiLoading] = useState(false)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -912,48 +868,12 @@ export default function TeamDashboard() {
       },
     },
   }), [chartT])
-  const chartGrid = useMemo(() => ({ color: chartT.border }), [chartT])
-  const chartTick = useMemo(() => ({ color: chartT.tertiary, font: { size: 11 } }), [chartT])
-
   // 部門人力分佈（從 team 算）
   const deptCounts = useMemo(() => {
     const m = {}
     for (const e of team) m[e.dept || '未分類'] = (m[e.dept || '未分類'] || 0) + 1
     return m
   }, [team])
-
-  // ── Phase 3：Gemini AI 洞察 ──
-  const fetchAiInsight = useCallback(async () => {
-    if (!isConfigured()) return
-    setAiLoading(true)
-    try {
-      clearSession('team-dashboard')
-      const summary = {
-        scope: scopeStoreId ? `門市 ${stores.find(s => s.id === scopeStoreId)?.name || scopeStoreId}` : '全公司',
-        team: { total: kpi.total, presentToday: kpi.presentCount, attendRate: kpi.attendRate + '%' },
-        today: { onLeave: kpi.leaveCount, ot: kpi.otCount, trip: kpi.tripCount, unclocked: kpi.lateCount },
-        month: { leaveDays: monthLeaveDays, otHours: monthOtHours, tripCount: monthTripCount },
-        approvals: {
-          pending: kpi.pendingCount,
-          avgPendingDays: kpi.avgPendingDays,
-          overdueCount: pendingUnified.filter(p => p.daysOpen >= 3).length,
-        },
-        alerts: alerts.length,
-        workflowsActive: activeWorkflows.length,
-        workflowsStuck: activeWorkflows.filter(w => w.started_at && daysBetween(todayStr(), w.started_at.slice(0, 10)) >= 3).length,
-      }
-      const result = await chat(
-        `你是 HR / 流程主管的助理。以下是 ${summary.scope} 今日的營運摘要 JSON，請給 3-5 條觀察與建議，每條 30 字內，用條列「•」開頭。\n${JSON.stringify(summary, null, 2)}`,
-        'team-dashboard'
-      )
-      setAiInsight(result)
-    } catch (e) {
-      setAiInsight(`AI 分析失敗：${e.message}`)
-    } finally {
-      setAiLoading(false)
-    }
-  }, [scopeStoreId, stores, kpi, monthLeaveDays, monthOtHours, monthTripCount,
-      pendingUnified, alerts, activeWorkflows])
 
   if (loading && team.length === 0) return <LoadingSpinner />
 
@@ -1069,47 +989,17 @@ export default function TeamDashboard() {
       </div>
 
       {/* ─── AI 智慧洞察（Gemini）─── */}
-      {isConfigured() && (
-        <div style={{
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16,
-          display: 'flex', flexDirection: 'column', gap: 10,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={16} style={{ color: C.purple }} /> AI 智慧洞察
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: C.purpleDim, padding: '2px 6px', borderRadius: 4 }}>
-                Gemini
-              </span>
-            </h3>
-            <button
-              onClick={fetchAiInsight}
-              disabled={aiLoading}
-              style={{
-                background: aiLoading ? C.bg2 : C.purpleDim,
-                color: C.purple, border: 'none', borderRadius: 8,
-                padding: '6px 14px', fontSize: 12, fontWeight: 600,
-                cursor: aiLoading ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              {aiLoading
-                ? <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> 分析中…</>
-                : <><Bot size={12} /> {aiInsight ? '重新分析' : '產生洞察'}</>
-              }
-            </button>
-          </div>
-          {aiInsight ? (
-            <div style={{
-              fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)',
-              background: C.bg2, padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap',
-            }}>{aiInsight}</div>
-          ) : (
-            <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Bot size={14} style={{ opacity: 0.5 }} /> 點「產生洞察」讓 Gemini 分析當日營運摘要並給建議
-            </div>
-          )}
-        </div>
-      )}
+      <DashboardAiChat
+        scopeStoreId={scopeStoreId}
+        stores={stores}
+        kpi={kpi}
+        monthLeaveDays={monthLeaveDays}
+        monthOtHours={monthOtHours}
+        monthTripCount={monthTripCount}
+        pendingUnified={pendingUnified}
+        alerts={alerts}
+        activeWorkflows={activeWorkflows}
+      />
 
       {/* ─── 待簽核 + 警示（main + side） ─── */}
       <div style={{
@@ -1192,80 +1082,7 @@ export default function TeamDashboard() {
       </div>
 
       {/* ─── Charts row：近 7 天出勤 + 部門人力 ─── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)',
-        gap: 16,
-      }} className="dash-two-col">
-        {/* 近 7 天出勤趨勢 */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-          <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <TrendingUp size={16} style={{ color: C.cyan }} /> 近 7 天出勤趨勢
-          </h3>
-          <div style={{ height: 220 }}>
-            <Line
-              data={{
-                labels: last7Att.map(d => d.label),
-                datasets: [
-                  {
-                    label: '出勤', data: last7Att.map(d => d.normal),
-                    borderColor: chartC.green, backgroundColor: `${chartC.green}20`,
-                    fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.green, borderWidth: 2,
-                  },
-                  {
-                    label: '請假', data: last7Att.map(d => d.leave || 0),
-                    borderColor: chartC.cyan, backgroundColor: `${chartC.cyan}14`,
-                    fill: false, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.cyan, borderWidth: 2,
-                  },
-                  {
-                    label: '遲到', data: last7Att.map(d => d.late),
-                    borderColor: chartC.orange, backgroundColor: `${chartC.orange}14`,
-                    fill: false, tension: 0.35, pointRadius: 4, pointBackgroundColor: chartC.orange, borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                ...chartOpts,
-                scales: {
-                  x: { grid: { display: false }, ticks: chartTick },
-                  y: { beginAtZero: true, grid: chartGrid, ticks: { ...chartTick, stepSize: 1 } },
-                },
-              }}
-            />
-          </div>
-        </div>
-
-        {/* 部門人力分佈 */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
-          <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Building2 size={16} style={{ color: C.purple }} /> 部門人力
-          </h3>
-          <div style={{ height: 220 }}>
-            {Object.keys(deptCounts).length === 0 ? (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>無資料</div>
-            ) : (
-              <Bar
-                data={{
-                  labels: Object.keys(deptCounts),
-                  datasets: [{
-                    data: Object.values(deptCounts),
-                    backgroundColor: [chartC.cyan, chartC.blue, chartC.purple, chartC.green, chartC.orange, chartC.pink || chartC.red].map(c => `${c}cc`),
-                    borderRadius: 6, barThickness: 24,
-                  }],
-                }}
-                options={{
-                  ...chartOpts,
-                  plugins: { ...chartOpts.plugins, legend: { display: false } },
-                  scales: {
-                    x: { grid: { display: false }, ticks: chartTick },
-                    y: { beginAtZero: true, grid: chartGrid, ticks: { ...chartTick, stepSize: 1 } },
-                  },
-                }}
-              />
-            )}
-          </div>
-        </div>
-      </div>
+      <DashboardCharts last7Att={last7Att} deptCounts={deptCounts} />
 
       {/* ─── 團隊狀態 grid ─── */}
       {/* 顯示規則：

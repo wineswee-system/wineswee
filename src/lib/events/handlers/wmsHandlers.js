@@ -144,6 +144,80 @@ export function registerWMSHandlers(bus) {
     })
   })
 
+  // ── Stock below reorder point → notify procurement ──
+  bus.subscribe('wms.stock.below_reorder', async function onStockBelowReorderNotify(event) {
+    const { items } = event.payload
+    if (!items || items.length === 0) return
+
+    const itemNames = items.map(i => i.name || i.sku_name || i.sku_code).filter(Boolean).join('、')
+    await supabase.from('notifications').insert({
+      type: '庫存警示',
+      title: `庫存低於再訂購點：${itemNames}`,
+      target_role: '採購',
+      priority: 'high',
+      read: false,
+    }).then(({ error }) => {
+      if (error) console.warn('[WMS] Stock below reorder notification failed:', error.message)
+    })
+  })
+
+  // ── Transfer completed → notify warehouse manager ──
+  bus.subscribe('wms.transfer.completed', async function onTransferCompletedNotify(event) {
+    const { from_warehouse, to_warehouse, items } = event.payload
+
+    await supabase.from('notifications').insert({
+      type: '調撥完成',
+      title: `庫存調撥完成：${from_warehouse} → ${to_warehouse}（${items?.length || 0} 項）`,
+      read: false,
+    }).then(({ error }) => {
+      if (error) console.warn('[WMS] Transfer notification failed:', error.message)
+    })
+  })
+
+  // ── Kit assembled → increase kit stock, decrease component stock ──
+  bus.subscribe('wms.kit.assembled', async function onKitAssembledAdjustStock(event) {
+    const { kit_sku, quantity, components } = event.payload
+
+    const kitStock = await resolveStockByName(kit_sku)
+    if (kitStock) {
+      await supabase.from('stock_levels')
+        .update({ quantity: (kitStock.quantity || 0) + quantity })
+        .eq('id', kitStock.id)
+    }
+
+    for (const comp of (components || [])) {
+      const compStock = await resolveStockByName(comp.name || comp.sku_code)
+      if (compStock) {
+        const used = (comp.qty_per_kit || 1) * quantity
+        await supabase.from('stock_levels')
+          .update({ quantity: Math.max(0, (compStock.quantity || 0) - used) })
+          .eq('id', compStock.id)
+      }
+    }
+  })
+
+  // ── Kit disassembled → decrease kit stock, return components to stock ──
+  bus.subscribe('wms.kit.disassembled', async function onKitDisassembledAdjustStock(event) {
+    const { kit_sku, quantity, components } = event.payload
+
+    const kitStock = await resolveStockByName(kit_sku)
+    if (kitStock) {
+      await supabase.from('stock_levels')
+        .update({ quantity: Math.max(0, (kitStock.quantity || 0) - quantity) })
+        .eq('id', kitStock.id)
+    }
+
+    for (const comp of (components || [])) {
+      const compStock = await resolveStockByName(comp.name || comp.sku_code)
+      if (compStock) {
+        const returned = (comp.qty_per_kit || 1) * quantity
+        await supabase.from('stock_levels')
+          .update({ quantity: (compStock.quantity || 0) + returned })
+          .eq('id', compStock.id)
+      }
+    }
+  })
+
   // ── Auto-reorder triggered → create draft purchase orders ──
   bus.subscribe('wms.auto_reorder.triggered', async function onAutoReorderCreatePOs(event) {
     const { purchase_orders } = event.payload

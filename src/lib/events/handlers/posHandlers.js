@@ -39,6 +39,12 @@ export function registerPOSHandlers(bus) {
     })
   })
 
+  // ── POS shift opened → log shift start ──
+  bus.subscribe('pos.shift.opened', async function onShiftOpenedLog(event) {
+    const { shift_id, store, cashier, opening_cash } = event.payload
+    console.info(`[POS] Shift ${shift_id} opened by ${cashier} at ${store}, opening cash: NT$${opening_cash}`)
+  })
+
   // ── POS shift closed → generate shift summary for analytics ──
   bus.subscribe('pos.shift.closed', async function onShiftClosedSummary(event) {
     const { shift_id, store, cashier, closing_cash, cash_difference } = event.payload

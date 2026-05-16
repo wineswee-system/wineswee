@@ -22,14 +22,15 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, ArrowUp, ArrowDown, Trash2, Save, AlertCircle, CheckCircle2, ArrowLeft, DollarSign, Edit2 } from 'lucide-react'
+import { X, Save, ArrowLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ModalOverlay } from './Modal'
 import LoadingSpinner from './LoadingSpinner'
-import SearchableSelect, { empOptions } from './SearchableSelect'
-
 import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
+import ChainListView from './chains/ChainListView'
+import ChainEditorView from './chains/ChainEditorView'
+
 // ─── target_type 選項 ───
 // applicant_supervisor 加回（行政員工 vs 門市員工 一條 chain 解兩情境，
 // 各員工各自設「直屬主管」即可）
@@ -60,8 +61,6 @@ const blankStep = (idx) => ({
   target_store_id: null,
   target_section_id: null,
 })
-
-const fmtAmount = (n) => n == null ? '無上限' : `$${Number(n).toLocaleString()}`
 
 export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false }) {
   // ── view state（amount_grouped / library 才會切 list ↔ editor） ──
@@ -538,7 +537,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       padding: embedded ? 0 : '0 22px',
     }}>
       {loading ? <LoadingSpinner /> : view === 'list' ? (
-        <ListView
+        <ChainListView
           mode={mode}
           chainsList={chainsList}
           shortStepDesc={shortStepDesc}
@@ -547,7 +546,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
           onDelete={handleDeleteChain}
         />
       ) : (
-        <EditorView
+        <ChainEditorView
           mode={mode}
           chainName={chainName} setChainName={setChainName}
           chainDescription={chainDescription} setChainDescription={setChainDescription}
@@ -560,7 +559,6 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
           removeStep={removeStep}
           moveStep={moveStep}
           changeTargetType={changeTargetType}
-          stepPreview={stepPreview}
           employees={employees}
           roles={roles}
           depts={depts}
@@ -623,326 +621,3 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   )
 }
 
-// ════════════════════════════════════════════════════════
-// Sub-components
-// ════════════════════════════════════════════════════════
-
-function ListView({ mode, chainsList, shortStepDesc, onNew, onEdit, onDelete }) {
-  const isLibrary = mode === 'library'
-  return (
-    <div>
-      {/* 提示卡 */}
-      <div style={{
-        padding: 12, marginBottom: 16, borderRadius: 8,
-        background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan-dim)',
-        fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 4 }}>
-          <DollarSign size={14} /> {isLibrary ? '簽核鏈中央管理' : '金額分流自動指派'}
-        </div>
-        {isLibrary
-          ? '這裡是整個組織的簽核鏈池子。流程任務、HR 表單、自訂表單會從這裡選 chain 來用。同一條 chain 可被多處引用，編輯後立即生效。'
-          : '員工送出申請時，系統依「預估金額」自動找符合區間的簽核鏈並套用。最精準（min_amount 最大）的區間會優先被選中。'}
-      </div>
-
-      {/* 新增按鈕 */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button className="btn btn-primary" onClick={onNew} style={{ fontSize: 13 }}>
-          <Plus size={14} /> {isLibrary ? '新增簽核鏈' : '新增金額區間'}
-        </button>
-      </div>
-
-      {/* Chain list */}
-      {chainsList.length === 0 ? (
-        <div style={{
-          padding: '40px 20px', textAlign: 'center',
-          color: 'var(--text-muted)', fontSize: 13,
-          border: '2px dashed var(--border-medium)', borderRadius: 10,
-        }}>
-          {isLibrary ? '尚未建立任何簽核鏈' : '尚未設定任何金額區間'} <br />
-          <span style={{ fontSize: 11 }}>點擊上方「{isLibrary ? '新增簽核鏈' : '新增金額區間'}」建立第一條</span>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {chainsList.map(c => (
-            <div key={c.id}
-              onClick={() => onEdit(c.id)}
-              style={{
-                padding: 16, borderRadius: 10,
-                background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
-                cursor: 'pointer', transition: 'transform .12s, border-color .12s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.borderColor = 'var(--accent-cyan)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-medium)' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15 }}>{c.name}</span>
-                    {c.is_active === false && (
-                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontWeight: 700 }}>停用</span>
-                    )}
-                  </div>
-                  {c.description && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{c.description}</div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                    {isLibrary ? (
-                      c.category && (
-                        <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim, rgba(167,139,250,0.15))', color: 'var(--accent-purple)', fontWeight: 600 }}>
-                          {c.category}
-                        </span>
-                      )
-                    ) : (
-                      <span style={{ fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                        {fmtAmount(c.min_amount)} ~ {fmtAmount(c.max_amount)}
-                      </span>
-                    )}
-                    <span>{c.steps.length} 關</span>
-                  </div>
-                  {/* 流程預覽 */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>申請人</span>
-                    {c.steps.length === 0 ? (
-                      <span style={{ color: 'var(--accent-orange)', fontStyle: 'italic' }}>→ 尚未設定關卡</span>
-                    ) : (
-                      c.steps.map(s => (
-                        <span key={s.step_order} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ color: 'var(--text-muted)' }}>→</span>
-                          <span style={{ padding: '2px 8px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }}>
-                            {s.label || shortStepDesc(s)}
-                          </span>
-                        </span>
-                      ))
-                    )}
-                    <span style={{ color: 'var(--text-muted)' }}>→</span>
-                    <span style={{ color: 'var(--accent-green)' }}>✓</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  <button onClick={(e) => { e.stopPropagation(); onEdit(c.id) }} title="編輯"
-                    style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                    <Edit2 size={14} />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete(c.id, c.name) }} title="刪除"
-                    style={{ background: 'transparent', border: '1px solid var(--accent-red-dim)', borderRadius: 6, padding: 6, cursor: 'pointer', color: 'var(--accent-red)' }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EditorView({
-  mode, chainName, setChainName, chainDescription, setChainDescription,
-  libraryCategory, setLibraryCategory,
-  minAmount, setMinAmount, maxAmount, setMaxAmount,
-  steps, updateStep, addStep, removeStep, moveStep,
-  changeTargetType, stepPreview,
-  employees, roles, depts, stores, sections, formLabel,
-}) {
-  return (
-    <>
-      {/* Chain name + (amount_grouped) amount + (library) category */}
-      <div style={{ marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>簽核鏈名稱 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-          <input className="form-input" style={{ width: '100%' }}
-            value={chainName} onChange={e => setChainName(e.target.value)}
-            placeholder={mode === 'library' ? '例：員工請假簽核 / 採購簽核 / 執行長簽核' : `例：小額${formLabel}`} />
-        </div>
-        {(mode === 'amount_grouped' || mode === 'library') && (
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>說明（選填）</label>
-            <input className="form-input" style={{ width: '100%' }}
-              value={chainDescription} onChange={e => setChainDescription(e.target.value)}
-              placeholder={mode === 'library' ? '描述這條 chain 的用途或適用情境' : '例：3,000 以下由直屬主管核准'} />
-          </div>
-        )}
-        {mode === 'library' && (
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>分類（選填）</label>
-            <input className="form-input" style={{ width: '100%' }}
-              value={libraryCategory} onChange={e => setLibraryCategory(e.target.value)}
-              placeholder="例：請假 / 採購 / 費用 / 行政 — 用來分組顯示" />
-          </div>
-        )}
-        {mode === 'amount_grouped' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最低金額（含）</label>
-              <input className="form-input" type="number" style={{ width: '100%' }}
-                value={minAmount} onChange={e => setMinAmount(e.target.value)}
-                placeholder="0（無下限）" />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>最高金額（含）</label>
-              <input className="form-input" type="number" style={{ width: '100%' }}
-                value={maxAmount} onChange={e => setMaxAmount(e.target.value)}
-                placeholder="留空 = 無上限" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Steps */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* 申請人（固定） */}
-        <div style={{ padding: '8px 12px', background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>👤</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>申請人</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>送出表單者，自動帶</div>
-          </div>
-        </div>
-
-        {steps.map((step, idx) => {
-          const meta = TARGET_TYPES.find(t => t.value === step.target_type)
-          const preview = stepPreview(step)
-          return (
-            <div key={step._localId} style={{
-              padding: 10, background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-medium)', borderRadius: 10,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-purple)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                  {idx + 1}
-                </div>
-                <input className="form-input" style={{ flex: 1, fontWeight: 600 }}
-                  placeholder={`第 ${idx + 1} 關標籤（例：直屬主管 / 部門經理 / 財務確認）`}
-                  value={step.label} onChange={e => updateStep(idx, { label: e.target.value })} />
-                <button title="上移" disabled={idx === 0}
-                  onClick={() => moveStep(idx, -1)}
-                  style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 4, cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.4 : 1 }}>
-                  <ArrowUp size={14} />
-                </button>
-                <button title="下移" disabled={idx === steps.length - 1}
-                  onClick={() => moveStep(idx, 1)}
-                  style={{ background: 'transparent', border: '1px solid var(--border-medium)', borderRadius: 6, padding: 4, cursor: idx === steps.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === steps.length - 1 ? 0.4 : 1 }}>
-                  <ArrowDown size={14} />
-                </button>
-                <button title="刪除" onClick={() => removeStep(idx)}
-                  style={{ background: 'transparent', border: '1px solid var(--accent-red-dim)', borderRadius: 6, padding: 4, cursor: 'pointer', color: 'var(--accent-red)' }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>簽核者類型</label>
-                <select className="form-input" style={{ width: '100%' }}
-                  value={step.target_type}
-                  onChange={e => changeTargetType(idx, e.target.value)}>
-                  {Array.from(new Set(TARGET_TYPES.map(t => t.group))).map(g => (
-                    <optgroup key={g} label={g}>
-                      {TARGET_TYPES.filter(t => t.group === g).map(t => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-
-              {meta?.needs === 'emp' && (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>選擇員工</label>
-                  <SearchableSelect
-                    value={step.target_emp_id || ''}
-                    options={empOptions(employees)}
-                    onChange={v => updateStep(idx, { target_emp_id: v ? Number(v) : null })}
-                    placeholder="搜尋員工..."
-                  />
-                </div>
-              )}
-              {meta?.needs === 'role' && (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>選擇角色</label>
-                  <select className="form-input" style={{ width: '100%' }}
-                    value={step.target_role_id || ''}
-                    onChange={e => updateStep(idx, { target_role_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">— 選擇角色 —</option>
-                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {meta?.needs === 'dept' && (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>選擇部門</label>
-                  <select className="form-input" style={{ width: '100%' }}
-                    value={step.target_dept_id || ''}
-                    onChange={e => updateStep(idx, { target_dept_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">— 選擇部門 —</option>
-                    {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {meta?.needs === 'store' && (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>選擇門市</label>
-                  <select className="form-input" style={{ width: '100%' }}
-                    value={step.target_store_id || ''}
-                    onChange={e => updateStep(idx, { target_store_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">— 選擇門市 —</option>
-                    {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {meta?.needs === 'section' && (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>選擇課別</label>
-                  <select className="form-input" style={{ width: '100%' }}
-                    value={step.target_section_id || ''}
-                    onChange={e => updateStep(idx, { target_section_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">— 選擇課別 —</option>
-                    {sections.map(sec => {
-                      const dept = depts.find(d => d.id === sec.department_id)
-                      return <option key={sec.id} value={sec.id}>{sec.name}{dept ? `(${dept.name})` : ''}</option>
-                    })}
-                  </select>
-                </div>
-              )}
-
-              <div style={{
-                padding: '6px 10px', borderRadius: 6,
-                background: preview.ok ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)',
-                color: preview.ok ? 'var(--accent-green)' : 'var(--accent-orange)',
-                fontSize: 11, fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
-                {preview.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                本關會由：{preview.text}
-                {preview.dynamic && <span style={{ fontSize: 9, marginLeft: 4, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.4)' }}>動態</span>}
-              </div>
-            </div>
-          )
-        })}
-
-        <button onClick={addStep} style={{
-          padding: '12px', borderRadius: 8,
-          border: '2px dashed var(--border-medium)', background: 'transparent',
-          color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-        }}>
-          <Plus size={14} /> 新增關卡
-        </button>
-
-        <div style={{ padding: '8px 12px', background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green-dim)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-green)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✅</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>簽核完成</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>所有關卡通過後通知申請人</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--bg-tertiary)', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-        💡 <b>動態目標</b>：每次申請才會解析（例：申請人部門主管會依申請人 department_id 動態決定）<br/>
-        💡 <b>解不到簽核者</b>：表示組織圖未設好（例：員工未設 department_id）→ 申請會卡住，請先到員工資料補
-      </div>
-    </>
-  )
-}

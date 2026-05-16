@@ -1,31 +1,27 @@
-import { useState, useEffect, useRef } from 'react'
-import { ModalOverlay } from './Modal'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Upload, Bell, Check, Workflow, Rocket, Copy } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Bell, Copy } from 'lucide-react'
 import InputModal from './ui/InputModal'
-import { empLabel } from '../lib/empLabel'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 import { toast } from '../lib/toast'
 import {
   updateTask, deleteTask,
-  getTaskComments, createTaskComment,
-  getTaskAttachments, createTaskAttachment, deleteTaskAttachment,
-  getTaskChecklists, linkTaskChecklist, unlinkTaskChecklist,
-  getTaskDependencies, createTaskDependency, deleteTaskDependency,
-  getChecklistItems, updateChecklistItem,
-  getApprovalChains,
-  getApprovalFormByTask, createApprovalForm, updateApprovalForm,
-  getApprovalFormSteps, createApprovalFormSteps, updateApprovalFormStep,
-  getTaskConfirmations, createTaskConfirmation, updateTaskConfirmation, deleteTaskConfirmation,
-  createWorkflowInstance,
+  getTaskComments, getTaskAttachments,
+  getTaskChecklists, getTaskDependencies,
+  getApprovalChains, getApprovalFormByTask, getApprovalFormSteps,
+  getTaskConfirmations,
+  getChecklistItems,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { notifyApproval, notifyTaskAssignee } from '../lib/lineNotify'
 import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
-
 import { confirm } from '../lib/confirm'
 import { logChanges } from '../lib/auditLogger'
+
+import TaskRelationsTab from './tasks/TaskRelationsTab'
+import TaskApprovalTab from './tasks/TaskApprovalTab'
+import TaskDiscussionTab from './tasks/TaskDiscussionTab'
+
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
@@ -43,7 +39,7 @@ export default function TaskDetailPanel({
   const [comments, setComments] = useState([])
   const [attachments, setAttachments] = useState([])
   const [linkedChecklists, setLinkedChecklists] = useState([])
-  const [checklistItemsMap, setChecklistItemsMap] = useState({}) // { checklistId: items[] }
+  const [checklistItemsMap, setChecklistItemsMap] = useState({})
   const [dependencies, setDependencies] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
   const [approvalForm, setApprovalForm] = useState(null)
@@ -53,21 +49,17 @@ export default function TaskDetailPanel({
   const [confirmations, setConfirmations] = useState([])
   const [newConfirmApprover, setNewConfirmApprover] = useState('')
   const [newConfirmPriority, setNewConfirmPriority] = useState('中')
-  const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
-  const commentsListRef = useRef(null)
 
-  // Trigger workflow
+  // Relations tab data
   const [sopTemplates, setSopTemplates] = useState([])
   const [triggeredInstances, setTriggeredInstances] = useState([])
-  const [triggerTemplateId, setTriggerTemplateId] = useState('')
-  const [triggering, setTriggering] = useState(false)
 
-  // Project & workflow dropdowns
+  // Basic tab dropdowns
   const [allProjects, setAllProjects] = useState([])
   const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
 
-  // InputModal state (replaces window.prompt calls)
+  // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
   const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
     setInputModal({ open: true, title, label, placeholder, required, onConfirm })
@@ -117,7 +109,6 @@ export default function TaskDetailPanel({
       setTriggeredInstances(trig.data || [])
       setAllProjects(proj.data || [])
       setAllWorkflowInstances(wfAll.data || [])
-      // Load approval form & steps
       if (af.data) {
         setApprovalForm(af.data)
         setApprovalPriority(af.data.priority || '中')
@@ -129,7 +120,6 @@ export default function TaskDetailPanel({
         setApprovalPriority('中')
         setApprovalMode('sequential')
       }
-      // Load items for each linked checklist
       const linked = cl.data || []
       if (linked.length > 0) {
         Promise.all(linked.map(lc => safe(getChecklistItems(lc.checklist_id))))
@@ -151,33 +141,30 @@ export default function TaskDetailPanel({
     return () => { document.body.style.overflow = orig }
   }, [])
 
-  // Dirty state: track if user made changes
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
   const [isDirty, setIsDirty] = useState(false)
   useEffect(() => { setIsDirty(false) }, [task?.id])
   const setAndDirty = (k, v) => { set(k, v); setIsDirty(true) }
 
   const handleClose = async () => {
     if (isDirty && !(await confirm({ message: '有未儲存的變更，確定要離開嗎？' }))) return
+    setIsDirty(false)
     onClose()
   }
 
   if (!task) return null
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
   const handleSave = async () => {
     setSaving(true)
     const prevStatus = task.status
 
-    // ★ If task has an approval chain, block direct completion until chain passes
-    // 走新架構：task_confirmations + DB trigger 推進；不再建 approval_form
     if (form.status === '已完成' && prevStatus !== '已完成' && task.approval_chain_id) {
       const hasAnyConfirm = confirmations.length > 0
       const hasPending = confirmations.some(c => c.status === 'pending')
       const wasRejected = task.confirmation_status === 'rejected'
 
       if (!hasAnyConfirm) {
-        // 第一次完成 → 呼 web_complete_task RPC：建 step 0 confirmations + trigger 推 LINE
         const { data: result, error } = await supabase.rpc('web_complete_task', { p_task_id: task.id })
         if (error || !result?.ok) {
           setForm(f => ({ ...f, status: prevStatus }))
@@ -185,7 +172,6 @@ export default function TaskDetailPanel({
           toast.error('啟動簽核失敗：' + (error?.message || result?.error || '未知錯誤'))
           return
         }
-        // reload confirmations 讓 UI 立刻反映
         const { data: tcData } = await supabase.from('task_confirmations').select('*').eq('task_id', task.id).order('created_at')
         setConfirmations(tcData || [])
         setForm(f => ({ ...f, status: result.status === '已完成' ? '已完成' : prevStatus }))
@@ -207,7 +193,6 @@ export default function TaskDetailPanel({
         toast.error('請等待簽核完成後，任務會自動標記為已完成')
         return
       }
-      // confirmations 全部 approved → 任務應該已被 trigger 標完成；放行
     }
 
     const payload = {
@@ -237,9 +222,7 @@ export default function TaskDetailPanel({
         newData: data,
         orgId: profile?.organization_id || null,
       }).catch(() => {})
-      // Task completed — cascade next tasks and notify their assignees
       if (form.status === '已完成' && prevStatus !== '已完成') {
-        // trigger-type: frontend activates the next task + notifies
         const triggerDeps = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
         for (const dep of triggerDeps) {
           await supabase
@@ -248,7 +231,6 @@ export default function TaskDetailPanel({
             .eq('id', dep.depends_on_task_id)
             .eq('status', '待簽核')
         }
-        // prerequisite-type: DB trigger already cascaded them — notification fired by DB trigger
       }
     }
     setSaving(false)
@@ -260,295 +242,6 @@ export default function TaskDetailPanel({
     onDelete(task.id)
   }
 
-  // ── Approval (簽核) ──
-  const handleStartApproval = async (chainId) => {
-    if (!chainId) return
-    const chain = approvalChains.find(c => c.id === Number(chainId))
-    if (!chain) return
-    const { data: approvalFormData } = await createApprovalForm({
-      title: `${task.title} — 簽核`,
-      applicant: profile?.name || task.assignee || '系統',
-      chain_id: chain.id,
-      ref_task_id: task.id,
-      status: '簽核中',
-      current_step: 0,
-      priority: approvalPriority,
-      mode: approvalMode,
-    })
-    if (!approvalFormData) return
-    setApprovalForm(approvalFormData)
-    // Create steps from chain — parallel: all 待簽; sequential: only first 待簽
-    const chainSteps = chain.steps || []
-    const stepRows = chainSteps.map((s, i) => ({
-      form_id: approvalFormData.id,
-      step_order: i + 1,
-      role: s.role,
-      status: approvalMode === 'parallel' ? '待簽' : (i === 0 ? '待簽' : '等待中'),
-    }))
-    const { data: steps } = await createApprovalFormSteps(stepRows)
-    setApprovalSteps(steps || [])
-    // Notify
-    const notifyExtras = { chainName: chain.name, category: chain.category, store: approvalFormData.store || null, approvedSteps: [] }
-    if (approvalMode === 'parallel') {
-      chainSteps.forEach((s, i) => {
-        if (s.role) notifyApproval(s.role, task.title, `第 ${i + 1} 關：${s.label || s.role}（同時審核）`, notifyExtras)
-      })
-    } else {
-      const firstStep = chainSteps[0]
-      if (firstStep?.role) {
-        notifyApproval(firstStep.role, task.title, `第 1 關：${firstStep.label || firstStep.role}`, {
-          ...notifyExtras,
-          pendingSteps: chainSteps.slice(1).map(s => ({ name: s.label || s.role })),
-        })
-      }
-    }
-  }
-
-  const handleApprovalAction = async (formStepId, action, comment) => {
-    const newStatus = action === 'approve' ? '已核准' : '已退回'
-    const currentUser = profile?.name || task.assignee || instance?.assignee || '系統'
-    const { data } = await updateApprovalFormStep(formStepId, {
-      status: newStatus,
-      approver: currentUser,
-      comment: comment || null,
-      acted_at: new Date().toISOString(),
-    })
-    if (!data) return
-    const updated = approvalSteps.map(s => s.id === formStepId ? data : s)
-    setApprovalSteps(updated)
-
-    if (action === 'reject') {
-      const { data: f } = await updateApprovalForm(approvalForm.id, { status: '已退回' })
-      if (f) setApprovalForm(f)
-      return
-    }
-
-    // Approved — finalize or advance based on mode
-    if (approvalMode === 'parallel') {
-      const allDone = updated.every(s => s.status === '已核准')
-      if (allDone) {
-        const { data: f } = await updateApprovalForm(approvalForm.id, {
-          status: '已通過', completed_at: new Date().toISOString(),
-        })
-        if (f) setApprovalForm(f)
-        // ★ Chain complete — auto-complete the task
-        const { data: completedTask } = await updateTask(task.id, {
-          status: '已完成', completed_at: new Date().toISOString(),
-        })
-        if (completedTask) onUpdate(completedTask)
-      }
-    } else {
-      const nextStep = updated.find(s => s.status === '等待中')
-      if (nextStep) {
-        const { data: ns } = await updateApprovalFormStep(nextStep.id, { status: '待簽' })
-        if (ns) setApprovalSteps(prev => prev.map(s => s.id === ns.id ? ns : s))
-        await updateApprovalForm(approvalForm.id, { current_step: nextStep.step_order })
-        const chain = approvalChains.find(c => c.id === approvalForm.chain_id)
-        const stepDef = chain?.steps?.[nextStep.step_order - 1]
-        if (nextStep.role) notifyApproval(nextStep.role, approvalForm.title, `第 ${nextStep.step_order} 關：${stepDef?.label || nextStep.role}`, {
-          chainName: chain?.name || null, category: chain?.category || null,
-          store: task.store || null,
-          approvedSteps: updated.filter(s => s.status === '已核准').map(s => ({ name: s.approver, actedAt: s.acted_at })),
-          pendingSteps: updated.filter(s => s.status === '等待中').map(s => ({ name: s.role })),
-        }).catch(() => {})
-      } else {
-        const { data: f } = await updateApprovalForm(approvalForm.id, {
-          status: '已通過', completed_at: new Date().toISOString(),
-        })
-        if (f) setApprovalForm(f)
-        // ★ Chain complete — auto-complete the task
-        const { data: completedTask } = await updateTask(task.id, {
-          status: '已完成', completed_at: new Date().toISOString(),
-        })
-        if (completedTask) onUpdate(completedTask)
-      }
-    }
-  }
-
-  const handleUpdateApprovalMeta = async (patch) => {
-    if (!approvalForm) return
-    const { data } = await updateApprovalForm(approvalForm.id, patch)
-    if (data) setApprovalForm(data)
-  }
-
-  // ── Task Confirmations (確認審批) ──
-  const handleAddConfirmation = async () => {
-    if (!newConfirmApprover) return
-    if (confirmations.some(c => c.approver === newConfirmApprover)) return
-    // 依序模式：若已有 pending 則新的排 'waiting'，避免同時多人在審
-    const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
-    const hasActive = confirmations.some(c => c.status === 'pending')
-    const initialStatus = (mode === 'sequential' && hasActive) ? 'waiting' : 'pending'
-    const { data } = await createTaskConfirmation({
-      task_id: task.id,
-      approver: newConfirmApprover,
-      status: initialStatus,
-      priority: newConfirmPriority,
-    })
-    if (data) {
-      setConfirmations(prev => [...prev, data])
-      // 只有真的 pending 才立刻通知（排隊中的等前面回應再推播）
-      if (initialStatus === 'pending') {
-        notifyApproval(newConfirmApprover, task.title, `請求審批（${newConfirmPriority}）`, { store: task.store || null })
-      }
-      setNewConfirmApprover('')
-      setNewConfirmPriority('中')
-    }
-  }
-
-  const handleConfirmationAction = async (id, status, notes) => {
-    const { data } = await updateTaskConfirmation(id, {
-      status,
-      notes: notes || null,
-      responded_at: new Date().toISOString(),
-    })
-    if (!data) return
-
-    // 依序模式（legacy 非 chain）：前一位回應後，自動升下一個 waiting → pending
-    const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
-    let next = confirmations.map(c => c.id === id ? data : c)
-    if (mode === 'sequential' && (status === 'approved' || status === 'rejected') && !task.approval_chain_id) {
-      const stillPending = next.some(c => c.status === 'pending')
-      if (!stillPending) {
-        const priRank = { '高': 0, '中': 1, '低': 2 }
-        const nextWaiting = next
-          .filter(c => c.status === 'waiting')
-          .sort((a, b) => (priRank[a.priority] ?? 1) - (priRank[b.priority] ?? 1) || a.id - b.id)[0]
-        if (nextWaiting) {
-          const { data: promoted } = await updateTaskConfirmation(nextWaiting.id, { status: 'pending' })
-          if (promoted) {
-            notifyApproval(promoted.approver, task.title, `請求審批（${promoted.priority || '中'}）`, { store: task.store || null })
-          }
-        }
-      }
-    }
-
-    // ★ Chain 任務：trigger 可能在背後建了下一關 confirmations 或標完成 task → 全部重抓
-    if (task.approval_chain_id) {
-      const { data: all } = await supabase.from('task_confirmations').select('*').eq('task_id', task.id).order('created_at')
-      setConfirmations(all || [])
-      const { data: refreshedTask } = await supabase.from('tasks').select('*').eq('id', task.id).single()
-      if (refreshedTask) onUpdate(refreshedTask)
-    } else {
-      setConfirmations(next)
-    }
-  }
-
-  const handleRemoveConfirmation = async (id) => {
-    await deleteTaskConfirmation(id)
-    setConfirmations(prev => prev.filter(c => c.id !== id))
-  }
-
-  // Comments
-  const handleSendComment = async () => {
-    if (!commentText.trim()) return
-    const { data } = await createTaskComment({ task_id: task.id, author: profile?.name || '使用者', content: commentText.trim() })
-    if (data) {
-      setComments(prev => [...prev, data])
-      requestAnimationFrame(() => {
-        const el = commentsListRef.current
-        if (el) el.scrollTop = el.scrollHeight
-      })
-    }
-    setCommentText('')
-  }
-
-  // Toggle checklist item (from linked checklist)
-  const handleToggleLinkedItem = async (item) => {
-    const { data } = await updateChecklistItem(item.id, { checked: !item.checked })
-    if (data) {
-      const updatedItems = (checklistItemsMap[item.checklist_id] || []).map(i => i.id === item.id ? data : i)
-      setChecklistItemsMap(prev => ({ ...prev, [item.checklist_id]: updatedItems }))
-      // Persist completed count to checklists table
-      const completed = updatedItems.filter(i => i.checked).length
-      await supabase.from('checklists').update({ completed }).eq('id', item.checklist_id)
-    }
-  }
-
-  // Checklists link
-  const handleLinkChecklist = async (checklistId) => {
-    if (!checklistId) return
-    const { data } = await linkTaskChecklist(task.id, Number(checklistId))
-    if (data) {
-      const cl = checklists.find(c => c.id === Number(checklistId))
-      setLinkedChecklists(prev => [...prev, { ...data, checklists: cl }])
-    }
-  }
-
-  const handleUnlinkChecklist = async (linkId) => {
-    await unlinkTaskChecklist(linkId)
-    setLinkedChecklists(prev => prev.filter(l => l.id !== linkId))
-  }
-
-  // Dependencies
-  const otherSteps = allSteps.filter(s => s.id !== task.id)
-  const prerequisites = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'prerequisite')
-  const triggers = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
-
-  const handleAddDep = async (depTaskId, type) => {
-    if (!depTaskId) return
-    const { data } = await createTaskDependency({ task_id: task.id, depends_on_task_id: Number(depTaskId), dep_type: type })
-    if (data) setDependencies(prev => [...prev, data])
-  }
-
-  const handleRemoveDep = async (depId) => {
-    await deleteTaskDependency(depId)
-    setDependencies(prev => prev.filter(d => d.id !== depId))
-  }
-
-  // Trigger a workflow from this task
-  const handleTriggerWorkflow = async () => {
-    if (!triggerTemplateId) return
-    const tpl = sopTemplates.find(t => t.id === Number(triggerTemplateId))
-    if (!tpl) return
-    setTriggering(true)
-    try {
-      const { data: inst, error } = await createWorkflowInstance({
-        template_name: tpl.name,
-        store: task.store || null,
-        status: '進行中',
-        started_by: task.assignee || '系統',
-        triggered_by_task_id: task.id,
-        started_at: new Date().toISOString(),
-      })
-      if (error || !inst) throw new Error(error?.message || '建立流程失敗')
-
-      const steps = Array.isArray(tpl.steps) ? tpl.steps : []
-      if (steps.length > 0) {
-        const taskRows = steps.map((s, i) => ({
-          workflow_instance_id: inst.id,
-          step_order: i + 1,
-          title: s.title,
-          description: s.description || null,
-          role: s.role || null,
-          assignee: i === 0 ? (task.assignee || null) : null,
-          store: task.store || null,
-          // step 1 開工進行中、step 2+ 待處理（trg_task_advance_next_step 等前一步完成推進）
-          // 注意：'待簽核' 是 HR 簽核任務用、不是執行任務用
-          status: i === 0 ? '進行中' : '待處理',
-          started_at: i === 0 ? new Date().toISOString() : null,
-          bucket: 'Workflow',
-          category: 'Workflow',
-          priority: s.priority || '中',
-        }))
-        const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
-        if (createdTasks?.[0]?.assignee) {
-          notifyTaskAssignee(createdTasks[0].assignee, createdTasks[0].title, tpl.name, createdTasks[0].id, {
-            dueDate: createdTasks[0].due_date, description: createdTasks[0].description, notes: createdTasks[0].notes, store: createdTasks[0].store,
-            approvalRequired: createdTasks[0].status === '待簽核',
-          }).catch(() => {})
-        }
-      }
-
-      setTriggeredInstances(prev => [inst, ...prev])
-      setTriggerTemplateId('')
-    } catch (err) {
-      toast.error('觸發失敗，請稍後再試')
-    }
-    setTriggering(false)
-  }
-
-  // Reminder quick set
   const setReminder = (type) => {
     if (!form.due_date) return
     const due = new Date(form.due_date + 'T' + (form.due_time || '17:00'))
@@ -557,11 +250,6 @@ export default function TaskDetailPanel({
     else if (type === '1day') reminder = new Date(due.getTime() - 24 * 60 * 60 * 1000)
     else reminder = new Date(form.due_date + 'T09:00')
     set('reminder_at', reminder.toISOString().slice(0, 16))
-  }
-
-  const getStepLabel = (id) => {
-    const s = allSteps.find(x => x.id === id)
-    return s ? `${s.step_order}. ${s.title}` : `#${id}`
   }
 
   const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
@@ -668,788 +356,203 @@ export default function TaskDetailPanel({
         {/* ── Body (scrollable) ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-          {/* ═══ Section: Basic Fields ═══ */}
+          {/* ═══ Basic Tab ═══ */}
           {activeTab === 'basic' && (
-          <div style={sectionStyle}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 1fr', gap: 12 }}>
-              <div>
-                <div style={labelStyle}>狀態</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.status}
-                  onChange={e => setAndDirty('status', e.target.value)}>
-                  {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={labelStyle}>優先度</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.priority}
-                  onChange={e => setAndDirty('priority', e.target.value)}>
-                  {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={labelStyle}>分類</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.category}
-                  onChange={e => setAndDirty('category', e.target.value)}>
-                  {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={fieldGrid}>
-              <div>
-                <div style={labelStyle}>負責人</div>
-                <SearchableSelect
-                  value={form.assignee}
-                  onChange={(v) => setAndDirty('assignee', v || '')}
-                  options={empOptions(employees, { keyBy: 'name' })}
-                  placeholder="搜尋員工姓名/職稱..."
-                />
-              </div>
-              <div>
-                <div style={labelStyle}>歸屬門市</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.store}
-                  onChange={e => setAndDirty('store', e.target.value)}>
-                  <option value="">未指定</option>
-                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={fieldGrid}>
-              <div>
-                <div style={labelStyle}>工作流</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.workflow_instance_id}
-                  onChange={e => setAndDirty('workflow_instance_id', e.target.value ? Number(e.target.value) : '')}>
-                  <option value="">未指定</option>
-                  {allWorkflowInstances.map(w => (
-                    <option key={w.id} value={w.id}>{w.template_name}{w.status ? ` (${w.status})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div style={labelStyle}>專案</div>
-                <select className="form-input" style={{ width: '100%' }} value={form.project_id}
-                  onChange={e => setAndDirty('project_id', e.target.value ? Number(e.target.value) : '')}>
-                  <option value="">未指定</option>
-                  {allProjects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* ═══ Section: Dates & Time ═══ */}
-          {activeTab === 'basic' && (
-          <div style={sectionStyle}>
-            <div style={fieldGrid}>
-              {/* 計畫開始日 */}
-              <div>
-                <div style={labelStyle}>計畫開始日</div>
-                <input className="form-input" type="date" style={{ width: '100%' }}
-                  value={form.planned_start} onChange={e => setAndDirty('planned_start', e.target.value)} />
-              </div>
-              {/* 預計完成日 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={labelStyle}>預計完成日</div>
-                <input className="form-input" type="date" style={{ width: '100%' }}
-                  value={form.due_date} onChange={e => setAndDirty('due_date', e.target.value)} />
-                <input className="form-input" type="time" style={{ width: '100%' }}
-                  value={form.due_time || ''} onChange={e => setAndDirty('due_time', e.target.value)} />
-              </div>
-              {/* 提醒時間 */}
-              <div>
-                <div style={labelStyle}>
-                  <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
-                </div>
-                <input className="form-input" type="datetime-local" style={{ width: '100%' }}
-                  value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
-                  onChange={e => setAndDirty('reminder_at', e.target.value)} />
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                  {[
-                    { label: '1hr前', type: '1hr' },
-                    { label: '1天前', type: '1day' },
-                    { label: '09:00', type: 'morning' },
-                  ].map(r => (
-                    <button key={r.type} onClick={() => setReminder(r.type)} style={{
-                      padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                      border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
-                      color: 'var(--text-secondary)', cursor: 'pointer',
-                    }}>{r.label}</button>
-                  ))}
-                </div>
-              </div>
-              {/* 實際完成日 */}
-              <div>
-                <div style={labelStyle}>實際完成日</div>
-                <input className="form-input" type="datetime-local" style={{ width: '100%', opacity: 0.7 }}
-                  readOnly
-                  value={task.completed_at ? task.completed_at.slice(0, 16) : ''}
-                  placeholder="標記已完成時自動填入"
-                />
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* ═══ Section: 確認審批（統一的任務審批機制）═══
-                合併舊的「🔐 確認審批」+「🤝 認可回應」，並加上「審核方式」。 */}
-          {activeTab === 'approval' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🔐 確認審批 ({confirmations.length})</span>
-              {confirmations.length > 0 && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-                  已回應 {confirmations.filter(c => c.status !== 'pending' && c.status !== 'waiting').length}/{confirmations.length}
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              指定員工審批本任務。不需走完整簽核鏈時使用。
-            </div>
-
-            {/* 審核方式 */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>審核方式</div>
-              <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                value={form.confirmation_mode || 'parallel'}
-                onChange={e => setAndDirty('confirmation_mode', e.target.value)}>
-                <option value="parallel">⚡ 同時（全部一起審）</option>
-                <option value="sequential">🔀 依序（一位審完再換下一位）</option>
-              </select>
-              {(form.confirmation_mode === 'sequential') && (
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                  依序模式：同一時間只有一位在「待審批」，前一位回應後自動換下一位（依優先度 高→中→低）。
-                </div>
-              )}
-            </div>
-
-            {confirmations.map(c => {
-              const isDone = c.status === 'approved'
-              const isRejected = c.status === 'rejected'
-              const isWaiting = c.status === 'waiting'
-              const pri = c.priority || '中'
-              const priColor = pri === '高' ? 'var(--accent-red)' : pri === '低' ? 'var(--text-muted)' : 'var(--accent-orange)'
-              const badgeLabel = isDone ? '✅ 已審批'
-                : isRejected ? '❌ 已拒絕'
-                : isWaiting ? '🕐 排隊中'
-                : '⏳ 待審批'
-              const badgeBg = isDone ? 'var(--accent-green-dim)'
-                : isRejected ? 'var(--accent-red-dim)'
-                : isWaiting ? 'var(--glass-light)'
-                : 'var(--accent-orange-dim)'
-              const badgeColor = isDone ? 'var(--accent-green)'
-                : isRejected ? 'var(--accent-red)'
-                : isWaiting ? 'var(--text-muted)'
-                : 'var(--accent-orange)'
-              return (
-                <div key={c.id} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px',
-                  background: 'var(--glass-light)', borderRadius: 8, marginBottom: 6,
-                  border: '1px solid var(--border-subtle)',
-                  opacity: isWaiting ? 0.7 : 1,
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>👤 {c.approver}</span>
-                      <span style={{
-                        fontSize: 10, padding: '1px 6px', borderRadius: 3,
-                        border: `1px solid ${priColor}`, color: priColor, fontWeight: 700,
-                      }}>{pri}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                        background: badgeBg, color: badgeColor,
-                      }}>{badgeLabel}</span>
-                    </div>
-                    {c.responded_at && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                        已回應 · {new Date(c.responded_at).toLocaleString('zh-TW')}
-                      </div>
-                    )}
-                    {c.notes && (
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
-                        💬 {c.notes}
-                      </div>
-                    )}
-                    {c.status === 'pending' && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                        <button className="btn btn-sm"
-                          style={{ background: 'var(--accent-green)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
-                          onClick={() => openInput(
-                            '審批確認',
-                            '審批備註（可留空）：',
-                            (n) => { closeInput(); handleConfirmationAction(c.id, 'approved', n || null) },
-                            { placeholder: '選填', required: false }
-                          )}>✅ 審批</button>
-                        <button className="btn btn-sm"
-                          style={{ background: 'var(--accent-red)', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer' }}
-                          onClick={() => openInput(
-                            '拒絕確認',
-                            '拒絕原因：',
-                            (n) => { closeInput(); handleConfirmationAction(c.id, 'rejected', n) },
-                            { placeholder: '請填寫拒絕原因', required: true }
-                          )}>❌ 拒絕</button>
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={() => handleRemoveConfirmation(c.id)} style={{
-                    background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0,
-                  }}><X size={14} /></button>
-                </div>
-              )
-            })}
-
-            {/* Add confirmation */}
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <div style={{ flex: 1 }}>
-                <SearchableSelect
-                  value={newConfirmApprover}
-                  onChange={(v) => setNewConfirmApprover(v || '')}
-                  options={empOptions(
-                    employees.filter(emp => !confirmations.some(c => c.approver === emp.name)),
-                    { keyBy: 'name' }
-                  )}
-                  placeholder="＋ 搜尋員工..."
-                />
-              </div>
-              <select className="form-input" style={{ width: 90, fontSize: 12 }}
-                value={newConfirmPriority} onChange={e => setNewConfirmPriority(e.target.value)}>
-                {PRIORITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <button className="btn btn-sm btn-primary" onClick={handleAddConfirmation}
-                disabled={!newConfirmApprover}
-                style={{ fontSize: 12, padding: '6px 12px' }}>加入</button>
-            </div>
-          </div>
-          )}
-
-          {/* ═══ Section: 清單設定 (select existing checklists) ═══ */}
-          {activeTab === 'relations' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>📋 清單設定 ({linkedChecklists.length})</span>
-            </div>
-
-            {/* Linked checklists with their items */}
-            {linkedChecklists.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>尚無關聯清單，請從下方選擇</div>
-            ) : linkedChecklists.map(lc => {
-              const clItems = checklistItemsMap[lc.checklist_id] || []
-              const clChecked = clItems.filter(i => i.checked).length
-              const clTotal = clItems.length
-              return (
-                <div key={lc.id} style={{
-                  marginBottom: 10, borderRadius: 8,
-                  border: '1px solid var(--border-subtle)', overflow: 'hidden',
-                }}>
-                  {/* Checklist header */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 12px', background: 'var(--glass-light)',
-                  }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>
-                      {lc.checklists?.name || `清單 #${lc.checklist_id}`}
-                      {clTotal > 0 && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>({clChecked}/{clTotal})</span>}
-                    </span>
-                    <button onClick={() => handleUnlinkChecklist(lc.id)} style={{
-                      background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 11,
-                    }}>移除</button>
-                  </div>
-
-                  {/* Progress bar */}
-                  {clTotal > 0 && (
-                    <div style={{ padding: '4px 12px 0' }}>
-                      <div style={{ height: 4, borderRadius: 2, background: 'var(--border-medium)', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 2,
-                          width: `${Math.round(clChecked / clTotal * 100)}%`,
-                          background: clChecked === clTotal ? 'var(--accent-green)' : 'var(--accent-cyan)',
-                        }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Items */}
-                  <div style={{ padding: '8px 12px' }}>
-                    {clItems.map(item => (
-                      <div key={item.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
-                      }}>
-                        <button onClick={() => handleToggleLinkedItem(item)} style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
-                          background: item.checked ? 'var(--accent-green)' : 'transparent',
-                          color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0, padding: 0,
-                        }}>
-                          {item.checked && <Check size={12} />}
-                        </button>
-                        <span style={{
-                          fontSize: 12,
-                          textDecoration: item.checked ? 'line-through' : 'none',
-                          color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
-                        }}>{item.title}</span>
-                      </div>
-                    ))}
-                    {clItems.length === 0 && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>此清單尚無項目，請到「查核清單」頁面新增</div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Select existing checklist */}
-            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-              value="" onChange={e => {
-                const id = e.target.value
-                if (!id) return
-                handleLinkChecklist(id).then(() => {
-                  // Load items for newly linked checklist
-                  getChecklistItems(Number(id)).then(({ data }) => {
-                    setChecklistItemsMap(prev => ({ ...prev, [Number(id)]: data || [] }))
-                  })
-                })
-              }}>
-              <option value="">＋ 選擇已建立的清單...</option>
-              {(checklists || []).filter(c => !linkedChecklists.some(lc => lc.checklist_id === c.id))
-                .map(c => <option key={c.id} value={c.id}>{c.name} ({c.completed}/{c.items})</option>)}
-            </select>
-          </div>
-          )}
-
-          {/* ═══ Section: Notes ═══ */}
-          {activeTab === 'basic' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
-            <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
-              placeholder="備註..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
-          </div>
-          )}
-
-          {/* ID & Created */}
-          {activeTab === 'basic' && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-            ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}
-            {task.confirmation_status === 'approved' && <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>✅ {task.confirmation_responded_at?.slice(0, 10)}</span>}
-          </div>
-          )}
-
-          {/* ═══ Section: Trigger Workflow ═══ */}
-          {activeTab === 'relations' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Rocket size={13} style={{ color: 'var(--accent-purple)' }} />
-              <span style={{ color: 'var(--accent-purple)' }}>觸發流程</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              從此任務啟動一個工作流程，第一個步驟自動設為進行中並通知負責人。
-            </div>
-            {triggeredInstances.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                {triggeredInstances.map(inst => {
-                  const iColor = inst.status === '已完成' ? 'var(--accent-green)' : 'var(--accent-cyan)'
-                  return (
-                    <div key={inst.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                      background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
-                      border: '1px solid var(--border-subtle)', fontSize: 12,
-                    }}>
-                      <Workflow size={11} style={{ color: iColor, flexShrink: 0 }} />
-                      <span style={{ flex: 1, fontWeight: 600 }}>{inst.template_name}</span>
-                      {inst.store && <span style={{ color: 'var(--text-muted)' }}>{inst.store}</span>}
-                      <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 700, color: iColor, background: inst.status === '已完成' ? 'var(--accent-green-dim)' : 'var(--accent-cyan-dim)' }}>{inst.status}</span>
-                      <span style={{ color: 'var(--text-muted)' }}>{inst.started_at?.slice(0, 10)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <select className="form-input" style={{ flex: 1, fontSize: 12 }}
-                value={triggerTemplateId} onChange={e => setTriggerTemplateId(e.target.value)}>
-                <option value="">選擇流程範本…</option>
-                {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-purple)', border: 'none' }}
-                onClick={handleTriggerWorkflow} disabled={!triggerTemplateId || triggering}>
-                <Rocket size={12} /> {triggering ? '觸發中...' : '觸發'}
-              </button>
-            </div>
-          </div>
-          )}
-
-          {/* ═══ Section: Prerequisites ═══ */}
-          {activeTab === 'relations' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0 }}>🔒 前置條件（全部完成後才開始）</div>
-            {prerequisites.map(d => (
-              <div key={d.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
-                border: '1px solid var(--border-subtle)', fontSize: 13,
-              }}>
-                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_task_id)}</span>
-                <button onClick={() => handleRemoveDep(d.id)} style={{
-                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
-                }}><X size={14} /></button>
-              </div>
-            ))}
-            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-              value="" onChange={e => handleAddDep(e.target.value, 'prerequisite')}>
-              <option value="">＋ 新增前置條件...</option>
-              {otherSteps.filter(s => !prerequisites.some(p => p.depends_on_task_id === s.id))
-                .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
-            </select>
-          </div>
-          )}
-
-          {/* ═══ Section: Triggers ═══ */}
-          {activeTab === 'relations' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0 }}>⚠️ 觸發動作（完成時執行）</div>
-            {triggers.map(d => (
-              <div key={d.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                background: 'var(--glass-light)', borderRadius: 8, marginBottom: 4,
-                border: '1px solid var(--border-subtle)', fontSize: 13,
-              }}>
-                <span style={{ flex: 1 }}>→ {getStepLabel(d.depends_on_task_id)}</span>
-                <button onClick={() => handleRemoveDep(d.id)} style={{
-                  background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
-                }}><X size={14} /></button>
-              </div>
-            ))}
-            <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-              value="" onChange={e => handleAddDep(e.target.value, 'trigger')}>
-              <option value="">＋ 新增觸發任務...</option>
-              {otherSteps.filter(s => !triggers.some(t => t.depends_on_task_id === s.id))
-                .map(s => <option key={s.id} value={s.id}>{s.step_order}. {s.title}</option>)}
-            </select>
-          </div>
-          )}
-
-          {/* ═══ Section: Attachments ═══ */}
-          {activeTab === 'discussion' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>📎 附件 ({attachments.length})</span>
-              <button className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}
-                onClick={() => openInput(
-                  '新增附件',
-                  '檔案 URL（須以 https:// 開頭）：',
-                  (url) => {
-                    if (!url.startsWith('https://')) { toast.warning('請輸入有效的 https:// 網址'); return }
-                    openInput(
-                      '新增附件',
-                      '檔案名稱：',
-                      (name) => {
-                        closeInput()
-                        createTaskAttachment({ task_id: task.id, file_name: name, file_url: url, uploaded_by: '使用者' })
-                          .then(({ data }) => { if (data) setAttachments(prev => [...prev, data]) })
-                      },
-                      { placeholder: '例如：合約.pdf' }
-                    )
-                  },
-                  { placeholder: 'https://...' }
-                )}>
-                <Upload size={11} /> 上傳
-              </button>
-            </div>
-            {attachments.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無附件</div>
-            ) : attachments.map(a => (
-              <div key={a.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
-                marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
-              }}>
-                <a href={a.file_url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-cyan)' }}>
-                  📄 {a.file_name}
-                </a>
-                <button onClick={async () => {
-                  await deleteTaskAttachment(a.id)
-                  setAttachments(prev => prev.filter(x => x.id !== a.id))
-                }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-          )}
-
-          {/* ═══ Section: Approval (簽核系統) ═══ */}
-          {activeTab === 'approval' && (
-          <div style={{
-            ...sectionStyle,
-            border: '2px solid var(--accent-purple)',
-            background: 'linear-gradient(135deg, var(--bg-card), rgba(139,92,246,0.05))',
-          }}>
-            <div style={{ ...labelStyle, marginTop: 0, color: 'var(--accent-purple)', fontSize: 14 }}>
-              🔏 簽核流程
-            </div>
-
-            {task.approval_chain_id ? (
-              // 任務綁定簽核鏈 → 自動走 task_confirmations + DB trigger 推進
-              // 進度顯示在上面「🔐 確認審批」面板
-              <div style={{
-                padding: 12, borderRadius: 8,
-                background: 'var(--accent-cyan-dim)',
-                border: '1px solid var(--accent-cyan-dim)',
-                color: 'var(--text-secondary)',
-                fontSize: 13, lineHeight: 1.6,
-              }}>
-                {(() => {
-                  const chain = approvalChains.find(c => c.id === task.approval_chain_id)
-                  const totalSteps = chain?.steps?.length ?? '?'
-                  const hasConf = confirmations.length > 0
-                  const isApproved = task.confirmation_status === 'approved'
-                  const isRejected = task.confirmation_status === 'rejected'
-                  return (
-                    <>
-                      <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--accent-cyan)' }}>
-                        🔗 已綁定簽核鏈：{chain?.name || `#${task.approval_chain_id}`}（{totalSteps} 關）
-                      </div>
-                      <div style={{ fontSize: 12 }}>
-                        {isApproved ? '✅ 簽核完成，任務已標記完成。' :
-                         isRejected ? '❌ 簽核已退回，任務退回進行中。' :
-                         hasConf ? '⏳ 簽核進行中 — 進度請見上面「確認審批」面板。' :
-                         '完成任務時自動啟動，按「儲存」並把狀態改成「已完成」就會建第一關簽核者。'}
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
-            ) : !approvalForm ? (
-              <>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>尚未啟動簽核，設定後選擇簽核鏈開始</div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>優先度</div>
-                    <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                      value={approvalPriority} onChange={e => setApprovalPriority(e.target.value)}>
-                      {PRIORITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+            <>
+              <div style={sectionStyle}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={labelStyle}>狀態</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.status}
+                      onChange={e => setAndDirty('status', e.target.value)}>
+                      {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>審核方式</div>
-                    <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                      value={approvalMode} onChange={e => setApprovalMode(e.target.value)}>
-                      <option value="sequential">🔀 依序（一關接一關）</option>
-                      <option value="parallel">⚡ 同時（全部一起審）</option>
+                  <div>
+                    <div style={labelStyle}>優先度</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.priority}
+                      onChange={e => setAndDirty('priority', e.target.value)}>
+                      {PRIORITY_LIST.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={labelStyle}>分類</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.category}
+                      onChange={e => setAndDirty('category', e.target.value)}>
+                      {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
-                <select className="form-input" style={{ width: '100%', fontSize: 13 }}
-                  value="" onChange={e => handleStartApproval(e.target.value)}>
-                  <option value="">＋ 選擇簽核鏈以啟動...</option>
-                  {approvalChains.map(ac => (
-                    <option key={ac.id} value={ac.id}>
-                      {ac.name} ({(ac.steps || []).length} 關)
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <>
-                {/* Form status */}
-                {(() => {
-                  const respondedCount = approvalSteps.filter(s => s.acted_at).length
-                  const totalCount = approvalSteps.length
-                  const pri = approvalForm.priority || '中'
-                  const priColor = pri === '高' ? 'var(--accent-red)' : pri === '低' ? 'var(--text-muted)' : 'var(--accent-orange)'
-                  return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-                      <span style={{
-                        padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-                        background: approvalForm.status === '已通過' ? 'var(--accent-green-dim)' :
-                          approvalForm.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-purple-dim)',
-                        color: approvalForm.status === '已通過' ? 'var(--accent-green)' :
-                          approvalForm.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-purple)',
-                        border: `1px solid ${approvalForm.status === '已通過' ? 'var(--accent-green-dim)' :
-                          approvalForm.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-purple-dim)'}`,
-                      }}>
-                        {approvalForm.status === '已通過' ? '✅ 已通過' : approvalForm.status === '已退回' ? '❌ 已退回' : '⏳ 簽核中'}
-                      </span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
-                        border: `1px solid ${priColor}`, color: priColor,
-                      }}>優先度 {pri}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
-                        background: 'var(--glass-light)', color: 'var(--text-secondary)',
-                      }}>{(approvalForm.mode || 'sequential') === 'parallel' ? '⚡ 同時審' : '🔀 依序審'}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
-                        background: 'var(--glass-light)', color: 'var(--text-secondary)',
-                      }}>已回應 {respondedCount}/{totalCount}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                        申請人：{approvalForm.applicant}
-                      </span>
-                      {approvalForm.status === '簽核中' && (
-                        <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: 72 }}
-                          value={approvalForm.priority || '中'}
-                          onChange={e => handleUpdateApprovalMeta({ priority: e.target.value })}>
-                          {PRIORITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                      )}
-                    </div>
-                  )
-                })()}
 
-                {/* Steps timeline */}
-                <div style={{ position: 'relative', paddingLeft: 24 }}>
-                  {/* Vertical line */}
-                  <div style={{
-                    position: 'absolute', left: 9, top: 8, bottom: 8, width: 2,
-                    background: 'var(--border-medium)',
-                  }} />
-
-                  {approvalSteps.map((as, i) => {
-                    const isActive = as.status === '待簽'
-                    const isDone = as.status === '已核准'
-                    const isRejected = as.status === '已退回'
-                    return (
-                      <div key={as.id} style={{ position: 'relative', marginBottom: 16 }}>
-                        {/* Dot */}
-                        <div style={{
-                          position: 'absolute', left: -24, top: 2,
-                          width: 18, height: 18, borderRadius: '50%',
-                          background: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
-                            isActive ? 'var(--accent-purple)' : 'var(--border-medium)',
-                          border: isActive ? '3px solid var(--accent-purple-dim)' : 'none',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#fff', fontSize: 10, zIndex: 1,
-                        }}>
-                          {isDone ? '✓' : isRejected ? '✗' : i + 1}
-                        </div>
-
-                        {/* Content */}
-                        <div style={{
-                          padding: '10px 14px', borderRadius: 10,
-                          background: isActive ? 'var(--accent-purple-dim)' : 'var(--glass-light)',
-                          border: `1px solid ${isActive ? 'var(--accent-purple-dim)' : 'var(--border-subtle)'}`,
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                                第 {as.step_order} 關：{as.role || '審核者'}
-                              </div>
-                              {as.acted_at ? (
-                                <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600,
-                                  color: isRejected ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-                                  {isRejected ? '❌' : '✅'} 已回應
-                                  {as.approver && ` · ${as.approver}`}
-                                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
-                                    {new Date(as.acted_at).toLocaleString('zh-TW')}
-                                  </span>
-                                </div>
-                              ) : isActive ? (
-                                <div style={{ fontSize: 11, color: 'var(--accent-purple)', marginTop: 4, fontWeight: 600 }}>
-                                  ⏳ 等待回應中
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                                  尚未輪到此關
-                                </div>
-                              )}
-                              {as.comment && (
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
-                                  💬 {as.comment}
-                                </div>
-                              )}
-                            </div>
-                            <span style={{
-                              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                              background: isDone ? 'var(--accent-green-dim)' : isRejected ? 'var(--accent-red-dim)' :
-                                isActive ? 'var(--accent-purple-dim)' : 'var(--glass-light)',
-                              color: isDone ? 'var(--accent-green)' : isRejected ? 'var(--accent-red)' :
-                                isActive ? 'var(--accent-purple)' : 'var(--text-muted)',
-                            }}>
-                              {as.status}
-                            </span>
-                          </div>
-
-                          {/* Action buttons for active step */}
-                          {isActive && approvalForm.status === '簽核中' && (
-                            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                              <button
-                                className="btn btn-sm"
-                                style={{
-                                  background: 'var(--accent-green)', color: '#fff', border: 'none',
-                                  padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-                                }}
-                                onClick={() => openInput(
-                                  '核准簽核',
-                                  '審核意見（可留空）：',
-                                  (comment) => { closeInput(); handleApprovalAction(as.id, 'approve', comment || null) },
-                                  { placeholder: '選填', required: false }
-                                )}
-                              >
-                                ✅ 核准
-                              </button>
-                              <button
-                                className="btn btn-sm"
-                                style={{
-                                  background: 'var(--accent-red)', color: '#fff', border: 'none',
-                                  padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-                                }}
-                                onClick={() => openInput(
-                                  '退回簽核',
-                                  '退回原因：',
-                                  (comment) => { closeInput(); handleApprovalAction(as.id, 'reject', comment) },
-                                  { placeholder: '請填寫退回原因', required: true }
-                                )}
-                              >
-                                ❌ 退回
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-          )}
-
-          {/* ═══ Section: Comments ═══ */}
-          {activeTab === 'discussion' && (
-          <div style={sectionStyle}>
-            <div style={{ ...labelStyle, marginTop: 0 }}>💬 備註 ({comments.length})</div>
-            <div ref={commentsListRef} style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 8 }}>
-              {comments.map(c => (
-                <div key={c.id} style={{
-                  padding: '8px 12px', marginBottom: 6, borderRadius: 8,
-                  background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)' }}>⚙️ {c.author}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {new Date(c.created_at).toLocaleString('zh-TW')}
-                    </span>
+                <div style={fieldGrid}>
+                  <div>
+                    <div style={labelStyle}>負責人</div>
+                    <SearchableSelect
+                      value={form.assignee}
+                      onChange={(v) => setAndDirty('assignee', v || '')}
+                      options={empOptions(employees, { keyBy: 'name' })}
+                      placeholder="搜尋員工姓名/職稱..."
+                    />
                   </div>
-                  <div style={{ fontSize: 13 }}>🚩 {c.content}</div>
+                  <div>
+                    <div style={labelStyle}>歸屬門市</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.store}
+                      onChange={e => setAndDirty('store', e.target.value)}>
+                      <option value="">未指定</option>
+                      {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input className="form-input" type="text" style={{ flex: 1 }}
-                placeholder="輸入備註..."
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSendComment()} />
-              <button className="btn btn-primary" onClick={handleSendComment}
-                style={{ fontSize: 12, padding: '8px 14px' }}>
-                送出
-              </button>
-            </div>
-          </div>
+
+                <div style={fieldGrid}>
+                  <div>
+                    <div style={labelStyle}>工作流</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.workflow_instance_id}
+                      onChange={e => setAndDirty('workflow_instance_id', e.target.value ? Number(e.target.value) : '')}>
+                      <option value="">未指定</option>
+                      {allWorkflowInstances.map(w => (
+                        <option key={w.id} value={w.id}>{w.template_name}{w.status ? ` (${w.status})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={labelStyle}>專案</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.project_id}
+                      onChange={e => setAndDirty('project_id', e.target.value ? Number(e.target.value) : '')}>
+                      <option value="">未指定</option>
+                      {allProjects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style={sectionStyle}>
+                <div style={fieldGrid}>
+                  <div>
+                    <div style={labelStyle}>計畫開始日</div>
+                    <input className="form-input" type="date" style={{ width: '100%' }}
+                      value={form.planned_start} onChange={e => setAndDirty('planned_start', e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={labelStyle}>預計完成日</div>
+                    <input className="form-input" type="date" style={{ width: '100%' }}
+                      value={form.due_date} onChange={e => setAndDirty('due_date', e.target.value)} />
+                    <input className="form-input" type="time" style={{ width: '100%' }}
+                      value={form.due_time || ''} onChange={e => setAndDirty('due_time', e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={labelStyle}>
+                      <Bell size={13} style={{ verticalAlign: 'middle', color: 'var(--accent-red)' }} /> 提醒時間
+                    </div>
+                    <input className="form-input" type="datetime-local" style={{ width: '100%' }}
+                      value={form.reminder_at ? form.reminder_at.slice(0, 16) : ''}
+                      onChange={e => setAndDirty('reminder_at', e.target.value)} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {[
+                        { label: '1hr前', type: '1hr' },
+                        { label: '1天前', type: '1day' },
+                        { label: '09:00', type: 'morning' },
+                      ].map(r => (
+                        <button key={r.type} onClick={() => setReminder(r.type)} style={{
+                          padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                          color: 'var(--text-secondary)', cursor: 'pointer',
+                        }}>{r.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={labelStyle}>實際完成日</div>
+                    <input className="form-input" type="datetime-local" style={{ width: '100%', opacity: 0.7 }}
+                      readOnly
+                      value={task.completed_at ? task.completed_at.slice(0, 16) : ''}
+                      placeholder="標記已完成時自動填入"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={sectionStyle}>
+                <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
+                <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+                  placeholder="備註..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
+                ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}
+                {task.confirmation_status === 'approved' && (
+                  <span style={{ marginLeft: 12, color: 'var(--accent-green)' }}>
+                    ✅ {task.confirmation_responded_at?.slice(0, 10)}
+                  </span>
+                )}
+              </div>
+            </>
           )}
 
+          {/* ═══ Relations Tab ═══ */}
+          {activeTab === 'relations' && (
+            <TaskRelationsTab
+              task={task}
+              checklists={checklists}
+              linkedChecklists={linkedChecklists}
+              setLinkedChecklists={setLinkedChecklists}
+              checklistItemsMap={checklistItemsMap}
+              setChecklistItemsMap={setChecklistItemsMap}
+              dependencies={dependencies}
+              setDependencies={setDependencies}
+              allSteps={allSteps}
+              sopTemplates={sopTemplates}
+              triggeredInstances={triggeredInstances}
+              setTriggeredInstances={setTriggeredInstances}
+            />
+          )}
+
+          {/* ═══ Approval Tab ═══ */}
+          {activeTab === 'approval' && (
+            <TaskApprovalTab
+              task={task}
+              profile={profile}
+              employees={employees}
+              form={form}
+              setAndDirty={setAndDirty}
+              confirmations={confirmations}
+              setConfirmations={setConfirmations}
+              newConfirmApprover={newConfirmApprover}
+              setNewConfirmApprover={setNewConfirmApprover}
+              newConfirmPriority={newConfirmPriority}
+              setNewConfirmPriority={setNewConfirmPriority}
+              approvalChains={approvalChains}
+              approvalForm={approvalForm}
+              setApprovalForm={setApprovalForm}
+              approvalSteps={approvalSteps}
+              setApprovalSteps={setApprovalSteps}
+              approvalPriority={approvalPriority}
+              setApprovalPriority={setApprovalPriority}
+              approvalMode={approvalMode}
+              setApprovalMode={setApprovalMode}
+              openInput={openInput}
+              closeInput={closeInput}
+              onUpdate={onUpdate}
+            />
+          )}
+
+          {/* ═══ Discussion Tab ═══ */}
+          {activeTab === 'discussion' && (
+            <TaskDiscussionTab
+              task={task}
+              profile={profile}
+              attachments={attachments}
+              setAttachments={setAttachments}
+              comments={comments}
+              setComments={setComments}
+              openInput={openInput}
+              closeInput={closeInput}
+            />
+          )}
+
+          {/* ═══ Changelog Tab ═══ */}
           {activeTab === 'changelog' && (
             <div style={{ padding: '4px 0' }}>
               <ChangelogPanel

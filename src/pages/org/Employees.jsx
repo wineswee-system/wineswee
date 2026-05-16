@@ -11,6 +11,9 @@ import AssignmentCsvImport from '../../components/employee/AssignmentCsvImport'
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
+import EmployeeFormModal from './components/EmployeeFormModal'
+import ResignRehireModal from './components/ResignRehireModal'
+
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
@@ -534,254 +537,40 @@ export default function Employees() {
       </>}
 
       {/* 新增員工 Modal */}
-      {showModal && (
-        <Modal title="新增員工（到職）" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="姓名" required>
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="王小明" value={form.name} onChange={e => set('name', e.target.value)} />
-            </Field>
-            <Field label="英文姓名">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="Xiaoming Wang" value={form.name_en} onChange={e => set('name_en', e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="僱用類型">
-              <select className="form-input" style={{ width: '100%' }} value={form.employment_type} onChange={e => set('employment_type', e.target.value)}>
-                {EMPLOYMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </Field>
-            <Field label="到職日">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date} onChange={e => set('join_date', e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="部門">
-              <select className="form-input" style={{ width: '100%' }} value={form.department_id ?? ''} onChange={e => set('department_id', e.target.value ? Number(e.target.value) : null)}>
-                <option value="">請選擇</option>
-                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            </Field>
-            <Field label="主職稱">
-              <select className="form-input" style={{ width: '100%' }} value={form.position} onChange={e => {
-                const pos = e.target.value
-                setForm(f => {
-                  const next = { ...f, position: pos }
-                  if (pos && (pos.includes('門市') || pos.includes('店長'))) {
-                    const ops = departments.find(d => d.name === '營運部')
-                    if (ops) next.department_id = ops.id
-                  }
-                  return next
-                })
-              }}>
-                <option value="">請選擇</option>
-                <optgroup label="管理職">
-                  {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-                </optgroup>
-                <optgroup label="行政職">
-                  {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-                </optgroup>
-                <optgroup label="門市職">
-                  {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-                </optgroup>
-              </select>
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="副職稱">
-              <PosSelect value={form.position_secondary} onChange={e => set('position_secondary', e.target.value)} />
-            </Field>
-            <Field label="第三職稱">
-              <PosSelect value={form.position_third} onChange={e => set('position_third', e.target.value)} />
-            </Field>
-          </div>
-          <Field label="門市 / 分店">
-            <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''} onChange={e => {
-              const sid = e.target.value ? Number(e.target.value) : null
-              setForm(f => {
-                const next = { ...f, store_id: sid }
-                // 門市人員一律歸屬營運部
-                if (sid) {
-                  const ops = departments.find(d => d.name === '營運部')
-                  if (ops) next.department_id = ops.id
-                }
-                return next
-              })
-            }}>
-              <option value="">請選擇</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Email" required>
-            <input className="form-input" type="email" style={{ width: '100%' }} placeholder="example@company.com" value={form.email} onChange={e => set('email', e.target.value)} />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="手機">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="0912-345-678" value={form.phone} onChange={e => set('phone', e.target.value)} />
-            </Field>
-          </div>
-
-          {/* 🆕 系統權限與組織 */}
-          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🔐 系統權限與組織</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="角色（系統權限）">
-                <select className="form-input" style={{ width: '100%' }} value={form.role} onChange={e => set('role', e.target.value)}>
-                  <option value="">依職稱自動判定</option>
-                  <option value="store_staff">門市人員</option>
-                  <option value="office_staff">行政人員</option>
-                  <option value="manager">主管</option>
-                  <option value="admin">HR 管理員</option>
-                  <option value="super_admin">超級管理員</option>
-                </select>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                  影響系統內可進的頁面與按鈕。未指定則依職稱自動判定。
-                </div>
-              </Field>
-              <Field label="直屬主管">
-                <SearchableSelect
-                  value={form.supervisor_id}
-                  onChange={(v) => set('supervisor_id', v)}
-                  options={empOptions(employees.filter(e => e.status === '在職'))}
-                  placeholder="搜尋姓名 / 職稱 / 部門 / 門市..."
-                />
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                  簽核流程「直屬主管」這關會解析到這個人。
-                </div>
-              </Field>
-            </div>
-          </div>
-
-          {/* 🆕 個人資料 */}
-          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>👤 個人資料</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="身分證字號">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="A123456789" maxLength={10}
-                  value={form.id_number} onChange={e => set('id_number', e.target.value.toUpperCase())} />
-              </Field>
-              <Field label="生日">
-                <input className="form-input" type="date" style={{ width: '100%' }} value={form.birth_date} onChange={e => set('birth_date', e.target.value)} />
-              </Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="性別">
-                <select className="form-input" style={{ width: '100%' }} value={form.gender} onChange={e => set('gender', e.target.value)}>
-                  <option value="">未填</option>
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                  <option value="不公開">不公開</option>
-                </select>
-              </Field>
-              <Field label="員工編號">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="留空自動產生" value={form.employee_number} onChange={e => set('employee_number', e.target.value)} />
-              </Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="試用期結束日">
-                <input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end_date} onChange={e => set('probation_end_date', e.target.value)} />
-              </Field>
-              <Field label="通訊地址">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北市..." value={form.address} onChange={e => set('address', e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          {/* 緊急聯絡人 & 薪轉帳戶 */}
-          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>🆘 緊急聯絡人 &amp; 薪轉帳戶</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <Field label="緊急聯絡人">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="姓名" value={form.emergency_contact_name} onChange={e => set('emergency_contact_name', e.target.value)} />
-              </Field>
-              <Field label="緊急聯絡電話">
-                <input className="form-input" type="tel" style={{ width: '100%' }} placeholder="0912-345-678" value={form.emergency_contact_phone} onChange={e => set('emergency_contact_phone', e.target.value)} />
-              </Field>
-              <Field label="關係">
-                <select className="form-input" style={{ width: '100%' }} value={form.emergency_contact_relation} onChange={e => set('emergency_contact_relation', e.target.value)}>
-                  <option value="">請選擇</option>
-                  <option value="父母">父母</option>
-                  <option value="配偶">配偶</option>
-                  <option value="子女">子女</option>
-                  <option value="兄弟姊妹">兄弟姊妹</option>
-                  <option value="祖父母">祖父母</option>
-                  <option value="親戚">親戚</option>
-                  <option value="朋友">朋友</option>
-                  <option value="其他">其他</option>
-                </select>
-              </Field>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="銀行代碼">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="004" maxLength={7} value={form.bank_code} onChange={e => set('bank_code', e.target.value)} />
-              </Field>
-              <Field label="銀行帳號">
-                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="帳戶號碼" value={form.bank_account} onChange={e => set('bank_account', e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          {/* 薪資區塊 */}
-          <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 薪資資訊</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="計薪方式">
-                <select className="form-input" style={{ width: '100%' }} value={form.salary_type} onChange={e => set('salary_type', e.target.value)}>
-                  <option value="monthly">月薪制</option>
-                  <option value="hourly">時薪制</option>
-                </select>
-              </Field>
-              {form.salary_type === 'monthly' ? (
-                <Field label="月底薪 (NT$)">
-                  <input className="form-input" type="number" style={{ width: '100%' }} placeholder="28000" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
-                </Field>
-              ) : (
-                <Field label="時薪 (NT$)">
-                  <input className="form-input" type="number" style={{ width: '100%' }} placeholder="183" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
-                </Field>
-              )}
-            </div>
-            <Field label="每週工時上限">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="40" value={form.weekly_hours} onChange={e => set('weekly_hours', e.target.value)} />
-            </Field>
-          </div>
-        </Modal>
-      )}
+      <EmployeeFormModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        departments={departments}
+        locations={locations}
+        employees={employees}
+        form={form}
+        setForm={setForm}
+        onSubmit={handleSubmit}
+      />
 
       {/* 離職 Modal */}
-      {showResignModal && selectedEmp && (
-        <Modal title={`員工離職 — ${selectedEmp.name}`} onClose={() => setShowResignModal(false)} onSubmit={handleResign} submitText="確認離職">
-          <div style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)', fontSize: 13, color: 'var(--accent-red)', marginBottom: 12 }}>
-            將 <b>{selectedEmp.name}</b>（{deptName(selectedEmp.department_id)} · {selectedEmp.position}）設為離職狀態
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="離職日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={resignDate} onChange={e => setResignDate(e.target.value)} />
-            </Field>
-            <Field label="到職日">
-              <input className="form-input" type="text" style={{ width: '100%' }} value={selectedEmp.join_date || '-'} readOnly />
-            </Field>
-          </div>
-          <Field label="離職原因">
-            <textarea className="form-input" style={{ width: '100%', height: 80, resize: 'vertical' }} placeholder="自願離職 / 合約到期 / 資遣 / 退休..."
-              value={resignReason} onChange={e => setResignReason(e.target.value)} />
-          </Field>
-        </Modal>
-      )}
+      <ResignRehireModal
+        mode="resign"
+        open={showResignModal && !!selectedEmp}
+        onClose={() => setShowResignModal(false)}
+        employee={selectedEmp}
+        deptName={deptName}
+        resignDate={resignDate}
+        setResignDate={setResignDate}
+        resignReason={resignReason}
+        setResignReason={setResignReason}
+        onSubmit={handleResign}
+      />
 
       {/* 復職 Modal */}
-      {showRehireModal && selectedEmp && (
-        <Modal title={`員工復職 — ${selectedEmp.name}`} onClose={() => setShowRehireModal(false)} onSubmit={handleRehire} submitText="確認復職">
-          <div style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', fontSize: 13, color: 'var(--accent-green)' }}>
-            將 <b>{selectedEmp.name}</b> 恢復為在職狀態
-          </div>
-          {selectedEmp.resign_date && (
-            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-              離職日期：{selectedEmp.resign_date}<br />
-              離職原因：{selectedEmp.resign_reason || '-'}
-            </div>
-          )}
-        </Modal>
-      )}
+      <ResignRehireModal
+        mode="rehire"
+        open={showRehireModal && !!selectedEmp}
+        onClose={() => setShowRehireModal(false)}
+        employee={selectedEmp}
+        deptName={deptName}
+        onSubmit={handleRehire}
+      />
 
       {showCsvImport && (
         <AssignmentCsvImport

@@ -23,43 +23,29 @@ export function createRetryMiddleware(config = {}) {
   const { maxRetries, baseDelayMs, maxJitterMs } = { ...DEFAULT_CONFIG, ...config }
 
   return async function retryMiddleware(event, next) {
-    // Store original handler errors for comparison
-    const originalErrors = event._handlerErrors ? [...event._handlerErrors] : null
-
+    // First attempt: run remaining middleware chain + transport delivery
     await next()
 
-    // If no handler errors occurred, nothing to retry
-    if (!event._handlerErrors || event._handlerErrors.length === 0) return
+    if (!event._handlerErrors?.length) return
 
-    // Retry only the failed handlers
-    const failedErrors = event._handlerErrors
-    event._retryAttempts = event._retryAttempts || 0
-
-    if (event._retryAttempts >= maxRetries) {
-      // Max retries exceeded — let DLQ middleware handle it
-      console.warn(
-        `[Retry] Event ${event.id} (${event.type}) exceeded ${maxRetries} retries. Sending to DLQ.`
+    // After the first next() completes the chain index is exhausted, so
+    // subsequent next() calls go directly to transport — intentionally
+    // retrying only handler delivery, not audit/idempotency/etc.
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * maxJitterMs
+      console.debug(
+        `[Retry] ${event.type} (${event.id}) attempt ${attempt}/${maxRetries} in ${Math.round(delay)}ms`
       )
-      return
+      await sleep(delay)
+      event._handlerErrors = []
+      event._retryAttempts = attempt
+      await next()  // index past chain — calls transport directly
+      if (!event._handlerErrors?.length) return
     }
 
-    event._retryAttempts++
-    const delay = baseDelayMs * Math.pow(2, event._retryAttempts - 1) + Math.random() * maxJitterMs
-
-    console.debug(
-      `[Retry] Event ${event.id} (${event.type}) retry ${event._retryAttempts}/${maxRetries} in ${Math.round(delay)}ms`
+    console.warn(
+      `[Retry] ${event.type} (${event.id}) exhausted ${maxRetries} retries. Routing to DLQ.`
     )
-
-    await sleep(delay)
-
-    // Clear errors for retry attempt
-    event._handlerErrors = []
-
-    // Re-run transport delivery (next was already called, so we re-trigger)
-    // The transport will re-invoke matching handlers
-    await next()
-
-    // If still failing after retry, errors remain on event for DLQ
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment, memo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Plus, ChevronDown, ChevronUp, Send, FileText, DollarSign, Users, CheckCircle, Download, Upload, Gift, Receipt, Shield } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getPayrollRuns, getPayrollRecords, getActiveEmployees, updatePayrollRun, upsertSalaryRecord } from '../../lib/db'
@@ -6,9 +6,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
-
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import ImportModal from './components/ImportModal'
+import YearEndBonusModal from './components/YearEndBonusModal'
+import PayslipRow from './components/PayslipRow'
+
 const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 
 const STATUS_STYLES = {
@@ -32,15 +35,7 @@ export default function Payroll() {
   const [finalizing, setFinalizing] = useState(false)
   const [exportingBank, setExportingBank] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
-  const [importFile, setImportFile] = useState(null)
-  const [importPreview, setImportPreview] = useState([])
-  const [importHeaders, setImportHeaders] = useState([])
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState(null)
   const [showYearEndModal, setShowYearEndModal] = useState(false)
-  const [yearEndYear, setYearEndYear] = useState(new Date().getFullYear())
-  const [yearEndMonths, setYearEndMonths] = useState('')  // 空字串=用 salary_structures 預設
-  const [generatingYearEnd, setGeneratingYearEnd] = useState(false)
 
   const loadData = () => {
     setLoading(true)
@@ -177,36 +172,10 @@ export default function Payroll() {
     }
   }
 
-  // 二代健保補充保費（now stored in DB, fallback to legacy calc if not set）
-  const suppNhi = (rec) => {
-    if (rec.nhi_supplementary != null) return rec.nhi_supplementary
-    const bonus = (rec.bonus_total || 0)
-    return Math.round(Math.max(0, bonus - 2000) * 0.0211)
-  }
-
-  // 年終獎金結算
-  const handleGenerateYearEnd = async () => {
-    if (!yearEndYear) return
-    if (!(await confirm({ message: `確定產生 ${yearEndYear} 年度年終獎金結算？\n${yearEndMonths ? `所有員工統一給 ${yearEndMonths} 個月` : '依員工 salary_structures 各自的設定計算'}\n\n注意：同年度只能跑一次，重跑需先刪除既有 run。` }))) return
-    setGeneratingYearEnd(true)
-    try {
-      const { data, error } = await supabase.rpc('generate_year_end_bonus', {
-        p_year: yearEndYear,
-        p_months_override: yearEndMonths ? Number(yearEndMonths) : null,
-        p_created_by: profile?.id ?? null,
-      })
-      if (error) throw error
-      const result = data?.[0] || data
-      toast.error(`年終獎金結算完成！\n發放 ${result?.records_created || 0} 人，總金額 NT$ ${(result?.total_amount || 0).toLocaleString()}`)
-      const { data: freshRuns } = await getPayrollRuns()
-      setRuns(freshRuns || [])
-      setShowYearEndModal(false)
-    } catch (err) {
-      console.error('Year-end bonus failed:', err)
-      toast.error('結算失敗：' + (err.message || '未知錯誤'))
-    } finally {
-      setGeneratingYearEnd(false)
-    }
+  // 年終獎金結算完成後重刷 runs
+  const handleYearEndComplete = async () => {
+    const { data: freshRuns } = await getPayrollRuns()
+    setRuns(freshRuns || [])
   }
 
   // 勞退提繳清冊匯出（CSV）
@@ -378,147 +347,6 @@ ${rec.notes ? `<div style="margin-top:12px;padding:8px;background:#f5f5f5;border
     win.document.close()
   }
 
-  // ── 薪資 CSV 匯入（新版：對應 payroll_records 完整欄位） ──
-  // 支援老闆 Excel 格式：前 N 行標題 → 找包含「姓名」的 header row → 跳「總計」row
-
-  // 中文 header → DB column。沒對應的 column 就 ignore。
-  // 重複欄位（資食費 vs 伙食津貼）以前者為準。
-  const COLUMN_MAP = {
-    '本薪': 'base_salary',
-    '底薪': 'base_insured',
-    '伙食津貼': 'meal_allowance',
-    '資食費': 'meal_allowance',          // 老闆 Excel 有兩個都叫伙食的欄位，後面這個會覆蓋前面
-    '主管加給': 'supervisor_allowance',
-    '夜班津貼': 'night_shift_allowance',
-    '跨區津貼': 'cross_store_allowance',
-    '加班費': 'overtime_pay_weekday',
-    '額外加班費': 'overtime_pay_holiday',
-    '公休薪資': 'rest_day_unused_pay',
-    '補發前期差額': 'back_pay_adjustment',
-    '休息未休': 'unused_leave_payout',
-    '折扣差額': 'commission',             // 暫對到 commission；老闆若有差額分類再細分
-    '勞保費': 'labor_ins_employee',
-    '健保費': 'health_ins_employee',
-    '員工自提退休': 'labor_pension_employee',
-    '請假扣款(有薪)': 'paid_leave_deduction',
-    '請假扣款(無薪)': 'unpaid_leave_deduction',
-    '法扣項目': 'legal_deduction_total',
-    '應付總計': 'gross_salary',
-    '實際薪資': 'net_salary',
-    '勞保費(公司負擔)': 'labor_ins_employer',
-    '健保費(公司負擔)': 'health_ins_employer',
-    '員工退休金提撥(公司負擔)': 'labor_pension_employer',
-  }
-
-  // 從原始字串抓 yyyy-MM（例：「2026年04月 台中永春門市 薪資表」→ "2026-04"）
-  const extractPayPeriod = (lines) => {
-    for (const line of lines.slice(0, 5)) {
-      const m = line.match(/(\d{4})\D{0,3}(\d{1,2})/)
-      if (m) return `${m[1]}-${m[2].padStart(2, '0')}`
-    }
-    return null
-  }
-
-  // 找 header row（包含「姓名」欄）
-  const findHeaderRowIdx = (lines) => {
-    return lines.findIndex(l => l.split(',').some(c => c.trim() === '姓名'))
-  }
-
-  const handleImportFileChange = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImportFile(file)
-    setImportResult(null)
-    const reader = new FileReader()
-    reader.onload = (evt) => {
-      const text = evt.target.result.replace(/^﻿/, '') // strip BOM
-      const lines = text.split(/\r?\n/).filter(l => l.trim())
-      const headerIdx = findHeaderRowIdx(lines)
-      if (headerIdx < 0) {
-        setImportHeaders([])
-        setImportPreview([])
-        toast.error('找不到 header row（沒有「姓名」欄位）')
-        return
-      }
-      const headers = lines[headerIdx].split(',').map(s => s.trim())
-      setImportHeaders(headers)
-      // 預覽接下來 5 row（跳掉「總計」row）
-      const preview = lines.slice(headerIdx + 1, headerIdx + 1 + 8)
-        .map(l => l.split(','))
-        .filter(cols => {
-          const nameIdx = headers.indexOf('姓名')
-          const name = cols[nameIdx]?.trim()
-          return name && name !== '總計'
-        })
-        .slice(0, 5)
-      setImportPreview(preview)
-    }
-    reader.readAsText(file, 'utf-8')
-  }
-
-  // 確認匯入：對每一筆 row 呼叫 payroll_import_row RPC
-  const handleConfirmImport = async () => {
-    if (!importFile) return
-    setImporting(true)
-    setImportResult(null)
-    try {
-      const text = (await importFile.text()).replace(/^﻿/, '')
-      const lines = text.split(/\r?\n/).filter(l => l.trim())
-      const payPeriod = extractPayPeriod(lines)
-      if (!payPeriod) throw new Error('無法從 CSV 抓出年月（前 5 行需有 yyyy/MM 格式）')
-
-      const headerIdx = findHeaderRowIdx(lines)
-      if (headerIdx < 0) throw new Error('找不到 header row（含「姓名」欄）')
-      const headers = lines[headerIdx].split(',').map(s => s.trim())
-      const nameIdx = headers.indexOf('姓名')
-      const dataLines = lines.slice(headerIdx + 1)
-
-      // 員工名 → id 的 map（用 employees 已載入的）
-      const empByName = {}
-      employees.forEach(e => { empByName[e.name] = e })
-
-      let success = 0, failed = 0, errors = []
-      for (const line of dataLines) {
-        const cols = line.split(',')
-        const empName = cols[nameIdx]?.trim()
-        if (!empName || empName === '總計' || empName === '合計') continue
-        const emp = empByName[empName]
-        if (!emp) {
-          failed++
-          errors.push(`找不到員工：${empName}`)
-          continue
-        }
-        // 建 payload：依 COLUMN_MAP 把中文 header 對應到 DB 欄
-        const payload = {
-          pay_period: payPeriod,
-          employee_id: emp.id,
-          organization_id: profile?.organization_id,
-        }
-        headers.forEach((h, idx) => {
-          const dbCol = COLUMN_MAP[h]
-          if (!dbCol) return
-          const v = (cols[idx] || '').trim().replace(/[",]/g, '')
-          if (v && !isNaN(Number(v))) payload[dbCol] = Number(v)
-        })
-        try {
-          const { data, error } = await supabase.rpc('payroll_import_row', { p_payload: payload })
-          if (error) throw error
-          if (!data?.ok) throw new Error(data?.error || '未知錯誤')
-          success++
-        } catch (e) {
-          failed++
-          errors.push(`${empName}: ${e.message}`)
-        }
-      }
-      setImportResult({ success, failed, errors: errors.slice(0, 10), payPeriod })
-      if (success > 0) loadData()
-    } catch (err) {
-      console.error('Import failed:', err)
-      toast.error('匯入失敗：' + (err.message || '未知錯誤'))
-    } finally {
-      setImporting(false)
-    }
-  }
 
   // Summary for selected run
   const summary = useMemo(() => {
@@ -732,131 +560,12 @@ ${rec.notes ? `<div style="margin-top:12px;padding:8px;background:#f5f5f5;border
                                       </td>
                                     </tr>
                                     {isExpanded && (
-                                      <tr style={{ background: 'var(--bg-tertiary)' }}>
-                                        <td colSpan={6} style={{ padding: '16px 20px' }}>
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                                            {/* Income */}
-                                            <div>
-                                              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-green)' }}>收入項目</div>
-                                              <DetailRow label="本薪" value={fmt(rec.base_salary)} />
-                                              {rec.base_insured > 0 && rec.base_insured !== rec.base_salary && (
-                                                <DetailRow label="└ 申報底薪" value={fmt(rec.base_insured)} />
-                                              )}
-                                              {rec.supervisor_allowance > 0 && <DetailRow label="主管加給" value={fmt(rec.supervisor_allowance)} />}
-                                              <DetailRow label="職務津貼" value={fmt(rec.role_allowance)} />
-                                              {rec.night_shift_allowance > 0 && <DetailRow label="夜班津貼" value={fmt(rec.night_shift_allowance)} />}
-                                              {rec.cross_store_allowance > 0 && <DetailRow label="跨區津貼" value={fmt(rec.cross_store_allowance)} />}
-                                              <DetailRow label="伙食津貼" value={fmt(rec.meal_allowance)} />
-                                              <DetailRow label="交通津貼" value={fmt(rec.transport_allowance)} />
-                                              <DetailRow label="全勤獎金" value={fmt(rec.attendance_bonus_earned)} />
-                                              <DetailRow label="加班費" value={fmt(rec.overtime_pay)} />
-                                              {(rec.overtime_pay_weekday > 0 || rec.overtime_pay_restday > 0 || rec.overtime_pay_holiday > 0 || rec.overtime_pay_national > 0) && (
-                                                <>
-                                                  {rec.overtime_pay_weekday > 0 && <DetailRow label="└ 平日加班" value={fmt(rec.overtime_pay_weekday)} />}
-                                                  {rec.overtime_pay_restday > 0 && <DetailRow label="└ 休息日加班" value={fmt(rec.overtime_pay_restday)} />}
-                                                  {rec.overtime_pay_holiday > 0 && <DetailRow label="└ 例假加班" value={fmt(rec.overtime_pay_holiday)} />}
-                                                  {rec.overtime_pay_national > 0 && <DetailRow label="└ 國定加班" value={fmt(rec.overtime_pay_national)} />}
-                                                </>
-                                              )}
-                                              {rec.rest_day_unused_pay > 0 && <DetailRow label="休息未休補償" value={fmt(rec.rest_day_unused_pay)} />}
-                                              {rec.back_pay_adjustment > 0 && <DetailRow label="補發前期差額" value={fmt(rec.back_pay_adjustment)} />}
-                                              {rec.performance_bonus > 0 && <DetailRow label="績效獎金" value={fmt(rec.performance_bonus)} />}
-                                              {rec.commission > 0 && <DetailRow label="業績/差額" value={fmt(rec.commission)} />}
-                                              {rec.festival_bonus > 0 && <DetailRow label="三節獎金" value={fmt(rec.festival_bonus)} />}
-                                              {rec.other_bonus > 0 && <DetailRow label="其他獎金" value={fmt(rec.other_bonus)} />}
-                                              {rec.year_end_bonus > 0 && <DetailRow label="年終獎金" value={fmt(rec.year_end_bonus)} />}
-                                              {rec.unused_leave_payout > 0 && <DetailRow label={`未休特休折現（${rec.unused_leave_days || 0} 天）`} value={fmt(rec.unused_leave_payout)} />}
-                                              {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
-                                                <>
-                                                  {rec.custom_allowances_breakdown.map((c, i) => (
-                                                    <DetailRow key={i} label={`└ ${c.name}`} value={fmt(c.amount)} />
-                                                  ))}
-                                                  <DetailRow label="自訂津貼合計" value={fmt(rec.custom_allowances_total)} bold />
-                                                </>
-                                              )}
-                                              <DetailRow label="應發合計" value={fmt(rec.gross_salary)} bold />
-                                            </div>
-                                            {/* Deductions */}
-                                            <div>
-                                              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-red)' }}>扣除項目</div>
-                                              {rec.paid_leave_deduction > 0 && <DetailRow label="請假扣款（有薪）" value={fmt(rec.paid_leave_deduction)} />}
-                                              {rec.unpaid_leave_deduction > 0 && <DetailRow label="請假扣款（無薪）" value={fmt(rec.unpaid_leave_deduction)} />}
-                                              {(rec.leave_deduction > 0 && !rec.paid_leave_deduction && !rec.unpaid_leave_deduction) && (
-                                                <DetailRow label="請假扣款" value={fmt(rec.leave_deduction)} />
-                                              )}
-                                              {rec.late_deduction > 0 && <DetailRow label="遲到扣款" value={fmt(rec.late_deduction)} />}
-                                              {rec.advance_recovery > 0 && <DetailRow label="預支扣回" value={fmt(rec.advance_recovery)} />}
-                                              <DetailRow label="勞保（個人）" value={fmt(rec.labor_ins_employee)} />
-                                              <DetailRow label="健保（個人）" value={fmt(rec.health_ins_employee)} />
-                                              <DetailRow label="勞退（個人）" value={fmt(rec.labor_pension_employee)} />
-                                              <DetailRow label="代扣所得稅" value={fmt(rec.income_tax_withheld)} />
-                                              {suppNhi(rec) > 0 && (
-                                                <DetailRow label="二代健保補充保費 (2.11%)" value={fmt(suppNhi(rec))} />
-                                              )}
-                                              {Array.isArray(rec.nhi_supplementary_breakdown) && rec.nhi_supplementary_breakdown.length > 0 && (
-                                                rec.nhi_supplementary_breakdown.map((n, i) => (
-                                                  <DetailRow key={`nhi-${i}`} label={`└ ${n.category}`} value={fmt(n.premium)} />
-                                                ))
-                                              )}
-                                              {Array.isArray(rec.legal_deduction_breakdown) && rec.legal_deduction_breakdown.length > 0 && (
-                                                <>
-                                                  {rec.legal_deduction_breakdown.map((d, i) => (
-                                                    <DetailRow
-                                                      key={i}
-                                                      label={`└ ${d.title}${d.shortfall > 0 ? ' ⚠️' : ''}`}
-                                                      value={fmt(d.amount)}
-                                                    />
-                                                  ))}
-                                                  <DetailRow label="法扣合計" value={fmt(rec.legal_deduction_total)} bold />
-                                                </>
-                                              )}
-                                              <DetailRow label="扣除合計" value={fmt(rec.total_deductions)} bold />
-                                              {Array.isArray(rec.legal_deduction_breakdown) &&
-                                                rec.legal_deduction_breakdown.some(d => d.shortfall > 0) && (
-                                                <div style={{
-                                                  marginTop: 6, fontSize: 11, color: 'var(--accent-orange)',
-                                                  padding: '4px 8px', background: 'rgba(251,146,60,0.08)',
-                                                  borderRadius: 6,
-                                                }}>
-                                                  ⚠️ 部分法扣金額不足當月扣完，已自動延後到下月
-                                                </div>
-                                              )}
-                                            </div>
-                                            {/* Summary */}
-                                            <div>
-                                              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-cyan)' }}>其他資訊</div>
-                                              <DetailRow label="實際工時" value={rec.hours_worked != null ? `${rec.hours_worked} 小時` : '-'} />
-                                              <DetailRow label="實發薪資" value={fmt(rec.net_salary)} bold />
-                                              <DetailRow label="薪資單發送" value={rec.payslip_sent_at ? new Date(rec.payslip_sent_at).toLocaleString('zh-TW') : '尚未發送'} />
-                                              <button
-                                                onClick={() => printPayslip(rec, empMap[rec.employee_id], selectedRun)}
-                                                style={{
-                                                  marginTop: 12, padding: '8px 16px', borderRadius: 8,
-                                                  background: 'var(--accent-cyan)', color: '#fff',
-                                                  border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                                                  display: 'flex', alignItems: 'center', gap: 6,
-                                                }}
-                                              >🧾 列印薪資條</button>
-                                            </div>
-                                            {/* 公司負擔 */}
-                                            <div>
-                                              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--accent-purple)' }}>公司負擔</div>
-                                              <DetailRow label="勞保（公司）" value={fmt(rec.labor_ins_employer)} />
-                                              <DetailRow label="健保（公司）" value={fmt(rec.health_ins_employer)} />
-                                              <DetailRow label="勞退提撥（6%）" value={fmt(rec.labor_pension_employer)} />
-                                              {rec.occupational_injury_employer > 0 && (
-                                                <DetailRow label="職災保險" value={fmt(rec.occupational_injury_employer)} />
-                                              )}
-                                              {rec.nhi_supplementary_employer > 0 && (
-                                                <DetailRow label="二代健保補充（公司）" value={fmt(rec.nhi_supplementary_employer)} />
-                                              )}
-                                              {rec.employer_total_cost > 0 && (
-                                                <DetailRow label="公司總成本" value={fmt(rec.employer_total_cost)} bold />
-                                              )}
-                                            </div>
-                                          </div>
-                                        </td>
-                                      </tr>
+                                      <PayslipRow
+                                        record={rec}
+                                        employee={emp}
+                                        selectedRun={selectedRun}
+                                        printPayslip={printPayslip}
+                                      />
                                     )}
                                   </Fragment>
                                 )
@@ -887,109 +596,20 @@ ${rec.notes ? `<div style="margin-top:12px;padding:8px;background:#f5f5f5;border
         </Modal>
       )}
 
-      {/* Year-End Bonus Modal */}
-      {showYearEndModal && (
-        <Modal title="年終獎金結算" onClose={() => setShowYearEndModal(false)} onSubmit={handleGenerateYearEnd} submitLabel={generatingYearEnd ? '結算中...' : '產生年終獎金'}>
-          <Field label="年度">
-            <input className="form-input" type="number" value={yearEndYear} onChange={e => setYearEndYear(Number(e.target.value))} min="2020" max="2099" />
-          </Field>
-          <Field label="統一月數覆寫（空白=用各員工 salary_structures 設定）">
-            <input className="form-input" type="number" step="0.5" value={yearEndMonths} onChange={e => setYearEndMonths(e.target.value)} placeholder="例：1.5" />
-          </Field>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8, lineHeight: 1.6 }}>
-            <b>計算方式：</b>每員工年終 = base_salary × 月數<br />
-            <b>稅務：</b>使用月度扣繳級距計算所得稅<br />
-            <b>二代健保：</b>累計年度獎金超過月投保 4 倍門檻時，超出部分扣 2.11%<br />
-            <b>注意：</b>同年度只能跑 1 次（pay_period='YYYY-13'），重跑需先刪除既有 run<br />
-            <b>對象：</b>當年度在職 + 當年度離職員工
-          </div>
-        </Modal>
-      )}
+      <YearEndBonusModal
+        open={showYearEndModal}
+        onClose={() => setShowYearEndModal(false)}
+        runs={runs}
+        onComplete={handleYearEndComplete}
+      />
 
-      {/* Import Payroll Modal */}
-      {showImportModal && (
-        <Modal
-          title="匯入薪資"
-          onClose={() => {
-            setShowImportModal(false)
-            setImportFile(null)
-            setImportPreview([])
-            setImportHeaders([])
-            setImportResult(null)
-          }}
-          onSubmit={importResult ? null : handleConfirmImport}
-          submitLabel={importing ? '匯入中...' : '確認匯入'}
-          submitDisabled={importing || !importFile || importPreview.length === 0}
-        >
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-            請上傳 CSV 格式（UTF-8 with BOM）<br />
-            欄位順序：<code style={{ fontSize: 12 }}>員工姓名,月份(YYYY-MM),基本薪資,津貼,加班費,扣除項,勞保,淨薪資</code>
-          </div>
-          <Field label="選擇檔案">
-            <input
-              className="form-input"
-              type="file"
-              accept=".csv"
-              onChange={handleImportFileChange}
-            />
-          </Field>
-          {importPreview.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>預覽（前 {importPreview.length} 筆）</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-tertiary)' }}>
-                      {importHeaders.map((h, i) => (
-                        <th key={i} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importPreview.map((row, ri) => (
-                      <tr key={ri} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        {row.map((cell, ci) => (
-                          <td key={ci} style={{ padding: '5px 10px', color: 'var(--text-secondary)' }}>{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {importResult && (
-            <div style={{
-              marginTop: 12, padding: '10px 14px', borderRadius: 8,
-              background: importResult.failed === 0 ? 'rgba(0,200,150,0.1)' : 'rgba(251,146,60,0.1)',
-              color: importResult.failed === 0 ? 'var(--accent-green)' : 'var(--accent-orange)',
-              fontSize: 13, fontWeight: 600,
-            }}>
-              <div>
-                匯入完成 {importResult.payPeriod && `(${importResult.payPeriod})`}：成功 {importResult.success} 筆
-                {importResult.failed > 0 ? `，失敗 ${importResult.failed} 筆` : ''}
-              </div>
-              {importResult.errors?.length > 0 && (
-                <div style={{ fontSize: 11, fontWeight: 400, marginTop: 6, color: 'var(--accent-red)', maxHeight: 120, overflowY: 'auto' }}>
-                  {importResult.errors.map((e, i) => <div key={i}>• {e}</div>)}
-                  {importResult.failed > importResult.errors.length && (
-                    <div style={{ fontStyle: 'italic', marginTop: 4 }}>... 還有 {importResult.failed - importResult.errors.length} 筆錯誤未顯示</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </Modal>
-      )}
+      <ImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        employees={employees}
+        onImportComplete={loadData}
+      />
     </div>
   )
 }
 
-const DetailRow = memo(function DetailRow({ label, value, bold }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13 }}>
-      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ fontWeight: bold ? 700 : 400, color: 'var(--text-primary)' }}>{value}</span>
-    </div>
-  )
-})

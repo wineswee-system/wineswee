@@ -99,7 +99,7 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     if (!form.title) return
-    const { data } = await createTask({ ...form, status: '未開始' })
+    const { data } = await createTask({ ...form, status: '未開始', organization_id: profile?.organization_id || null })
     if (data) {
       setTasks(prev => [data, ...prev])
       setShowModal(false)
@@ -327,7 +327,7 @@ export default function Tasks() {
                   </select>
                   <select className="form-input" style={{ padding: '2px 6px', fontSize: 12, minWidth: 0 }}
                     value={t.status}
-                    onChange={e => handleStatusChange(t.id, e.target.value === '未開始' ? '待處理' : e.target.value)}>
+                    onChange={e => handleStatusChange(t.id, e.target.value)}>
                     {statusOpts.map(s => <option key={s}>{s}</option>)}
                   </select>
                   <button title="編輯" style={iconBtnStyle}

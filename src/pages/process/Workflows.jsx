@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { toast } from '../../lib/toast'
 import {
-  Plus, Pencil, Trash2, ChevronRight, CheckCircle,
-  X, Users, User, Play, Pause, Rocket, Archive,
+  Plus, Pencil, ChevronRight, CheckCircle,
+  Users, User, Play, Pause, Rocket, Archive,
   ClipboardList, Square, RotateCcw, Ban, ChevronDown, Search
 } from 'lucide-react'
 import { empLabel } from '../../lib/empLabel'
@@ -16,7 +15,6 @@ import {
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
@@ -30,9 +28,15 @@ import ActiveInstancesList from './components/ActiveInstancesList'
 import TemplatesList from './components/TemplatesList'
 import ArchivedInstancesList from './components/ArchivedInstancesList'
 import { generateFlowByRules } from './components/flowTemplates'
+import BlankWorkflowModal from './components/BlankWorkflowModal'
+import NewWorkflowMenu from './components/NewWorkflowMenu'
+import WorkflowCategoriesModal from './components/WorkflowCategoriesModal'
 
 import { confirm } from '../../lib/confirm'
 import { HR_APPROVAL_TEMPLATE_NAMES } from '../../lib/workflowIntegration'
+
+const TRIGGER_DEPTH_LIMIT = 5
+
 export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
   const currentUser = profile?.name || '管理員'
@@ -152,7 +156,8 @@ export default function Workflows() {
     //   「已完成 + 有 chain」攔截轉 '待確認' + 建 task_confirmations，
     //   前端不需要繞道，直接送 '已完成' 讓 DB 處理。
     const completedAt = newStatus === '已完成' ? new Date().toISOString() : null
-    const { data } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
+    const { data, error } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
+    if (error) { toast.error('更新失敗：' + error.message); return }
     if (data) {
       const updatedTasks = tasks.map(t => t.id === taskId ? data : t)
       setAllTasks(updatedTasks)
@@ -195,7 +200,6 @@ export default function Workflows() {
   //   來源：tasks.trigger_template_id_on_complete（部署時設定）
   //   行為：建一個新 workflow_instance + 對應 tasks，第 1 步進行中 + 通知
   //   防護：trigger_depth 上限 5，避免「A→B→A」無限迴圈把資料庫塞爆
-  const TRIGGER_DEPTH_LIMIT = 5
   const triggerSopOnComplete = async (templateId, sourceTask) => {
     const tpl = templates.find(t => t.id === Number(templateId))
     if (!tpl) return
@@ -273,7 +277,7 @@ export default function Workflows() {
 
     for (const dep of deps) {
       const targetTask = instTasks.find(t => t.id === dep.task_id)
-      if (!targetTask || targetTask.status !== '待簽核') continue
+      if (!targetTask || targetTask.status !== '待處理') continue
 
       const { data: allPrereqs } = await supabase.from('task_dependencies')
         .select('depends_on_task_id').eq('task_id', dep.task_id).eq('dep_type', 'prerequisite')
@@ -1224,142 +1228,36 @@ export default function Workflows() {
 
       {/* ══ Blank Workflow Modal ══ */}
       {showBlankWorkflowModal && (
-        <Modal
-          title="建立空白流程"
+        <BlankWorkflowModal
+          blankWorkflowForm={blankWorkflowForm}
+          setBlankWorkflowForm={setBlankWorkflowForm}
+          employees={employees}
+          stores={stores}
           onClose={() => setShowBlankWorkflowModal(false)}
           onSubmit={handleCreateBlankWorkflow}
-          submitLabel="建立"
-        >
-          <Field label="流程名稱" required>
-            <input className="form-input" placeholder="例：新店開幕準備" autoFocus
-              value={blankWorkflowForm.name}
-              onChange={e => setBlankWorkflowForm(p => ({ ...p, name: e.target.value }))}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateBlankWorkflow() } }}
-            />
-          </Field>
-          <Field label="門市／地點">
-            <select className="form-input" value={blankWorkflowForm.store} onChange={e => setBlankWorkflowForm(p => ({ ...p, store: e.target.value }))}>
-              <option value="">— 選擇門市 —</option>
-              {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
-          </Field>
-          <Field label="負責人">
-            <SearchableSelect
-              value={blankWorkflowForm.assignee}
-              onChange={(v) => setBlankWorkflowForm(p => ({ ...p, assignee: v || '' }))}
-              options={empOptions(employees, { keyBy: 'name' })}
-              placeholder="搜尋負責人..."
-            />
-          </Field>
-          <Field label="截止日期">
-            <input className="form-input" type="date"
-              value={blankWorkflowForm.due_date}
-              onChange={e => setBlankWorkflowForm(p => ({ ...p, due_date: e.target.value }))}
-            />
-          </Field>
-        </Modal>
+        />
       )}
 
       {/* ══ New Workflow Chooser Overlay ══ */}
-      {showNewWorkflowMenu && createPortal(
-        <div
-          onClick={() => setShowNewWorkflowMenu(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 10000,
-            background: 'rgba(0,0,0,0.55)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
-              borderRadius: 16, padding: 32, width: 420, maxWidth: '92vw',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>新增流程</h3>
-              <button onClick={() => setShowNewWorkflowMenu(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
-                <X size={18} />
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                {
-                  icon: '📄',
-                  label: '建立空白流程',
-                  desc: '從頭手動填寫步驟與設定',
-                  action: () => { setShowNewWorkflowMenu(false); setShowBlankWorkflowModal(true) },
-                },
-                {
-                  icon: '📁',
-                  label: '從範本建立',
-                  desc: '選擇現有 SOP 範本快速部署',
-                  action: () => { setShowNewWorkflowMenu(false); setTab('templates') },
-                },
-                {
-                  icon: '🤖',
-                  label: 'AI 助手建立',
-                  desc: '描述需求，讓 AI 自動生成流程',
-                  action: () => { setShowNewWorkflowMenu(false); setTab('ai') },
-                },
-              ].map(opt => (
-                <button
-                  key={opt.label}
-                  onClick={opt.action}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 16,
-                    padding: '16px 20px', borderRadius: 12, cursor: 'pointer',
-                    background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
-                    textAlign: 'left', transition: 'border-color 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
-                >
-                  <span style={{ fontSize: 28, lineHeight: 1 }}>{opt.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>{opt.label}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{opt.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showNewWorkflowMenu && (
+        <NewWorkflowMenu
+          onClose={() => setShowNewWorkflowMenu(false)}
+          onBlank={() => { setShowNewWorkflowMenu(false); setShowBlankWorkflowModal(true) }}
+          onFromTemplate={() => { setShowNewWorkflowMenu(false); setTab('templates') }}
+          onAi={() => { setShowNewWorkflowMenu(false); setTab('ai') }}
+        />
       )}
 
       {/* ══ Workflow Categories Modal ══ */}
       {showCategoryModal && (
-        <Modal title="管理流程分類" onClose={() => setShowCategoryModal(false)} onSubmit={() => setShowCategoryModal(false)} submitLabel="完成">
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <input className="form-input" type="text" placeholder="新分類名稱" style={{ flex: 1 }}
-              value={newCategoryName}
-              onChange={e => setNewCategoryName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory() } }} />
-            <button className="btn btn-primary" onClick={handleAddCategory} style={{ fontSize: 13 }}>
-              <Plus size={13} /> 新增
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {categories.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>尚無分類</div>
-            ) : categories.map(c => (
-              <div key={c.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 12px', borderRadius: 8,
-                background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
-              }}>
-                <span style={{ fontSize: 13 }}>{c.name}</span>
-                <button onClick={() => handleDeleteCategory(c)} style={{
-                  background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4,
-                }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Modal>
+        <WorkflowCategoriesModal
+          categories={categories}
+          newCategoryName={newCategoryName}
+          setNewCategoryName={setNewCategoryName}
+          onAdd={handleAddCategory}
+          onDelete={handleDeleteCategory}
+          onClose={() => setShowCategoryModal(false)}
+        />
       )}
     </div>
   )

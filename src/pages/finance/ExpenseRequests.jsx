@@ -17,6 +17,9 @@ import { empLabel } from '../../lib/empLabel'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { safeStorageName } from '../../lib/storageSanitize'
 
+import ExpenseFormModal from './components/ExpenseFormModal'
+import SettleModal from './components/SettleModal'
+
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 const STATUS_COLORS = {
@@ -66,6 +69,7 @@ export default function ExpenseRequests() {
   const [lineItems, setLineItems] = useState([emptyItem()])
   const fileRef = useRef(null)
   const settleFileRef = useRef(null)
+  const csvRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const updateItem = (i, k, v) => setLineItems(items => {
@@ -75,6 +79,33 @@ export default function ExpenseRequests() {
     return n
   })
   const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
+
+  const handleCsvImport = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target.result
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      // skip header row if first cell matches known header
+      const start = /^(品名|name)/i.test(lines[0]) ? 1 : 0
+      const parsed = lines.slice(start).map(line => {
+        const cols = line.split(',')
+        const name = (cols[0] || '').trim()
+        const qty = Number((cols[1] || '').trim()) || 0
+        const unit_price = Number((cols[2] || '').trim()) || 0
+        return { name, qty, unit_price, subtotal: qty * unit_price }
+      }).filter(li => li.name)
+      if (parsed.length === 0) { toast.error('CSV 沒有有效資料'); return }
+      setLineItems(prev => {
+        const cleaned = prev.filter(li => li.name || li.qty || li.unit_price)
+        return [...cleaned, ...parsed]
+      })
+      toast.success(`已匯入 ${parsed.length} 筆品項`)
+    }
+    reader.readAsText(file, 'UTF-8')
+  }
 
   const load = async () => {
     setLoading(true)
@@ -671,273 +702,40 @@ export default function ExpenseRequests() {
       </div>
 
       {/* New Request Modal */}
-      {showModal && (
-        <ModalOverlay onClose={() => { setShowModal(false); setErrors({}) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 520, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-              <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowModal(false); setErrors({}) }}><X size={20} /></button>
-            </div>
-            <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className={errors.employee ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請人 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                <SearchableSelect
-                  value={form.employee}
-                  onChange={(v) => { set('employee', v || ''); clearError('employee', setErrors) }}
-                  options={empOptions(employees, { keyBy: 'name' })}
-                  placeholder="搜尋申請人姓名/部門/門市..."
-                />
-                {errors.employee && <div className="field-error-msg">⚠ 請選擇申請人</div>}
-              </div>
-              {/* Expense / Non-expense toggle */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請類型</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {[{ val: true, label: '費用' }, { val: false, label: '非費用' }].map(opt => (
-                    <button key={String(opt.val)} type="button"
-                      onClick={() => { setIsExpense(opt.val); set('account_code', '') }}
-                      style={{
-                        flex: 1, padding: '7px 0', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                        background: isExpense === opt.val ? 'var(--accent-blue)' : 'var(--bg-main)',
-                        color: isExpense === opt.val ? '#fff' : 'var(--text-secondary)',
-                        border: isExpense === opt.val ? 'none' : '1px solid var(--border)',
-                      }}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {isExpense && (
-                <div className={errors.account_code ? 'field-error' : undefined}>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>會計科目 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                  <select value={form.account_code} onChange={e => { set('account_code', e.target.value); clearError('account_code', setErrors) }}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                    <option value="">請選擇科目</option>
-                    {Object.entries(
-                      accounts.filter(a => a.type === '費用')
-                        .reduce((groups, a) => {
-                          const group = a.parent_code ? `${a.type} ─ 子科目` : a.type || '其他'
-                          if (!groups[group]) groups[group] = []
-                          groups[group].push(a)
-                          return groups
-                        }, {})
-                    ).map(([group, items]) => (
-                      <optgroup key={group} label={`── ${group} ──`}>
-                        {items.map(a => (
-                          <option key={a.id} value={a.code}>
-                            {a.parent_code ? '  └ ' : ''}{a.code}  {a.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {errors.account_code && <div className="field-error-msg">⚠ 請選擇會計科目</div>}
-                </div>
-              )}
-              <div className={errors.title ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>{isExpense ? '項目名稱' : '主旨'} <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                <input type="text" value={form.title} onChange={e => { set('title', e.target.value); clearError('title', setErrors) }} placeholder={isExpense ? '例：採購辦公椅 x5' : '例：派員出席外部研討會'}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                {errors.title && <div className="field-error-msg">⚠ 請填寫{isExpense ? '項目名稱' : '主旨'}</div>}
-              </div>
-              {isExpense && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
-                    <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>門市</label>
-                    <input type="text" value={form.store} onChange={e => set('store', e.target.value)} placeholder="選填"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Line items — 非費用不需要 */}
-              {isExpense && (
-              <div className={errors._total ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-main)' }}>
-                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600 }}>品名</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 70 }}>數量</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>單價</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>小計</th>
-                        <th style={{ width: 32 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lineItems.map((li, i) => (
-                        <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                          <td style={{ padding: 4 }}><input type="text" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="品名" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12 }} /></td>
-                          <td style={{ padding: 4 }}><input type="number" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} placeholder="0" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} /></td>
-                          <td style={{ padding: 4 }}><input type="number" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} placeholder="0" style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} /></td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{li.subtotal ? fmt(li.subtotal) : '-'}</td>
-                          <td style={{ padding: 4 }}>
-                            {lineItems.length > 1 && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }} onClick={() => setLineItems(items => items.filter((_, j) => j !== i))}><X size={14} /></button>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: '2px solid var(--border)' }}>
-                        <td colSpan={3} style={{ padding: '6px 8px' }}>
-                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setLineItems(items => [...items, emptyItem()])}><Plus size={11} /> 新增品項</button>
-                        </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', fontSize: 14, color: 'var(--accent-blue)' }}>{fmt(lineTotal)}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-              )}
-
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>說明</label>
-                <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="用途、規格..."
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 50, resize: 'vertical' }} />
-              </div>
-              {/* File upload — 3 個紅虛線 slot */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>附件（訂購單、報價單...）</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[0, 1, 2].map(idx => {
-                    const file = files[idx]
-                    return (
-                      <label key={idx} style={{
-                        position: 'relative',
-                        border: '2px dashed var(--accent-red)',
-                        borderRadius: 8,
-                        padding: 10,
-                        minHeight: 92,
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        background: file ? 'var(--accent-red-dim)' : 'transparent',
-                        transition: 'background .15s',
-                      }}>
-                        <input type="file"
-                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
-                          style={{ display: 'none' }}
-                          onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            setFiles(prev => {
-                              const next = [...prev]
-                              next[idx] = f
-                              return next
-                            })
-                            e.target.value = ''
-                          }}
-                        />
-                        {file ? (
-                          <>
-                            {file.type?.startsWith('image')
-                              ? <Image size={22} style={{ color: 'var(--accent-red)' }} />
-                              : <FileText size={22} style={{ color: 'var(--accent-red)' }} />}
-                            <div style={{ fontSize: 11, color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.3 }}>
-                              {file.name}
-                            </div>
-                            <button type="button"
-                              onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation()
-                                setFiles(prev => prev.filter((_, j) => j !== idx))
-                              }}
-                              style={{
-                                position: 'absolute', top: 4, right: 4,
-                                background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
-                                color: '#fff', width: 20, height: 20, padding: 0, cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>
-                              <X size={12} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={22} style={{ color: 'var(--accent-red)', opacity: 0.55 }} />
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>點此上傳</div>
-                          </>
-                        )}
-                      </label>
-                    )
-                  })}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
-                  支援格式：JPG / PNG / GIF / WebP / PDF / Excel (XLS、XLSX) / CSV
-                  <br />
-                  單檔最大 10MB · 最多 3 個附件
-                </div>
-              </div>
-            </div>
-            <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-              <button className="btn btn-secondary" onClick={() => { setShowModal(false); setErrors({}) }}>取消</button>
-              <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? '提交中...' : '提交申請'}</button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
+      <ExpenseFormModal
+        open={showModal}
+        onClose={() => { setShowModal(false); setErrors({}) }}
+        form={form}
+        setForm={setForm}
+        lineItems={lineItems}
+        setLineItems={setLineItems}
+        files={files}
+        setFiles={setFiles}
+        employees={employees}
+        accounts={accounts}
+        editingId={editingId}
+        isExpense={isExpense}
+        setIsExpense={setIsExpense}
+        onSubmit={handleSubmit}
+        saving={saving}
+        errors={errors}
+        setErrors={setErrors}
+      />
 
       {/* Settlement Modal */}
-      {showSettleModal && showDetail && (
-        <ModalOverlay onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, width: 480, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-              <h3 style={{ margin: 0 }}>核銷：{showDetail.title}</h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}><X size={20} /></button>
-            </div>
-            <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              預估金額：<strong>{fmt(showDetail.estimated_amount)}</strong>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className={errors.actual_amount ? 'field-error' : undefined}>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>實際金額 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-                <input type="number" value={settleForm.actual_amount} onChange={e => { setSettleForm(f => ({ ...f, actual_amount: e.target.value })); clearError('actual_amount', setErrors) }}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                {errors.actual_amount && <div className="field-error-msg">⚠ 請填寫實際金額</div>}
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>備註</label>
-                <textarea value={settleForm.notes} onChange={e => setSettleForm(f => ({ ...f, notes: e.target.value }))} placeholder="選填"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 60, resize: 'vertical' }} />
-              </div>
-              {/* Receipt upload */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>收據/發票附件</label>
-                <input ref={settleFileRef} type="file" multiple accept="image/*,.pdf"
-                  onChange={e => setSettleFiles(prev => [...prev, ...Array.from(e.target.files)])}
-                  style={{ display: 'none' }} />
-                <button className="btn btn-secondary" onClick={() => settleFileRef.current?.click()} style={{ fontSize: 12 }}>
-                  <Upload size={12} /> 上傳收據
-                </button>
-                {settleFiles.length > 0 && (
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {settleFiles.map((f, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {f.type?.startsWith('image') ? <Image size={12} /> : <FileText size={12} />}
-                        {f.name}
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}
-                          onClick={() => setSettleFiles(prev => prev.filter((_, j) => j !== i))}><X size={12} /></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            </div>
-            <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-              <button className="btn btn-secondary" onClick={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}>取消</button>
-              <button className="btn btn-primary" onClick={handleSettle} disabled={saving}>{saving ? '提交中...' : '提交核銷'}</button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
+      <SettleModal
+        open={showSettleModal && !!showDetail}
+        onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}
+        request={showDetail}
+        settleForm={settleForm}
+        setSettleForm={setSettleForm}
+        settleFiles={settleFiles}
+        setSettleFiles={setSettleFiles}
+        onSubmit={handleSettle}
+        saving={saving}
+        errors={errors}
+        setErrors={setErrors}
+      />
 
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
       {showDetail && !showSettleModal && (() => {

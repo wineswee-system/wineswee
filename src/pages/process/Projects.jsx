@@ -535,7 +535,7 @@ export default function Projects() {
   const activeStatuses = tab === 'active' ? ['規劃中', '進行中'] : tab === 'completed' ? ['已完成'] : ['暫停', '已取消']
   const filtered = projects.filter(p => {
     if (!activeStatuses.includes(p.status)) return false
-    if (search && !p.name?.toLowerCase().includes(search.toLowerCase()) && !p.owner?.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) { const s = search.toLowerCase(); if (!p.name?.toLowerCase().includes(s) && !p.owner?.toLowerCase().includes(s) && !`pj-${p.id}`.includes(s)) return false }
     if (filterOwner && p.owner !== filterOwner) return false
     if (filterStore && p.store !== filterStore) return false
     return true

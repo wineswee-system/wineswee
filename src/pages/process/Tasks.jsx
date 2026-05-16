@@ -135,7 +135,7 @@ export default function Tasks() {
     if (filterBucket && t.bucket !== filterBucket) return false
     if (filterProject && t.projectName !== filterProject) return false
     if (filterWorkflow && t.workflow !== filterWorkflow) return false
-    if (search && !t.title?.toLowerCase().includes(search.toLowerCase()) && !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) { const s = search.toLowerCase(); if (!t.title?.toLowerCase().includes(s) && !t.assignee?.toLowerCase().includes(s) && !`tk-${t.id}`.includes(s)) return false }
     if (tab === 'pending') return t.status === '未開始' || t.status === '待簽核'
     if (tab === 'active') return t.status === '進行中'
     if (tab === 'done') return t.status === '已完成'

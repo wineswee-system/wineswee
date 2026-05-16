@@ -1006,7 +1006,7 @@ export default function Workflows() {
   const HR_TEMPLATE_SET = new Set(HR_APPROVAL_TEMPLATE_NAMES)
   const filteredInstances = instances.filter(i => {
     if (HR_TEMPLATE_SET.has(i.template_name)) return false
-    if (search && !i.template_name?.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) { const s = search.toLowerCase(); if (!i.template_name?.toLowerCase().includes(s) && !`wf-${i.id}`.includes(s)) return false }
     if (filterStore && i.store !== filterStore) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true

@@ -284,11 +284,7 @@ export default function Tasks() {
                 {/* Col 1: task info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                    {t.task_code && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
-                        {t.task_code}
-                      </span>
-                    )}
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>#{t.id}</span>
                     <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t.title}
                     </span>

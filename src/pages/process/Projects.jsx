@@ -42,7 +42,7 @@ const TASK_STATUS_CONFIG = {
 const TASK_STATUS_FALLBACK = TASK_STATUS_CONFIG['未開始']
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
-const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '' }
+const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '', template_id: '' }
 
 export default function Projects() {
   const { profile } = useAuth()
@@ -211,6 +211,7 @@ export default function Projects() {
       budget: form.budget ? Number(form.budget) : null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
+      template_id: form.template_id ? Number(form.template_id) : null,
     }
     if (profile?.organization_id) payload.organization_id = profile.organization_id
     if (editingId) {
@@ -267,6 +268,7 @@ export default function Projects() {
       name: p.name, description: p.description || '', status: p.status, priority: p.priority || '中',
       owner: p.owner || '', department: p.department || '', store: p.store || '',
       start_date: p.start_date || '', end_date: p.end_date || '', budget: p.budget || '',
+      template_id: p.template_id || '',
     })
     setEditingId(p.id)
     setShowModal(true)
@@ -274,7 +276,7 @@ export default function Projects() {
 
   const handleDelete = async (id, e) => {
     e?.stopPropagation()
-    if (!(await confirm({ message: '確定刪除此專案？資料會移入回收暫存區保留備份（可供復原）。' }))) return
+    if (!(await confirm({ title: '刪除專案', message: `確定刪除此專案？所有相關流程與任務的連結將解除，資料會移入回收暫存區備份（可供復原）。此操作無法立即復原。`, confirmLabel: '確認刪除', danger: true }))) return
     const proj = projects.find(p => p.id === id)
     if (proj) {
       await drainEntity({
@@ -447,6 +449,7 @@ export default function Projects() {
         end_date: endDate,
         budget: tpl.estimated_budget,
         organization_id: orgId,
+        template_id: tpl.id,
       }).select().single()
 
       if (!project) throw new Error('建立專案失敗')
@@ -537,7 +540,9 @@ export default function Projects() {
             <div>
               <button className="btn btn-secondary" style={{ marginBottom: 8, fontSize: 12 }} onClick={() => setSelected(null)}>← 返回專案列表</button>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className="header-icon">📁</span> {p.name}
+                <span className="header-icon">📁</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>#{p.id}</span>
+                {p.name}
                 <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
               </h2>
@@ -599,8 +604,10 @@ export default function Projects() {
           {p.owner && <div><span style={{ color: 'var(--text-muted)' }}>負責人</span> <strong style={{ color: 'var(--text-primary)' }}>{p.owner}</strong></div>}
           {p.department && <div><span style={{ color: 'var(--text-muted)' }}>部門</span> {p.department}</div>}
           {p.store && <div><span style={{ color: 'var(--text-muted)' }}>門市</span> {p.store}</div>}
-          {p.start_date && <div><span style={{ color: 'var(--text-muted)' }}>期間</span> {p.start_date} ~ {p.end_date || '未定'}</div>}
+          {p.start_date && <div><span style={{ color: 'var(--text-muted)' }}>開始</span> {p.start_date}</div>}
+          {p.end_date && <div><span style={{ color: 'var(--text-muted)' }}>預計完成</span> {p.end_date}</div>}
           {p.budget && <div><span style={{ color: 'var(--text-muted)' }}>預算</span> {fmt(p.budget)}</div>}
+          {p.template_id && (() => { const tpl = templates.find(t => t.id === p.template_id); return tpl ? <div><span style={{ color: 'var(--text-muted)' }}>模板</span> {tpl.name}</div> : null })()}
         </div>
 
         {/* Detail tabs */}
@@ -1062,10 +1069,20 @@ export default function Projects() {
 
         {/* Modal in detail view */}
         {showModal && (
-          <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
+          <Modal title="編輯專案" onClose={() => setShowModal(false)} onSubmit={handleSubmit} submitLabel="更新">
+            {editingId && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>專案 ID：<strong style={{ color: 'var(--text-secondary)' }}>#{editingId}</strong></div>
+            )}
             <Field label="專案名稱" required>
               <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
+            <Field label="說明">
+              <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="開始日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} /></Field>
+              <Field label="預計結束日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} /></Field>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="狀態">
                 <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
@@ -1090,20 +1107,24 @@ export default function Projects() {
                   placeholder="搜尋專案負責人..."
                 />
               </Field>
+              <Field label="部門">
+                <input className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)} placeholder="選填" />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="門市">
                 <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
                   <option value="">不指定</option>
                   {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
               </Field>
+              <Field label="模板">
+                <select className="form-input" style={{ width: '100%' }} value={form.template_id} onChange={e => set('template_id', e.target.value)}>
+                  <option value="">無</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </Field>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="開始日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} /></Field>
-              <Field label="結束日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} /></Field>
-            </div>
-            <Field label="說明">
-              <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} />
-            </Field>
           </Modal>
         )}
       </div>
@@ -1269,12 +1290,15 @@ export default function Projects() {
                 <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>#{p.id}</span>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</span>
                     <span style={{ padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {p.owner || '未指派'} · {p.start_date || '未定'}{p.end_date && ` ~ ${p.end_date}`}
+                    {p.department && ` · ${p.department}`}
+                    {p.store && ` · ${p.store}`}
                     {stats.workflows > 0 && ` · ${stats.workflows} 流程`}
                   </div>
                 </div>
@@ -1324,9 +1348,23 @@ export default function Projects() {
       {/* Modal */}
       {showModal && (
         <Modal title={editingId ? '編輯專案' : '新增專案'} onClose={() => { setShowModal(false); setEditingId(null); resetNewProjectState() }} onSubmit={handleSubmit} submitLabel={editingId ? '更新' : '建立'}>
+          {editingId && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>專案 ID：<strong style={{ color: 'var(--text-secondary)' }}>#{editingId}</strong></div>
+          )}
           <Field label="專案名稱" required>
             <input className="form-input" style={{ width: '100%' }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="例：南京門市裝潢翻新" />
           </Field>
+          <Field label="說明">
+            <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="開始日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+            </Field>
+            <Field label="預計結束日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
+            </Field>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="狀態">
               <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
@@ -1351,24 +1389,24 @@ export default function Projects() {
                 placeholder="搜尋員工姓名/職稱..."
               />
             </Field>
+            <Field label="部門">
+              <input className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)} placeholder="選填" />
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="門市">
               <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
                 <option value="">不指定</option>
                 {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="開始日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
-            </Field>
-            <Field label="結束日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
+            <Field label="模板">
+              <select className="form-input" style={{ width: '100%' }} value={form.template_id} onChange={e => set('template_id', e.target.value)}>
+                <option value="">無</option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             </Field>
           </div>
-          <Field label="說明">
-            <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="專案描述..." />
-          </Field>
 
           {!editingId && <>
             {/* Workflows */}

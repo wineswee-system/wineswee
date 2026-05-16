@@ -5,12 +5,13 @@ import { toast } from '../../lib/toast'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns, GitBranch, MoreVertical
+  Users, Settings, Columns, GitBranch, MoreVertical, Search
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAuditLog } from '../../lib/useAuditLog'
 import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ProjectMembers from '../../components/tasks/ProjectMembers'
@@ -44,8 +45,14 @@ const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '', template_id: '' }
 
+const PROJECT_FIELD_LABELS = {
+  name: '名稱', description: '描述', status: '狀態', priority: '優先', owner: '負責人',
+  department: '部門', store: '門市', start_date: '開始日', end_date: '結束日', budget: '預算',
+}
+
 export default function Projects() {
   const { profile } = useAuth()
+  const { logAction, logFieldChange } = useAuditLog()
   const [projects, setProjects] = useState([])
   const [workflows, setWorkflows] = useState([])
   const [tasks, setTasks] = useState([])
@@ -65,6 +72,7 @@ export default function Projects() {
   const [commentText, setCommentText] = useState('')
   const [tab, setTab] = useState('active')
   const [detailTab, setDetailTab] = useState('overview')
+  const [search, setSearch] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [sections, setSections] = useState([])
@@ -215,11 +223,22 @@ export default function Projects() {
     }
     if (profile?.organization_id) payload.organization_id = profile.organization_id
     if (editingId) {
+      const oldProj = projects.find(p => p.id === editingId)
       const { data, error } = await supabase.from('projects').update(payload).eq('id', editingId).select().single()
       if (error) { toast.error('更新失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => prev.map(p => p.id === editingId ? data : p))
         if (selected?.id === editingId) setSelected(data)
+        if (oldProj) {
+          const idLabel = `pj-${String(editingId).padStart(6, '0')}`
+          for (const key of Object.keys(PROJECT_FIELD_LABELS)) {
+            const oldVal = String(oldProj[key] ?? '')
+            const newVal = String(payload[key] ?? '')
+            if (oldVal !== newVal) {
+              await logFieldChange('projects', editingId, PROJECT_FIELD_LABELS[key], oldVal, newVal, `${idLabel} ${oldProj.name}`)
+            }
+          }
+        }
       }
     } else {
       payload.owner = payload.owner || profile?.name || ''
@@ -227,6 +246,7 @@ export default function Projects() {
       if (error) { toast.error('建立失敗，請稍後再試'); return }
       if (data) {
         setProjects(prev => [data, ...prev])
+        await logAction('新增', 'projects', data.id, `pj-${String(data.id).padStart(6, '0')} ${data.name}`)
         let sortOrder = 1
         for (const id of pendingWfAttach) {
           await supabase.from('workflow_instances').update({ project_id: data.id, sort_order: sortOrder++ }).eq('id', id)
@@ -290,6 +310,7 @@ export default function Projects() {
       })
     }
     await supabase.from('projects').delete().eq('id', id)
+    if (proj) await logAction('刪除', 'projects', id, `pj-${String(id).padStart(6, '0')} ${proj.name}`)
     setProjects(prev => prev.filter(p => p.id !== id))
     if (selected?.id === id) setSelected(null)
   }
@@ -514,6 +535,7 @@ export default function Projects() {
   const activeStatuses = tab === 'active' ? ['規劃中', '進行中'] : tab === 'completed' ? ['已完成'] : ['暫停', '已取消']
   const filtered = projects.filter(p => {
     if (!activeStatuses.includes(p.status)) return false
+    if (search && !p.name?.toLowerCase().includes(search.toLowerCase()) && !p.owner?.toLowerCase().includes(search.toLowerCase())) return false
     if (filterOwner && p.owner !== filterOwner) return false
     if (filterStore && p.store !== filterStore) return false
     return true
@@ -541,7 +563,7 @@ export default function Projects() {
               <button className="btn btn-secondary" style={{ marginBottom: 8, fontSize: 12 }} onClick={() => setSelected(null)}>← 返回專案列表</button>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="header-icon">📁</span>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>#{p.id}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>pj-{p.id}</span>
                 {p.name}
                 <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>
@@ -748,7 +770,7 @@ export default function Projects() {
                   }
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
-                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginRight: 5 }}>#{w.id}</span>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginRight: 5 }}>wf-{w.id}</span>
                       {w.template_name}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -827,7 +849,7 @@ export default function Projects() {
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => setSelectedTask(t)}
                     >
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>#{t.id}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                       <span style={{
                         flex: 1, fontWeight: 500, lineHeight: 1.4,
                         textDecoration: t.status === '已完成' ? 'line-through' : 'none',
@@ -906,7 +928,7 @@ export default function Projects() {
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => setSelectedTask(t)}
                     >
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>#{t.id}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                       <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
                       <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
@@ -1153,6 +1175,10 @@ export default function Projects() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="search-bar" style={{ minWidth: 200 }}>
+          <Search className="search-icon" />
+          <input type="text" placeholder="搜尋專案..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
           <FolderOpen size={14} /> 負責人
           <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)}
@@ -1290,7 +1316,7 @@ export default function Projects() {
                 <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>#{p.id}</span>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>pj-{p.id}</span>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</span>
                     <span style={{ padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: sc.color, background: `color-mix(in srgb, ${sc.color} 15%, transparent)` }}>{p.status}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[p.priority] }}>{p.priority}</span>

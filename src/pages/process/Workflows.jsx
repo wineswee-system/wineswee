@@ -4,7 +4,7 @@ import { toast } from '../../lib/toast'
 import {
   Plus, Pencil, Trash2, ChevronRight, CheckCircle,
   X, Users, User, Play, Pause, Rocket, Archive,
-  ClipboardList, Square, RotateCcw, Ban, ChevronDown
+  ClipboardList, Square, RotateCcw, Ban, ChevronDown, Search
 } from 'lucide-react'
 import { empLabel } from '../../lib/empLabel'
 import {
@@ -50,6 +50,7 @@ export default function Workflows() {
   const [projects, setProjects] = useState([])
 
   // Filters
+  const [search, setSearch] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
 
@@ -1005,6 +1006,7 @@ export default function Workflows() {
   const HR_TEMPLATE_SET = new Set(HR_APPROVAL_TEMPLATE_NAMES)
   const filteredInstances = instances.filter(i => {
     if (HR_TEMPLATE_SET.has(i.template_name)) return false
+    if (search && !i.template_name?.toLowerCase().includes(search.toLowerCase())) return false
     if (filterStore && i.store !== filterStore) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true
@@ -1084,6 +1086,10 @@ export default function Workflows() {
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
         flexWrap: 'wrap', alignItems: 'center',
       }}>
+        <div className="search-bar" style={{ minWidth: 200 }}>
+          <Search className="search-icon" />
+          <input type="text" placeholder="搜尋流程..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>

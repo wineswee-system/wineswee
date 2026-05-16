@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, CheckCircle2 } from 'lucide-react'
 import Spinner from './Spinner'
+import { confirm } from '../lib/confirm'
 
 /**
  * Modal — 表單對話框
@@ -16,6 +17,7 @@ export default function Modal({
   onSubmit, submitLabel = '儲存', submitDisabled = false,
   maxWidth = 640, headerExtra = null,
   successMessage = null,
+  isDirty = false,
 }) {
   const modalRef = useRef(null)
   const previousFocusRef = useRef(null)
@@ -26,14 +28,22 @@ export default function Modal({
   onCloseRef.current = onClose
   const submittingRef = useRef(false)
   submittingRef.current = submitting
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement
     // 防止背景滾動
     document.body.style.overflow = 'hidden'
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && !submittingRef.current) onCloseRef.current()
+    const handleKeyDown = async (e) => {
+      if (e.key === 'Escape' && !submittingRef.current) {
+        if (isDirtyRef.current) {
+          const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+          if (!ok) return
+        }
+        onCloseRef.current()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
 
@@ -72,8 +82,12 @@ export default function Modal({
     }
   }
 
-  const handleClose = () => {
+  const handleClose = async () => {
     if (submitting) return
+    if (isDirty) {
+      const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+      if (!ok) return
+    }
     onClose()
   }
 
@@ -208,13 +222,34 @@ function SuccessState({ title = '已送出', hint }) {
  * 通用 Modal Overlay — 給 inline modal 用的 Portal wrapper
  * 用法：<ModalOverlay onClose={fn}><div>你的 modal 內容</div></ModalOverlay>
  */
-export function ModalOverlay({ onClose, children, zIndex = 10000 }) {
+export function ModalOverlay({ onClose, children, zIndex = 10000, isDirty = false }) {
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
+
   useEffect(() => {
     document.body.style.overflow = 'hidden'
-    const handleKey = (e) => { if (e.key === 'Escape' && onClose) onClose() }
+    const handleKey = async (e) => {
+      if (e.key !== 'Escape' || !onCloseRef.current) return
+      if (isDirtyRef.current) {
+        const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+        if (!ok) return
+      }
+      onCloseRef.current()
+    }
     document.addEventListener('keydown', handleKey)
     return () => { document.body.style.overflow = ''; document.removeEventListener('keydown', handleKey) }
-  }, [onClose])
+  }, [])
+
+  const guardedClose = async () => {
+    if (!onCloseRef.current) return
+    if (isDirtyRef.current) {
+      const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+      if (!ok) return
+    }
+    onCloseRef.current()
+  }
 
   return createPortal(
     <div style={{
@@ -223,7 +258,7 @@ export function ModalOverlay({ onClose, children, zIndex = 10000 }) {
       backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 24,
-    }} onMouseDown={e => { if (e.target === e.currentTarget && onClose) onClose() }}>
+    }} onMouseDown={e => { if (e.target === e.currentTarget) guardedClose() }}>
       {children}
     </div>,
     document.body

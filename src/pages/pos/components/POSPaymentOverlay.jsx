@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ModalOverlay } from '../../../components/Modal'
 import { Loader2, CheckCircle, XCircle, Receipt, Printer, RotateCcw } from 'lucide-react'
@@ -19,6 +20,17 @@ export default function POSPaymentOverlay({
   resetTerminal,
   setPaymentStage,
 }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== 'Escape') return
+      if (paymentStage === 'paying') return // blocked — payment in progress
+      if (paymentStage === 'success') resetTerminal()
+      if (paymentStage === 'failed') setPaymentStage('cart')
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [paymentStage, resetTerminal, setPaymentStage])
+
   if (paymentStage === 'paying') {
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

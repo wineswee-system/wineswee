@@ -609,10 +609,11 @@ export default function TaskDetailPanel({
                 style={{ fontSize: 18, fontWeight: 800, flex: 1 }}
               />
             ) : (
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, cursor: 'pointer' }}
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                 onClick={() => setEditingTitle(true)}>
+                <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{task.id}</span>
                 {titleDraft}
-                <Pencil size={14} style={{ marginLeft: 8, color: 'var(--accent-orange)', verticalAlign: 'middle' }} />
+                <Pencil size={14} style={{ marginLeft: 4, color: 'var(--accent-orange)', flexShrink: 0 }} />
               </h3>
             )}
           </div>

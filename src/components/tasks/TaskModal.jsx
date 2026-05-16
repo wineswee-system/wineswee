@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Repeat, Calendar, Trash2, Activity as ActivityIcon, Copy } from 'lucide-react'
 import {
@@ -37,6 +37,27 @@ export default function TaskModal({ task, employees = [], sections = [], current
   const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('detail')
   const [activityRefresh, setActivityRefresh] = useState(0)
+
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const isDirtyRef = useRef(false)
+  // title and description save on blur — flag if either has pending unsaved text
+  isDirtyRef.current = task
+    ? form.title !== (task.title || '') || form.description !== (task.description || '')
+    : false
+
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      if (e.key !== 'Escape') return
+      if (isDirtyRef.current) {
+        const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+        if (!ok) return
+      }
+      onCloseRef.current?.()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   useEffect(() => {
     if (!task) return
@@ -111,8 +132,16 @@ export default function TaskModal({ task, employees = [], sections = [], current
     onClose?.()
   }
 
+  const guardedClose = async () => {
+    if (isDirtyRef.current) {
+      const ok = await confirm({ title: '有未儲存的變更', message: '關閉後，未儲存的變更將遺失。', confirmLabel: '關閉', cancelLabel: '繼續編輯', danger: true })
+      if (!ok) return
+    }
+    onCloseRef.current?.()
+  }
+
   const overlay = (
-    <div onClick={onClose} style={{
+    <div onClick={e => { if (e.target === e.currentTarget) guardedClose() }} style={{
       position: 'fixed', inset: 0, background: 'var(--bg-modal-overlay)', zIndex: 999,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     }}>
@@ -146,7 +175,7 @@ export default function TaskModal({ task, employees = [], sections = [], current
             </button>
           )}
           <button onClick={handleDelete} className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }}><Trash2 size={14} /></button>
-          <button onClick={onClose} className="btn btn-secondary" style={{ padding: '4px 8px' }}><X size={14} /></button>
+          <button onClick={guardedClose} className="btn btn-secondary" style={{ padding: '4px 8px' }}><X size={14} /></button>
         </div>
 
         {/* Tabs */}

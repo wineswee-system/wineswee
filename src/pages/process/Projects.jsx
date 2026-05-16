@@ -5,7 +5,7 @@ import { toast } from '../../lib/toast'
 import {
   Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns, GitBranch, MoreVertical, Search
+  Users, Settings, Columns, GitBranch, MoreVertical, Search, GripVertical
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
@@ -102,6 +102,10 @@ export default function Projects() {
   const toggleWf = (id) => setCollapsedWfIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const [wfMenuId, setWfMenuId] = useState(null)
   const [projMenuId, setProjMenuId] = useState(null)
+  const [dragWfId, setDragWfId] = useState(null)
+  const [dragOverWfId, setDragOverWfId] = useState(null)
+  const [dragTaskId, setDragTaskId] = useState(null)
+  const [dragOverTaskId, setDragOverTaskId] = useState(null)
 
   const handleWfRename = async (w) => {
     const name = window.prompt('流程名稱', w.template_name)
@@ -119,6 +123,36 @@ export default function Projects() {
     setWorkflows(prev => prev.filter(x => x.id !== w.id))
     setTasks(prev => prev.filter(t => t.workflow_instance_id !== w.id))
     toast('已刪除')
+  }
+
+  const handleWfReorder = async (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId || !selected) return
+    const sorted = workflows
+      .filter(w => w.project_id === selected.id)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    const from = sorted.findIndex(w => w.id === fromId)
+    const to = sorted.findIndex(w => w.id === toId)
+    if (from === -1 || to === -1) return
+    const reordered = [...sorted]
+    reordered.splice(to, 0, reordered.splice(from, 1)[0])
+    const updates = reordered.map((w, i) => ({ id: w.id, sort_order: i + 1 }))
+    setWorkflows(prev => prev.map(w => { const u = updates.find(u => u.id === w.id); return u ? { ...w, sort_order: u.sort_order } : w }))
+    await Promise.all(updates.map(u => supabase.from('workflow_instances').update({ sort_order: u.sort_order }).eq('id', u.id)))
+  }
+
+  const handleTaskReorder = async (fromId, toId, wfId) => {
+    if (!fromId || !toId || fromId === toId) return
+    const sorted = tasks
+      .filter(t => t.workflow_instance_id === wfId)
+      .sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    const from = sorted.findIndex(t => t.id === fromId)
+    const to = sorted.findIndex(t => t.id === toId)
+    if (from === -1 || to === -1) return
+    const reordered = [...sorted]
+    reordered.splice(to, 0, reordered.splice(from, 1)[0])
+    const updates = reordered.map((t, i) => ({ id: t.id, step_order: i + 1 }))
+    setTasks(prev => prev.map(t => { const u = updates.find(u => u.id === t.id); return u ? { ...t, step_order: u.step_order } : t }))
+    await Promise.all(updates.map(u => supabase.from('tasks').update({ step_order: u.step_order }).eq('id', u.id)))
   }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -551,7 +585,7 @@ export default function Projects() {
   if (selected) {
     const p = selected
     const stats = getStats(p.id)
-    const pWorkflows = workflows.filter(w => w.project_id === p.id)
+    const pWorkflows = workflows.filter(w => w.project_id === p.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
     const pComments = comments.filter(c => c.project_id === p.id)
     const sc = STATUS_MAP[p.status] || {}
 
@@ -751,7 +785,7 @@ export default function Projects() {
             尚無流程。到「流程管理 → 流程」建立時可指定專案。
           </div>
         ) : pWorkflows.map(w => {
-          const wTasks = tasks.filter(t => t.workflow_instance_id === w.id)
+          const wTasks = tasks.filter(t => t.workflow_instance_id === w.id).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
           const wTotal = wTasks.length
           const wDone = wTasks.filter(t => t.status === '已完成').length
           const wInProgress = wTasks.filter(t => t.status === '進行中').length
@@ -761,9 +795,16 @@ export default function Projects() {
 
           const wCollapsed = collapsedWfIds.has(w.id)
           return (
-            <div key={w.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
+            <div key={w.id} className="card"
+              draggable
+              onDragStart={() => setDragWfId(w.id)}
+              onDragEnd={() => { setDragWfId(null); setDragOverWfId(null) }}
+              onDragOver={e => { e.preventDefault(); setDragOverWfId(w.id) }}
+              onDrop={e => { e.preventDefault(); handleWfReorder(dragWfId, w.id); setDragOverWfId(null) }}
+              style={{ marginBottom: 10, padding: '14px 16px', ...(dragOverWfId === w.id && dragWfId !== w.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: -2 } : {}) }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <GripVertical size={14} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.45 }} onClick={e => e.stopPropagation()} />
                   {wCollapsed
                     ? <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 0.2s' }} />
                     : <ChevronDown size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0, transition: 'transform 0.2s' }} />
@@ -844,11 +885,18 @@ export default function Projects() {
                   const sc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
                   return (
                     <div key={t.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px 5px 24px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s' }}
+                      draggable
+                      onDragStart={() => setDragTaskId(t.id)}
+                      onDragEnd={() => { setDragTaskId(null); setDragOverTaskId(null) }}
+                      onDragOver={e => { e.preventDefault(); setDragOverTaskId(t.id) }}
+                      onDrop={e => { e.preventDefault(); handleTaskReorder(dragTaskId, t.id, w.id); setDragOverTaskId(null) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px 5px 4px', fontSize: 13, borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s',
+                        borderTop: dragOverTaskId === t.id && dragTaskId !== t.id ? '2px solid var(--accent-cyan)' : '2px solid transparent' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => setSelectedTask(t)}
                     >
+                      <GripVertical size={12} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.4 }} onClick={e => e.stopPropagation()} />
                       <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                       <span style={{
                         flex: 1, fontWeight: 500, lineHeight: 1.4,

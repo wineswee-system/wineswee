@@ -263,8 +263,8 @@ export default function PunchCorrection() {
     }
   }
 
-  const handleReject = async (id) => {
-    const reason = prompt('駁回原因：')
+  const handleReject = async (id, reasonArg) => {
+    const reason = reasonArg ?? prompt('駁回原因：')
     if (!reason) return
     const { data } = await supabase.from('clock_corrections')
       .update({ status: '已駁回', reject_reason: reason })
@@ -347,21 +347,7 @@ export default function PunchCorrection() {
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                       {c.status === '待審核' && canApprove('clock_corrections', c.id) ? (
-                        <ExtraSignerControls
-                          sourceTable="clock_corrections"
-                          row={c}
-                          onChanged={() => load()}
-                          renderNormal={() => (
-                            <>
-                              <AsyncButton className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(c.id)} busyLabel="處理中…">
-                                <Check size={12} /> 核准
-                              </AsyncButton>
-                              <AsyncButton className="btn btn-sm btn-secondary" style={{ padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(c.id)} busyLabel="處理中…">
-                                <X size={12} /> 駁回
-                              </AsyncButton>
-                            </>
-                          )}
-                        />
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       ) : (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {c.approver}
@@ -485,6 +471,15 @@ export default function PunchCorrection() {
             requestType="correction"
             requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '待審核' && canApprove('clock_corrections', detailRow.id) ? {
+                sourceTable: 'clock_corrections',
+                row: detailRow,
+                onApprove: async () => handleApprove(detailRow.id),
+                onReject: async (_r, reason) => handleReject(detailRow.id, reason),
+                onChanged: () => { load(); setDetailRow(null) },
+              } : null
+            }
           />
         )
       })()}

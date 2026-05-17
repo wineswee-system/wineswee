@@ -377,17 +377,7 @@ export default function TransferRequest() {
                     <td onClick={(ev) => ev.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (
-                          <ExtraSignerControls
-                            sourceTable="personnel_transfer_requests"
-                            row={r}
-                            onChanged={() => load()}
-                            renderNormal={() => (
-                              <>
-                                <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(r)} busyLabel="處理中…"><CheckCircle size={11} /> 核准</AsyncButton>
-                                <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(r)}><XCircle size={11} /> 駁回</button>
-                              </>
-                            )}
-                          />
+                          <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                         )}
                         {canEdit && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} onClick={() => openEdit(r)}>
@@ -529,6 +519,22 @@ export default function TransferRequest() {
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '申請中' && canIApprove(detailRow) ? {
+                sourceTable: 'personnel_transfer_requests',
+                row: { ...detailRow, employee_id: detailRow.employee?.id },
+                onApprove: async () => handleApprove(detailRow),
+                onReject: async (_r, reason) => {
+                  const res = await approveChainStep({
+                    table: 'transfer', id: detailRow.id,
+                    approverEmpId: profile?.id, action: 'reject', reason,
+                  })
+                  if (!res?.ok) toast.error('駁回失敗：' + (res?.error || 'unknown'))
+                },
+                onChanged: () => { load(); setDetailRow(null) },
+                rejectLabel: '駁回',
+              } : null
+            }
           />
         )
       })()}

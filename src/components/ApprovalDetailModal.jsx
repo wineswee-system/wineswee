@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, Printer, FileText, Image as ImageIcon, User } from 'lucide-react'
 import { ModalOverlay } from './Modal'
 import { supabase } from '../lib/supabase'
+import ApprovalActionBar from './ApprovalActionBar'
 
 const STATUS_BADGE = {
   '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
@@ -55,6 +56,13 @@ export default function ApprovalDetailModal({
   //   requestType: 'leave' | 'overtime' | 'trip' | 'correction' | 'expense' | 'expense_request'
   requestType,
   requestId,
+  // 簽核動作（modal 底部 ApprovalActionBar 用）— 可選；只有當前是 pending 且 caller 可簽時傳
+  //   sourceTable: 'leave_requests' / 'expense_requests' / ... 對應 approval_extra_steps.source_table
+  //   row:         { id, current_step, employee_id } — 給加簽用
+  //   onApprove:   async (row) => void
+  //   onReject:    async (row, reason) => void
+  //   onChanged:   () => void — action 完後 reload
+  actions,
 }) {
   const [timeline, setTimeline] = useState([])
 
@@ -255,6 +263,19 @@ export default function ApprovalDetailModal({
             <ChainTimeline steps={mergedChainSteps} />
           </div>
         </div>
+
+        {/* Footer: 簽核操作列（僅 pending 且 caller 可簽核時顯示） */}
+        {actions && actions.sourceTable && actions.row && (
+          <ApprovalActionBar
+            sourceTable={actions.sourceTable}
+            row={actions.row}
+            onApprove={actions.onApprove}
+            onReject={actions.onReject}
+            onChanged={actions.onChanged}
+            approveLabel={actions.approveLabel}
+            rejectLabel={actions.rejectLabel}
+          />
+        )}
       </div>
     </ModalOverlay>
   )

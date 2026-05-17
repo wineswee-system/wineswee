@@ -97,8 +97,8 @@ export default function BusinessTravel() {
     if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
   }
 
-  const handleReject = async (id) => {
-    const reason = prompt('請輸入駁回原因：')
+  const handleReject = async (id, reasonArg) => {
+    const reason = reasonArg ?? prompt('請輸入駁回原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     const { data } = await updateBusinessTripStatus(id, '已駁回', reason.trim())
@@ -252,17 +252,7 @@ export default function BusinessTravel() {
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {t.status === '待審核' && canApprove('business_trips', t.id) && (
-                        <ExtraSignerControls
-                          sourceTable="business_trips"
-                          row={t}
-                          onChanged={() => load()}
-                          renderNormal={() => (
-                            <>
-                              <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(t.id)} busyLabel="處理中…">核准</AsyncButton>
-                              <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(t.id)} busyLabel="處理中…">駁回</AsyncButton>
-                            </>
-                          )}
-                        />
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
                       {['待審核','申請中','已駁回','已退回'].includes(t.status) && t.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
@@ -358,6 +348,15 @@ export default function BusinessTravel() {
             requestType="trip"
             requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '待審核' && canApprove('business_trips', detailRow.id) ? {
+                sourceTable: 'business_trips',
+                row: detailRow,
+                onApprove: async () => handleApprove(detailRow.id),
+                onReject: async (_r, reason) => handleReject(detailRow.id, reason),
+                onChanged: () => { load(); setDetailRow(null) },
+              } : null
+            }
           />
         )
       })()}

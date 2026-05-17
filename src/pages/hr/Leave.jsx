@@ -319,8 +319,9 @@ export default function Leave() {
       }
     }
   }
-  const handleReject = async (id) => {
-    const reason = prompt('請輸入拒絕原因：')
+  const handleReject = async (id, reasonArg) => {
+    // 從 ApprovalDetailModal 來的會帶 reason；舊路徑（保留相容）會 prompt
+    const reason = reasonArg ?? prompt('請輸入拒絕原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫拒絕原因'); return }
     const leave = leaves.find(l => l.id === id)
@@ -526,17 +527,7 @@ export default function Leave() {
                   <div style={{ padding: '4px 8px' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {l.status === '待審核' && canApprove('leave_requests', l.id) && (
-                        <ExtraSignerControls
-                          sourceTable="leave_requests"
-                          row={l}
-                          onChanged={() => load()}
-                          renderNormal={() => (
-                            <>
-                              <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(l.id)} busyLabel="處理中…">核准</AsyncButton>
-                              <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(l.id)} busyLabel="處理中…">拒絕</AsyncButton>
-                            </>
-                          )}
-                        />
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
                       {['待審核','申請中','已拒絕','已駁回','已退回'].includes(l.status) && l.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
@@ -646,6 +637,16 @@ export default function Leave() {
             requestType="leave"
             requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '待審核' && canApprove('leave_requests', detailRow.id) ? {
+                sourceTable: 'leave_requests',
+                row: detailRow,
+                onApprove: async () => handleApprove(detailRow.id),
+                onReject: async (_r, reason) => handleReject(detailRow.id, reason),
+                onChanged: () => { load(); setDetailRow(null) },
+                rejectLabel: '拒絕',
+              } : null
+            }
           />
         )
       })()}

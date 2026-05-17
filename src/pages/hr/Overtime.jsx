@@ -205,8 +205,8 @@ export default function Overtime() {
     }
   }
 
-  const handleReject = async (id) => {
-    const reason = prompt('請輸入駁回原因：')
+  const handleReject = async (id, reasonArg) => {
+    const reason = reasonArg ?? prompt('請輸入駁回原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     try {
@@ -384,17 +384,7 @@ export default function Overtime() {
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {o.status === '待審核' && canApprove('overtime_requests', o.id) && (
-                        <ExtraSignerControls
-                          sourceTable="overtime_requests"
-                          row={o}
-                          onChanged={() => load()}
-                          renderNormal={() => (
-                            <>
-                              <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(o.id)} busyLabel="處理中…">核准</AsyncButton>
-                              <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(o.id)} busyLabel="處理中…">駁回</AsyncButton>
-                            </>
-                          )}
-                        />
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
                       {['待審核','申請中','已拒絕','已駁回','已退回'].includes(o.status) && o.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
@@ -596,6 +586,15 @@ export default function Overtime() {
             requestType="overtime"
             requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '待審核' && canApprove('overtime_requests', detailRow.id) ? {
+                sourceTable: 'overtime_requests',
+                row: detailRow,
+                onApprove: async () => handleApprove(detailRow.id),
+                onReject: async (_r, reason) => handleReject(detailRow.id, reason),
+                onChanged: () => { load(); setDetailRow(null) },
+              } : null
+            }
           />
         )
       })()}

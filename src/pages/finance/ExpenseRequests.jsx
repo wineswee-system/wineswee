@@ -729,38 +729,19 @@ export default function ExpenseRequests() {
                     <div style={{ display: 'flex', gap: 4 }}>
                       {r.status === '申請中' && canApprove('expense_requests', r.id) && (() => {
                         const extra = pendingExtras[r.id]
-                        // 有 pending 加簽：發起人看得到「撤銷」；其他人看到「等候加簽中」鎖住
+                        // 有 pending 加簽顯示提示，否則顯示「點開簽核」提示
                         if (extra) {
-                          const isMine = extra.requested_by_id === profile?.id
                           const assigneeName = employees.find(e => e.id === extra.assignee_id)?.name || '加簽人'
                           return (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                              <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>
-                                🪶 加簽中：{assigneeName}
-                              </span>
-                              {isMine && (
-                                <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
-                                  onClick={() => handleCancelExtra(extra.id)} busyLabel="…">
-                                  撤銷
-                                </AsyncButton>
-                              )}
-                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>
+                              🪶 加簽中：{assigneeName}
+                            </span>
                           )
                         }
-                        // 正常：核准 / 退回 / 加簽 三鈕
                         return (
-                          <>
-                            <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)} busyLabel="處理中…">
-                              <Check size={12} /> 核准
-                            </AsyncButton>
-                            <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(r)} busyLabel="…">
-                              <X size={12} />
-                            </AsyncButton>
-                            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-orange)' }}
-                              onClick={() => openExtraModal(r)} title="加簽（邀請第三人協助審核）">
-                              🪶 加簽
-                            </button>
-                          </>
+                          <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                            點明細簽核
+                          </span>
                         )
                       })()}
                       {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
@@ -832,61 +813,6 @@ export default function ExpenseRequests() {
         errors={errors}
         setErrors={setErrors}
       />
-
-      {/* 加簽 Modal（P3a）*/}
-      {showExtraModal && (
-        <ModalOverlay onClick={() => setShowExtraModal(null)}>
-          <div className="modal-content" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>🪶 加簽請求</h3>
-              <button className="btn-icon" onClick={() => setShowExtraModal(null)}><X size={18} /></button>
-            </div>
-
-            <div style={{ marginBottom: 12, padding: 10, background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-              邀請同事在 <b style={{ color: 'var(--text-primary)' }}>{showExtraModal.row?.title || '—'}</b>{' '}
-              （金額 NT$ {Number(showExtraModal.row?.estimated_amount || 0).toLocaleString()}）
-              第 {(showExtraModal.row?.current_step ?? 0) + 1} 關之前協助加簽
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                加簽人 <span style={{ color: 'var(--accent-red)' }}>*</span>
-              </label>
-              <SearchableSelect
-                value={extraForm.assignee_id}
-                onChange={(v) => setExtraForm(f => ({ ...f, assignee_id: v }))}
-                options={empOptions(employees.filter(e =>
-                  e.id !== profile?.id &&
-                  e.id !== showExtraModal.row?.employee_id
-                ))}
-                placeholder="搜尋同事姓名或部門…"
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                加簽原因（選填，但建議填）
-              </label>
-              <textarea
-                className="input"
-                value={extraForm.reason}
-                onChange={(e) => setExtraForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="例：金額較高，請會計師先看"
-                rows={3}
-                style={{ width: '100%', resize: 'vertical' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setShowExtraModal(null)}>取消</button>
-              <AsyncButton className="btn btn-primary" onClick={handleSubmitExtra} busyLabel="送出中…"
-                disabled={!extraForm.assignee_id}>
-                送出加簽請求
-              </AsyncButton>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
 
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
       {showDetail && !showSettleModal && (() => {
@@ -1019,6 +945,21 @@ export default function ExpenseRequests() {
             createdAt={showDetail.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
             onPrint={handlePrintSignOff}
+            actions={
+              showDetail.status === '申請中' && canApprove('expense_requests', showDetail.id) ? {
+                sourceTable: 'expense_requests',
+                row: showDetail,
+                onApprove: async (r) => handleApprove(r),
+                onReject: async (r, reason) => {
+                  const { data, error } = await supabase.rpc('expense_request_step_advance', {
+                    p_id: r.id, p_action: 'reject', p_reason: reason,
+                  })
+                  if (error) { toast.error(error.message); return }
+                  if (!data?.ok) { toast.error(`退回失敗：${data?.error || 'unknown'}`); return }
+                },
+                onChanged: () => { load(); setShowDetail(null) },
+              } : null
+            }
           />
         )
       })()}

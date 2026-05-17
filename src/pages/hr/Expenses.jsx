@@ -163,8 +163,8 @@ export default function Expenses() {
     }
   }
 
-  const handleReject = async (id) => {
-    const reason = prompt('請輸入駁回原因：')
+  const handleReject = async (id, reasonArg) => {
+    const reason = reasonArg ?? prompt('請輸入駁回原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
@@ -321,17 +321,7 @@ export default function Expenses() {
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {e.status === '待審核' && canApprove('expenses', e.id) && (
-                        <ExtraSignerControls
-                          sourceTable="expenses"
-                          row={e}
-                          onChanged={() => load()}
-                          renderNormal={() => (
-                            <>
-                              <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)} busyLabel="處理中…">核銷</AsyncButton>
-                              <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)} busyLabel="處理中…">駁回</AsyncButton>
-                            </>
-                          )}
-                        />
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
                       {['待審核','申請中','已駁回','已退回'].includes(e.status) && e.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
@@ -451,6 +441,16 @@ export default function Expenses() {
             requestType="expense"
             requestId={detailRow.id}
             onPrint={() => printWithChain(detailRow)}
+            actions={
+              detailRow.status === '待審核' && canApprove('expenses', detailRow.id) ? {
+                sourceTable: 'expenses',
+                row: detailRow,
+                onApprove: async () => handleApprove(detailRow.id),
+                onReject: async (_r, reason) => handleReject(detailRow.id, reason),
+                onChanged: () => { load(); setDetailRow(null) },
+                approveLabel: '核銷',
+              } : null
+            }
           />
         )
       })()}

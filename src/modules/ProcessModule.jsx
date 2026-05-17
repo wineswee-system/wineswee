@@ -5,6 +5,7 @@ import Tasks from '../pages/process/Tasks'
 import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
 import Approvals from '../pages/process/Approvals'
+import TaskConfirmations from '../pages/process/TaskConfirmations'
 import Projects from '../pages/process/Projects'
 import Categories from '../pages/process/settings/Categories'
 import Tags from '../pages/process/settings/Tags'
@@ -27,6 +28,7 @@ export default function ProcessModule() {
       <Route path="checklists" element={<Checklists />} />
       <Route path="sop" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
+      <Route path="task-confirmations" element={<TaskConfirmations />} />
       <Route path="settings/categories" element={<Categories />} />
       <Route path="settings/tags" element={<Tags />} />
       <Route path="settings/chains" element={<Chains />} />

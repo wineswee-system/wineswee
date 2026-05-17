@@ -41,6 +41,8 @@ import LaborLawRates from '../pages/hr/LaborLawRates'
 import Resignation from '../pages/hr/Resignation'
 import TransferRequest from '../pages/hr/TransferRequest'
 import LeaveOfAbsence from '../pages/hr/LeaveOfAbsence'
+import OffRequests from '../pages/hr/OffRequests'
+import ShiftSwaps from '../pages/hr/ShiftSwaps'
 import FormBuilder from '../pages/hr/FormBuilder'
 import CustomFormFill from '../pages/hr/CustomFormFill'
 import FormSubmissions from '../pages/hr/FormSubmissions'
@@ -87,6 +89,8 @@ export default memo(function HRModule() {
       <Route path="forms/resignation" element={<Resignation />} />
       <Route path="forms/transfer" element={<TransferRequest />} />
       <Route path="forms/loa" element={<LeaveOfAbsence />} />
+      <Route path="off-requests" element={<OffRequests />} />
+      <Route path="shift-swaps" element={<ShiftSwaps />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
       <Route path="forms/submissions" element={<FormSubmissions />} />
       <Route path="form-builder" element={<FormBuilder />} />

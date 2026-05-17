@@ -140,6 +140,10 @@ export default function Sidebar() {
 
   // Close mega dropdown on route change
   useEffect(() => { setOpenDropdown(null) }, [location.pathname])
+  // Clear tooltip on route change（防卡住）
+  useEffect(() => { setTooltip(null) }, [location.pathname])
+  // Clear tooltip when dropdown closes（item 元素消失時 mouseleave 不會觸發）
+  useEffect(() => { if (!openDropdown) setTooltip(null) }, [openDropdown])
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -160,6 +164,7 @@ export default function Sidebar() {
   }
 
   const handleNavClick = () => {
+    setTooltip(null)  // 點擊立刻清 tooltip，避免元素消失後卡住
     if (window.innerWidth <= 768) setMobileOpen(false)
   }
 
@@ -183,6 +188,7 @@ export default function Sidebar() {
   }
 
   const handleMegaItemClick = (path) => {
+    setTooltip(null)  // 點擊立刻清 tooltip
     navigate(path)
     setOpenDropdown(null)
   }

@@ -8,6 +8,7 @@ import { getEventBus } from '../../lib/events/index.js'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
+import ExtraSignerControls from '../../components/ExtraSignerControls'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -320,10 +321,17 @@ export default function Expenses() {
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {e.status === '待審核' && canApprove('expenses', e.id) && (
-                        <>
-                          <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)} busyLabel="處理中…">核銷</AsyncButton>
-                          <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)} busyLabel="處理中…">駁回</AsyncButton>
-                        </>
+                        <ExtraSignerControls
+                          sourceTable="expenses"
+                          row={e}
+                          onChanged={() => load()}
+                          renderNormal={() => (
+                            <>
+                              <AsyncButton className="btn btn-sm btn-primary" onClick={() => handleApprove(e.id)} busyLabel="處理中…">核銷</AsyncButton>
+                              <AsyncButton className="btn btn-sm btn-secondary" onClick={() => handleReject(e.id)} busyLabel="處理中…">駁回</AsyncButton>
+                            </>
+                          )}
+                        />
                       )}
                       {['待審核','申請中','已駁回','已退回'].includes(e.status) && e.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {

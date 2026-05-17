@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
+import ExtraSignerControls from '../../components/ExtraSignerControls'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
@@ -376,10 +377,17 @@ export default function TransferRequest() {
                     <td onClick={(ev) => ev.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (
-                          <>
-                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(r)} busyLabel="處理中…"><CheckCircle size={11} /> 核准</AsyncButton>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(r)}><XCircle size={11} /> 駁回</button>
-                          </>
+                          <ExtraSignerControls
+                            sourceTable="personnel_transfer_requests"
+                            row={r}
+                            onChanged={() => load()}
+                            renderNormal={() => (
+                              <>
+                                <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(r)} busyLabel="處理中…"><CheckCircle size={11} /> 核准</AsyncButton>
+                                <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(r)}><XCircle size={11} /> 駁回</button>
+                              </>
+                            )}
+                          />
                         )}
                         {canEdit && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} onClick={() => openEdit(r)}>

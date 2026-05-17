@@ -67,6 +67,11 @@ export default function ExpenseRequests() {
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
   const [lineItems, setLineItems] = useState([emptyItem()])
+  // 加簽（P3a）：pending extras 索引 by source_id → 用來判斷當前狀態 + 撤銷
+  const [pendingExtras, setPendingExtras] = useState({})
+  // 加簽 modal 狀態
+  const [showExtraModal, setShowExtraModal] = useState(null) // null or { row }
+  const [extraForm, setExtraForm] = useState({ assignee_id: null, reason: '' })
   const fileRef = useRef(null)
   const settleFileRef = useRef(null)
   const csvRef = useRef(null)
@@ -112,16 +117,25 @@ export default function ExpenseRequests() {
     const orgId = profile?.organization_id
     let reqQuery = supabase.from('expense_requests').select('*').order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
-    const [reqRes, accRes, empRes, orgRes] = await Promise.all([
+    const [reqRes, accRes, empRes, orgRes, extraRes] = await Promise.all([
       reqQuery,
       getAccounts(orgId),
       getEmployees(orgId),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+      // 加簽（P3a）：撈 pending extras 給 UI 顯示 / 撤銷判斷
+      supabase.from('approval_extra_steps')
+        .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status, created_at')
+        .eq('source_table', 'expense_requests')
+        .eq('status', 'pending'),
     ])
     setRequests(reqRes.data || [])
     setAccounts(accRes.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setOrganization(orgRes?.data || null)
+    // 把 extras 索引化：{ [source_id]: extra_row }（每張單同一 step 只會有一筆 pending）
+    const idx = {}
+    for (const e of (extraRes?.data || [])) idx[e.source_id] = e
+    setPendingExtras(idx)
     setLoading(false)
   }
 
@@ -325,6 +339,7 @@ export default function ExpenseRequests() {
         NOT_PENDING: `此申請目前狀態 ${data.current_status}，無法核准`,
         STEP_NOT_FOUND: `chain 第 ${data.current_step + 1} 關沒設定`,
         NOT_AUTHORIZED_FOR_STEP: `你不是目前這關的簽核者（第 ${data.current_step + 1} 關需要 ${data.expected_role}）`,
+        PENDING_EXTRA_SIGNER: data?.message || '此單據有加簽請求進行中，請等加簽人完成後再簽核',
       }[data?.error] || `核准失敗：${data?.error || 'unknown'}`
       toast.error(msg); return
     }
@@ -347,6 +362,59 @@ export default function ExpenseRequests() {
       toast.error(`退回失敗：${data?.error || 'unknown'}`)
       return
     }
+    load()
+  }
+
+  // 加簽（P3a）— 開 modal
+  const openExtraModal = (req) => {
+    setShowExtraModal({ row: req })
+    setExtraForm({ assignee_id: null, reason: '' })
+  }
+
+  // 加簽 — 送出
+  const handleSubmitExtra = async () => {
+    if (!showExtraModal?.row) return
+    if (!extraForm.assignee_id) { toast.error('請選擇加簽人'); return }
+    const req = showExtraModal.row
+    const { data, error } = await supabase.rpc('request_extra_signer', {
+      p_source_table: 'expense_requests',
+      p_source_id: req.id,
+      p_insert_before_step: req.current_step ?? 0,
+      p_assignee_id: extraForm.assignee_id,
+      p_requested_by_id: profile?.id,
+      p_reason: extraForm.reason?.trim() || null,
+    })
+    if (error) {
+      // 解 friendly message — Postgres error 碼跟訊息直出
+      const msg = error.message?.includes('不能對自己加簽') ? '不能對自己加簽'
+                : error.message?.includes('已有 pending 加簽') ? '此步驟已有加簽進行中'
+                : error.message?.includes('不支援此單據類型') ? '此單據類型不支援加簽'
+                : `加簽失敗：${error.message}`
+      toast.error(msg)
+      return
+    }
+    toast.success(`已送出加簽請求給 ${employees.find(e => e.id === extraForm.assignee_id)?.name || '加簽人'}`)
+    setShowExtraModal(null)
+    load()
+  }
+
+  // 加簽 — 撤銷
+  const handleCancelExtra = async (extraId) => {
+    if (!extraId) return
+    const ok = await confirm('確定要撤銷加簽？加簽人會收到通知')
+    if (!ok) return
+    const { error } = await supabase.rpc('cancel_extra_signer', {
+      p_extra_step_id: extraId,
+      p_canceller_id: profile?.id,
+    })
+    if (error) {
+      const msg = error.message?.includes('只有發起人') ? '只有加簽發起人可以撤銷'
+                : error.message?.includes('狀態非 pending') ? '此加簽已被處理或撤銷'
+                : `撤銷失敗：${error.message}`
+      toast.error(msg)
+      return
+    }
+    toast.success('已撤銷加簽')
     load()
   }
 
@@ -657,16 +725,42 @@ export default function ExpenseRequests() {
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {r.status === '申請中' && canApprove('expense_requests', r.id) && (
-                        <>
-                          <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)} busyLabel="處理中…">
-                            <Check size={12} /> 核准
-                          </AsyncButton>
-                          <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(r)} busyLabel="…">
-                            <X size={12} />
-                          </AsyncButton>
-                        </>
-                      )}
+                      {r.status === '申請中' && canApprove('expense_requests', r.id) && (() => {
+                        const extra = pendingExtras[r.id]
+                        // 有 pending 加簽：發起人看得到「撤銷」；其他人看到「等候加簽中」鎖住
+                        if (extra) {
+                          const isMine = extra.requested_by_id === profile?.id
+                          const assigneeName = employees.find(e => e.id === extra.assignee_id)?.name || '加簽人'
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                              <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>
+                                🪶 加簽中：{assigneeName}
+                              </span>
+                              {isMine && (
+                                <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
+                                  onClick={() => handleCancelExtra(extra.id)} busyLabel="…">
+                                  撤銷
+                                </AsyncButton>
+                              )}
+                            </div>
+                          )
+                        }
+                        // 正常：核准 / 退回 / 加簽 三鈕
+                        return (
+                          <>
+                            <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleApprove(r)} busyLabel="處理中…">
+                              <Check size={12} /> 核准
+                            </AsyncButton>
+                            <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleReject(r)} busyLabel="…">
+                              <X size={12} />
+                            </AsyncButton>
+                            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-orange)' }}
+                              onClick={() => openExtraModal(r)} title="加簽（邀請第三人協助審核）">
+                              🪶 加簽
+                            </button>
+                          </>
+                        )
+                      })()}
                       {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
                           <Send size={12} /> 核銷
@@ -736,6 +830,61 @@ export default function ExpenseRequests() {
         errors={errors}
         setErrors={setErrors}
       />
+
+      {/* 加簽 Modal（P3a）*/}
+      {showExtraModal && (
+        <ModalOverlay onClick={() => setShowExtraModal(null)}>
+          <div className="modal-content" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>🪶 加簽請求</h3>
+              <button className="btn-icon" onClick={() => setShowExtraModal(null)}><X size={18} /></button>
+            </div>
+
+            <div style={{ marginBottom: 12, padding: 10, background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+              邀請同事在 <b style={{ color: 'var(--text-primary)' }}>{showExtraModal.row?.title || '—'}</b>{' '}
+              （金額 NT$ {Number(showExtraModal.row?.estimated_amount || 0).toLocaleString()}）
+              第 {(showExtraModal.row?.current_step ?? 0) + 1} 關之前協助加簽
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                加簽人 <span style={{ color: 'var(--accent-red)' }}>*</span>
+              </label>
+              <SearchableSelect
+                value={extraForm.assignee_id}
+                onChange={(v) => setExtraForm(f => ({ ...f, assignee_id: v }))}
+                options={empOptions(employees.filter(e =>
+                  e.id !== profile?.id &&
+                  e.id !== showExtraModal.row?.employee_id
+                ))}
+                placeholder="搜尋同事姓名或部門…"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                加簽原因（選填，但建議填）
+              </label>
+              <textarea
+                className="input"
+                value={extraForm.reason}
+                onChange={(e) => setExtraForm(f => ({ ...f, reason: e.target.value }))}
+                placeholder="例：金額較高，請會計師先看"
+                rows={3}
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setShowExtraModal(null)}>取消</button>
+              <AsyncButton className="btn btn-primary" onClick={handleSubmitExtra} busyLabel="送出中…"
+                disabled={!extraForm.assignee_id}>
+                送出加簽請求
+              </AsyncButton>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
       {showDetail && !showSettleModal && (() => {

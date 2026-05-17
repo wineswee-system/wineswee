@@ -12,7 +12,7 @@ import {
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator,
   UserCheck, Shield, Send, Search, AlertOctagon, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
-  FolderTree,
+  FolderTree, UserMinus, PauseCircle, RefreshCcw,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -222,6 +222,8 @@ export const groupNav = {
       children: [
         { icon: Calendar, label: '排班', path: '/hr/schedule' },
         { icon: CalendarDays, label: '我的班表', path: '/hr/my-schedule' },
+        { icon: CalendarOff, label: '希望休', path: '/hr/off-requests' },
+        { icon: RefreshCcw, label: '換班', path: '/hr/shift-swaps' },
         { icon: Workflow, label: '排班規則', path: '/hr/schedule-rules' },
         { icon: Workflow, label: '工時/假別單位', path: '/hr/work-unit-settings' },
         { icon: CalendarDays, label: '假日管理', path: '/hr/holidays' },
@@ -233,6 +235,9 @@ export const groupNav = {
       children: [
         { icon: FileText, label: 'HR 表單中心', path: '/hr/forms' },
         { icon: ClipboardCheck, label: '我的提交', path: '/hr/forms/submissions' },
+        { icon: UserMinus, label: '離職申請', path: '/hr/forms/resignation' },
+        { icon: PauseCircle, label: '留職停薪', path: '/hr/forms/loa' },
+        { icon: ArrowRightLeft, label: '人事異動', path: '/hr/forms/transfer' },
         { icon: Settings, label: '表單建立器', path: '/hr/form-builder' },
         { icon: FileText, label: '文件範本', path: '/org/templates' },
       ]
@@ -299,6 +304,7 @@ export const groupNav = {
         { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
         { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
         { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },
+        { icon: CheckSquare, label: '任務確認', path: '/process/task-confirmations', title: '任務 chain 步驟確認' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists', title: '標準作業檢查表（例：每日開店清單）' },
       ]
     },

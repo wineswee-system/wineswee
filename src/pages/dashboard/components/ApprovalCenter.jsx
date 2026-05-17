@@ -5,7 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import {
-  Users, Wallet, Calendar, ClipboardCheck,
+  Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
   ChevronRight, CheckCircle2,
 } from 'lucide-react'
 
@@ -41,7 +41,22 @@ const GROUPS = [
     key: 'people', label: '人事異動', icon: Calendar, color: 'var(--accent-purple)',
     tabs: [
       { key: 'resignation', label: '離職', table: 'resignation_requests',         route: '/hr/forms/resignation', pendingStatus: '申請中' },
+      { key: 'loa',         label: '留停', table: 'leave_of_absence_requests',    route: '/hr/forms/loa',         pendingStatus: '申請中' },
       { key: 'transfer',    label: '異動', table: 'personnel_transfer_requests',  route: '/hr/forms/transfer',    pendingStatus: '申請中' },
+    ],
+  },
+  {
+    key: 'schedule', label: '排班', icon: CalendarOff, color: 'var(--accent-orange)',
+    tabs: [
+      { key: 'off_request',        label: '希望休',     table: 'off_requests', route: '/hr/off-requests', pendingStatus: '待審核' },
+      { key: 'shift_swap_peer',    label: '換班-我同意', table: 'shift_swaps',  route: '/hr/shift-swaps',  pendingStatus: '待對方同意' },
+      { key: 'shift_swap_manager', label: '換班-我核准', table: 'shift_swaps',  route: '/hr/shift-swaps',  pendingStatus: '待主管核准' },
+    ],
+  },
+  {
+    key: 'task', label: '任務', icon: ClipboardCheck, color: 'var(--accent-cyan)',
+    tabs: [
+      { key: 'task_confirmation', label: '任務確認', table: 'task_confirmations', route: '/process/task-confirmations', pendingStatus: 'pending' },
     ],
   },
 ]
@@ -56,7 +71,13 @@ const PERM_KEY_MAP = {
   expense_request: 'expense_requests',
   expense_settle: 'expense_settles',
   resignation: 'resignation_requests',
+  loa: 'leave_of_absence_requests',
   transfer: 'personnel_transfer_requests',
+  // 排班 / 任務（暫未在 web_list_my_pending_approval_ids 內 → 後續補）
+  off_request: 'off_requests',
+  shift_swap_peer: 'shift_swaps',
+  shift_swap_manager: 'shift_swaps',
+  task_confirmation: 'task_confirmations',
 }
 
 export default function ApprovalCenter() {
@@ -294,6 +315,27 @@ function getRowDisplay(row, tabKey) {
       return {
         title: `${row.employee} · 核銷 ${row.title || ''}`,
         subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'loa':
+      return {
+        title: `${row.employee?.name || '—'} · 留職停薪`,
+        subtitle: `${row.start_date || ''} ~ ${row.planned_end_date || ''}（${row.reason_type || '—'}）`,
+      }
+    case 'off_request':
+      return {
+        title: `${row.employee || '—'} · 希望休`,
+        subtitle: row.date || '—',
+      }
+    case 'shift_swap_peer':
+    case 'shift_swap_manager':
+      return {
+        title: `換班申請 #${row.id}`,
+        subtitle: `${row.source_date || ''} ↔ ${row.target_date || ''}`,
+      }
+    case 'task_confirmation':
+      return {
+        title: row.task_title || `任務 #${row.task_id || row.id}`,
+        subtitle: `第 ${(row.step_order ?? 0) + 1} 關`,
       }
     case 'resignation':
       return {

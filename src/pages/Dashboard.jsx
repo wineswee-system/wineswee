@@ -3,6 +3,9 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import TeamDashboard from './dashboard/TeamDashboard'
 import StaffDashboard from './dashboard/components/StaffDashboard'
+import ApprovalCenter from './dashboard/components/ApprovalCenter'
+import { usePendingApprovals } from '../lib/usePendingApprovals'
+import { LayoutDashboard, FileCheck } from 'lucide-react'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
   ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
@@ -586,8 +589,77 @@ export default function Dashboard() {
   //   office_staff → 原本的 StaffDashboard（用 admin UI 的員工）
   //   manager / admin / super_admin → 新的 TeamDashboard（團隊視角）
   if (userRole === 'store_staff') return <Navigate to="/portal" replace />
-  if (userRole === 'office_staff' && profile) return <StaffDashboard profile={profile} />
-  if (['manager', 'admin', 'super_admin'].includes(userRole)) return <TeamDashboard />
-  // fallback
-  return <AdminDashboard profile={profile} />
+
+  // 兩 tab：總覽 + 我的待簽（簽核中心）
+  const inner = userRole === 'office_staff' && profile
+    ? <StaffDashboard profile={profile} />
+    : ['manager', 'admin', 'super_admin'].includes(userRole)
+      ? <TeamDashboard />
+      : <AdminDashboard profile={profile} />
+
+  return <DashboardTabs overview={inner} />
+}
+
+function DashboardTabs({ overview }) {
+  const { totalPending, loading: pendingLoading } = usePendingApprovals()
+  // 預設：有待簽 → 直接顯示我的待簽；沒有 → 總覽
+  // 載入完才做決定，避免閃爍
+  const [tab, setTab] = useState('overview')
+  useEffect(() => {
+    if (!pendingLoading && totalPending > 0 && tab === 'overview') {
+      setTab('approvals')
+    }
+    // 只在首次載入完成時自動切，後續使用者切走不再自動切回
+  }, [pendingLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', gap: 4, padding: '12px 16px 0 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        background: 'var(--bg-card)',
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <DashboardTabButton
+          active={tab === 'overview'} onClick={() => setTab('overview')}
+          icon={<LayoutDashboard size={16} />}
+          label="總覽"
+        />
+        <DashboardTabButton
+          active={tab === 'approvals'} onClick={() => setTab('approvals')}
+          icon={<FileCheck size={16} />}
+          label="我的待簽"
+          badge={totalPending}
+        />
+      </div>
+
+      <div style={{ padding: tab === 'approvals' ? 24 : 0 }}>
+        {tab === 'overview' && overview}
+        {tab === 'approvals' && <ApprovalCenter />}
+      </div>
+    </div>
+  )
+}
+
+function DashboardTabButton({ active, onClick, icon, label, badge }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '10px 16px',
+      background: 'transparent', border: 'none', cursor: 'pointer',
+      borderBottom: active ? '3px solid var(--accent-cyan)' : '3px solid transparent',
+      color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
+      fontSize: 14, fontWeight: 700,
+      display: 'flex', alignItems: 'center', gap: 8,
+      marginBottom: -1,
+    }}>
+      {icon} {label}
+      {badge > 0 && (
+        <span style={{
+          background: 'var(--accent-red)', color: '#fff',
+          fontSize: 11, fontWeight: 700,
+          padding: '2px 7px', borderRadius: 10, minWidth: 20, textAlign: 'center',
+        }}>{badge}</span>
+      )}
+    </button>
+  )
 }

@@ -28,5 +28,10 @@ export function usePendingApprovals() {
     return data[table].includes(id)
   }, [data])
 
-  return { canApprove, reload, loading }
+  // 總待簽數（給 Dashboard tab badge 用）
+  const totalPending = data
+    ? Object.values(data).reduce((s, arr) => s + (Array.isArray(arr) ? arr.length : 0), 0)
+    : 0
+
+  return { canApprove, reload, loading, pendingByTable: data || {}, totalPending }
 }

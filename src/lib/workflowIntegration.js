@@ -36,7 +36,23 @@ const CHAIN_CATEGORY_MAP = {
  * @param {string} requesterName - 申請人
  * @returns {{ instance, steps, error? }}
  */
+// 已停用此 createApprovalWorkflow 處理的 type：
+// 這些類型的簽核已改走 DB trigger（approval_chains + chain_steps），
+// 前端不該再建立 workflow_instance + tasks（會跟 chain 雙跑、產生 ghost 資料、
+// LINE cron 重複推「今日到期提醒」）。
+//
+// 2026-05-17 階段性 disable：
+//   B1: expense_request（confirmed bug 源頭）
+//   B2 待觀察：leave / overtime / expense / business_trip / clock_correction
+//   B3 待評估：purchase
+const DISABLED_TYPES = new Set(['expense_request'])
+
 export async function createApprovalWorkflow(type, record, requesterName) {
+  // ★ B1：停用簽核類前端建 workflow，由 DB trigger 處理
+  if (DISABLED_TYPES.has(type)) {
+    return { skipped: true, reason: 'handled_by_db_trigger' }
+  }
+
   const defaultTpl = DEFAULT_TEMPLATES[type]
   if (!defaultTpl) return { error: `未知的流程類型：${type}` }
 

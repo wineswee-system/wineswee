@@ -227,9 +227,49 @@ const handleResend: PostbackHandler = async (params, ctx) => {
   return [card];
 };
 
+// ── Handler: 加簽核准（P3d） ──────────────────────────────────────────────────
+// postback data: action=approve&type=extra&extra_id=X
+// 加簽人 LINE 卡按「✅ 核准加簽」→ 直接通過，不用進 LIFF
+//
+// 加簽退回需要填原因 → 不做 postback，使用者按「📋 查看 / 退回」進 LIFF 填寫
+// 撤銷加簽 → 從 Web/LIFF UI 觸發，不從 LINE 卡上做
+const handleApproveExtra: PostbackHandler = async (params, ctx) => {
+  const extraId = Number(params.extra_id);
+  if (!extraId) {
+    return [txt("⚠️ 加簽參數有誤")];
+  }
+
+  // 解 line user → employee_id
+  if (!ctx.lineUser?.employee_id) {
+    return [txt("❌ 你的 LINE 還沒綁員工，請先 /註冊 姓名")];
+  }
+  const empId = ctx.lineUser.employee_id;
+
+  const { data, error } = await ctx.db.rpc("process_extra_signer", {
+    p_extra_step_id: extraId,
+    p_processor_id: empId,
+    p_action: "approve",
+    p_reject_reason: null,
+  });
+
+  if (error) {
+    // PostgreSQL RAISE EXCEPTION 訊息可能含中文錯誤
+    const msg = error.message ?? "核准失敗";
+    if (msg.includes("加簽紀錄不存在")) return [txt("❌ 加簽紀錄不存在或已被處理")];
+    if (msg.includes("狀態非 pending")) return [txt("❌ 此加簽已被處理或撤銷")];
+    if (msg.includes("只有加簽人本人")) return [txt("❌ 你不是這個加簽的對象")];
+    return [txt(`❌ 核准加簽失敗：${msg}`)];
+  }
+
+  // 後續 LINE 推送由 DB trigger _trg_extra_signer_updated 自動處理：
+  // - 推「✅ 加簽已通過」卡給原發起人
+  return [txt(`✅ 已核准加簽（#${extraId}）`)];
+};
+
 // ── Register ─────────────────────────────────────────────────────────────────
 
 registerPostback("approve", "request", handleApprove);
 registerPostback("reject",  "request", handleReject);
 registerPostback("cancel",  "request", handleCancel);
+registerPostback("approve", "extra",   handleApproveExtra);  // P3d 加簽核准
 registerPostback("resend",  "request", handleResend);

@@ -22,7 +22,12 @@ export const getWorkflowInstances = (options = {}) => {
   let q = supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
   if (options.orgId) q = q.eq('organization_id', options.orgId)
   if (options.excludeTemplates?.length) {
-    q = q.not('template_name', 'in', `(${options.excludeTemplates.map(n => `"${n}"`).join(',')})`)
+    // 用 .neq() 逐一排除（PostgREST `not in` 對中文 + 引號 escape 不可靠，
+    // 原本 `"${n}"` 雙引號是 SQL identifier 不是字串字面值 → 整個 filter 沒生效，
+    // 造成 HR 簽核（如「費用申請簽核」）跑進流程頁面）
+    for (const name of options.excludeTemplates) {
+      q = q.neq('template_name', name)
+    }
   }
   return q.limit(options.limit ?? 200)
 }

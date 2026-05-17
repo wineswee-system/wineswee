@@ -615,7 +615,7 @@ function DashboardTabs({ overview }) {
   return (
     <div>
       <div style={{
-        display: 'flex', gap: 4, padding: '12px 16px 0 16px',
+        display: 'flex', gap: 24, padding: '12px 24px 0 24px',
         borderBottom: '1px solid var(--border-subtle)',
         background: 'var(--bg-card)',
         position: 'sticky', top: 0, zIndex: 10,

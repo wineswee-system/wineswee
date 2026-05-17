@@ -23,25 +23,25 @@ const GROUPS = [
   {
     key: 'hr', label: '人事', icon: Users, color: 'var(--accent-cyan)',
     tabs: [
-      { key: 'leave',        label: '請假', table: 'leave_requests',     route: '/hr/leave',           pendingStatus: '待審核' },
-      { key: 'overtime',     label: '加班', table: 'overtime_requests',  route: '/hr/overtime',        pendingStatus: '待審核' },
-      { key: 'trip',         label: '出差', table: 'business_trips',     route: '/hr/business-travel', pendingStatus: '待審核' },
-      { key: 'correction',   label: '補打卡', table: 'clock_corrections', route: '/hr/punch-correction', pendingStatus: '待審核' },
-      { key: 'expense',      label: '報帳', table: 'expenses',           route: '/hr/expenses',        pendingStatus: '待審核' },
+      { key: 'leave',        label: '請假',   table: 'leave_requests',     route: '/hr/leave',             pendingStatus: '待審核' },
+      { key: 'overtime',     label: '加班',   table: 'overtime_requests',  route: '/hr/overtime',          pendingStatus: '待審核' },
+      { key: 'trip',         label: '出差',   table: 'business_trips',     route: '/hr/travel',            pendingStatus: '待審核' },
+      { key: 'correction',   label: '補打卡', table: 'clock_corrections',  route: '/hr/punch-correction',  pendingStatus: '待審核' },
+      { key: 'expense',      label: '報帳',   table: 'expenses',           route: '/hr/expenses',          pendingStatus: '待審核' },
     ],
   },
   {
     key: 'finance', label: '經費', icon: Wallet, color: 'var(--accent-green)',
     tabs: [
-      { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/finance/expense-requests', pendingStatus: '申請中' },
-      { key: 'expense_settle',  label: '核銷', table: 'expense_requests', route: '/finance/expense-requests', pendingStatus: '待核銷' },
+      { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中' },
+      { key: 'expense_settle',  label: '核銷', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷' },
     ],
   },
   {
     key: 'people', label: '人事異動', icon: Calendar, color: 'var(--accent-purple)',
     tabs: [
-      { key: 'resignation', label: '離職', table: 'resignation_requests',         route: '/hr/resignation',  pendingStatus: '申請中' },
-      { key: 'transfer',    label: '異動', table: 'personnel_transfer_requests',  route: '/hr/transfer-request', pendingStatus: '申請中' },
+      { key: 'resignation', label: '離職', table: 'resignation_requests',         route: '/hr/forms/resignation', pendingStatus: '申請中' },
+      { key: 'transfer',    label: '異動', table: 'personnel_transfer_requests',  route: '/hr/forms/transfer',    pendingStatus: '申請中' },
     ],
   },
 ]
@@ -174,21 +174,24 @@ export default function ApprovalCenter() {
           const isActive = g.key === activeGroup
           return (
             <button key={g.key} onClick={() => changeGroup(g.key)} style={{
-              flex: 1, padding: '14px 8px',
+              flex: 1, padding: '12px 8px',
               background: isActive ? 'var(--bg-card)' : 'transparent',
               border: 'none', cursor: 'pointer',
               borderBottom: isActive ? `3px solid ${g.color}` : '3px solid transparent',
               color: isActive ? g.color : 'var(--text-muted)',
-              fontSize: 14, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              fontSize: 13, fontWeight: 700,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              position: 'relative',
               transition: 'all .15s',
             }}>
-              <Icon size={16} /> {g.label}
+              <Icon size={20} />
+              <span>{g.label}</span>
               {count > 0 && (
                 <span style={{
+                  position: 'absolute', top: 6, right: 8,
                   background: g.color, color: '#fff',
-                  fontSize: 11, fontWeight: 700,
-                  padding: '2px 7px', borderRadius: 10, minWidth: 22, textAlign: 'center',
+                  fontSize: 10, fontWeight: 700,
+                  padding: '1px 6px', borderRadius: 10, minWidth: 18, textAlign: 'center',
                 }}>{count}</span>
               )}
             </button>

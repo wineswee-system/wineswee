@@ -633,7 +633,7 @@ function DashboardTabs({ overview }) {
         />
       </div>
 
-      <div style={{ padding: tab === 'approvals' ? 24 : 0 }}>
+      <div style={{ padding: tab === 'approvals' ? 24 : '20px 0 0 0' }}>
         {tab === 'overview' && overview}
         {tab === 'approvals' && <ApprovalCenter />}
       </div>

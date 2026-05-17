@@ -100,10 +100,11 @@ export async function buildWorkflowChainSteps({
  * @param {string} opts.applicantName
  * @param {string} opts.applicantCreatedAt
  * @param {Object} [opts.approverMap]        { emp_id: emp_name }，用於把 chain step 的 target_emp_id 翻成名字
+ * @param {string} [opts.sourceTable]        提供此參數時會 merge 加簽（approval_extra_steps）— 'expense_requests' / 'leave_requests' / ...
  * @returns {Promise<Array>}
  */
 export async function buildChainBasedSteps({
-  row, applicantName, applicantCreatedAt, approverMap = {},
+  row, applicantName, applicantCreatedAt, approverMap = {}, sourceTable = null,
 }) {
   const applicantStep = {
     label: '申請人',
@@ -177,7 +178,101 @@ export async function buildChainBasedSteps({
     }
   })
 
-  return [applicantStep, ...steps]
+  const allSteps = [applicantStep, ...steps]
+
+  // 加簽 merge — sourceTable 提供時撈 approval_extra_steps 插入對應位置
+  if (sourceTable && row?.id) {
+    const merged = await mergeExtraSteps(allSteps, sourceTable, row.id, approverMap)
+    return merged
+  }
+  return allSteps
+}
+
+/**
+ * 把 approval_extra_steps 插入既有 chain steps（共用 helper）
+ *
+ * 規則：
+ *   - 跳過 'cancelled' 狀態（不顯示）
+ *   - extra.status → step.status 對映：
+ *       pending  → 'current'  （等加簽人簽）
+ *       approved → 'completed'
+ *       rejected → 'rejected'
+ *   - 插在原 chain 第 insert_before_step 之前（用 fractional step_order 排序：N - 0.5）
+ *
+ * @param {Array} baseSteps      含申請人 cell 的完整 chain steps
+ * @param {string} sourceTable
+ * @param {number} sourceId
+ * @param {Object} approverMap   { emp_id: emp_name } — 解加簽人 / 發起人姓名
+ * @returns {Promise<Array>}
+ */
+async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {}) {
+  const { data: extras } = await supabase
+    .from('approval_extra_steps')
+    .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, reject_reason, status, approved_at, created_at')
+    .eq('source_table', sourceTable)
+    .eq('source_id', sourceId)
+    .neq('status', 'cancelled')
+    .order('created_at')
+
+  if (!extras || extras.length === 0) return baseSteps
+
+  // 把員工 id → 姓名拉齊（如果 approverMap 沒有就 query）
+  const needIds = new Set()
+  for (const e of extras) {
+    if (!approverMap[e.assignee_id]) needIds.add(e.assignee_id)
+    if (!approverMap[e.requested_by_id]) needIds.add(e.requested_by_id)
+  }
+  let nameMap = { ...approverMap }
+  if (needIds.size > 0) {
+    const { data: emps } = await supabase
+      .from('employees')
+      .select('id, name')
+      .in('id', Array.from(needIds))
+    for (const e of (emps || [])) nameMap[e.id] = e.name
+  }
+
+  // 組加簽 step
+  const extraSteps = extras.map(e => {
+    let status = 'pending'
+    if (e.status === 'pending') status = 'current'
+    else if (e.status === 'approved') status = 'completed'
+    else if (e.status === 'rejected') status = 'rejected'
+    return {
+      kind: 'extra',
+      label: '加簽',
+      name: nameMap[e.assignee_id] || '',
+      status,
+      completedAt: e.approved_at,
+      completedBy: nameMap[e.assignee_id] || '',
+      rejectReason: e.reject_reason || '',
+      // 加簽專屬 meta（給 PDF / Modal 顯示「由 X 發起 / 原因」）
+      extraReason: e.reason || '',
+      extraRequesterName: nameMap[e.requested_by_id] || '',
+      // 用 -0.5 表達「在第 N 關之前」— 給排序用
+      _insertBefore: e.insert_before_step,
+      _insertOrder: e.insert_before_step - 0.5,
+    }
+  })
+
+  // base 是 [applicantStep, step1, step2, ...] — applicantStep idx 0，chain step.step_order 從 0 開始
+  // 加簽要插到對應 chain step「之前」(同 idx 的 chain step 之前)
+  // 用 _insertOrder = N-0.5 跟 chain step 的 step_order = N 一起排
+  const indexed = []
+  let chainIdx = 0
+  for (let i = 0; i < baseSteps.length; i++) {
+    const s = baseSteps[i]
+    if (s.isApplicant) {
+      indexed.push({ _order: -1, step: s })
+    } else {
+      indexed.push({ _order: chainIdx, step: s })
+      chainIdx += 1
+    }
+  }
+  for (const ex of extraSteps) {
+    indexed.push({ _order: ex._insertOrder, step: ex })
+  }
+  indexed.sort((a, b) => a._order - b._order)
+  return indexed.map(x => x.step)
 }
 
 

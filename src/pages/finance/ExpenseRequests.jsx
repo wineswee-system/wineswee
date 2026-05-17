@@ -459,6 +459,7 @@ export default function ExpenseRequests() {
     // 餵 buildChainBasedSteps：用 row.current_step（新加的欄位）真實推進度
     // 沒 chain → buildChainBasedSteps 自己 fallback 給「主管核示」單關
     const fakeRow = {
+      id: req.id,  // ★ buildChainBasedSteps 用來查 approval_extra_steps（加簽 merge）
       approval_chain_id: req.approval_chain_id || null,
       current_step: req.current_step || 0,
       // ★ 必須帶 employee_id 給 get_chain_step_display_names 解動態 target（applicant_dept_manager 等）
@@ -477,6 +478,7 @@ export default function ExpenseRequests() {
         applicantName: req.employee,
         applicantCreatedAt: req.created_at,
         approverMap,
+        sourceTable: 'expense_requests',  // ★ P3b 加簽 merge
       })
     } catch (e) {
       console.error('buildChainBasedSteps failed:', e)

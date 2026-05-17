@@ -572,7 +572,9 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
 
   // 有 chainSteps → 智慧渲染（優先使用 step.status；沒設則 fallback 用 overall status）
   return chainSteps.map((step, idx) => {
-    const stepLabel = step.label || step.role_name || `第 ${idx + 1} 關`
+    // 加簽 cell（P3b）：label 強制顯示「加簽」，cell 加底色 + 註明由誰發起 / 原因
+    const isExtraCell = step.kind === 'extra'
+    const stepLabel = isExtraCell ? '加簽' : (step.label || step.role_name || `第 ${idx + 1} 關`)
     // 優先：step.name（buildChainSteps 已預先填好）；次之：approverMap lookup；最後：role_name
     const stepTarget = step.name || (step.target_emp_id ? approverMap[step.target_emp_id] : '') || step.role_name || ''
 
@@ -620,11 +622,25 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
         : `<div class="placeholder-line">簽章 / 日期</div>`
     }
 
+    // 加簽 cell 額外註腳：由誰發起 / 原因
+    const extraFooter = isExtraCell
+      ? `<div style="margin-top:4px;padding:4px;font-size:8pt;color:#9A3412;background:#FFF7ED;border-radius:3px;line-height:1.4">
+           ${step.extraRequesterName ? `由 ${safe(step.extraRequesterName)} 發起<br/>` : ''}
+           ${step.extraReason ? `原因：${safe(step.extraReason)}` : ''}
+         </div>`
+      : ''
+
+    // 加簽 cell 用斜框 + 橘邊區分（PDF 黑白也看得出來）
+    const extraCellStyle = isExtraCell
+      ? 'style="border:1.5px dashed #f97316;background:#FFFBEB"'
+      : ''
+
     return `
-      <div class="sign-cell ${cellStatus}">
-        <div class="sign-header">${safe(stepLabel)}</div>
+      <div class="sign-cell ${cellStatus}" ${extraCellStyle}>
+        <div class="sign-header">${safe(stepLabel)}${isExtraCell ? ' 🪶' : ''}</div>
         <div class="sign-target">${safe(stepTarget || '　')}</div>
         <div class="sign-stamp">${cellContent}</div>
+        ${extraFooter}
       </div>`
   }).join('')
 }

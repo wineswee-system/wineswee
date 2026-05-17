@@ -41,14 +41,22 @@ const CHAIN_CATEGORY_MAP = {
 // 前端不該再建立 workflow_instance + tasks（會跟 chain 雙跑、產生 ghost 資料、
 // LINE cron 重複推「今日到期提醒」）。
 //
-// 2026-05-17 階段性 disable：
+// 2026-05-15 一次 disable 全部簽核類（user：可交叉測試，要 revert 也容易）：
 //   B1: expense_request（confirmed bug 源頭）
-//   B2 待觀察：leave / overtime / expense / business_trip / clock_correction
-//   B3 待評估：purchase
-const DISABLED_TYPES = new Set(['expense_request'])
+//   B2: leave / overtime / expense / business_trip / clock_correction
+//   B3: purchase
+const DISABLED_TYPES = new Set([
+  'expense_request',
+  'leave',
+  'overtime',
+  'expense',
+  'business_trip',
+  'clock_correction',
+  'purchase',
+])
 
 export async function createApprovalWorkflow(type, record, requesterName) {
-  // ★ B1：停用簽核類前端建 workflow，由 DB trigger 處理
+  // ★ 停用簽核類前端建 workflow_instance + tasks，由 DB trigger（approval_chains）處理
   if (DISABLED_TYPES.has(type)) {
     return { skipped: true, reason: 'handled_by_db_trigger' }
   }

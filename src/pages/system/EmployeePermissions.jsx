@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { toast } from '../../lib/toast'
 import PermissionModuleSection from './components/PermissionModuleSection'
+import { SOURCE_BADGE } from './components/PermissionFeatureRow'
 
 const ROLE_LABEL = {
   store_staff:  '門市人員',

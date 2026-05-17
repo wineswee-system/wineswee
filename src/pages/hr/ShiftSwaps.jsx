@@ -23,8 +23,9 @@ export default function ShiftSwaps() {
 
   const load = async () => {
     setLoading(true)
+    // shift_swaps 欄位：requester_id / target_id / swap_date / status / store_id ...
     let q = supabase.from('shift_swaps')
-      .select('*, source:employees!source_id(id,name), target:employees!target_id(id,name)')
+      .select('*, requester_emp:employees!requester_id(id,name), target_emp:employees!target_id(id,name)')
       .order('id', { ascending: false })
     if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)
     const { data } = await q
@@ -47,59 +48,57 @@ export default function ShiftSwaps() {
 
   // ── 我可以做什麼判斷 ──
   // peer 同意：我是 target_id 且 status='待對方同意'
-  // manager 核准：我是 store manager 或有 schedule.approve 權限 且 status='待主管核准'
+  // manager 核准：我不是雙方 + status='待主管核准'（store manager / schedule.approve 由 RPC 端驗）
   const myRole = (r) => {
     if (!profile?.id) return null
     if (r.status === '待對方同意' && r.target_id === profile.id) return 'peer'
-    if (r.status === '待主管核准' && r.source_id !== profile.id && r.target_id !== profile.id) return 'manager'
+    if (r.status === '待主管核准' && r.requester_id !== profile.id && r.target_id !== profile.id) return 'manager'
     return null
   }
 
+  // peer: web_respond_shift_swap_peer({ agree | reject })
   const doApprovePeer = async () => {
     const r = detailRow
-    const { error } = await supabase.from('shift_swaps').update({
-      status: '待主管核准',
-      peer_responded_at: new Date().toISOString(),
-    }).eq('id', r.id)
+    const { data, error } = await supabase.rpc('web_respond_shift_swap_peer', {
+      p_swap_id: r.id, p_action: 'agree', p_reason: null,
+    })
     if (error) { toast.error('同意失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('同意失敗：' + (data?.error || 'unknown')); return }
     toast.success('已同意，等主管核准')
   }
   const doRejectPeer = async (_r, reason) => {
     const r = detailRow
-    const { error } = await supabase.from('shift_swaps').update({
-      status: '已拒絕',
-      peer_responded_at: new Date().toISOString(),
-      reject_reason: reason,
-    }).eq('id', r.id)
+    const { data, error } = await supabase.rpc('web_respond_shift_swap_peer', {
+      p_swap_id: r.id, p_action: 'reject', p_reason: reason,
+    })
     if (error) { toast.error('拒絕失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('拒絕失敗：' + (data?.error || 'unknown')); return }
     toast.success('已拒絕')
   }
+  // manager: web_approve_shift_swap_manager({ approve | reject }) — 含實際 schedules 交換
   const doApproveManager = async () => {
     const r = detailRow
-    const { error } = await supabase.from('shift_swaps').update({
-      status: '已通過',
-      approver_id: profile?.id,
-      approved_at: new Date().toISOString(),
-    }).eq('id', r.id)
+    const { data, error } = await supabase.rpc('web_approve_shift_swap_manager', {
+      p_swap_id: r.id, p_action: 'approve', p_reason: null,
+    })
     if (error) { toast.error('核准失敗：' + error.message); return }
-    toast.success('已核准')
+    if (!data?.ok) { toast.error('核准失敗：' + (data?.error || 'unknown')); return }
+    toast.success('已核准（班表已交換）')
   }
   const doRejectManager = async (_r, reason) => {
     const r = detailRow
-    const { error } = await supabase.from('shift_swaps').update({
-      status: '已駁回',
-      approver_id: profile?.id,
-      approved_at: new Date().toISOString(),
-      reject_reason: reason,
-    }).eq('id', r.id)
+    const { data, error } = await supabase.rpc('web_approve_shift_swap_manager', {
+      p_swap_id: r.id, p_action: 'reject', p_reason: reason,
+    })
     if (error) { toast.error('駁回失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('駁回失敗：' + (data?.error || 'unknown')); return }
     toast.success('已駁回')
   }
 
   if (loading) return <LoadingSpinner />
 
   const peerCount = list.filter(r => r.status === '待對方同意' && r.target_id === profile?.id).length
-  const managerCount = list.filter(r => r.status === '待主管核准').length
+  const managerCount = list.filter(r => r.status === '待主管核准' && r.requester_id !== profile?.id && r.target_id !== profile?.id).length
 
   const detailRoleNow = detailRow ? myRole(detailRow) : null
   const actions = detailRoleNow === 'peer' ? {
@@ -149,15 +148,12 @@ export default function ShiftSwaps() {
                 const s = STATUS_BADGE[r.status] || {}
                 return (
                   <tr key={r.id} onClick={() => setDetailRow(r)} style={{ cursor: 'pointer' }} title="點擊查看明細">
-                    <td><b>{r.source?.name || `#${r.source_id}`}</b></td>
-                    <td>{r.target?.name || `#${r.target_id}`}</td>
-                    <td>
-                      {r.source_date || r.date || '—'}
-                      {r.target_date && r.target_date !== r.source_date && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>↔ {r.target_date}</div>}
-                    </td>
+                    <td><b>{r.requester_emp?.name || r.requester || `#${r.requester_id}`}</b></td>
+                    <td>{r.target_emp?.name || r.target || `#${r.target_id}`}</td>
+                    <td>{r.swap_date || '—'}</td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>
-                      {r.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}
+                      {(r.reject_reason || r.peer_reject_reason) && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason || r.peer_reject_reason}</div>}
                     </td>
                     <td style={{ fontSize: 12 }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
                   </tr>
@@ -176,16 +172,15 @@ export default function ShiftSwaps() {
           docNo={detailRow.id}
           status={detailRow.status}
           applicant={{
-            name: detailRow.source?.name || `員工 #${detailRow.source_id}`,
+            name: detailRow.requester_emp?.name || detailRow.requester || `員工 #${detailRow.requester_id}`,
             status: '在職',
           }}
           fields={[
-            { label: '申請人', value: detailRow.source?.name },
-            { label: '對方', value: detailRow.target?.name },
-            { label: '換班日期', value: detailRow.source_date || detailRow.date },
-            ...(detailRow.target_date && detailRow.target_date !== detailRow.source_date
-              ? [{ label: '對方日期', value: detailRow.target_date }] : []),
+            { label: '申請人', value: detailRow.requester_emp?.name || detailRow.requester },
+            { label: '對方', value: detailRow.target_emp?.name || detailRow.target },
+            { label: '換班日期', value: detailRow.swap_date },
             ...(detailRow.reason ? [{ label: '原因', value: detailRow.reason, multiline: true }] : []),
+            ...(detailRow.peer_reject_reason ? [{ label: '對方拒絕原因', value: detailRow.peer_reject_reason, multiline: true }] : []),
             ...(detailRow.reject_reason ? [{ label: '退回原因', value: detailRow.reject_reason, multiline: true }] : []),
           ]}
           createdAt={detailRow.created_at}

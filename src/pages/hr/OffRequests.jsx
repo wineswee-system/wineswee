@@ -46,29 +46,23 @@ export default function OffRequests() {
     }
   }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 直接 update 走 RLS。沒過的話 admin 可從 LIFF / SQL 處理
+  // 走 SECURITY DEFINER RPC，避免 RLS 卡關 + 驗權限（HR 簽核者）
   const doApprove = async () => {
     if (!detailRow) return
-    const { error } = await supabase.from('off_requests').update({
-      status: '已核准',
-      approver_id: profile?.id,
-      approver_name: profile?.name,
-      approved_at: new Date().toISOString(),
-      reject_reason: null,
-    }).eq('id', detailRow.id)
+    const { data, error } = await supabase.rpc('web_approve_off_request', {
+      p_id: detailRow.id, p_action: 'approve', p_reason: null,
+    })
     if (error) { toast.error('核准失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('核准失敗：' + (data?.error || 'unknown')); return }
     toast.success('已核准')
   }
   const doReject = async (_r, reason) => {
     if (!detailRow) return
-    const { error } = await supabase.from('off_requests').update({
-      status: '已退回',
-      approver_id: profile?.id,
-      approver_name: profile?.name,
-      approved_at: new Date().toISOString(),
-      reject_reason: reason,
-    }).eq('id', detailRow.id)
+    const { data, error } = await supabase.rpc('web_approve_off_request', {
+      p_id: detailRow.id, p_action: 'reject', p_reason: reason,
+    })
     if (error) { toast.error('退回失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
     toast.success('已退回')
   }
 

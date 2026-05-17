@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'
@@ -58,6 +58,18 @@ export default function Leave() {
   // 附件（對齊 LIFF）：上傳到 Supabase Storage bucket `leave-attachments`
   const [attachFiles, setAttachFiles] = useState([])
   const [uploading, setUploading] = useState(false)
+
+  // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !leaves.length) return
+    const row = leaves.find(l => l.id === Number(focus))
+    if (row) {
+      openDetail(row)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [leaves, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])

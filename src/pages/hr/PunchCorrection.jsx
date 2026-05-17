@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Check, X, Printer, Settings, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -149,6 +149,18 @@ export default function PunchCorrection() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !corrections.length) return
+    const row = corrections.find(c => c.id === Number(focus))
+    if (row) {
+      openDetail(row)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [corrections, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

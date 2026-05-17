@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -108,6 +108,18 @@ export default function Expenses() {
       setLoading(false)
     })
   }, [])
+
+  // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !expenses.length) return
+    const row = expenses.find(e => e.id === Number(focus))
+    if (row) {
+      openDetail(row)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [expenses, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

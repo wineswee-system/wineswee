@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
 import { Plus, X, Check, Upload, FileText, Image, Send, Settings } from 'lucide-react'
@@ -140,6 +140,19 @@ export default function ExpenseRequests() {
   }
 
   useEffect(() => { load() }, [profile?.organization_id])
+
+  // 從 Dashboard ApprovalCenter 跳過來時，URL 帶 ?focus=ID → 自動開 detail modal
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !requests.length) return
+    const row = requests.find(r => r.id === Number(focus))
+    if (row) {
+      openDetail(row)
+      // 清掉 URL param 避免重整時又跳出來
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [requests, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load attachments for detail view
   const loadAttachments = async (requestId) => {

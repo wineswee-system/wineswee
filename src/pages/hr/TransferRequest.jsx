@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -166,6 +166,18 @@ export default function TransferRequest() {
     setLoading(false)
   }
   useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])
+
+  // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !list.length) return
+    const row = list.find(r => r.id === Number(focus))
+    if (row) {
+      openDetail(row)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedEmp = employees.find(e => String(e.id) === String(form.employee_id))
   const formattedEmpOptions = useMemo(() => empOptions(employees), [employees])

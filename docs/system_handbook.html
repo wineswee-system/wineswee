@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>系統操作手冊（完整版）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', 'Helvetica Neue', sans-serif;
+    margin: 0; padding: 40px;
+    color: #1f2937; line-height: 1.65;
+    background: #fff;
+    max-width: 920px; margin: 0 auto;
+  }
+  .cover {
+    text-align: center; padding: 60px 0;
+    border-bottom: 3px solid #06b6d4;
+  }
+  .cover h1 { font-size: 36px; margin: 0; color: #0f172a; }
+  .cover .ver { color: #64748b; margin-top: 10px; font-size: 14px; }
+  h1 {
+    font-size: 26px; margin: 60px 0 8px 0;
+    color: #0f172a;
+    padding: 12px 18px; background: #06b6d4; color: #fff;
+    border-radius: 8px;
+  }
+  h2 {
+    font-size: 20px; margin: 36px 0 12px 0;
+    color: #0f172a; padding-left: 12px;
+    border-left: 4px solid #06b6d4;
+  }
+  h3 {
+    font-size: 15px; margin: 18px 0 8px 0; color: #1f2937;
+    padding: 4px 10px; background: #ecfeff; border-radius: 6px;
+    border-left: 3px solid #06b6d4;
+  }
+  p, li { font-size: 13.5px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 8px 0 18px 0;
+    font-size: 12.5px;
+  }
+  th {
+    background: #f1f5f9; text-align: left; padding: 7px 9px;
+    border: 1px solid #e2e8f0; font-weight: 700; font-size: 12px;
+  }
+  td {
+    padding: 7px 9px; border: 1px solid #e2e8f0; vertical-align: top;
+  }
+  td.feat { font-weight: 700; white-space: nowrap; color: #0f172a; }
+  td.code, code {
+    background: #f1f5f9; padding: 1px 6px; border-radius: 3px;
+    font-family: Consolas, 'Courier New', monospace; font-size: 12px;
+    color: #be185d;
+  }
+  .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 700; border: 1px solid;
+  }
+  .badge.role { color: #64748b; background: #f1f5f9; border-color: #cbd5e1; }
+  .badge.grant { color: #16a34a; background: #dcfce7; border-color: #16a34a; }
+  .badge.revoke { color: #dc2626; background: #fee2e2; border-color: #dc2626; }
+  .badge.warn { color: #92400e; background: #fef3c7; border-color: #f59e0b; }
+  .badge.ok { color: #166534; background: #dcfce7; border-color: #22c55e; }
+  .note {
+    background: #fef9c3; border: 1px solid #facc15;
+    border-radius: 8px; padding: 10px 14px; margin: 10px 0;
+    font-size: 12.5px;
+  }
+  .note .label { font-weight: 700; color: #854d0e; margin-right: 4px; }
+  .warn {
+    background: #fee2e2; border: 1px solid #ef4444;
+    border-radius: 8px; padding: 10px 14px; margin: 10px 0;
+    font-size: 12.5px;
+  }
+  .warn .label { font-weight: 700; color: #991b1b; margin-right: 4px; }
+  .step {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 8px; padding: 10px 14px; margin: 6px 0;
+    font-size: 13px;
+  }
+  .step-num {
+    display: inline-block; width: 22px; height: 22px;
+    background: #06b6d4; color: #fff; border-radius: 50%;
+    text-align: center; line-height: 22px;
+    font-weight: 700; font-size: 13px;
+    margin-right: 8px;
+  }
+  .toc {
+    background: #f8fafc; border: 2px solid #06b6d4;
+    border-radius: 12px; padding: 20px 28px; margin: 30px 0;
+  }
+  .toc h3 { margin-top: 0; background: transparent; border: none; padding: 0; font-size: 16px; }
+  .toc ol { padding-left: 28px; }
+  .toc a { color: #0f172a; text-decoration: none; }
+  .toc a:hover { color: #06b6d4; text-decoration: underline; }
+  .toc li { margin: 5px 0; font-size: 13.5px; }
+  .toc .sub { margin-left: 18px; font-size: 12px; color: #64748b; }
+  @media print {
+    body { padding: 20px; max-width: none; }
+    h1 { page-break-before: always; page-break-after: avoid; }
+    h2, h3 { page-break-after: avoid; }
+    .step, .note, .warn, table { page-break-inside: avoid; }
+    .toc { page-break-after: always; }
+    .cover { page-break-after: always; }
+  }
+  .print-btn {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 20px; border-radius: 8px;
+    background: #06b6d4; color: #fff; border: none;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(6,182,212,0.4);
+    z-index: 999;
+  }
+  @media print { .print-btn { display: none; } }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .chip { display: inline-block; padding: 3px 10px; border-radius: 14px; font-size: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">🖨 列印 / 存 PDF</button>
+
+<div class="cover">
+  <h1>📘 SME Ops System 系統操作手冊</h1>
+  <div class="ver">完整版 · 9 章 · 約 100+ 頁 · 2026-05-17</div>
+</div>
+
+<div class="toc">
+  <h3>📑 目錄</h3>
+  <ol>
+    <li><a href="#ch1">簽核中心 + 加簽功能</a><div class="sub">所有使用者</div></li>
+    <li><a href="#ch2">LIFF 員工日常操作</a><div class="sub">所有員工</div></li>
+    <li><a href="#ch3">簽核鏈設定（chain setup）</a><div class="sub">Admin</div></li>
+    <li><a href="#ch4">主管簽核作業</a><div class="sub">店長 / 部門主管</div></li>
+    <li><a href="#ch5">排班系統</a><div class="sub">店長 / HR</div></li>
+    <li><a href="#ch6">薪資作業 SOP</a><div class="sub">HR / Payroll</div></li>
+    <li><a href="#ch7">新進員工入職 SOP</a><div class="sub">HR</div></li>
+    <li><a href="#ch8">Admin 緊急排錯手冊</a><div class="sub">Admin / 開發者</div></li>
+    <li><a href="#ch9">LINE BOT 指令清單</a><div class="sub">所有員工</div></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch1">第 1 章 · 簽核中心 + 加簽功能</h1>
+<p>給 <b>所有使用者</b>：員工 / 主管 / admin。</p>
+
+<h2>1.1 簽核中心是什麼</h2>
+<p>系統提供「一個地方看完所有跨類型的待簽」入口。不用切 8 個頁面找待簽單。</p>
+
+<h2>1.2 怎麼進到簽核中心</h2>
+<div class="step"><span class="step-num">1</span>登入後直接到 Dashboard（首頁）</div>
+<div class="step"><span class="step-num">2</span>上方有兩個 tab：<b>📊 總覽</b> · <b>📋 我的待簽（badge 顯示總數）</b></div>
+<div class="step"><span class="step-num">3</span>有待簽時系統自動跳到「我的待簽」；沒有則停在「總覽」</div>
+<div class="note">手機 LIFF 也有對應入口：HRHub → 簽核中心（也可從首頁卡片連結進去）</div>
+
+<h2>1.3 簽核中心 5 大群組</h2>
+<table>
+  <thead><tr><th>群組</th><th>包含類型</th><th>使用對象</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">🧑 人事</td><td>請假 / 加班 / 出差 / 補打卡 / 報帳</td><td>主管 / HR</td></tr>
+    <tr><td class="feat">💰 經費</td><td>申請 / 核銷</td><td>主管 / 財務</td></tr>
+    <tr><td class="feat">🟣 人事異動</td><td>離職 / 留停 / 異動</td><td>HR / 高階主管</td></tr>
+    <tr><td class="feat">🟠 排班</td><td>希望休 / 換班-我同意 / 換班-我核准</td><td>員工 / 店長</td></tr>
+    <tr><td class="feat">🔵 任務</td><td>任務確認</td><td>所有人</td></tr>
+  </tbody>
+</table>
+<p>每群組旁邊有 count badge 顯示該群組的待簽數。</p>
+
+<h2>1.4 怎麼簽一筆單</h2>
+
+<div class="step"><span class="step-num">1</span>進「我的待簽」→ 選對應群組 → 點要簽的 row</div>
+<div class="step"><span class="step-num">2</span>系統會跳轉到對應的 HR 頁面，<b>自動開啟該單明細 Modal</b></div>
+<div class="step"><span class="step-num">3</span>Modal 結構：
+  <ul style="margin:6px 0 0 0">
+    <li>左半邊：申請人資料 + 表單內容 + 附件</li>
+    <li>右半邊：簽核流程時間軸（每關狀態：已簽/等待/駁回）</li>
+    <li>底部：簽核操作列（永遠看得到，不用滾）</li>
+  </ul>
+</div>
+<div class="step"><span class="step-num">4</span>底部三顆按鈕：
+  <ul style="margin:6px 0 0 0">
+    <li><b>✓ 核准</b>：通過此關，推進到下一關</li>
+    <li><b>✗ 退回</b>：點下去展開原因 textarea，必填，送出後申請人會收 LINE 通知並可編輯重送</li>
+    <li><b>🪶 加簽</b>：邀請第三人協助看，自己暫不簽（詳見 1.5）</li>
+  </ul>
+</div>
+
+<h2>1.5 加簽功能</h2>
+<p>當你發現「這張單可能需要其他人也看一下」，可以用加簽 — <b>不是把責任推給別人，而是請第三人也參與</b>。</p>
+
+<h3>誰能發起加簽</h3>
+<p>只有當前 step 的簽核者本人能加簽。前一關已簽完的人不能、後一關還沒輪到的人也不能。</p>
+
+<h3>加簽人會看到什麼</h3>
+<ul>
+  <li>立即收到 LINE flex 卡（橘色頭、🪶 圖示）：「Zoey 邀請你協助加簽 / 案件 X / 加簽原因 Y / [✓ 核准加簽] [📋 查看 / 退回]」</li>
+  <li>同樣會出現在加簽人的 Dashboard 我的待簽 + LIFF 簽核中心</li>
+  <li>加簽人卡片上「核准加簽」可<b>直接從 LINE 上點</b>，不用進 LIFF（postback 直接處理）</li>
+  <li>退回的話需要進 LIFF/Web 填原因（必填）</li>
+</ul>
+
+<h3>加簽後流程</h3>
+<table>
+  <thead><tr><th>加簽人動作</th><th>系統做什麼</th><th>誰收到 LINE</th></tr></thead>
+  <tbody>
+    <tr><td>核准加簽</td><td>chain 繼續，原當前簽核者繼續簽自己這關</td><td>發起人「請繼續簽核」</td></tr>
+    <tr><td>退回加簽</td><td><b>整單退回</b>，狀態變「已退回 / 已駁回」</td><td>申請人 + 發起人</td></tr>
+    <tr><td>沒動作 / 拖太久</td><td>發起人可隨時撤銷</td><td>加簽人「已撤銷加簽」</td></tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <span class="label">注意：</span>加簽是「前加簽」— 加簽人簽完後才回到原簽核者。加簽人不能再對別人加簽（避免無限加簽鏈）。
+</div>
+
+<h3>加簽完整流程範例</h3>
+<div class="step"><span class="step-num">1</span>Zoey 收到一張 ETC 儲值金費用申請（3000 元），她身為執行長要核准</div>
+<div class="step"><span class="step-num">2</span>Zoey 想：「金額比平常多，請會計師看一下」→ 點 [🪶 加簽]</div>
+<div class="step"><span class="step-num">3</span>選加簽人「韓德森（會計師）」+ 填原因「金額較高請看」→ 送出</div>
+<div class="step"><span class="step-num">4</span>韓德森 LINE 收到加簽請求 → 點「核准加簽」</div>
+<div class="step"><span class="step-num">5</span>Zoey LINE 收到「韓德森已加簽通過，請繼續您的簽核」</div>
+<div class="step"><span class="step-num">6</span>Zoey 點該單 → 簽自己這關 → 流程繼續到下一關</div>
+
+<h2>1.6 PDF 簽呈</h2>
+<p>每張單的 detail modal 右上角有「下載簽呈」按鈕，下載正式 PDF 用於存檔 / 上呈。</p>
+<p>簽呈格式 (台灣傳統公文)：申請人 → 第 1 關 → 加簽（如果有）→ 第 2 關 → ... → 最終核可。</p>
+
+<h2>1.7 加簽 vs 退回 vs 詢問</h2>
+<table>
+  <thead><tr><th>動作</th><th>什麼時候用</th></tr></thead>
+  <tbody>
+    <tr><td><b>核准</b></td><td>單據沒問題、合於規定、可推到下一關</td></tr>
+    <tr><td><b>加簽</b></td><td>不確定，想找專業人看（會計、法務、其他主管）</td></tr>
+    <tr><td><b>退回</b></td><td>單據有問題，要申請人修正後重送（必填原因）</td></tr>
+    <tr><td><b>線下詢問</b></td><td>急、單純資訊確認 — 跟申請人 LINE 對話即可，不用動單據</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch2">第 2 章 · LIFF 員工日常操作</h1>
+<p>給 <b>所有員工</b>：店員 / 辦公室 / 主管 / HR 都用得到。</p>
+
+<h2>2.1 怎麼開啟 LIFF</h2>
+<div class="step"><span class="step-num">1</span>用手機加 LINE 官方帳號好友（公司會給連結 / QR）</div>
+<div class="step"><span class="step-num">2</span>對話視窗下方有 Rich Menu，點任一鈕進 LIFF</div>
+<div class="step"><span class="step-num">3</span>首次進入會要求 LINE 授權（一次性）</div>
+<div class="note">如果系統說「找不到員工資料」→ 表示你的 LINE 還沒綁定員工帳號。請 HR 幫你綁。</div>
+
+<h2>2.2 主頁 HRHub</h2>
+<p>主頁分幾個功能群組：</p>
+<table>
+  <thead><tr><th>群組</th><th>內容</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">個人中心</td><td>我的任務 / 我的班表 / 我的簽核進度</td></tr>
+    <tr><td class="feat">各類申請</td><td>申請（費用） / 加班 / 出差 / 排休 / 留職停薪</td></tr>
+    <tr><td class="feat">出勤</td><td>打卡 / 待認領代班 / 補打卡</td></tr>
+    <tr><td class="feat">假期</td><td>請假 / 假期額度 / 我的福利</td></tr>
+    <tr><td class="feat">薪酬績效</td><td>查薪水 / 我的績效 / 報帳</td></tr>
+    <tr><td class="feat">學習與文件</td><td>培訓資料 / 公司文件</td></tr>
+  </tbody>
+</table>
+
+<h2>2.3 日常打卡</h2>
+<div class="step"><span class="step-num">1</span>HRHub → 出勤 → 打卡</div>
+<div class="step"><span class="step-num">2</span>會自動偵測 GPS 位置（必須在公司 / 門市附近）</div>
+<div class="step"><span class="step-num">3</span>點「上班打卡」/「下班打卡」</div>
+<div class="note">如果忘記打卡 → 用補打卡功能（後段說明）</div>
+
+<h2>2.4 申請流程通用步驟</h2>
+<p>所有申請類功能（請假/加班/出差/補打卡/費用/留停/希望休）長得很像，通用步驟：</p>
+<div class="step"><span class="step-num">1</span>HRHub → 點對應功能 → 進到該頁面</div>
+<div class="step"><span class="step-num">2</span>右上「+ 新增」按鈕 → 展開表單</div>
+<div class="step"><span class="step-num">3</span>填欄位（日期、原因等）→ 點「送出申請」</div>
+<div class="step"><span class="step-num">4</span>下方列表顯示你提過的所有申請，狀態 badge 顏色：
+  <ul style="margin:6px 0 0 0">
+    <li><span class="badge warn">待審核 / 申請中</span> — 主管還沒簽</li>
+    <li><span class="badge ok">已核准</span> — 通過了</li>
+    <li><span class="badge revoke">已退回 / 已駁回</span> — 被退回，可看原因 + 編輯重送</li>
+  </ul>
+</div>
+
+<h3>各功能特殊欄位</h3>
+<table>
+  <thead><tr><th>申請</th><th>必填欄位</th><th>特殊</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">請假</td><td>假別 / 起訖日期 / 原因</td><td>連 leave_balance，會檢查假別餘額</td></tr>
+    <tr><td class="feat">加班</td><td>日期 / 時數 / 事由</td><td>分「預先申請」/「事後補登」</td></tr>
+    <tr><td class="feat">出差</td><td>目的地 / 起訖日期 / 事由 / 預算</td><td>預估費用之後可開銷</td></tr>
+    <tr><td class="feat">補打卡</td><td>日期 / 上下班 / 補登時間</td><td>核准後自動寫入打卡紀錄</td></tr>
+    <tr><td class="feat">費用申請</td><td>金額 / 項目 / 科目 / 說明</td><td>核准後可進「核銷」階段</td></tr>
+    <tr><td class="feat">費用報帳</td><td>類別 / 金額 / 日期 / 說明</td><td>單關核可，沒有 chain</td></tr>
+    <tr><td class="feat">希望休</td><td>日期 / 原因</td><td>核准後排班演算法會避開</td></tr>
+    <tr><td class="feat">換班</td><td>對方 / 日期</td><td>對方同意 → 主管核准 雙簽</td></tr>
+    <tr><td class="feat">留職停薪</td><td>起訖日期 / 原因類型</td><td>核准後員工狀態變「留停」</td></tr>
+  </tbody>
+</table>
+
+<h2>2.5 編輯重送（被退回後）</h2>
+<div class="step"><span class="step-num">1</span>列表上看到「<span class="badge revoke">已退回</span>」標籤 → 點旁邊「編輯重送」按鈕</div>
+<div class="step"><span class="step-num">2</span>表單重新展開，紅色框內顯示原退回原因</div>
+<div class="step"><span class="step-num">3</span>修改欄位 → 點「更新申請」</div>
+<div class="step"><span class="step-num">4</span>送出後狀態回到「申請中」，重新走 chain 第 1 關</div>
+
+<h2>2.6 我的簽核進度</h2>
+<p>HRHub → 個人中心 → 我的簽核進度</p>
+<p>會顯示你所有「自己提的單」的最新狀態（含每關簽核軌跡）。</p>
+
+<h2>2.7 我的班表</h2>
+<p>HRHub → 個人中心 → 我的班表</p>
+<p>看本月班表，含希望休 / 換班結果。可點某天看細節（上下班時間、是不是國定假）。</p>
+
+<h2>2.8 LINE 通知會收到什麼</h2>
+<table>
+  <thead><tr><th>事件</th><th>收到的卡片內容</th></tr></thead>
+  <tbody>
+    <tr><td>我的單被核准</td><td>「✅ 你的請假申請已通過」</td></tr>
+    <tr><td>我的單被退回</td><td>「❌ 你的請假被退回 / 原因：xxx / [編輯重送]」</td></tr>
+    <tr><td>輪到我簽某張單</td><td>含申請人 / 內容 / [✓ 核准] [❌ 退回] [📋 明細]</td></tr>
+    <tr><td>有人邀請我加簽</td><td>橘色「🪶 加簽請求」卡 + [核准加簽] [查看 / 退回]</td></tr>
+    <tr><td>我的加簽通過</td><td>「✅ 韓德森已加簽通過，請繼續您的簽核」</td></tr>
+    <tr><td>到期前提醒</td><td>「⏰ 今日到期提醒 / 你有 N 張待簽」</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch3">第 3 章 · 簽核鏈設定（chain setup）</h1>
+<p>給 <b>Admin</b>。背後邏輯較複雜，建議仔細看完。</p>
+
+<h2>3.1 什麼是簽核鏈</h2>
+<p>「簽核鏈（approval_chain）」= 一個單據從送出到完全核准要經過的<b>幾關 + 每關該由誰簽</b>。</p>
+<p>例：請假申請鏈 = 第 1 關「直屬主管」→ 第 2 關「人資」→ 結束</p>
+
+<h2>3.2 哪些表用 chain</h2>
+<table>
+  <thead><tr><th>表</th><th>category</th><th>備註</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">leave_requests 請假</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">overtime_requests 加班</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">business_trips 出差</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">clock_corrections 補打卡</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">expenses 費用報帳</td><td>HR</td><td>單關（不用 chain）</td></tr>
+    <tr><td class="feat">expense_requests 費用申請</td><td>費用申請</td><td>必須掛 chain，可金額分流</td></tr>
+    <tr><td class="feat">expense_settle 核銷</td><td>(用 settle_chain_id)</td><td>同上</td></tr>
+    <tr><td class="feat">resignation_requests 離職</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">leave_of_absence_requests 留停</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">personnel_transfer_requests 異動</td><td>HR</td><td>chain-aware</td></tr>
+    <tr><td class="feat">tasks 任務確認</td><td>(用 task_confirmations)</td><td>多 confirmations</td></tr>
+  </tbody>
+</table>
+
+<h2>3.3 怎麼建一條 chain</h2>
+<div class="step"><span class="step-num">1</span>Sidebar → 專案流程 → 簽核設定（或 /process/settings/chains）</div>
+<div class="step"><span class="step-num">2</span>點「+ 新增 chain」→ 填：
+  <ul style="margin:6px 0 0 0">
+    <li>name：chain 名稱（如「採購簽核 5 萬以下」）</li>
+    <li>category：HR / 費用申請 / 採購 / 留停 ...</li>
+    <li>min_amount / max_amount：金額分流（無金額相關設 0 / null）</li>
+    <li>organization_id：所屬組織</li>
+    <li>is_active：勾起來才會生效</li>
+  </ul>
+</div>
+<div class="step"><span class="step-num">3</span>chain 建好後，新增 steps（每一關）</div>
+
+<h2>3.4 每個 step 的 9 種 target_type</h2>
+<p>step 的核心是「這關該由誰簽」。系統提供 9 種 target_type：</p>
+
+<table>
+  <thead><tr><th>target_type</th><th>意思</th><th>需要設定</th><th>範例</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">fixed_emp</td><td>固定某員工</td><td>target_emp_id</td><td>「永遠由韓德森簽」</td></tr>
+    <tr><td class="feat">fixed_role</td><td>固定某 role 角色</td><td>target_role_id</td><td>「任何 admin 都可簽」</td></tr>
+    <tr><td class="feat">fixed_dept</td><td>固定某部門所有人</td><td>target_dept_id</td><td>「會計部任一位都可簽」</td></tr>
+    <tr><td class="feat">applicant_dept_manager</td><td>申請人的部門主管</td><td>無</td><td>申請人在業務部 → 業務部主管簽</td></tr>
+    <tr><td class="feat">applicant_store_manager</td><td>申請人的門市店長</td><td>無</td><td>申請人在永春店 → 永春店店長簽</td></tr>
+    <tr><td class="feat">applicant_section_manager</td><td>申請人的科別主管</td><td>無</td><td>類似但更細粒度</td></tr>
+    <tr><td class="feat">specific_dept_manager</td><td>指定部門的主管</td><td>target_dept_id</td><td>「人資部主管簽（不管申請人在哪部）」</td></tr>
+    <tr><td class="feat">specific_store_manager</td><td>指定門市的店長</td><td>target_store_id</td><td>「永春店店長簽」</td></tr>
+    <tr><td class="feat">specific_section_manager</td><td>指定科別的主管</td><td>target_section_id</td><td>同 dept_manager 更細</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <span class="label">關鍵：</span><code>applicant_*</code> 系列是「動態解」— 系統依當前申請人解出該層級的主管。<code>specific_*</code> 跟 <code>fixed_*</code> 是「靜態指定」。
+</div>
+
+<div class="warn">
+  <span class="label">常見錯誤：</span>多關都用同一個 applicant_dept_manager → 解出來都是同一人 → 多關形同一關。建議多關時混搭不同 target_type。
+</div>
+
+<h2>3.5 金額分流</h2>
+<p>同 category 可以建多條 chain，依金額自動挑：</p>
+<table>
+  <thead><tr><th>chain</th><th>min_amount</th><th>max_amount</th><th>適用</th></tr></thead>
+  <tbody>
+    <tr><td>「費用申請 5K 以下」</td><td>0</td><td>5000</td><td>1 關：直屬主管</td></tr>
+    <tr><td>「費用申請 5K-5W」</td><td>5001</td><td>50000</td><td>2 關：主管 + 財務</td></tr>
+    <tr><td>「費用申請 5W 以上」</td><td>50001</td><td>NULL</td><td>3 關：主管 + 財務 + 總經理</td></tr>
+  </tbody>
+</table>
+<p>系統 INSERT expense_request 時自動挑符合金額的 chain。</p>
+
+<h2>3.6 form_chain_configs：HR 表單怎麼掛 chain</h2>
+<p>HR 5 表 + HR 異動 3 表不靠金額分流，而是靠「form_type → chain 對應」：</p>
+<table>
+  <thead><tr><th>form_type</th><th>對應</th></tr></thead>
+  <tbody>
+    <tr><td><code>leave</code></td><td>請假</td></tr>
+    <tr><td><code>overtime</code></td><td>加班</td></tr>
+    <tr><td><code>trip</code></td><td>出差</td></tr>
+    <tr><td><code>correction</code></td><td>補打卡</td></tr>
+    <tr><td><code>resignation</code></td><td>離職</td></tr>
+    <tr><td><code>loa</code></td><td>留停</td></tr>
+    <tr><td><code>transfer</code></td><td>異動</td></tr>
+  </tbody>
+</table>
+<p>各表的「簽核設定」按鈕（每張表單頁右上）會跳到設定頁。</p>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch4">第 4 章 · 主管簽核作業</h1>
+<p>給 <b>店長 / 部門主管</b>。日常簽核作業的最佳實踐。</p>
+
+<h2>4.1 三種簽核入口</h2>
+<table>
+  <thead><tr><th>入口</th><th>優點</th><th>缺點</th><th>適合</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">LINE 卡</td><td>即時、不用開系統</td><td>畫面小、退回要進 LIFF 填原因</td><td>外出時、快速核准</td></tr>
+    <tr><td class="feat">LIFF 簽核中心</td><td>手機完整視圖 + 加簽</td><td>需要 LINE 開啟</td><td>手機處理、批量簽</td></tr>
+    <tr><td class="feat">Web Dashboard</td><td>大畫面、看完整明細 + PDF</td><td>需電腦</td><td>金額大、需細看內容</td></tr>
+  </tbody>
+</table>
+
+<h2>4.2 LINE 卡上的快速操作</h2>
+<div class="step"><span class="step-num">1</span>收到簽核卡 → 看內容</div>
+<div class="step"><span class="step-num">2</span>三個 footer 按鈕：
+  <ul style="margin:6px 0 0 0">
+    <li>✅ 核准：直接點 → 推進到下一關</li>
+    <li>❌ 退回：跳出快速回覆選項（需附證明 / 日期改 / 工時不允許 / ✏️ 自己寫）</li>
+    <li>📋 明細：跳 LIFF 看完整資料</li>
+  </ul>
+</div>
+
+<h2>4.3 看明細決定時的判斷流程</h2>
+<div class="step"><span class="step-num">1</span><b>看申請人</b>：是不是我的下屬 / 對的人</div>
+<div class="step"><span class="step-num">2</span><b>看時間 / 金額</b>：合理範圍嗎</div>
+<div class="step"><span class="step-num">3</span><b>看原因</b>：說明清楚嗎</div>
+<div class="step"><span class="step-num">4</span><b>看附件</b>（如有）：證明文件齊不齊</div>
+<div class="step"><span class="step-num">5</span><b>看歷程</b>：之前關卡誰簽過、簽核意見是什麼</div>
+<div class="step"><span class="step-num">6</span>決定：核准 / 加簽 / 退回</div>
+
+<h2>4.4 退回的最佳實踐</h2>
+<ul>
+  <li><b>原因要具體</b>：「請補附發票照片」優於「資料不足」</li>
+  <li><b>建議如何修</b>：「日期請改成上班日」優於「日期錯」</li>
+  <li><b>避免主觀</b>：「金額過高」要說明標準（依公司 SOP / 比照前例）</li>
+</ul>
+
+<h2>4.5 批次簽核小技巧</h2>
+<div class="step"><span class="step-num">1</span>Web Dashboard → 我的待簽 → 選擇對應群組</div>
+<div class="step"><span class="step-num">2</span>看到一堆類似的單（如月初員工集中報帳）：先全部點開明細快速掃</div>
+<div class="step"><span class="step-num">3</span>確認都 OK 後一個個 modal 內點核准（沒有真正的批次按鈕 — 簽核屬於審慎動作）</div>
+
+<h2>4.6 不該做的事</h2>
+<div class="warn">
+  <ul>
+    <li>❌ 不細看內容直接「秒簽」批量 — 出事責任在你</li>
+    <li>❌ 直接幫部屬代為提單再自己簽 — 違反「自簽不允許」的設計</li>
+    <li>❌ 用聊天 / 口頭核准代替系統簽核 — 沒紀錄無法追溯</li>
+    <li>❌ 拖過久不簽 — 同事的薪資 / 排班可能因此卡關</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch5">第 5 章 · 排班系統</h1>
+<p>給 <b>店長 / HR</b>。排班是相對複雜的後台運算，這章說明設計概念與操作。</p>
+
+<h2>5.1 系統採用的排班制度</h2>
+<table>
+  <thead><tr><th>制度</th><th>說明</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">月制工時</td><td>以月為單位算總工時，不是週固定。一個月不超過 174h 等（依勞基法）</td></tr>
+    <tr><td class="feat">時段覆蓋制</td><td>排班不是員工選班別，而是「店長定義時段（早班 / 中班 / 晚班 / 大夜）」員工去 cover</td></tr>
+    <tr><td class="feat">三級偏好</td><td>員工可標記某些時段「希望 / 普通 / 不希望」，演算法盡量配合</td></tr>
+  </tbody>
+</table>
+
+<h2>5.2 排班相關設定（admin / 店長）</h2>
+<div class="step"><span class="step-num">1</span>Sidebar → HR → 排班管理 → 排班規則 / 工時設定</div>
+<div class="step"><span class="step-num">2</span>每個門市可獨立設定每月時段（store_time_slots）</div>
+<div class="step"><span class="step-num">3</span>每個門市可獨立設定班別（shift_definitions）：班名 / 起訖時間 / 顏色</div>
+<div class="note"><span class="label">重要：</span>shift_definitions 跟 store_time_slots 必須帶 store_id + year_month，跨月複製要先設定。</div>
+
+<h2>5.3 員工提交希望休</h2>
+<div class="step"><span class="step-num">1</span>員工：LIFF HRHub → 各類申請 → 排休申請</div>
+<div class="step"><span class="step-num">2</span>選日期 → 填原因 → 送出</div>
+<div class="step"><span class="step-num">3</span>店長收 LINE 通知 → 核准 / 退回</div>
+<div class="step"><span class="step-num">4</span>核准後該日期會被排班演算法視為「請避開」</div>
+
+<h2>5.4 跑排班演算法</h2>
+<div class="step"><span class="step-num">1</span>Web → HR → 排班</div>
+<div class="step"><span class="step-num">2</span>選月份 + 門市 + 班別範圍</div>
+<div class="step"><span class="step-num">3</span>點「LLM 排班 / 自動排班」</div>
+<div class="step"><span class="step-num">4</span>系統會考慮：員工偏好 / 希望休 / 月工時上限 / 加班上限 / 排班規則 / 正職優先</div>
+<div class="step"><span class="step-num">5</span>產生 draft，店長可手動微調 → 確認後發佈</div>
+
+<h2>5.5 換班流程</h2>
+<div class="step"><span class="step-num">1</span>員工 A：LIFF → 換班申請 → 選對方 B + 日期</div>
+<div class="step"><span class="step-num">2</span>B 收 LINE → 同意 or 拒絕</div>
+<div class="step"><span class="step-num">3</span>B 同意 → 進入「待主管核准」階段，店長收通知</div>
+<div class="step"><span class="step-num">4</span>店長核准 → 系統<b>實際交換</b> schedules 表的班次 + 工時欄位</div>
+<div class="step"><span class="step-num">5</span>A / B 都收到「換班通過」LINE 通知</div>
+
+<h2>5.6 排班月休邏輯</h2>
+<ul>
+  <li>休假天數<b>按月累計</b>（不要拆週分配）</li>
+  <li>純月制目標：每月若需休 N 天則整月內配置 N 天</li>
+  <li>正職員工先排，PT 補空檔</li>
+</ul>
+
+<h2>5.7 常見排班問題</h2>
+<table>
+  <thead><tr><th>問題</th><th>原因</th><th>處理</th></tr></thead>
+  <tbody>
+    <tr><td>演算法跑出來人力不夠</td><td>時段定義太多 / 員工太少</td><td>調整時段、增聘、減少時段</td></tr>
+    <tr><td>某員工工時破表</td><td>偏好過少 / 班別設計問題</td><td>手動微調、確認班別覆蓋率</td></tr>
+    <tr><td>希望休全被忽略</td><td>還沒核准 / 跨月設定錯</td><td>確認希望休狀態 + year_month</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch6">第 6 章 · 薪資作業 SOP</h1>
+<p>給 <b>HR / Payroll</b>。算錯薪資後果嚴重，這章是鐵則 + SOP。</p>
+
+<h2>6.1 月底薪資作業流程</h2>
+<div class="step"><span class="step-num">1</span>確認當月出勤資料齊全（打卡 / 補打卡 / 請假 / 加班）</div>
+<div class="step"><span class="step-num">2</span>跑「批次計薪」（salary.compute 權限）</div>
+<div class="step"><span class="step-num">3</span>對照各員工的明細（底薪 / 加班 / 津貼 / 扣項）</div>
+<div class="step"><span class="step-num">4</span>跟廠商（會計師事務所）的計算 PDF 比對</div>
+<div class="step"><span class="step-num">5</span>差異排查 → 調整 → 重算</div>
+<div class="step"><span class="step-num">6</span>產出薪資單 + 發放</div>
+
+<h2>6.2 薪資計算鐵則（不要違背）</h2>
+<div class="warn">
+  <ul>
+    <li><b>所得稅不代扣</b>：系統 NOT 自動扣所得稅。員工自行處理年度報稅。</li>
+    <li><b>月薪不算國定假日</b>：月薪制員工的國定假日已包含在底薪內，不另外算加班費</li>
+    <li><b>投保用 base + role cap</b>：投保級距上限 45,800（依勞動部）</li>
+    <li><b>PT 固定 11,100 / 29,500</b>：PT 兼職員工特殊投保算法</li>
+  </ul>
+</div>
+
+<h2>6.3 加班費三桶</h2>
+<table>
+  <thead><tr><th>桶</th><th>倍率</th><th>條件</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">第 1 桶</td><td>1.34</td><td>平日加班前 2 小時</td></tr>
+    <tr><td class="feat">第 2 桶</td><td>1.67</td><td>平日加班 2 小時後</td></tr>
+    <tr><td class="feat">第 3 桶</td><td>2.67</td><td>休息日 / 國定假日加班</td></tr>
+  </tbody>
+</table>
+
+<h2>6.4 勞健保級距</h2>
+<div class="step"><span class="step-num">1</span>Sidebar → HR → 薪酬與福利 → 健保級距監控</div>
+<div class="step"><span class="step-num">2</span>每月看實領 vs 投保級距是否一致</div>
+<div class="step"><span class="step-num">3</span>不一致 → 需調整級距（依勞健保局規定有調整時機）</div>
+
+<h2>6.5 永春案例（PT 投保特例）</h2>
+<p>永春 PT 投保用固定值 11,100 / 29,500，不照一般員工級距表算。這是廠商特殊規則。</p>
+
+<h2>6.6 常見薪資問題</h2>
+<table>
+  <thead><tr><th>問題</th><th>排查方向</th></tr></thead>
+  <tbody>
+    <tr><td>某員工薪資少算 / 多算</td><td>確認出勤資料 / 假單 / 加班 / 補打卡是否齊全；確認 employee_salary_structures 設定</td></tr>
+    <tr><td>批次計薪報錯</td><td>看哪幾位錯 → 個別檢查；看 audit log</td></tr>
+    <tr><td>勞健保級距異常</td><td>確認 insurance_grade_monitor；可能級距需手動調整</td></tr>
+    <tr><td>所得稅相關詢問</td><td>系統不代扣，請員工自行處理；HR 不該回答稅務問題</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch7">第 7 章 · 新進員工入職 SOP</h1>
+<p>給 <b>HR</b>。新員工到職要做的全部設定。</p>
+
+<h2>7.1 入職前準備</h2>
+<div class="step"><span class="step-num">1</span>確認職位 / 部門 / 門市 / 上班日 / 薪資結構</div>
+<div class="step"><span class="step-num">2</span>準備新員工 LINE 加好友 QR code</div>
+
+<h2>7.2 系統建檔步驟</h2>
+<div class="step"><span class="step-num">1</span><b>建員工</b>：Sidebar → 人員組織 → 員工 → 新增</div>
+<div class="step"><span class="step-num">2</span>填基本資料：姓名、英文名、身份證、生日、聯絡電話、Email</div>
+<div class="step"><span class="step-num">3</span>關聯：所屬公司 / 部門 / 門市 / 職位</div>
+<div class="step"><span class="step-num">4</span>設定 <b>role</b>：store_staff / office_staff / manager / admin / super_admin</div>
+<div class="step"><span class="step-num">5</span>填薪資結構：底薪、津貼、健保級距</div>
+
+<h2>7.3 帳號 / 權限</h2>
+<div class="step"><span class="step-num">1</span>系統設定 → 使用者管理 → 新增使用者 → 關聯到員工</div>
+<div class="step"><span class="step-num">2</span>角色預設權限就自動有了。<b>大多數情況不需要個別調整</b></div>
+<div class="step"><span class="step-num">3</span>例外才到「員工個別權限」設定</div>
+
+<h2>7.4 LINE 綁定</h2>
+<div class="step"><span class="step-num">1</span>給員工 LINE 官方帳號 QR / 連結加好友</div>
+<div class="step"><span class="step-num">2</span>員工加好友後輸入「/註冊 姓名」綁定（或 admin 從後台 employee_line_accounts 手動綁）</div>
+<div class="step"><span class="step-num">3</span>確認 LINE 通知功能正常（叫員工試提一張請假單看會不會收到通知）</div>
+
+<h2>7.5 排班加入</h2>
+<div class="step"><span class="step-num">1</span>HR → 排班管理 → 排班 → 選對應月份門市</div>
+<div class="step"><span class="step-num">2</span>把新員工加入該月排班</div>
+<div class="step"><span class="step-num">3</span>分配班別 / 工時</div>
+
+<h2>7.6 入職第一週 checklist</h2>
+<table>
+  <thead><tr><th>項目</th><th>檢查</th></tr></thead>
+  <tbody>
+    <tr><td>能登入 Web</td><td>讓員工試打卡或看自己薪資</td></tr>
+    <tr><td>LINE 收到歡迎卡</td><td>確認 LINE 綁定成功</td></tr>
+    <tr><td>能看到自己班表</td><td>LIFF HRHub → 我的班表</td></tr>
+    <tr><td>能提請假申請</td><td>提一張測試（隨後取消）</td></tr>
+    <tr><td>試用期評核設定</td><td>HR → 人才發展 → 試用期管理</td></tr>
+  </tbody>
+</table>
+
+<h2>7.7 離職員工處理</h2>
+<div class="step"><span class="step-num">1</span>員工自行提離職申請（LIFF）或 HR 代提</div>
+<div class="step"><span class="step-num">2</span>核准流程跑完 → 系統自動把 employees.status 改成「離職」</div>
+<div class="step"><span class="step-num">3</span>HR 補：薪資結算 / 資遣費（如有） / 法扣（如有） / 退保</div>
+<div class="step"><span class="step-num">4</span>停用 LINE 綁定 + 使用者帳號（不要刪、保留歷史）</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch8">第 8 章 · Admin 緊急排錯手冊</h1>
+<p>給 <b>admin / 開發者</b>。系統出狀況時的應急處理。</p>
+
+<h2>8.1 常見錯誤類型</h2>
+
+<h3>A. 系統閃退 / 白畫面（React 錯誤）</h3>
+<p>典型訊息：「ReferenceError: XXX is not defined」</p>
+<div class="step"><span class="step-num">1</span>F12 開瀏覽器 console，看具體錯誤訊息 + stacktrace</div>
+<div class="step"><span class="step-num">2</span>多半是 import 漏（重構切檔忘記補）</div>
+<div class="step"><span class="step-num">3</span>找到對應檔案，加 import 即可</div>
+<p>已發生案例：Award is not defined（Sidebar）/ SOURCE_BADGE is not defined（EmployeePermissions）</p>
+
+<h3>B. Migration drift（DB schema 跟 code 對不上）</h3>
+<p>典型錯誤：「column does not exist」「relation not found」</p>
+<div class="step"><span class="step-num">1</span>確認哪張表哪個欄位</div>
+<div class="step"><span class="step-num">2</span>到 Supabase Studio 查 information_schema.columns 確認真實 schema</div>
+<div class="step"><span class="step-num">3</span>如果 schema 是新版但 migration file 是舊版 → 補 migration / 修 code</div>
+<div class="step"><span class="step-num">4</span>如果是老闆直接 Studio 改 → 更新 migration file 保持同步</div>
+
+<h3>C. 簽核流程卡住</h3>
+<p>單據卡在某關，沒人能簽。</p>
+<div class="step"><span class="step-num">1</span>查該單 approval_chain_id + current_step</div>
+<div class="step"><span class="step-num">2</span>查對應 chain_step 的 target_type 跟解出來的 approver</div>
+<div class="step"><span class="step-num">3</span>常見：applicant 的 supervisor / store_manager 沒設 → 解不出簽核人</div>
+<div class="step"><span class="step-num">4</span>修：到員工資料補上 supervisor_id / 門市設 manager_id</div>
+
+<h3>D. 加簽幽靈單</h3>
+<p>workflow_instances + tasks 跟 expense_request 不同步，LINE 推「今日到期提醒」吵人。</p>
+<div class="step"><span class="step-num">1</span>確認該 workflow_instance / tasks 對應的 expense_request 真實狀態</div>
+<div class="step"><span class="step-num">2</span>如果原單已結案，把 wi + tasks 標已完成（不動原單）</div>
+<div class="step"><span class="step-num">3</span>SQL：UPDATE workflow_instances SET status='已完成' WHERE id IN (...)</div>
+
+<h3>E. LINE 推不出去</h3>
+<table>
+  <thead><tr><th>檢查項</th><th>方法</th></tr></thead>
+  <tbody>
+    <tr><td>該員工有沒有 LINE 綁定</td><td>SELECT * FROM employee_line_accounts WHERE employee_id = X</td></tr>
+    <tr><td>line-push Edge Function 健康</td><td>看 Supabase functions log</td></tr>
+    <tr><td>LINE channel token 過期</td><td>看 line_channels 表 access_token + 重新整理</td></tr>
+    <tr><td>net.http_post 失敗</td><td>查 pg_net 設定 + extensions</td></tr>
+  </tbody>
+</table>
+
+<h2>8.2 SQL 緊急修法（要小心！）</h2>
+<div class="warn">
+  <span class="label">鐵則：</span>
+  <ul>
+    <li>所有 SQL update 先 BEGIN; ... 觀察結果後再 COMMIT</li>
+    <li>影響範圍要先 SELECT 列出來看清楚</li>
+    <li>DELETE / DROP 等不可逆動作絕對先列影響 → 確認 → 才動手</li>
+    <li>2026-05-13 慘案：誤解「加班就洪伯嘉就好」結果刪錯方向，22 筆非洪伯嘉資料蒸發</li>
+  </ul>
+</div>
+
+<h2>8.3 救援基本資源</h2>
+<table>
+  <thead><tr><th>資源</th><th>位置</th></tr></thead>
+  <tbody>
+    <tr><td>主系統 GitHub</td><td><code>aska911023/sme-ops-system</code> (main 分支)</td></tr>
+    <tr><td>LIFF GitHub</td><td><code>aska911023/sme-ops-liff</code> (master 分支)</td></tr>
+    <tr><td>Supabase Studio</td><td>跑 SQL / 看 logs / 看 Edge Function</td></tr>
+    <tr><td>migration 檔</td><td><code>supabase/migrations/</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h1 id="ch9">第 9 章 · LINE BOT 指令清單</h1>
+<p>給 <b>所有員工</b>。LINE 上可以做什麼。</p>
+
+<h2>9.1 文字指令</h2>
+<table>
+  <thead><tr><th>指令</th><th>功能</th><th>範例</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">/註冊 姓名</td><td>綁定 LINE 帳號到員工</td><td><code>/註冊 王小明</code></td></tr>
+    <tr><td class="feat">/我的單</td><td>查看自己最近的申請狀態</td><td>—</td></tr>
+    <tr><td class="feat">/我的待簽</td><td>查看輪到我簽的單</td><td>—</td></tr>
+    <tr><td class="feat">/我的班表</td><td>看本月班表（卡片）</td><td>—</td></tr>
+    <tr><td class="feat">/薪資</td><td>查最新一期薪資（卡片）</td><td>—</td></tr>
+    <tr><td class="feat">/打卡</td><td>跳 LIFF 打卡頁</td><td>—</td></tr>
+    <tr><td class="feat">/請假</td><td>跳 LIFF 請假頁</td><td>—</td></tr>
+    <tr><td class="feat">/幫助</td><td>列所有可用指令</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h2>9.2 卡片按鈕（postback）</h2>
+<p>LINE 收到的 flex 卡上有按鈕，點下去會做：</p>
+<table>
+  <thead><tr><th>按鈕</th><th>動作</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">✅ 核准</td><td>對該單核准（不用進 LIFF）</td></tr>
+    <tr><td class="feat">❌ 退回</td><td>跳 quick reply 選常用原因，或進 LIFF 自己寫</td></tr>
+    <tr><td class="feat">📋 明細</td><td>跳 LIFF 看完整資料</td></tr>
+    <tr><td class="feat">✏️ 編輯重送</td><td>（被退回後）跳 LIFF 編輯重新送審</td></tr>
+    <tr><td class="feat">🪶 核准加簽</td><td>對加簽請求直接核准（不用進 LIFF）</td></tr>
+  </tbody>
+</table>
+
+<h2>9.3 LINE 通知卡片類型</h2>
+<table>
+  <thead><tr><th>卡片</th><th>什麼時候收到</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">簽核請求卡</td><td>輪到你簽某張單</td></tr>
+    <tr><td class="feat">加簽請求卡</td><td>有人邀請你協助加簽</td></tr>
+    <tr><td class="feat">已核准通知</td><td>自己的單通過了</td></tr>
+    <tr><td class="feat">已退回通知</td><td>自己的單被退回（含原因 + 編輯重送鈕）</td></tr>
+    <tr><td class="feat">到期提醒</td><td>排程提醒當日待簽（每天早上推）</td></tr>
+    <tr><td class="feat">任務確認卡</td><td>任務 chain 輪到你確認</td></tr>
+  </tbody>
+</table>
+
+<h2>9.4 LINE 卡片不見了？</h2>
+<p>LINE 客戶端有快取，如果系統 deploy 後卡片格式變了，可能要重新觸發指令才能看到新卡。</p>
+<div class="step"><span class="step-num">1</span>輸入指令重新觸發（例：/我的待簽）</div>
+<div class="step"><span class="step-num">2</span>或請發出單據的人重新觸發那個事件</div>
+
+<h2>9.5 LINE 收不到通知</h2>
+<table>
+  <thead><tr><th>檢查</th><th>怎麼做</th></tr></thead>
+  <tbody>
+    <tr><td>LINE 有沒有封鎖官方帳號</td><td>檢查好友列表</td></tr>
+    <tr><td>有沒有解除綁定</td><td>輸入 <code>/我的單</code> 看會不會回</td></tr>
+    <tr><td>LINE 通知總開關</td><td>LINE app → 設定 → 通知</td></tr>
+    <tr><td>請 HR / Admin 重新綁</td><td>後台檢查 employee_line_accounts</td></tr>
+  </tbody>
+</table>
+
+<hr style="margin: 60px 0 20px 0; border: none; border-top: 1px dashed #cbd5e1">
+<p style="text-align: center; color: #94a3b8; font-size: 12px">
+  📘 sme-ops-system 系統操作手冊 · 完整版 · 2026-05-17<br>
+  共 9 章 · 涵蓋簽核 / 員工 / 主管 / 排班 / 薪資 / Admin / LINE BOT
+</p>
+
+</body>
+</html>

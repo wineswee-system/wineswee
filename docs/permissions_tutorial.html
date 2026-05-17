@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>權限設定操作手冊</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', 'Helvetica Neue', sans-serif;
+    margin: 0; padding: 40px;
+    color: #1f2937; line-height: 1.7;
+    background: #fff;
+    max-width: 820px; margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px; margin: 0 0 6px 0;
+    color: #0f172a; border-bottom: 3px solid #06b6d4; padding-bottom: 10px;
+  }
+  .subtitle { color: #64748b; margin-bottom: 32px; font-size: 14px; }
+  h2 {
+    font-size: 19px; margin: 36px 0 14px 0;
+    color: #0f172a; padding-left: 12px;
+    border-left: 4px solid #06b6d4;
+  }
+  h3 {
+    font-size: 15px; margin: 22px 0 10px 0; color: #1f2937;
+  }
+  p, li { font-size: 13.5px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 18px 0;
+    font-size: 13px;
+  }
+  th {
+    background: #f1f5f9; text-align: left; padding: 8px 10px;
+    border: 1px solid #e2e8f0; font-weight: 700;
+  }
+  td {
+    padding: 8px 10px; border: 1px solid #e2e8f0; vertical-align: top;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 700; border: 1px solid;
+  }
+  .badge.role { color: #64748b; background: #f1f5f9; border-color: #cbd5e1; }
+  .badge.grant { color: #16a34a; background: #dcfce7; border-color: #16a34a; }
+  .badge.revoke { color: #dc2626; background: #fee2e2; border-color: #dc2626; }
+  .btn-mock {
+    display: inline-block; padding: 3px 12px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    border: 1.5px solid; margin: 0 2px;
+  }
+  .btn-on { background: #06b6d4; color: #fff; border-color: #06b6d4; }
+  .btn-off { background: transparent; color: #94a3b8; border-color: #cbd5e1; }
+  .note {
+    background: #fef9c3; border: 1px solid #facc15;
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0;
+    font-size: 13px;
+  }
+  .note .label { font-weight: 700; color: #854d0e; margin-right: 4px; }
+  .warn {
+    background: #fee2e2; border: 1px solid #ef4444;
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0;
+    font-size: 13px;
+  }
+  .warn .label { font-weight: 700; color: #991b1b; margin-right: 4px; }
+  .step {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 8px; padding: 12px 16px; margin: 8px 0;
+  }
+  .step-num {
+    display: inline-block; width: 22px; height: 22px;
+    background: #06b6d4; color: #fff; border-radius: 50%;
+    text-align: center; line-height: 22px;
+    font-weight: 700; font-size: 13px;
+    margin-right: 8px;
+  }
+  code {
+    background: #f1f5f9; padding: 1px 6px; border-radius: 3px;
+    font-family: Consolas, 'Courier New', monospace; font-size: 12.5px;
+    color: #be185d;
+  }
+  .toc {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 8px; padding: 14px 20px; margin: 24px 0;
+  }
+  .toc ol { margin: 6px 0 0 0; padding-left: 24px; }
+  .toc li { margin: 2px 0; font-size: 13px; }
+  @media print {
+    body { padding: 20px; }
+    h2 { page-break-after: avoid; }
+    .step, .note, .warn, table { page-break-inside: avoid; }
+  }
+  .print-btn {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 20px; border-radius: 8px;
+    background: #06b6d4; color: #fff; border: none;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(6,182,212,0.4);
+  }
+  @media print { .print-btn { display: none; } }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">🖨 列印 / 存 PDF</button>
+
+<h1>🔐 權限設定操作手冊</h1>
+<div class="subtitle">給 HR / Admin / Super Admin 用 · 版本：2026-05-17</div>
+
+<div class="toc">
+  <b>目錄</b>
+  <ol>
+    <li>權限制度速覽（5 角色制）</li>
+    <li>怎麼進到權限設定頁</li>
+    <li>畫面解讀：「查詢」「修改」兩顆按鈕</li>
+    <li>狀態色碼說明（角色預設 / 手動加給 / 個別禁用）</li>
+    <li>常見操作場景</li>
+    <li>注意事項與常見問題</li>
+  </ol>
+</div>
+
+<h2>1. 權限制度速覽</h2>
+
+<p>本系統採用 <b>5 角色 + 個別覆寫</b> 制度。每位員工歸屬一個角色，角色帶有預設權限；如果某個員工需要例外，再「個別調整」覆寫掉角色預設。</p>
+
+<h3>5 個角色</h3>
+<table>
+  <thead><tr><th>角色</th><th>定位</th><th>典型權限</th></tr></thead>
+  <tbody>
+    <tr><td><b>super_admin</b></td><td>最高層</td><td>所有功能</td></tr>
+    <tr><td><b>admin</b></td><td>系統管理員</td><td>HR / 經費 / 流程 全部能改</td></tr>
+    <tr><td><b>manager</b></td><td>主管 / 店長</td><td>HR 簽核 / 排班核准 / 看自己單位資料</td></tr>
+    <tr><td><b>office_staff</b></td><td>辦公室員工</td><td>看大部分資訊、改少數（如自己的請假申請）</td></tr>
+    <tr><td><b>store_staff</b></td><td>門市員工</td><td>進員工 Portal、看薪資 / 班表、提申請</td></tr>
+  </tbody>
+</table>
+
+<h3>權限怎麼算？</h3>
+<ol>
+  <li>系統先看員工的「角色預設」 → 拿到一份預設權限清單</li>
+  <li>再看員工的「個別調整」（如果有的話）→ 覆蓋掉預設</li>
+  <li>結果就是該員工真正擁有的權限</li>
+</ol>
+
+<div class="note">
+  <span class="label">舉例：</span>
+  小華是 store_staff，角色預設沒有「員工資料修改」。但 admin 給他「個別加給」這個權限，他就能改員工資料。如果 admin 把他從 office_staff 改回 store_staff，這個個別調整還在，他仍保有這個權限（直到 admin 把它移除）。
+</div>
+
+<h2>2. 怎麼進到權限設定頁</h2>
+
+<div class="step">
+  <span class="step-num">1</span>用 admin 或 super_admin 帳號登入
+</div>
+<div class="step">
+  <span class="step-num">2</span>左側 sidebar → <b>系統設定</b> → <b>權限設定</b>（或直接打開 <code>/system/employee-permissions</code>）
+</div>
+<div class="step">
+  <span class="step-num">3</span>左側列出所有員工，點要設定的員工 → 右側顯示該員工所有 module 的權限明細
+</div>
+
+<h2>3. 畫面解讀：「查詢」「修改」兩顆按鈕</h2>
+
+<p>每個功能（feature）右側都有兩顆按鈕：</p>
+
+<table>
+  <thead><tr><th>按鈕</th><th>意思</th><th>關掉時</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="btn-mock btn-on">✓ 查詢</span></td>
+      <td>看得到資料但不能改</td>
+      <td>連功能都看不到</td>
+    </tr>
+    <tr>
+      <td><span class="btn-mock btn-on">✓ 修改</span></td>
+      <td>看得到 + 可以改</td>
+      <td>只能查詢、不能改動</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <span class="label">小提醒：</span>
+  按鈕有連動邏輯：
+  <ul style="margin:6px 0 0 0">
+    <li>點「修改」開 → 自動把「查詢」也開（不可能能改但看不到）</li>
+    <li>點「查詢」關 → 自動把「修改」也關（看不到怎麼改）</li>
+  </ul>
+</div>
+
+<h2>4. 狀態色碼說明</h2>
+
+<p>每個功能旁邊會有個小標籤，告訴你這個權限是「哪裡來的」：</p>
+
+<table>
+  <thead><tr><th>標籤</th><th>含義</th><th>什麼時候會出現</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge role">角色預設</span></td>
+      <td>沒做個別調整，照角色預設來</td>
+      <td>絕大多數情況</td>
+    </tr>
+    <tr>
+      <td><span class="badge grant">手動調整</span>（綠色）</td>
+      <td>角色預設沒給，但個別加給了</td>
+      <td>例：給某個門市員工特權看薪資</td>
+    </tr>
+    <tr>
+      <td><span class="badge revoke">手動調整</span>（紅色）</td>
+      <td>角色預設有，但個別禁用了</td>
+      <td>例：某個主管暫時不能改員工資料</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>有手動調整的 row 會用對應顏色框起來，旁邊還有 <code>↻</code> 圖示 — 點它就會把調整移除、回到角色預設。</p>
+
+<h2>5. 常見操作場景</h2>
+
+<h3>情境 A：給某員工加額外權限</h3>
+
+<div class="step">
+  <span class="step-num">1</span>左側找到該員工，點選
+</div>
+<div class="step">
+  <span class="step-num">2</span>找到對應的功能 row（例：HR / 員工管理 / 修改）
+</div>
+<div class="step">
+  <span class="step-num">3</span>點「修改」按鈕 → 變青色（按鈕亮起 + ✓）
+</div>
+<div class="step">
+  <span class="step-num">4</span>row 旁邊會出現 <span class="badge grant">手動調整</span> 綠色標籤，整 row 加綠框
+</div>
+
+<h3>情境 B：收回某員工的個別權限</h3>
+
+<div class="step">
+  <span class="step-num">1</span>找到該員工 → 找到被「個別加給」的功能（綠標籤）
+</div>
+<div class="step">
+  <span class="step-num">2</span>有兩種方式：
+  <ul style="margin:6px 0 0 0">
+    <li><b>方式 A：</b> 點該功能的「修改」按鈕關掉 → 變紅色標籤 <span class="badge revoke">手動調整</span>（角色預設有但被禁用，僅限角色本來就有的情況）</li>
+    <li><b>方式 B：</b> 點 row 最右側的 <code>↻</code> 圖示 → 整個移除個別調整、回到角色預設</li>
+  </ul>
+</div>
+
+<h3>情境 C：全部恢復角色預設（清零）</h3>
+
+<div class="step">
+  <span class="step-num">1</span>找到該員工
+</div>
+<div class="step">
+  <span class="step-num">2</span>右上角有一顆「<code>↻ 全部恢復角色預設</code>」按鈕
+</div>
+<div class="step">
+  <span class="step-num">3</span>確認後會清除這個員工所有個別權限調整，所有 row 回到 <span class="badge role">角色預設</span> 狀態
+</div>
+
+<div class="warn">
+  <span class="label">注意：</span>
+  此操作不可逆。建議先記錄該員工目前的個別調整有哪些（看畫面上的綠 / 紅 row），再操作。
+</div>
+
+<h3>情境 D：直接改員工角色（更大刀的方式）</h3>
+
+<p>有時候員工換職務，整個角色換掉比較快。例：office_staff 升 manager。</p>
+
+<div class="step">
+  <span class="step-num">1</span>到 <b>系統設定 → 員工管理</b>（或直接編輯員工資料）
+</div>
+<div class="step">
+  <span class="step-num">2</span>修改 <code>role</code> 欄位（不是在權限頁做，是在員工資料頁）
+</div>
+<div class="step">
+  <span class="step-num">3</span>儲存後，該員工的「角色預設」整個換成新角色的預設
+</div>
+
+<div class="note">
+  <span class="label">注意：</span>
+  改角色後，之前的「個別調整」不會自動清除 — 仍會疊加在新角色上。如果想完全乾淨，記得搭配「情境 C」清零。
+</div>
+
+<h2>6. 注意事項與常見問題</h2>
+
+<h3>Q1：為什麼有些員工看不到「修改」按鈕，只有「查詢」？</h3>
+<p>因為這個功能本身只設計成「唯讀」或「可寫」其中一種權限。例如「薪資查看」可能只有查詢權限，沒有對應的修改權限。</p>
+
+<h3>Q2：簽核（HR 表單核准）的權限要怎麼設？</h3>
+<p>簽核權限不在這頁設定。系統用 <b>簽核鏈（chain）</b> 決定誰能簽：</p>
+<ul>
+  <li>是不是該關卡的指定簽核人</li>
+  <li>是不是 HR 組織圖上的對應主管（store manager / supervisor）</li>
+</ul>
+<p>要調整簽核流程，請到「<b>專案流程 → 簽核設定</b>」修改 chain 的簽核步驟。</p>
+
+<h3>Q3：改了權限對方要重新登入嗎？</h3>
+<p>建議請該員工重新整理瀏覽器（或重登）— 權限是登入時抓取的，現場改了當下不會立刻反映。</p>
+
+<h3>Q4：admin 自己的權限可以被改嗎？</h3>
+<p>技術上可以，但**強烈不建議** — admin 把自己權限改沒了會鎖住自己。如果要做這種改動，務必先找 super_admin 確認備援。</p>
+
+<h3>Q5：個別調整的紀錄會留嗎？</h3>
+<p>會。每筆個別調整都有日期 — 在「手動調整」標籤上會顯示 <code>MM/DD</code>。歷史誰改了哪個權限，目前透過資料庫的 <code>employee_permissions</code> 表的 <code>override_at</code> 欄位追蹤。</p>
+
+<div class="note">
+  <span class="label">建議：</span>
+  個別調整不要設太多 — 太多個別調整代表「角色設定可能有問題」。如果同樣的個別調整反覆出現在多位員工身上，考慮直接修改該角色的預設權限。
+</div>
+
+<hr style="margin: 40px 0 20px 0; border: none; border-top: 1px dashed #cbd5e1">
+<p style="text-align: center; color: #94a3b8; font-size: 12px">
+  📄 sme-ops-system · 權限設定操作手冊 · 2026-05-17 版本
+</p>
+
+</body>
+</html>

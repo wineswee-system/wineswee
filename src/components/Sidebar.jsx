@@ -8,6 +8,9 @@ import {
   Upload,
   Shield, Search, Activity, AlertOctagon,
   Sparkles,
+  // ── 補 systemItems / superAdminItems 需要的 icon（老闆 refactor 時漏掉）──
+  Award, BarChart3, FileText, Truck,
+  Package, Monitor, GitBranch,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from './NotificationCenter'

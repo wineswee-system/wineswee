@@ -30,6 +30,8 @@ export default function ApprovalActionBar({
   sourceTable, row,
   onApprove, onReject, onChanged,
   approveLabel = '核准', rejectLabel = '退回',
+  // 不支援加簽的情境（如核銷 settle chain）→ true 時只顯示核准/退回兩鈕
+  hideExtra = false,
 }) {
   const { profile } = useAuth()
   const [pendingExtra, setPendingExtra] = useState(null)
@@ -48,6 +50,11 @@ export default function ApprovalActionBar({
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      if (hideExtra) {
+        // 核銷類不查 pendingExtra，省一次 query
+        if (!cancelled) setLoading(false)
+        return
+      }
       const [{ data: extras }, { data: emps }] = await Promise.all([
         supabase.from('approval_extra_steps')
           .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status')
@@ -66,7 +73,7 @@ export default function ApprovalActionBar({
       setLoading(false)
     })()
     return () => { cancelled = true }
-  }, [sourceTable, row.id])
+  }, [sourceTable, row.id, hideExtra])
 
   if (loading) return null
 
@@ -233,7 +240,7 @@ export default function ApprovalActionBar({
   // 情境 3：正常
   return wrap(
     <>
-      {/* idle / 預設三鈕 */}
+      {/* idle / 預設按鈕：hideExtra=true 只顯示核准/退回；否則三鈕 */}
       {mode === 'idle' && (
         <div style={{ display: 'flex', gap: 8 }}>
           <AsyncButton className="btn btn-primary" style={{ flex: 3, padding: '10px' }}
@@ -245,11 +252,13 @@ export default function ApprovalActionBar({
             onClick={() => setMode('rejecting')}>
             <X size={16} /> {rejectLabel}
           </button>
-          <button className="btn btn-secondary"
-            style={{ flex: 1.5, padding: '10px', color: 'var(--accent-orange)', borderColor: 'var(--accent-orange)', borderStyle: 'dashed' }}
-            onClick={() => setMode('adding')}>
-            <Feather size={16} /> 加簽
-          </button>
+          {!hideExtra && (
+            <button className="btn btn-secondary"
+              style={{ flex: 1.5, padding: '10px', color: 'var(--accent-orange)', borderColor: 'var(--accent-orange)', borderStyle: 'dashed' }}
+              onClick={() => setMode('adding')}>
+              <Feather size={16} /> 加簽
+            </button>
+          )}
         </div>
       )}
 
@@ -269,8 +278,8 @@ export default function ApprovalActionBar({
         </div>
       )}
 
-      {/* 加簽 inline form */}
-      {mode === 'adding' && (
+      {/* 加簽 inline form（hideExtra 時不渲染）*/}
+      {mode === 'adding' && !hideExtra && (
         <div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
             🪶 邀請第三人協助加簽（會插在當前簽核者之前）

@@ -274,6 +274,7 @@ export default function ApprovalDetailModal({
             onChanged={actions.onChanged}
             approveLabel={actions.approveLabel}
             rejectLabel={actions.rejectLabel}
+            hideExtra={actions.hideExtra}
           />
         )}
       </div>

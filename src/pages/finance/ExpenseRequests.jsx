@@ -763,14 +763,7 @@ export default function ExpenseRequests() {
                         </button>
                       )}
                       {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
-                        <>
-                          <AsyncButton className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-cyan)' }} onClick={() => handleConfirmSettle(r)} busyLabel="…">
-                            <Check size={12} /> 核准
-                          </AsyncButton>
-                          <AsyncButton className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleRejectSettle(r)} busyLabel="…">
-                            <X size={12} />
-                          </AsyncButton>
-                        </>
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細核銷</span>
                       )}
                       {r.status === '核銷已退回' && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
@@ -958,21 +951,46 @@ export default function ExpenseRequests() {
             createdAt={showDetail.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
             onPrint={handlePrintSignOff}
-            actions={
-              showDetail.status === '申請中' && canApprove('expense_requests', showDetail.id) ? {
-                sourceTable: 'expense_requests',
-                row: showDetail,
-                onApprove: async (r) => handleApprove(r),
-                onReject: async (r, reason) => {
-                  const { data, error } = await supabase.rpc('expense_request_step_advance', {
-                    p_id: r.id, p_action: 'reject', p_reason: reason,
-                  })
-                  if (error) { toast.error(error.message); return }
-                  if (!data?.ok) { toast.error(`退回失敗：${data?.error || 'unknown'}`); return }
-                },
-                onChanged: () => { load(); setShowDetail(null) },
-              } : null
-            }
+            actions={(() => {
+              // 申請中：走 expense_request_step_advance（支援加簽）
+              if (showDetail.status === '申請中' && canApprove('expense_requests', showDetail.id)) {
+                return {
+                  sourceTable: 'expense_requests',
+                  row: showDetail,
+                  onApprove: async (r) => handleApprove(r),
+                  onReject: async (r, reason) => {
+                    const { data, error } = await supabase.rpc('expense_request_step_advance', {
+                      p_id: r.id, p_action: 'reject', p_reason: reason,
+                    })
+                    if (error) { toast.error(error.message); return }
+                    if (!data?.ok) { toast.error(`退回失敗：${data?.error || 'unknown'}`); return }
+                  },
+                  onChanged: () => { load(); setShowDetail(null) },
+                }
+              }
+              // 待核銷：走 liff_approve_request type=expense_settle（不支援加簽）
+              if (showDetail.status === '待核銷' && canApprove('expense_settles', showDetail.id)) {
+                return {
+                  sourceTable: 'expense_requests',
+                  row: showDetail,
+                  onApprove: async (r) => handleConfirmSettle(r),
+                  onReject: async (_r, reason) => {
+                    // handleRejectSettle 內部會 prompt — 但我們已經有 reason，要繞過
+                    const { data, error } = await supabase.rpc('liff_approve_request', {
+                      p_line_user_id: null, p_type: 'expense_settle', p_id: showDetail.id,
+                      p_action: 'reject', p_reason: reason,
+                    })
+                    if (error) { toast.error('退回失敗：' + error.message); return }
+                    if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
+                  },
+                  onChanged: () => { load(); setShowDetail(null) },
+                  approveLabel: '核准核銷',
+                  rejectLabel: '核銷退回',
+                  hideExtra: true,
+                }
+              }
+              return null
+            })()}
           />
         )
       })()}

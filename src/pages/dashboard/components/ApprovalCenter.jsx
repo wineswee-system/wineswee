@@ -34,6 +34,7 @@ const GROUPS = [
     key: 'finance', label: '經費', icon: Wallet, color: 'var(--accent-green)',
     tabs: [
       { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/finance/expense-requests', pendingStatus: '申請中' },
+      { key: 'expense_settle',  label: '核銷', table: 'expense_requests', route: '/finance/expense-requests', pendingStatus: '待核銷' },
     ],
   },
   {
@@ -45,15 +46,17 @@ const GROUPS = [
   },
 ]
 
+// tab.key → usePendingApprovals 的 key（核銷走 expense_settles 而非 expense_requests）
 const PERM_KEY_MAP = {
-  leave_requests: 'leave_requests',
-  overtime_requests: 'overtime_requests',
-  business_trips: 'business_trips',
-  clock_corrections: 'clock_corrections',
-  expenses: 'expenses',
-  expense_requests: 'expense_requests',
-  resignation_requests: 'resignation_requests',
-  personnel_transfer_requests: 'personnel_transfer_requests',
+  leave: 'leave_requests',
+  overtime: 'overtime_requests',
+  trip: 'business_trips',
+  correction: 'clock_corrections',
+  expense: 'expenses',
+  expense_request: 'expense_requests',
+  expense_settle: 'expense_settles',
+  resignation: 'resignation_requests',
+  transfer: 'personnel_transfer_requests',
 }
 
 export default function ApprovalCenter() {
@@ -81,8 +84,9 @@ export default function ApprovalCenter() {
     const map = {}
     allTabs.forEach((t, i) => {
       const rows = results[i].data || []
-      // 過濾出當前使用者可簽的單
-      map[t.key] = rows.filter(r => canApprove(PERM_KEY_MAP[t.table] || t.table, r.id))
+      // 過濾出當前使用者可簽的單（用 tab.key → perm key 映射；核銷會走 expense_settles）
+      const permKey = PERM_KEY_MAP[t.key] || t.table
+      map[t.key] = rows.filter(r => canApprove(permKey, r.id))
     })
     setData(map)
     setLoading(false)
@@ -282,6 +286,11 @@ function getRowDisplay(row, tabKey) {
       return {
         title: `${row.employee} · ${row.title || '費用申請'}`,
         subtitle: `NT$ ${Number(row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'expense_settle':
+      return {
+        title: `${row.employee} · 核銷 ${row.title || ''}`,
+        subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
       }
     case 'resignation':
       return {

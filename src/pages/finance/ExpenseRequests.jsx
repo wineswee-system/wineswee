@@ -953,6 +953,18 @@ export default function ExpenseRequests() {
             onPrint={handlePrintSignOff}
             actions={(() => {
               // 申請中：走 expense_request_step_advance（支援加簽）
+              // 加簽 / 核准 / 退回 後重抓 row 跟 chainSteps，不關 modal
+              // 讓加簽成功時時間軸馬上顯示加簽人那一關（不用使用者自己重開 modal）
+              const refreshDetail = async () => {
+                await load()
+                const { data: fresh } = await supabase
+                  .from('expense_requests')
+                  .select('*')
+                  .eq('id', showDetail.id)
+                  .maybeSingle()
+                if (fresh) openDetail(fresh)
+                else setShowDetail(null)
+              }
               if (showDetail.status === '申請中' && canApprove('expense_requests', showDetail.id)) {
                 return {
                   sourceTable: 'expense_requests',
@@ -965,7 +977,7 @@ export default function ExpenseRequests() {
                     if (error) { toast.error(error.message); return }
                     if (!data?.ok) { toast.error(`退回失敗：${data?.error || 'unknown'}`); return }
                   },
-                  onChanged: () => { load(); setShowDetail(null) },
+                  onChanged: refreshDetail,
                 }
               }
               // 待核銷：走 liff_approve_request type=expense_settle（不支援加簽）
@@ -983,7 +995,7 @@ export default function ExpenseRequests() {
                     if (error) { toast.error('退回失敗：' + error.message); return }
                     if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
                   },
-                  onChanged: () => { load(); setShowDetail(null) },
+                  onChanged: refreshDetail,
                   approveLabel: '核准核銷',
                   rejectLabel: '核銷退回',
                   hideExtra: true,

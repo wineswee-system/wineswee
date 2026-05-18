@@ -635,12 +635,14 @@ function renderSignCells({ status, rejectReason, chainSteps, approverMap, finalA
       ? 'style="border:1.5px dashed #f97316;background:#FFFBEB"'
       : ''
 
+    // extraFooter 必須包進 sign-stamp 內 —
+    // .sign-row 用 grid-auto-flow: column + 3 row，每個 cell 攤平後應該剛好佔 3 個 grid 位置（header/target/stamp）；
+    // 若 cell 多出第 4 個子元素，會被自動丟到下個 column 第 1 row（就是隔壁欄的 header 上面），導致跑版。
     return `
       <div class="sign-cell ${cellStatus}" ${extraCellStyle}>
         <div class="sign-header">${safe(stepLabel)}${isExtraCell ? ' 🪶' : ''}</div>
         <div class="sign-target">${safe(stepTarget || '　')}</div>
-        <div class="sign-stamp">${cellContent}</div>
-        ${extraFooter}
+        <div class="sign-stamp">${cellContent}${extraFooter}</div>
       </div>`
   }).join('')
 }

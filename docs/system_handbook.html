@@ -473,109 +473,440 @@
 
 <!-- ═══════════════════════════════════════════════════════ -->
 <h1 id="ch5">第 5 章 · 排班系統</h1>
-<p>給 <b>店長 / HR</b>。排班是相對複雜的後台運算，這章說明設計概念與操作。</p>
+<p>給 <b>店長 / HR</b>。排班是相對複雜的後台運算，這章是<b>詳細版</b>，含演算法 v5 內部邏輯。</p>
 
 <h2>5.1 系統採用的排班制度</h2>
+
+<h3>5.1.1 月制工時（非週制）</h3>
+<p>以月為單位計算總工時上限，不是每週固定。</p>
+<ul>
+  <li>勞基法基準：每月正常工時 174 小時內</li>
+  <li>例外加班：每月加班不超過 46 小時（一般行業）</li>
+  <li>系統會在 store_settings 內讓店長設「每月工時上限」、「加班上限」</li>
+</ul>
+<div class="note"><span class="label">為什麼選月制：</span>用週制控制工時時邊界 case 太多（連續週交界、月底切點），月制計算精準到目標天數，演算法簡單可靠（2026-04-21 從週制改為純月制）。</div>
+
+<h3>5.1.2 時段覆蓋制（非員工選班別）</h3>
+<p>排班邏輯不是「員工自己選想上的班別」，而是：</p>
+<ol>
+  <li>店長先定義<b>店時段</b>（store_time_slots）— 一天分早 / 中 / 晚 / 大夜等時段</li>
+  <li>每個時段定義<b>需求人數</b>（早班需 2 人 / 晚班需 3 人等）</li>
+  <li>演算法把員工<b>分配進時段覆蓋</b>，確保每個時段都有足夠人手</li>
+</ol>
+
+<h3>5.1.3 班別 vs 時段</h3>
 <table>
-  <thead><tr><th>制度</th><th>說明</th></tr></thead>
+  <thead><tr><th>概念</th><th>是什麼</th><th>store_id + year_month 必填</th></tr></thead>
   <tbody>
-    <tr><td class="feat">月制工時</td><td>以月為單位算總工時，不是週固定。一個月不超過 174h 等（依勞基法）</td></tr>
-    <tr><td class="feat">時段覆蓋制</td><td>排班不是員工選班別，而是「店長定義時段（早班 / 中班 / 晚班 / 大夜）」員工去 cover</td></tr>
-    <tr><td class="feat">三級偏好</td><td>員工可標記某些時段「希望 / 普通 / 不希望」，演算法盡量配合</td></tr>
+    <tr><td class="feat">shift_definitions</td><td>班別（標準班次）：早班 09-17、晚班 17-23 等。員工被分配「班別」。</td><td>✅ 必填</td></tr>
+    <tr><td class="feat">store_time_slots</td><td>店時段（營業覆蓋）：早 10-14、中 14-18、晚 18-22 等。系統檢查覆蓋率。</td><td>✅ 必填</td></tr>
+  </tbody>
+</table>
+<div class="warn"><span class="label">坑：</span>shift_definitions 跟 store_time_slots 沒帶 store_id 會混到其他門市的班別。每個月份要先建好對應月的設定。</div>
+
+<h3>5.1.4 三級偏好制（演算法分數）</h3>
+<p>員工對每個班別 / 時段可表達偏好（在 employee_shift_preferences）：</p>
+<table>
+  <thead><tr><th>偏好</th><th>icon</th><th>演算法分數</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">希望</td><td>⭐</td><td><b>+20</b></td><td>強烈想上這時段</td></tr>
+    <tr><td class="feat">可以</td><td>✅</td><td><b>+8</b></td><td>普通可以</td></tr>
+    <tr><td class="feat">不行</td><td>❌</td><td><b>blocked</b></td><td>排不進去（硬約束）</td></tr>
+  </tbody>
+</table>
+<div class="note"><span class="label">分數差別：</span>演算法把所有可能組合算總分，分數最高的方案勝出。⭐ 跟 ✅ 差距大（+20 vs +8）讓「強烈偏好」真的有差。</div>
+
+<h2>5.2 排班相關設定步驟（admin / 店長）</h2>
+
+<h3>5.2.1 設定店時段</h3>
+<div class="step"><span class="step-num">1</span>Sidebar → HR → 排班管理 → 排班規則 / 工時設定 → 選門市</div>
+<div class="step"><span class="step-num">2</span>「店時段設定」tab → 新增時段：時間範圍 + 需求人數</div>
+<div class="step"><span class="step-num">3</span>跨月需重複設定（系統會自動帶上 year_month）</div>
+
+<h3>5.2.2 設定班別</h3>
+<div class="step"><span class="step-num">1</span>「班別管理」tab → 新增班別：班名 / 起訖時間 / 顏色 / 適用員工類型（全職 / PT / 全部）</div>
+<div class="step"><span class="step-num">2</span>同個店可有多個班別組合</div>
+
+<h3>5.2.3 設定每月工時 / 月休</h3>
+<div class="step"><span class="step-num">1</span>「工時設定」tab</div>
+<div class="step"><span class="step-num">2</span>填：每月正常工時 / 加班上限 / 月休天數（正職）/ 月休天數（PT）</div>
+<div class="step"><span class="step-num">3</span>系統會以這個值為演算法目標</div>
+
+<h3>5.2.4 員工偏好（員工自己設或店長代設）</h3>
+<div class="step"><span class="step-num">1</span>員工：LIFF → 個人偏好設定（或店長後台代設）</div>
+<div class="step"><span class="step-num">2</span>對每個班別 / 時段標 ⭐ / ✅ / ❌</div>
+<div class="step"><span class="step-num">3</span>偏好會直接餵進演算法</div>
+
+<h2>5.3 員工提交希望休（off_request）</h2>
+<div class="step"><span class="step-num">1</span>員工：LIFF HRHub → 各類申請 → 排休申請</div>
+<div class="step"><span class="step-num">2</span>選日期 → 填原因 → 送出</div>
+<div class="step"><span class="step-num">3</span>店長收 LINE 通知 → 核准 / 退回（每月通常有截止日，截止後不收）</div>
+<div class="step"><span class="step-num">4</span>核准後該日期會被演算法視為「請避開」</div>
+<div class="note">員工也可在 Web 看希望休狀態（HRHub → 各類申請 → 排休申請）。如被退回，原因會顯示。</div>
+
+<h2>5.4 排班演算法 v5（核心邏輯）</h2>
+
+<h3>5.4.1 整體流程</h3>
+<pre style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px;line-height:1.5">
+月排班開始
+  ├─ 拆成週（4 週變形月制）
+  └─ 每週依序：
+     1. 標記休息日（依員工已核准的希望休 + 月休目標）
+     2. Pass 1：偏好班別分配（⭐ 優先 → ✅ 次之）
+     3. Pass 2：剩餘人力評分填滿（覆蓋率優先）
+     4. Step 3a：混合補班（標準班別不夠時動態產生非標準班次）
+     5. Step 3b：開店 / 關店人員修正（早班一定要有開店人）
+     6. Step 3c：跨門市借調（本店人力不足時從 additional_stores 借）
+     7. 驗證 + 統計（hour balance、覆蓋率、違規檢查）
+     8. [可選] LLM retry（有違規時用 Gemini 建議微調）
+最終校正：超標的月休轉回上班
+</pre>
+
+<h3>5.4.2 三級偏好分數計算</h3>
+<p>對每一個「員工 × 時段 / 班別」組合算分：</p>
+<ul>
+  <li>基礎分數 = 員工偏好（⭐+20 / ✅+8 / ❌blocked）</li>
+  <li>+ 加成：員工這月還欠工時 → 加分</li>
+  <li>+ 加成：員工偏好覆蓋率高 → 加分</li>
+  <li>- 懲罰：跨門市借調 <b>-20 分</b>（盡量本店人）</li>
+  <li>- 懲罰：連續上班過久 → 扣分</li>
+  <li>- 硬約束（不會分配）：希望休、月休目標已達、月工時上限已到</li>
+</ul>
+
+<h3>5.4.3 月休純月制邏輯（2026-04-21 大改）</h3>
+<ul>
+  <li>店長設「月休 N 天」（如正職 10 天 / PT 14 天）</li>
+  <li>演算法在月內均勻配置，不再用週分配</li>
+  <li><b>Step 1c</b>：正職的硬性月休先排（這是硬約束）</li>
+  <li><b>Phase 3</b>：不給正職額外休假，只補 PT 月休彈性</li>
+  <li>最終校正：演算法超標時，把多排的休假轉回上班（保證精確命中目標）</li>
+</ul>
+<div class="warn"><span class="label">過去 bug：</span>用週分配（ceil/floor/max）控制月休 → 邊界 case 11/12/13 天不穩定。改純月累計後精確到目標。</div>
+
+<h3>5.4.4 LLM retry（演算法 v5 新增）</h3>
+<p>跑完演算法後驗證，若有違規（如某員工工時超標、某時段沒覆蓋）：</p>
+<ol>
+  <li>送 Gemini：「現有方案有 X 違規，建議調整」</li>
+  <li>Gemini 回保守建議（盡量小幅調整不大改）</li>
+  <li>系統 retry 演算法 with 新限制</li>
+  <li>最多 retry 3 次，仍違規時呈現給店長手動處理</li>
+</ol>
+
+<h3>5.4.5 跨門市借調</h3>
+<p>多店連鎖時，本店人力不足可從「附屬門市」借人：</p>
+<ul>
+  <li>需在 employees.additional_stores 設定「員工跨支援的門市」</li>
+  <li>跨店上班 -20 分懲罰（盡量本店）</li>
+  <li>跨店上班結果會出現在借調員工的本月班表 + 兩店都看得到</li>
+</ul>
+
+<h3>5.4.6 歷史模式分析（analyzeHistoricalPatterns）</h3>
+<p>跑演算法前，系統會先分析過去 4-8 週的排班：</p>
+<ul>
+  <li>找出固定模式（如周一固定 A 開店、週末固定 B 顧）</li>
+  <li>提供「歷史傾向」加分到當月演算法</li>
+  <li>讓排班結果保持<b>連續性</b>，不會每月都跑出截然不同的安排</li>
+</ul>
+
+<h2>5.5 排班結果處理</h2>
+
+<h3>5.5.1 Draft → Publish</h3>
+<div class="step"><span class="step-num">1</span>跑演算法後系統產出 <b>draft</b>（草稿）</div>
+<div class="step"><span class="step-num">2</span>店長手動微調（拖拉某員工換時段）</div>
+<div class="step"><span class="step-num">3</span>確認後點「發佈」→ 寫入 schedules 表，員工才看得到</div>
+
+<h3>5.5.2 publishChecklist 檢查項</h3>
+<p>發佈前系統會列出檢查項：</p>
+<table>
+  <thead><tr><th>檢查項</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td>覆蓋率 100%</td><td>每個店時段都有足夠人力</td></tr>
+    <tr><td>無人工時超標</td><td>沒有員工月工時超過上限</td></tr>
+    <tr><td>無違反勞基法</td><td>連續工時 / 休息時數合於法規</td></tr>
+    <tr><td>希望休全部尊重</td><td>核准的希望休都被避開</td></tr>
+    <tr><td>月休天數精確</td><td>每人月休天數 = 設定目標</td></tr>
   </tbody>
 </table>
 
-<h2>5.2 排班相關設定（admin / 店長）</h2>
-<div class="step"><span class="step-num">1</span>Sidebar → HR → 排班管理 → 排班規則 / 工時設定</div>
-<div class="step"><span class="step-num">2</span>每個門市可獨立設定每月時段（store_time_slots）</div>
-<div class="step"><span class="step-num">3</span>每個門市可獨立設定班別（shift_definitions）：班名 / 起訖時間 / 顏色</div>
-<div class="note"><span class="label">重要：</span>shift_definitions 跟 store_time_slots 必須帶 store_id + year_month，跨月複製要先設定。</div>
-
-<h2>5.3 員工提交希望休</h2>
-<div class="step"><span class="step-num">1</span>員工：LIFF HRHub → 各類申請 → 排休申請</div>
-<div class="step"><span class="step-num">2</span>選日期 → 填原因 → 送出</div>
-<div class="step"><span class="step-num">3</span>店長收 LINE 通知 → 核准 / 退回</div>
-<div class="step"><span class="step-num">4</span>核准後該日期會被排班演算法視為「請避開」</div>
-
-<h2>5.4 跑排班演算法</h2>
-<div class="step"><span class="step-num">1</span>Web → HR → 排班</div>
-<div class="step"><span class="step-num">2</span>選月份 + 門市 + 班別範圍</div>
-<div class="step"><span class="step-num">3</span>點「LLM 排班 / 自動排班」</div>
-<div class="step"><span class="step-num">4</span>系統會考慮：員工偏好 / 希望休 / 月工時上限 / 加班上限 / 排班規則 / 正職優先</div>
-<div class="step"><span class="step-num">5</span>產生 draft，店長可手動微調 → 確認後發佈</div>
-
-<h2>5.5 換班流程</h2>
+<h2>5.6 換班流程（shift_swap）</h2>
 <div class="step"><span class="step-num">1</span>員工 A：LIFF → 換班申請 → 選對方 B + 日期</div>
-<div class="step"><span class="step-num">2</span>B 收 LINE → 同意 or 拒絕</div>
-<div class="step"><span class="step-num">3</span>B 同意 → 進入「待主管核准」階段，店長收通知</div>
-<div class="step"><span class="step-num">4</span>店長核准 → 系統<b>實際交換</b> schedules 表的班次 + 工時欄位</div>
-<div class="step"><span class="step-num">5</span>A / B 都收到「換班通過」LINE 通知</div>
-
-<h2>5.6 排班月休邏輯</h2>
-<ul>
-  <li>休假天數<b>按月累計</b>（不要拆週分配）</li>
-  <li>純月制目標：每月若需休 N 天則整月內配置 N 天</li>
-  <li>正職員工先排，PT 補空檔</li>
-</ul>
+<div class="step"><span class="step-num">2</span>B 收 LINE 「[同意] [拒絕]」</div>
+<div class="step"><span class="step-num">3</span>B 同意 → 狀態變「待主管核准」，店長收通知</div>
+<div class="step"><span class="step-num">4</span>店長核准 → 系統<b>實際交換 schedules 表</b>的：
+  <ul style="margin:6px 0 0 0">
+    <li>shift（班次名）</li>
+    <li>actual_start / actual_end（上下班時間）</li>
+    <li>actual_hours（工時）</li>
+  </ul>
+</div>
+<div class="step"><span class="step-num">5</span>A / B 都收 LINE「換班通過」通知</div>
+<div class="note">換班是「對拷」— A 跟 B 整個班次互換，包含工時。不能只換半天。</div>
 
 <h2>5.7 常見排班問題</h2>
 <table>
   <thead><tr><th>問題</th><th>原因</th><th>處理</th></tr></thead>
   <tbody>
     <tr><td>演算法跑出來人力不夠</td><td>時段定義太多 / 員工太少</td><td>調整時段、增聘、減少時段</td></tr>
-    <tr><td>某員工工時破表</td><td>偏好過少 / 班別設計問題</td><td>手動微調、確認班別覆蓋率</td></tr>
-    <tr><td>希望休全被忽略</td><td>還沒核准 / 跨月設定錯</td><td>確認希望休狀態 + year_month</td></tr>
+    <tr><td>某員工工時破表</td><td>偏好過少 / 班別覆蓋不足</td><td>手動微調、檢查偏好分布</td></tr>
+    <tr><td>希望休全被忽略</td><td>還沒核准 / year_month 不對</td><td>確認希望休 status 跟對應月份</td></tr>
+    <tr><td>跨月份排班帶錯班別</td><td>shift_definitions 沒 year_month 篩</td><td>檢查 store_id + year_month 是否齊全</td></tr>
+    <tr><td>排班結果跟上個月差很多</td><td>歷史模式分析資料不足</td><td>需累積至少 4 週資料</td></tr>
+    <tr><td>LLM retry 跑很久</td><td>違規太多、Gemini API 慢</td><td>手動修正幾個明顯違規再 retry</td></tr>
   </tbody>
 </table>
 
 <!-- ═══════════════════════════════════════════════════════ -->
-<h1 id="ch6">第 6 章 · 薪資作業 SOP</h1>
-<p>給 <b>HR / Payroll</b>。算錯薪資後果嚴重，這章是鐵則 + SOP。</p>
+<h1 id="ch6">第 6 章 · 薪資作業 SOP（詳細版）</h1>
+<p>給 <b>HR / Payroll</b>。算錯薪資後果嚴重，這章是完整 SOP + 計算規則。</p>
 
-<h2>6.1 月底薪資作業流程</h2>
-<div class="step"><span class="step-num">1</span>確認當月出勤資料齊全（打卡 / 補打卡 / 請假 / 加班）</div>
-<div class="step"><span class="step-num">2</span>跑「批次計薪」（salary.compute 權限）</div>
-<div class="step"><span class="step-num">3</span>對照各員工的明細（底薪 / 加班 / 津貼 / 扣項）</div>
-<div class="step"><span class="step-num">4</span>跟廠商（會計師事務所）的計算 PDF 比對</div>
-<div class="step"><span class="step-num">5</span>差異排查 → 調整 → 重算</div>
-<div class="step"><span class="step-num">6</span>產出薪資單 + 發放</div>
+<h2>6.1 月底薪資作業 SOP</h2>
 
-<h2>6.2 薪資計算鐵則（不要違背）</h2>
+<h3>6.1.1 結算前確認（每月 27-30 日）</h3>
+<div class="step"><span class="step-num">1</span>催當月所有出勤資料齊全：打卡紀錄 / 補打卡 / 請假申請 / 加班申請都簽核完畢</div>
+<div class="step"><span class="step-num">2</span>檢查每位員工的 employee_salary_structures 有無變動（升遷、調薪、新進）</div>
+<div class="step"><span class="step-num">3</span>確認本月國定假日 / 補班日已在 holidays 表正確設定</div>
+<div class="step"><span class="step-num">4</span>確認 attendance_records 跟 schedules 對得起來（如有差異是請假 / 缺勤）</div>
+
+<h3>6.1.2 跑批次計薪</h3>
+<div class="step"><span class="step-num">1</span>Sidebar → HR → 薪酬與福利 → 薪資管理</div>
+<div class="step"><span class="step-num">2</span>選對應月份 → 跑「批次計薪」（需 salary.compute 權限）</div>
+<div class="step"><span class="step-num">3</span>系統依員工結構 + 出勤 + 加班 + 法扣 + 投保 計算每人薪資</div>
+<div class="step"><span class="step-num">4</span>產出每人明細（底薪 / 各加班桶 / 津貼 / 投保自付 / 法扣 / 請假扣款 / 實領）</div>
+
+<h3>6.1.3 對帳</h3>
+<div class="step"><span class="step-num">1</span>對照廠商（會計師事務所）給的計算 PDF</div>
+<div class="step"><span class="step-num">2</span>逐一比對：投保金額、加班費、實領</div>
+<div class="step"><span class="step-num">3</span>差異 &gt; 100 元的條目要找原因（schema drift / 設定不對 / 邏輯誤差）</div>
+
+<h3>6.1.4 發放</h3>
+<div class="step"><span class="step-num">1</span>對完無誤 → 產出薪資單 PDF / 銀行匯款檔</div>
+<div class="step"><span class="step-num">2</span>標記「已發放」（salary.pay 權限）</div>
+<div class="step"><span class="step-num">3</span>發 LINE 通知給每位員工「本月薪資已入帳」（可選）</div>
+
+<h2>6.2 薪資組成公式</h2>
+
+<h3>6.2.1 月薪正職</h3>
+<pre style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px">
+月薪 = 底薪(base)
+     + 職務津貼(role_allowance)
+     + 其他津貼（伙食、交通、全勤等）
+     + 加班費（依加班桶分別計算）
+     + 績效獎金
+     - 請假扣款（依日 / 時計）
+     - 投保自付（勞保 + 健保）
+     - 法扣（如有）
+     - 預支 / 借款扣款（如有）
+     = 實領
+</pre>
+
+<h3>6.2.2 PT 兼職</h3>
+<pre style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px">
+PT 薪資 = 工作時數 × 時薪
+       + 加班費（同月薪規則）
+       + 國定假日 / 例假日加成（×2 詳見 6.4.3）
+       - 投保自付（PT 特殊 11,100 / 29,500）
+       - 法扣（如有）
+       = 實領
+</pre>
+
+<h3>6.2.3 hourly rate 公式（重要）</h3>
 <div class="warn">
-  <ul>
-    <li><b>所得稅不代扣</b>：系統 NOT 自動扣所得稅。員工自行處理年度報稅。</li>
-    <li><b>月薪不算國定假日</b>：月薪制員工的國定假日已包含在底薪內，不另外算加班費</li>
-    <li><b>投保用 base + role cap</b>：投保級距上限 45,800（依勞動部）</li>
-    <li><b>PT 固定 11,100 / 29,500</b>：PT 兼職員工特殊投保算法</li>
-  </ul>
+  <span class="label">🔴 鐵則：</span>加班費的 hourly rate = <code>base / 30 / 8</code>，<b>不是</b>全薪 / 240。
+</div>
+<ul>
+  <li>正職月薪 30,000 → hourly = 30000 / 30 / 8 = 125</li>
+  <li>加班 1 小時平日 1.34 倍 → 125 × 1.34 = 167.5</li>
+  <li>用全薪 (含津貼) 算 hourly 會多算 → 違反勞基法</li>
+</ul>
+
+<h2>6.3 加班費規則（A/B/C 三類）</h2>
+
+<h3>6.3.1 A 類：平日延長工時（勞基法 §24）</h3>
+<table>
+  <thead><tr><th>時段</th><th>倍率</th><th>說明</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">前 2 小時</td><td><b>1.34</b></td><td>正常工時(8h) 外延長前 2 小時</td></tr>
+    <tr><td class="feat">2 小時後</td><td><b>1.67</b></td><td>延長超過 2 小時的部分</td></tr>
+  </tbody>
+</table>
+<p><b>例：</b>平日上班 8 小時後加班 3 小時 → 前 2h ×1.34 + 第 3h ×1.67</p>
+
+<h3>6.3.2 B 類：休息日加班（勞基法 §24-1）</h3>
+<p>休息日 = 一般指週六（公司可調，看「彈性出勤」設定）</p>
+<table>
+  <thead><tr><th>時段</th><th>倍率</th><th>說明</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">前 2 小時</td><td><b>1.34</b></td><td>休息日加班前 2 小時</td></tr>
+    <tr><td class="feat">2-8 小時</td><td><b>1.67</b></td><td>第 3-8 小時</td></tr>
+    <tr><td class="feat">8-12 小時</td><td><b>2.67</b></td><td>第 9-12 小時（這就是「2.67 桶」）</td></tr>
+  </tbody>
+</table>
+<p><b>例：</b>週六出勤 10 小時 → 前 2h ×1.34 + 中間 6h ×1.67 + 後 2h ×2.67</p>
+
+<h3>6.3.3 C 類：國定假日 / 例假日 出勤（勞基法 §39）</h3>
+<div class="warn">
+  <span class="label">⚠️ 跟加班費不同：</span>
+  國定假日 / 例假日 出勤<b>本身就是工資加倍</b>（不是加班費的概念）。即便只上 1 小時也是這天工資全額再給一倍。
+</div>
+<table>
+  <thead><tr><th>對象</th><th>怎麼算</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">月薪正職</td><td>底薪已含整月工資（含國定假日）→ <b>不另外加給</b></td></tr>
+    <tr><td class="feat">PT 兼職</td><td>工時 ×1 倍時薪 + 額外 ×1 倍 holidayBonus = <b>共 ×2</b></td></tr>
+  </tbody>
+</table>
+<p><b>例 1：</b>月薪 30,000 員工在 4/4 兒童節上班 4 小時 → <b>不另外給</b>（底薪已含）</p>
+<p><b>例 2：</b>PT 時薪 200 在 4/4 兒童節上班 4 小時 → 4 × 200 (工時) + 4 × 200 (holidayBonus) = 1,600</p>
+
+<h3>6.3.4 D 類：例假日（週日）</h3>
+<p>跟國定假日同邏輯：×2 工資加倍。一般不應出勤，必須出勤的話需先取得勞工同意。</p>
+
+<h3>6.3.5 ot_category 自動分類</h3>
+<p>系統依加班<b>日期</b>自動判 weekday / restday / holiday，存在 <code>overtime_requests.ot_category</code>。</p>
+<table>
+  <thead><tr><th>category</th><th>對應</th><th>用哪桶</th></tr></thead>
+  <tbody>
+    <tr><td><code>weekday</code></td><td>週一到週五（非國定）</td><td>A 類 1.34 / 1.67</td></tr>
+    <tr><td><code>restday</code></td><td>休息日（週六）</td><td>B 類 1.34 / 1.67 / 2.67</td></tr>
+    <tr><td><code>holiday</code></td><td>國定假日 / 例假日</td><td>C 類 ×2（PT 適用，月薪不加）</td></tr>
+  </tbody>
+</table>
+<div class="warn"><span class="label">注意：</span><code>ot_type</code> = pay / leave，是「加班補休 vs 加班費」的選擇，<b>不是</b>平日/休息日分類。過去把 ot_type 誤當分類 → 全算平日倍率。</div>
+
+<h3>6.3.6 加班 start_time / end_time（2026-05-14 新增）</h3>
+<p>過去只記 hours，不知道實際幾點到幾點。現在補上：</p>
+<ul>
+  <li><code>start_time</code>：加班起始時間（24h 制）</li>
+  <li><code>end_time</code>：加班結束時間（可跨日）</li>
+  <li>用途：稽核「平日 18:00-19:00 vs 凌晨 03:00-04:00 是否倍率不同」</li>
+</ul>
+
+<h3>6.3.7 加班補休 vs 加班費（ot_type）</h3>
+<table>
+  <thead><tr><th>ot_type</th><th>意思</th></tr></thead>
+  <tbody>
+    <tr><td><code>pay</code></td><td>領加班費（依倍率計算）</td></tr>
+    <tr><td><code>leave</code></td><td>換補休（hours 進 leave_balances）</td></tr>
+  </tbody>
+</table>
+<p>申請時員工自己選。同一筆加班只能擇一。</p>
+
+<h2>6.4 投保金額規則</h2>
+
+<h3>6.4.1 月薪正職</h3>
+<div class="step"><span class="step-num">1</span>計算 <code>insured = base + role_allowance</code>（基本薪 + 職務津貼）</div>
+<div class="step"><span class="step-num">2</span>對照<b>勞健保級距表</b>找到對應級距</div>
+<div class="step"><span class="step-num">3</span><b>上限 cap 45,800</b>（依勞動部 2026 級距）</div>
+<div class="step"><span class="step-num">4</span>勞保 / 健保用同一個值（廠商實務 — 把健保也 cap 45,800，雖違反健保法但常見）</div>
+
+<h3>6.4.2 PT 兼職（特殊）</h3>
+<table>
+  <thead><tr><th>險種</th><th>固定值</th></tr></thead>
+  <tbody>
+    <tr><td class="feat">勞保</td><td><b>11,100</b></td></tr>
+    <tr><td class="feat">健保</td><td><b>29,500</b></td></tr>
+  </tbody>
+</table>
+<div class="note"><span class="label">法規 vs 實務：</span>法規 PT 應用「最近 3 個月平均月薪資」對齊級距，2 月跟 8 月各調一次。廠商實務常用固定值（簡化）。系統預設廠商實務 (forcePartTimeMin=true)，admin 可後台 base_insured 覆寫。</div>
+
+<h3>6.4.3 2026 勞保費率 12.5%</h3>
+<table>
+  <thead><tr><th>項目</th><th>費率</th></tr></thead>
+  <tbody>
+    <tr><td>普通事故保險費率</td><td>11.5%</td></tr>
+    <tr><td>+ 就業保險費率</td><td>1.0%</td></tr>
+    <tr><td><b>= 合計</b></td><td><b>12.5%</b></td></tr>
+    <tr><td>65 歲以上（已退休再就業）</td><td>11.5%（無就保）</td></tr>
+  </tbody>
+</table>
+<div class="note">員工自付 20%、雇主負擔 70%、政府補助 10%（一般）— 比例依勞保條例。</div>
+
+<h3>6.4.4 健保費率</h3>
+<p>2026 健保費率 5.17%（一般）。員工自付 30%、雇主 60%、政府 10%。</p>
+
+<h3>6.4.5 勞退 6%（雇主提撥）</h3>
+<p>系統 hardcode 計算：級距 × 6%（雇主全額提撥，員工不扣）。</p>
+
+<h3>6.4.6 admin 覆寫</h3>
+<p>如果廠商規則跟系統算出來不同（特例員工），admin 可在後台填 <code>employee_salary_structures.base_insured</code>，系統會優先用這個值，不再依公式算。</p>
+
+<h2>6.5 計薪鐵則（嚴格遵守，不要違背）</h2>
+
+<div class="warn">
+  <ol>
+    <li><b>所得稅不代扣</b>：系統 <code>withholdTax: false</code>。員工 5 月自行報稅。HR 不該回答稅務問題。</li>
+    <li><b>月薪正職國定假日不另加</b>：月薪固定值已含整月工資，<code>holidayBonus</code> 只對 PT。</li>
+    <li><b>PT 國定假日 ×2</b>：工時 1 倍 + holidayBonus 1 倍 = 共 ×2。</li>
+    <li><b>投保 = base + role 對齊級距，上限 45,800</b>。健保也 cap 45,800（廠商實務）。</li>
+    <li><b>PT 投保固定 11,100 / 29,500</b>（廠商實務）— 法規應用 3 個月平均，但簡化用固定值。</li>
+    <li><b>加班 hourly rate = base / 30 / 8</b>（不是全薪 / 240）。</li>
+    <li><b>2026 勞保費率 12.5%</b>（普通 11.5% + 就保 1%）。</li>
+    <li><b>ot_category 才是平日/休息日分類，ot_type 是補休 vs 加班費</b>。不要混淆。</li>
+  </ol>
 </div>
 
-<h2>6.3 加班費三桶</h2>
+<h2>6.6 永春門市實測案例（2026-04 對齊廠商 PDF）</h2>
+
+<h3>7 員工結果</h3>
 <table>
-  <thead><tr><th>桶</th><th>倍率</th><th>條件</th></tr></thead>
+  <thead><tr><th>員工</th><th>制</th><th>月薪 / 時薪</th><th>實領</th></tr></thead>
   <tbody>
-    <tr><td class="feat">第 1 桶</td><td>1.34</td><td>平日加班前 2 小時</td></tr>
-    <tr><td class="feat">第 2 桶</td><td>1.67</td><td>平日加班 2 小時後</td></tr>
-    <tr><td class="feat">第 3 桶</td><td>2.67</td><td>休息日 / 國定假日加班</td></tr>
+    <tr><td>陳嘉益</td><td>月薪</td><td>41,000</td><td>65,503</td></tr>
+    <tr><td>許亦翎</td><td>月薪</td><td>40,000</td><td>45,562</td></tr>
+    <tr><td>徐宥芯</td><td>月薪</td><td>40,000</td><td>45,380</td></tr>
+    <tr><td>洪瑛妏</td><td>PT</td><td>220</td><td>10,155</td></tr>
+    <tr><td>蔡伊真</td><td>PT</td><td>220</td><td>21,792</td></tr>
+    <tr><td>林思妤</td><td>PT</td><td>220</td><td>19,141</td></tr>
+    <tr><td>陳姿螢</td><td>PT</td><td>220</td><td>15,490</td></tr>
   </tbody>
 </table>
 
-<h2>6.4 勞健保級距</h2>
-<div class="step"><span class="step-num">1</span>Sidebar → HR → 薪酬與福利 → 健保級距監控</div>
-<div class="step"><span class="step-num">2</span>每月看實領 vs 投保級距是否一致</div>
-<div class="step"><span class="step-num">3</span>不一致 → 需調整級距（依勞健保局規定有調整時機）</div>
+<h3>實測修出來的 7 個 bug</h3>
+<ol>
+  <li>schema drift：補 <code>overtime_requests.request_date</code> / <code>ot_hours</code> 欄位 + 5 個表 organization_id backfill</li>
+  <li>ot_category 自動分類：新增欄位 + DB trigger 自動分 weekday / restday / holiday</li>
+  <li>加班三桶階梯：1.34 / 1.67 / 2.67 算法對</li>
+  <li>國定假日 §39：只對 PT 加 ×2，月薪不加</li>
+  <li>勞健保 2026 級距：費率 12.5%、PT 最低 11,100 / 29,500、月薪 cap 45,800</li>
+  <li>所得稅：不代扣（withholdTax: false）</li>
+  <li>陳嘉益 store=NULL → 補綁台北永春</li>
+</ol>
 
-<h2>6.5 永春案例（PT 投保特例）</h2>
-<p>永春 PT 投保用固定值 11,100 / 29,500，不照一般員工級距表算。這是廠商特殊規則。</p>
+<h3>待辦（下次接續永春時）</h3>
+<ul>
+  <li>PT 投保「最近 3 個月平均」自動算（法規要求）</li>
+  <li>「排班差額」邏輯（廠商獨有欄位，規則未確認）</li>
+  <li>PT 工時認列差距（廠商從排班預定工時認列正常工時，系統用 attendance 全加）</li>
+</ul>
 
-<h2>6.6 常見薪資問題</h2>
+<h2>6.7 常見薪資問題排查</h2>
 <table>
   <thead><tr><th>問題</th><th>排查方向</th></tr></thead>
   <tbody>
-    <tr><td>某員工薪資少算 / 多算</td><td>確認出勤資料 / 假單 / 加班 / 補打卡是否齊全；確認 employee_salary_structures 設定</td></tr>
-    <tr><td>批次計薪報錯</td><td>看哪幾位錯 → 個別檢查；看 audit log</td></tr>
-    <tr><td>勞健保級距異常</td><td>確認 insurance_grade_monitor；可能級距需手動調整</td></tr>
-    <tr><td>所得稅相關詢問</td><td>系統不代扣，請員工自行處理；HR 不該回答稅務問題</td></tr>
+    <tr><td>某員工加班費全 0</td><td>確認 overtime_requests 是否有資料 / 是否有 organization_id / request_date 欄位 / 是否 status='已核准'</td></tr>
+    <tr><td>加班費全算 1.34（沒分桶）</td><td>是否誤用 ot_type 當分類？改用 ot_category（DB trigger 已自動分）</td></tr>
+    <tr><td>月薪員工被加了國定假日 holidayBonus</td><td>違反鐵則 #2，找 payroll.js 內 holidayBonus 邏輯，確認 isMonthlySalaried 判斷對</td></tr>
+    <tr><td>勞保金額跟廠商不同</td><td>確認用 base + role 算（不是 base 單個）+ cap 45,800 + 2026 級距</td></tr>
+    <tr><td>PT 級距異常</td><td>系統預設 forcePartTimeMin=true 用 11,100 / 29,500。如要法規模式 admin 後台調 base_insured</td></tr>
+    <tr><td>所得稅被扣</td><td>查 calculateNetSalary 的 withholdTax 是否誤設 true</td></tr>
+    <tr><td>批次計薪報錯</td><td>看 audit log 哪幾位失敗 → 個別跑單人計算看哪段壞</td></tr>
+  </tbody>
+</table>
+
+<h2>6.8 名詞速查</h2>
+<table>
+  <thead><tr><th>名詞</th><th>意思</th></tr></thead>
+  <tbody>
+    <tr><td><code>base</code></td><td>基本薪資（不含津貼）</td></tr>
+    <tr><td><code>role_allowance</code></td><td>職務津貼</td></tr>
+    <tr><td><code>hourly_rate</code></td><td>時薪 = base / 30 / 8</td></tr>
+    <tr><td><code>insured</code></td><td>投保金額（級距）</td></tr>
+    <tr><td><code>holidayBonus</code></td><td>國定假日加倍工資（PT 適用）</td></tr>
+    <tr><td><code>ot_category</code></td><td>加班類別：weekday / restday / holiday（系統自動分類）</td></tr>
+    <tr><td><code>ot_type</code></td><td>加班用途：pay（領加班費）/ leave（換補休）</td></tr>
+    <tr><td><code>休息日</code></td><td>勞基法用語：一般指週六（公司可定）</td></tr>
+    <tr><td><code>例假日</code></td><td>勞基法用語：一般指週日</td></tr>
+    <tr><td><code>國定假日</code></td><td>勞動部公告：元旦 / 春節 / 清明 / 端午 / 中秋 / 國慶 / 兒童節 等</td></tr>
   </tbody>
 </table>
 

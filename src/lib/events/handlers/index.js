@@ -6,6 +6,7 @@ import { registerPOSHandlers } from './posHandlers.js'
 import { registerHRHandlers } from './hrHandlers.js'
 import { registerManufacturingHandlers } from './manufacturingHandlers.js'
 import { registerSalesHandlers } from './salesHandlers.js'
+import { registerLMSHandlers } from './lmsHandlers.js'
 // registerWorkflowExecutors 需要 crm_workflows 表；目前環境沒有，先停用避免啟動 404。
 // 日後要啟用 CRM 自動化，把下面的 import/call 取消註解，並建好 crm_workflows。
 // import { registerWorkflowExecutors } from '../../workflowExecutor.js'
@@ -29,6 +30,7 @@ export function registerAllHandlers(bus) {
   registerHRHandlers(bus)
   registerManufacturingHandlers(bus)
   registerSalesHandlers(bus)
+  registerLMSHandlers(bus)
 
   // CRM Workflow Automation — 暫停（依賴不存在的 crm_workflows 表）
   // registerWorkflowExecutors(bus)

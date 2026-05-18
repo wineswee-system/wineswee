@@ -11,6 +11,7 @@ import TenantAdmin from '../pages/system/TenantAdmin'
 import ApprovalRules from '../pages/system/ApprovalRules'
 import TrainingGuide from '../pages/system/TrainingGuide'
 import EmployeePermissions from '../pages/system/EmployeePermissions'
+import OfferLetterTemplates from '../pages/system/OfferLetterTemplates'
 export default function SystemModule() {
   return (
     <Routes>
@@ -26,6 +27,7 @@ export default function SystemModule() {
       <Route path="database" element={<DatabaseAdmin />} />
       <Route path="tenants" element={<TenantAdmin />} />
       <Route path="approval-rules" element={<ApprovalRules />} />
+      <Route path="offer-letter-templates" element={<OfferLetterTemplates />} />
     </Routes>
   )
 }

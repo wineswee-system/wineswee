@@ -40,9 +40,10 @@ const GROUPS = [
   {
     key: 'people', label: '人事異動', icon: Calendar, color: 'var(--accent-purple)',
     tabs: [
-      { key: 'resignation', label: '離職', table: 'resignation_requests',         route: '/hr/forms/resignation', pendingStatus: '申請中' },
-      { key: 'loa',         label: '留停', table: 'leave_of_absence_requests',    route: '/hr/forms/loa',         pendingStatus: '申請中' },
-      { key: 'transfer',    label: '異動', table: 'personnel_transfer_requests',  route: '/hr/forms/transfer',    pendingStatus: '申請中' },
+      { key: 'resignation',   label: '離職', table: 'resignation_requests',        route: '/hr/forms/resignation', pendingStatus: '申請中' },
+      { key: 'loa',           label: '留停', table: 'leave_of_absence_requests',   route: '/hr/forms/loa',         pendingStatus: '申請中' },
+      { key: 'transfer',      label: '異動', table: 'personnel_transfer_requests', route: '/hr/forms/transfer',    pendingStatus: '申請中' },
+      { key: 'hire_approval', label: '錄取', table: 'offer_letters',               route: '/hr/recruitment',       pendingStatus: '待審' },
     ],
   },
   {
@@ -70,9 +71,10 @@ const PERM_KEY_MAP = {
   expense: 'expenses',
   expense_request: 'expense_requests',
   expense_settle: 'expense_settles',
-  resignation: 'resignation_requests',
-  loa: 'leave_of_absence_requests',
-  transfer: 'personnel_transfer_requests',
+  resignation:   'resignation_requests',
+  loa:           'leave_of_absence_requests',
+  transfer:      'personnel_transfer_requests',
+  hire_approval: 'offer_letters',
   // 排班 / 任務（暫未在 web_list_my_pending_approval_ids 內 → 後續補）
   off_request: 'off_requests',
   shift_swap_peer: 'shift_swaps',

@@ -34,13 +34,14 @@ const SystemModule = lazy(() => import('./modules/SystemModule'))
 const AIModule = lazy(() => import('./modules/AIModule'))
 const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
 const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
+const LMSModule = lazy(() => import('./modules/LMSModule'))
 
 // ── Route-level access control — 5 roles ──
 const ROLE_ROUTES = {
   store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/forms'],
   office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/hr/forms', '/hr/insurance-grade', '/hr/labor-law-rates', '/process', '/org'],
-  manager:      ['/', '/hr', '/org', '/process'],
-  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics'],
+  manager:      ['/', '/hr', '/org', '/process', '/lms'],
+  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics', '/lms'],
   super_admin:  null, // all
 }
 
@@ -108,6 +109,7 @@ function AdminApp() {
             <Route path="/system/*" element={canAccessWithPerm('/system', 'system.admin') ? <SystemModule /> : blocked} />
             <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
             <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
+            <Route path="/lms/*" element={canAccess('/lms') ? <LMSModule /> : blocked} />
             <Route path="/super-admin/*" element={isSuperAdmin ? <SuperAdminModule /> : blocked} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

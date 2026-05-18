@@ -6,6 +6,7 @@ import { MANUFACTURING_EVENTS } from './manufacturing.events.js'
 import { HR_EVENTS } from './hr.events.js'
 import { CRM_EVENTS } from './crm.events.js'
 import { POS_EVENTS } from './pos.events.js'
+import { LMS_EVENTS } from './lms.events.js'
 
 export const EVENT_CATALOG = {
   ...SALES_EVENTS,
@@ -16,4 +17,5 @@ export const EVENT_CATALOG = {
   ...HR_EVENTS,
   ...CRM_EVENTS,
   ...POS_EVENTS,
+  ...LMS_EVENTS,
 }

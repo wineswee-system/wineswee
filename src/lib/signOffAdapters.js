@@ -261,6 +261,51 @@ export function printResignationSignOff(row, opts = {}) {
   })
 }
 
+// ─── 8. 錄取簽呈 offer_letters ───
+// ol: offer_letters row (may include ol.candidates.name via join)
+// opts: { companyName, logoUrl, candidateName, chainSteps, approverMap }
+export function printHireApprovalSignOff(ol, opts = {}) {
+  if (!ol) return
+  const base = baseOpts(opts)
+  const candidateName = opts.candidateName || ol.candidates?.name || '—'
+
+  printSignOff({
+    ...base,
+    docTitle: '錄取核准簽呈',
+    docNo: ol.id,
+    applicant: {
+      name: opts.submitterName || opts.companyName || '',
+      dept: '人力資源部',
+    },
+    date: fmtDate(ol.created_at),
+    subject: `聘用 ${candidateName} 擔任 ${ol.position || '—'} 一職`,
+    sections: [
+      {
+        title: '候選人資訊',
+        rows: [
+          ['姓名',     candidateName],
+          ['應聘職位', ol.position || '—'],
+          ['部門',     ol.dept     || '—'],
+        ],
+      },
+      {
+        title: '薪資與到職條件',
+        rows: [
+          ['月薪',   ol.salary        ? `NT$ ${Number(ol.salary).toLocaleString()}` : '—'],
+          ['到職日', fmtDate(ol.start_date)],
+          ['試用期', ol.probation_days ? `${ol.probation_days} 天` : '—'],
+        ],
+      },
+    ],
+    status: ol.status || '',
+    rejectReason: ol.reject_reason || '',
+    finalApprover: ol.status === '已核准'
+      ? { name: opts.approverName || '', approved_at: ol.approved_at }
+      : undefined,
+    simpleSign: ['人資呈文', '部門主管', 'CEO 核章'],
+  })
+}
+
 // ─── 7. 人事異動 personnel_transfer_requests ───
 // row 預期已 join employee:employees(...) + approver + departments / stores 對照
 export function printTransferSignOff(row, opts = {}) {

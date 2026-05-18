@@ -24,6 +24,63 @@ export const updateRecruitmentJob = (id, data) =>
 export const deleteRecruitmentJob = (id) =>
   supabase.from('recruitment_jobs').delete().eq('id', id)
 
+// ─── Candidates ───
+export const getCandidates = (orgId, jobId) => {
+  let q = supabase.from('candidates').select('*, recruitment_jobs(title)').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  if (jobId) q = q.eq('job_id', jobId)
+  return q
+}
+export const createCandidate = (data) =>
+  supabase.from('candidates').insert(data).select().single()
+export const updateCandidate = (id, data) =>
+  supabase.from('candidates').update(data).eq('id', id).select().single()
+export const deleteCandidate = (id) =>
+  supabase.from('candidates').delete().eq('id', id)
+
+// ─── Interviews ───
+export const getInterviews = (orgId, candidateId) => {
+  let q = supabase.from('interviews')
+    .select('*, employees(name)')
+    .order('scheduled_at', { ascending: true })
+  if (orgId) q = q.eq('organization_id', orgId)
+  if (candidateId) q = q.eq('candidate_id', candidateId)
+  return q
+}
+export const createInterview = (data) =>
+  supabase.from('interviews').insert(data).select().single()
+export const updateInterview = (id, data) =>
+  supabase.from('interviews').update(data).eq('id', id).select().single()
+export const deleteInterview = (id) =>
+  supabase.from('interviews').delete().eq('id', id)
+
+// ─── Offer Letter Templates ───
+export const getOfferLetterTemplates = (orgId) => {
+  let q = supabase.from('offer_letter_templates').select('*').order('is_default', { ascending: false }).order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+export const createOfferLetterTemplate = (data) =>
+  supabase.from('offer_letter_templates').insert(data).select().single()
+export const updateOfferLetterTemplate = (id, data) =>
+  supabase.from('offer_letter_templates').update(data).eq('id', id).select().single()
+export const deleteOfferLetterTemplate = (id) =>
+  supabase.from('offer_letter_templates').delete().eq('id', id)
+
+// ─── Offer Letters ───
+export const getOfferLetters = (orgId, candidateId) => {
+  let q = supabase.from('offer_letters')
+    .select('*, candidates(name), offer_letter_templates(name)')
+    .order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  if (candidateId) q = q.eq('candidate_id', candidateId)
+  return q
+}
+export const createOfferLetter = (data) =>
+  supabase.from('offer_letters').insert(data).select().single()
+export const updateOfferLetter = (id, data) =>
+  supabase.from('offer_letters').update(data).eq('id', id).select().single()
+
 export const getDocuments = (orgId) => {
   let q = supabase.from('documents').select('*').order('upload_date', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)

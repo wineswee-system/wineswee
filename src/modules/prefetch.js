@@ -19,6 +19,7 @@ const moduleLoaders = {
   ai: () => import('./AIModule'),
   integration: () => import('./IntegrationModule'),
   superadmin: () => import('./SuperAdminModule'),
+  lms: () => import('./LMSModule'),
 }
 
 // Sidebar groups → module keys
@@ -30,6 +31,7 @@ const groupModules = {
   analytics: ['analytics'],
   system: ['system', 'ai', 'integration'],
   'super-admin': ['superadmin'],
+  lms: ['lms'],
 }
 
 const prefetched = new Set()

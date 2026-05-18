@@ -172,7 +172,8 @@ export async function buildChainBasedSteps({
       target_emp_id: s.target_emp_id || null,
       role_name: s.role_name || null,
       status,
-      completedAt: status === 'completed' && idx === totalSteps ? row.approved_at : undefined,
+      // 最後一關 completed 才用 row.approved_at；idx 是 0-based step_order，最後一關 = totalSteps - 1
+      completedAt: status === 'completed' && idx === totalSteps - 1 ? row.approved_at : undefined,
       completedBy: status === 'completed' ? targetName : null,
       rejectReason: status === 'rejected' ? row.reject_reason : '',
     }

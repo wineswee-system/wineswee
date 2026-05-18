@@ -505,21 +505,18 @@ export default function ExpenseRequests() {
       })
       const tlByStep = {}
       ;(timeline || []).forEach(t => { tlByStep[t.step_order] = t })
+      // mergeExtraSteps 後 baseSteps = [申請人, ...可能含加簽..., chain_step_0, chain_step_1, ...]
+      // 用獨立 chainStepIdx 對齊 timeline.step_order，跳過 applicant 跟加簽 step
+      let chainStepIdx = 0
       baseSteps = baseSteps.map(s => {
-        // 申請人 step 不動 (createdAt 已設)
         if (s.isApplicant) return s
-        // chain 各關 step_order 是 0-based；申請人 step 不算 step_order，所以要對齊
-        // buildChainBasedSteps 返回 [申請人, step0, step1, ...] → step index = i - 1
-        return s
+        if (s.kind === 'extra') return s
+        const tl = tlByStep[chainStepIdx]
+        chainStepIdx += 1
+        if (!tl || !tl.exited_at) return s
+        if (s.status !== 'completed' && s.status !== 'rejected') return s
+        return { ...s, completedAt: tl.exited_at, durationText: tl.duration_text }
       })
-      // 用 step_order 對應，直接 mapping 進 baseSteps（跳過第 0 個 applicant）
-      for (let i = 1; i < baseSteps.length; i++) {
-        const tl = tlByStep[i - 1]
-        if (!tl) continue
-        if (tl.exited_at && (baseSteps[i].status === 'completed' || baseSteps[i].status === 'rejected')) {
-          baseSteps[i] = { ...baseSteps[i], completedAt: tl.exited_at, durationText: tl.duration_text }
-        }
-      }
     } catch (e) {
       console.warn('[get_approval_timeline] failed:', e)
     }

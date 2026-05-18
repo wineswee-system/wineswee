@@ -10,6 +10,22 @@
 import { supabase } from './supabase'
 import { getWorkflowForRecord } from './workflowIntegration'
 
+// 把兩個時間差格式化成「X 天 Y 小時 Z 分」（給 timeline 「停留」用，對齊 get_approval_timeline 的 duration_text）
+function fmtDuration(startIso, endIso) {
+  if (!startIso || !endIso) return null
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
+  if (ms < 0) return null
+  let mins = Math.floor(ms / 60000)
+  if (mins < 1) return '不到 1 分'
+  const days = Math.floor(mins / (60 * 24)); mins -= days * 60 * 24
+  const hours = Math.floor(mins / 60);       mins -= hours * 60
+  const parts = []
+  if (days  > 0) parts.push(`${days} 天`)
+  if (hours > 0) parts.push(`${hours} 小時`)
+  if (mins  > 0 || parts.length === 0) parts.push(`${mins} 分`)
+  return parts.join(' ')
+}
+
 /**
  * Pattern A：用 template_name + applicant 找 workflow，再轉 chain steps
  *
@@ -238,6 +254,10 @@ async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {
     if (e.status === 'pending') status = 'current'
     else if (e.status === 'approved') status = 'completed'
     else if (e.status === 'rejected') status = 'rejected'
+    // 加簽停留時間：created_at → approved_at（核准或退回都算）
+    const durationText = e.approved_at
+      ? fmtDuration(e.created_at, e.approved_at)
+      : null
     return {
       kind: 'extra',
       label: '加簽',
@@ -245,6 +265,7 @@ async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {
       status,
       completedAt: e.approved_at,
       completedBy: nameMap[e.assignee_id] || '',
+      durationText,
       rejectReason: e.reject_reason || '',
       // 加簽專屬 meta（給 PDF / Modal 顯示「由 X 發起 / 原因」）
       extraReason: e.reason || '',

@@ -83,7 +83,7 @@ const PERM_KEY_MAP = {
 export default function ApprovalCenter() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { canApprove } = usePendingApprovals()
+  const { pendingByTable, loading: pendingLoading } = usePendingApprovals()
   const [activeGroup, setActiveGroup] = useState('hr')
   const [activeTab, setActiveTab] = useState('leave')
   const [data, setData] = useState({})
@@ -93,27 +93,38 @@ export default function ApprovalCenter() {
     if (!profile?.organization_id) return
     setLoading(true)
     const allTabs = GROUPS.flatMap(g => g.tabs)
+    // RPC 已經幫我們算好「我這關該簽的 id 集合」(pendingByTable)，
+    // 直接用 .in('id', ids) 撈 row，不再 .eq('status') 全表掃，
+    // 避免細粒度 RLS 把 row 擋掉造成 badge 對得上但內容空。
     const results = await Promise.all(
-      allTabs.map(t =>
-        supabase.from(t.table)
+      allTabs.map(t => {
+        const permKey = PERM_KEY_MAP[t.key] || t.table
+        const ids = pendingByTable[permKey] || []
+        if (ids.length === 0) return Promise.resolve({ data: [] })
+        return supabase.from(t.table)
           .select('*')
-          .eq('status', t.pendingStatus)
-          .eq('organization_id', profile.organization_id)
+          .in('id', ids)
           .order('created_at', { ascending: false })
-      )
+      })
     )
     const map = {}
     allTabs.forEach((t, i) => {
-      const rows = results[i].data || []
-      // 過濾出當前使用者可簽的單（用 tab.key → perm key 映射；核銷會走 expense_settles）
-      const permKey = PERM_KEY_MAP[t.key] || t.table
-      map[t.key] = rows.filter(r => canApprove(permKey, r.id))
+      let rows = results[i].data || []
+      // shift_swap_peer / shift_swap_manager 共用 'shift_swaps' permKey，
+      // 撈回後依當前 sub-tab 的 pendingStatus 再 filter
+      if (t.key === 'shift_swap_peer' || t.key === 'shift_swap_manager') {
+        rows = rows.filter(r => r.status === t.pendingStatus)
+      }
+      map[t.key] = rows
     })
     setData(map)
     setLoading(false)
   }
 
-  useEffect(() => { reload() }, [profile?.organization_id])
+  useEffect(() => {
+    if (pendingLoading) return
+    reload()
+  }, [profile?.organization_id, pendingLoading, pendingByTable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 計算各 tab / group 的 count
   const tabCounts = {}

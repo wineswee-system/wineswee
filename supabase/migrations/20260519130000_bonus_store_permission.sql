@@ -12,10 +12,10 @@
 BEGIN;
 
 -- 1. 新增 permission
-INSERT INTO public.permissions (code, label, module, is_active)
+INSERT INTO public.permissions (code, name, module, is_active)
 VALUES ('bonus.store.compute', '計算 / 編輯門市業績獎金', '薪酬與福利', true)
 ON CONFLICT (code) DO UPDATE SET
-  label = EXCLUDED.label,
+  name = EXCLUDED.name,
   module = EXCLUDED.module,
   is_active = EXCLUDED.is_active;
 

@@ -50,6 +50,12 @@ export default function FormSubmissions() {
   const [showChainModal, setShowChainModal] = useState(false)
   const [companyName, setCompanyName] = useState(loadCompanyName)
   const [logoUrl, setLogoUrl] = useState('')
+  // task #3：每張單對應 chain 的所有 steps，給「第 X/Y 關 — label」用
+  const [chainStepsMap, setChainStepsMap] = useState({})  // { chainId: { totalSteps, steps: [orderedByStepOrder] } }
+  // task #1：picker 類型把 ID 顯示成人名/部門名/門市名
+  const [empMap, setEmpMap] = useState({})
+  const [deptMap, setDeptMap] = useState({})
+  const [storeMap, setStoreMap] = useState({})
 
   const load = async () => {
     setLoading(true)
@@ -84,8 +90,55 @@ export default function FormSubmissions() {
       q,
       orgId ? supabase.from('organizations').select('logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
-    setList(listRes.data || [])
+    const rows = listRes.data || []
+    setList(rows)
     setLogoUrl(orgRes?.data?.logo_url || '')
+
+    // task #3：先抓 list 內出現的所有 chain_ids 對應的 steps 一次 → render 時 lookup
+    const chainIds = [...new Set(rows.map(r => r.template?.approval_chain_id).filter(Boolean))]
+    if (chainIds.length) {
+      const { data: stepsData } = await supabase
+        .from('approval_chain_steps')
+        .select('chain_id, step_order, label, role_name')
+        .in('chain_id', chainIds)
+        .order('step_order', { ascending: true })
+      const m = {}
+      for (const step of (stepsData || [])) {
+        if (!m[step.chain_id]) m[step.chain_id] = { totalSteps: 0, steps: [] }
+        m[step.chain_id].steps[step.step_order] = step
+        m[step.chain_id].totalSteps = Math.max(m[step.chain_id].totalSteps, step.step_order + 1)
+      }
+      setChainStepsMap(m)
+    } else {
+      setChainStepsMap({})
+    }
+
+    // task #1：偵測 list 內有沒有 picker 欄位 → 才打 DB 拿 employees/depts/stores
+    const allFields = rows.flatMap(r => r.template?.fields || [])
+    const needEmp = allFields.some(f => f.type === 'employee_picker')
+    const needDept = allFields.some(f => f.type === 'department_picker')
+    const needStore = allFields.some(f => f.type === 'store_picker')
+    const pickerTasks = []
+    if (orgId && needEmp) {
+      pickerTasks.push(
+        supabase.from('employees').select('id, name').eq('organization_id', orgId)
+          .then(({ data }) => setEmpMap(Object.fromEntries((data || []).map(e => [e.id, e.name]))))
+      )
+    }
+    if (orgId && needDept) {
+      pickerTasks.push(
+        supabase.from('departments').select('id, name').eq('organization_id', orgId)
+          .then(({ data }) => setDeptMap(Object.fromEntries((data || []).map(d => [d.id, d.name]))))
+      )
+    }
+    if (orgId && needStore) {
+      pickerTasks.push(
+        supabase.from('stores').select('id, name').eq('organization_id', orgId)
+          .then(({ data }) => setStoreMap(Object.fromEntries((data || []).map(s => [s.id, s.name]))))
+      )
+    }
+    if (pickerTasks.length) await Promise.all(pickerTasks)
+
     setLoading(false)
   }
   useEffect(() => { load() }, [tab, profile?.id, templateFilter])
@@ -334,7 +387,20 @@ export default function FormSubmissions() {
                     <td><b>{s.template?.name}</b></td>
                     <td>{s.applicant?.name}{s.applicant?.name_en ? ` ${s.applicant.name_en}` : ''}</td>
                     <td style={{ fontSize: 12 }}>{s.created_at?.slice(0, 10)}</td>
-                    <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{s.status}</span></td>
+                    <td>
+                      <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{s.status}</span>
+                      {s.status === '申請中' && s.template?.approval_chain_id && chainStepsMap[s.template.approval_chain_id] && (() => {
+                        const cs = chainStepsMap[s.template.approval_chain_id]
+                        const cur = s.current_step ?? 0
+                        const stepInfo = cs.steps[cur]
+                        if (!stepInfo) return null
+                        return (
+                          <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 2 }}>
+                            第 {cur + 1}/{cs.totalSteps} 關 · {stepInfo.label || stepInfo.role_name || ''}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td style={{ fontSize: 12 }}>{s.approver?.name || '—'}{s.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)' }}>{s.reject_reason}</div>}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
@@ -368,6 +434,7 @@ export default function FormSubmissions() {
         const fields = []
         const attachments = []
         for (const f of (detailRow.template?.fields || [])) {
+          if (f.type === 'section') continue  // section 是視覺分隔，不顯示在明細
           const v = detailRow.data?.[f.key]
           if (f.type === 'file') {
             if (v) attachments.push({ url: v, name: String(v).split('?')[0].split('/').pop() || f.label })
@@ -375,6 +442,9 @@ export default function FormSubmissions() {
             let displayValue
             if (v === null || v === undefined || v === '') displayValue = ''
             else if (f.type === 'checkbox') displayValue = v ? '✓ 是' : '✗ 否'
+            else if (f.type === 'employee_picker') displayValue = empMap[v] || `(員工 #${v})`
+            else if (f.type === 'department_picker') displayValue = deptMap[v] || `(部門 #${v})`
+            else if (f.type === 'store_picker') displayValue = storeMap[v] || `(門市 #${v})`
             else displayValue = String(v)
             const multiline = f.type === 'textarea' || (typeof displayValue === 'string' && displayValue.length > 50)
             fields.push({ label: f.label, value: displayValue, multiline })

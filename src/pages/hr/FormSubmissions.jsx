@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Printer, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -25,9 +26,13 @@ const STATUS_BADGE = {
 export default function FormSubmissions() {
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const templateFilter = searchParams.get('template')  // ?template=<id> filter 單一模板
+  const [templateName, setTemplateName] = useState('')
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState(isAdmin ? 'review' : 'mine')   // mine | review | all
+  // 從某張模板的「查看紀錄」按鈕跳進來時，預設顯示「所有」tab；其他情境照舊
+  const [tab, setTab] = useState(templateFilter ? 'all' : (isAdmin ? 'review' : 'mine'))   // mine | review | all
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
@@ -47,6 +52,17 @@ export default function FormSubmissions() {
     if (tab === 'mine') q = q.eq('applicant_id', profile?.id || 0)
     else if (tab === 'review') q = q.eq('status', '申請中')
 
+    // ?template=<id> filter 單一模板（從 CustomFormFill「查看紀錄」進來）
+    if (templateFilter) {
+      q = q.eq('template_id', Number(templateFilter))
+      // 順手抓模板名稱顯示在 header
+      const { data: tmpl } = await supabase.from('form_templates')
+        .select('name').eq('id', Number(templateFilter)).maybeSingle()
+      setTemplateName(tmpl?.name || '')
+    } else {
+      setTemplateName('')
+    }
+
     const orgId = profile?.organization_id
     const [listRes, orgRes] = await Promise.all([
       q,
@@ -56,7 +72,7 @@ export default function FormSubmissions() {
     setLogoUrl(orgRes?.data?.logo_url || '')
     setLoading(false)
   }
-  useEffect(() => { load() }, [tab, profile?.id])
+  useEffect(() => { load() }, [tab, profile?.id, templateFilter])
 
   const handleApprove = async (sub) => {
     if (!(await confirm({ message: `核准 ${sub.applicant?.name} 的「${sub.template?.name}」？` }))) return
@@ -203,8 +219,27 @@ export default function FormSubmissions() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2>表單提交記錄</h2>
-            <p>共 {list.length} 筆 · 列印簽呈用公司名：<b>{companyName}</b></p>
+            <h2>
+              表單提交記錄
+              {templateFilter && templateName && (
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent-cyan)', marginLeft: 8 }}>
+                  · {templateName}
+                </span>
+              )}
+            </h2>
+            <p>
+              共 {list.length} 筆
+              {templateFilter && (
+                <button
+                  onClick={() => setSearchParams({}, { replace: true })}
+                  style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                  title="顯示全部表單"
+                >
+                  × 清除模板篩選
+                </button>
+              )}
+              {' · 列印簽呈用公司名：'}<b>{companyName}</b>
+            </p>
           </div>
           <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定公司名稱（簽呈標題用）">
             <Building2 size={14} /> 公司名稱

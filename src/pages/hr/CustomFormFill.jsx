@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Settings } from 'lucide-react'
+import { ArrowLeft, Send, Settings, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -84,14 +84,21 @@ export default function CustomFormFill() {
 
   return (
     <div className="fade-in" style={{ maxWidth: 720 }}>
-      <div style={{ marginBottom: 14, display: 'flex', gap: 8 }}>
+      <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
         <button className="btn btn-secondary" onClick={() => navigate('/hr/forms')} style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }}>
           <ArrowLeft size={12} /> 返回 HR 表單中心
+        </button>
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-secondary"
+          onClick={() => navigate(`/hr/forms/submissions?template=${templateId}`)}
+          style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-cyan)' }}
+          title="看這張表單已提交的紀錄">
+          <FileText size={12} /> 查看紀錄
         </button>
         {isAdmin && (
           <button className="btn btn-secondary"
             onClick={() => navigate(`/hr/form-builder?edit=${templateId}`)}
-            style={{ width: 'auto', padding: '4px 12px', fontSize: 12, marginLeft: 'auto', color: 'var(--accent-purple)' }}
+            style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-purple)' }}
             title="編輯欄位 / 設定簽核流程">
             <Settings size={12} /> 管理此模板
           </button>

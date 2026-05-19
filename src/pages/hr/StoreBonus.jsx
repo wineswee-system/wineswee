@@ -117,6 +117,23 @@ export default function StoreBonus() {
     if (error) { toast.error(`儲存 ${emp.employee_name} 失敗：${error.message}`); return }
   }
 
+  const handleSyncPunchCounts = async () => {
+    if (!monthly?.id) return
+    setSaving(true)
+    const { data, error } = await supabase.rpc('sync_store_bonus_punch_counts', {
+      p_monthly_id: monthly.id,
+    })
+    setSaving(false)
+    if (error) { toast.error('同步失敗：' + error.message); return }
+    if (!data?.ok) { toast.error(`同步失敗：${data?.error || 'unknown'}`); return }
+    if (data.updated === 0) {
+      toast.success('已是最新（沒人補卡次數變動）')
+    } else {
+      toast.success(`已同步 ${data.updated} 人補卡次數，已重算扣項`)
+    }
+    loadMonthly()
+  }
+
   const handleRecalculate = async () => {
     if (!monthly?.id) return
     setSaving(true)
@@ -258,6 +275,9 @@ export default function StoreBonus() {
             <div style={{ flex: 1 }} />
             {!isFinalized && (
               <>
+                <AsyncButton className="btn btn-secondary" onClick={handleSyncPunchCounts} busyLabel="同步中…" disabled={saving} title="從 clock_corrections 自動填補卡次數">
+                  <RefreshCw size={14} /> 同步補卡次數
+                </AsyncButton>
                 <AsyncButton className="btn btn-secondary" onClick={handleRecalculate} busyLabel="重算中…" disabled={saving}>
                   <RefreshCw size={14} /> 重算
                 </AsyncButton>

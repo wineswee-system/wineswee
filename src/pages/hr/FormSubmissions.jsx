@@ -52,7 +52,7 @@ export default function FormSubmissions() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('form_submissions').select(`*,
-      template:form_templates(id,name,category,fields),
+      template:form_templates(id,name,category,fields,approval_chain_id),
       applicant:employees!applicant_id(id,name,name_en,position),
       approver:employees!approver_id(id,name,signature_url)`).order('id', { ascending: false })
     if (tab === 'mine') q = q.eq('applicant_id', profile?.id || 0)

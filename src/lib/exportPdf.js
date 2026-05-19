@@ -303,6 +303,79 @@ export function exportExpenseRequestPdf(req, opts = {}) {
   })
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 人力需求申請 → 簽呈 PDF
+// ──────────────────────────────────────────────────────────────────────────
+// opts: companyName / logoUrl / chainSteps / approverMap / signatures
+// ══════════════════════════════════════════════════════════════════════════
+export function exportHeadcountRequestPdf(req, opts = {}) {
+  if (!req) return
+
+  const sections = [
+    {
+      title: '基本資訊',
+      rows: [
+        ['表單編號',     req.form_no || `#${req.id}`],
+        ['申請人',       req.employee?.name || req.employee || ''],
+        ['申請人部門',   req.applicant_dept?.name || '—'],
+        ['申請日期',     (req.request_date || (req.created_at || '').slice(0, 10) || '').replaceAll('-', '/')],
+        ['新增人力原因', req.new_reason || '—'],
+        ['需求部門',     req.need_dept?.name || '—'],
+        ['需求門市',     req.store?.name || '—'],
+        ['需求人數',     `${req.headcount || 0} 人`],
+      ],
+    },
+    {
+      title: '職務資訊',
+      rows: [
+        ['職務名稱', req.job_title || ''],
+        ['職務性質', req.job_type || '—'],
+        ['職務說明', req.job_description || '—'],
+        ['工作待遇', `${req.salary_type || ''}　${req.salary_range || ''}`.trim() || '—'],
+        ['管理責任', req.management_resp || '—'],
+        ['出差外派', req.business_travel || '—'],
+      ],
+    },
+    {
+      title: '班別 / 求職條件',
+      rows: [
+        ['上班時段', req.work_shift || '—'],
+        ['休假制度', req.rest_policy || '—'],
+        ['工作經驗', req.experience_required || '—'],
+        ['學歷要求', req.education_required || '—'],
+        ['科系要求', req.major_required || '—'],
+        ['擅長工具', req.tool_required || '—'],
+        ['其他條件', req.other_conditions || '—'],
+      ],
+    },
+  ]
+
+  printSignOff({
+    companyName: opts.companyName || '',
+    logoUrl: opts.logoUrl || '',
+    docTitle: '人力需求申請',
+    docNo: req.form_no || req.id,
+    applicant: {
+      name: req.employee?.name || req.employee || '',
+      dept: req.applicant_dept?.name,
+      position: req.employee?.position,
+    },
+    date: (req.request_date || (req.created_at || '').slice(0, 10) || '').replaceAll('-', '/'),
+    subject: `${req.job_title || ''} × ${req.headcount || 0} 人`,
+    sections,
+    status: req.status || '',
+    rejectReason: req.reject_reason || '',
+    chainSteps: opts.chainSteps || [],
+    approverMap: opts.approverMap || {},
+    finalApprover: req.approved_by ? { name: req.approved_by, approved_at: req.approved_at } : undefined,
+    simpleSign: ['呈文者', '主管核示'],
+    simpleSignApproverIdx: 1,
+    signatures: opts.signatures || {},
+    _win: opts._win,
+  })
+}
+
+
 // ══════════════════════════════════════
 //  排班月曆 PDF — 用瀏覽器列印（中文字完美顯示，無需內嵌字型）
 // ══════════════════════════════════════

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, ArrowRight, Settings } from 'lucide-react'
+import { Plus, ArrowRight, Settings, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -17,6 +17,7 @@ import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { confirm } from '../../lib/confirm'
+import { exportHeadcountRequestPdf } from '../../lib/exportPdf'
 
 const JOB_TYPES = ['正職', '兼職', '約聘', '工讀', '實習']
 const SALARY_TYPES = ['時薪', '月薪', '年薪', '日薪', '面議']
@@ -102,6 +103,31 @@ export default function HeadcountRequest() {
     setLoadingChain(false)
   }
 
+  const printWithChain = async (row) => {
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const builtSteps = await buildAndResolveChain(row)
+      const approverMap = {}
+      builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      // 簽章 url 從 employees signature_url 帶入
+      const signatures = Object.fromEntries(
+        employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+      )
+      exportHeadcountRequestPdf(row, {
+        companyName: organization?.name,
+        logoUrl: organization?.logo_url,
+        chainSteps: builtSteps,
+        approverMap,
+        signatures,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     let q = supabase.from('headcount_requests')
@@ -111,7 +137,7 @@ export default function HeadcountRequest() {
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,departments!department_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,signature_url,departments!department_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').eq('organization_id', orgId || 0).order('name'),
       supabase.from('stores').select('id,name').eq('organization_id', orgId || 0).order('name'),
       findActiveChainByCategory('人力需求', orgId),
@@ -393,6 +419,10 @@ export default function HeadcountRequest() {
                               setShowForm(true)
                             }}>✏️ {['已駁回','已退回'].includes(r.status) ? '編輯重送' : '編輯'}</button>
                         )}
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
+                          onClick={() => printWithChain(r)}>
+                          <Printer size={11} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -636,6 +666,7 @@ export default function HeadcountRequest() {
           attachments={detailRow.attachment_url ? [{ url: detailRow.attachment_url, name: detailRow.attachment_url.split('/').pop() }] : []}
           createdAt={detailRow.created_at}
           chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+          onPrint={() => printWithChain(detailRow)}
           actions={
             detailRow.status === '申請中' && canIApprove(detailRow) ? {
               sourceTable: 'headcount_requests',

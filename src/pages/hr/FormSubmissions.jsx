@@ -90,23 +90,33 @@ export default function FormSubmissions() {
 
   const handleApprove = async (sub) => {
     if (!(await confirm({ message: `核准 ${sub.applicant?.name} 的「${sub.template?.name}」？` }))) return
-    await supabase.from('form_submissions').update({
-      status: '已核准',
-      approver_id: profile?.id || null,
-      approved_at: new Date().toISOString(),
-    }).eq('id', sub.id)
+    const { data, error } = await supabase.rpc('form_submission_chain_approve', {
+      p_id: sub.id, p_approver_id: profile?.id, p_action: 'approve', p_reason: null,
+    })
+    if (error) { toast.error('核准失敗：' + error.message); return }
+    if (!data?.ok) {
+      const msg = {
+        'NOT_YOUR_TURN': '這關不是你簽核',
+        'PENDING_EXTRA_SIGNER': data.message || '此單有加簽進行中',
+        'ALREADY_PROCESSED': '此單已處理過',
+      }[data?.error] || `核准失敗：${data?.error}`
+      toast.error(msg); return
+    }
+    toast.success(data.is_last_step ? '已核准（最終關）' : `已推進到第 ${(data.advanced_to_step ?? 0) + 1} 關`)
     load()
   }
 
   const handleReject = async () => {
     if (!rejectReason) return toast.warning('請填駁回原因')
-    await supabase.from('form_submissions').update({
-      status: '已駁回',
-      approver_id: profile?.id || null,
-      approved_at: new Date().toISOString(),
-      reject_reason: rejectReason,
-    }).eq('id', reviewModal.id)
+    const { data, error } = await supabase.rpc('form_submission_chain_approve', {
+      p_id: reviewModal.id, p_approver_id: profile?.id, p_action: 'reject', p_reason: rejectReason,
+    })
+    if (error) { toast.error('駁回失敗：' + error.message); return }
+    if (!data?.ok) {
+      toast.error(`駁回失敗：${data?.error || 'unknown'}`); return
+    }
     setReviewModal(null); setRejectReason('')
+    toast.success('已駁回')
     load()
   }
 

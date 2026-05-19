@@ -203,9 +203,19 @@ export default function FormSubmissions() {
     if (chainId) {
       // 用 RPC 解出每關實際簽核人（covers 9 種 target_type，含 applicant_supervisor）
       const applicantEmpId = sub.applicant_id || sub.applicant?.id || null
-      const { data: chainStepsData } = await supabase.rpc('get_chain_step_display_names', {
-        p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
-      })
+      const [{ data: chainStepsData }, { data: ashRows }] = await Promise.all([
+        supabase.rpc('get_chain_step_display_names', {
+          p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
+        }),
+        supabase.from('approval_step_history')
+          .select('step_order, exited_at, action, approver_name')
+          .eq('request_type', 'form_submission')
+          .eq('request_id', sub.id)
+          .not('exited_at', 'is', null),
+      ])
+      const ashByStep = {}
+      for (const r of (ashRows || [])) ashByStep[r.step_order] = r
+
       const stepsList = Array.isArray(chainStepsData) ? chainStepsData : []
       const isApproved = sub.status === '已核准' || sub.status === '已核銷'
       const isRejected = sub.status === '已駁回' || sub.status === '已退回' || sub.status === '已拒絕'
@@ -215,12 +225,16 @@ export default function FormSubmissions() {
         if (isApproved) stStatus = 'completed'
         else if (isRejected) stStatus = (i === curStep ? 'rejected' : (i < curStep ? 'completed' : 'pending'))
         else stStatus = (i < curStep ? 'completed' : (i === curStep ? 'current' : 'pending'))
+        const ash = ashByStep[i]
         return {
           label: s.label || s.role_name || `第${i + 1}關`,
           name: s.names || '',
           role_name: s.role_name || '',
           status: stStatus,
-          completedAt: stStatus === 'completed' && i === stepsList.length - 1 ? sub.approved_at : undefined,
+          completedAt: stStatus === 'completed'
+            ? (ash?.exited_at || (i === stepsList.length - 1 ? sub.approved_at : undefined))
+            : undefined,
+          completedBy: stStatus === 'completed' ? (ash?.approver_name || undefined) : undefined,
           rejectReason: stStatus === 'rejected' ? sub.reject_reason : '',
         }
       })
@@ -267,10 +281,23 @@ export default function FormSubmissions() {
     if (chainId) {
       // 用 RPC 解出每關實際簽核人（cover 動態 target：applicant_dept_manager / specific_* 等 9 種）
       const applicantEmpId = sub.applicant_id || sub.applicant?.id || null
-      const { data: chainStepsData } = await supabase.rpc('get_chain_step_display_names', {
-        p_chain_id: chainId,
-        p_applicant_emp_id: applicantEmpId,
-      })
+      const [{ data: chainStepsData }, { data: ashRows }] = await Promise.all([
+        supabase.rpc('get_chain_step_display_names', {
+          p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
+        }),
+        // approval_step_history 提供每關 exited_at / approver_name
+        supabase.from('approval_step_history')
+          .select('step_order, exited_at, action, approver_name')
+          .eq('request_type', 'form_submission')
+          .eq('request_id', sub.id)
+          .not('exited_at', 'is', null)
+          .order('step_order', { ascending: true }),
+      ])
+      const ashByStep = {}
+      for (const r of (ashRows || [])) {
+        ashByStep[r.step_order] = r  // 同 step 多筆會被最後一筆蓋掉，正常情況每 step 只有 1 筆 exited
+      }
+
       const stepsList = Array.isArray(chainStepsData) ? chainStepsData : []
       const curStep = sub.current_step ?? 0
       restSteps = stepsList.map((s, i) => {
@@ -278,11 +305,17 @@ export default function FormSubmissions() {
         if (isApproved) status = 'completed'
         else if (isRejected) status = (i === curStep ? 'rejected' : (i < curStep ? 'completed' : 'pending'))
         else status = (i < curStep ? 'completed' : (i === curStep ? 'current' : 'pending'))
+        const ash = ashByStep[i]
         return {
           label: s.label || s.role_name || `第${i + 1}關`,
           name: s.names || '',  // RPC 已解出所有 target_type
           status,
-          completedAt: status === 'completed' && i === stepsList.length - 1 ? sub.approved_at : undefined,
+          // completedAt 優先 ash.exited_at；最後一關終態 fallback 用 sub.approved_at
+          completedAt: status === 'completed'
+            ? (ash?.exited_at || (i === stepsList.length - 1 ? sub.approved_at : undefined))
+            : undefined,
+          // 簽核人名以 ash 紀錄為準（會被自己當下實際簽的人覆蓋 — 例如多人共簽中誰按）
+          completedBy: status === 'completed' ? (ash?.approver_name || undefined) : undefined,
           rejectReason: status === 'rejected' ? sub.reject_reason : '',
         }
       })

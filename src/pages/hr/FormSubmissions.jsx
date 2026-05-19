@@ -189,27 +189,41 @@ export default function FormSubmissions() {
       return
     }
 
-    let chainSteps = []
-    let approverMap = {}
+    // 申請人 step 0（PDF 簽核欄第一格）
+    const applicantStep = {
+      label: '申請人',
+      name: sub.applicant?.name || '—',
+      isApplicant: true,
+      status: 'completed',
+      completedAt: sub.created_at,
+    }
 
+    let restSteps = []
     const chainId = sub.template?.approval_chain_id
     if (chainId) {
-      const { data: steps } = await supabase
-        .from('approval_chain_steps')
-        .select('id, step_order, label, role_name, target_emp_id, target_dept_id, target_role_id')
-        .eq('chain_id', chainId)
-        .order('step_order', { ascending: true })
-      chainSteps = steps || []
-
-      // 抓所有 step.target_emp_id 對應的員工姓名
-      const empIds = [...new Set(chainSteps.map(s => s.target_emp_id).filter(Boolean))]
-      if (empIds.length > 0) {
-        const { data: emps } = await supabase
-          .from('employees')
-          .select('id, name')
-          .in('id', empIds)
-        approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
-      }
+      // 用 RPC 解出每關實際簽核人（covers 9 種 target_type，含 applicant_supervisor）
+      const applicantEmpId = sub.applicant_id || sub.applicant?.id || null
+      const { data: chainStepsData } = await supabase.rpc('get_chain_step_display_names', {
+        p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
+      })
+      const stepsList = Array.isArray(chainStepsData) ? chainStepsData : []
+      const isApproved = sub.status === '已核准' || sub.status === '已核銷'
+      const isRejected = sub.status === '已駁回' || sub.status === '已退回' || sub.status === '已拒絕'
+      const curStep = sub.current_step ?? 0
+      restSteps = stepsList.map((s, i) => {
+        let stStatus
+        if (isApproved) stStatus = 'completed'
+        else if (isRejected) stStatus = (i === curStep ? 'rejected' : (i < curStep ? 'completed' : 'pending'))
+        else stStatus = (i < curStep ? 'completed' : (i === curStep ? 'current' : 'pending'))
+        return {
+          label: s.label || s.role_name || `第${i + 1}關`,
+          name: s.names || '',
+          role_name: s.role_name || '',
+          status: stStatus,
+          completedAt: stStatus === 'completed' && i === stepsList.length - 1 ? sub.approved_at : undefined,
+          rejectReason: stStatus === 'rejected' ? sub.reject_reason : '',
+        }
+      })
     }
 
     printFormMemo({
@@ -218,8 +232,8 @@ export default function FormSubmissions() {
       applicant: sub.applicant,
       companyName,
       logoUrl,
-      chainSteps,
-      approverMap,
+      chainSteps: [applicantStep, ...restSteps],
+      approverMap: {},
     })
   }
 

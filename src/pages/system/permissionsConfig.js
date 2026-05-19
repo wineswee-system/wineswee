@@ -31,6 +31,7 @@ export const FEATURES = [
   { module: '薪酬與福利', label: '資遣',       view: 'severance.view',       edit: 'severance.execute' },
   { module: '薪酬與福利', label: '法扣',       view: 'legal_deduction.view', edit: 'legal_deduction.edit' },
   { module: '薪酬與福利', label: '績效獎金',   view: 'bonus.view',           edit: 'bonus.compute' },
+  { module: '薪酬與福利', label: '門市業績獎金', view: null,                 edit: 'bonus.store.compute' },
   { module: '薪酬與福利', label: '勞健保級距', view: 'insurance_rate.view',  edit: 'insurance_rate.edit' },
   // 人才發展
   { module: '人才發展', label: '招募管理',   view: 'recruit.view',   edit: 'recruit.manage' },

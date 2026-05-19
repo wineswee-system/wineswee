@@ -81,13 +81,22 @@ export default function ApprovalDetailModal({
     return () => { cancelled = true }
   }, [open, requestType, requestId])
 
-  // 把 timeline 的 duration_text 合併進 chainSteps（按 step_order 對應）
+  // 把 timeline 的 duration_text 合併進 chainSteps
+  // 注意：chainSteps = [applicantStep, ...可能含加簽..., chain_step_0, chain_step_1, ...]
+  // timeline.step_order 從 0 開始，只對應「實際 chain step」(不含 applicant / extra)
+  // 用獨立 chainStepIdx 對齊，避免 applicant cell 拿到第 0 關 duration 這種錯位
   const mergedChainSteps = useMemo(() => {
     if (!timeline.length) return chainSteps
-    return chainSteps.map((s, idx) => {
-      const t = timeline.find(x => x.step_order === idx) || timeline[idx]
+    let chainStepIdx = 0
+    return chainSteps.map(s => {
+      if (s.isApplicant) return s
+      if (s.kind === 'extra') return s
+      const t = timeline.find(x => x.step_order === chainStepIdx)
+      chainStepIdx += 1
       if (!t) return s
-      return { ...s, durationText: t.duration_text }
+      // 不蓋過 caller 已算好的 durationText（buildChainBasedSteps 對加簽 step
+      // 自己算 duration，RPC 不一定有對應 entry）
+      return { ...s, durationText: s.durationText || t.duration_text }
     })
   }, [chainSteps, timeline])
 

@@ -6,8 +6,22 @@ import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
-  ChevronRight, CheckCircle2,
+  ChevronRight, CheckCircle2, Inbox, FileCheck,
 } from 'lucide-react'
+
+// 已簽核 type → 路由 (對齊 GROUPS 的 route)，給 SignedView row 跳轉用
+const SIGNED_TYPE_ROUTE = {
+  leave: '/hr/leave', overtime: '/hr/overtime', trip: '/hr/travel',
+  correction: '/hr/punch-correction', expense: '/hr/expenses',
+  expense_request: '/hr/expense-requests',
+  resignation: '/hr/forms/resignation', loa: '/hr/forms/loa',
+  transfer: '/hr/forms/transfer', headcount: '/hr/forms/headcount',
+}
+const SIGNED_TYPE_LABEL = {
+  leave: '請假', overtime: '加班', trip: '出差', correction: '補打卡',
+  expense: '報帳', expense_request: '費用申請',
+  resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
+}
 
 /**
  * 簽核中心面板 — 一進儀表板看到所有跨類型的待簽
@@ -84,7 +98,8 @@ const PERM_KEY_MAP = {
   task_confirmation: 'task_confirmations',
 }
 
-export default function ApprovalCenter() {
+// ── 待簽核 view (原 ApprovalCenter 內容 1:1 不動) ────────────────────────
+function PendingApprovalsView() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { pendingByTable, loading: pendingLoading } = usePendingApprovals()
@@ -410,6 +425,128 @@ function ApprovalRow({ row, tabDef, groupColor, onClick }) {
         </span>
       )}
       <ChevronRight size={16} color="var(--text-muted)" />
+    </div>
+  )
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// 已簽核 view — 從 web_list_my_signed_approvals RPC 拉
+// ════════════════════════════════════════════════════════════════════════════
+function SignedApprovalsView() {
+  const navigate = useNavigate()
+  const today = new Date()
+  const [yearMonth, setYearMonth] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    supabase.rpc('web_list_my_signed_approvals', { p_year_month: yearMonth })
+      .then(({ data }) => {
+        if (data?.error) { console.warn('web_list_my_signed_approvals:', data.error); setList([]) }
+        else setList(Array.isArray(data) ? data : [])
+        setLoading(false)
+      })
+  }, [yearMonth])
+
+  const handleRowClick = (row) => {
+    const route = SIGNED_TYPE_ROUTE[row.source_type]
+    if (route) navigate(`${route}?focus=${row.source_id}`)
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12, padding: 16 }}>
+      {/* 月份切換 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{yearMonth} 我已簽核 · {list.length} 件</div>
+        <input className="form-input" type="month" value={yearMonth}
+          onChange={e => setYearMonth(e.target.value)}
+          style={{ width: 160 }} />
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center' }}><LoadingSpinner /></div>
+      ) : list.length === 0 ? (
+        <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          這個月你還沒簽核過任何單
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {list.map((row, i) => {
+            const actionLabel = row.my_action === 'approved' ? '✓ 核准' : '✗ 退回'
+            const actionColor = row.my_action === 'approved' ? 'var(--accent-green)' : 'var(--accent-red)'
+            const typeLabel = SIGNED_TYPE_LABEL[row.source_type] || row.source_type
+            return (
+              <div key={`${row.source_type}-${row.source_id}-${i}`} onClick={() => handleRowClick(row)} style={{
+                padding: 12, borderRadius: 10,
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-secondary)',
+                cursor: SIGNED_TYPE_ROUTE[row.source_type] ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                  background: row.is_extra ? 'var(--accent-orange)' : 'var(--accent-purple)',
+                  color: '#fff', flexShrink: 0,
+                }}>{row.is_extra ? '🪶 加簽' : typeLabel}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {row.applicant_name || '—'} · {row.summary || `#${row.source_id}`}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {row.step_label || '—'} · {row.signed_at ? new Date(row.signed_at).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                    · 整單狀態 {row.current_status || '—'}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: actionColor }}>{actionLabel}</span>
+                {SIGNED_TYPE_ROUTE[row.source_type] && <ChevronRight size={16} color="var(--text-muted)" />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Outer wrapper — 切換「待簽核 / 已簽核」最外層 tab
+// ════════════════════════════════════════════════════════════════════════════
+export default function ApprovalCenter() {
+  const [outerTab, setOuterTab] = useState('pending')
+
+  return (
+    <div>
+      {/* 外層 tab bar */}
+      <div style={{
+        display: 'flex', gap: 0, marginBottom: 12,
+        borderBottom: '2px solid var(--border-subtle)',
+      }}>
+        {[
+          { key: 'pending', label: '待簽核', icon: Inbox },
+          { key: 'signed',  label: '已簽核', icon: FileCheck },
+        ].map(t => {
+          const Icon = t.icon
+          const isActive = outerTab === t.key
+          return (
+            <button key={t.key} onClick={() => setOuterTab(t.key)} style={{
+              padding: '10px 20px', border: 'none', background: 'transparent', cursor: 'pointer',
+              fontSize: 14, fontWeight: 700,
+              color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              marginBottom: -2,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon size={16} />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {outerTab === 'pending' ? <PendingApprovalsView /> : <SignedApprovalsView />}
     </div>
   )
 }

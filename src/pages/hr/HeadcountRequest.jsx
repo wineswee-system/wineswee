@@ -33,6 +33,7 @@ const EMPTY_FORM = {
   applicant_dept_id: '',
   request_date: new Date().toISOString().slice(0, 10),
   need_dept_id: '',
+  store_id: '',
   headcount: 1,
   new_reason: '',
   job_title: '',
@@ -60,6 +61,7 @@ export default function HeadcountRequest() {
   const [list, setList] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
+  const [stores, setStores] = useState([])
   const [chainSteps, setChainSteps] = useState({})
   const [activeChain, setActiveChain] = useState(null)
   const [organization, setOrganization] = useState(null)
@@ -103,20 +105,22 @@ export default function HeadcountRequest() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('headcount_requests')
-      .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url), need_dept:departments!need_dept_id(id,name), applicant_dept:departments!applicant_dept_id(id,name)')
+      .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url), need_dept:departments!need_dept_id(id,name), applicant_dept:departments!applicant_dept_id(id,name), store:stores!store_id(id,name)')
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
-    const [{ data: r }, { data: e }, { data: d }, chain, orgRes] = await Promise.all([
+    const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,departments!department_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').eq('organization_id', orgId || 0).order('name'),
+      supabase.from('stores').select('id,name').eq('organization_id', orgId || 0).order('name'),
       findActiveChainByCategory('人力需求', orgId),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])
     setEmployees(e || [])
     setDepartments(d || [])
+    setStores(s || [])
     setActiveChain(chain)
     setOrganization(orgRes?.data || null)
 
@@ -159,6 +163,7 @@ export default function HeadcountRequest() {
       applicant_dept_id: form.applicant_dept_id ? Number(form.applicant_dept_id) : null,
       request_date: form.request_date || new Date().toISOString().slice(0, 10),
       need_dept_id: form.need_dept_id ? Number(form.need_dept_id) : null,
+      store_id: form.store_id ? Number(form.store_id) : null,
       headcount: Number(form.headcount) || 1,
       new_reason: form.new_reason || null,
       job_title: form.job_title,
@@ -297,6 +302,7 @@ export default function HeadcountRequest() {
                 <th>表單編號</th>
                 <th>申請人</th>
                 <th>需求部門</th>
+                <th>需求門市</th>
                 <th>職務 / 性質</th>
                 <th>需求人數</th>
                 <th>申請日</th>
@@ -307,7 +313,7 @@ export default function HeadcountRequest() {
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無人力需求申請</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無人力需求申請</td></tr>
               )}
               {list.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
@@ -320,6 +326,7 @@ export default function HeadcountRequest() {
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.form_no || `#${r.id}`}</td>
                     <td><b>{r.employee?.name}</b>{r.employee?.name_en ? ` ${r.employee.name_en}` : ''}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.applicant_dept?.name || '—'}</div></td>
                     <td>{r.need_dept?.name || '—'}</td>
+                    <td>{r.store?.name || '—'}</td>
                     <td>{r.job_title}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.job_type || '—'}</div></td>
                     <td style={{ textAlign: 'center' }}>{r.headcount} 人</td>
                     <td style={{ fontSize: 12 }}>{r.request_date || r.created_at?.slice(0, 10)}</td>
@@ -365,6 +372,7 @@ export default function HeadcountRequest() {
                                 applicant_dept_id: r.applicant_dept_id || '',
                                 request_date: r.request_date || new Date().toISOString().slice(0, 10),
                                 need_dept_id: r.need_dept_id || '',
+                                store_id: r.store_id || '',
                                 headcount: r.headcount || 1,
                                 new_reason: r.new_reason || '',
                                 job_title: r.job_title || '',
@@ -437,6 +445,14 @@ export default function HeadcountRequest() {
                 onChange={e => setForm(f => ({ ...f, need_dept_id: e.target.value }))}>
                 <option value="">—</option>
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </Field>
+            <Field label="需求門市">
+              <select className="form-input" style={{ width: '100%' }}
+                value={form.store_id}
+                onChange={e => setForm(f => ({ ...f, store_id: e.target.value }))}>
+                <option value="">—（後勤需求不指定）</option>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
             <Field label="需求人數 *" required error={errors.headcount} errorMsg="請填寫人數">
@@ -599,6 +615,7 @@ export default function HeadcountRequest() {
           }}
           fields={[
             { label: '需求部門', value: detailRow.need_dept?.name || '—' },
+            { label: '需求門市', value: detailRow.store?.name || '—' },
             { label: '需求人數', value: `${detailRow.headcount} 人` },
             { label: '職務名稱', value: detailRow.job_title },
             { label: '職務性質', value: detailRow.job_type || '—' },

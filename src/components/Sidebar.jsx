@@ -261,6 +261,7 @@ export default function Sidebar() {
     '/hr/tax-forms':         'nav.salary.advanced',
     '/hr/performance':       'nav.salary.advanced',
     '/hr/bonus':             'nav.salary.advanced',
+    '/hr/store-bonus':       'nav.salary.advanced',
     '/hr/compensation':      'nav.salary.advanced',
     '/hr/benefit-settings':  'nav.salary.advanced',
     '/hr/labor-law-rates':   'nav.salary.law',

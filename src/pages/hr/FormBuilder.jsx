@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Pencil, Trash2, FileText, ToggleLeft, ToggleRight, GripVertical, X, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -34,6 +35,7 @@ export default function FormBuilder() {
   const [chains, setChains] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null) // null = closed, {} = new, {...} = edit existing
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const load = async () => {
     setLoading(true)
@@ -46,6 +48,17 @@ export default function FormBuilder() {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // ?edit=<id> 自動打開該模板的編輯 modal (給 CustomFormFill 快捷入口用)
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    if (!editId || !templates.length || editing) return
+    const t = templates.find(x => x.id === Number(editId))
+    if (t) {
+      setEditing({ ...t, fields: Array.isArray(t.fields) ? t.fields : [] })
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('edit'); return x }, { replace: true })
+    }
+  }, [searchParams, templates]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openNew = () => setEditing({
     name: '', category: 'other', description: '',

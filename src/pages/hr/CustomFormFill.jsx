@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Send, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -12,7 +12,8 @@ import { toast } from '../../lib/toast'
 export default function CustomFormFill() {
   const { templateId } = useParams()
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
+  const isAdmin = ['super_admin','admin'].includes(role?.name)
   const [template, setTemplate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({})
@@ -83,10 +84,18 @@ export default function CustomFormFill() {
 
   return (
     <div className="fade-in" style={{ maxWidth: 720 }}>
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 14, display: 'flex', gap: 8 }}>
         <button className="btn btn-secondary" onClick={() => navigate('/hr/forms')} style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }}>
           <ArrowLeft size={12} /> 返回 HR 表單中心
         </button>
+        {isAdmin && (
+          <button className="btn btn-secondary"
+            onClick={() => navigate(`/hr/form-builder?edit=${templateId}`)}
+            style={{ width: 'auto', padding: '4px 12px', fontSize: 12, marginLeft: 'auto', color: 'var(--accent-purple)' }}
+            title="編輯欄位 / 設定簽核流程">
+            <Settings size={12} /> 管理此模板
+          </button>
+        )}
       </div>
 
       <div className="page-header">

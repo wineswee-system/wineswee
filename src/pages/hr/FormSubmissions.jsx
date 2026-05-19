@@ -186,27 +186,23 @@ export default function FormSubmissions() {
     const chainId = sub.template?.approval_chain_id
 
     if (chainId) {
-      const { data: rawSteps } = await supabase
-        .from('approval_chain_steps')
-        .select('id, step_order, label, role_name, target_emp_id')
-        .eq('chain_id', chainId)
-        .order('step_order')
-      const empIds = [...new Set((rawSteps || []).map(s => s.target_emp_id).filter(Boolean))]
-      let nameMap = {}
-      if (empIds.length > 0) {
-        const { data: emps } = await supabase.from('employees').select('id, name').in('id', empIds)
-        nameMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
-      }
-      restSteps = (rawSteps || []).map((s, i) => {
+      // 用 RPC 解出每關實際簽核人（cover 動態 target：applicant_dept_manager / specific_* 等 9 種）
+      const applicantEmpId = sub.applicant_id || sub.applicant?.id || null
+      const { data: chainStepsData } = await supabase.rpc('get_chain_step_display_names', {
+        p_chain_id: chainId,
+        p_applicant_emp_id: applicantEmpId,
+      })
+      const stepsList = Array.isArray(chainStepsData) ? chainStepsData : []
+      restSteps = stepsList.map((s, i) => {
         let status
         if (isApproved) status = 'completed'
         else if (isRejected) status = i === 0 ? 'rejected' : 'pending'
         else status = i === 0 ? 'current' : 'pending'
         return {
-          label: s.label || s.role_name || `第${s.step_order}關`,
-          name: s.target_emp_id ? (nameMap[s.target_emp_id] || '') : (s.role_name || ''),
+          label: s.label || s.role_name || `第${i + 1}關`,
+          name: s.names || '',  // RPC 已解出所有 target_type
           status,
-          completedAt: status === 'completed' && i === rawSteps.length - 1 ? sub.approved_at : undefined,
+          completedAt: status === 'completed' && i === stepsList.length - 1 ? sub.approved_at : undefined,
           rejectReason: status === 'rejected' ? sub.reject_reason : '',
         }
       })

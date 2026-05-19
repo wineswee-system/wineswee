@@ -5,8 +5,10 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
-import Modal, { Field } from '../../components/Modal'
+import Modal, { Field, ModalOverlay } from '../../components/Modal'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import ChainConfigModal from '../../components/ChainConfigModal'
+import CustomFormFill from './CustomFormFill'
 import { printFormMemo } from '../../lib/printFormMemo'
 
 import { toast } from '../../lib/toast'
@@ -42,6 +44,8 @@ export default function FormSubmissions() {
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [showCompanyModal, setShowCompanyModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showChainModal, setShowChainModal] = useState(false)
   const [companyName, setCompanyName] = useState(loadCompanyName)
   const [logoUrl, setLogoUrl] = useState('')
 
@@ -253,14 +257,14 @@ export default function FormSubmissions() {
           <div style={{ display: 'flex', gap: 8 }}>
             {templateFilter && isAdmin && (
               <button className="btn btn-secondary"
-                onClick={() => navigate(`/hr/form-builder?edit=${templateFilter}`)}
-                title="編輯欄位 / 設定簽核流程">
+                onClick={() => setShowChainModal(true)}
+                title="設定簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
             {templateFilter && (
               <button className="btn btn-primary"
-                onClick={() => navigate(`/hr/forms/custom/${templateFilter}?embedded=1`)}
+                onClick={() => setShowCreateModal(true)}
                 title="新增申請">
                 <Plus size={14} /> 新增申請
               </button>
@@ -405,6 +409,47 @@ export default function FormSubmissions() {
             <input className="form-input" style={{ width: '100%' }} value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="例：威耀時代股份有限公司" />
           </Field>
         </Modal>
+      )}
+
+      {/* + 新增申請 Modal (內嵌 CustomFormFill 元件) */}
+      {showCreateModal && templateFilter && (
+        <ModalOverlay onClose={() => setShowCreateModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'var(--bg-card)', borderRadius: 12,
+            width: 'min(720px, 96vw)', maxHeight: '88vh', overflow: 'auto',
+            border: '1px solid var(--border-medium)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '16px 22px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+                + 新增{templateName || '申請'}
+              </h3>
+              <button onClick={() => setShowCreateModal(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                         color: 'var(--text-muted)', fontSize: 22, padding: 4 }}>×</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <CustomFormFill
+                templateId={templateFilter}
+                embedded
+                onClose={() => { setShowCreateModal(false); load() }}
+              />
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* ⚙ 簽核設定 Modal */}
+      {showChainModal && templateFilter && (
+        <ChainConfigModal
+          open={showChainModal}
+          onClose={() => setShowChainModal(false)}
+          formType={`custom:${templateFilter}`}
+          formLabel={templateName || '自訂表單'}
+          mode="single"
+          organizationId={profile?.organization_id}
+          onSaved={() => { setShowChainModal(false); load() }}
+        />
       )}
     </div>
   )

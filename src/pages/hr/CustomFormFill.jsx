@@ -9,11 +9,15 @@ import { safeStorageName } from '../../lib/storageSanitize'
 import { toast } from '../../lib/toast'
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
-export default function CustomFormFill() {
-  const { templateId } = useParams()
+export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, onClose }) {
+  const params = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const isEmbedded = searchParams.get('embedded') === '1'  // 從列表頁「+ 新增申請」進來時 = 卡片模式（不顯示頂部 nav）
+  // 可由 Modal 用 prop 傳入 templateId，否則 fallback 走 route param
+  const templateId = propTemplateId ?? params.templateId
+  // embedded 模式：prop 或 URL ?embedded=1（卡片型，不顯示頂部 nav）
+  const isEmbedded = propEmbedded ?? (searchParams.get('embedded') === '1')
+  const isModal = !!onClose  // 有 onClose 表示是 Modal 內 render
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin'].includes(role?.name)
   const [template, setTemplate] = useState(null)
@@ -68,8 +72,11 @@ export default function CustomFormFill() {
       })
       if (error) throw error
       toast.success('已送出申請！')
-      // 卡片模式返回該模板的列表頁；獨立頁返回通用列表頁
-      navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms/submissions')
+      if (isModal) {
+        onClose()  // Modal 模式由 caller 自己 reload + 關閉
+      } else {
+        navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms/submissions')
+      }
     } catch (err) {
       toast.error('送出失敗：' + (err.message || '未知錯誤'))
     } finally {
@@ -87,8 +94,8 @@ export default function CustomFormFill() {
 
   return (
     <div className="fade-in" style={{ maxWidth: 720 }}>
-      {/* 卡片模式（從列表頁「+ 新增申請」進來）只顯示「取消返回」一顆按鈕 */}
-      {isEmbedded ? (
+      {/* Modal 模式（被父元件 wrap 在 Modal 內）完全不顯示 nav，由 Modal 外殼提供關閉 */}
+      {isModal ? null : isEmbedded ? (
         <div style={{ marginBottom: 14 }}>
           <button className="btn btn-secondary"
             onClick={() => navigate(`/hr/forms/submissions?template=${templateId}`)}
@@ -133,7 +140,10 @@ export default function CustomFormFill() {
 
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary"
-            onClick={() => navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms')}>
+            onClick={() => {
+              if (isModal) onClose()
+              else navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms')
+            }}>
             取消
           </button>
           <button className="btn btn-primary" onClick={submit} disabled={submitting}>

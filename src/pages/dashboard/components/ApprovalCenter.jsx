@@ -6,7 +6,7 @@ import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
-  ChevronRight, CheckCircle2, Inbox, FileCheck,
+  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText,
 } from 'lucide-react'
 
 // 已簽核 type → 路由 (對齊 GROUPS 的 route)，給 SignedView row 跳轉用
@@ -75,6 +75,12 @@ const GROUPS = [
       { key: 'task_confirmation', label: '任務確認', table: 'task_confirmations', route: '/process/task-confirmations', pendingStatus: 'pending' },
     ],
   },
+  {
+    key: 'form', label: '自訂表單', icon: FileText, color: 'var(--accent-blue)',
+    tabs: [
+      { key: 'form_submission', label: '表單申請', table: 'form_submissions', route: '/hr/forms/submissions', pendingStatus: '申請中' },
+    ],
+  },
 ]
 
 // tab.key → usePendingApprovals 的 key（核銷走 expense_settles 而非 expense_requests）
@@ -91,6 +97,7 @@ const PERM_KEY_MAP = {
   transfer:      'personnel_transfer_requests',
   hire_approval: 'offer_letters',
   headcount:     'headcount_requests',
+  form_submission: 'form_submissions',
   // 排班 / 任務（暫未在 web_list_my_pending_approval_ids 內 → 後續補）
   off_request: 'off_requests',
   shift_swap_peer: 'shift_swaps',
@@ -381,6 +388,11 @@ function getRowDisplay(row, tabKey) {
       return {
         title: `${row.job_title || '人力需求'} × ${row.headcount || 0} 人`,
         subtitle: row.form_no || `#${row.id}`,
+      }
+    case 'form_submission':
+      return {
+        title: row.template?.name || row.template_name || `自訂表單 #${row.id}`,
+        subtitle: `申請人：${row.applicant?.name || row.applicant_name || '—'}`,
       }
     default:
       return { title: `#${row.id}`, subtitle: '' }

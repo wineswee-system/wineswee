@@ -49,7 +49,8 @@ const CATEGORIES = [
     title: '📋 其他',
     desc: '招募、訓練、文件、職災等',
     forms: [
-      { icon: Users,         name: '招募職缺申請', desc: '部門新增人力需求提報', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/recruitment' },
+      { icon: Users,         name: '人力需求申請', desc: '部門新增人力需求提報（走簽核鏈）', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/forms/headcount', tag: '新' },
+      { icon: Users,         name: '招募追蹤', desc: '已核准單的招募進度看板', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/recruitment' },
       { icon: GraduationCap, name: '教育訓練', desc: '內外訓課程報名與費用', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/training' },
       { icon: FileSignature, name: '文件簽核', desc: '合約、協議書、重要文件簽核', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/documents' },
       { icon: AlertTriangle, name: '工傷通報', desc: '職場意外事故通報', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)', action: '/hr/labor-inspection' },

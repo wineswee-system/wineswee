@@ -17,12 +17,14 @@ const TABLE_MAP = {
   resignation: 'resignation_requests',
   loa: 'leave_of_absence_requests',
   transfer: 'personnel_transfer_requests',
+  headcount: 'headcount_requests',
 }
 
 const CATEGORY_MAP = {
   resignation: '離職',
   loa: '留停',
   transfer: '異動',
+  headcount: '人力需求',
 }
 
 /**

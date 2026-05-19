@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { CheckCircle, XCircle, Printer, Building2 } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CheckCircle, XCircle, Printer, Building2, Settings, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -26,9 +26,11 @@ const STATUS_BADGE = {
 export default function FormSubmissions() {
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const templateFilter = searchParams.get('template')  // ?template=<id> filter 單一模板
   const [templateName, setTemplateName] = useState('')
+  const [templateChain, setTemplateChain] = useState(null)  // { id, name } or null = 無 chain
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   // 從某張模板的「查看紀錄」按鈕跳進來時，預設顯示「所有」tab；其他情境照舊
@@ -55,12 +57,20 @@ export default function FormSubmissions() {
     // ?template=<id> filter 單一模板（從 CustomFormFill「查看紀錄」進來）
     if (templateFilter) {
       q = q.eq('template_id', Number(templateFilter))
-      // 順手抓模板名稱顯示在 header
+      // 順手抓模板名稱 + chain info 顯示在 header
       const { data: tmpl } = await supabase.from('form_templates')
-        .select('name').eq('id', Number(templateFilter)).maybeSingle()
+        .select('name, approval_chain_id').eq('id', Number(templateFilter)).maybeSingle()
       setTemplateName(tmpl?.name || '')
+      if (tmpl?.approval_chain_id) {
+        const { data: ch } = await supabase.from('approval_chains')
+          .select('id, name').eq('id', tmpl.approval_chain_id).maybeSingle()
+        setTemplateChain(ch || null)
+      } else {
+        setTemplateChain(null)
+      }
     } else {
       setTemplateName('')
+      setTemplateChain(null)
     }
 
     const orgId = profile?.organization_id
@@ -220,30 +230,45 @@ export default function FormSubmissions() {
         <div className="page-header-row">
           <div>
             <h2>
-              表單提交記錄
-              {templateFilter && templateName && (
-                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent-cyan)', marginLeft: 8 }}>
-                  · {templateName}
-                </span>
-              )}
+              {templateFilter && templateName ? templateName : '表單提交記錄'}
             </h2>
             <p>
-              共 {list.length} 筆
+              共 {list.length} 筆 · 申請中 {list.filter(r => r.status === '申請中').length} 筆
+              {templateFilter && (
+                templateChain
+                  ? <span style={{ marginLeft: 8, color: 'var(--accent-cyan)', fontSize: 12 }}>· 簽核鏈：{templateChain.name}</span>
+                  : <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontSize: 12 }}>· ⚠ 無簽核鏈，admin 可直接核准</span>
+              )}
               {templateFilter && (
                 <button
                   onClick={() => setSearchParams({}, { replace: true })}
                   style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                   title="顯示全部表單"
                 >
-                  × 清除模板篩選
+                  × 顯示全部表單
                 </button>
               )}
-              {' · 列印簽呈用公司名：'}<b>{companyName}</b>
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定公司名稱（簽呈標題用）">
-            <Building2 size={14} /> 公司名稱
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {templateFilter && isAdmin && (
+              <button className="btn btn-secondary"
+                onClick={() => navigate(`/hr/form-builder?edit=${templateFilter}`)}
+                title="編輯欄位 / 設定簽核流程">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            {templateFilter && (
+              <button className="btn btn-primary"
+                onClick={() => navigate(`/hr/forms/custom/${templateFilter}`)}
+                title="新增申請">
+                <Plus size={14} /> 新增申請
+              </button>
+            )}
+            <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定公司名稱（簽呈標題用）">
+              <Building2 size={14} /> 公司名稱
+            </button>
+          </div>
         </div>
       </div>
 

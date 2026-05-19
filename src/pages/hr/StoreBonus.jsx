@@ -7,6 +7,9 @@ import AsyncButton from '../../components/AsyncButton'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 
+// 固定 3 種角色（DB role_config 還沒建也能正常下拉）
+const ROLE_OPTIONS = ['店長', '正職', '兼職']
+
 /**
  * 門市業績獎金 — 月度計算與結算
  *
@@ -289,7 +292,7 @@ export default function StoreBonus() {
                         value={e.role}
                         onChange={ev => handleEmpFieldChange(e.id, 'role', ev.target.value)}
                         style={{ width: 80, padding: 4, fontSize: 12 }}>
-                        {roleConfig.map(c => <option key={c.role} value={c.role}>{c.role}</option>)}
+                        {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </td>
                     <td style={{ textAlign: 'right' }}>{Number(e.weight).toFixed(2)}</td>

@@ -296,7 +296,7 @@ export default function StoreBonus() {
                       </select>
                     </td>
                     <td style={{ textAlign: 'right' }}>{Number(e.weight).toFixed(2)}</td>
-                    <td style={{ textAlign: 'right' }}>{(Number(e.weight_ratio) * 100).toFixed(1)}%</td>
+                    <td style={{ textAlign: 'right' }}>{Number(e.weight_ratio).toFixed(2)}</td>
                     <td style={{ textAlign: 'right' }}>{Number(e.profit_bonus).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', color: 'var(--accent-green)' }}>
                       {e.target_bonus > 0 ? Number(e.target_bonus).toLocaleString() : '—'}

@@ -99,6 +99,16 @@ ALTER TABLE lms_enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lms_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lms_certificates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS lms_courses_select ON lms_courses;
+DROP POLICY IF EXISTS lms_courses_insert ON lms_courses;
+DROP POLICY IF EXISTS lms_courses_update ON lms_courses;
+DROP POLICY IF EXISTS lms_sections_all ON lms_sections;
+DROP POLICY IF EXISTS lms_lessons_all ON lms_lessons;
+DROP POLICY IF EXISTS lms_enrollments_all ON lms_enrollments;
+DROP POLICY IF EXISTS lms_progress_all ON lms_progress;
+DROP POLICY IF EXISTS lms_certificates_select ON lms_certificates;
+DROP POLICY IF EXISTS lms_certificates_insert ON lms_certificates;
+
 CREATE POLICY lms_courses_select ON lms_courses FOR SELECT USING (true);
 CREATE POLICY lms_courses_insert ON lms_courses FOR INSERT WITH CHECK (true);
 CREATE POLICY lms_courses_update ON lms_courses FOR UPDATE USING (true);

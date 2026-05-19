@@ -20,7 +20,8 @@ const ROLE_OPTIONS = ['店長', '正職', '兼職']
  *   4. 「結算發放」 → finalize（鎖定）
  */
 export default function StoreBonus() {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  const canCompute = hasPermission('bonus.store.compute')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -157,6 +158,16 @@ export default function StoreBonus() {
   }), [employees])
 
   if (loading) return <LoadingSpinner />
+
+  if (!canCompute) {
+    return (
+      <div className="fade-in" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+        <h3 style={{ margin: 0 }}>無權存取</h3>
+        <p>門市業績獎金需要 <code>bonus.store.compute</code> 權限，請聯絡 admin。</p>
+      </div>
+    )
+  }
 
   return (
     <div className="fade-in">

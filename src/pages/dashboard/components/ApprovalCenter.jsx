@@ -40,10 +40,11 @@ const GROUPS = [
   {
     key: 'people', label: '人事異動', icon: Calendar, color: 'var(--accent-purple)',
     tabs: [
-      { key: 'resignation',   label: '離職', table: 'resignation_requests',        route: '/hr/forms/resignation', pendingStatus: '申請中' },
-      { key: 'loa',           label: '留停', table: 'leave_of_absence_requests',   route: '/hr/forms/loa',         pendingStatus: '申請中' },
-      { key: 'transfer',      label: '異動', table: 'personnel_transfer_requests', route: '/hr/forms/transfer',    pendingStatus: '申請中' },
-      { key: 'hire_approval', label: '錄取', table: 'offer_letters',               route: '/hr/recruitment',       pendingStatus: '待審' },
+      { key: 'resignation',   label: '離職',     table: 'resignation_requests',         route: '/hr/forms/resignation', pendingStatus: '申請中' },
+      { key: 'loa',           label: '留停',     table: 'leave_of_absence_requests',    route: '/hr/forms/loa',         pendingStatus: '申請中' },
+      { key: 'transfer',      label: '異動',     table: 'personnel_transfer_requests',  route: '/hr/forms/transfer',    pendingStatus: '申請中' },
+      { key: 'hire_approval', label: '錄取',     table: 'offer_letters',                route: '/hr/recruitment',       pendingStatus: '待審' },
+      { key: 'headcount',     label: '人力需求', table: 'headcount_requests',           route: '/hr/forms/headcount',   pendingStatus: '申請中' },
     ],
   },
   {
@@ -75,6 +76,7 @@ const PERM_KEY_MAP = {
   loa:           'leave_of_absence_requests',
   transfer:      'personnel_transfer_requests',
   hire_approval: 'offer_letters',
+  headcount:     'headcount_requests',
   // 排班 / 任務（暫未在 web_list_my_pending_approval_ids 內 → 後續補）
   off_request: 'off_requests',
   shift_swap_peer: 'shift_swaps',
@@ -359,6 +361,11 @@ function getRowDisplay(row, tabKey) {
       return {
         title: `${row.employee?.name || '—'} · ${row.transfer_type || '人事異動'}`,
         subtitle: `生效 ${row.effective_date || '—'}`,
+      }
+    case 'headcount':
+      return {
+        title: `${row.job_title || '人力需求'} × ${row.headcount || 0} 人`,
+        subtitle: row.form_no || `#${row.id}`,
       }
     default:
       return { title: `#${row.id}`, subtitle: '' }

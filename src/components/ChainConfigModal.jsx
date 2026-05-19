@@ -475,6 +475,17 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         }, { onConflict: 'form_type,organization_id' })
         if (cfgErr) throw cfgErr
 
+        // 自訂表單 (form_type = 'custom:<id>') 額外把 chain_id 寫回 form_templates
+        // 讓 FormBuilder 列表「簽核鏈」欄位也能讀到（兩邊資料源對齊）
+        if (formType?.startsWith('custom:')) {
+          const tmplId = Number(formType.split(':')[1])
+          if (tmplId) {
+            await supabase.from('form_templates')
+              .update({ approval_chain_id: cid })
+              .eq('id', tmplId)
+          }
+        }
+
         toast.success(`「${formLabel}」簽核鏈已儲存（${steps.length} 關）`)
         onClose()
       } else {

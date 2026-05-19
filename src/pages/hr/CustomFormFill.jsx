@@ -1,25 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Send, Settings, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { safeStorageName } from '../../lib/storageSanitize'
 
 import { toast } from '../../lib/toast'
 
-// 預設值 token 替換（${user.name} / ${user.dept} / ${today} ...）
+// 預設值 token 替換（${user.name} / ${user.dept_id} / ${today} ...）
+// 注意：picker 類型存 ID，需要用數字 token（${user.id} / ${user.dept_id} / ${user.store_id}）
 function resolveDefaultToken(raw, profile) {
   if (typeof raw !== 'string' || !raw.includes('${')) return raw
   return raw
+    .replace(/\$\{user\.id\}/g, profile?.id ?? '')
     .replace(/\$\{user\.name\}/g, profile?.name || '')
+    .replace(/\$\{user\.dept_id\}/g, profile?.department_id ?? '')
     .replace(/\$\{user\.dept\}/g, profile?.dept || '')
+    .replace(/\$\{user\.store_id\}/g, profile?.store_id ?? '')
     .replace(/\$\{user\.store\}/g, profile?.store || '')
     .replace(/\$\{user\.position\}/g, profile?.position || '')
     .replace(/\$\{user\.email\}/g, profile?.email || '')
     .replace(/\$\{today\}/g, new Date().toISOString().slice(0, 10))
     .replace(/\$\{now\}/g, new Date().toISOString().slice(0, 16).replace('T', ' '))
 }
+
+const PICKER_TYPES = ['employee_picker', 'department_picker', 'store_picker']
 
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
@@ -38,6 +45,55 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [employees, setEmployees] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [stores, setStores] = useState([])
+
+  // 只在 template 有 picker 欄位才 fetch 對應資料源
+  const needPicker = useMemo(() => {
+    const types = (template?.fields || []).map(f => f.type)
+    return {
+      employee: types.includes('employee_picker'),
+      department: types.includes('department_picker'),
+      store: types.includes('store_picker'),
+    }
+  }, [template])
+
+  useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId || !template) return
+    const tasks = []
+    if (needPicker.employee && employees.length === 0) {
+      tasks.push(
+        supabase.from('employees')
+          .select('id, name, name_en, position, dept, store')
+          .eq('organization_id', orgId)
+          .eq('status', '在職')
+          .order('name')
+          .then(({ data }) => setEmployees(data || []))
+      )
+    }
+    if (needPicker.department && departments.length === 0) {
+      tasks.push(
+        supabase.from('departments')
+          .select('id, name')
+          .eq('organization_id', orgId)
+          .order('name')
+          .then(({ data }) => setDepartments(data || []))
+      )
+    }
+    if (needPicker.store && stores.length === 0) {
+      tasks.push(
+        supabase.from('stores')
+          .select('id, name')
+          .eq('organization_id', orgId)
+          .eq('is_active', true)
+          .order('name')
+          .then(({ data }) => setStores(data || []))
+      )
+    }
+    if (tasks.length) Promise.all(tasks)
+  }, [template, profile?.organization_id, needPicker])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!templateId) return
@@ -168,7 +224,12 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
             const span = f.column_span === 1 ? 1 : 2
             return (
               <div key={f.key} style={{ gridColumn: `span ${span}` }}>
-                <FieldRender field={f} value={data[f.key]} onChange={v => setField(f.key, v)} />
+                <FieldRender
+                  field={f}
+                  value={data[f.key]}
+                  onChange={v => setField(f.key, v)}
+                  pickerData={{ employees, departments, stores }}
+                />
               </div>
             )
           })}
@@ -191,7 +252,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
   )
 }
 
-function FieldRender({ field, value, onChange }) {
+function FieldRender({ field, value, onChange, pickerData }) {
   const wrapper = { display: 'flex', flexDirection: 'column', gap: 4 }
   const label = (
     <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -199,6 +260,46 @@ function FieldRender({ field, value, onChange }) {
       {field.required && <span style={{ color: 'var(--accent-red)', marginLeft: 4 }}>*</span>}
     </label>
   )
+
+  if (field.type === 'employee_picker') {
+    const opts = empOptions(pickerData?.employees || [])
+    return (
+      <div style={wrapper}>{label}
+        <SearchableSelect
+          value={value || ''}
+          onChange={v => onChange(v)}
+          options={opts}
+          placeholder="搜尋員工…"
+        />
+      </div>
+    )
+  }
+  if (field.type === 'department_picker') {
+    const opts = (pickerData?.departments || []).map(d => ({ value: d.id, label: d.name }))
+    return (
+      <div style={wrapper}>{label}
+        <SearchableSelect
+          value={value || ''}
+          onChange={v => onChange(v)}
+          options={opts}
+          placeholder="選擇部門…"
+        />
+      </div>
+    )
+  }
+  if (field.type === 'store_picker') {
+    const opts = (pickerData?.stores || []).map(s => ({ value: s.id, label: s.name }))
+    return (
+      <div style={wrapper}>{label}
+        <SearchableSelect
+          value={value || ''}
+          onChange={v => onChange(v)}
+          options={opts}
+          placeholder="選擇門市…"
+        />
+      </div>
+    )
+  }
 
   if (field.type === 'textarea') {
     return (

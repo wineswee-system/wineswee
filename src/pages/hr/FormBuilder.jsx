@@ -17,14 +17,17 @@ const CATEGORIES = [
 ]
 
 const FIELD_TYPES = [
-  { value: 'text',     label: '單行文字' },
-  { value: 'textarea', label: '多行文字' },
-  { value: 'number',   label: '數字' },
-  { value: 'date',     label: '日期' },
-  { value: 'select',   label: '下拉選單' },
-  { value: 'checkbox', label: '勾選框' },
-  { value: 'file',     label: '檔案上傳' },
-  { value: 'section',  label: '🔖 分區標題' },
+  { value: 'text',              label: '單行文字' },
+  { value: 'textarea',          label: '多行文字' },
+  { value: 'number',            label: '數字' },
+  { value: 'date',              label: '日期' },
+  { value: 'select',            label: '下拉選單' },
+  { value: 'checkbox',          label: '勾選框' },
+  { value: 'file',              label: '檔案上傳' },
+  { value: 'employee_picker',   label: '👤 員工選擇器' },
+  { value: 'department_picker', label: '🏢 部門選擇器' },
+  { value: 'store_picker',      label: '🏪 門市選擇器' },
+  { value: 'section',           label: '🔖 分區標題' },
 ]
 
 const COLORS = ['cyan', 'blue', 'green', 'orange', 'red', 'purple', 'yellow']

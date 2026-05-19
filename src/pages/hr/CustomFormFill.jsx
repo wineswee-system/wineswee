@@ -7,6 +7,20 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { safeStorageName } from '../../lib/storageSanitize'
 
 import { toast } from '../../lib/toast'
+
+// 預設值 token 替換（${user.name} / ${user.dept} / ${today} ...）
+function resolveDefaultToken(raw, profile) {
+  if (typeof raw !== 'string' || !raw.includes('${')) return raw
+  return raw
+    .replace(/\$\{user\.name\}/g, profile?.name || '')
+    .replace(/\$\{user\.dept\}/g, profile?.dept || '')
+    .replace(/\$\{user\.store\}/g, profile?.store || '')
+    .replace(/\$\{user\.position\}/g, profile?.position || '')
+    .replace(/\$\{user\.email\}/g, profile?.email || '')
+    .replace(/\$\{today\}/g, new Date().toISOString().slice(0, 10))
+    .replace(/\$\{now\}/g, new Date().toISOString().slice(0, 16).replace('T', ' '))
+}
+
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
 export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, onClose }) {
@@ -31,22 +45,25 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
       .then(({ data }) => {
         setTemplate(data)
         if (data?.fields) {
-          // 預設值 init
+          // 預設值 init（section 跳過；其他欄位若 default 含 ${token} 自動替換）
           const initial = {}
           for (const f of data.fields) {
-            initial[f.key] = f.default ?? (f.type === 'checkbox' ? false : '')
+            if (f.type === 'section') continue
+            const raw = f.default ?? (f.type === 'checkbox' ? false : '')
+            initial[f.key] = resolveDefaultToken(raw, profile)
           }
           setData(initial)
         }
       })
       .finally(() => setLoading(false))
-  }, [templateId])
+  }, [templateId, profile])
 
   const setField = (key, val) => setData(d => ({ ...d, [key]: val }))
 
   const validate = () => {
     if (!template) return false
     for (const f of template.fields || []) {
+      if (f.type === 'section') continue
       if (f.required) {
         const v = data[f.key]
         if (v === '' || v === null || v === undefined || (f.type === 'checkbox' && !v)) {
@@ -132,10 +149,29 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
       </div>
 
       <div className="card" style={{ padding: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {(template.fields || []).map(f => (
-            <FieldRender key={f.key} field={f} value={data[f.key]} onChange={v => setField(f.key, v)} />
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 14, rowGap: 14 }}>
+          {(template.fields || []).map((f, idx) => {
+            if (f.type === 'section') {
+              const isFirst = idx === 0
+              return (
+                <div key={`sec_${idx}`} style={{
+                  gridColumn: '1 / -1',
+                  marginTop: isFirst ? 0 : 8,
+                  paddingTop: isFirst ? 0 : 12,
+                  borderTop: isFirst ? 'none' : '1px solid var(--border-subtle)',
+                }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent-cyan)' }}>{f.label}</div>
+                  {f.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{f.description}</div>}
+                </div>
+              )
+            }
+            const span = f.column_span === 1 ? 1 : 2
+            return (
+              <div key={f.key} style={{ gridColumn: `span ${span}` }}>
+                <FieldRender field={f} value={data[f.key]} onChange={v => setField(f.key, v)} />
+              </div>
+            )
+          })}
         </div>
 
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

@@ -24,6 +24,7 @@ const FIELD_TYPES = [
   { value: 'select',   label: '下拉選單' },
   { value: 'checkbox', label: '勾選框' },
   { value: 'file',     label: '檔案上傳' },
+  { value: 'section',  label: '🔖 分區標題' },
 ]
 
 const COLORS = ['cyan', 'blue', 'green', 'orange', 'red', 'purple', 'yellow']
@@ -172,7 +173,7 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
 
   const addField = () => setF('fields', [
     ...(form.fields || []),
-    { key: `field_${Date.now()}`, label: '', type: 'text', required: false },
+    { key: `field_${Date.now()}`, label: '', type: 'text', required: false, column_span: 2 },
   ])
 
   const updateField = (idx, patch) => {
@@ -199,6 +200,10 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
     if (!form.name?.trim()) return toast.warning('請填模板名稱')
     if (!(form.fields || []).length) return toast.warning('至少要 1 個欄位')
     for (const f of form.fields) {
+      if (f.type === 'section') {
+        if (!f.label) return toast.error('分區標題不可空白')
+        continue
+      }
       if (!f.key || !f.label) return toast.error(`欄位「${f.label || f.key}」缺 key 或 label`)
       if (f.type === 'select' && !(f.options || '').trim()) return toast.error(`下拉選單「${f.label}」需要設選項`)
     }
@@ -277,41 +282,77 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
         {(form.fields || []).length === 0 && (
           <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>尚未加任何欄位</div>
         )}
-        {(form.fields || []).map((field, idx) => (
-          <div key={idx} style={{ border: '1px solid var(--border-medium)', borderRadius: 8, padding: 10, marginBottom: 8, background: 'var(--bg-card)' }}>
+        {(form.fields || []).map((field, idx) => {
+          const isSection = field.type === 'section'
+          return (
+          <div key={idx} style={{
+            border: `1px solid ${isSection ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+            borderRadius: 8, padding: 10, marginBottom: 8,
+            background: isSection ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <button type="button" onClick={() => moveField(idx, -1)} disabled={idx === 0} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
                 <button type="button" onClick={() => moveField(idx, 1)} disabled={idx === form.fields.length - 1} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: idx === form.fields.length - 1 ? 0.3 : 1 }}>▼</button>
               </div>
-              <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>欄位 #{idx + 1}</div>
+              <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
+                {isSection ? `🔖 分區 #${idx + 1}` : `欄位 #${idx + 1}`}
+              </div>
               <button type="button" onClick={() => removeField(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><X size={16} /></button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 8 }}>
-              <Field label="顯示名稱"><input className="form-input" style={{ fontSize: 12 }} value={field.label} onChange={e => updateField(idx, { label: e.target.value })} /></Field>
-              <Field label="變數名 (英文)"><input className="form-input" style={{ fontSize: 12 }} value={field.key} onChange={e => updateField(idx, { key: e.target.value.replace(/[^a-z0-9_]/gi, '_').toLowerCase() })} /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: isSection ? '2fr 1fr' : '1.5fr 1fr 1fr', gap: 8 }}>
+              <Field label={isSection ? '分區標題' : '顯示名稱'}>
+                <input className="form-input" style={{ fontSize: 12 }} value={field.label} onChange={e => updateField(idx, { label: e.target.value })} placeholder={isSection ? '例：申請人資訊' : ''} />
+              </Field>
+              {!isSection && (
+                <Field label="變數名 (英文)"><input className="form-input" style={{ fontSize: 12 }} value={field.key} onChange={e => updateField(idx, { key: e.target.value.replace(/[^a-z0-9_]/gi, '_').toLowerCase() })} /></Field>
+              )}
               <Field label="類型">
                 <select className="form-input" style={{ fontSize: 12 }} value={field.type} onChange={e => updateField(idx, { type: e.target.value })}>
                   {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
                 </select>
               </Field>
             </div>
-            {(field.type === 'select') && (
-              <Field label="選項（每行一個）">
-                <textarea className="form-input" rows={3} style={{ fontSize: 12 }} value={field.options || ''} onChange={e => updateField(idx, { options: e.target.value })} placeholder="選項一&#10;選項二&#10;選項三" />
+
+            {isSection && (
+              <Field label="副標題（選填，灰色小字）">
+                <input className="form-input" style={{ fontSize: 12 }} value={field.description || ''} onChange={e => updateField(idx, { description: e.target.value })} placeholder="例：以下為招募條件相關欄位" />
               </Field>
             )}
-            {(field.type === 'text' || field.type === 'textarea' || field.type === 'number') && (
-              <Field label="提示文字（placeholder）">
-                <input className="form-input" style={{ fontSize: 12 }} value={field.placeholder || ''} onChange={e => updateField(idx, { placeholder: e.target.value })} />
-              </Field>
+
+            {!isSection && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8, marginTop: 6 }}>
+                  <Field label="欄寬">
+                    <select className="form-input" style={{ fontSize: 12 }} value={field.column_span ?? 2} onChange={e => updateField(idx, { column_span: Number(e.target.value) })}>
+                      <option value={2}>滿寬</option>
+                      <option value={1}>半寬（兩欄並排）</option>
+                    </select>
+                  </Field>
+                  <Field label={`預設值（可用 \${user.name}、\${user.dept}、\${user.store}、\${user.position}、\${today}）`}>
+                    <input className="form-input" style={{ fontSize: 12 }} value={field.default || ''} onChange={e => updateField(idx, { default: e.target.value })} placeholder="例：${user.name} 或 ${today}" />
+                  </Field>
+                </div>
+
+                {(field.type === 'select') && (
+                  <Field label="選項（每行一個）">
+                    <textarea className="form-input" rows={3} style={{ fontSize: 12 }} value={field.options || ''} onChange={e => updateField(idx, { options: e.target.value })} placeholder="選項一&#10;選項二&#10;選項三" />
+                  </Field>
+                )}
+                {(field.type === 'text' || field.type === 'textarea' || field.type === 'number') && (
+                  <Field label="提示文字（placeholder）">
+                    <input className="form-input" style={{ fontSize: 12 }} value={field.placeholder || ''} onChange={e => updateField(idx, { placeholder: e.target.value })} />
+                  </Field>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6 }}>
+                  <input type="checkbox" checked={!!field.required} onChange={e => updateField(idx, { required: e.target.checked })} />
+                  必填
+                </label>
+              </>
             )}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6 }}>
-              <input type="checkbox" checked={!!field.required} onChange={e => updateField(idx, { required: e.target.checked })} />
-              必填
-            </label>
           </div>
-        ))}
+          )
+        })}
       </div>
     </Modal>
     {showChainModal && form.id && (

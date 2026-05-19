@@ -388,6 +388,93 @@ function buildTaskAutoStarted(details: {
   };
 }
 
+// ── form_submission：自訂表單通用通知（step_assigned / approved / rejected）─
+function buildFormSubmissionNotification(
+  variant: "step_assigned" | "approved" | "rejected",
+  details: {
+    submission_id: number;
+    template_name: string;
+    applicant_name: string;
+    current_step_label?: string;
+    current_step_index?: number;
+    total_steps?: number;
+    summary_fields?: Array<{ label: string; value: string }>;
+    reject_reason?: string;
+    liff_url?: string;
+  },
+) {
+  const sid = details.submission_id;
+  const isStep = variant === "step_assigned";
+  const isApproved = variant === "approved";
+  const headerColor = isStep ? "#0EA5E9" : isApproved ? "#16a34a" : "#dc2626";
+  const emoji = isStep ? "📄" : isApproved ? "✅" : "❌";
+  const headerLabel = isStep
+    ? `待你審核：${details.template_name}`
+    : isApproved
+      ? `已核准：${details.template_name}`
+      : `已退回：${details.template_name}`;
+  const altText = `${emoji} ${headerLabel} — ${details.applicant_name}`;
+
+  const summary = (details.summary_fields || []).slice(0, 5).map(f => row(f.label, f.value || "—"));
+  const stepRow = isStep && details.current_step_label
+    ? [row("關卡",
+        `第 ${(details.current_step_index ?? 0) + 1}/${details.total_steps ?? "?"} 關 · ${details.current_step_label}`,
+        "#0EA5E9")]
+    : [];
+  const reasonRow = variant === "rejected" && details.reject_reason
+    ? [
+        { type: "separator", margin: "md" },
+        { type: "text", text: "退回原因", size: "xs", color: "#9CA3AF", margin: "md" },
+        { type: "text", text: details.reject_reason, size: "sm", color: "#dc2626", wrap: true, margin: "xs" },
+      ]
+    : [];
+
+  const footerButtons: object[] = [];
+  if (isStep) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 核准",
+          data: `action=approve&type=request&rt=form_submission&id=${sid}`,
+          displayText: "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=request&rt=form_submission&id=${sid}`,
+          displayText: "退回" } },
+    );
+  }
+  if (details.liff_url) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: isStep ? "📋 看完整詳情" : "📋 看詳情", uri: details.liff_url } });
+  }
+
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [
+          { type: "text", text: `${emoji} ${headerLabel}`, weight: "bold", color: "#FFFFFF", size: "md", wrap: true },
+          { type: "text", text: `#${sid}`, size: "xs", color: "#FFFFFFAA", margin: "xs" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("申請人", details.applicant_name),
+          ...stepRow,
+          ...summary,
+          ...reasonRow,
+        ],
+      },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
+    },
+  };
+}
+
 // ══════════════════════════════════════════════════════════════
 // Main Handler
 // ══════════════════════════════════════════════════════════════
@@ -594,6 +681,12 @@ serve(async (req) => {
       message = buildCorrectionNotification("approved", details);
     } else if (type === "correction_rejected") {
       message = buildCorrectionNotification("rejected", details);
+    } else if (type === "form_submission_step_assigned") {
+      message = buildFormSubmissionNotification("step_assigned", details);
+    } else if (type === "form_submission_approved") {
+      message = buildFormSubmissionNotification("approved", details);
+    } else if (type === "form_submission_rejected") {
+      message = buildFormSubmissionNotification("rejected", details);
     } else if (type === "task_auto_started") {
       // 補抓 task 完整欄位（trigger 只丟 task_id + 簡單 details，這裡 hydrate）
       let enriched = { ...details, liff_id: acct?.liffId || null };

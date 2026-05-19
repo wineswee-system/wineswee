@@ -260,18 +260,22 @@ export default function FormSubmissions() {
             )}
             {templateFilter && (
               <button className="btn btn-primary"
-                onClick={() => navigate(`/hr/forms/custom/${templateFilter}`)}
+                onClick={() => navigate(`/hr/forms/custom/${templateFilter}?embedded=1`)}
                 title="新增申請">
                 <Plus size={14} /> 新增申請
               </button>
             )}
-            <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定公司名稱（簽呈標題用）">
-              <Building2 size={14} /> 公司名稱
-            </button>
+            {!templateFilter && (
+              <button className="btn btn-secondary" onClick={() => setShowCompanyModal(true)} title="設定公司名稱（簽呈標題用）">
+                <Building2 size={14} /> 公司名稱
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      {/* templateFilter 模式不顯示 tab bar，對齊人力需求列表頁簡潔風格 */}
+      {!templateFilter && (
       <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden', marginBottom: 16, maxWidth: 480 }}>
         {[
           { key: 'mine',   label: '📝 我的申請' },
@@ -286,6 +290,7 @@ export default function FormSubmissions() {
           }}>{t.label}</button>
         ))}
       </div>
+      )}
 
       <div className="card">
         <div className="data-table-wrapper">

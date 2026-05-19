@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Send, Settings, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,6 +12,8 @@ import { toast } from '../../lib/toast'
 export default function CustomFormFill() {
   const { templateId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isEmbedded = searchParams.get('embedded') === '1'  // 從列表頁「+ 新增申請」進來時 = 卡片模式（不顯示頂部 nav）
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin'].includes(role?.name)
   const [template, setTemplate] = useState(null)
@@ -66,7 +68,8 @@ export default function CustomFormFill() {
       })
       if (error) throw error
       toast.success('已送出申請！')
-      navigate('/hr/forms/submissions')
+      // 卡片模式返回該模板的列表頁；獨立頁返回通用列表頁
+      navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms/submissions')
     } catch (err) {
       toast.error('送出失敗：' + (err.message || '未知錯誤'))
     } finally {
@@ -84,26 +87,37 @@ export default function CustomFormFill() {
 
   return (
     <div className="fade-in" style={{ maxWidth: 720 }}>
-      <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button className="btn btn-secondary" onClick={() => navigate('/hr/forms')} style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }}>
-          <ArrowLeft size={12} /> 返回 HR 表單中心
-        </button>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-secondary"
-          onClick={() => navigate(`/hr/forms/submissions?template=${templateId}`)}
-          style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-cyan)' }}
-          title="看這張表單已提交的紀錄">
-          <FileText size={12} /> 查看紀錄
-        </button>
-        {isAdmin && (
+      {/* 卡片模式（從列表頁「+ 新增申請」進來）只顯示「取消返回」一顆按鈕 */}
+      {isEmbedded ? (
+        <div style={{ marginBottom: 14 }}>
           <button className="btn btn-secondary"
-            onClick={() => navigate(`/hr/form-builder?edit=${templateId}`)}
-            style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-purple)' }}
-            title="編輯欄位 / 設定簽核流程">
-            <Settings size={12} /> 管理此模板
+            onClick={() => navigate(`/hr/forms/submissions?template=${templateId}`)}
+            style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }}>
+            <ArrowLeft size={12} /> 取消返回
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/hr/forms')} style={{ width: 'auto', padding: '4px 12px', fontSize: 12 }}>
+            <ArrowLeft size={12} /> 返回 HR 表單中心
+          </button>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary"
+            onClick={() => navigate(`/hr/forms/submissions?template=${templateId}`)}
+            style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-cyan)' }}
+            title="看這張表單已提交的紀錄">
+            <FileText size={12} /> 查看紀錄
+          </button>
+          {isAdmin && (
+            <button className="btn btn-secondary"
+              onClick={() => navigate(`/hr/form-builder?edit=${templateId}`)}
+              style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-purple)' }}
+              title="編輯欄位 / 設定簽核流程">
+              <Settings size={12} /> 管理此模板
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="page-header">
         <h2>{template.name}</h2>
@@ -118,7 +132,10 @@ export default function CustomFormFill() {
         </div>
 
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => navigate('/hr/forms')}>取消</button>
+          <button className="btn btn-secondary"
+            onClick={() => navigate(isEmbedded ? `/hr/forms/submissions?template=${templateId}` : '/hr/forms')}>
+            取消
+          </button>
           <button className="btn btn-primary" onClick={submit} disabled={submitting}>
             <Send size={14} /> {submitting ? '送出中…' : '送出申請'}
           </button>

@@ -85,7 +85,7 @@ export default function HRForms() {
           desc: t.description || '自訂表單',
           color: c.color,
           dim: c.dim,
-          action: `/hr/forms/custom/${t.id}`,
+          action: `/hr/forms/submissions?template=${t.id}`,
           tag: '自訂',
         })
       }

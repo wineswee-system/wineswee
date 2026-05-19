@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { X, Plus, Upload, FileText, Image } from 'lucide-react'
+import { X, Plus, Upload, FileText, Image, Download } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { clearError } from '../../../lib/formValidation'
@@ -55,6 +55,25 @@ export default function ExpenseFormModal({
   })
 
   const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
+
+  // 下載 CSV 範本（含標題列 + 2 筆範例，UTF-8 BOM 讓 Excel 認得）
+  const handleDownloadTemplate = () => {
+    const sample = [
+      '品名,數量,單價',
+      '辦公椅,5,1800',
+      'A4 影印紙,10,120',
+    ].join('\r\n')
+    const BOM = '﻿'
+    const blob = new Blob([BOM + sample], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '品項明細範本.csv'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   const handleCsvImport = (e) => {
     const file = e.target.files?.[0]
@@ -240,8 +259,14 @@ export default function ExpenseFormModal({
                           <Plus size={11} /> 新增品項
                         </button>
                         <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
-                          onClick={() => csvRef.current?.click()}>
+                          onClick={() => csvRef.current?.click()}
+                          title="3 欄：品名,數量,單價（小計自動算）— UTF-8 編碼">
                           <Upload size={11} /> 匯入 CSV
+                        </button>
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', color: 'var(--accent-cyan)' }}
+                          onClick={handleDownloadTemplate}
+                          title="下載空白 CSV 範本（含標題列 + 2 筆範例）">
+                          <Download size={11} /> 下載範本
                         </button>
                         <input ref={csvRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvImport} />
                       </td>

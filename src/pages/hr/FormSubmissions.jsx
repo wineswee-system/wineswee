@@ -10,6 +10,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import ChainConfigModal from '../../components/ChainConfigModal'
 import CustomFormFill from './CustomFormFill'
 import { printFormMemo } from '../../lib/printFormMemo'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -28,6 +29,7 @@ const STATUS_BADGE = {
 export default function FormSubmissions() {
   const { profile, role } = useAuth()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const { canApprove: canApproveByRpc } = usePendingApprovals()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const templateFilter = searchParams.get('template')  // ?template=<id> filter 單一模板
@@ -321,7 +323,11 @@ export default function FormSubmissions() {
               )}
               {list.map(s => {
                 const sb = STATUS_BADGE[s.status] || {}
-                const canApprove = isAdmin && s.status === '申請中'
+                // chain 中間關卡用 RPC 算「這關該不該給我簽」；沒設 chain 的單 admin 仍可一鍵核准
+                const canApprove = s.status === '申請中' && (
+                  canApproveByRpc('form_submissions', s.id)
+                  || (!s.template?.approval_chain_id && isAdmin)
+                )
                 const canCancel = s.status === '申請中' && (s.applicant_id === profile?.id || isAdmin)
                 return (
                   <tr key={s.id} onClick={() => openDetail(s)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">

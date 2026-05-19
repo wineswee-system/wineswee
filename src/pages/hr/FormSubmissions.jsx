@@ -272,11 +272,12 @@ export default function FormSubmissions() {
         p_applicant_emp_id: applicantEmpId,
       })
       const stepsList = Array.isArray(chainStepsData) ? chainStepsData : []
+      const curStep = sub.current_step ?? 0
       restSteps = stepsList.map((s, i) => {
         let status
         if (isApproved) status = 'completed'
-        else if (isRejected) status = i === 0 ? 'rejected' : 'pending'
-        else status = i === 0 ? 'current' : 'pending'
+        else if (isRejected) status = (i === curStep ? 'rejected' : (i < curStep ? 'completed' : 'pending'))
+        else status = (i < curStep ? 'completed' : (i === curStep ? 'current' : 'pending'))
         return {
           label: s.label || s.role_name || `第${i + 1}關`,
           name: s.names || '',  // RPC 已解出所有 target_type

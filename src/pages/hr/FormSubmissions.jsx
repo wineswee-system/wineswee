@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle, XCircle, Printer, Building2, Settings, Plus, Paperclip, X } from 'lucide-react'
+import { CheckCircle, XCircle, Printer, Building2, Settings, Plus, Paperclip, X, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -38,6 +38,7 @@ export default function FormSubmissions() {
   const [templateName, setTemplateName] = useState('')
   const [templateChain, setTemplateChain] = useState(null)  // { id, name } or null = 無 chain
   const [list, setList] = useState([])
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   // 從某張模板的「查看紀錄」按鈕跳進來時，預設顯示「所有」tab；其他情境照舊
   const [tab, setTab] = useState(templateFilter ? 'all' : (isAdmin ? 'review' : 'mine'))   // mine | review | all
@@ -433,10 +434,18 @@ export default function FormSubmissions() {
       )}
 
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><X size={12} /></button>}
+          </div>
+        </div>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 55 }}>單號</th>
                 <th>表單</th>
                 <th>申請人</th>
                 <th>申請日</th>
@@ -446,10 +455,10 @@ export default function FormSubmissions() {
               </tr>
             </thead>
             <tbody>
-              {list.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>無資料</td></tr>
+              {list.filter(s => !search.trim() || String(s.id).includes(search.trim())).length === 0 && (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>無資料</td></tr>
               )}
-              {list.map(s => {
+              {list.filter(s => !search.trim() || String(s.id).includes(search.trim())).map(s => {
                 const sb = STATUS_BADGE[s.status] || {}
                 // chain 中間關卡用 RPC 算「這關該不該給我簽」；沒設 chain 的單 admin 仍可一鍵核准
                 const canApprove = s.status === '申請中' && (
@@ -459,6 +468,7 @@ export default function FormSubmissions() {
                 const canCancel = s.status === '申請中' && (s.applicant_id === profile?.id || isAdmin)
                 return (
                   <tr key={s.id} onClick={() => openDetail(s)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{s.id}</td>
                     <td><b>{s.template?.name}</b></td>
                     <td>{s.applicant?.name}{s.applicant?.name_en ? ` ${s.applicant.name_en}` : ''}</td>
                     <td style={{ fontSize: 12 }}>{s.created_at?.slice(0, 10)}</td>

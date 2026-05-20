@@ -41,7 +41,8 @@ const emptyForm = {
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 export default function ExpenseRequests() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [requests, setRequests] = useState([])
@@ -640,6 +641,14 @@ export default function ExpenseRequests() {
     }))
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('expense_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   // Filter
   const q = search.trim()
   const filtered = requests.filter(r => {
@@ -728,6 +737,7 @@ export default function ExpenseRequests() {
         <table>
           <thead>
             <tr>
+              <th style={{ width: 55 }}>單號</th>
               <th>申請人</th>
               <th>科目</th>
               <th>項目</th>
@@ -739,11 +749,12 @@ export default function ExpenseRequests() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>無資料</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>無資料</td></tr>}
             {filtered.map(r => {
               const sc = STATUS_COLORS[r.status] || {}
               return (
                 <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>#{r.id}</td>
                   <td style={{ fontWeight: 600 }}>{r.employee}</td>
                   <td>
                     {r.is_expense === false
@@ -797,6 +808,11 @@ export default function ExpenseRequests() {
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
                           ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
+                        </button>
+                      )}
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                          刪除
                         </button>
                       )}
                     </div>

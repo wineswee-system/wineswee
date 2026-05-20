@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 
 const STATUS_BADGE = {
   '待對方同意': { bg: 'rgba(99,102,241,0.12)',  color: '#6366f1' },
@@ -16,7 +17,8 @@ const STATUS_BADGE = {
 }
 
 export default function ShiftSwaps() {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [detailRow, setDetailRow] = useState(null)
@@ -95,6 +97,14 @@ export default function ShiftSwaps() {
     toast.success('已駁回')
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('shift_swaps').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   if (loading) return <LoadingSpinner />
 
   const peerCount = list.filter(r => r.status === '待對方同意' && r.target_id === profile?.id).length
@@ -138,11 +148,12 @@ export default function ShiftSwaps() {
                 <th>換班日期</th>
                 <th>狀態</th>
                 <th>申請時間</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無換班申請</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無換班申請</td></tr>
               )}
               {list.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
@@ -156,6 +167,13 @@ export default function ShiftSwaps() {
                       {(r.reject_reason || r.peer_reject_reason) && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason || r.peer_reject_reason}</div>}
                     </td>
                     <td style={{ fontSize: 12 }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

@@ -26,7 +26,8 @@ const normalizeType = (t) => {
 }
 
 export default function PunchCorrection() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const userRole = role?.name || profile?.role || 'store_staff'
@@ -284,6 +285,14 @@ export default function PunchCorrection() {
     if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('clock_corrections').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   if (loading) return <LoadingSpinner />
 
   const filtered = corrections.filter(c => {
@@ -375,6 +384,11 @@ export default function PunchCorrection() {
                         onClick={() => printWithChain(c)}>
                         <Printer size={11} />
                       </button>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(c)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

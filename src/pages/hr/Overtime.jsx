@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
+import { Plus, Printer, Settings, Paperclip, Search, X as XIcon } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -19,6 +19,7 @@ import { uploadFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 
 // 算加班時數：依起訖時間 + 商店最小單位（step）
 // 跨日：end < start 自動 +24h（例 22:00 -> 02:00 = 4 小時）
@@ -33,13 +34,15 @@ function computeOvertimeHours(start, end, step = 0.5) {
 }
 
 export default function Overtime() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -308,8 +311,17 @@ export default function Overtime() {
     }
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('overtime_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    setRecords(prev => prev.filter(x => x.id !== row.id))
+  }
+
   const filtered = records.filter(r =>
-    deptFilter === '' || getEmpDept(r.employee) === deptFilter
+    (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
+    (!search.trim() || String(r.id).includes(search.trim()))
   )
 
 
@@ -370,16 +382,22 @@ export default function Overtime() {
       <div className="card">
         <div className="card-header">
           <div className="card-title"><span className="card-title-icon">📋</span> 加班紀錄</div>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><XIcon size={12} /></button>}
+          </div>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>員工</th><th>部門</th><th>日期</th><th>時數</th><th>原因</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th style={{ width: 55 }}>單號</th><th>員工</th><th>部門</th><th>日期</th><th>時數</th><th>原因</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無加班紀錄</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無加班紀錄</td></tr>}
               {filtered.map(o => (
                 <tr key={o.id} onClick={() => openDetail(o)} style={{ cursor: 'pointer' }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = ''}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{o.id}</td>
                   <td style={{ fontWeight: 600 }}>{o.employee}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(o.employee) || '-'}</td>
                   <td>{o.date}</td>
@@ -409,6 +427,11 @@ export default function Overtime() {
                         onClick={() => printWithChain(o)}>
                         <Printer size={11} />
                       </button>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(o)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -23,6 +23,7 @@ const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 
 export default function Expenses() {
   const { profile, hasPermission, isAdmin } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [expenses, setExpenses] = useState([])
@@ -181,6 +182,14 @@ export default function Expenses() {
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
     if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
+  }
+
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('expenses').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    setExpenses(prev => prev.filter(x => x.id !== row.id))
   }
 
   if (loading) return <LoadingSpinner />
@@ -353,6 +362,11 @@ export default function Expenses() {
                         onClick={() => printWithChain(e)}>
                         <Printer size={11} />
                       </button>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(e)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

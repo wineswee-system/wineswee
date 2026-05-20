@@ -30,7 +30,8 @@ const STATUS_BADGE = {
 }
 
 export default function Resignation() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
@@ -254,6 +255,14 @@ export default function Resignation() {
     load()
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('resignation_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   const formattedEmpOptions = useMemo(() => empOptions(employees), [employees])
 
   if (loading) return <LoadingSpinner />
@@ -370,6 +379,11 @@ export default function Resignation() {
                           onClick={() => printWithChain(r)}>
                           <Printer size={11} />
                         </button>
+                        {canDeleteAll && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                            刪除
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

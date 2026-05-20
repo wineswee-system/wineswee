@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 
 const STATUS_BADGE = {
   '待審核': { bg: 'rgba(99,102,241,0.12)',  color: '#6366f1' },
@@ -15,7 +16,8 @@ const STATUS_BADGE = {
 }
 
 export default function OffRequests() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +68,14 @@ export default function OffRequests() {
     toast.success('已退回')
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('off_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   if (loading) return <LoadingSpinner />
 
   const pending = list.filter(r => r.status === '待審核').length
@@ -93,11 +103,12 @@ export default function OffRequests() {
                 <th>申請時間</th>
                 <th>狀態</th>
                 <th>簽核者</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無希望休申請</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無希望休申請</td></tr>
               )}
               {list.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
@@ -114,6 +125,13 @@ export default function OffRequests() {
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {r.approver_name || '—'}
                       {r.approved_at && <div style={{ fontSize: 10 }}>{r.approved_at.slice(0, 10)}</div>}
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

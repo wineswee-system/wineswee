@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Printer, Settings } from 'lucide-react'
+import { Plus, Printer, Settings, Search, X as XIcon } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -18,14 +18,17 @@ import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 export default function BusinessTravel() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [trips, setTrips] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -179,8 +182,17 @@ export default function BusinessTravel() {
     setLoadingChain(false)
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('business_trips').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    setTrips(prev => prev.filter(x => x.id !== row.id))
+  }
+
   const filtered = trips.filter(t =>
-    deptFilter === '' || getEmpDept(t.employee) === deptFilter
+    (deptFilter === '' || getEmpDept(t.employee) === deptFilter) &&
+    (!search.trim() || String(t.id).includes(search.trim()))
   )
 
 
@@ -237,15 +249,23 @@ export default function BusinessTravel() {
       </div>
 
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><XIcon size={12} /></button>}
+          </div>
+        </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>員工</th><th>部門</th><th>目的地</th><th>出發日</th><th>回程日</th><th>事由</th><th>預算</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th style={{ width: 55 }}>單號</th><th>員工</th><th>部門</th><th>目的地</th><th>出發日</th><th>回程日</th><th>事由</th><th>預算</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無差旅紀錄</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無差旅紀錄</td></tr>}
               {filtered.map(t => (
                 <tr key={t.id} onClick={() => openDetail(t)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = ''}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{t.id}</td>
                   <td style={{ fontWeight: 600 }}>{t.employee}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(t.employee) || '-'}</td>
                   <td>{t.destination}</td>
@@ -284,6 +304,11 @@ export default function BusinessTravel() {
                         onClick={() => printWithChain(t)}>
                         <Printer size={11} />
                       </button>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(t)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

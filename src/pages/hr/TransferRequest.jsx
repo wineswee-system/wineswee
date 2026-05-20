@@ -30,7 +30,8 @@ const STATUS_BADGE = {
 }
 
 export default function TransferRequest() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
@@ -289,6 +290,14 @@ export default function TransferRequest() {
     load()
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('personnel_transfer_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    load()
+  }
+
   if (loading) return <LoadingSpinner />
 
   // 改走 web_list_my_pending_approval_ids RPC（chain step 動態解人 + 自己不能簽自己）
@@ -403,6 +412,11 @@ export default function TransferRequest() {
                           onClick={() => printWithChain(r)}>
                           <Printer size={11} />
                         </button>
+                        {canDeleteAll && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                            刪除
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

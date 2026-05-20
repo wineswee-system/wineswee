@@ -28,7 +28,8 @@ import LeaveFormModal from './components/LeaveFormModal'
 import LeavePolicyModal from './components/LeavePolicyModal'
 
 export default function Leave() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const [leaves, setLeaves] = useState([])
@@ -414,6 +415,14 @@ export default function Leave() {
     setLoadingChain(false)
   }
 
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
+    const { error } = await supabase.from('leave_requests').delete().eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    setLeaves(prev => prev.filter(x => x.id !== row.id))
+  }
+
   const filtered = useMemo(() => leaves.filter(l =>
     (deptFilter === '' || getEmpDept(l.employee) === deptFilter) &&
     (search === '' || l.employee.includes(search))
@@ -574,6 +583,11 @@ export default function Leave() {
                         onClick={() => printWithChain(l)}>
                         <Printer size={11} />
                       </button>
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(l)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
                     </div>
                   </div>
                 </VirtualRow>

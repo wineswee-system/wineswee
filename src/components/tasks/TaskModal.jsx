@@ -181,12 +181,23 @@ export default function TaskModal({ task, employees = [], sections = [], approva
               {task.task_code}
             </span>
           )}
-          <input
-            value={form.title}
-            onChange={e => set('title', e.target.value)}
-            onBlur={() => form.title !== task.title && saveField({ title: form.title })}
-            style={{ flex: 1, fontSize: 15, fontWeight: 700, border: 'none', background: 'transparent', color: 'var(--text-primary)', outline: 'none' }}
-          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ color: 'var(--accent-red)', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>*</span>
+              <input
+                value={form.title}
+                onChange={e => set('title', e.target.value)}
+                onBlur={() => form.title !== task.title && saveField({ title: form.title })}
+                placeholder="任務名稱（必填）"
+                style={{
+                  flex: 1, fontSize: 15, fontWeight: 700, border: 'none',
+                  borderBottom: !form.title ? '1.5px solid var(--accent-red)' : '1.5px solid transparent',
+                  background: 'transparent', color: 'var(--text-primary)', outline: 'none', width: '100%',
+                }}
+              />
+            </div>
+            {!form.title && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>⚠ 任務名稱為必填</div>}
+          </div>
           {onDuplicate && (
             <button
               onClick={async () => { await onDuplicate(task); onClose?.() }}

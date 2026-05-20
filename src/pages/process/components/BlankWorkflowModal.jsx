@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 
@@ -10,14 +11,30 @@ export default function BlankWorkflowModal({
   onClose,
   onSubmit,
 }) {
-  const set = (k, v) => setBlankWorkflowForm(p => ({ ...p, [k]: v }))
+  const [errors, setErrors] = useState({})
+
+  const set = (k, v) => {
+    setBlankWorkflowForm(p => ({ ...p, [k]: v }))
+    if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }))
+  }
+
+  const handleSubmit = () => {
+    const errs = {}
+    if (!blankWorkflowForm.name?.trim()) errs.name = '流程名稱為必填'
+    if (!blankWorkflowForm.planned_start_date) errs.planned_start_date = '計畫開始日期為必填'
+    if (!blankWorkflowForm.planned_end_date) errs.planned_end_date = '預期完成日為必填'
+    if (Object.keys(errs).length > 0) { setErrors(errs); return false }
+    setErrors({})
+    return onSubmit()
+  }
+
   return (
-    <Modal title="建立空白流程" onClose={onClose} onSubmit={onSubmit} submitLabel="建立">
-      <Field label="流程名稱" required>
+    <Modal title="建立空白流程" onClose={onClose} onSubmit={handleSubmit} submitLabel="建立">
+      <Field label="流程名稱" required error={!!errors.name} errorMsg={errors.name}>
         <input className="form-input" placeholder="例：新店開幕準備" autoFocus style={{ width: '100%' }}
           value={blankWorkflowForm.name}
           onChange={e => set('name', e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onSubmit() } }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit() } }}
         />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -35,12 +52,12 @@ export default function BlankWorkflowModal({
             placeholder="搜尋負責人..."
           />
         </Field>
-        <Field label="計畫開始">
+        <Field label="計畫開始" required error={!!errors.planned_start_date} errorMsg={errors.planned_start_date}>
           <input className="form-input" type="date" style={{ width: '100%' }}
             value={blankWorkflowForm.planned_start_date || ''}
             onChange={e => set('planned_start_date', e.target.value)} />
         </Field>
-        <Field label="預期完成日">
+        <Field label="預期完成日" required error={!!errors.planned_end_date} errorMsg={errors.planned_end_date}>
           <input className="form-input" type="date" style={{ width: '100%' }}
             value={blankWorkflowForm.planned_end_date || ''}
             onChange={e => set('planned_end_date', e.target.value)} />
@@ -52,7 +69,7 @@ export default function BlankWorkflowModal({
             <option value="低">低</option>
           </select>
         </Field>
-        <Field label="截止日期（舊欄位）">
+        <Field label="截止日期（選填）">
           <input className="form-input" type="date" style={{ width: '100%' }}
             value={blankWorkflowForm.due_date}
             onChange={e => set('due_date', e.target.value)} />

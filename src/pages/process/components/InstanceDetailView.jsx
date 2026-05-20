@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
-  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -44,6 +44,16 @@ export default function InstanceDetailView({
   const [chainRejectReason, setChainRejectReason] = useState('')
   const [chainRejectOpen, setChainRejectOpen] = useState(false)
   const [chainBusy, setChainBusy] = useState(false)
+  const [addTaskErrors, setAddTaskErrors] = useState({})
+
+  const handleAddTask = () => {
+    const errs = {}
+    if (!taskForm.title?.trim()) errs.title = '任務名稱為必填'
+    if (!taskForm.due_date) errs.due_date = '截止日期為必填'
+    if (Object.keys(errs).length > 0) { setAddTaskErrors(errs); return false }
+    setAddTaskErrors({})
+    return onAddTask()
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -340,11 +350,11 @@ export default function InstanceDetailView({
         </Modal>
       )}
       {showAddTaskModal && (
-        <Modal title="新增任務" onClose={() => setShowAddTaskModal(false)} onSubmit={onAddTask}>
-          <Field label="任務名稱" required>
+        <Modal title="新增任務" onClose={() => { setAddTaskErrors({}); setShowAddTaskModal(false) }} onSubmit={handleAddTask}>
+          <Field label="任務名稱" required error={!!addTaskErrors.title} errorMsg={addTaskErrors.title}>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：電力申請"
               value={taskForm.title}
-              onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />
+              onChange={e => { setTaskForm(f => ({ ...f, title: e.target.value })); if (addTaskErrors.title) setAddTaskErrors(e => ({ ...e, title: undefined })) }} />
           </Field>
           <Field label="說明">
             <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }}
@@ -393,10 +403,10 @@ export default function InstanceDetailView({
                 value={taskForm.planned_start}
                 onChange={e => setTaskForm(f => ({ ...f, planned_start: e.target.value }))} />
             </Field>
-            <Field label="截止日期">
+            <Field label="截止日期" required error={!!addTaskErrors.due_date} errorMsg={addTaskErrors.due_date}>
               <input className="form-input" type="date" style={{ width: '100%' }}
                 value={taskForm.due_date}
-                onChange={e => setTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+                onChange={e => { setTaskForm(f => ({ ...f, due_date: e.target.value })); if (addTaskErrors.due_date) setAddTaskErrors(er => ({ ...er, due_date: undefined })) }} />
             </Field>
             <Field label="截止時間">
               <input className="form-input" type="time" style={{ width: '100%' }}

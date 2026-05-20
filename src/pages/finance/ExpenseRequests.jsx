@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Send, Settings } from 'lucide-react'
+import { Plus, X, Check, Upload, FileText, Image, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
@@ -60,6 +60,7 @@ export default function ExpenseRequests() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('all')
+  const [search, setSearch] = useState('')
   const [isExpense, setIsExpense] = useState(true)
   const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
@@ -640,9 +641,18 @@ export default function ExpenseRequests() {
   }
 
   // Filter
+  const q = search.trim().toLowerCase()
   const filtered = requests.filter(r => {
-    if (tab === 'all') return true
-    return r.status === tab
+    if (tab !== 'all' && r.status !== tab) return false
+    if (!q) return true
+    return (
+      (r.employee || '').toLowerCase().includes(q) ||
+      (r.title || '').toLowerCase().includes(q) ||
+      (r.account_code || '').toLowerCase().includes(q) ||
+      (r.account_name || '').toLowerCase().includes(q) ||
+      (r.store || '').toLowerCase().includes(q) ||
+      (r.supplier || '').toLowerCase().includes(q)
+    )
   })
 
   const counts = {}
@@ -702,6 +712,22 @@ export default function ExpenseRequests() {
             <div style={{ fontSize: 20, fontWeight: 700, color: STATUS_COLORS[s].color }}>{counts[s] || 0}</div>
           </div>
         ))}
+      </div>
+
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜尋申請人、項目、科目、門市…"
+          style={{ width: '100%', boxSizing: 'border-box', paddingLeft: 32, paddingRight: search ? 32 : 12, paddingTop: 8, paddingBottom: 8, borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Table */}

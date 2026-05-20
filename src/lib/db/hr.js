@@ -231,6 +231,19 @@ export const updateDevelopmentPlan = (id, data) =>
 export const deleteDevelopmentPlan = (id) =>
   supabase.from('employee_development_plans').delete().eq('id', id)
 
+// ─── Headcount Requests ───
+export const getHeadcountRequests = (orgId) => {
+  let q = supabase.from('headcount_requests')
+    .select('*, creator:employees!created_by(name), reviewer:employees!reviewed_by(name)')
+    .order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+export const createHeadcountRequest = (data) =>
+  supabase.from('headcount_requests').insert(data).select().single()
+export const updateHeadcountRequest = (id, data) =>
+  supabase.from('headcount_requests').update(data).eq('id', id).select().single()
+
 export const getBenefitPolicies = (filters = {}) => {
   let q = supabase.from('benefit_policies').select('*, stores(name), employees(name)').order('id', { ascending: false })
   if (filters.orgId) q = q.eq('organization_id', filters.orgId)

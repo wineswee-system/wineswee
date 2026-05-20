@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search } from 'lucide-react'
+import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
   getCandidates, createCandidate, updateCandidate, deleteCandidate,
   getInterviews, createInterview, updateInterview,
   getOfferLetterTemplates, getOfferLetters, createOfferLetter, updateOfferLetter,
+  createOfferLetterTemplate, updateOfferLetterTemplate, deleteOfferLetterTemplate,
+  getHeadcountRequests, createHeadcountRequest, updateHeadcountRequest,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -43,6 +45,8 @@ function Tabs({ active, onChange }) {
     { key: 'candidates', label: '候選人',   icon: UserCheck },
     { key: 'interviews', label: '面試',     icon: Calendar },
     { key: 'offers',     label: '錄取簽呈', icon: FileText },
+    { key: 'headcount',  label: '人力需求單',   icon: ClipboardList },
+    { key: 'templates',  label: '通知書範本',   icon: FileEdit },
   ]
   return (
     <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border-primary)' }}>
@@ -326,10 +330,17 @@ export default function Recruitment() {
   const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
   const [searchQuery, setSearchQuery] = useState('')
 
+  const [editingTpl, setEditingTpl] = useState(null)  // null=list, 'new'=new, obj=editing
+
+  const [headcountReqs, setHeadcountReqs] = useState([])
+  const [showHcModal,   setShowHcModal]   = useState(false)
+  const [hcForm, setHcForm] = useState({ dept: '', position_title: '', headcount: 1, expected_start_date: '', reason: '' })
+  const hset = (k, v) => setHcForm(f => ({ ...f, [k]: v }))
+
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return }
     try {
-      const [j, d, l, e, c, iv, ot, ol] = await Promise.all([
+      const [j, d, l, e, c, iv, ot, ol, hc] = await Promise.all([
         getRecruitmentJobs(orgId),
         supabase.from('departments').select('id,name').eq('organization_id', orgId).order('name'),
         supabase.from('stores').select('id,name').eq('organization_id', orgId).order('name'),
@@ -338,6 +349,7 @@ export default function Recruitment() {
         getInterviews(orgId),
         getOfferLetterTemplates(orgId),
         getOfferLetters(orgId),
+        getHeadcountRequests(orgId),
       ])
       const depts = d.data || []
       const locs  = l.data || []
@@ -349,6 +361,7 @@ export default function Recruitment() {
       setInterviews(iv.data || [])
       setOfferTemplates(ot.data || [])
       setOfferLetters(ol.data || [])
+      setHeadcountReqs(hc.data || [])
       setJobForm(f => ({ ...f, dept: depts[0]?.name || '', location: locs[0]?.name || '' }))
     } catch (err) {
       console.error('Recruitment load error:', err)
@@ -520,6 +533,95 @@ export default function Recruitment() {
     }
   }
 
+  // ── Template handlers ──
+  const handleSaveTpl = async (tplData) => {
+    if (editingTpl && editingTpl !== 'new') {
+      const { data } = await updateOfferLetterTemplate(editingTpl.id, tplData)
+      if (data) {
+        setOfferTemplates(prev => prev.map(t => t.id === data.id ? data : t))
+        toast.success('範本已更新')
+        setEditingTpl(null)
+      }
+    } else {
+      const { data } = await createOfferLetterTemplate({ ...tplData, organization_id: orgId })
+      if (data) {
+        setOfferTemplates(prev => [...prev, data])
+        toast.success('範本已建立')
+        setEditingTpl(null)
+      }
+    }
+  }
+
+  const handleDeleteTpl = async (tpl) => {
+    const ok = await confirm(`確定刪除範本「${tpl.name}」？`)
+    if (!ok) return
+    await deleteOfferLetterTemplate(tpl.id)
+    setOfferTemplates(prev => prev.filter(t => t.id !== tpl.id))
+  }
+
+  const handleSetDefaultTpl = async (tpl) => {
+    await Promise.all(offerTemplates.map(t =>
+      updateOfferLetterTemplate(t.id, { is_default: t.id === tpl.id })
+    ))
+    setOfferTemplates(prev => prev.map(t => ({ ...t, is_default: t.id === tpl.id })))
+    toast.success(`「${tpl.name}」已設為預設`)
+  }
+
+  // ── Headcount handlers ──
+  const handleAddHcRequest = async () => {
+    if (!hcForm.dept || !hcForm.position_title) { toast('請填寫部門與職位'); return }
+    const { data, error } = await createHeadcountRequest({
+      ...hcForm,
+      headcount: Number(hcForm.headcount) || 1,
+      expected_start_date: hcForm.expected_start_date || null,
+      organization_id: orgId,
+      created_by: profile?.id || null,
+      status: 'pending',
+    })
+    if (error) { toast.error('建立失敗：' + error.message); return }
+    setHeadcountReqs(prev => [data, ...prev])
+    setShowHcModal(false)
+    setHcForm({ dept: '', position_title: '', headcount: 1, expected_start_date: '', reason: '' })
+    toast.success('人力需求單已送出')
+  }
+
+  const handleApproveHcRequest = async (req) => {
+    const { data: job, error: jobErr } = await createRecruitmentJob({
+      title: req.position_title,
+      dept: req.dept,
+      type: '全職',
+      applicants: 0,
+      status: '招募中',
+      organization_id: orgId,
+      headcount: req.headcount,
+      headcount_request_id: req.id,
+      posted: new Date().toISOString().slice(0, 10),
+    })
+    if (jobErr) { toast.error('開職缺失敗：' + jobErr.message); return }
+    const { data } = await updateHeadcountRequest(req.id, {
+      status: 'approved',
+      reviewed_by: profile?.id || null,
+      reviewed_at: new Date().toISOString(),
+      job_id: job.id,
+    })
+    if (data) {
+      setHeadcountReqs(prev => prev.map(r => r.id === req.id ? data : r))
+      setJobs(prev => [...prev, job])
+      toast.success(`已核准，職缺「${req.position_title}」已建立`)
+    }
+  }
+
+  const handleRejectHcRequest = async (req) => {
+    const ok = await confirm('確定駁回此需求單？')
+    if (!ok) return
+    const { data } = await updateHeadcountRequest(req.id, {
+      status: 'rejected',
+      reviewed_by: profile?.id || null,
+      reviewed_at: new Date().toISOString(),
+    })
+    if (data) setHeadcountReqs(prev => prev.map(r => r.id === req.id ? data : r))
+  }
+
   // ── derived ──
   const filteredJobs  = jobs.filter(j => deptFilter === '' || j.dept === deptFilter)
   const filteredCands = candidates.filter(c => {
@@ -557,6 +659,21 @@ export default function Recruitment() {
           {tab === 'candidates' && (
             <button className="btn btn-primary" onClick={() => setShowCandModal(true)}>
               <Plus size={14} /> 新增候選人
+            </button>
+          )}
+          {tab === 'headcount' && (
+            <button className="btn btn-primary" onClick={() => setShowHcModal(true)}>
+              <Plus size={14} /> 新增需求單
+            </button>
+          )}
+          {tab === 'templates' && !editingTpl && (
+            <button className="btn btn-primary" onClick={() => setEditingTpl('new')}>
+              <Plus size={14} /> 新增範本
+            </button>
+          )}
+          {tab === 'templates' && editingTpl && (
+            <button className="btn btn-secondary" onClick={() => setEditingTpl(null)}>
+              ← 返回列表
             </button>
           )}
         </div>
@@ -830,6 +947,144 @@ export default function Recruitment() {
         </div>
       )}
 
+      {/* ─── 通知書範本 ─── */}
+      {tab === 'templates' && !editingTpl && (
+        <div className="card">
+          {offerTemplates.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <FileEdit size={36} style={{ marginBottom: 12, opacity: 0.4 }} />
+              <p style={{ marginBottom: 16 }}>尚未建立任何範本</p>
+              <button className="btn btn-primary" onClick={() => setEditingTpl('new')}>
+                <Plus size={14} /> 建立第一個範本
+              </button>
+            </div>
+          ) : (
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>範本名稱</th><th>預設</th><th>操作</th></tr></thead>
+                <tbody>
+                  {offerTemplates.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ fontWeight: 600 }}>{t.name}</td>
+                      <td>
+                        {t.is_default
+                          ? <span className="badge badge-success">預設</span>
+                          : <button className="btn btn-sm btn-secondary" onClick={() => handleSetDefaultTpl(t)}>設為預設</button>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-sm btn-secondary" onClick={() => setEditingTpl(t)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Edit3 size={11} /> 編輯
+                          </button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handleDeleteTpl(t)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-red)' }}>
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+      {tab === 'templates' && editingTpl && (
+        <OfferTemplateEditor
+          initial={editingTpl === 'new' ? null : editingTpl}
+          onSave={handleSaveTpl}
+          onCancel={() => setEditingTpl(null)}
+        />
+      )}
+
+      {/* ─── 人力需求單 ─── */}
+      {tab === 'headcount' && (
+        <div className="card">
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr><th>部門</th><th>職位</th><th>人數</th><th>預計到職</th><th>原因</th><th>建立者</th><th>狀態</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                {headcountReqs.length === 0 && (
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無人力需求單</td></tr>
+                )}
+                {headcountReqs.map(req => (
+                  <tr key={req.id}>
+                    <td>{req.dept}</td>
+                    <td style={{ fontWeight: 600 }}>{req.position_title}</td>
+                    <td>{req.headcount}</td>
+                    <td>{req.expected_start_date ? fmtDate(req.expected_start_date) : '—'}</td>
+                    <td style={{ maxWidth: 200, color: 'var(--text-secondary)', fontSize: 12 }}>{req.reason || '—'}</td>
+                    <td>{req.creator?.name || '—'}</td>
+                    <td>
+                      <span className={`badge ${
+                        req.status === 'approved' ? 'badge-success' :
+                        req.status === 'rejected' ? 'badge-error' : 'badge-warning'
+                      }`}>
+                        {req.status === 'approved' ? '已核准' : req.status === 'rejected' ? '已駁回' : '待審'}
+                      </span>
+                      {req.status === 'approved' && req.job_id && (
+                        <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent-cyan)' }}>
+                          → 職缺 #{req.job_id}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {req.status === 'pending' && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-sm btn-primary"
+                            onClick={() => handleApproveHcRequest(req)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <CheckCircle size={11} /> 核准
+                          </button>
+                          <button className="btn btn-sm btn-secondary"
+                            onClick={() => handleRejectHcRequest(req)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-red)' }}>
+                            <XCircle size={11} /> 駁回
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Add Headcount modal ─── */}
+      {showHcModal && (
+        <Modal title="新增人力需求單" onClose={() => setShowHcModal(false)} onSubmit={handleAddHcRequest} submitLabel="送出">
+          <Field label="部門" required>
+            <select className="form-input" style={{ width: '100%' }} value={hcForm.dept} onChange={e => hset('dept', e.target.value)}>
+              <option value="">請選擇</option>
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </select>
+          </Field>
+          <Field label="職位名稱" required>
+            <input className="form-input" style={{ width: '100%' }} placeholder="例：資深工程師"
+              value={hcForm.position_title} onChange={e => hset('position_title', e.target.value)} />
+          </Field>
+          <Field label="需求人數">
+            <input className="form-input" type="number" min={1} style={{ width: '100%' }}
+              value={hcForm.headcount} onChange={e => hset('headcount', e.target.value)} />
+          </Field>
+          <Field label="預計到職日">
+            <input className="form-input" type="date" style={{ width: '100%' }}
+              value={hcForm.expected_start_date} onChange={e => hset('expected_start_date', e.target.value)} />
+          </Field>
+          <Field label="需求原因">
+            <textarea className="form-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+              placeholder="說明人力需求背景、原因..."
+              value={hcForm.reason} onChange={e => hset('reason', e.target.value)} />
+          </Field>
+        </Modal>
+      )}
+
       {/* ─── Add Job modal ─── */}
       {showJobModal && (
         <Modal title={editingJob ? '編輯職缺' : '新增職缺'} onClose={() => { setShowJobModal(false); setEditingJob(null) }} onSubmit={handleAddJob} submitLabel={editingJob ? '儲存' : '新增'}>
@@ -947,6 +1202,165 @@ export default function Recruitment() {
           </Field>
         </Modal>
       )}
+    </div>
+  )
+}
+
+// ─── 變數列表 ───
+const TPL_VARS = [
+  { label: '應聘人姓名', key: 'candidate_name' },
+  { label: '職位',       key: 'position' },
+  { label: '部門',       key: 'dept' },
+  { label: '月薪',       key: 'salary' },
+  { label: '到職日',     key: 'start_date' },
+  { label: '試用期天數', key: 'probation_days' },
+  { label: '公司名稱',   key: 'company_name' },
+  { label: '簽署日期',   key: 'signed_date' },
+]
+
+const SAMPLE_DATA = {
+  candidate_name: '王小明',
+  position:       '資深前端工程師',
+  dept:           '技術部',
+  salary:         'NT$ 60,000',
+  start_date:     '2026/06/01',
+  probation_days: '90 天',
+  company_name:   '貴公司名稱',
+  signed_date:    new Date().toISOString().slice(0, 10).replace(/-/g, '/'),
+}
+
+const DEFAULT_BODY = `親愛的 {{candidate_name}} 您好，
+
+感謝您應徵本公司 {{position}} 一職。
+
+經過審慎評選，我們誠摯地邀請您加入我們的團隊，以下為錄取條件：
+
+• 職位：{{position}}
+• 部門：{{dept}}
+• 月薪：{{salary}}
+• 到職日：{{start_date}}
+• 試用期：{{probation_days}}
+
+請於收到本通知後 5 個工作日內回覆確認意願，逾期視同婉拒。
+如有任何問題，歡迎聯繫人資部門。
+
+期待您的加入，祝商祺。
+
+{{company_name}}
+{{signed_date}}`
+
+function bodyToHtml(text) {
+  return text
+    .split(/\n\n+/)
+    .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+    .join('\n')
+}
+
+function fillPreview(text, data) {
+  return Object.entries(data).reduce(
+    (s, [k, v]) => s.replaceAll(`{{${k}}}`, `<strong style="color:var(--accent-cyan)">${v}</strong>`), text
+  )
+}
+
+function OfferTemplateEditor({ initial, onSave, onCancel }) {
+  const [name, setName] = useState(initial?.name || '')
+  const [body, setBody] = useState(() => {
+    if (!initial?.body_html) return DEFAULT_BODY
+    // convert HTML back to plain text for editing
+    return initial.body_html
+      .replace(/<p>/g, '').replace(/<\/p>/g, '\n\n').replace(/<br>/g, '\n').trim()
+  })
+  const [showPreview, setShowPreview] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const textareaRef = import.meta.env ? { current: null } : null
+  const taRef = { current: null }
+
+  const insertVar = (key) => {
+    const el = taRef.current
+    if (!el) return
+    const start = el.selectionStart
+    const end   = el.selectionEnd
+    const tag   = `{{${key}}}`
+    const next  = body.slice(0, start) + tag + body.slice(end)
+    setBody(next)
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = start + tag.length
+      el.focus()
+    })
+  }
+
+  const handleSave = async () => {
+    if (!name.trim()) { toast('請填寫範本名稱'); return }
+    setSaving(true)
+    await onSave({ name: name.trim(), body_html: bodyToHtml(body) })
+    setSaving(false)
+  }
+
+  const previewHtml = fillPreview(
+    body.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>'),
+    SAMPLE_DATA
+  )
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+      {/* Left: editor */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 16 }}>
+          {initial ? '編輯範本' : '新增範本'}
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>範本名稱</div>
+          <input className="form-input" style={{ width: '100%' }} placeholder="例：標準錄取通知書"
+            value={name} onChange={e => setName(e.target.value)} />
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>插入變數（點擊即可插入游標位置）</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {TPL_VARS.map(v => (
+              <button key={v.key} onClick={() => insertVar(v.key)}
+                style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', border: 'none',
+                  background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 500 }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>信件內容</div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>直接打字，換行用 Enter</span>
+          </div>
+          <textarea ref={taRef} className="form-input"
+            style={{ width: '100%', minHeight: 320, fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7, resize: 'vertical' }}
+            value={body} onChange={e => setBody(e.target.value)} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" onClick={onCancel}>取消</button>
+          <button className="btn btn-secondary" onClick={() => setBody(DEFAULT_BODY)}>套用預設範本</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? '儲存中…' : '儲存範本'}
+          </button>
+        </div>
+      </div>
+
+      {/* Right: preview */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 4 }}>
+          預覽效果
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
+          青色字為變數，實際發出時會替換成真實資料
+        </div>
+        <div style={{
+          background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)',
+          borderRadius: 8, padding: '20px 24px', fontSize: 14, lineHeight: 2,
+          color: 'var(--text-secondary)', minHeight: 320,
+        }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      </div>
     </div>
   )
 }

@@ -40,6 +40,7 @@ export default function ExpenseFormModal({
   editingId,
   isExpense, setIsExpense,
   onSubmit, saving, errors, setErrors,
+  currency, onCurrencyChange,
 }) {
   if (!open) return null
 
@@ -205,6 +206,24 @@ export default function ExpenseFormModal({
                 <input type="text" value={form.store} onChange={e => set('store', e.target.value)} placeholder="選填"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
               </div>
+            </div>
+          )}
+
+          {/* Currency — expense only */}
+          {isExpense && (
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>幣別</label>
+              <select
+                value={currency || 'TWD'}
+                onChange={e => onCurrencyChange(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+              >
+                <option value="TWD">TWD — 台幣</option>
+                <option value="USD">USD — 美元</option>
+                <option value="JPY">JPY — 日幣</option>
+                <option value="CNY">CNY — 人民幣</option>
+                <option value="EUR">EUR — 歐元</option>
+              </select>
             </div>
           )}
 

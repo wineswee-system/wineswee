@@ -35,7 +35,7 @@ const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = {
   employee: '', account_code: '', title: '', description: '',
-  estimated_amount: '', store: '', supplier: '',
+  estimated_amount: '', store: '', supplier: '', currency: 'TWD',
 }
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
@@ -207,6 +207,7 @@ export default function ExpenseRequests() {
       estimated_amount: req.estimated_amount?.toString() || '',
       store: req.store || '',
       supplier: req.supplier || '',
+      currency: req.currency || 'TWD',
     })
     const items = Array.isArray(req.items) && req.items.length > 0
       ? req.items.map(it => ({
@@ -256,6 +257,7 @@ export default function ExpenseRequests() {
       supplier: isExpense ? (form.supplier || null) : null,
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
+      currency: isExpense ? (form.currency || 'TWD') : 'TWD',
       organization_id: profile?.organization_id ?? null,
     }
     if (!payload.organization_id) {
@@ -806,6 +808,8 @@ export default function ExpenseRequests() {
         saving={saving}
         errors={errors}
         setErrors={setErrors}
+        currency={form.currency}
+        onCurrencyChange={v => setForm(f => ({ ...f, currency: v }))}
       />
 
       {/* Settlement Modal */}

@@ -92,7 +92,8 @@ export async function approveChainStep({ table, id, approverEmpId, action, reaso
 
 /**
  * 寫一筆 notifications 給 emp_id（recipient_emp_id）
- * payload 內 actionUrl 會在 NotificationCenter 點擊時開啟
+ * NotificationCenter UI 已移除（2026-05-20）；此處仍寫 notifications 表保留資料
+ * 之後若做別的通知 UI 直接讀此表即可
  */
 export async function notifyApprovers({ approvers, title, message, type = 'form_submission', actionUrl, organizationId }) {
   if (!approvers || approvers.length === 0) return

@@ -13,7 +13,6 @@ import {
   Package, Monitor, GitBranch,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import NotificationCenter from './NotificationCenter'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 import { majorGroups, groupNav } from './sidebar/sidebarConfig'
@@ -386,7 +385,6 @@ export default function Sidebar() {
           <Sparkles size={12} />
           Demo
         </button>
-        <NotificationCenter />
         <button onClick={toggleTheme} className="topnav-theme-btn" title={theme === 'light' ? '深色模式' : '淺色模式'}>
           {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
         </button>

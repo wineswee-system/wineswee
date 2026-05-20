@@ -24,7 +24,21 @@ export default function ProjectFormModal({
   pendingTasks,
   setPendingTasks,
 }) {
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const [errors, setErrors] = useState({})
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }))
+    if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }))
+  }
+
+  const handleSubmit = () => {
+    const errs = {}
+    if (!form.name?.trim()) errs.name = '專案名稱為必填'
+    if (!form.start_date) errs.start_date = '開始日期為必填'
+    if (!form.end_date) errs.end_date = '預計結束日期為必填'
+    if (Object.keys(errs).length > 0) { setErrors(errs); return false }
+    setErrors({})
+    return onSubmit()
+  }
 
   const [inlineWfMode, setInlineWfMode] = useState(null) // null | 'attach' | 'create'
   const [inlineWfAttachId, setInlineWfAttachId] = useState('')
@@ -36,7 +50,7 @@ export default function ProjectFormModal({
     <Modal
       title={editingId ? '編輯專案' : '新增專案'}
       onClose={onClose}
-      onSubmit={onSubmit}
+      onSubmit={handleSubmit}
       submitLabel={editingId ? '更新' : '建立'}
     >
       {editingId && (
@@ -44,7 +58,7 @@ export default function ProjectFormModal({
           專案 ID：<strong style={{ color: 'var(--text-secondary)' }}>#{editingId}</strong>
         </div>
       )}
-      <Field label="專案名稱" required>
+      <Field label="專案名稱" required error={!!errors.name} errorMsg={errors.name}>
         <input
           className="form-input" style={{ width: '100%' }}
           value={form.name}
@@ -62,10 +76,10 @@ export default function ProjectFormModal({
         />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="開始日期">
+        <Field label="開始日期" required error={!!errors.start_date} errorMsg={errors.start_date}>
           <input className="form-input" type="date" style={{ width: '100%' }} value={form.start_date} onChange={e => set('start_date', e.target.value)} />
         </Field>
-        <Field label="預計結束日期">
+        <Field label="預計結束日期" required error={!!errors.end_date} errorMsg={errors.end_date}>
           <input className="form-input" type="date" style={{ width: '100%' }} value={form.end_date} onChange={e => set('end_date', e.target.value)} />
         </Field>
       </div>
@@ -207,14 +221,20 @@ export default function ProjectFormModal({
                   options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="負責人"
                 />
-                <input className="form-input" type="date" style={{ fontSize: 13 }} value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
+                    截止日期 <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>*</span>
+                  </div>
+                  <input className="form-input" type="date" style={{ fontSize: 13, width: '100%', borderColor: !inlineTask.due_date ? 'var(--accent-red)' : undefined }}
+                    value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
+                </div>
                 <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
                   <option>高</option><option>中</option><option>低</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title}
-                  onClick={() => { if (inlineTask.title) { setPendingTasks(p => [...p, { ...inlineTask }]); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' }); setInlineTaskMode(false) } }}>確認</button>
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title || !inlineTask.due_date}
+                  onClick={() => { if (inlineTask.title && inlineTask.due_date) { setPendingTasks(p => [...p, { ...inlineTask }]); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' }); setInlineTaskMode(false) } }}>確認</button>
                 <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setInlineTaskMode(false)}>取消</button>
               </div>
             </div>

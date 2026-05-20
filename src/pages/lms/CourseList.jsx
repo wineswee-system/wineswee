@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { BookOpen, Clock, Plus, Search } from 'lucide-react'
+import { BookOpen, Clock, Search } from 'lucide-react'
 
 const DIFFICULTY_COLOR = {
   '初級': 'var(--accent-green)',
@@ -44,15 +44,9 @@ export default function CourseList() {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, color: 'var(--text-primary)' }}>課程總覽</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>{filtered.length} 門課程</p>
-        </div>
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => navigate('/lms/builder')}>
-          <Plus size={15} /> 新增課程
-        </button>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 22, color: 'var(--text-primary)' }}>我的學習</h1>
+        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>{filtered.length} 門課程</p>
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>

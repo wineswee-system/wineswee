@@ -44,7 +44,7 @@ export default function ProjectFormModal({
   const [inlineWfAttachId, setInlineWfAttachId] = useState('')
   const [inlineWfCreate, setInlineWfCreate] = useState({ template_name: '' })
   const [inlineTaskMode, setInlineTaskMode] = useState(false)
-  const [inlineTask, setInlineTask] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
+  const [inlineTask, setInlineTask] = useState({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' })
 
   return (
     <Modal
@@ -203,7 +203,7 @@ export default function ProjectFormModal({
               {pendingTasks.map((t, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
                   <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}{t.due_date && <span style={{ color: 'var(--text-muted)' }}> · {t.due_date}</span>}</span>
+                  <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}{t.store && <span style={{ color: 'var(--text-muted)' }}> · {t.store}</span>}{t.due_date && <span style={{ color: 'var(--text-muted)' }}> 截止 {t.due_date}</span>}</span>
                   <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--glass-light)', color: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
                   <button onClick={() => setPendingTasks(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
                 </div>
@@ -211,16 +211,27 @@ export default function ProjectFormModal({
             </div>
           )}
           {inlineTaskMode && (
-            <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-              <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="任務名稱 *"
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
+              <input className="form-input" style={{ width: '100%', marginBottom: 10, fontSize: 13 }} placeholder="任務名稱 *"
                 value={inlineTask.title} onChange={e => setInlineTask(f => ({ ...f, title: e.target.value }))} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 <SearchableSelect
                   value={inlineTask.assignee}
                   onChange={(v) => setInlineTask(f => ({ ...f, assignee: v || '' }))}
                   options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="負責人"
                 />
+                <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.store} onChange={e => setInlineTask(f => ({ ...f, store: e.target.value }))}>
+                  <option value="">— 門市 —</option>
+                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>計畫開始</div>
+                  <input className="form-input" type="date" style={{ fontSize: 13, width: '100%' }}
+                    value={inlineTask.planned_start} onChange={e => setInlineTask(f => ({ ...f, planned_start: e.target.value }))} />
+                </div>
                 <div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
                     截止日期 <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>*</span>
@@ -228,14 +239,27 @@ export default function ProjectFormModal({
                   <input className="form-input" type="date" style={{ fontSize: 13, width: '100%', borderColor: !inlineTask.due_date ? 'var(--accent-red)' : undefined }}
                     value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
                 </div>
-                <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
-                  <option>高</option><option>中</option><option>低</option>
-                </select>
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>優先度</div>
+                  <select className="form-input" style={{ fontSize: 13, width: '100%' }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
+                    <option>高</option><option>中</option><option>低</option>
+                  </select>
+                </div>
               </div>
+              <textarea className="form-input" style={{ width: '100%', fontSize: 13, minHeight: 52, resize: 'vertical', marginBottom: 8 }}
+                placeholder="說明（選填）"
+                value={inlineTask.description} onChange={e => setInlineTask(f => ({ ...f, description: e.target.value }))} />
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title || !inlineTask.due_date}
-                  onClick={() => { if (inlineTask.title && inlineTask.due_date) { setPendingTasks(p => [...p, { ...inlineTask }]); setInlineTask({ title: '', assignee: '', due_date: '', priority: '中' }); setInlineTaskMode(false) } }}>確認</button>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setInlineTaskMode(false)}>取消</button>
+                  onClick={() => {
+                    if (inlineTask.title && inlineTask.due_date) {
+                      setPendingTasks(p => [...p, { ...inlineTask }])
+                      setInlineTask({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' })
+                      setInlineTaskMode(false)
+                    }
+                  }}>確認</button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }}
+                  onClick={() => { setInlineTaskMode(false); setInlineTask({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' }) }}>取消</button>
               </div>
             </div>
           )}

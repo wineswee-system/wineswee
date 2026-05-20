@@ -641,18 +641,11 @@ export default function ExpenseRequests() {
   }
 
   // Filter
-  const q = search.trim().toLowerCase()
+  const q = search.trim()
   const filtered = requests.filter(r => {
     if (tab !== 'all' && r.status !== tab) return false
     if (!q) return true
-    return (
-      (r.employee || '').toLowerCase().includes(q) ||
-      (r.title || '').toLowerCase().includes(q) ||
-      (r.account_code || '').toLowerCase().includes(q) ||
-      (r.account_name || '').toLowerCase().includes(q) ||
-      (r.store || '').toLowerCase().includes(q) ||
-      (r.supplier || '').toLowerCase().includes(q)
-    )
+    return String(r.id).includes(q)
   })
 
   const counts = {}
@@ -715,17 +708,17 @@ export default function ExpenseRequests() {
       </div>
 
       {/* Search */}
-      <div style={{ position: 'relative', marginBottom: 12 }}>
-        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginBottom: 12 }}>
+        <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="搜尋申請人、項目、科目、門市…"
-          style={{ width: '100%', boxSizing: 'border-box', paddingLeft: 32, paddingRight: search ? 32 : 12, paddingTop: 8, paddingBottom: 8, borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+          placeholder="搜尋單號"
+          style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 140 }}
         />
         {search && (
-          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-            <X size={14} />
+          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            <X size={12} />
           </button>
         )}
       </div>

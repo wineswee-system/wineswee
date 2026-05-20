@@ -5,7 +5,7 @@ import SearchableSelect, { empOptions } from '../../../components/SearchableSele
 import { clearError } from '../../../lib/formValidation'
 import { toast } from '../../../lib/toast'
 
-const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
+const CURRENCY_PREFIX = { TWD: 'NT$' }
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
@@ -56,7 +56,7 @@ export default function ExpenseFormModal({
   })
 
   const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
-  const fmtAmt = (n) => n != null ? `${CURRENCY_SYMBOL[currency] || currency} ${Number(n).toLocaleString()}` : '-'
+  const fmtAmt = (n) => n != null ? `${CURRENCY_PREFIX[currency] ?? currency} ${Number(n).toLocaleString()}` : '-'
 
   // 下載 CSV 範本（含標題列 + 2 筆範例，UTF-8 BOM 讓 Excel 認得）
   const handleDownloadTemplate = () => {

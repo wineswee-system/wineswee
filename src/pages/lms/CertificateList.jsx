@@ -3,9 +3,12 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { Award, Download, Calendar } from 'lucide-react'
+import { printCertificate } from '../../lib/certificatePrinter'
 
 export default function CertificateList() {
   const { profile } = useAuth()
+  const employeeName = profile?.name || ''
+  const companyName = profile?.company_name || ''
   const [certificates, setCertificates] = useState([])
   const [courseMap, setCourseMap] = useState({})
   const [loading, setLoading] = useState(true)
@@ -42,7 +45,7 @@ export default function CertificateList() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {certificates.map(cert => (
-            <CertificateCard key={cert.id} cert={cert} course={courseMap[cert.course_id]} />
+            <CertificateCard key={cert.id} cert={cert} course={courseMap[cert.course_id]} employeeName={employeeName} companyName={companyName} />
           ))}
         </div>
       )}
@@ -50,7 +53,7 @@ export default function CertificateList() {
   )
 }
 
-function CertificateCard({ cert, course }) {
+function CertificateCard({ cert, course, employeeName, companyName }) {
   const issueDate = cert.issued_at ? new Date(cert.issued_at).toLocaleDateString('zh-TW') : '—'
   const expiryDate = cert.expires_at ? new Date(cert.expires_at).toLocaleDateString('zh-TW') : null
   const isExpired = cert.expires_at && new Date(cert.expires_at) < new Date()
@@ -95,8 +98,8 @@ function CertificateCard({ cert, course }) {
 
       <button className="btn btn-secondary"
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13 }}
-        onClick={() => window.print()}>
-        <Download size={13} /> 列印 / 下載
+        onClick={() => printCertificate(cert, { courseName: course?.title, employeeName, companyName })}>
+        <Download size={13} /> 列印 / 下載 PDF
       </button>
     </div>
   )

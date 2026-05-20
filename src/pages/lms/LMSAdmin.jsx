@@ -246,6 +246,117 @@ export default function LMSAdmin() {
         </div>
       </div>
 
+      {/* 必修合規追蹤 */}
+      {(() => {
+        const required = courses.filter(c => c.is_required && c.status === '發布')
+        if (!required.length) return null
+        const totalEmp = employees.length
+        return (
+          <div className="card" style={{ marginTop: 20, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Award size={16} style={{ color: 'var(--accent-orange)' }} />
+              <h3 style={{ margin: 0, fontSize: 15, color: 'var(--text-primary)' }}>必修課合規追蹤</h3>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{required.length} 門必修</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-tertiary)' }}>
+                    {['課程名稱', '應修人數', '已完成', '進行中', '未開始', '合規率'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {required.map(course => {
+                    const enrs = enrollments.filter(e => e.course_id === course.id)
+                    const completed = enrs.filter(e => e.status === '已完成').length
+                    const inProgress = enrs.filter(e => e.status === '進行中').length
+                    const notStarted = totalEmp - enrs.length
+                    const rate = totalEmp ? Math.round((completed / totalEmp) * 100) : 0
+                    return (
+                      <tr key={course.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                        <td style={{ padding: '11px 14px', fontWeight: 600, color: 'var(--text-primary)' }}>{course.title}</td>
+                        <td style={{ padding: '11px 14px', color: 'var(--text-secondary)' }}>{totalEmp}</td>
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{completed}</span>
+                        </td>
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{ color: 'var(--accent-cyan)' }}>{inProgress}</span>
+                        </td>
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{ color: notStarted > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{notStarted}</span>
+                        </td>
+                        <td style={{ padding: '11px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 80, height: 6, background: 'var(--bg-tertiary)', borderRadius: 3 }}>
+                              <div style={{ height: '100%', borderRadius: 3, width: `${rate}%`,
+                                background: rate >= 80 ? 'var(--accent-green)' : rate >= 50 ? 'var(--accent-orange)' : 'var(--accent-red)' }} />
+                            </div>
+                            <span style={{ fontWeight: 600, color: rate >= 80 ? 'var(--accent-green)' : rate >= 50 ? 'var(--accent-orange)' : 'var(--accent-red)' }}>
+                              {rate}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 團隊學習狀況（依角色顯示） */}
+      {['super_admin','admin','manager'].includes(profile?.role) && employees.length > 0 && (
+        <div className="card" style={{ marginTop: 20, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={16} style={{ color: 'var(--accent-blue)' }} />
+            <h3 style={{ margin: 0, fontSize: 15, color: 'var(--text-primary)' }}>團隊學習狀況</h3>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-tertiary)' }}>
+                  {['員工', '已報名', '完課', '完成率', '取得證書'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map(emp => {
+                  const empEnrs = enrollments.filter(e => e.employee_id === emp.id)
+                  const empDone = empEnrs.filter(e => e.status === '已完成').length
+                  const empCerts = certificates.filter(c => c.employee_id === emp.id).length
+                  const empRate = empEnrs.length ? Math.round((empDone / empEnrs.length) * 100) : 0
+                  return (
+                    <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 500, color: 'var(--text-primary)' }}>{emp.name}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{empEnrs.length}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--accent-green)', fontWeight: 600 }}>{empDone}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        {empEnrs.length > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 60, height: 5, background: 'var(--bg-tertiary)', borderRadius: 3 }}>
+                              <div style={{ height: '100%', borderRadius: 3, width: `${empRate}%`, background: 'var(--accent-cyan)' }} />
+                            </div>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{empRate}%</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>未報名</span>}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: empCerts > 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                        {empCerts > 0 ? `${empCerts} 張` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Enrollment side panel */}
       {selectedCourse && (
         <div style={{

@@ -330,6 +330,20 @@ function QuizEditor({ quizData, onChange }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {questions.length} 題</span>
         <div style={{ display: 'flex', gap: 8 }}>
+          {questions.length > 0 && (
+            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => {
+                const hdrs = ['題目','選項A','選項B','選項C','選項D','正確答案(A/B/C/D)','解析說明']
+                const rows = questions.map(q => {
+                  const opts = [...q.options]; while (opts.length < 4) opts.push('')
+                  return [q.question, ...opts.slice(0,4), String.fromCharCode(65+(q.answer_index||0)), q.explanation||'']
+                })
+                const esc = c => { const s=String(c??''); return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,'""')}"`:s }
+                const csv = [hdrs.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')
+                const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'})
+                const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='測驗題目.csv'; a.click()
+              }}>匯出</button>
+          )}
           <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
             onClick={() => setShowImport(true)}>匯入</button>
           <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}

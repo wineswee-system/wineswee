@@ -27,6 +27,7 @@ export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
   approvalChains = [],
   currentUser = '', isAdmin = false, isSuperAdmin = false,
+  currentEmpId = null,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
   showAddTaskModal, taskForm, setTaskForm, setShowAddTaskModal,
@@ -36,9 +37,13 @@ export default function InstanceDetailView({
   onClose, onStatusChange, onConfirmTask, onSaveNotes, onAddTask, onEditInstance,
   onStepUpdate, onStepDelete, onStepDuplicate,
   onArchive, onDelete,
+  onChainApprove,
 }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
   const [menuOpen, setMenuOpen] = useState(false)
+  const [chainRejectReason, setChainRejectReason] = useState('')
+  const [chainRejectOpen, setChainRejectOpen] = useState(false)
+  const [chainBusy, setChainBusy] = useState(false)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -152,6 +157,96 @@ export default function InstanceDetailView({
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 'auto' }}>共 <strong>{stats.total}</strong></div>
         </div>
       </div>
+
+      {/* ── 整體完成後簽核鏈狀態 ── */}
+      {inst.completion_chain_id && inst.chain_status !== '未啟動' && (() => {
+        const chain = approvalChains.find(c => c.id === inst.completion_chain_id)
+        const currentStepInfo = chain?.steps?.find(s => s.step_order === inst.chain_current_step)
+        const statusColor = inst.chain_status === '已核准' ? 'var(--accent-green)'
+          : inst.chain_status === '已駁回' ? 'var(--accent-red)'
+          : 'var(--accent-orange)'
+        const statusBg = inst.chain_status === '已核准' ? 'var(--accent-green-dim)'
+          : inst.chain_status === '已駁回' ? 'var(--accent-red-dim)'
+          : 'var(--accent-orange-dim)'
+        return (
+          <div style={{
+            marginBottom: 20, padding: '14px 18px', borderRadius: 14,
+            background: statusBg, border: `1.5px solid ${statusColor}`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: statusColor, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {inst.chain_status === '已核准' ? <ShieldCheck size={16} /> : inst.chain_status === '已駁回' ? <ShieldX size={16} /> : <ShieldCheck size={16} />}
+                整體完成簽核
+                <span style={{ fontSize: 11, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: statusColor, color: '#fff' }}>
+                  {inst.chain_status}
+                </span>
+              </div>
+              {chain && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {chain.name} · 共 {chain.steps?.length || 0} 關
+                </div>
+              )}
+            </div>
+            {inst.chain_status === '簽核中' && currentStepInfo && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                目前：第 {inst.chain_current_step + 1} 關 — {currentStepInfo.label || currentStepInfo.role || '—'}
+              </div>
+            )}
+            {inst.chain_status === '簽核中' && onChainApprove && (
+              chainRejectOpen ? (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    placeholder="退回原因（必填）..."
+                    style={{ width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--accent-red)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box', resize: 'vertical' }}
+                    value={chainRejectReason}
+                    onChange={e => setChainRejectReason(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      disabled={chainBusy || !chainRejectReason.trim()}
+                      onClick={async () => {
+                        if (!chainRejectReason.trim()) return
+                        setChainBusy(true)
+                        await onChainApprove(inst.id, 'reject', chainRejectReason.trim())
+                        setChainBusy(false)
+                        setChainRejectOpen(false)
+                        setChainRejectReason('')
+                      }}
+                      style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1.5px solid var(--accent-red)', background: 'var(--accent-red)', color: '#fff', opacity: (!chainRejectReason.trim() || chainBusy) ? 0.5 : 1 }}>
+                      確認退回
+                    </button>
+                    <button
+                      disabled={chainBusy}
+                      onClick={() => { setChainRejectOpen(false); setChainRejectReason('') }}
+                      style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', border: '1.5px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    disabled={chainBusy}
+                    onClick={async () => {
+                      setChainBusy(true)
+                      await onChainApprove(inst.id, 'approve')
+                      setChainBusy(false)
+                    }}
+                    style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1.5px solid var(--accent-green)', background: 'var(--accent-green)', color: '#fff', display: 'flex', alignItems: 'center', gap: 6, opacity: chainBusy ? 0.5 : 1 }}>
+                    <ShieldCheck size={14} /> 核准
+                  </button>
+                  <button
+                    disabled={chainBusy}
+                    onClick={() => setChainRejectOpen(true)}
+                    style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1.5px solid var(--accent-red)', background: 'transparent', color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ShieldX size={14} /> 退回
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        )
+      })()}
 
       {/* Task table header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>

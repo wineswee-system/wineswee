@@ -592,6 +592,25 @@ export default function DeployModal({
               onChange={e => setDeployForm(f => ({ ...f, notes: e.target.value }))} />
           </Field>
 
+          {/* ─── 整體完成後簽核鏈 ─── */}
+          <Field label="📋 整體完成後簽核鏈（選填）">
+            <select className="form-input" style={{ width: '100%' }}
+              value={deployForm.completion_chain_id || ''}
+              onChange={e => setDeployForm(f => ({ ...f, completion_chain_id: e.target.value || null }))}>
+              <option value="">不需要 — 所有任務完成即結案</option>
+              {approvalChains.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}（{c.steps?.length || 0} 關）
+                </option>
+              ))}
+            </select>
+            {deployForm.completion_chain_id && (
+              <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 4 }}>
+                ⚠ 選了簽核鏈後，所有任務完成時流程會進入「待簽核」，需簽核通過才算結案
+              </div>
+            )}
+          </Field>
+
           {/* ─── 預覽 + 驗證提示 ─── */}
           <div style={{
             marginTop: 16, padding: 14, borderRadius: 10,

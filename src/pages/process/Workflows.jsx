@@ -189,8 +189,16 @@ export default function Workflows() {
       if (instId) {
         const instTasks = latestTasks.filter(t => t.workflow_instance_id === instId)
         if (instTasks.length > 0 && instTasks.every(t => t.status === '已完成')) {
-          const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
-          if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
+          const currentInst = instances.find(i => i.id === instId)
+          if (currentInst?.completion_chain_id) {
+            // start the completion chain — instance stays '待簽核' until chain approves
+            await supabase.rpc('workflow_instance_start_chain', { p_instance_id: instId })
+            const { data: inst } = await updateWorkflowInstance(instId, { status: '待簽核' })
+            if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
+          } else {
+            const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
+            if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
+          }
         }
       }
     }
@@ -323,6 +331,25 @@ export default function Workflows() {
         notifyTaskConfirmationResult(data.assignee, data.title, action, reason, data.id).catch(() => {})
       }
     }
+  }
+
+  const handleChainApprove = async (instId, action, reason = null) => {
+    const empId = profile?.id
+    if (!empId) { toast.error('無法識別簽核人員'); return }
+    const { data, error } = await supabase.rpc('workflow_instance_chain_approve', {
+      p_instance_id: instId,
+      p_approver_id: empId,
+      p_action: action,
+      p_reason: reason || null,
+    })
+    if (error) { toast.error('簽核失敗：' + error.message); return }
+    if (!data?.ok) { toast.error(data?.error === 'NOT_YOUR_TURN' ? '您不是本關簽核人' : (data?.error || '簽核失敗')); return }
+    // reload fresh instance row (chain columns updated in DB)
+    const { data: freshInst } = await supabase.from('workflow_instances').select('*').eq('id', instId).single()
+    if (freshInst) setInstances(prev => prev.map(i => i.id === instId ? freshInst : i))
+    if (data.event === 'approved') toast.success('流程簽核完成，已核准！')
+    else if (data.event === 'rejected') toast.error('已退回此流程')
+    else toast.success(`已推進到第 ${(data.advanced_to_step || 0) + 1} 關（${data.next_step_label || ''}）`)
   }
 
   const handleSaveNotes = async () => {
@@ -766,6 +793,8 @@ export default function Workflows() {
         planned_end_date: deployForm.planned_end_date || null,
         priority: deployForm.priority || '中',
         notes: deployForm.notes || null,
+        completion_chain_id: deployForm.completion_chain_id ? Number(deployForm.completion_chain_id) : null,
+        applicant_emp_id: profile?.id || null,
       }).select().single()
       if (instance) {
         const empByName = new Map((employees || []).map(e => [e.name, e.id]))
@@ -1037,6 +1066,8 @@ export default function Workflows() {
         employees={employees} stores={stores} checklists={checklists} projects={projects} lineGroups={lineGroups}
         approvalChains={approvalChains}
         currentUser={currentUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
+        currentEmpId={profile?.id}
+        onChainApprove={handleChainApprove}
         showNotesModal={showNotesModal} notesStep={notesStep} notesText={notesText}
         setNotesText={setNotesText} setShowNotesModal={setShowNotesModal} setNotesStep={setNotesStep}
         showAddTaskModal={showAddTaskModal} taskForm={taskForm} setTaskForm={setTaskForm} setShowAddTaskModal={setShowAddTaskModal}

@@ -48,6 +48,16 @@ export function printFormMemo({
     }
   }
 
+  // 駁回附件（簽核人退單時附的範本/說明）加在表單附件後面
+  if (Array.isArray(submission?.reject_attachments)) {
+    for (const att of submission.reject_attachments) {
+      if (att?.url) {
+        const rawName = att.name || att.url.split('?')[0].split('/').pop() || '附件'
+        attachments.push({ url: att.url, name: `[駁回附件] ${rawName}` })
+      }
+    }
+  }
+
   printSignOff({
     companyName,
     logoUrl,

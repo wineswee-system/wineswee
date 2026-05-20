@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle, XCircle, Printer, Building2, Settings, Plus } from 'lucide-react'
+import { CheckCircle, XCircle, Printer, Building2, Settings, Plus, Paperclip, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -11,6 +11,7 @@ import ChainConfigModal from '../../components/ChainConfigModal'
 import CustomFormFill from './CustomFormFill'
 import { printFormMemo } from '../../lib/printFormMemo'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { safeStorageName } from '../../lib/storageSanitize'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -45,6 +46,8 @@ export default function FormSubmissions() {
   const detailRowIdRef = useRef(null)
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [rejectFiles, setRejectFiles] = useState([])  // 駁回時上傳的附件（File[]，最多 3 個）
+  const [rejecting, setRejecting] = useState(false)   // 上傳+RPC busy state
   const [showCompanyModal, setShowCompanyModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showChainModal, setShowChainModal] = useState(false)
@@ -163,16 +166,31 @@ export default function FormSubmissions() {
 
   const handleReject = async () => {
     if (!rejectReason) return toast.warning('請填駁回原因')
-    const { data, error } = await supabase.rpc('form_submission_chain_approve', {
-      p_id: reviewModal.id, p_approver_id: profile?.id, p_action: 'reject', p_reason: rejectReason,
-    })
-    if (error) { toast.error('駁回失敗：' + error.message); return }
-    if (!data?.ok) {
-      toast.error(`駁回失敗：${data?.error || 'unknown'}`); return
+    if (rejectFiles.length > 3) return toast.warning('附件最多 3 個')
+    setRejecting(true)
+    try {
+      // 先把附件上傳到 uploads bucket（form-reject/<sub_id>/<ts>_<filename>）
+      const attachments = []
+      for (const file of rejectFiles) {
+        const path = `form-reject/${reviewModal.id}/${Date.now()}_${safeStorageName(file.name)}`
+        const { data: upload, error: upErr } = await supabase.storage.from('uploads').upload(path, file)
+        if (upErr) { toast.error(`上傳「${file.name}」失敗：${upErr.message}`); return }
+        const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(upload.path)
+        attachments.push({ url: publicUrl, name: file.name, uploaded_at: new Date().toISOString() })
+      }
+      const { data, error } = await supabase.rpc('form_submission_chain_approve', {
+        p_id: reviewModal.id, p_approver_id: profile?.id, p_action: 'reject',
+        p_reason: rejectReason,
+        p_reject_attachments: attachments,
+      })
+      if (error) { toast.error('駁回失敗：' + error.message); return }
+      if (!data?.ok) { toast.error(`駁回失敗：${data?.error || 'unknown'}`); return }
+      setReviewModal(null); setRejectReason(''); setRejectFiles([])
+      toast.success(attachments.length ? `已駁回（附 ${attachments.length} 個附件）` : '已駁回')
+      load()
+    } finally {
+      setRejecting(false)
     }
-    setReviewModal(null); setRejectReason('')
-    toast.success('已駁回')
-    load()
   }
 
   const handleCancel = async (sub) => {
@@ -501,6 +519,17 @@ export default function FormSubmissions() {
         if (detailRow.reject_reason) {
           fields.push({ label: '駁回原因', value: detailRow.reject_reason, multiline: true })
         }
+        // 駁回附件（簽核人退單時補的範本/報價單）→ 跟表單附件一起顯示，標 [駁回] 區隔
+        if (Array.isArray(detailRow.reject_attachments)) {
+          for (const att of detailRow.reject_attachments) {
+            if (att?.url) {
+              attachments.push({
+                url: att.url,
+                name: `[駁回附件] ${att.name || String(att.url).split('?')[0].split('/').pop()}`,
+              })
+            }
+          }
+        }
         return (
           <ApprovalDetailModal
             open={!!detailRow}
@@ -523,9 +552,48 @@ export default function FormSubmissions() {
       })()}
 
       {reviewModal && (
-        <Modal title={`駁回 — ${reviewModal.template?.name}`} onClose={() => { setReviewModal(null); setRejectReason('') }} onSubmit={handleReject} submitLabel="確認駁回">
+        <Modal title={`駁回 — ${reviewModal.template?.name}`}
+          onClose={() => { setReviewModal(null); setRejectReason(''); setRejectFiles([]) }}
+          onSubmit={handleReject}
+          submitLabel={rejecting ? '處理中…' : '確認駁回'}>
           <Field label="駁回原因">
-            <textarea className="form-input" rows={3} value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+            <textarea className="form-input" rows={3} value={rejectReason} onChange={e => setRejectReason(e.target.value)} disabled={rejecting} />
+          </Field>
+          <Field label="附件（選填，最多 3 個 — 範本／報價單／正確格式截圖等）">
+            <input
+              type="file"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+              multiple
+              disabled={rejecting || rejectFiles.length >= 3}
+              onChange={(e) => {
+                const files = Array.from(e.target.files || [])
+                const remaining = 3 - rejectFiles.length
+                if (files.length > remaining) toast.warning(`只能再加 ${remaining} 個檔案（共 3 個）`)
+                setRejectFiles(prev => [...prev, ...files.slice(0, remaining)])
+                e.target.value = ''
+              }}
+              style={{ marginBottom: 6 }}
+            />
+            {rejectFiles.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                {rejectFiles.map((f, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '4px 8px', background: 'var(--bg-card-alt, rgba(0,0,0,0.03))',
+                    borderRadius: 4, fontSize: 12,
+                  }}>
+                    <Paperclip size={12} style={{ color: 'var(--accent-cyan)' }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(f.size / 1024).toFixed(0)} KB</span>
+                    <button type="button" disabled={rejecting}
+                      onClick={() => setRejectFiles(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
         </Modal>
       )}

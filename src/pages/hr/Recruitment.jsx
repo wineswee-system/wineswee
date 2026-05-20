@@ -90,7 +90,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 }
 
 // ─── Candidate detail side panel ───
-function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer }) {
+function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
   const [showIntForm, setShowIntForm] = useState(false)
   const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
@@ -235,7 +235,13 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
               <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                 {RESULTS.filter(r => r !== iv.result).map(r => (
                   <button key={r} className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}
-                    onClick={() => updateInterview(iv.id, { result: r }).then(onRefreshInterviews)}>
+                    onClick={async () => {
+                      await updateInterview(iv.id, { result: r })
+                      onRefreshInterviews()
+                      if (r === '通過' && c.stage === '面試') {
+                        onStageChange(c.id, '錄取決定')
+                      }
+                    }}>
                     → {r}
                   </button>
                 ))}
@@ -552,6 +558,43 @@ export default function Recruitment() {
             </div>
           </div>
 
+          {candidates.length > 0 && (() => {
+            const total = candidates.length
+            const counts = STAGES.map(s => ({ stage: s, n: candidates.filter(c => c.stage === s).length }))
+            const maxN = Math.max(...counts.map(x => x.n), 1)
+            return (
+              <div className="card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14 }}>招募漏斗</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {counts.map(({ stage, n }, i) => {
+                    const pct = total ? Math.round((n / total) * 100) : 0
+                    const barW = maxN ? Math.round((n / maxN) * 100) : 0
+                    const fromPrev = i > 0 && counts[i-1].n > 0 ? Math.round((n / counts[i-1].n) * 100) : null
+                    return (
+                      <div key={stage} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 72, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', flexShrink: 0 }}>{stage}</div>
+                        <div style={{ flex: 1, height: 20, background: 'var(--bg-tertiary)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: 4, width: `${barW}%`,
+                            background: STAGE_COLOR[stage], opacity: 0.75,
+                            transition: 'width 0.3s',
+                          }} />
+                        </div>
+                        <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'right', flexShrink: 0 }}>{n}</div>
+                        <div style={{ width: 52, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                          {fromPrev !== null ? `↓${fromPrev}%` : `${pct}%`}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+                  共 {total} 位候選人　已錄取率：{total ? Math.round((counts.find(x=>x.stage==='已錄取')?.n||0)/total*100) : 0}%
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="card">
             <div className="data-table-wrapper">
               <table className="data-table">
@@ -650,6 +693,7 @@ export default function Recruitment() {
               onRefreshInterviews={refreshInterviews}
               offerTemplates={offerTemplates}
               onCreateOffer={openOfferModal}
+              onStageChange={handleStageChange}
             />
           )}
         </>

@@ -375,11 +375,13 @@ function QuizImportModal({ onClose, onImport }) {
         const t = cols.map(c => c.trim().replace(/^"|"$/g, ''))
         if (t.length < 3) throw new Error(`第 ${i + 1} 行格式不符（至少需要：題目、選項A、選項B）`)
         // 判斷最後第2欄是否為數字（答案編號）
-        const hasAnswer = /^\d+$/.test(t[t.length - 2])
+        const answerCell = t[t.length - 2]
+        const isAnswerCol = /^[A-Da-d]$/.test(answerCell) || /^\d+$/.test(answerCell)
         let options, answer_index, explanation
-        if (hasAnswer) {
+        if (isAnswerCol) {
           options = t.slice(1, -2).filter(Boolean)
-          answer_index = Math.max(0, parseInt(t[t.length - 2]) - 1)
+          const raw = answerCell.toUpperCase()
+          answer_index = /^[A-D]$/.test(raw) ? raw.charCodeAt(0) - 65 : Math.max(0, parseInt(raw) - 1)
           explanation = t[t.length - 1] || ''
         } else {
           options = t.slice(1).filter(Boolean)
@@ -403,17 +405,17 @@ function QuizImportModal({ onClose, onImport }) {
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, flex: 1 }}>
             格式（逗號或 Tab 分隔）：<br />
             <code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
-              題目, 選項A, 選項B, 選項C, 選項D, 正確答案(1起算), 解析說明
+              題目, 選項A, 選項B, 選項C, 選項D, 正確答案(A/B/C/D), 解析說明
             </code><br />
-            範例：收銀機如何開啟？, 按電源鍵, 插電就好, 叫主管開, 不需要開, 1, 按電源鍵後等待啟動<br />
-            ※ 正確答案欄與解析欄可省略（省略時預設選項A為正確答案）
+            範例：收銀機如何開啟？, 按電源鍵, 插電就好, 叫主管開, 不需要開, A, 按電源鍵後等待啟動<br />
+            ※ 正確答案欄與解析欄可省略（省略時預設 A 為正確答案）
           </p>
           <button className="btn btn-ghost" style={{ fontSize: 12, whiteSpace: 'nowrap', marginLeft: 12 }}
             onClick={() => {
-              const csv = '題目,選項A,選項B,選項C,選項D,正確答案(1-4),解析說明\n' +
-                '收銀機如何開啟？,按電源鍵,插電就好,叫主管開,不需要開,1,按電源鍵後等待系統啟動約 30 秒\n' +
-                '服務守則中禁止的行為？,對客戶不禮貌,主動問候,協助找商品,微笑服務,1,請參閱服務守則第三條\n' +
-                '發現商品短缺應如何處理？,立即補貨,忽略,通知主管,詢問客戶,3,短缺需通報主管才可安排補貨'
+              const csv = '題目,選項A,選項B,選項C,選項D,正確答案(A/B/C/D),解析說明\n' +
+                '收銀機如何開啟？,按電源鍵,插電就好,叫主管開,不需要開,A,按電源鍵後等待系統啟動約 30 秒\n' +
+                '服務守則中禁止的行為？,對客戶不禮貌,主動問候,協助找商品,微笑服務,A,請參閱服務守則第三條\n' +
+                '發現商品短缺應如何處理？,立即補貨,忽略,通知主管,詢問客戶,C,短缺需通報主管才可安排補貨'
               const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
               const a = document.createElement('a')
               a.href = URL.createObjectURL(blob)

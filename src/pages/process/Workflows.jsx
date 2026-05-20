@@ -94,7 +94,7 @@ export default function Workflows() {
   // New workflow menu
   const [showNewWorkflowMenu, setShowNewWorkflowMenu] = useState(false)
   const [showBlankWorkflowModal, setShowBlankWorkflowModal] = useState(false)
-  const [blankWorkflowForm, setBlankWorkflowForm] = useState({ name: '', store: '', assignee: '', due_date: '' })
+  const [blankWorkflowForm, setBlankWorkflowForm] = useState({ name: '', store: '', assignee: '', due_date: '', planned_start_date: '', planned_end_date: '', priority: '中', notes: '', completion_chain_id: '' })
 
   // SOP deploy
   const [showDeployModal, setShowDeployModal] = useState(false)
@@ -563,6 +563,8 @@ export default function Workflows() {
       assignee: editForm.assignee || null,
       groups: editForm.groups.length > 0 ? editForm.groups : null,
       project_id: editForm.project_id ? Number(editForm.project_id) : null,
+      completion_chain_id: editForm.completion_chain_id ? Number(editForm.completion_chain_id) : null,
+      applicant_emp_id: profile?.id || null,
     })
     if (data) {
       setInstances(prev => prev.map(i => i.id === selectedInstance.id ? data : i))
@@ -725,6 +727,12 @@ export default function Workflows() {
       store: blankWorkflowForm.store || null,
       assignee: blankWorkflowForm.assignee || null,
       due_date: blankWorkflowForm.due_date || null,
+      planned_start_date: blankWorkflowForm.planned_start_date || null,
+      planned_end_date: blankWorkflowForm.planned_end_date || null,
+      priority: blankWorkflowForm.priority || '中',
+      notes: blankWorkflowForm.notes || null,
+      completion_chain_id: blankWorkflowForm.completion_chain_id ? Number(blankWorkflowForm.completion_chain_id) : null,
+      applicant_emp_id: profile?.id || null,
       started_by: currentUser,
       status: '進行中',
       organization_id: profile?.organization_id || null,
@@ -732,7 +740,7 @@ export default function Workflows() {
     if (error) { toast.error('建立失敗：' + error.message); return }
     if (data) {
       setInstances(prev => [data, ...prev])
-      setBlankWorkflowForm({ name: '', store: '', assignee: '', due_date: '' })
+      setBlankWorkflowForm({ name: '', store: '', assignee: '', due_date: '', planned_start_date: '', planned_end_date: '', priority: '中', notes: '', completion_chain_id: '' })
       setShowBlankWorkflowModal(false)
       setSelectedInstance(data)
     }
@@ -1264,6 +1272,7 @@ export default function Workflows() {
           setBlankWorkflowForm={setBlankWorkflowForm}
           employees={employees}
           stores={stores}
+          approvalChains={approvalChains}
           onClose={() => setShowBlankWorkflowModal(false)}
           onSubmit={handleCreateBlankWorkflow}
         />

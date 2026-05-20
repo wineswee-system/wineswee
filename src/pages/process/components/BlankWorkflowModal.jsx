@@ -6,42 +6,78 @@ export default function BlankWorkflowModal({
   setBlankWorkflowForm,
   employees,
   stores,
+  approvalChains = [],
   onClose,
   onSubmit,
 }) {
+  const set = (k, v) => setBlankWorkflowForm(p => ({ ...p, [k]: v }))
   return (
-    <Modal
-      title="建立空白流程"
-      onClose={onClose}
-      onSubmit={onSubmit}
-      submitLabel="建立"
-    >
+    <Modal title="建立空白流程" onClose={onClose} onSubmit={onSubmit} submitLabel="建立">
       <Field label="流程名稱" required>
-        <input className="form-input" placeholder="例：新店開幕準備" autoFocus
+        <input className="form-input" placeholder="例：新店開幕準備" autoFocus style={{ width: '100%' }}
           value={blankWorkflowForm.name}
-          onChange={e => setBlankWorkflowForm(p => ({ ...p, name: e.target.value }))}
+          onChange={e => set('name', e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onSubmit() } }}
         />
       </Field>
-      <Field label="門市／地點">
-        <select className="form-input" value={blankWorkflowForm.store} onChange={e => setBlankWorkflowForm(p => ({ ...p, store: e.target.value }))}>
-          <option value="">— 選擇門市 —</option>
-          {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="門市／地點">
+          <select className="form-input" style={{ width: '100%' }} value={blankWorkflowForm.store} onChange={e => set('store', e.target.value)}>
+            <option value="">— 選擇門市 —</option>
+            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </Field>
+        <Field label="負責人">
+          <SearchableSelect
+            value={blankWorkflowForm.assignee}
+            onChange={(v) => set('assignee', v || '')}
+            options={empOptions(employees, { keyBy: 'name' })}
+            placeholder="搜尋負責人..."
+          />
+        </Field>
+        <Field label="計畫開始">
+          <input className="form-input" type="date" style={{ width: '100%' }}
+            value={blankWorkflowForm.planned_start_date || ''}
+            onChange={e => set('planned_start_date', e.target.value)} />
+        </Field>
+        <Field label="預期完成日">
+          <input className="form-input" type="date" style={{ width: '100%' }}
+            value={blankWorkflowForm.planned_end_date || ''}
+            onChange={e => set('planned_end_date', e.target.value)} />
+        </Field>
+        <Field label="優先度">
+          <select className="form-input" style={{ width: '100%' }} value={blankWorkflowForm.priority || '中'} onChange={e => set('priority', e.target.value)}>
+            <option value="高">高</option>
+            <option value="中">中</option>
+            <option value="低">低</option>
+          </select>
+        </Field>
+        <Field label="截止日期（舊欄位）">
+          <input className="form-input" type="date" style={{ width: '100%' }}
+            value={blankWorkflowForm.due_date}
+            onChange={e => set('due_date', e.target.value)} />
+        </Field>
+      </div>
+      <Field label="整體完成後簽核鏈（選填）">
+        <select className="form-input" style={{ width: '100%' }}
+          value={blankWorkflowForm.completion_chain_id || ''}
+          onChange={e => set('completion_chain_id', e.target.value || '')}>
+          <option value="">不需要 — 所有任務完成即結案</option>
+          {approvalChains.map(c => (
+            <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+          ))}
         </select>
+        {blankWorkflowForm.completion_chain_id && (
+          <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 4 }}>
+            ⚠ 所有任務完成後流程進入「待簽核」，需簽核通過才算結案
+          </div>
+        )}
       </Field>
-      <Field label="負責人">
-        <SearchableSelect
-          value={blankWorkflowForm.assignee}
-          onChange={(v) => setBlankWorkflowForm(p => ({ ...p, assignee: v || '' }))}
-          options={empOptions(employees, { keyBy: 'name' })}
-          placeholder="搜尋負責人..."
-        />
-      </Field>
-      <Field label="截止日期">
-        <input className="form-input" type="date"
-          value={blankWorkflowForm.due_date}
-          onChange={e => setBlankWorkflowForm(p => ({ ...p, due_date: e.target.value }))}
-        />
+      <Field label="備註（選填）">
+        <textarea className="form-input" style={{ width: '100%', minHeight: 56, resize: 'vertical' }}
+          placeholder="這個流程的背景說明..."
+          value={blankWorkflowForm.notes || ''}
+          onChange={e => set('notes', e.target.value)} />
       </Field>
     </Modal>
   )

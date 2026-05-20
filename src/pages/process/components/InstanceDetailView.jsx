@@ -84,7 +84,7 @@ export default function InstanceDetailView({
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.store} · {inst.started_at?.slice(0, 10)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>指派</span>
-            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: inst.groups || [], project_id: inst.project_id || '' }); setShowEditModal(true) }}>
+            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: inst.groups || [], project_id: inst.project_id || '', completion_chain_id: inst.completion_chain_id ? String(inst.completion_chain_id) : '' }); setShowEditModal(true) }}>
               <Pencil size={11} /> 編輯
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -534,7 +534,17 @@ export default function InstanceDetailView({
         </Modal>
       )}
       {showEditModal && (
-        <Modal title="編輯指派" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
+        <Modal title="編輯流程" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
+          <Field label="整體完成後簽核鏈">
+            <select className="form-input" style={{ width: '100%' }}
+              value={editForm.completion_chain_id || ''}
+              onChange={e => setEditForm(f => ({ ...f, completion_chain_id: e.target.value || '' }))}>
+              <option value="">不需要 — 所有任務完成即結案</option>
+              {approvalChains.map(c => (
+                <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+              ))}
+            </select>
+          </Field>
           <Field label="負責人">
             <SearchableSelect
               value={editForm.assignee}

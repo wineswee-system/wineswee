@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Pencil, Trash2 } from 'lucide-react'
-import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows } from '../../lib/db'
+import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -24,6 +24,7 @@ export default function Tasks() {
   const [stores, setStores] = useState([])
   const [projects, setProjects] = useState([])
   const [taskCategories, setTaskCategories] = useState([])
+  const [approvalChains, setApprovalChains] = useState([])
   const [dependencies, setDependencies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,7 +37,7 @@ export default function Tasks() {
   const [filterProject, setFilterProject] = useState('')
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
-  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
+  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: 'General', description: '', approval_chain_id: '' })
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -49,7 +50,8 @@ export default function Tasks() {
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),
       getWorkflows(),
-    ]).then(([t, e, s, d, p, cat, wf]) => {
+      getApprovalChains(),
+    ]).then(([t, e, s, d, p, cat, wf, ac]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
@@ -58,6 +60,7 @@ export default function Tasks() {
       setProjects(p.data || [])
       setTaskCategories(cat.data || [])
       setWorkflowDefs(wf.data || [])
+      setApprovalChains(ac.data || [])
       const ids = rows.map(r => r.id)
       if (ids.length) {
         getTaskDependenciesByInstance(ids).then(({ data }) => setDependencies(data || []))
@@ -99,11 +102,16 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     if (!form.title) return
-    const { data } = await createTask({ ...form, status: '未開始', organization_id: profile?.organization_id || null })
+    const { data } = await createTask({
+      ...form,
+      status: '未開始',
+      organization_id: profile?.organization_id || null,
+      approval_chain_id: form.approval_chain_id ? Number(form.approval_chain_id) : null,
+    })
     if (data) {
       setTasks(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ title: '', workflow: '', assignee: '', due_date: '', priority: '中', bucket: 'General' })
+      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: 'General', description: '', approval_chain_id: '' })
     }
   }
 
@@ -355,6 +363,7 @@ export default function Tasks() {
         <TaskModal
           task={selectedTask}
           employees={employees}
+          approvalChains={approvalChains}
           currentUser={profile}
           onClose={() => setSelectedTask(null)}
           onChange={(updated) => {
@@ -415,14 +424,10 @@ export default function Tasks() {
 
       {showModal && (
         <Modal title="新增任務" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="任務名稱" required><input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} /></Field>
+          <Field label="任務名稱" required>
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} />
+          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="所屬流程">
-              <select className="form-input" style={{ width: '100%' }} value={form.workflow} onChange={e => set('workflow', e.target.value)}>
-                <option value="">— 選擇流程 —</option>
-                {workflowDefs.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
-              </select>
-            </Field>
             <Field label="負責人">
               <SearchableSelect
                 value={form.assignee}
@@ -431,9 +436,18 @@ export default function Tasks() {
                 placeholder="搜尋員工姓名/職稱..."
               />
             </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="截止日期"><input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date} onChange={e => set('due_date', e.target.value)} /></Field>
+            <Field label="門市">
+              <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
+                <option value="">— 選擇門市 —</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Field label="計畫開始">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
+            </Field>
+            <Field label="截止日期">
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+            </Field>
             <Field label="優先度">
               <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
                 <option>高</option><option>中</option><option>低</option>
@@ -447,7 +461,25 @@ export default function Tasks() {
                   : ['General', 'Personal', 'Workflow'].map(b => <option key={b}>{b}</option>)}
               </select>
             </Field>
+            <Field label="角色">
+              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：店長、主管..." value={form.role} onChange={e => set('role', e.target.value)} />
+            </Field>
+            <Field label="所屬流程">
+              <select className="form-input" style={{ width: '100%' }} value={form.workflow} onChange={e => set('workflow', e.target.value)}>
+                <option value="">— 選擇流程 —</option>
+                {workflowDefs.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
+              </select>
+            </Field>
           </div>
+          <Field label="簽核方式（選填）">
+            <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id} onChange={e => set('approval_chain_id', e.target.value)}>
+              <option value="">不需要簽核</option>
+              {approvalChains.map(c => <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>)}
+            </select>
+          </Field>
+          <Field label="說明（選填）">
+            <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} placeholder="任務說明、注意事項..." value={form.description} onChange={e => set('description', e.target.value)} />
+          </Field>
         </Modal>
       )}
     </div>

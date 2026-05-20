@@ -26,11 +26,12 @@ const RECURRENCE_PRESETS = [
   { value: 'FREQ=MONTHLY', label: '每月' },
 ]
 
-export default function TaskModal({ task, employees = [], sections = [], currentUser, onClose, onChange, onDelete, onDuplicate }) {
+export default function TaskModal({ task, employees = [], sections = [], approvalChains = [], currentUser, onClose, onChange, onDelete, onDuplicate }) {
   const [form, setForm] = useState({
     title: '', status: '未開始', priority: '中',
     assignee: '', assignee_id: null,
     due_date: '', section_id: '', recurrence_rule: '', description: '',
+    approval_chain_id: '',
   })
   const [comments, setComments] = useState([])
   const [commentDraft, setCommentDraft] = useState('')
@@ -74,6 +75,7 @@ export default function TaskModal({ task, employees = [], sections = [], current
       section_id: task.section_id || '',
       recurrence_rule: task.recurrence_rule || '',
       description: task.description || '',
+      approval_chain_id: task.approval_chain_id ? String(task.approval_chain_id) : '',
     })
     getTaskComments(task.id).then(({ data }) => setComments(data || []))
   }, [task?.id, employees])
@@ -199,7 +201,7 @@ export default function TaskModal({ task, employees = [], sections = [], current
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', minHeight: 480 }}>
           {tab === 'detail' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -258,6 +260,26 @@ export default function TaskModal({ task, employees = [], sections = [], current
                   </div>
                 )}
               </div>
+
+              {/* Approval chain */}
+              {approvalChains.length > 0 && (
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>簽核方式</label>
+                  <select
+                    className="form-input" style={{ width: '100%', fontSize: 12 }}
+                    value={form.approval_chain_id}
+                    onChange={e => {
+                      set('approval_chain_id', e.target.value)
+                      saveField({ approval_chain_id: e.target.value ? Number(e.target.value) : null })
+                    }}
+                  >
+                    <option value="">不需要簽核</option>
+                    {approvalChains.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Recurrence */}
               <div style={{ padding: 10, background: 'var(--glass-light)', borderRadius: 8 }}>

@@ -77,6 +77,7 @@ export default function HeadcountRequest() {
   const [form, setForm] = useState({ ...EMPTY_FORM, employee_id: profile?.id || '' })
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState(null)
 
   const buildAndResolveChain = async (row) => {
@@ -302,7 +303,6 @@ export default function HeadcountRequest() {
   if (loading) return <LoadingSpinner />
 
   const canIApprove = (req) => canApprove('headcount_requests', req.id)
-  const [search, setSearch] = useState('')
   const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
 
   return (

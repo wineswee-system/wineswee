@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [profileReady, setProfileReady] = useState(false)
   const profileLoaded = useRef(false)
+  const [empId, setEmpId] = useState(null)
 
   const loadProfile = useCallback(async (authUser) => {
     if (!authUser?.email) {
@@ -35,6 +36,7 @@ export function AuthProvider({ children }) {
         emp = empByEmail
       }
       setProfile(emp || null)
+      setEmpId(emp?.id || null)
       if (!emp) return
 
       // Load organization
@@ -96,12 +98,32 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [loadProfile])
 
+  // 訂閱自己的 employee row：偵測到 force_logout_at 更新就自動登出
+  useEffect(() => {
+    if (!empId) return
+    const channel = supabase
+      .channel(`force-logout-${empId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'employees',
+        filter: `id=eq.${empId}`,
+      }, (payload) => {
+        if (payload.new?.force_logout_at) {
+          supabase.auth.signOut()
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [empId])
+
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password })
 
   const signOut = async () => {
     await supabase.auth.signOut()
     setUser(null); setProfile(null); setOrganization(null); setRole(null); setPermissions([])
+    setEmpId(null)
     profileLoaded.current = false
   }
 

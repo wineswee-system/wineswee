@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus } from 'lucide-react'
+import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -376,6 +376,13 @@ export default function EmployeePermissions() {
   }
 
   // 全部恢復角色預設（清光該員工所有 override）
+  const handleForceLogout = async () => {
+    if (!selectedEmp) return
+    const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedEmp.id })
+    if (error) { toast.error('強制登出失敗：' + error.message); return }
+    toast.success(`已將 ${selectedEmp.name} 強制登出`)
+  }
+
   const handleResetAll = async () => {
     if (!canManage || !selectedEmp) return
     if (!isSuperAdmin && selectedEmp.id === profile?.id) {
@@ -822,6 +829,18 @@ export default function EmployeePermissions() {
                       }}
                       title="清除所有個別權限調整，全部恢復為該角色的預設">
                       <RotateCcw size={12} /> 全部恢復角色預設
+                    </button>
+                    <button onClick={handleForceLogout}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: 'var(--accent-red-dim)',
+                        color: 'var(--accent-red)',
+                        border: '1px solid var(--accent-red)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="立即強制該員工登出（Realtime 即時生效）">
+                      <LogOut size={12} /> 強制登出
                     </button>
                   </div>
                 </div>

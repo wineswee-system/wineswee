@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
-import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle, ArrowUp, ArrowDown } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
 
 const LESSON_TYPE_ICON = { text: FileText, video: Video, quiz: HelpCircle }
@@ -25,6 +25,8 @@ export default function CourseBuilder() {
   const [sections, setSections] = useState([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
+  const [removedSectionIds, setRemovedSectionIds] = useState([])
+  const [removedLessonIds, setRemovedLessonIds] = useState([])
 
   useEffect(() => {
     if (!isEdit) return
@@ -46,7 +48,11 @@ export default function CourseBuilder() {
     _tempId: Date.now(), title: '新章節', lessons: [], sort_order: prev.length,
   }])
 
-  const removeSection = idx => setSections(prev => prev.filter((_, i) => i !== idx))
+  const removeSection = idx => {
+    const sec = sections[idx]
+    if (sec?.id) setRemovedSectionIds(prev => [...prev, sec.id])
+    setSections(prev => prev.filter((_, i) => i !== idx))
+  }
 
   const addLesson = sectionIdx => setSections(prev => prev.map((sec, i) =>
     i !== sectionIdx ? sec : {
@@ -58,9 +64,13 @@ export default function CourseBuilder() {
     }
   ))
 
-  const removeLesson = (sectionIdx, lessonIdx) => setSections(prev => prev.map((sec, i) =>
-    i !== sectionIdx ? sec : { ...sec, lessons: sec.lessons.filter((_, j) => j !== lessonIdx) }
-  ))
+  const removeLesson = (sectionIdx, lessonIdx) => {
+    const lesson = sections[sectionIdx]?.lessons[lessonIdx]
+    if (lesson?.id) setRemovedLessonIds(prev => [...prev, lesson.id])
+    setSections(prev => prev.map((sec, i) =>
+      i !== sectionIdx ? sec : { ...sec, lessons: sec.lessons.filter((_, j) => j !== lessonIdx) }
+    ))
+  }
 
   const updateLesson = (sectionIdx, lessonIdx, patch) => setSections(prev => prev.map((sec, i) =>
     i !== sectionIdx ? sec : {
@@ -83,6 +93,15 @@ export default function CourseBuilder() {
         const { data, error } = await supabase.from('lms_courses').insert(courseData).select().single()
         if (error) throw error
         courseId = data.id
+      }
+
+      // Delete removed sections (CASCADE also deletes their lessons)
+      if (removedSectionIds.length) {
+        await supabase.from('lms_sections').delete().in('id', removedSectionIds)
+      }
+      // Delete removed lessons from still-existing sections
+      if (removedLessonIds.length) {
+        await supabase.from('lms_lessons').delete().in('id', removedLessonIds)
       }
 
       for (let si = 0; si < sections.length; si++) {
@@ -120,7 +139,7 @@ export default function CourseBuilder() {
       }
 
       toast.success(isEdit ? '課程已更新' : '課程已建立')
-      navigate('/lms/courses')
+      navigate('/lms/admin')
     } catch (err) {
       toast.error(`儲存失敗：${err.message}`)
     } finally {
@@ -131,7 +150,7 @@ export default function CourseBuilder() {
   return (
     <div style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button className="btn btn-ghost" onClick={() => navigate('/lms/courses')} style={{ padding: '6px 10px' }}>
+        <button className="btn btn-ghost" onClick={() => navigate('/lms/admin')} style={{ padding: '6px 10px' }}>
           <ArrowLeft size={16} />
         </button>
         <h1 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{isEdit ? '編輯課程' : '新增課程'}</h1>
@@ -188,6 +207,12 @@ export default function CourseBuilder() {
               {['草稿', '發布', '封存'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">封面圖片網址（選填）</label>
+            <input className="form-input" value={course.thumbnail_url || ''}
+              onChange={e => setCourse(p => ({ ...p, thumbnail_url: e.target.value }))}
+              placeholder="https://example.com/cover.jpg" />
+          </div>
         </div>
       </div>
 
@@ -202,9 +227,11 @@ export default function CourseBuilder() {
           <p>尚未新增章節，點擊「新增章節」開始建立課程內容</p>
         </div>
       ) : sections.map((sec, si) => (
-        <SectionEditor key={sec.id || sec._tempId} section={sec} sectionIdx={si}
+        <SectionEditor key={sec.id || sec._tempId} section={sec} sectionIdx={si} totalSections={sections.length}
           onChange={patch => setSections(prev => prev.map((s, i) => i === si ? { ...s, ...patch } : s))}
           onRemove={() => removeSection(si)}
+          onMoveUp={() => setSections(prev => { const a = [...prev]; [a[si-1], a[si]] = [a[si], a[si-1]]; return a })}
+          onMoveDown={() => setSections(prev => { const a = [...prev]; [a[si], a[si+1]] = [a[si+1], a[si]]; return a })}
           onAddLesson={() => addLesson(si)}
           onRemoveLesson={li => removeLesson(si, li)}
           onUpdateLesson={(li, patch) => updateLesson(si, li, patch)}
@@ -214,7 +241,7 @@ export default function CourseBuilder() {
   )
 }
 
-function SectionEditor({ section, sectionIdx, onChange, onRemove, onAddLesson, onRemoveLesson, onUpdateLesson }) {
+function SectionEditor({ section, sectionIdx, totalSections, onChange, onRemove, onMoveUp, onMoveDown, onAddLesson, onRemoveLesson, onUpdateLesson }) {
   const [collapsed, setCollapsed] = useState(false)
   return (
     <div className="card" style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}>
@@ -225,6 +252,12 @@ function SectionEditor({ section, sectionIdx, onChange, onRemove, onAddLesson, o
         </span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{section.lessons.length} 個單元</span>
         {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+          disabled={sectionIdx === 0}
+          onClick={e => { e.stopPropagation(); onMoveUp() }}><ArrowUp size={13} /></button>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+          disabled={sectionIdx === totalSections - 1}
+          onClick={e => { e.stopPropagation(); onMoveDown() }}><ArrowDown size={13} /></button>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }}
           onClick={e => { e.stopPropagation(); onRemove() }}><Trash2 size={14} /></button>
       </div>

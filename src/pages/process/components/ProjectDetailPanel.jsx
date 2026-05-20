@@ -114,9 +114,14 @@ export default function ProjectDetailPanel({
   inputModal,
   closeInput,
   onBack,
+  onWfEdit,
+  onProjectOrderChange,
+  approvalChains = [],
 }) {
   const [detailTab, setDetailTab] = useState('overview')
   const [selectedTask, setSelectedTask] = useState(null)
+  const [editWfOpen, setEditWfOpen] = useState(false)
+  const [editWfForm, setEditWfForm] = useState({})
 
   const sc = STATUS_MAP[p.status] || {}
 
@@ -334,6 +339,18 @@ export default function ProjectDetailPanel({
             style={{ marginBottom: 10, padding: '14px 16px', ...(dragOverWfId === w.id && dragWfId !== w.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: -2 } : {}) }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
+                  <input
+                    key={w.project_order}
+                    type="number" min="1"
+                    defaultValue={w.project_order ?? ''}
+                    onBlur={e => onProjectOrderChange?.('wf', w.id, e.target.value)}
+                    title="執行順位（跨流程與任務）"
+                    style={{ width: 38, fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', textAlign: 'center' }}
+                    placeholder="—"
+                  />
+                </div>
                 <GripVertical size={14} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.45 }} onClick={e => e.stopPropagation()} />
                 {wCollapsed
                   ? <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 0.2s' }} />
@@ -378,8 +395,28 @@ export default function ProjectDetailPanel({
                         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => {
+                          setWfMenuId(null)
+                          setEditWfForm({
+                            template_name: w.template_name || '',
+                            assignee: w.assignee || '',
+                            store: w.store || '',
+                            planned_start_date: w.planned_start_date || '',
+                            planned_end_date: w.planned_end_date || '',
+                            priority: w.priority || '中',
+                            completion_chain_id: w.completion_chain_id ? String(w.completion_chain_id) : '',
+                            notes: w.notes || '',
+                            _wfId: w.id,
+                          })
+                          setEditWfOpen(true)
+                        }}
+                      ><Edit3 size={13} /> 編輯流程</button>
+                      <button
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                         onClick={() => { setWfMenuId(null); handleWfRename(w) }}
-                      ><Edit3 size={13} /> 編輯名稱</button>
+                      ><Edit3 size={13} /> 改名</button>
                       <button
                         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
@@ -497,7 +534,12 @@ export default function ProjectDetailPanel({
               {directTasks.length === 0 && !addingDirectTask && (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無獨立任務。點「新增任務」直接加入專案。</div>
               )}
-              {directTasks.map((t) => {
+              {directTasks.sort((a, b) => {
+                if (a.project_order != null && b.project_order != null) return a.project_order - b.project_order
+                if (a.project_order != null) return -1
+                if (b.project_order != null) return 1
+                return (a.step_order || 0) - (b.step_order || 0)
+              }).map((t) => {
                 const tsc = TASK_STATUS_CONFIG[t.status] || TASK_STATUS_FALLBACK
                 return (
                   <div key={t.id}
@@ -506,6 +548,18 @@ export default function ProjectDetailPanel({
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     onClick={() => setSelectedTask(t)}
                   >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
+                      <input
+                        key={t.project_order}
+                        type="number" min="1"
+                        defaultValue={t.project_order ?? ''}
+                        onBlur={e => onProjectOrderChange?.('task', t.id, e.target.value)}
+                        title="執行順位（跨流程與任務）"
+                        style={{ width: 38, fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', textAlign: 'center' }}
+                        placeholder="—"
+                      />
+                    </div>
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                     <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
@@ -595,6 +649,83 @@ export default function ProjectDetailPanel({
           onDelete={() => setSelectedTask(null)}
           onClose={() => setSelectedTask(null)}
         />
+      )}
+
+      {/* Edit workflow modal */}
+      {editWfOpen && (
+        <Modal title="編輯流程" onClose={() => setEditWfOpen(false)}
+          onSubmit={async () => {
+            const patch = {
+              template_name: editWfForm.template_name || undefined,
+              assignee: editWfForm.assignee || null,
+              store: editWfForm.store || null,
+              planned_start_date: editWfForm.planned_start_date || null,
+              planned_end_date: editWfForm.planned_end_date || null,
+              priority: editWfForm.priority || '中',
+              completion_chain_id: editWfForm.completion_chain_id ? Number(editWfForm.completion_chain_id) : null,
+              notes: editWfForm.notes || null,
+            }
+            await onWfEdit?.(editWfForm._wfId, patch)
+            setEditWfOpen(false)
+          }}
+          submitLabel="儲存"
+        >
+          <Field label="流程名稱" required>
+            <input className="form-input" style={{ width: '100%' }}
+              value={editWfForm.template_name || ''}
+              onChange={e => setEditWfForm(f => ({ ...f, template_name: e.target.value }))} />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="負責人">
+              <SearchableSelect
+                value={editWfForm.assignee}
+                onChange={(v) => setEditWfForm(f => ({ ...f, assignee: v || '' }))}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="搜尋負責人..."
+              />
+            </Field>
+            <Field label="門市">
+              <select className="form-input" style={{ width: '100%' }}
+                value={editWfForm.store || ''}
+                onChange={e => setEditWfForm(f => ({ ...f, store: e.target.value }))}>
+                <option value="">不指定</option>
+                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Field label="計畫開始">
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={editWfForm.planned_start_date || ''}
+                onChange={e => setEditWfForm(f => ({ ...f, planned_start_date: e.target.value }))} />
+            </Field>
+            <Field label="預期完成日">
+              <input className="form-input" type="date" style={{ width: '100%' }}
+                value={editWfForm.planned_end_date || ''}
+                onChange={e => setEditWfForm(f => ({ ...f, planned_end_date: e.target.value }))} />
+            </Field>
+            <Field label="優先度">
+              <select className="form-input" style={{ width: '100%' }}
+                value={editWfForm.priority || '中'}
+                onChange={e => setEditWfForm(f => ({ ...f, priority: e.target.value }))}>
+                <option>高</option><option>中</option><option>低</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="整體完成後簽核鏈（選填）">
+            <select className="form-input" style={{ width: '100%' }}
+              value={editWfForm.completion_chain_id || ''}
+              onChange={e => setEditWfForm(f => ({ ...f, completion_chain_id: e.target.value || '' }))}>
+              <option value="">不需要 — 所有任務完成即結案</option>
+              {approvalChains.map(c => (
+                <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="備註（選填）">
+            <textarea className="form-input" style={{ width: '100%', minHeight: 56, resize: 'vertical' }}
+              value={editWfForm.notes || ''}
+              onChange={e => setEditWfForm(f => ({ ...f, notes: e.target.value }))} />
+          </Field>
+        </Modal>
       )}
 
       {/* Workflow attach/create modal */}

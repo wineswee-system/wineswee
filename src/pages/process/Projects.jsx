@@ -65,6 +65,7 @@ export default function Projects() {
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [templates, setTemplates] = useState([])
+  const [approvalChains, setApprovalChains] = useState([])
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -130,6 +131,22 @@ export default function Projects() {
     toast('已刪除')
   }
 
+  const handleWfEdit = async (wfId, patch) => {
+    const { data } = await supabase.from('workflow_instances').update(patch).eq('id', wfId).select().single()
+    if (data) setWorkflows(prev => prev.map(w => w.id === wfId ? data : w))
+  }
+
+  const handleProjectOrderChange = async (type, id, order) => {
+    const val = order !== '' && order != null ? Number(order) : null
+    if (type === 'wf') {
+      await supabase.from('workflow_instances').update({ project_order: val }).eq('id', id)
+      setWorkflows(prev => prev.map(w => w.id === id ? { ...w, project_order: val } : w))
+    } else {
+      await supabase.from('tasks').update({ project_order: val }).eq('id', id)
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, project_order: val } : t))
+    }
+  }
+
   const handleWfReorder = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId || !selected) return
     const sorted = workflows
@@ -164,13 +181,14 @@ export default function Projects() {
 
   const load = async () => {
     setLoading(true)
-    const [pRes, wRes, eRes, sRes, cRes, tplRes] = await Promise.all([
+    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
       getEmployees(),
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
       supabase.from('project_templates').select('*').order('id'),
+      supabase.from('approval_chains').select('id, name, steps:approval_chain_steps(id)').order('name'),
     ])
     // Load tasks that either carry project_id directly OR belong to a project's workflow instance
     const wIds = (wRes.data || []).map(w => w.id)
@@ -186,6 +204,7 @@ export default function Projects() {
     setStores(sRes.data || [])
     setComments(cRes.data || [])
     setTemplates(tplRes.data || [])
+    setApprovalChains(acRes.data || [])
     setLoading(false)
   }
 
@@ -590,7 +609,12 @@ export default function Projects() {
   if (selected) {
     const p = selected
     const stats = getStats(p.id)
-    const pWorkflows = workflows.filter(w => w.project_id === p.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    const pWorkflows = workflows.filter(w => w.project_id === p.id).sort((a, b) => {
+      if (a.project_order != null && b.project_order != null) return a.project_order - b.project_order
+      if (a.project_order != null) return -1
+      if (b.project_order != null) return 1
+      return (a.sort_order || 0) - (b.sort_order || 0)
+    })
     const pComments = comments.filter(c => c.project_id === p.id)
 
     return (
@@ -670,6 +694,9 @@ export default function Projects() {
         handleTaskReorder={handleTaskReorder}
         handleWfRename={handleWfRename}
         handleWfDelete={handleWfDelete}
+        onWfEdit={handleWfEdit}
+        onProjectOrderChange={handleProjectOrderChange}
+        approvalChains={approvalChains}
         inputModal={inputModal}
         closeInput={closeInput}
         onBack={() => setSelected(null)}

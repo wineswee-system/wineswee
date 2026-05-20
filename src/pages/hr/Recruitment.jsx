@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, FileText, Briefcase, UserCheck, Calendar } from 'lucide-react'
+import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search } from 'lucide-react'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
   getCandidates, createCandidate, updateCandidate, deleteCandidate,
@@ -92,7 +92,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 // ─── Candidate detail side panel ───
 function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer }) {
   const [showIntForm, setShowIntForm] = useState(false)
-  const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '' })
+  const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
 
   const handleAddInterview = async () => {
@@ -104,13 +104,14 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
       result: intForm.result,
       note: intForm.note,
       location: intForm.location,
+      score: intForm.score || null,
       candidate_id: c.id,
       organization_id: orgId,
     })
     if (data) {
       onRefreshInterviews()
       setShowIntForm(false)
-      setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '' })
+      setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
     }
   }
 
@@ -189,6 +190,18 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
                 <input className="input" style={{ fontSize: 12, width: '100%' }}
                   value={intForm.note} onChange={e => iset('note', e.target.value)} placeholder="注意事項等" />
               </div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>評分（1-5）</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => iset('score', intForm.score === n ? 0 : n)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                      <Star size={18} fill={n <= intForm.score ? 'var(--accent-orange)' : 'none'}
+                        style={{ color: n <= intForm.score ? 'var(--accent-orange)' : 'var(--text-muted)' }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleAddInterview}>確認</button>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowIntForm(false)}>取消</button>
@@ -204,7 +217,17 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
               background: 'var(--bg-secondary)', borderRadius: 6, padding: '8px 10px', marginBottom: 6,
               borderLeft: `3px solid ${iv.result === '通過' ? 'var(--accent-green)' : iv.result === '不通過' ? 'var(--accent-red)' : 'var(--border-primary)'}`,
             }}>
-              <div style={{ fontWeight: 600, fontSize: 12 }}>{iv.round} · {fmtDate(iv.scheduled_at)}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontWeight: 600, fontSize: 12 }}>{iv.round} · {fmtDate(iv.scheduled_at)}</div>
+                {iv.score > 0 && (
+                  <div style={{ display: 'flex', gap: 1 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <Star key={n} size={11} fill={n <= iv.score ? 'var(--accent-orange)' : 'none'}
+                        style={{ color: n <= iv.score ? 'var(--accent-orange)' : 'var(--border-primary)' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 面試官：{iv.employees?.name || '—'} · 結果：{iv.result}
               </div>
@@ -263,9 +286,11 @@ export default function Recruitment() {
   const [showOfferModal,  setShowOfferModal]  = useState(false)
   const [offerTarget,     setOfferTarget]     = useState(null)
 
-  const [jobForm,   setJobForm]   = useState({ title: '', dept: '', location: '', type: '全職' })
-  const [candForm,  setCandForm]  = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '' })
-  const [offerForm, setOfferForm] = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
+  const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職' })
+  const [editingJob,  setEditingJob]  = useState(null)
+  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '' })
+  const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return }
@@ -307,10 +332,21 @@ export default function Recruitment() {
   // ── Job handlers ──
   const handleAddJob = async () => {
     if (!jobForm.title) return
-    const { data } = await createRecruitmentJob({
-      ...jobForm, applicants: 0, status: '招募中', organization_id: orgId,
-    })
-    if (data) { setJobs(prev => [...prev, data]); setShowJobModal(false) }
+    if (editingJob) {
+      const { data } = await updateRecruitmentJob(editingJob.id, jobForm)
+      if (data) { setJobs(prev => prev.map(j => j.id === editingJob.id ? data : j)); setShowJobModal(false); setEditingJob(null) }
+    } else {
+      const { data } = await createRecruitmentJob({
+        ...jobForm, applicants: 0, status: '招募中', organization_id: orgId,
+      })
+      if (data) { setJobs(prev => [...prev, data]); setShowJobModal(false) }
+    }
+  }
+
+  const openEditJob = (j) => {
+    setEditingJob(j)
+    setJobForm({ title: j.title, dept: j.dept || '', location: j.location || '', type: j.type || '全職' })
+    setShowJobModal(true)
   }
 
   const handleCloseJob = async (id) => {
@@ -432,12 +468,26 @@ export default function Recruitment() {
     if (data) setOfferLetters(prev => prev.map(x => x.id === ol.id ? data : x))
   }
 
+  const handleDeclineOffer = async (ol) => {
+    const ok = await confirm('確定標記此 Offer 為已婉拒？候選人將移至「淘汰」')
+    if (!ok) return
+    const { data } = await updateOfferLetter(ol.id, { status: '已婉拒' })
+    if (data) {
+      setOfferLetters(prev => prev.map(x => x.id === ol.id ? data : x))
+      await updateCandidate(ol.candidate_id, { stage: '淘汰', hire_status: null })
+      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '淘汰', hire_status: null } : c))
+    }
+  }
+
   // ── derived ──
   const filteredJobs  = jobs.filter(j => deptFilter === '' || j.dept === deptFilter)
-  const filteredCands = candidates.filter(c =>
-    (jobFilter   === '' || String(c.job_id) === jobFilter) &&
-    (stageFilter === '' || c.stage === stageFilter)
-  )
+  const filteredCands = candidates.filter(c => {
+    const q = searchQuery.toLowerCase()
+    const matchSearch = !q || c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)
+    return matchSearch &&
+      (jobFilter   === '' || String(c.job_id) === jobFilter) &&
+      (stageFilter === '' || c.stage === stageFilter)
+  })
   const candInterviews = selectedCand
     ? interviews.filter(iv => iv.candidate_id === selectedCand.id)
     : []
@@ -524,9 +574,14 @@ export default function Recruitment() {
                         </span>
                       </td>
                       <td>
-                        {j.status === '招募中' && (
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleCloseJob(j.id)}>關閉</button>
-                        )}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-sm btn-secondary" onClick={() => openEditJob(j)}>
+                            <Edit3 size={12} />
+                          </button>
+                          {j.status === '招募中' && (
+                            <button className="btn btn-sm btn-secondary" onClick={() => handleCloseJob(j.id)}>關閉</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -540,7 +595,12 @@ export default function Recruitment() {
       {/* ─── 候選人 kanban ─── */}
       {tab === 'candidates' && (
         <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 240 }}>
+              <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input className="form-input" style={{ fontSize: 13, paddingLeft: 28 }} placeholder="搜尋姓名 / Email"
+                value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
             <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={jobFilter} onChange={e => setJobFilter(e.target.value)}>
               <option value="">全部職缺</option>
               {jobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
@@ -549,9 +609,7 @@ export default function Recruitment() {
               <option value="">全部階段</option>
               {STAGES.map(s => <option key={s}>{s}</option>)}
             </select>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
-              共 {filteredCands.length} 位候選人
-            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {filteredCands.length} 位</span>
           </div>
 
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, minHeight: 300 }}>
@@ -671,13 +729,17 @@ export default function Recruitment() {
                       }`}>{ol.status}</span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <button className="btn btn-sm btn-secondary" onClick={() => handlePrintApproval(ol)}>簽呈</button>
                         {ol.status === '已核准' && (
                           <>
                             <button className="btn btn-sm btn-primary" onClick={() => handlePrintOffer(ol)}>通知書</button>
                             <button className="btn btn-sm btn-secondary" onClick={() => handleMarkSent(ol)}>標記已發送</button>
                           </>
+                        )}
+                        {['待審', '已核准', '已發送'].includes(ol.status) && (
+                          <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }}
+                            onClick={() => handleDeclineOffer(ol)}>婉拒</button>
                         )}
                       </div>
                     </td>
@@ -691,7 +753,7 @@ export default function Recruitment() {
 
       {/* ─── Add Job modal ─── */}
       {showJobModal && (
-        <Modal title="新增職缺" onClose={() => setShowJobModal(false)} onSubmit={handleAddJob}>
+        <Modal title={editingJob ? '編輯職缺' : '新增職缺'} onClose={() => { setShowJobModal(false); setEditingJob(null) }} onSubmit={handleAddJob} submitLabel={editingJob ? '儲存' : '新增'}>
           <Field label="職稱" required>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：資深前端工程師"
               value={jobForm.title} onChange={e => setJobForm(f => ({ ...f, title: e.target.value }))} />

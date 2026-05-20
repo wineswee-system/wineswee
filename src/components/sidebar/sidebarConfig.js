@@ -266,6 +266,7 @@ export const groupNav = {
       icon: UserSearch,
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
+        { icon: FileText, label: '通知書範本', path: '/system/offer-letter-templates' },
         { icon: GraduationCap, label: '課程管理', path: '/lms/admin' },
         { icon: PlayCircle, label: '我的學習', path: '/lms/courses' },
         { icon: TrendingUp, label: '學習進度', path: '/lms/progress' },

@@ -378,8 +378,7 @@ export default function EmployeePermissions() {
   // 全部恢復角色預設（清光該員工所有 override）
   const handleForceLogout = async () => {
     if (!selectedEmp) return
-    if (selectedEmp.id === profile?.id) { toast.warning('不能將自己強制登出'); return }
-    const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedEmp.id })
+const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedEmp.id })
     if (error) { toast.error('強制登出失敗：' + error.message); return }
     toast.success(`已將 ${selectedEmp.name} 強制登出`)
   }

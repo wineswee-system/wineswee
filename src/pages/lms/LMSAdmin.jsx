@@ -5,7 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { confirm } from '../../lib/confirm'
-import { BookOpen, Users, Award, TrendingUp, Edit, Plus, X, UserPlus, Trash2, ChevronRight } from 'lucide-react'
+import { BookOpen, Users, Award, TrendingUp, Edit, Plus, X, UserPlus, Trash2, Upload } from 'lucide-react'
 
 const STATUS_OPTIONS = ['草稿', '發布', '封存']
 const STATUS_COLOR = {
@@ -29,6 +29,8 @@ export default function LMSAdmin() {
   const [enrollLoading, setEnrollLoading] = useState(false)
   const [enrollTarget, setEnrollTarget] = useState('')
   const [enrolling, setEnrolling] = useState(false)
+
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     if (!profile?.organization_id) return
@@ -130,10 +132,16 @@ export default function LMSAdmin() {
           <h1 style={{ margin: '0 0 4px', fontSize: 22, color: 'var(--text-primary)' }}>學習管理後台</h1>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>課程與學員總覽</p>
         </div>
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => navigate('/lms/builder')}>
-          <Plus size={15} /> 新增課程
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => setShowImport(true)}>
+            <Upload size={14} /> 匯入舊訓練課程
+          </button>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => navigate('/lms/builder')}>
+            <Plus size={15} /> 新增課程
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -336,6 +344,159 @@ export default function LMSAdmin() {
           </div>
         </div>
       )}
+
+      {showImport && (
+        <TrainingImportModal
+          orgId={profile?.organization_id}
+          existingTitles={new Set(courses.map(c => c.title))}
+          onClose={() => setShowImport(false)}
+          onImported={(newCourses) => {
+            setCourses(prev => [...newCourses, ...prev])
+            setShowImport(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── 匯入舊訓練課程 Modal ───────────────────────────────────────────
+function TrainingImportModal({ orgId, existingTitles, onClose, onImported }) {
+  const [oldCourses, setOldCourses] = useState([])
+  const [selected, setSelected] = useState(new Set())
+  const [loading, setLoading] = useState(true)
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    supabase.from('training_courses')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setOldCourses(data || [])
+        const newOnes = new Set((data || []).filter(c => !existingTitles.has(c.title)).map(c => c.id))
+        setSelected(newOnes)
+      })
+      .finally(() => setLoading(false))
+  }, [orgId])
+
+  const mapStatus = (s) => s === '開課中' ? '發布' : s === '已結束' ? '封存' : '草稿'
+
+  const handleImport = async () => {
+    if (!selected.size) return
+    setImporting(true)
+    const toImport = oldCourses.filter(c => selected.has(c.id)).map(c => ({
+      title: c.title,
+      description: c.description || null,
+      category: c.category || '一般',
+      estimated_hours: Number(c.duration_hours) || 1,
+      difficulty: '初級',
+      passing_score: 80,
+      is_required: false,
+      status: mapStatus(c.status),
+      organization_id: orgId,
+    }))
+
+    const { data, error } = await supabase.from('lms_courses').insert(toImport).select()
+    setImporting(false)
+    if (error) { toast.error(`匯入失敗：${error.message}`); return }
+    setResult(data)
+    toast.success(`已匯入 ${data.length} 門課程`)
+    onImported(data)
+  }
+
+  const toggle = (id) => setSelected(prev => {
+    const s = new Set(prev)
+    s.has(id) ? s.delete(id) : s.add(id)
+    return s
+  })
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="card" style={{ width: 580, maxHeight: '78vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border-primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, color: 'var(--text-primary)' }}>匯入舊訓練課程</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+              從舊系統 training_courses 匯入至 LMS，勾選要匯入的課程
+            </p>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }}><X size={18} /></button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 22px' }}>
+          {loading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
+          ) : oldCourses.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <BookOpen size={36} style={{ marginBottom: 8, opacity: 0.3 }} />
+              <p>舊系統無訓練課程資料</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                <span>共 {oldCourses.length} 筆，已選 {selected.size} 筆</span>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }}
+                    onClick={() => setSelected(new Set(oldCourses.map(c => c.id)))}>全選</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }}
+                    onClick={() => setSelected(new Set())}>全取消</button>
+                </div>
+              </div>
+              {oldCourses.map(c => {
+                const alreadyExists = existingTitles.has(c.title)
+                return (
+                  <div key={c.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                    borderRadius: 8, marginBottom: 6,
+                    background: alreadyExists ? 'var(--bg-tertiary)' : selected.has(c.id) ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+                    opacity: alreadyExists ? 0.55 : 1,
+                  }}>
+                    <input type="checkbox" checked={selected.has(c.id)} disabled={alreadyExists}
+                      onChange={() => toggle(c.id)}
+                      style={{ accentColor: 'var(--accent-cyan)', cursor: alreadyExists ? 'not-allowed' : 'pointer' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.title}
+                        {alreadyExists && (
+                          <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>（已存在）</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {c.category} · {c.duration_hours}h · {mapStatus(c.status)}
+                        {c.instructor && ` · 講師：${c.instructor}`}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, flexShrink: 0,
+                      color: mapStatus(c.status) === '發布' ? 'var(--accent-green)' : 'var(--text-muted)',
+                      background: mapStatus(c.status) === '發布' ? 'var(--accent-green-dim)' : 'var(--bg-tertiary)' }}>
+                      {mapStatus(c.status)}
+                    </span>
+                  </div>
+                )
+              })}
+            </>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-primary)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            匯入後需至 CourseBuilder 補充章節與單元內容
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={onClose}>取消</button>
+            <button className="btn btn-primary" onClick={handleImport}
+              disabled={!selected.size || importing || loading}>
+              {importing ? '匯入中...' : `匯入 ${selected.size} 門課程`}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

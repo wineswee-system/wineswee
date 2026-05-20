@@ -44,16 +44,16 @@ export function AuthProvider({ children }) {
         setOrganization(org || null)
       }
 
-      // Load role + permissions
+      // Load role + effective permissions (role baseline + individual grant/revoke overrides)
       if (emp.role_id) {
         const { data: roleData } = await supabase
           .from('roles').select('*').eq('id', emp.role_id).maybeSingle()
         setRole(roleData || null)
-
-        const { data: perms } = await supabase
-          .from('role_permissions').select('permissions(code)').eq('role_id', emp.role_id)
-        setPermissions((perms || []).map(p => p.permissions?.code).filter(Boolean))
       }
+      // 用 effective_permissions RPC 抓含個人 override 的最終清單
+      const { data: perms } = await supabase
+        .rpc('get_employee_effective_permissions', { p_emp_id: emp.id })
+      setPermissions((perms || []).map(p => p.code).filter(Boolean))
     } catch (err) {
       console.error('Failed to load employee profile:', err)
       setProfile(null)

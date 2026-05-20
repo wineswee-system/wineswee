@@ -46,8 +46,9 @@ const FEATURES = [
   { module: '排班管理', label: '排班演算法',      view: null, edit: 'schedule.algo' },
   { module: '排班管理', label: '排班規則 / 班別', view: null, edit: 'schedule.rule_edit' },
   // HR 表單
-  { module: 'HR 表單', label: '審核 HR 表單', view: 'hr_form.view', edit: 'hr_form.approve' },
-  { module: 'HR 表單', label: 'HR 表單範本',  view: null,           edit: 'hr_form.template_edit' },
+  { module: 'HR 表單', label: '審核 HR 表單',     view: 'hr_form.view', edit: 'hr_form.approve' },
+  { module: 'HR 表單', label: 'HR 表單範本',      view: null,           edit: 'hr_form.template_edit' },
+  { module: 'HR 表單', label: '刪除自訂表單申請', view: null,           edit: 'hr_form.delete_all' },
   // 薪酬與福利
   { module: '薪酬與福利', label: '部門薪資',   view: 'salary.view_dept',     edit: null },
   { module: '薪酬與福利', label: '全公司薪資', view: 'salary.view_all',      edit: null },

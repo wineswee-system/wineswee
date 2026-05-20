@@ -28,8 +28,9 @@ const STATUS_BADGE = {
 }
 
 export default function FormSubmissions() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove: canApproveByRpc } = usePendingApprovals()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -196,6 +197,14 @@ export default function FormSubmissions() {
   const handleCancel = async (sub) => {
     if (!(await confirm({ message: '確定取消此申請？' }))) return
     await supabase.from('form_submissions').update({ status: '已取消' }).eq('id', sub.id)
+    load()
+  }
+
+  const handleDelete = async (sub) => {
+    if (!(await confirm({ message: `確定永久刪除「${sub.template?.name || '此申請'}」？此操作無法復原。` }))) return
+    const { error } = await supabase.from('form_submissions').delete().eq('id', sub.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
     load()
   }
 
@@ -485,6 +494,11 @@ export default function FormSubmissions() {
                         )}
                         {canCancel && (
                           <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(s)} busyLabel="處理中…">取消</AsyncButton>
+                        )}
+                        {canDeleteAll && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(s)} title="永久刪除此申請">
+                            <X size={11} /> 刪除
+                          </button>
                         )}
                       </div>
                     </td>

@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { Award, Download, Calendar } from 'lucide-react'
 
 export default function CertificateList() {
+  const { profile } = useAuth()
   const [certificates, setCertificates] = useState([])
   const [courseMap, setCourseMap] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('lms_certificates').select('*').order('issued_at', { ascending: false })
+    if (!profile?.id) return
+    supabase.from('lms_certificates').select('*').eq('employee_id', profile.id).order('issued_at', { ascending: false })
       .then(async ({ data: certs }) => {
         if (!certs?.length) { setLoading(false); return }
         setCertificates(certs)

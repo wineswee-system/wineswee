@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { BookOpen, Award, Clock, TrendingUp, ChevronRight } from 'lucide-react'
 
 export default function ProgressDashboard() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [enrollments, setEnrollments] = useState([])
   const [courseMap, setCourseMap] = useState({})
   const [progressMap, setProgressMap] = useState({})
@@ -13,7 +15,8 @@ export default function ProgressDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('lms_enrollments').select('*').order('enrolled_at', { ascending: false })
+    if (!profile?.id) return
+    supabase.from('lms_enrollments').select('*').eq('employee_id', profile.id).order('enrolled_at', { ascending: false })
       .then(async ({ data: enrs }) => {
         if (!enrs?.length) { setLoading(false); return }
         setEnrollments(enrs)

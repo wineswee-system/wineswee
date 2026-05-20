@@ -5,11 +5,12 @@ import { supabase } from '../../supabase.js'
  * Subscribes to cross-module events that affect learning records and HR development plans.
  */
 export function registerLMSHandlers(bus) {
-  // ── Course completed → update HR development plan if linked ──
-  bus.subscribe('lms.course.completed', async function onCourseCompletedUpdateDevPlan(event) {
-    const { employee_id, course_title, passed } = event.payload
+  // ── Course completed → issue certificate + update dev plan ──
+  bus.subscribe('lms.course.completed', async function onCourseCompleted(event) {
+    const { employee_id, enrollment_id, course_id, course_title, passed } = event.payload
     if (!passed) return
 
+    // Update HR development plan if linked
     await supabase
       .from('employee_development_plans')
       .update({ status: '已完成', completed_date: new Date().toISOString().slice(0, 10) })
@@ -19,6 +20,64 @@ export function registerLMSHandlers(bus) {
       .then(({ error }) => {
         if (error) console.warn('[LMS] Dev plan update failed:', error.message)
       })
+
+    // Auto-issue certificate
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const certNum = `CERT-${dateStr}-${course_id}-${employee_id}`
+
+    // Fetch best quiz score from progress
+    let score = null
+    if (enrollment_id) {
+      const { data: progRows } = await supabase
+        .from('lms_progress')
+        .select('score')
+        .eq('enrollment_id', enrollment_id)
+        .not('score', 'is', null)
+      if (progRows?.length) {
+        score = Math.round(progRows.reduce((s, r) => s + r.score, 0) / progRows.length)
+      }
+    }
+
+    // Get org for RLS
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('organization_id, name')
+      .eq('id', employee_id)
+      .single()
+
+    const { data: cert, error: certErr } = await supabase
+      .from('lms_certificates')
+      .insert({
+        enrollment_id: enrollment_id ? parseInt(enrollment_id) : null,
+        course_id: parseInt(course_id),
+        employee_id: parseInt(employee_id),
+        certificate_number: certNum,
+        score,
+        issued_at: new Date().toISOString(),
+        organization_id: emp?.organization_id,
+      })
+      .select()
+      .single()
+
+    if (certErr) {
+      if (!certErr.message.includes('unique')) {
+        console.warn('[LMS] Certificate issuance failed:', certErr.message)
+      }
+      return
+    }
+
+    await bus.publish('lms.certificate.issued', {
+      certificate_id: String(cert.id),
+      certificate_number: certNum,
+      course_id: String(course_id),
+      course_title,
+      employee_id: String(employee_id),
+      employee_name: emp?.name || '',
+      score,
+    }, {
+      causation_id: event.id,
+      correlation_id: event.metadata?.correlation_id,
+    })
   })
 
   // ── Certificate issued → notify employee ──

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Check, X, Printer, Settings, Paperclip } from 'lucide-react'
+import { Plus, Check, X, Printer, Settings, Paperclip, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -39,6 +39,7 @@ export default function PunchCorrection() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
+  const [search, setSearch] = useState('')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
   const [editingId, setEditingId] = useState(null)
   const [errors, setErrors] = useState({})
@@ -296,9 +297,10 @@ export default function PunchCorrection() {
   if (loading) return <LoadingSpinner />
 
   const filtered = corrections.filter(c => {
-    if (tab === 'pending') return c.status === '待審核'
-    if (tab === 'approved') return c.status === '已核准'
-    if (tab === 'rejected') return c.status === '已駁回'
+    if (tab === 'pending' && c.status !== '待審核') return false
+    if (tab === 'approved' && c.status !== '已核准') return false
+    if (tab === 'rejected' && c.status !== '已駁回') return false
+    if (search.trim() && !String(c.id).includes(search.trim())) return false
     return true
   })
 
@@ -344,17 +346,25 @@ export default function PunchCorrection() {
       </div>
 
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><X size={12} /></button>}
+          </div>
+        </div>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>員工</th><th>日期</th><th>類型</th><th>補登時間</th><th>原因</th><th>狀態</th><th>操作</th></tr>
+              <tr><th style={{ width: 55 }}>單號</th><th>員工</th><th>日期</th><th>類型</th><th>補登時間</th><th>原因</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
               {filtered.map(c => (
                 <tr key={c.id} onClick={() => openDetail(c)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                   onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{c.id}</td>
                   <td style={{ fontWeight: 600 }}>{c.employee}</td>
                   <td>{c.date}</td>
                   <td><span className="badge badge-cyan">{normalizeType(c.type) === 'clock_in' ? '上班' : '下班'}</span></td>

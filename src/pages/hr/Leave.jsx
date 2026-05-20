@@ -425,7 +425,7 @@ export default function Leave() {
 
   const filtered = useMemo(() => leaves.filter(l =>
     (deptFilter === '' || getEmpDept(l.employee) === deptFilter) &&
-    (search === '' || l.employee.includes(search))
+    (search === '' || l.employee.includes(search) || String(l.id).includes(search))
   ), [leaves, deptFilter, search, getEmpDept])
 
   const { virtualItems, containerRef, containerStyle } = useVirtualList({ items: filtered, itemHeight: 52, overscan: 8 })
@@ -505,8 +505,8 @@ export default function Leave() {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無假單</div>
           )}
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '假別', '期間', '天數/時數', '事由', '附件', '狀態', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['單號', '員工', '部門', '假別', '期間', '天數/時數', '事由', '附件', '狀態', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -517,7 +517,8 @@ export default function Leave() {
                 <VirtualRow key={l.id}
                   onClick={() => openDetail(l)}
                   title="點擊查看簽核明細"
-                  style={{ ...style, display: 'grid', gridTemplateColumns: '110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                  style={{ ...style, display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                  <div style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{l.id}</div>
                   <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
                   <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{l.type}</span></div>

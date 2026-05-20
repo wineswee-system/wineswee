@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { RefreshCcw } from 'lucide-react'
+import { RefreshCcw, Search, X as XIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -21,6 +21,7 @@ export default function ShiftSwaps() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState(null)
 
   const load = async () => {
@@ -107,6 +108,7 @@ export default function ShiftSwaps() {
 
   if (loading) return <LoadingSpinner />
 
+  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
   const peerCount = list.filter(r => r.status === '待對方同意' && r.target_id === profile?.id).length
   const managerCount = list.filter(r => r.status === '待主管核准' && r.requester_id !== profile?.id && r.target_id !== profile?.id).length
 
@@ -139,10 +141,18 @@ export default function ShiftSwaps() {
       </div>
 
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><XIcon size={12} /></button>}
+          </div>
+        </div>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 55 }}>單號</th>
                 <th>申請人</th>
                 <th>對方</th>
                 <th>換班日期</th>
@@ -152,13 +162,14 @@ export default function ShiftSwaps() {
               </tr>
             </thead>
             <tbody>
-              {list.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無換班申請</td></tr>
+              {displayList.length === 0 && (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無換班申請</td></tr>
               )}
-              {list.map(r => {
+              {displayList.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
                 return (
                   <tr key={r.id} onClick={() => setDetailRow(r)} style={{ cursor: 'pointer' }} title="點擊查看明細">
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{r.id}</td>
                     <td><b>{r.requester_emp?.name || r.requester || `#${r.requester_id}`}</b></td>
                     <td>{r.target_emp?.name || r.target || `#${r.target_id}`}</td>
                     <td>{r.swap_date || '—'}</td>

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil } from 'lucide-react'
+import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil, Search, X as XIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -36,6 +36,7 @@ export default function TransferRequest() {
   const navigate = useNavigate()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
+  const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
@@ -302,6 +303,7 @@ export default function TransferRequest() {
 
   // 改走 web_list_my_pending_approval_ids RPC（chain step 動態解人 + 自己不能簽自己）
   const canIApprove = (req) => canApprove('personnel_transfer_requests', req.id)
+  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
 
   return (
     <div className="fade-in">
@@ -332,10 +334,18 @@ export default function TransferRequest() {
       </div>
 
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><XIcon size={12} /></button>}
+          </div>
+        </div>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 55 }}>單號</th>
                 <th>員工</th>
                 <th>類型</th>
                 <th>異動內容</th>
@@ -347,10 +357,10 @@ export default function TransferRequest() {
               </tr>
             </thead>
             <tbody>
-              {list.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無異動申請</td></tr>
+              {displayList.length === 0 && (
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無異動申請</td></tr>
               )}
-              {list.map(r => {
+              {displayList.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
                 const steps = chainSteps[r.approval_chain_id] || []
                 const myTurn = canIApprove(r)
@@ -360,6 +370,7 @@ export default function TransferRequest() {
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                     onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
                     onMouseLeave={(ev) => ev.currentTarget.style.background = ''}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{r.id}</td>
                     <td><b>{r.employee?.name}</b>{r.employee?.name_en ? ` ${r.employee.name_en}` : ''}</td>
                     <td><span style={{ padding: '2px 6px', fontSize: 11, fontWeight: 600, borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>{r.transfer_type}</span></td>
                     <td style={{ fontSize: 12 }}>

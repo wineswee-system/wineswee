@@ -14,6 +14,7 @@ import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { notifyInterviewScheduled } from '../../lib/lineNotify'
 import { printHireApprovalSignOff } from '../../lib/signOffAdapters'
 import { printOfferLetter } from '../../lib/offerLetterPrinter'
 
@@ -116,6 +117,14 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
       onRefreshInterviews()
       setShowIntForm(false)
       setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
+      if (intForm.interviewer_id) {
+        notifyInterviewScheduled(Number(intForm.interviewer_id), {
+          candidateName: c.name,
+          round: intForm.round,
+          scheduledAt: intForm.scheduled_at,
+          location: intForm.location,
+        }).catch(() => {})
+      }
     }
   }
 
@@ -533,6 +542,22 @@ export default function Recruitment() {
     }
   }
 
+  // ── Export ──
+  const exportJobsCsv = () => {
+    const headers = ['職位名稱', '部門', '工作地點', '類型', '需求人數', '刊登日', '狀態']
+    const rows = jobs.filter(j => deptFilter === '' || j.dept === deptFilter).map(j => [
+      j.title, j.dept || '', j.location || '', j.type || '全職',
+      j.headcount || 1, j.posted || '', j.status || '',
+    ])
+    const bom = '﻿'
+    const escape = c => { const s = String(c ?? ''); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s }
+    const csv = [headers.join(','), ...rows.map(r => r.map(escape).join(','))].join('\r\n')
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `職缺清單_${new Date().toISOString().slice(0, 10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Template handlers ──
   const handleSaveTpl = async (tplData) => {
     if (editingTpl && editingTpl !== 'new') {
@@ -652,9 +677,15 @@ export default function Recruitment() {
             <p>職缺管理、候選人追蹤與錄取流程</p>
           </div>
           {tab === 'jobs' && (
-            <button className="btn btn-primary" onClick={() => setShowJobModal(true)}>
-              <Plus size={14} /> 新增職缺
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={exportJobsCsv}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                ↓ 匯出 CSV（104）
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowJobModal(true)}>
+                <Plus size={14} /> 新增職缺
+              </button>
+            </div>
           )}
           {tab === 'candidates' && (
             <button className="btn btn-primary" onClick={() => setShowCandModal(true)}>

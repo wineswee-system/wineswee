@@ -90,6 +90,30 @@ export default function DataImportExport() {
     }
   }
 
+  const exportJobs = async () => {
+    setLoad('jobs', true)
+    try {
+      const { data, error } = await supabase
+        .from('recruitment_jobs')
+        .select('title, dept, location, type, headcount, posted, status, description')
+        .eq('organization_id', orgId)
+        .eq('status', '招募中')
+        .order('posted', { ascending: false })
+      if (error) throw error
+      downloadCsv(`職缺清單_${new Date().toISOString().slice(0,10)}.csv`,
+        ['職位名稱','部門','工作地點','類型','需求人數','刊登日','狀態','職缺說明'],
+        (data || []).map(r => [
+          r.title, r.dept, r.location, r.type, r.headcount || 1, r.posted, r.status, r.description || '',
+        ])
+      )
+      toast.success('職缺清單已下載，可直接上傳至 104')
+    } catch (e) {
+      toast.error('匯出失敗：' + e.message)
+    } finally {
+      setLoad('jobs', false)
+    }
+  }
+
   const exportInventory = async () => {
     setLoad('inventory', true)
     try {
@@ -187,6 +211,12 @@ export default function DataImportExport() {
                 {loading.salary ? '匯出中…' : '下載 CSV'}
               </button>
             </div>
+          </ExportCard>
+
+          <ExportCard icon="💼" title="招募中職缺" desc="匯出職缺清單 CSV，可上傳至 104 等平台">
+            <button className="btn btn-primary" onClick={exportJobs} disabled={loading.jobs}>
+              {loading.jobs ? '匯出中…' : '下載 CSV'}
+            </button>
           </ExportCard>
 
           <ExportCard icon="📦" title="庫存報表" desc="匯出所有品項庫存量與庫存總值">

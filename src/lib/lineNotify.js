@@ -593,6 +593,56 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
 }
 
 /**
+ * 面試通知 — 推給被安排為面試官的員工
+ * @param {number} interviewerEmployeeId
+ * @param {{ candidateName, round, scheduledAt, location }} info
+ */
+export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
+  if (!interviewerEmployeeId) return { ok: false, reason: 'no_interviewer_id' }
+  const account = await resolveLineAccount(interviewerEmployeeId)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+
+  const { candidateName, round, scheduledAt, location } = info
+  const fmtDt = (iso) => iso
+    ? new Date(iso).toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', weekday: 'short',
+      })
+    : '—'
+
+  const bodyContents = [
+    { type: 'text', text: `候選人：${candidateName || '—'}`, weight: 'bold', size: 'sm', wrap: true },
+    { type: 'text', text: `輪次：${round || '—'}`, size: 'sm', color: LC.soft, margin: 'sm' },
+    { type: 'text', text: `時間：${fmtDt(scheduledAt)}`, size: 'sm', color: LC.dark, margin: 'sm' },
+  ]
+  if (location) {
+    bodyContents.push({ type: 'text', text: `地點：${location}`, size: 'sm', color: LC.dark, margin: 'xs' })
+  }
+  bodyContents.push({
+    type: 'text', text: '您已被安排為此場面試的面試官，請準時出席。',
+    size: 'xs', color: LC.muted, wrap: true, margin: 'md',
+  })
+
+  const messages = [{
+    type: 'flex',
+    altText: `📅 面試通知：${candidateName} ${round}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📅 面試通知', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
+        contents: bodyContents,
+      },
+    },
+  }]
+
+  return sendLinePush(account.lineUserId, messages)
+}
+
+/**
  * Get all LINE accounts for an employee.
  */
 export async function getEmployeeLineAccounts(employeeNameOrId) {

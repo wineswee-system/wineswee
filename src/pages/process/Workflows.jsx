@@ -440,6 +440,23 @@ export default function Workflows() {
     toast.success(`已複製「${origTask.title}」為流程第 ${maxOrder + 1} 步。`)
   }
 
+  const handleStepReorder = async (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return
+    const fromTask = tasks.find(t => t.id === fromId)
+    if (!fromTask) return
+    const instId = fromTask.workflow_instance_id
+    const instTasks = getInstanceTasks(instId).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    const fromIdx = instTasks.findIndex(t => t.id === fromId)
+    const toIdx = instTasks.findIndex(t => t.id === toId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const reordered = [...instTasks]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    const updates = reordered.map((t, i) => ({ id: t.id, step_order: i + 1 }))
+    setAllTasks(prev => prev.map(t => { const u = updates.find(u => u.id === t.id); return u ? { ...t, step_order: u.step_order } : t }))
+    await Promise.all(updates.map(u => supabase.from('tasks').update({ step_order: u.step_order }).eq('id', u.id)))
+  }
+
   const handleAddTask = async () => {
     if (!taskForm.title) { toast.warning('請填寫任務名稱'); return }
     if (!selectedInstance) { toast.error('找不到流程實例，請重新整理後再試'); return }
@@ -1090,6 +1107,7 @@ export default function Workflows() {
         onStepUpdate={d => { setAllTasks(prev => prev.map(t => t.id === d.id ? d : t)); setSelectedStep(d) }}
         onStepDelete={id => { setAllTasks(prev => prev.filter(t => t.id !== id)); setSelectedStep(null) }}
         onStepDuplicate={handleDuplicateTask}
+        onStepReorder={handleStepReorder}
         onArchive={handleArchiveInstance}
         onDelete={handleDeleteInstance}
       />

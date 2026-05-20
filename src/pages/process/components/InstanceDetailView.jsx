@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
-  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -38,6 +38,7 @@ export default function InstanceDetailView({
   onStepUpdate, onStepDelete, onStepDuplicate,
   onArchive, onDelete,
   onChainApprove,
+  onStepReorder,
 }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
   const [menuOpen, setMenuOpen] = useState(false)
@@ -45,6 +46,8 @@ export default function InstanceDetailView({
   const [chainRejectOpen, setChainRejectOpen] = useState(false)
   const [chainBusy, setChainBusy] = useState(false)
   const [addTaskErrors, setAddTaskErrors] = useState({})
+  const [dragStepId, setDragStepId] = useState(null)
+  const [dragOverStepId, setDragOverStepId] = useState(null)
 
   const handleAddTask = () => {
     const errs = {}
@@ -285,9 +288,22 @@ export default function InstanceDetailView({
               {instSteps.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>尚無任務</td></tr>}
               {instSteps.map(step => {
                 const sc = STATUS_CONFIG[step.status] || FALLBACK_STATUS
+                const isDragTarget = dragOverStepId === step.id && dragStepId !== step.id
                 return (
-                  <tr key={step.id} style={{ borderLeft: `3px solid ${sc.color}`, cursor: 'pointer' }} onClick={() => setSelectedStep(step)}>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)' }}>{step.step_order}</td>
+                  <tr key={step.id}
+                    draggable
+                    onDragStart={() => setDragStepId(step.id)}
+                    onDragEnd={() => { setDragStepId(null); setDragOverStepId(null) }}
+                    onDragOver={e => { e.preventDefault(); setDragOverStepId(step.id) }}
+                    onDrop={e => { e.preventDefault(); onStepReorder?.(dragStepId, step.id); setDragStepId(null); setDragOverStepId(null) }}
+                    style={{ borderLeft: `3px solid ${sc.color}`, cursor: 'pointer', borderTop: isDragTarget ? '2px solid var(--accent-cyan)' : undefined }}
+                    onClick={() => setSelectedStep(step)}>
+                    <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                        <GripVertical size={12} style={{ opacity: 0.35, cursor: 'grab', flexShrink: 0 }} onClick={e => e.stopPropagation()} />
+                        <span style={{ fontWeight: 700, fontSize: 12 }}>{step.step_order}</span>
+                      </div>
+                    </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {step.task_code && (

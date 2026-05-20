@@ -98,9 +98,12 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [loadProfile])
 
-  // 訂閱自己的 employee row：偵測到 force_logout_at 更新就自動登出
+  // 強制登出：Realtime + polling 雙保險
   useEffect(() => {
     if (!empId) return
+    const loginTime = Date.now()
+
+    // Realtime（需 employees 表在 supabase_realtime publication）
     const channel = supabase
       .channel(`force-logout-${empId}`)
       .on('postgres_changes', {
@@ -114,7 +117,24 @@ export function AuthProvider({ children }) {
         }
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    // Polling 備援：每 8 秒查一次，如果 force_logout_at 比本次登入晚就登出
+    const timer = setInterval(async () => {
+      const { data } = await supabase
+        .from('employees')
+        .select('force_logout_at')
+        .eq('id', empId)
+        .maybeSingle()
+      if (data?.force_logout_at) {
+        const flagTime = new Date(data.force_logout_at).getTime()
+        if (flagTime > loginTime) supabase.auth.signOut()
+      }
+    }, 8000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(timer)
+    }
   }, [empId])
 
   const signIn = (email, password) =>

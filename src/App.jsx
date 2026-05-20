@@ -38,8 +38,8 @@ const LMSModule = lazy(() => import('./modules/LMSModule'))
 
 // ── Route-level access control — 5 roles ──
 const ROLE_ROUTES = {
-  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/forms'],
-  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/hr/forms', '/hr/insurance-grade', '/hr/labor-law-rates', '/process', '/org'],
+  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/forms', '/lms'],
+  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/hr/forms', '/hr/insurance-grade', '/hr/labor-law-rates', '/process', '/org', '/lms'],
   manager:      ['/', '/hr', '/org', '/process', '/lms'],
   admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics', '/lms'],
   super_admin:  null, // all

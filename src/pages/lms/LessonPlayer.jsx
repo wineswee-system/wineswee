@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { ArrowLeft, ArrowRight, CheckCircle, BookOpen, Video, HelpCircle, Clock } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
@@ -9,6 +10,7 @@ import { getEventBus } from '../../lib/events/EventBus'
 export default function LessonPlayer() {
   const { courseId, lessonId } = useParams()
   const navigate = useNavigate()
+  const { profile } = useAuth()
 
   const [course, setCourse] = useState(null)
   const [sections, setSections] = useState([])
@@ -24,7 +26,7 @@ export default function LessonPlayer() {
     Promise.all([
       supabase.from('lms_courses').select('*').eq('id', courseId).single(),
       supabase.from('lms_sections').select('*, lms_lessons(*)').eq('course_id', courseId).order('sort_order'),
-      supabase.from('lms_enrollments').select('*').eq('course_id', courseId).maybeSingle(),
+      supabase.from('lms_enrollments').select('*').eq('course_id', courseId).eq('employee_id', profile?.id).maybeSingle(),
     ]).then(([c, s, e]) => {
       setCourse(c.data)
       setEnrollment(e.data)

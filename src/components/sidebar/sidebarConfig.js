@@ -12,7 +12,7 @@ import {
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator,
   UserCheck, Shield, Send, Search, AlertOctagon, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
-  FolderTree, UserMinus, PauseCircle, RefreshCcw,
+  FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -266,7 +266,10 @@ export const groupNav = {
       icon: UserSearch,
       children: [
         { icon: UserSearch, label: '招募管理', path: '/hr/recruitment' },
-        { icon: BookOpen, label: '教育訓練', path: '/hr/training' },
+        { icon: GraduationCap, label: '課程管理', path: '/lms/admin' },
+        { icon: PlayCircle, label: '我的學習', path: '/lms/courses' },
+        { icon: TrendingUp, label: '學習進度', path: '/lms/progress' },
+        { icon: Award, label: '結業證書', path: '/lms/certificates' },
         { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
         { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
       ]

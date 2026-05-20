@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
@@ -17,6 +18,7 @@ const DEFAULT_COURSE = {
 export default function CourseBuilder() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const isEdit = Boolean(id)
 
   const [course, setCourse] = useState(DEFAULT_COURSE)
@@ -71,7 +73,7 @@ export default function CourseBuilder() {
     setSaving(true)
     try {
       let courseId = id
-      const courseData = { ...course, updated_at: new Date().toISOString() }
+      const courseData = { ...course, updated_at: new Date().toISOString(), organization_id: profile?.organization_id }
       delete courseData.id
 
       if (isEdit) {

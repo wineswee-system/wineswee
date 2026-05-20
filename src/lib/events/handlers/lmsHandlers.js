@@ -54,18 +54,32 @@ export function registerLMSHandlers(bus) {
     const { employee_id, employee_name } = event.payload
     if (!employee_id) return
 
+    // 事件 payload 不帶 org，從 DB 補取
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('organization_id')
+      .eq('id', employee_id)
+      .single()
+
+    const organization_id = emp?.organization_id
+    if (!organization_id) {
+      console.warn('[LMS] auto-enroll skipped: organization_id not found for employee', employee_id)
+      return
+    }
+
     const { data: requiredCourses } = await supabase
       .from('lms_courses')
       .select('id, title')
       .eq('is_required', true)
       .eq('status', '發布')
+      .eq('organization_id', organization_id)
 
     if (!requiredCourses?.length) return
 
     for (const course of requiredCourses) {
       const { data: enrollment, error } = await supabase
         .from('lms_enrollments')
-        .insert({ course_id: course.id, employee_id, enrolled_by: '系統自動' })
+        .insert({ course_id: course.id, employee_id, enrolled_by: '系統自動', organization_id })
         .select()
         .single()
 

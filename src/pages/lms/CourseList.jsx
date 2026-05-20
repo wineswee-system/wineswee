@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { BookOpen, Clock, Plus, Search } from 'lucide-react'
 
 const DIFFICULTY_COLOR = {
@@ -12,6 +13,7 @@ const DIFFICULTY_COLOR = {
 
 export default function CourseList() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [courses, setCourses] = useState([])
   const [enrollments, setEnrollments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -20,10 +22,10 @@ export default function CourseList() {
   const [categories, setCategories] = useState([])
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('lms_courses').select('*').eq('status', '發布').order('created_at', { ascending: false }),
-      supabase.from('lms_enrollments').select('course_id, status, completed_at'),
-    ]).then(([c, e]) => {
+    if (!profile?.organization_id) return
+    const courseQuery = supabase.from('lms_courses').select('*').eq('status', '發布').eq('organization_id', profile.organization_id).order('created_at', { ascending: false })
+    const enrollQuery = supabase.from('lms_enrollments').select('course_id, status, completed_at').eq('employee_id', profile.id)
+    Promise.all([courseQuery, enrollQuery]).then(([c, e]) => {
       const list = c.data || []
       setCourses(list)
       setEnrollments(e.data || [])

@@ -21,15 +21,40 @@ export default function CourseList() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [categories, setCategories] = useState([])
 
+  const [progressMap, setProgressMap] = useState({})   // courseId → { done, total }
+
   useEffect(() => {
     if (!profile?.organization_id) return
     const courseQuery = supabase.from('lms_courses').select('*').eq('status', '發布').eq('organization_id', profile.organization_id).order('created_at', { ascending: false })
-    const enrollQuery = supabase.from('lms_enrollments').select('course_id, status, completed_at').eq('employee_id', profile.id)
-    Promise.all([courseQuery, enrollQuery]).then(([c, e]) => {
+    const enrollQuery = supabase.from('lms_enrollments').select('id, course_id, status, completed_at').eq('employee_id', profile.id)
+    Promise.all([courseQuery, enrollQuery]).then(async ([c, e]) => {
       const list = c.data || []
+      const enrs = e.data || []
       setCourses(list)
-      setEnrollments(e.data || [])
+      setEnrollments(enrs)
       setCategories([...new Set(list.map(x => x.category).filter(Boolean))])
+
+      if (!list.length || !enrs.length) return
+      const courseIds = list.map(x => x.id)
+      const enrollmentIds = enrs.map(x => x.id)
+      const [lessonRes, progressRes] = await Promise.all([
+        supabase.from('lms_lessons').select('id, course_id').in('course_id', courseIds),
+        supabase.from('lms_progress').select('enrollment_id, lesson_id, completed').in('enrollment_id', enrollmentIds),
+      ])
+      const lessonCount = {}
+      ;(lessonRes.data || []).forEach(l => { lessonCount[l.course_id] = (lessonCount[l.course_id] || 0) + 1 })
+      const doneByEnrollment = {}
+      ;(progressRes.data || []).forEach(p => {
+        if (p.completed) doneByEnrollment[p.enrollment_id] = (doneByEnrollment[p.enrollment_id] || 0) + 1
+      })
+      const pm = {}
+      enrs.forEach(enr => {
+        pm[enr.course_id] = {
+          done: doneByEnrollment[enr.id] || 0,
+          total: lessonCount[enr.course_id] || 0,
+        }
+      })
+      setProgressMap(pm)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -73,6 +98,7 @@ export default function CourseList() {
               key={course.id}
               course={course}
               enrollment={enrollmentMap[course.id]}
+              progress={progressMap[course.id]}
               onClick={() => navigate(`/lms/course/${course.id}`)}
             />
           ))}
@@ -82,7 +108,7 @@ export default function CourseList() {
   )
 }
 
-function CourseCard({ course, enrollment, onClick }) {
+function CourseCard({ course, enrollment, progress, onClick }) {
   const diffColor = DIFFICULTY_COLOR[course.difficulty] || 'var(--accent-blue)'
   return (
     <div className="card" style={{ cursor: 'pointer', padding: 0, overflow: 'hidden', transition: 'transform 0.15s' }}
@@ -114,11 +140,16 @@ function CourseCard({ course, enrollment, onClick }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               <span>{enrollment.status}</span>
-              {enrollment.status === '已完成' && <span style={{ color: 'var(--accent-green)' }}>✓ 完成</span>}
+              {enrollment.status === '已完成'
+                ? <span style={{ color: 'var(--accent-green)' }}>✓ 完成</span>
+                : progress?.total > 0
+                  ? <span>{progress.done}/{progress.total} 單元</span>
+                  : null}
             </div>
             <div style={{ height: 4, background: 'var(--bg-tertiary)', borderRadius: 2 }}>
               <div style={{ height: '100%', borderRadius: 2,
-                width: enrollment.status === '已完成' ? '100%' : '40%',
+                width: enrollment.status === '已完成' ? '100%'
+                  : progress?.total > 0 ? `${Math.round((progress.done / progress.total) * 100)}%` : '0%',
                 background: enrollment.status === '已完成' ? 'var(--accent-green)' : 'var(--accent-cyan)' }} />
             </div>
           </div>

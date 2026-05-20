@@ -256,6 +256,34 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
           </button>
         )}
 
+        {/* Stage history timeline */}
+        {c.stage_history?.length > 0 && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-primary)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>階段歷程</div>
+            <div style={{ position: 'relative', paddingLeft: 16 }}>
+              <div style={{ position: 'absolute', left: 5, top: 4, bottom: 4, width: 1, background: 'var(--border-primary)' }} />
+              {c.stage_history.map((h, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start', position: 'relative' }}>
+                  <div style={{
+                    position: 'absolute', left: -12, top: 4,
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: STAGE_COLOR[h.stage] || 'var(--accent-cyan)',
+                    border: '2px solid var(--bg-card)',
+                  }} />
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: STAGE_COLOR[h.stage] || 'var(--text-primary)' }}>
+                      {h.stage}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
+                      {new Date(h.changed_at).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8, color: 'var(--accent-red)', fontSize: 12 }}
           onClick={() => onDelete(c.id)}>
           刪除候選人
@@ -372,6 +400,7 @@ export default function Recruitment() {
       job_id:          candForm.job_id  ? Number(candForm.job_id) : null,
       organization_id: orgId,
       created_by:      profile?.id      || null,
+      stage_history:   [{ stage: '投遞', changed_at: new Date().toISOString() }],
     })
     if (data) {
       setCandidates(prev => [...prev, data])
@@ -385,10 +414,12 @@ export default function Recruitment() {
   }
 
   const handleStageChange = async (id, stage) => {
-    const { data } = await updateCandidate(id, { stage })
+    const cand = candidates.find(c => c.id === id)
+    const stage_history = [...(cand?.stage_history || []), { stage, changed_at: new Date().toISOString() }]
+    const { data } = await updateCandidate(id, { stage, stage_history })
     if (data) {
-      setCandidates(prev => prev.map(c => c.id === id ? { ...c, stage } : c))
-      if (selectedCand?.id === id) setSelectedCand(s => ({ ...s, stage }))
+      setCandidates(prev => prev.map(c => c.id === id ? { ...c, stage, stage_history } : c))
+      if (selectedCand?.id === id) setSelectedCand(s => ({ ...s, stage, stage_history }))
     }
   }
 
@@ -444,12 +475,14 @@ export default function Recruitment() {
       created_by:      profile?.id || null,
     })
     if (ol) {
-      await updateCandidate(offerTarget.id, { hire_status: '待審', stage: '錄取決定' })
+      const offerCand = candidates.find(c => c.id === offerTarget.id)
+      const stage_history = [...(offerCand?.stage_history || []), { stage: '錄取決定', changed_at: new Date().toISOString() }]
+      await updateCandidate(offerTarget.id, { hire_status: '待審', stage: '錄取決定', stage_history })
       setCandidates(prev => prev.map(c =>
-        c.id === offerTarget.id ? { ...c, hire_status: '待審', stage: '錄取決定' } : c
+        c.id === offerTarget.id ? { ...c, hire_status: '待審', stage: '錄取決定', stage_history } : c
       ))
       if (selectedCand?.id === offerTarget.id)
-        setSelectedCand(s => ({ ...s, hire_status: '待審', stage: '錄取決定' }))
+        setSelectedCand(s => ({ ...s, hire_status: '待審', stage: '錄取決定', stage_history }))
       setOfferLetters(prev => [...prev, ol])
       setShowOfferModal(false)
       toast('錄取簽呈已建立，請至簽核中心審核')
@@ -480,8 +513,10 @@ export default function Recruitment() {
     const { data } = await updateOfferLetter(ol.id, { status: '已婉拒' })
     if (data) {
       setOfferLetters(prev => prev.map(x => x.id === ol.id ? data : x))
-      await updateCandidate(ol.candidate_id, { stage: '淘汰', hire_status: null })
-      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '淘汰', hire_status: null } : c))
+      const declineCand = candidates.find(c => c.id === ol.candidate_id)
+      const declineHist = [...(declineCand?.stage_history || []), { stage: '淘汰', changed_at: new Date().toISOString() }]
+      await updateCandidate(ol.candidate_id, { stage: '淘汰', hire_status: null, stage_history: declineHist })
+      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '淘汰', hire_status: null, stage_history: declineHist } : c))
     }
   }
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { CheckCircle, XCircle, ArrowRight, Trophy } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
@@ -9,6 +10,7 @@ import { getEventBus } from '../../lib/events/EventBus'
 export default function QuizEngine() {
   const { courseId, lessonId } = useParams()
   const navigate = useNavigate()
+  const { profile } = useAuth()
 
   const [lesson, setLesson] = useState(null)
   const [enrollment, setEnrollment] = useState(null)
@@ -22,7 +24,7 @@ export default function QuizEngine() {
   useEffect(() => {
     Promise.all([
       supabase.from('lms_lessons').select('*').eq('id', lessonId).single(),
-      supabase.from('lms_enrollments').select('*').eq('course_id', courseId).maybeSingle(),
+      supabase.from('lms_enrollments').select('*').eq('course_id', courseId).eq('employee_id', profile?.id).maybeSingle(),
       supabase.from('lms_courses').select('id, title, passing_score').eq('id', courseId).single(),
     ]).then(([l, e, c]) => {
       setLesson(l.data)

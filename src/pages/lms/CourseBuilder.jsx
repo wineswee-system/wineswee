@@ -268,10 +268,187 @@ function LessonEditor({ lesson, onChange, onRemove }) {
           onChange={e => onChange({ content: e.target.value })}
           placeholder={lesson.type === 'video' ? '貼上影片網址（YouTube / Vimeo）' : '輸入課程內容（支援 Markdown）'} />
       ) : (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 6 }}>
-          測驗題目儲存後可於學員端作答
+        <QuizEditor quizData={lesson.quiz_data} onChange={quiz_data => onChange({ quiz_data })} />
+      )}
+    </div>
+  )
+}
+
+// ── QuizEditor ──────────────────────────────────────────────────
+function QuizEditor({ quizData, onChange }) {
+  const questions = Array.isArray(quizData) ? quizData : []
+  const [showImport, setShowImport] = useState(false)
+
+  const addQuestion = () => onChange([...questions, { question: '', options: ['', ''], answer_index: 0, explanation: '' }])
+  const removeQuestion = (qi) => onChange(questions.filter((_, i) => i !== qi))
+  const updateQuestion = (qi, patch) => onChange(questions.map((q, i) => i !== qi ? q : { ...q, ...patch }))
+  const addOption = (qi) => updateQuestion(qi, { options: [...questions[qi].options, ''] })
+  const removeOption = (qi, oi) => {
+    const q = questions[qi]
+    const opts = q.options.filter((_, i) => i !== oi)
+    const ans = q.answer_index === oi ? 0 : q.answer_index > oi ? q.answer_index - 1 : q.answer_index
+    updateQuestion(qi, { options: opts, answer_index: Math.min(ans, opts.length - 1) })
+  }
+  const updateOption = (qi, oi, val) =>
+    updateQuestion(qi, { options: questions[qi].options.map((o, i) => i !== oi ? o : val) })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {questions.length} 題</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+            onClick={() => setShowImport(true)}>匯入</button>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={addQuestion}><Plus size={12} /> 新增題目</button>
+        </div>
+      </div>
+
+      {questions.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12,
+          background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+          尚未新增題目，點「新增題目」或「匯入」開始
         </div>
       )}
+
+      {questions.map((q, qi) => (
+        <div key={qi} style={{ border: '1px solid var(--border-primary)', borderRadius: 8, padding: 12, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 22 }}>Q{qi + 1}</span>
+            <input className="form-input" style={{ flex: 1 }} placeholder="輸入題目文字…"
+              value={q.question} onChange={e => updateQuestion(qi, { question: e.target.value })} />
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }}
+              onClick={() => removeQuestion(qi)}><Trash2 size={14} /></button>
+          </div>
+
+          <div style={{ paddingLeft: 28 }}>
+            {q.options.map((opt, oi) => (
+              <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <input type="radio" name={`q${qi}-answer`} checked={q.answer_index === oi}
+                  onChange={() => updateQuestion(qi, { answer_index: oi })}
+                  title="設為正確答案"
+                  style={{ cursor: 'pointer', accentColor: 'var(--accent-green)', flexShrink: 0 }} />
+                <input className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder={`選項 ${oi + 1}`}
+                  value={opt} onChange={e => updateOption(qi, oi, e.target.value)} />
+                {q.options.length > 2 && (
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
+                    onClick={() => removeOption(qi, oi)}><Trash2 size={12} /></button>
+                )}
+              </div>
+            ))}
+            {q.options.length < 6 && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px', marginBottom: 8 }}
+                onClick={() => addOption(qi)}>＋ 新增選項</button>
+            )}
+            <input className="form-input" style={{ fontSize: 12, marginTop: 4 }} placeholder="解析說明（選填，學員答題後顯示）"
+              value={q.explanation || ''} onChange={e => updateQuestion(qi, { explanation: e.target.value })} />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              ● 點左側圓圈設定正確答案
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {showImport && (
+        <QuizImportModal
+          onClose={() => setShowImport(false)}
+          onImport={(parsed) => { onChange([...questions, ...parsed]); setShowImport(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── QuizImportModal ──────────────────────────────────────────────
+function QuizImportModal({ onClose, onImport }) {
+  const [text, setText] = useState('')
+  const [preview, setPreview] = useState(null)
+  const [error, setError] = useState('')
+
+  const parse = () => {
+    try {
+      const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean)
+      if (!lines.length) { setError('請貼上題目內容'); return }
+      const dataLines = /題目|question/i.test(lines[0]) ? lines.slice(1) : lines
+      const parsed = dataLines.map((line, i) => {
+        const cols = line.includes('\t') ? line.split('\t') : line.split(',')
+        const t = cols.map(c => c.trim().replace(/^"|"$/g, ''))
+        if (t.length < 3) throw new Error(`第 ${i + 1} 行格式不符（至少需要：題目、選項A、選項B）`)
+        // 判斷最後第2欄是否為數字（答案編號）
+        const hasAnswer = /^\d+$/.test(t[t.length - 2])
+        let options, answer_index, explanation
+        if (hasAnswer) {
+          options = t.slice(1, -2).filter(Boolean)
+          answer_index = Math.max(0, parseInt(t[t.length - 2]) - 1)
+          explanation = t[t.length - 1] || ''
+        } else {
+          options = t.slice(1).filter(Boolean)
+          answer_index = 0
+          explanation = ''
+        }
+        if (!t[0]) throw new Error(`第 ${i + 1} 行題目不可空白`)
+        if (options.length < 2) throw new Error(`第 ${i + 1} 行選項不足 2 個`)
+        return { question: t[0], options, answer_index: Math.min(answer_index, options.length - 1), explanation }
+      })
+      setPreview(parsed); setError('')
+    } catch (e) { setError(e.message); setPreview(null) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="card" style={{ width: 660, maxHeight: '82vh', overflowY: 'auto', padding: 24 }}>
+        <h3 style={{ margin: '0 0 6px', color: 'var(--text-primary)' }}>匯入測驗題目</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, flex: 1 }}>
+            格式（逗號或 Tab 分隔）：<br />
+            <code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
+              題目, 選項A, 選項B, 選項C, 選項D, 正確答案(1起算), 解析說明
+            </code><br />
+            範例：收銀機如何開啟？, 按電源鍵, 插電就好, 叫主管開, 不需要開, 1, 按電源鍵後等待啟動<br />
+            ※ 正確答案欄與解析欄可省略（省略時預設選項A為正確答案）
+          </p>
+          <button className="btn btn-ghost" style={{ fontSize: 12, whiteSpace: 'nowrap', marginLeft: 12 }}
+            onClick={() => {
+              const csv = '題目,選項A,選項B,選項C,選項D,正確答案(1-4),解析說明\n' +
+                '收銀機如何開啟？,按電源鍵,插電就好,叫主管開,不需要開,1,按電源鍵後等待系統啟動約 30 秒\n' +
+                '服務守則中禁止的行為？,對客戶不禮貌,主動問候,協助找商品,微笑服務,1,請參閱服務守則第三條\n' +
+                '發現商品短缺應如何處理？,立即補貨,忽略,通知主管,詢問客戶,3,短缺需通報主管才可安排補貨'
+              const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = '測驗題目範本.csv'
+              a.click()
+              URL.revokeObjectURL(a.href)
+            }}>
+            ↓ 下載範本
+          </button>
+        </div>
+        <textarea className="form-input" rows={8} value={text} onChange={e => { setText(e.target.value); setPreview(null); setError('') }}
+          placeholder="貼上題目資料…" style={{ fontFamily: 'monospace', fontSize: 12 }} />
+
+        {error && <p style={{ color: 'var(--accent-red)', fontSize: 12, margin: '6px 0 0' }}>{error}</p>}
+
+        {preview && (
+          <div style={{ margin: '12px 0 0', padding: 12, background: 'var(--bg-tertiary)', borderRadius: 8, fontSize: 12 }}>
+            <div style={{ color: 'var(--accent-green)', fontWeight: 600, marginBottom: 8 }}>✓ 解析成功，共 {preview.length} 題</div>
+            {preview.map((q, i) => (
+              <div key={i} style={{ marginBottom: 4, color: 'var(--text-secondary)' }}>
+                Q{i + 1}. {q.question}
+                <span style={{ color: 'var(--accent-green)', marginLeft: 8 }}>正確：{q.options[q.answer_index]}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+          <button className="btn btn-secondary" onClick={onClose}>取消</button>
+          {!preview
+            ? <button className="btn btn-primary" onClick={parse}>解析預覽</button>
+            : <button className="btn btn-primary" onClick={() => onImport(preview)}>匯入 {preview.length} 題</button>
+          }
+        </div>
+      </div>
     </div>
   )
 }

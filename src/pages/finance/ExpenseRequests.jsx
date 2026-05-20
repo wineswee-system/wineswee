@@ -234,6 +234,12 @@ export default function ExpenseRequests() {
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
+
+    if (files.length === 0) {
+      const proceed = await confirm('尚未附上任何附件（訂購單、報價單等），確定要直接提交？')
+      if (!proceed) return
+    }
+
     setSaving(true)
     const emp = employees.find(e => e.name === form.employee)
     const acc = isExpense ? accounts.find(a => a.code === form.account_code) : null

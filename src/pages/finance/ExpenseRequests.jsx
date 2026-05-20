@@ -32,6 +32,12 @@ const STATUS_COLORS = {
 }
 
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
+const fmtCur = (n, cur) => {
+  if (n == null) return '-'
+  const sym = CURRENCY_SYMBOL[cur] || (cur ?? 'NT$')
+  return `${sym} ${Number(n).toLocaleString()}`
+}
 
 const emptyForm = {
   employee: '', account_code: '', title: '', description: '',
@@ -762,12 +768,22 @@ export default function ExpenseRequests() {
                       : <><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.account_code}</span> {r.account_name}</>}
                   </td>
                   <td style={{ fontWeight: 500 }}>{r.title}</td>
-                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{r.is_expense === false ? '—' : fmt(r.estimated_amount)}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-                    {r.is_expense === false ? '—' : (r.actual_amount != null ? fmt(r.actual_amount) : '-')}
+                    {r.is_expense === false ? '—' : (
+                      <span>
+                        {fmtCur(r.estimated_amount, r.currency)}
+                        {r.currency && r.currency !== 'TWD' && (
+                          <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4, padding: '1px 5px', borderRadius: 3,
+                            color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{r.currency}</span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {r.is_expense === false ? '—' : (r.actual_amount != null ? fmtCur(r.actual_amount, r.currency) : '-')}
                     {r.difference != null && r.difference !== 0 && (
                       <span style={{ fontSize: 11, color: r.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)', marginLeft: 4 }}>
-                        ({r.difference > 0 ? '+' : ''}{fmt(r.difference)})
+                        ({r.difference > 0 ? '+' : ''}{fmtCur(r.difference, r.currency)})
                       </span>
                     )}
                   </td>
@@ -923,9 +939,26 @@ export default function ExpenseRequests() {
           label: '金額',
           value: (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8 }}>
-              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估金額</div><div style={{ fontWeight: 700 }}>{fmt(showDetail.estimated_amount)}</div></div>
-              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmt(showDetail.actual_amount) : '—'}</div></div>
-              <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>差異</div><div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{showDetail.difference != null ? fmt(showDetail.difference) : '—'}</div></div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  預估金額
+                  {showDetail.currency && showDetail.currency !== 'TWD' && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{showDetail.currency}</span>
+                  )}
+                </div>
+                <div style={{ fontWeight: 700 }}>{fmtCur(showDetail.estimated_amount, showDetail.currency)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>實際金額</div>
+                <div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmtCur(showDetail.actual_amount, showDetail.currency) : '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>差異</div>
+                <div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  {showDetail.difference != null ? fmtCur(showDetail.difference, showDetail.currency) : '—'}
+                </div>
+              </div>
             </div>
           ),
         })

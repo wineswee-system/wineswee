@@ -29,6 +29,7 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
   const [selectedTask, setSelectedTask] = useState(null)
   const [search, setSearch] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
@@ -101,7 +102,11 @@ export default function Tasks() {
   }
 
   const handleSubmit = async () => {
-    if (!form.title) return
+    const errs = {}
+    if (!form.title) errs.title = '任務名稱為必填'
+    if (!form.due_date) errs.due_date = '截止日期為必填'
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return false }
+    setFormErrors({})
     const chainId = form.approval_mode === 'chain' && form.approval_chain_id ? Number(form.approval_chain_id) : null
     const { data } = await createTask({
       title: form.title,
@@ -446,9 +451,10 @@ export default function Tasks() {
       )}
 
       {showModal && (
-        <Modal title="新增任務" onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="任務名稱" required>
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title} onChange={e => set('title', e.target.value)} />
+        <Modal title="新增任務" onClose={() => { setShowModal(false); setFormErrors({}) }} onSubmit={handleSubmit}>
+          <Field label="任務名稱" required error={!!formErrors.title} errorMsg={formErrors.title}>
+            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title}
+              onChange={e => { set('title', e.target.value); if (formErrors.title) setFormErrors(f => ({ ...f, title: undefined })) }} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="負責人">
@@ -468,8 +474,9 @@ export default function Tasks() {
             <Field label="計畫開始">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
             </Field>
-            <Field label="截止日期">
-              <input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+            <Field label="截止日期" required error={!!formErrors.due_date} errorMsg={formErrors.due_date}>
+              <input className="form-input" type="date" style={{ width: '100%' }} value={form.due_date}
+                onChange={e => { set('due_date', e.target.value); if (formErrors.due_date) setFormErrors(f => ({ ...f, due_date: undefined })) }} />
             </Field>
             <Field label="優先度">
               <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>

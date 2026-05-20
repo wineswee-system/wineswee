@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Repeat, Calendar, Trash2, Activity as ActivityIcon, Copy } from 'lucide-react'
+import { X, Repeat, Calendar, Trash2, Activity as ActivityIcon, Copy, ShieldCheck } from 'lucide-react'
 import {
   updateTask, deleteTask,
   getTaskComments, createTaskComment,
 } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import { processCommentMentions, notifyWatchers } from '../../lib/mentions'
 import { describeRule, materializeNextInstance } from '../../lib/recurrence'
 import TaskWatchers from './TaskWatchers'
@@ -38,6 +39,9 @@ export default function TaskModal({ task, employees = [], sections = [], approva
   const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('detail')
   const [activityRefresh, setActivityRefresh] = useState(0)
+  const [approvalMode, setApprovalMode] = useState('none') // 'none' | 'people' | 'chain'
+  const [confirmApprovers, setConfirmApprovers] = useState([]) // [{id, approver}]
+  const [confirmMode, setConfirmMode] = useState('parallel')
 
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -78,6 +82,22 @@ export default function TaskModal({ task, employees = [], sections = [], approva
       approval_chain_id: task.approval_chain_id ? String(task.approval_chain_id) : '',
     })
     getTaskComments(task.id).then(({ data }) => setComments(data || []))
+    setConfirmMode(task.confirmation_mode || 'parallel')
+    if (task.approval_chain_id) {
+      setApprovalMode('chain')
+      setConfirmApprovers([])
+    } else {
+      supabase.from('task_confirmations').select('id, approver, status')
+        .eq('task_id', task.id).order('step_order').then(({ data }) => {
+          if (data && data.length > 0) {
+            setApprovalMode('people')
+            setConfirmApprovers(data)
+          } else {
+            setApprovalMode('none')
+            setConfirmApprovers([])
+          }
+        })
+    }
   }, [task?.id, employees])
 
   if (!task) return null
@@ -239,12 +259,16 @@ export default function TaskModal({ task, employees = [], sections = [], approva
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>截止日</label>
+                  <label style={{ fontSize: 11, color: !form.due_date ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    截止日 <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>*</span>
+                  </label>
                   <input
-                    type="date" className="form-input" style={{ width: '100%', fontSize: 12 }}
+                    type="date" className="form-input"
+                    style={{ width: '100%', fontSize: 12, borderColor: !form.due_date ? 'var(--accent-red)' : undefined }}
                     value={form.due_date}
                     onChange={e => { set('due_date', e.target.value); saveField({ due_date: e.target.value || null }) }}
                   />
+                  {!form.due_date && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>⚠ 截止日為必填</div>}
                 </div>
                 {sections.length > 0 && (
                   <div style={{ gridColumn: 'span 2' }}>
@@ -261,25 +285,118 @@ export default function TaskModal({ task, employees = [], sections = [], approva
                 )}
               </div>
 
-              {/* Approval chain */}
-              {approvalChains.length > 0 && (
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>簽核方式</label>
-                  <select
-                    className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={form.approval_chain_id}
-                    onChange={e => {
-                      set('approval_chain_id', e.target.value)
-                      saveField({ approval_chain_id: e.target.value ? Number(e.target.value) : null })
-                    }}
-                  >
-                    <option value="">不需要簽核</option>
-                    {approvalChains.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
-                    ))}
-                  </select>
+              {/* Approval — 3-mode */}
+              <div style={{ padding: 10, background: 'var(--glass-light)', borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8 }}>🔐 審批設定</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  {[
+                    { v: 'none',   l: '不需簽核' },
+                    { v: 'people', l: '指定人員' },
+                    { v: 'chain',  l: '套用簽核鏈' },
+                  ].map(opt => {
+                    const active = approvalMode === opt.v
+                    return (
+                      <button type="button" key={opt.v}
+                        onClick={async () => {
+                          setApprovalMode(opt.v)
+                          if (opt.v === 'none') {
+                            await saveField({ approval_chain_id: null, confirmation_mode: null })
+                            await supabase.from('task_confirmations').delete().eq('task_id', task.id)
+                            setConfirmApprovers([])
+                          } else if (opt.v === 'people') {
+                            await saveField({ approval_chain_id: null })
+                            set('approval_chain_id', '')
+                          } else {
+                            await supabase.from('task_confirmations').delete().eq('task_id', task.id)
+                            setConfirmApprovers([])
+                          }
+                        }}
+                        style={{
+                          flex: 1, padding: '7px 4px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+                          cursor: 'pointer',
+                          border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                          background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                          color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                        }}>
+                        {opt.l}
+                      </button>
+                    )
+                  })}
                 </div>
-              )}
+
+                {approvalMode === 'people' && (
+                  <>
+                    <SearchableSelect
+                      value=""
+                      onChange={async (name) => {
+                        if (!name || confirmApprovers.some(c => c.approver === name)) return
+                        const { data } = await supabase.from('task_confirmations').insert({
+                          task_id: task.id,
+                          approver: name,
+                          step_order: confirmApprovers.length,
+                          status: 'pending',
+                          organization_id: task.organization_id || null,
+                        }).select().single()
+                        if (data) setConfirmApprovers(prev => [...prev, data])
+                      }}
+                      options={empOptions(
+                        employees.filter(e => !confirmApprovers.some(c => c.approver === e.name)),
+                        { keyBy: 'name' }
+                      )}
+                      placeholder="🔍 搜尋姓名 / 職稱..."
+                    />
+                    {confirmApprovers.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                        {confirmApprovers.map(c => (
+                          <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 14, fontSize: 11, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid var(--accent-purple)' }}>
+                            <ShieldCheck size={10} /> {c.approver}
+                            <button type="button"
+                              onClick={async () => {
+                                await supabase.from('task_confirmations').delete().eq('id', c.id)
+                                setConfirmApprovers(prev => prev.filter(x => x.id !== c.id))
+                              }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', padding: 0, lineHeight: 1 }}>
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {confirmApprovers.length > 1 && (
+                      <div style={{ marginTop: 8 }}>
+                        <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 4 }}>多人簽核模式</label>
+                        <select className="form-input" style={{ width: '100%', fontSize: 11 }}
+                          value={confirmMode}
+                          onChange={e => { setConfirmMode(e.target.value); saveField({ confirmation_mode: e.target.value }) }}>
+                          <option value="parallel">並簽（任一人通過即可）</option>
+                          <option value="sequential">會簽（每個人都要通過）</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {approvalMode === 'chain' && (
+                  <>
+                    <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                      value={form.approval_chain_id}
+                      onChange={e => {
+                        set('approval_chain_id', e.target.value)
+                        saveField({ approval_chain_id: e.target.value ? Number(e.target.value) : null })
+                      }}>
+                      <option value="">— 請選擇簽核鏈 —</option>
+                      {approvalChains.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+                      ))}
+                    </select>
+                    {form.approval_chain_id && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                        執行人按完成後，系統會依鏈逐關通知合法簽核者
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
 
               {/* Recurrence */}
               <div style={{ padding: 10, background: 'var(--glass-light)', borderRadius: 8 }}>

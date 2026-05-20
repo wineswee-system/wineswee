@@ -5,7 +5,7 @@ import SearchableSelect, { empOptions } from '../../../components/SearchableSele
 import { clearError } from '../../../lib/formValidation'
 import { toast } from '../../../lib/toast'
 
-const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
@@ -56,6 +56,7 @@ export default function ExpenseFormModal({
   })
 
   const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
+  const fmtAmt = (n) => n != null ? `${CURRENCY_SYMBOL[currency] || currency} ${Number(n).toLocaleString()}` : '-'
 
   // 下載 CSV 範本（含標題列 + 2 筆範例，UTF-8 BOM 讓 Excel 認得）
   const handleDownloadTemplate = () => {
@@ -258,7 +259,7 @@ export default function ExpenseFormModal({
                           <input type="number" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} placeholder="0"
                             style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} />
                         </td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{li.subtotal ? fmt(li.subtotal) : '-'}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{li.subtotal ? fmtAmt(li.subtotal) : '-'}</td>
                         <td style={{ padding: 4 }}>
                           {lineItems.length > 1 && (
                             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}
@@ -289,7 +290,7 @@ export default function ExpenseFormModal({
                         </button>
                         <input ref={csvRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvImport} />
                       </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', fontSize: 14, color: 'var(--accent-blue)' }}>{fmt(lineTotal)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', fontSize: 14, color: 'var(--accent-blue)' }}>{fmtAmt(lineTotal)}</td>
                       <td></td>
                     </tr>
                   </tfoot>

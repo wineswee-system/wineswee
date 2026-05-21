@@ -47,6 +47,14 @@ CREATE POLICY "hrt_delete" ON headcount_request_templates
   );
 
 -- updated_at 自動更新
+CREATE OR REPLACE FUNCTION set_hrt_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE TRIGGER trg_hrt_updated_at
   BEFORE UPDATE ON headcount_request_templates
-  FOR EACH ROW EXECUTE FUNCTION moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION set_hrt_updated_at();

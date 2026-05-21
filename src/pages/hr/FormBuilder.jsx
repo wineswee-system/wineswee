@@ -27,6 +27,7 @@ const FIELD_TYPES = [
   { value: 'employee_picker',   label: '👤 員工選擇器' },
   { value: 'department_picker', label: '🏢 部門選擇器' },
   { value: 'store_picker',      label: '🏪 門市選擇器' },
+  { value: 'date_range',        label: '📅 日期區間' },
   { value: 'section',           label: '🔖 分區標題' },
 ]
 
@@ -351,6 +352,53 @@ function TemplateEditor({ template, chains, onClose, onSaved, createdBy, orgId }
                   <input type="checkbox" checked={!!field.required} onChange={e => updateField(idx, { required: e.target.checked })} />
                   必填
                 </label>
+
+                {field.type === 'file' && (
+                  <Field label="最多上傳幾個檔案（1–10）">
+                    <input className="form-input" type="number" min={1} max={10} style={{ fontSize: 12, width: 80 }}
+                      value={field.max_files ?? 1}
+                      onChange={e => updateField(idx, { max_files: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                    />
+                  </Field>
+                )}
+
+                <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--glass-light)', borderRadius: 6, border: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>條件顯示（選填）</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select className="form-input" style={{ fontSize: 11, flex: '1 1 120px' }}
+                      value={field.show_if?.field || ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (!val) updateField(idx, { show_if: null })
+                        else updateField(idx, { show_if: { field: val, operator: field.show_if?.operator || 'eq', value: field.show_if?.value || '' } })
+                      }}>
+                      <option value="">— 永遠顯示 —</option>
+                      {(form.fields || [])
+                        .filter((f, i) => i !== idx && f.type !== 'section' && f.key)
+                        .map(f => <option key={f.key} value={f.key}>{f.label || f.key}</option>)
+                      }
+                    </select>
+                    {field.show_if?.field && (
+                      <>
+                        <select className="form-input" style={{ fontSize: 11, flex: '0 0 80px' }}
+                          value={field.show_if?.operator || 'eq'}
+                          onChange={e => updateField(idx, { show_if: { ...field.show_if, operator: e.target.value } })}>
+                          <option value="eq">等於</option>
+                          <option value="neq">不等於</option>
+                          <option value="not_empty">不為空</option>
+                          <option value="empty">為空</option>
+                        </select>
+                        {['eq', 'neq'].includes(field.show_if?.operator || 'eq') && (
+                          <input className="form-input" style={{ fontSize: 11, flex: '1 1 80px' }}
+                            value={field.show_if?.value || ''}
+                            placeholder="比對值"
+                            onChange={e => updateField(idx, { show_if: { ...field.show_if, value: e.target.value } })}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </div>

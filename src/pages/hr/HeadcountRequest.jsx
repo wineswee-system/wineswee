@@ -293,7 +293,7 @@ export default function HeadcountRequest() {
 
   const handleDelete = async (row) => {
     if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
-    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'headcount_requests', p_id: row.id })
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'headcount_requests', p_id: row.id, p_deleted_by: profile?.id ?? null })
     if (error) { toast.error('刪除失敗：' + error.message); return }
     toast.success('已移至最近刪除')
     load()

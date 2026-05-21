@@ -214,7 +214,7 @@ export default function FormSubmissions() {
 
   const handleDelete = async (sub) => {
     if (!(await confirm({ message: `將「${sub.template?.name || '此申請'}」移至最近刪除？可在 60 天內復原。` }))) return
-    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'form_submissions', p_id: sub.id })
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'form_submissions', p_id: sub.id, p_deleted_by: profile?.id ?? null })
     if (error) { toast.error('刪除失敗：' + error.message); return }
     toast.success('已移至最近刪除')
     load()
@@ -535,10 +535,23 @@ export default function FormSubmissions() {
         const fields = []
         const attachments = []
         for (const f of (detailRow.template?.fields || [])) {
-          if (f.type === 'section') continue  // section 是視覺分隔，不顯示在明細
+          if (f.type === 'section') continue
           const v = detailRow.data?.[f.key]
           if (f.type === 'file') {
-            if (v) attachments.push({ url: v, name: String(v).split('?')[0].split('/').pop() || f.label })
+            // 多檔：陣列；單檔：字串（向下相容）
+            const items = Array.isArray(v) ? v : (v ? [{ url: v, name: String(v).split('?')[0].split('/').pop() || f.label }] : [])
+            for (const item of items) {
+              if (item?.url) attachments.push({ url: item.url, name: item.name || String(item.url).split('/').pop() })
+            }
+          } else if (f.type === 'date_range') {
+            if (v?.start || v?.end) {
+              const start = v.start || '—'
+              const end = v.end || '—'
+              const days = (v.start && v.end)
+                ? Math.max(0, Math.round((new Date(v.end) - new Date(v.start)) / 86400000) + 1)
+                : null
+              fields.push({ label: f.label, value: `${start} → ${end}${days !== null ? `（共 ${days} 天）` : ''}` })
+            }
           } else {
             let displayValue
             if (v === null || v === undefined || v === '') displayValue = ''

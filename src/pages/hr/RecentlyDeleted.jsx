@@ -47,14 +47,14 @@ export default function RecentlyDeleted() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('v_recently_deleted')
-      .select('*')
-      .order('deleted_at', { ascending: false })
+    let q = supabase.from('v_recently_deleted').select('*').order('deleted_at', { ascending: false })
+    // non-super_admin 只看自己 org 的記錄
+    if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)
+    const { data, error } = await q
     if (error) toast.error('載入失敗：' + error.message)
     setItems(data || [])
     setLoading(false)
-  }, [])
+  }, [profile?.organization_id])
 
   useEffect(() => { load() }, [load])
 
@@ -71,9 +71,18 @@ export default function RecentlyDeleted() {
   const handlePermanentDelete = async (item) => {
     if (!(await confirm({ message: `永久刪除「${item.label}」？此操作無法復原。`, confirmText: '永久刪除', destructive: true }))) return
     setBusyId(item.record_id + item.source_table)
-    const { error } = await supabase.from(item.source_table).delete().eq('id', item.record_id)
+
+    if (item.source_table === 'expense_requests') {
+      // 清 storage 附件再刪 row
+      const { data: paths, error } = await supabase.rpc('hard_delete_expense_request', { p_id: item.record_id })
+      if (error) { setBusyId(null); toast.error('刪除失敗：' + error.message); return }
+      if (paths?.length) await supabase.storage.from('attachments').remove(paths)
+    } else {
+      const { error } = await supabase.from(item.source_table).delete().eq('id', item.record_id)
+      if (error) { setBusyId(null); toast.error('刪除失敗：' + error.message); return }
+    }
+
     setBusyId(null)
-    if (error) { toast.error('刪除失敗：' + error.message); return }
     toast.success('已永久刪除')
     setItems(prev => prev.filter(x => !(x.record_id === item.record_id && x.source_table === item.source_table)))
   }

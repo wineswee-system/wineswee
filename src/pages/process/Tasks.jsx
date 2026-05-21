@@ -391,6 +391,7 @@ export default function Tasks() {
         <TaskModal
           task={selectedTask}
           employees={employees}
+          stores={stores}
           approvalChains={approvalChains}
           currentUser={profile}
           onClose={() => setSelectedTask(null)}

@@ -324,7 +324,7 @@ function OffRequestForm({ empName, empId, employmentType }) {
     setSubmitting(true)
     const exists = myRequests.find(r => r.date === date)
     if (exists) {
-      await supabase.rpc('soft_delete_request', { p_table: 'off_requests', p_id: exists.id })
+      await supabase.rpc('soft_delete_request', { p_table: 'off_requests', p_id: exists.id, p_deleted_by: profile?.id ?? null })
       setMyRequests(prev => prev.filter(r => r.date !== date))
     } else {
       if (isAtLimit) { setSubmitting(false); return }

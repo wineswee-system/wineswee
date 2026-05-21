@@ -28,6 +28,19 @@ function resolveDefaultToken(raw, profile) {
 
 const PICKER_TYPES = ['employee_picker', 'department_picker', 'store_picker']
 
+function fieldVisible(field, data) {
+  const si = field.show_if
+  if (!si?.field) return true
+  const target = data[si.field]
+  switch (si.operator) {
+    case 'eq':        return String(target ?? '') === String(si.value ?? '')
+    case 'neq':       return String(target ?? '') !== String(si.value ?? '')
+    case 'not_empty': return target !== '' && target !== null && target !== undefined && target !== false
+    case 'empty':     return target === '' || target === null || target === undefined || target === false
+    default:          return true
+  }
+}
+
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
 export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, onClose }) {
@@ -120,9 +133,13 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
     if (!template) return false
     for (const f of template.fields || []) {
       if (f.type === 'section') continue
+      if (!fieldVisible(f, data)) continue
       if (f.required) {
         const v = data[f.key]
-        if (v === '' || v === null || v === undefined || (f.type === 'checkbox' && !v)) {
+        const isEmpty = f.type === 'date_range'
+          ? (!v?.start || !v?.end)
+          : (v === '' || v === null || v === undefined || (f.type === 'checkbox' && !v) || (Array.isArray(v) && v.length === 0))
+        if (isEmpty) {
           toast.error(`「${f.label}」為必填`)
           return false
         }
@@ -136,11 +153,17 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
     if (!profile?.id) return toast.error('未登入')
     setSubmitting(true)
     try {
+      // 隱藏欄位不送入 DB
+      const visibleData = {}
+      for (const f of (template?.fields || [])) {
+        if (f.type === 'section') continue
+        if (fieldVisible(f, data)) visibleData[f.key] = data[f.key]
+      }
       const { error } = await supabase.from('form_submissions').insert({
         organization_id: profile?.organization_id || 1,
         template_id: Number(templateId),
         applicant_id: profile.id,
-        data,
+        data: visibleData,
         status: '申請中',
       })
       if (error) throw error
@@ -221,6 +244,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
                 </div>
               )
             }
+            if (!fieldVisible(f, data)) return null
             const span = f.column_span === 1 ? 1 : 2
             return (
               <div key={f.key} style={{ gridColumn: `span ${span}` }}>
@@ -330,20 +354,84 @@ function FieldRender({ field, value, onChange, pickerData }) {
       </div>
     )
   }
-  if (field.type === 'file') {
+  if (field.type === 'date_range') {
+    const start = value?.start || ''
+    const end = value?.end || ''
+    const days = (start && end)
+      ? Math.max(0, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+      : null
     return (
       <div style={wrapper}>{label}
-        <input className="form-input" type="file" onChange={async e => {
-          const file = e.target.files?.[0]
-          if (!file) return
-          // 上傳到 Supabase Storage
-          const path = `form-uploads/${Date.now()}_${safeStorageName(file.name)}`
-          const { data: upload, error } = await supabase.storage.from('uploads').upload(path, file)
-          if (error) return toast.error('上傳失敗：' + error.message)
-          const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(upload.path)
-          onChange(publicUrl)
-        }} />
-        {value && <a href={value} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>已上傳：{value.split('/').pop()}</a>}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input className="form-input" type="date" style={{ flex: 1 }} value={start}
+            onChange={e => onChange({ ...value, start: e.target.value })} />
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>→</span>
+          <input className="form-input" type="date" style={{ flex: 1 }} value={end}
+            onChange={e => onChange({ ...value, end: e.target.value })} />
+          {days !== null && (
+            <span style={{ fontSize: 12, color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>共 {days} 天</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (field.type === 'file') {
+    const maxFiles = field.max_files ?? 1
+    const fileList = Array.isArray(value) ? value : (value ? [{ url: value, name: String(value).split('/').pop() }] : [])
+    const canAdd = fileList.length < maxFiles
+
+    const uploadFile = async (file) => {
+      const path = `form-uploads/${Date.now()}_${safeStorageName(file.name)}`
+      const { data: upload, error } = await supabase.storage.from('uploads').upload(path, file)
+      if (error) { toast.error('上傳失敗：' + error.message); return null }
+      const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(upload.path)
+      return { url: publicUrl, name: file.name }
+    }
+
+    if (maxFiles === 1) {
+      return (
+        <div style={wrapper}>{label}
+          <input className="form-input" type="file" onChange={async e => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            const result = await uploadFile(file)
+            if (result) onChange(result.url)
+          }} />
+          {fileList[0] && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <a href={fileList[0].url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>{fileList[0].name}</a>
+              <button type="button" onClick={() => onChange(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div style={wrapper}>{label}
+        {canAdd && (
+          <input className="form-input" type="file" multiple onChange={async e => {
+            const files = Array.from(e.target.files || [])
+            const remaining = maxFiles - fileList.length
+            const toUpload = files.slice(0, remaining)
+            const results = await Promise.all(toUpload.map(uploadFile))
+            onChange([...fileList, ...results.filter(Boolean)])
+            e.target.value = ''
+          }} />
+        )}
+        {fileList.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {fileList.map((f, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '3px 8px', background: 'var(--glass-light)', borderRadius: 4 }}>
+                <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--accent-cyan)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</a>
+                <button type="button" onClick={() => onChange(fileList.filter((_, j) => j !== i))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{fileList.length}/{maxFiles} 個</div>
       </div>
     )
   }

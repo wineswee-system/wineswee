@@ -48,8 +48,8 @@ export const updateLeaveStatus = (id, status, approver, rejectReason) =>
     p_reject_reason: rejectReason || null,
   })
 
-export const deleteLeaveRequest = (id) =>
-  supabase.rpc('soft_delete_request', { p_table: 'leave_requests', p_id: id })
+export const deleteLeaveRequest = (id, deletedBy) =>
+  supabase.rpc('soft_delete_request', { p_table: 'leave_requests', p_id: id, p_deleted_by: deletedBy ?? null })
 
 export const getOvertimeRequests = (options = {}) => {
   let q = supabase.from('overtime_requests').select('*').is('deleted_at', null).order('id')

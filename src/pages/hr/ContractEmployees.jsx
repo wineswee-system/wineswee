@@ -66,7 +66,7 @@ export default function ContractEmployees() {
       supabase.from('employees')
         .select('id, name, dept, position, store, employment_type')
         .eq('organization_id', orgId)
-        .in('employment_type', ['約聘', '派遣'])
+        .in('employment_type', ['約聘', '兼職', '派遣'])
         .eq('status', '在職')
         .order('name'),
     ])

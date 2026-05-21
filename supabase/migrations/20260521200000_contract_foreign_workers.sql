@@ -15,9 +15,9 @@ BEGIN;
 -- ─── 1. employment_type on employees ──────────────────────────────────────
 ALTER TABLE public.employees
   ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT '正職';
--- 正職 / 約聘 / 外籍 / 派遣
+-- 正職 / 約聘 / 兼職 / 外籍 / 派遣
 
-COMMENT ON COLUMN public.employees.employment_type IS '正職 / 約聘 / 外籍 / 派遣';
+COMMENT ON COLUMN public.employees.employment_type IS '正職 / 約聘 / 兼職 / 外籍 / 派遣';
 
 
 -- ─── 2. employee_contracts ────────────────────────────────────────────────

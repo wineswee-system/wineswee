@@ -148,6 +148,17 @@ export default function FormSubmissions() {
   }
   useEffect(() => { load() }, [tab, profile?.id, templateFilter])
 
+  // 從簽核中心 ?focus=ID 跳進來時自動開明細
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !list.length) return
+    const row = list.find(r => r.id === Number(focus))
+    if (row) {
+      setDetailRow(row)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleApprove = async (sub) => {
     if (!(await confirm({ message: `核准 ${sub.applicant?.name} 的「${sub.template?.name}」？` }))) return
     const { data, error } = await supabase.rpc('form_submission_chain_approve', {

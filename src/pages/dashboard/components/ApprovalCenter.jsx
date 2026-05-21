@@ -16,11 +16,13 @@ const SIGNED_TYPE_ROUTE = {
   expense_request: '/hr/expense-requests',
   resignation: '/hr/forms/resignation', loa: '/hr/forms/loa',
   transfer: '/hr/forms/transfer', headcount: '/hr/forms/headcount',
+  form_submission: '/hr/forms/submissions',
 }
 const SIGNED_TYPE_LABEL = {
   leave: '請假', overtime: '加班', trip: '出差', correction: '補打卡',
   expense: '報帳', expense_request: '費用申請',
   resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
+  form_submission: '表單申請',
 }
 
 /**

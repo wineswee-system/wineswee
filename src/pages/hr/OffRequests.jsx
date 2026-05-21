@@ -27,6 +27,7 @@ export default function OffRequests() {
     setLoading(true)
     let q = supabase.from('off_requests')
       .select('*')
+      .is('deleted_at', null)
       .order('id', { ascending: false })
     if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)
     if (!isAdmin && profile?.name) q = q.eq('employee', profile.name)
@@ -69,10 +70,10 @@ export default function OffRequests() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('off_requests').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'off_requests', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

@@ -357,8 +357,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     </label>
   )
 
-  const empTypeColor    = (form.employment_type || '全職') === '全職' ? 'var(--accent-green)'     : 'var(--accent-orange)'
-  const empTypeDimColor = (form.employment_type || '全職') === '全職' ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)'
+  const EMP_TYPE_COLORS = { 正職: ['var(--accent-green)', 'var(--accent-green-dim)'], 約聘: ['var(--accent-cyan)', 'var(--accent-cyan-dim)'], 兼職: ['var(--accent-orange)', 'var(--accent-orange-dim)'], 外籍: ['var(--accent-purple)', 'var(--accent-purple-dim)'], 派遣: ['var(--accent-red)', 'var(--accent-red-dim)'] }
+  const [empTypeColor, empTypeDimColor] = EMP_TYPE_COLORS[form.employment_type || '正職'] || EMP_TYPE_COLORS['正職']
   const statusColor     = (form.status || '在職') === '在職' ? 'var(--accent-green)' : form.status === '留職停薪' ? 'var(--accent-orange)' : 'var(--accent-red)'
   const statusDimColor  = (form.status || '在職') === '在職' ? 'var(--accent-green-dim)' : form.status === '留職停薪' ? 'var(--accent-orange-dim)' : 'var(--accent-red-dim)'
 
@@ -414,7 +414,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700 }}>EMP-{String(employee.id).padStart(3, '0')}</span>
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeDimColor, color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '全職'}</span>
+                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeDimColor, color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '正職'}</span>
                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: statusDimColor, color: statusColor, fontWeight: 700 }}>{form.status || '在職'}</span>
               </div>
             </div>

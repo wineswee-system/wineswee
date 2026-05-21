@@ -134,6 +134,7 @@ export default function HeadcountRequest() {
     setLoading(true)
     let q = supabase.from('headcount_requests')
       .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url), need_dept:departments!need_dept_id(id,name), applicant_dept:departments!applicant_dept_id(id,name), store:stores!store_id(id,name)')
+      .is('deleted_at', null)
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
@@ -291,10 +292,10 @@ export default function HeadcountRequest() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('headcount_requests').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'headcount_requests', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

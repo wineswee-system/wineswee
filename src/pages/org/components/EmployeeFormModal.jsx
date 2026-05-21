@@ -2,8 +2,11 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 
 const EMPLOYMENT_TYPES = [
-  { value: '全職', label: '全職' },
+  { value: '正職', label: '正職' },
+  { value: '約聘', label: '約聘' },
   { value: '兼職', label: '兼職' },
+  { value: '外籍', label: '外籍移工' },
+  { value: '派遣', label: '派遣' },
 ]
 
 const POSITIONS = [

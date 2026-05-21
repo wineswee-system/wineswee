@@ -33,7 +33,7 @@ export default function InsuranceGradeMonitor() {
       const [empRes, laborRes, healthRes] = await Promise.all([
         supabase
           .from('employees')
-          .select('id, name, dept, store, base_salary, labor_ins_grade, health_ins_grade, labor_ins_enrolled, status')
+          .select('id, name, dept, store, base_salary, labor_ins_grade, health_ins_grade, labor_ins_enrolled, status, employment_type')
           .eq('status', '在職')
           .eq('organization_id', profile?.organization_id)
           .order('name'),
@@ -64,9 +64,16 @@ export default function InsuranceGradeMonitor() {
 
   useEffect(() => { fetchData() }, [])
 
-  const getCorrectGrade = (emp) => findGrade(emp.base_salary || 0, laborBrackets)
+  // 外籍移工：適用勞保（就業保險不投保）；派遣：投保由派遣公司辦理，本系統不管
+  const isInsuranceManaged = (emp) => !['派遣'].includes(emp.employment_type || '正職')
+
+  const getCorrectGrade = (emp) => {
+    if (!isInsuranceManaged(emp)) return null
+    return findGrade(emp.base_salary || 0, laborBrackets)
+  }
 
   const needsChange = (emp) => {
+    if (!isInsuranceManaged(emp)) return false
     const correct = getCorrectGrade(emp)
     return correct && String(correct.insured_salary) !== String(emp.labor_ins_grade)
   }
@@ -179,6 +186,7 @@ export default function InsuranceGradeMonitor() {
             <thead>
               <tr>
                 <th>員工</th>
+                <th>類型</th>
                 <th>部門</th>
                 <th>目前月薪</th>
                 <th>現投保薪資</th>
@@ -191,56 +199,59 @@ export default function InsuranceGradeMonitor() {
             <tbody>
               {employees.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                     尚無在職員工資料
                   </td>
                 </tr>
               )}
               {employees.map(emp => {
+                const managed = isInsuranceManaged(emp)
                 const correct = getCorrectGrade(emp)
                 const current = Number(emp.labor_ins_grade) || 0
                 const correctVal = correct ? Number(correct.insured_salary) : current
                 const diff = correctVal - current
                 const changed = needsChange(emp)
+                const empType = emp.employment_type || '正職'
+
+                const EMP_TYPE_COLOR = { 正職: 'var(--accent-green)', 約聘: 'var(--accent-cyan)', 兼職: 'var(--accent-orange)', 外籍: 'var(--accent-purple)', 派遣: 'var(--accent-red)' }
+                const EMP_TYPE_DIM   = { 正職: 'var(--accent-green-dim)', 約聘: 'var(--accent-cyan-dim)', 兼職: 'var(--accent-orange-dim)', 外籍: 'var(--accent-purple-dim)', 派遣: 'var(--accent-red-dim)' }
+
                 return (
                   <tr key={emp.id}>
                     <td style={{ fontWeight: 600 }}>{emp.name}</td>
+                    <td>
+                      <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: EMP_TYPE_DIM[empType] || 'var(--accent-green-dim)', color: EMP_TYPE_COLOR[empType] || 'var(--accent-green)' }}>
+                        {empType}
+                      </span>
+                      {empType === '外籍' && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>無就業保險</div>}
+                      {empType === '派遣' && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>投保由派遣公司辦理</div>}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {emp.dept || emp.store || '—'}
                     </td>
                     <td>NT$ {(emp.base_salary || 0).toLocaleString()}</td>
-                    <td>{current ? `NT$ ${current.toLocaleString()}` : '—'}</td>
-                    <td style={{
-                      fontWeight: 600,
-                      color: changed ? 'var(--accent-orange)' : 'var(--text-secondary)',
-                    }}>
-                      {correctVal ? `NT$ ${correctVal.toLocaleString()}` : '—'}
+                    <td>{!managed ? <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>— 不適用</span> : current ? `NT$ ${current.toLocaleString()}` : '—'}</td>
+                    <td style={{ fontWeight: 600, color: changed ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>
+                      {!managed ? '—' : correctVal ? `NT$ ${correctVal.toLocaleString()}` : '—'}
                     </td>
                     <td>
-                      {diff !== 0 ? (
-                        <span style={{
-                          color: diff > 0 ? 'var(--accent-orange)' : 'var(--accent-red)',
-                          fontWeight: 600,
-                        }}>
+                      {!managed ? '—' : diff !== 0 ? (
+                        <span style={{ color: diff > 0 ? 'var(--accent-orange)' : 'var(--accent-red)', fontWeight: 600 }}>
                           {diff > 0 ? '+' : ''}{diff.toLocaleString()}
                         </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>0</span>
-                      )}
+                      ) : <span style={{ color: 'var(--text-muted)' }}>0</span>}
                     </td>
                     <td>
-                      {changed
-                        ? <span className="badge badge-warning">需調整</span>
-                        : <span className="badge badge-success">正常</span>
+                      {!managed
+                        ? <span className="badge badge-info">不適用</span>
+                        : changed
+                          ? <span className="badge badge-warning">需調整</span>
+                          : <span className="badge badge-success">正常</span>
                       }
                     </td>
                     <td>
-                      {changed && (
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={() => updateOne(emp)}
-                          disabled={updatingId === emp.id}
-                        >
+                      {changed && managed && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => updateOne(emp)} disabled={updatingId === emp.id}>
                           {updatingId === emp.id ? '...' : '更新'}
                         </button>
                       )}

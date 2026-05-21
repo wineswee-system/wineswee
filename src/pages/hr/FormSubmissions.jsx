@@ -67,7 +67,7 @@ export default function FormSubmissions() {
     let q = supabase.from('form_submissions').select(`*,
       template:form_templates(id,name,category,fields,approval_chain_id),
       applicant:employees!applicant_id(id,name,name_en,position),
-      approver:employees!approver_id(id,name,signature_url)`).order('id', { ascending: false })
+      approver:employees!approver_id(id,name,signature_url)`).is('deleted_at', null).order('id', { ascending: false })
     if (tab === 'mine') q = q.eq('applicant_id', profile?.id || 0)
     else if (tab === 'review') q = q.eq('status', '申請中')
 
@@ -213,10 +213,10 @@ export default function FormSubmissions() {
   }
 
   const handleDelete = async (sub) => {
-    if (!(await confirm({ message: `確定永久刪除「${sub.template?.name || '此申請'}」？此操作無法復原。` }))) return
-    const { error } = await supabase.from('form_submissions').delete().eq('id', sub.id)
+    if (!(await confirm({ message: `將「${sub.template?.name || '此申請'}」移至最近刪除？可在 60 天內復原。` }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'form_submissions', p_id: sub.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

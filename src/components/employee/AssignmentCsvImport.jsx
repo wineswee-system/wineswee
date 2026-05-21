@@ -13,7 +13,7 @@ import { confirm } from '../../lib/confirm'
  *   部門名稱 / department         — may also be a store name (門市)
  *   職稱 / position
  *   職等 / job_grade
- *   員工類型 / employment_type    — 全職 / 兼職 / 其他
+ *   員工類型 / employment_type    — 正職 / 約聘 / 兼職 / 外籍 / 派遣
  *   部門類型 / department_type   — 主要 / 次要 (default 主要)
  *   部分工時(是/否) / is_part_time
  *   平均每週工作時數 / avg_weekly_hours

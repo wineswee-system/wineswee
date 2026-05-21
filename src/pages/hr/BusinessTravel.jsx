@@ -183,10 +183,10 @@ export default function BusinessTravel() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('business_trips').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'business_trips', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     setTrips(prev => prev.filter(x => x.id !== row.id))
   }
 

@@ -51,7 +51,7 @@ export default function LeaveBalances() {
           .order('id', { ascending: false }),
         supabase
           .from('employees')
-          .select('id, name, dept, store, status')
+          .select('id, name, dept, store, status, employment_type, join_date, weekly_hours')
           .eq('status', '在職')
           .eq('organization_id', orgId)
           .order('name'),
@@ -79,6 +79,27 @@ export default function LeaveBalances() {
 
   const getEmpName = (empId) => employees.find(e => e.id === empId)?.name || `#${empId}`
   const getEmpDept = (empId) => employees.find(e => e.id === empId)?.dept || ''
+  const getEmp     = (empId) => employees.find(e => e.id === empId)
+
+  // 勞基法 §38 特休天數計算（依到職日 vs 今日）
+  // 兼職 <20hr/週不適用本法，返回 null
+  const calcStatutoryLeave = (emp) => {
+    if (!emp?.join_date) return null
+    const type = emp.employment_type || '正職'
+    const weekly = Number(emp.weekly_hours || 40)
+    if (type === '兼職' && weekly < 20) return null  // 不適用
+    const join = new Date(emp.join_date)
+    const now  = new Date()
+    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
+    const years  = Math.floor(months / 12)
+    if (months <  6) return 0
+    if (months < 12) return 3
+    if (years  <  2) return 7
+    if (years  <  3) return 10
+    if (years  <  5) return 14
+    if (years  < 10) return 15
+    return Math.min(15 + (years - 10), 30)
+  }
 
   const filtered = balances.filter(b =>
     (typeFilter === '' || b.leave_type === typeFilter) &&
@@ -326,18 +347,22 @@ export default function LeaveBalances() {
                 <th>已用天數</th>
                 <th>遞延天數</th>
                 <th>剩餘天數</th>
+                <th>法定最低 §38</th>
                 <th>到期日</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無餘額資料</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無餘額資料</td></tr>
               )}
               {filtered.map(b => {
                 const total = Number(b.total_days) + Number(b.carry_over_days || 0)
                 const remaining = total - Number(b.used_days)
                 const color = getRemainingColor(remaining, total)
+                const emp = getEmp(b.employee_id)
+                const statutory = b.leave_type === '特休' ? calcStatutoryLeave(emp) : null
+                const belowLegal = statutory !== null && Number(b.total_days) < statutory
                 return (
                   <tr key={b.id}>
                     <td style={{ fontWeight: 600 }}>{getEmpName(b.employee_id)}</td>
@@ -350,6 +375,15 @@ export default function LeaveBalances() {
                     <td>{b.carry_over_days || 0}</td>
                     <td>
                       <span style={{ fontWeight: 700, color }}>{remaining}</span>
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      {statutory === null
+                        ? <span style={{ color: 'var(--text-muted)' }}>另議</span>
+                        : <span style={{ color: belowLegal ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: belowLegal ? 700 : 400 }}
+                            title={belowLegal ? `帳上天數 ${b.total_days} 天低於勞基法應給 ${statutory} 天` : `符合勞基法§38`}>
+                            {statutory} 天{belowLegal ? ' ⚠️' : ''}
+                          </span>
+                      }
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.expires_at || '—'}</td>
                     <td>

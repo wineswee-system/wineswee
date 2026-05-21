@@ -97,7 +97,7 @@ export const deleteDocument = (id, orgId) => {
 }
 
 export const getBusinessTrips = (orgId) => {
-  let q = supabase.from('business_trips').select('*').order('id')
+  let q = supabase.from('business_trips').select('*').is('deleted_at', null).order('id')
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }

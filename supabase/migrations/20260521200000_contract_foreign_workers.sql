@@ -19,6 +19,9 @@ ALTER TABLE public.employees
 
 COMMENT ON COLUMN public.employees.employment_type IS '正職 / 約聘 / 兼職 / 外籍 / 派遣';
 
+-- 舊資料相容：舊版 UI 存的是 '全職'，統一改為 '正職'
+UPDATE public.employees SET employment_type = '正職' WHERE employment_type = '全職';
+
 
 -- ─── 2. employee_contracts ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.employee_contracts (

@@ -19,8 +19,11 @@ import { confirm } from '../../lib/confirm'
 const AVATARS = ['#3b82f6', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#22d3ee', '#f87171', '#fbbf24']
 
 const EMPLOYMENT_TYPES = [
-  { value: '全職', label: '全職', color: '#22c55e' },
-  { value: '兼職', label: '兼職', color: '#f59e0b' },
+  { value: '正職', label: '正職',   color: '#22c55e' },
+  { value: '約聘', label: '約聘',   color: '#06b6d4' },
+  { value: '兼職', label: '兼職',   color: '#f59e0b' },
+  { value: '外籍', label: '外籍移工', color: '#a855f7' },
+  { value: '派遣', label: '派遣',   color: '#f87171' },
 ]
 
 // 標準化職稱（manager = 有審核權限）
@@ -84,7 +87,7 @@ export default function Employees() {
   //   gender / employee_number / probation_end_date / address
   const [form, setForm] = useState({
     name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '',
-    store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職',
+    store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
     salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
     emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
     bank_code: '', bank_account: '',
@@ -158,13 +161,13 @@ export default function Employees() {
           department_id: data.department_id ?? null,
           store_id: data.store_id ?? null,
           position: data.position || null,
-          employment_type: data.employment_type || '全職',
+          employment_type: data.employment_type || '正職',
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
         setForm({
           name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '',
-          store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '全職',
+          store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
           salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
           emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
           bank_code: '', bank_account: '',
@@ -271,7 +274,7 @@ export default function Employees() {
           department_id: data.department_id ?? null,
           store_id: data.store_id ?? null,
           position: data.position || null,
-          employment_type: data.employment_type || '全職',
+          employment_type: data.employment_type || '正職',
           start_date: new Date().toISOString().slice(0, 10),
           is_active: true,
         })
@@ -288,7 +291,7 @@ export default function Employees() {
   const filtered = employees.filter(e =>
     !e.is_archived &&
     (statusFilter === '' || e.status === statusFilter) &&
-    (typeFilter === '' || (e.employment_type || '全職') === typeFilter) &&
+    (typeFilter === '' || (e.employment_type || '正職') === typeFilter) &&
     (storeFilter === '' || e.store_id === Number(storeFilter)) &&
     (deptFilter === '' || e.department_id === Number(deptFilter)) &&
     (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search) || e.employee_number?.includes(search))
@@ -404,7 +407,7 @@ export default function Employees() {
           <div key={t.value} className="stat-card" style={{ '--card-accent': t.color, '--card-accent-dim': t.color + '22', cursor: 'pointer', outline: typeFilter === t.value ? `2px solid ${t.color}` : 'none' }}
             onClick={() => setTypeFilter(typeFilter === t.value ? '' : t.value)}>
             <div className="stat-card-label">{t.label}</div>
-            <div className="stat-card-value">{employees.filter(e => (e.employment_type || '全職') === t.value && e.status === '在職').length}</div>
+            <div className="stat-card-value">{employees.filter(e => (e.employment_type || '正職') === t.value && e.status === '在職').length}</div>
           </div>
         ))}
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
@@ -467,7 +470,7 @@ export default function Employees() {
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
               {filtered.map(e => {
-                const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '全職'))
+                const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '正職'))
                 return (
                 <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={() => openDetail(e)}>
                   <td><span style={{ fontFamily: 'monospace', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}>{e.employee_number || `EMP-${String(e.id).padStart(3, '0')}`}</span></td>
@@ -482,7 +485,7 @@ export default function Employees() {
                       </div>
                     </div>
                   </td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: (empType?.color || '#22c55e') + '22', color: empType?.color || '#22c55e' }}>{empType?.label || '全職'}</span></td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: (empType?.color || '#22c55e') + '22', color: empType?.color || '#22c55e' }}>{empType?.label || '正職'}</span></td>
                   <td>{deptName(e.department_id)}</td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

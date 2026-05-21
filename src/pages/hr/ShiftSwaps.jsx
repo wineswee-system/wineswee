@@ -29,6 +29,7 @@ export default function ShiftSwaps() {
     // shift_swaps 欄位：requester_id / target_id / swap_date / status / store_id ...
     let q = supabase.from('shift_swaps')
       .select('*, requester_emp:employees!requester_id(id,name), target_emp:employees!target_id(id,name)')
+      .is('deleted_at', null)
       .order('id', { ascending: false })
     if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)
     const { data } = await q
@@ -99,10 +100,10 @@ export default function ShiftSwaps() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('shift_swaps').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'shift_swaps', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import {
   Plus, Pencil, ChevronRight, CheckCircle,
@@ -39,6 +40,7 @@ const TRIGGER_DEPTH_LIMIT = 5
 
 export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const currentUser = profile?.name || '管理員'
   const [tab, setTab] = useState('active')
   const [workflows, setWorkflows] = useState([])
@@ -135,6 +137,18 @@ export default function Workflows() {
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
   }, [])
+
+  // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動展開流程明細
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !instances.length) return
+    const inst = instances.find(i => i.id === Number(focus))
+    if (inst) {
+      setSelectedInstance(inst)
+      setTab('active')
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [instances, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ──
   const getInstanceTasks = (instId) => tasks.filter(t => t.workflow_instance_id === instId).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))

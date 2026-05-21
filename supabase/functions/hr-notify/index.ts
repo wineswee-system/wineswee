@@ -388,6 +388,56 @@ function buildTaskAutoStarted(details: {
   };
 }
 
+// ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
+function buildExpiryBatchNotification(alerts: any[]) {
+  const DOC_LABELS: Record<string, string> = {
+    work_permit: '工作許可', arc: '居留證', health_check: '健康檢查',
+    passport: '護照', other: '其他',
+    contract: '勞動契約', 定期勞動契約: '定期合約', 勞務承攬: '勞務承攬', 兼職: '兼職合約', 派遣: '派遣合約',
+  }
+  const label = (a: any) => DOC_LABELS[a.label] || a.label || a.alert_type
+
+  const urgent   = alerts.filter(a => a.days_remaining !== null && a.days_remaining >= 0  && a.days_remaining <= 30)
+  const warning  = alerts.filter(a => a.days_remaining !== null && a.days_remaining > 30   && a.days_remaining <= 90)
+  const expired  = alerts.filter(a => a.days_remaining !== null && a.days_remaining < 0)
+
+  const rows: object[] = []
+  if (expired.length > 0) {
+    rows.push({ type: "text", text: `❌ 已過期 ${expired.length} 件`, size: "sm", color: "#dc2626", weight: "bold" })
+    expired.slice(0, 3).forEach(a => rows.push(row(a.employee_name, `${label(a)} 已過期 ${Math.abs(a.days_remaining)} 天`, "#dc2626")))
+    if (expired.length > 3) rows.push({ type: "text", text: `…另有 ${expired.length - 3} 件，請至系統查看`, size: "xs", color: "#9CA3AF", wrap: true })
+    if (urgent.length > 0 || warning.length > 0) rows.push({ type: "separator", margin: "sm" })
+  }
+  if (urgent.length > 0) {
+    rows.push({ type: "text", text: `⚠️ 30 天內到期 ${urgent.length} 件`, size: "sm", color: "#d97706", weight: "bold" })
+    urgent.slice(0, 5).forEach(a => rows.push(row(a.employee_name, `${label(a)} 剩 ${a.days_remaining} 天`, a.days_remaining <= 7 ? "#dc2626" : "#d97706")))
+    if (urgent.length > 5) rows.push({ type: "text", text: `…另有 ${urgent.length - 5} 件`, size: "xs", color: "#9CA3AF", wrap: true })
+    if (warning.length > 0) rows.push({ type: "separator", margin: "sm" })
+  }
+  if (warning.length > 0) {
+    rows.push({ type: "text", text: `🔔 90 天內到期 ${warning.length} 件`, size: "sm", color: "#6B7280", weight: "bold" })
+    warning.slice(0, 3).forEach(a => rows.push(row(a.employee_name, `${label(a)} 剩 ${a.days_remaining} 天`)))
+  }
+  if (rows.length === 0) rows.push({ type: "text", text: "目前無到期預警項目", size: "sm", color: "#888888" })
+
+  const totalCount = expired.length + urgent.length + warning.length
+  return {
+    type: "flex",
+    altText: `🔔 HR 到期預警 — ${totalCount} 件（緊急 ${urgent.length + expired.length}）`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: urgent.length + expired.length > 0 ? "#d97706" : "#2563eb", paddingAll: "14px",
+        contents: [
+          { type: "text", text: "🔔 HR 到期預警", weight: "bold", color: "#FFFFFF", size: "md" },
+          { type: "text", text: `合約 + 外籍移工證件 | 共 ${totalCount} 件`, size: "xs", color: "#FEF3C7", margin: "xs" },
+        ],
+      },
+      body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: rows },
+    },
+  }
+}
+
 // ── form_submission：自訂表單通用通知（step_assigned / approved / rejected）─
 function buildFormSubmissionNotification(
   variant: "step_assigned" | "approved" | "rejected",
@@ -537,6 +587,42 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing type" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── contract_expiry_batch: 合約 + 外籍移工證件到期預警 → 推給所有 admin/manager ──
+    if (type === "contract_expiry_batch") {
+      const orgId = details?.organization_id || null
+
+      // 查 v_expiry_alerts：合約 90 天內 + 已過期 7 天內、證件 90 天內 + 已過期 7 天內
+      let query = db.from("v_expiry_alerts")
+        .select("*")
+        .lte("days_remaining", 90)
+        .gte("days_remaining", -7)
+        .order("days_remaining", { ascending: true })
+      if (orgId) query = query.eq("organization_id", orgId)
+      const { data: alerts } = await query
+
+      // 無到期項目仍推一次（讓 HR 知道系統在運作）
+      const msg = buildExpiryBatchNotification(alerts || [])
+
+      // 找所有 admin / manager（有 LINE 帳號的）
+      let adminQuery = db.from("employees")
+        .select("id")
+        .in("role", ["admin", "super_admin", "manager"])
+        .eq("status", "在職")
+      if (orgId) adminQuery = adminQuery.eq("organization_id", orgId)
+      const { data: admins } = await adminQuery
+
+      let sent = 0
+      for (const admin of (admins || [])) {
+        const lineId = await resolveLineId(db, admin.id)
+        if (lineId && await pushLine(lineId, [msg], accessToken)) sent++
+      }
+
+      console.log(`[hr-notify] contract_expiry_batch: ${(alerts || []).length} alerts, sent to ${sent} admins`)
+      return new Response(JSON.stringify({ ok: true, sent, alert_count: (alerts || []).length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
     }
 
     // ── schedule_published: broadcast to all employees with shifts ──

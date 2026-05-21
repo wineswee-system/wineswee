@@ -98,6 +98,10 @@ export default function Payroll() {
       })
       if (error) throw error
       const result = data?.[0] || data
+      // 外籍移工扣款（仲介費/住宿費/伙食費）— 就業服務法§52
+      if (result?.payroll_run_id) {
+        await supabase.rpc('apply_fw_deductions', { p_payroll_run_id: result.payroll_run_id })
+      }
       toast.error(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
       const { data: freshRuns } = await getPayrollRuns()
       setRuns(freshRuns || [])

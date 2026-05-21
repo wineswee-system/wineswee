@@ -135,7 +135,7 @@ export default function PunchCorrection() {
   const load = () => {
     const orgId = profile?.organization_id
     Promise.all([
-      supabase.from('clock_corrections').select('*').order('created_at', { ascending: false }),
+      supabase.from('clock_corrections').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId ?? -1).order('name'),
@@ -287,10 +287,10 @@ export default function PunchCorrection() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('clock_corrections').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'clock_corrections', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

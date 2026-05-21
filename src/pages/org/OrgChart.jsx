@@ -95,7 +95,7 @@ export default function OrgChart() {
         const aLead = isStoreLead(a) ? 0 : 1
         const bLead = isStoreLead(b) ? 0 : 1
         if (aLead !== bLead) return aLead - bLead
-        // 2. 全職 group before 兼職 group
+        // 2. 正職/約聘 group before 兼職/派遣 group
         const aPart = a.employment_type === '兼職' ? 1 : 0
         const bPart = b.employment_type === '兼職' ? 1 : 0
         if (aPart !== bPart) return aPart - bPart

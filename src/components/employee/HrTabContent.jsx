@@ -29,8 +29,12 @@ export default function HrTabContent({
           <SectionTitle icon="💼" text="僱用資訊" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>類型</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.employment_type || '全職'} onChange={e => set('employment_type', e.target.value)}>
-                <option>全職</option><option>兼職</option>
+              <select className="form-input" style={{ width: '100%' }} value={form.employment_type || '正職'} onChange={e => set('employment_type', e.target.value)}>
+                <option value="正職">正職</option>
+                <option value="約聘">約聘</option>
+                <option value="兼職">兼職</option>
+                <option value="外籍">外籍移工</option>
+                <option value="派遣">派遣</option>
               </select>
             </div>
             <div><div style={L}>狀態</div>

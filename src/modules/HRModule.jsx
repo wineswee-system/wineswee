@@ -48,6 +48,7 @@ import ShiftSwaps from '../pages/hr/ShiftSwaps'
 import FormBuilder from '../pages/hr/FormBuilder'
 import CustomFormFill from '../pages/hr/CustomFormFill'
 import FormSubmissions from '../pages/hr/FormSubmissions'
+import RecentlyDeleted from '../pages/hr/RecentlyDeleted'
 import ContractEmployees from '../pages/hr/ContractEmployees'
 import ForeignWorkers from '../pages/hr/ForeignWorkers'
 
@@ -100,6 +101,7 @@ export default memo(function HRModule() {
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
       <Route path="forms/submissions" element={<FormSubmissions />} />
       <Route path="form-builder" element={<FormBuilder />} />
+      <Route path="recently-deleted" element={<RecentlyDeleted />} />
       <Route path="insurance-grade" element={<InsuranceGradeMonitor />} />
       <Route path="labor-law-rates" element={<LaborLawRates />} />
       <Route path="contract-employees" element={<ContractEmployees />} />

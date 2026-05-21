@@ -123,7 +123,7 @@ export default function ExpenseRequests() {
   const load = async () => {
     setLoading(true)
     const orgId = profile?.organization_id
-    let reqQuery = supabase.from('expense_requests').select('*').order('created_at', { ascending: false })
+    let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
     const [reqRes, accRes, empRes, orgRes, extraRes] = await Promise.all([
       reqQuery,
@@ -648,10 +648,10 @@ export default function ExpenseRequests() {
   }
 
   const handleDelete = async (row) => {
-    if (!(await confirm({ message: '確定永久刪除此申請？此操作無法復原。' }))) return
-    const { error } = await supabase.from('expense_requests').delete().eq('id', row.id)
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'expense_requests', p_id: row.id })
     if (error) { toast.error('刪除失敗：' + error.message); return }
-    toast.success('已刪除')
+    toast.success('已移至最近刪除')
     load()
   }
 

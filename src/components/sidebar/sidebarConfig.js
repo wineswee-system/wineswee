@@ -13,7 +13,7 @@ import {
   UserCheck, Shield, Send, Search, AlertOctagon, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
-  Globe,
+  Globe, Trash2,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -241,6 +241,7 @@ export const groupNav = {
         { icon: ArrowRightLeft, label: '人事異動', path: '/hr/forms/transfer' },
         { icon: Settings, label: '表單建立器', path: '/hr/form-builder' },
         { icon: FileText, label: '文件範本', path: '/org/templates' },
+        { icon: Trash2, label: '最近刪除', path: '/hr/recently-deleted' },
       ]
     },
     {

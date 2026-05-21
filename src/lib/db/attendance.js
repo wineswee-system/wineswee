@@ -32,7 +32,7 @@ export async function checkMissedClockout(date) {
 }
 
 export const getLeaveRequests = (options = {}) => {
-  let q = supabase.from('leave_requests').select('*').order('id')
+  let q = supabase.from('leave_requests').select('*').is('deleted_at', null).order('id')
   if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 500)
 }
@@ -48,14 +48,11 @@ export const updateLeaveStatus = (id, status, approver, rejectReason) =>
     p_reject_reason: rejectReason || null,
   })
 
-export const deleteLeaveRequest = (id, orgId) => {
-  let q = supabase.from('leave_requests').delete().eq('id', id)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
-}
+export const deleteLeaveRequest = (id) =>
+  supabase.rpc('soft_delete_request', { p_table: 'leave_requests', p_id: id })
 
 export const getOvertimeRequests = (options = {}) => {
-  let q = supabase.from('overtime_requests').select('*').order('id')
+  let q = supabase.from('overtime_requests').select('*').is('deleted_at', null).order('id')
   if (options.orgId) q = q.eq('organization_id', options.orgId)
   return q.limit(options.limit ?? 500)
 }

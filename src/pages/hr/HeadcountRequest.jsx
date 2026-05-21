@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, ArrowRight, Settings, Printer, Search, X as XIcon } from 'lucide-react'
+import { Plus, ArrowRight, Settings, Printer, Search, X as XIcon, BookOpen, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -53,6 +53,36 @@ const EMPTY_FORM = {
   other_conditions: '',
 }
 
+// 範本可存的職務欄位（不含申請人/日期/部門等個人欄位）
+const TMPL_FIELDS = [
+  'job_title', 'job_type', 'job_description',
+  'salary_type', 'salary_range',
+  'management_resp', 'business_travel',
+  'work_shift', 'rest_policy',
+  'experience_required', 'education_required', 'major_required',
+  'tool_required', 'other_conditions', 'new_reason',
+]
+
+const EMPTY_TMPL = {
+  name: '',
+  description: '',
+  job_title: '',
+  job_type: '正職',
+  job_description: '',
+  salary_type: '月薪',
+  salary_range: '',
+  management_resp: '',
+  business_travel: '',
+  work_shift: '',
+  rest_policy: '',
+  experience_required: '',
+  education_required: '',
+  major_required: '',
+  tool_required: '',
+  other_conditions: '',
+  new_reason: '',
+}
+
 export default function HeadcountRequest() {
   const { profile, role, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
@@ -79,6 +109,16 @@ export default function HeadcountRequest() {
   const [rejectReason, setRejectReason] = useState('')
   const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState(null)
+
+  // ── 範本相關 state ──
+  const [templates, setTemplates] = useState([])
+  const [selectedTmplId, setSelectedTmplId] = useState('')
+  const [showTmplManager, setShowTmplManager] = useState(false)
+  const [tmplEditMode, setTmplEditMode] = useState(false)   // false=列表, true=編輯
+  const [editingTmplId, setEditingTmplId] = useState(null)  // null=新增
+  const [tmplForm, setTmplForm] = useState({ ...EMPTY_TMPL })
+  const [tmplErrors, setTmplErrors] = useState({})
+  const [savingTmpl, setSavingTmpl] = useState(false)
 
   const buildAndResolveChain = async (row) => {
     return buildFormChainSteps({
@@ -112,7 +152,6 @@ export default function HeadcountRequest() {
       const builtSteps = await buildAndResolveChain(row)
       const approverMap = {}
       builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
-      // 簽章 url 從 employees signature_url 帶入
       const signatures = Object.fromEntries(
         employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
       )
@@ -128,6 +167,16 @@ export default function HeadcountRequest() {
       win.close()
       toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
     }
+  }
+
+  const loadTemplates = async () => {
+    if (!profile?.organization_id) return
+    const { data } = await supabase
+      .from('headcount_request_templates')
+      .select('*')
+      .eq('organization_id', profile.organization_id)
+      .order('name')
+    setTemplates(data || [])
   }
 
   const load = async () => {
@@ -162,7 +211,8 @@ export default function HeadcountRequest() {
     setChainSteps(stepMap)
     setLoading(false)
   }
-  useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])
+
+  useEffect(() => { load(); loadTemplates() }, [profile?.id, isAdmin, profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dashboard 跳轉 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -175,6 +225,17 @@ export default function HeadcountRequest() {
       setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
     }
   }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 套用範本 ──
+  const applyTemplate = (tpl) => {
+    const d = tpl.template_data || {}
+    setForm(f => ({
+      ...f,
+      ...Object.fromEntries(TMPL_FIELDS.map(k => [k, d[k] ?? f[k]])),
+    }))
+    setSelectedTmplId('')
+    toast.success(`已套用範本「${tpl.name}」`)
+  }
 
   const handleSubmit = async () => {
     const empId = isAdmin ? form.employee_id : profile?.id
@@ -299,6 +360,61 @@ export default function HeadcountRequest() {
     load()
   }
 
+  // ── 範本 CRUD ──
+  const openCreateTmpl = () => {
+    setEditingTmplId(null)
+    setTmplForm({ ...EMPTY_TMPL })
+    setTmplErrors({})
+    setTmplEditMode(true)
+  }
+
+  const openEditTmpl = (tpl) => {
+    setEditingTmplId(tpl.id)
+    setTmplForm({
+      name: tpl.name || '',
+      description: tpl.description || '',
+      ...Object.fromEntries(TMPL_FIELDS.map(k => [k, tpl.template_data?.[k] ?? ''])),
+      job_type: tpl.template_data?.job_type || '正職',
+      salary_type: tpl.template_data?.salary_type || '月薪',
+    })
+    setTmplErrors({})
+    setTmplEditMode(true)
+  }
+
+  const handleTmplSave = async () => {
+    if (!tmplForm.name.trim()) { setTmplErrors({ name: true }); return }
+    setSavingTmpl(true)
+    const template_data = Object.fromEntries(TMPL_FIELDS.map(k => [k, tmplForm[k] || null]))
+    const payload = {
+      organization_id: profile?.organization_id,
+      name: tmplForm.name.trim(),
+      description: tmplForm.description || null,
+      template_data,
+      created_by: profile?.id || null,
+    }
+    if (editingTmplId) {
+      const { error } = await supabase.from('headcount_request_templates')
+        .update({ name: payload.name, description: payload.description, template_data })
+        .eq('id', editingTmplId)
+      if (error) { toast.error('儲存失敗：' + error.message); setSavingTmpl(false); return }
+    } else {
+      const { error } = await supabase.from('headcount_request_templates').insert(payload)
+      if (error) { toast.error('儲存失敗：' + error.message); setSavingTmpl(false); return }
+    }
+    toast.success(editingTmplId ? '範本已更新' : '範本已建立')
+    setSavingTmpl(false)
+    setTmplEditMode(false)
+    loadTemplates()
+  }
+
+  const handleTmplDelete = async (tpl) => {
+    if (!(await confirm({ message: `刪除範本「${tpl.name}」？` }))) return
+    const { error } = await supabase.from('headcount_request_templates').delete().eq('id', tpl.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已刪除')
+    loadTemplates()
+  }
+
   const formattedEmpOptions = useMemo(() => empOptions(employees), [employees])
 
   if (loading) return <LoadingSpinner />
@@ -320,6 +436,11 @@ export default function HeadcountRequest() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            {isAdmin && (
+              <button className="btn btn-secondary" onClick={() => { setShowTmplManager(true); setTmplEditMode(false) }}>
+                <BookOpen size={14} /> 範本管理
+              </button>
+            )}
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
               <button className="btn btn-secondary"
                 onClick={() => navigate('/process/settings/chains/edit?formType=headcount&label=人力需求')}
@@ -457,14 +578,46 @@ export default function HeadcountRequest() {
         </div>
       </div>
 
+      {/* ── 新增 / 編輯申請 Modal ── */}
       {showForm && (
         <Modal
           title={editingId ? '✏️ 編輯人力需求申請' : '新增人力需求申請'}
-          onClose={() => { setShowForm(false); setErrors({}); setEditingId(null) }}
+          onClose={() => { setShowForm(false); setErrors({}); setEditingId(null); setSelectedTmplId('') }}
           onSubmit={handleSubmit}
           submitLabel={editingId ? '更新送出' : '送出申請'}
           maxWidth={760}
         >
+          {/* 套用範本列 */}
+          {templates.length > 0 && (
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <BookOpen size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>套用範本</span>
+              <select
+                className="form-input"
+                style={{ flex: 1, fontSize: 12 }}
+                value={selectedTmplId}
+                onChange={e => setSelectedTmplId(e.target.value)}
+              >
+                <option value="">— 選擇範本 —</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}{t.description ? `　${t.description}` : ''}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, flexShrink: 0 }}
+                disabled={!selectedTmplId}
+                onClick={() => {
+                  const tpl = templates.find(t => t.id === Number(selectedTmplId))
+                  if (tpl) applyTemplate(tpl)
+                }}
+              >
+                套用
+              </button>
+            </div>
+          )}
+
           {/* 區塊 1：基本資訊 */}
           <SectionTitle>📋 基本資訊</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -641,6 +794,164 @@ export default function HeadcountRequest() {
                 ))}
               </div>
             </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ── 範本管理 Modal ── */}
+      {showTmplManager && (
+        <Modal
+          title={tmplEditMode ? (editingTmplId ? '編輯範本' : '新增範本') : '人力需求範本管理'}
+          onClose={() => { setShowTmplManager(false); setTmplEditMode(false) }}
+          onSubmit={tmplEditMode ? handleTmplSave : undefined}
+          submitLabel={tmplEditMode ? (savingTmpl ? '儲存中…' : '儲存範本') : undefined}
+          maxWidth={640}
+        >
+          {/* 列表視圖 */}
+          {!tmplEditMode && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={openCreateTmpl}>
+                  <Plus size={13} /> 新增範本
+                </button>
+              </div>
+              {templates.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                  尚無範本，點「新增範本」建立第一個
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {templates.map(tpl => (
+                    <div key={tpl.id} style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <BookOpen size={16} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{tpl.name}</div>
+                        {tpl.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{tpl.description}</div>}
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {[
+                            tpl.template_data?.job_title && `職務：${tpl.template_data.job_title}`,
+                            tpl.template_data?.job_type,
+                            tpl.template_data?.salary_type && tpl.template_data?.salary_range
+                              ? `${tpl.template_data.salary_type} ${tpl.template_data.salary_range}`
+                              : tpl.template_data?.salary_type,
+                          ].filter(Boolean).join('　·　')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px' }} onClick={() => openEditTmpl(tpl)}>
+                          <Pencil size={12} />
+                        </button>
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }} onClick={() => handleTmplDelete(tpl)}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 編輯視圖 */}
+          {tmplEditMode && (
+            <>
+              <button type="button" style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 12, padding: '0 0 12px', fontWeight: 600 }}
+                onClick={() => setTmplEditMode(false)}>
+                ← 返回列表
+              </button>
+              <Field label="範本名稱 *" error={tmplErrors.name} errorMsg="請填寫範本名稱">
+                <input className="form-input" style={{ width: '100%' }}
+                  placeholder="例：門市正職、工讀生標準版"
+                  value={tmplForm.name}
+                  onChange={e => { setTmplForm(f => ({ ...f, name: e.target.value })); setTmplErrors({}) }} />
+              </Field>
+              <Field label="備註說明">
+                <input className="form-input" style={{ width: '100%' }}
+                  placeholder="補充說明（選填）"
+                  value={tmplForm.description}
+                  onChange={e => setTmplForm(f => ({ ...f, description: e.target.value }))} />
+              </Field>
+
+              <SectionTitle>💼 職務資訊</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="職務名稱">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：PT / 業務助理"
+                    value={tmplForm.job_title} onChange={e => setTmplForm(f => ({ ...f, job_title: e.target.value }))} />
+                </Field>
+                <Field label="職務性質">
+                  <select className="form-input" style={{ width: '100%' }} value={tmplForm.job_type}
+                    onChange={e => setTmplForm(f => ({ ...f, job_type: e.target.value }))}>
+                    {JOB_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+                <Field label="職務說明" wide>
+                  <textarea className="form-input" rows={2} style={{ width: '100%' }} placeholder="工作內容..."
+                    value={tmplForm.job_description} onChange={e => setTmplForm(f => ({ ...f, job_description: e.target.value }))} />
+                </Field>
+                <Field label="管理責任">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：不需負擔管理責任"
+                    value={tmplForm.management_resp} onChange={e => setTmplForm(f => ({ ...f, management_resp: e.target.value }))} />
+                </Field>
+                <Field label="出差外派">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：無"
+                    value={tmplForm.business_travel} onChange={e => setTmplForm(f => ({ ...f, business_travel: e.target.value }))} />
+                </Field>
+              </div>
+
+              <SectionTitle>💰 待遇</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="工作待遇">
+                  <select className="form-input" style={{ width: '100%' }} value={tmplForm.salary_type}
+                    onChange={e => setTmplForm(f => ({ ...f, salary_type: e.target.value }))}>
+                    {SALARY_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+                <Field label="金額區間">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：220 / 35000~45000"
+                    value={tmplForm.salary_range} onChange={e => setTmplForm(f => ({ ...f, salary_range: e.target.value }))} />
+                </Field>
+              </div>
+
+              <SectionTitle>🕐 班別</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="上班時段">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：排班 / 09:00-18:00"
+                    value={tmplForm.work_shift} onChange={e => setTmplForm(f => ({ ...f, work_shift: e.target.value }))} />
+                </Field>
+                <Field label="休假制度">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：排休 / 週休二日"
+                    value={tmplForm.rest_policy} onChange={e => setTmplForm(f => ({ ...f, rest_policy: e.target.value }))} />
+                </Field>
+              </div>
+
+              <SectionTitle>📌 求職條件</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="工作經驗">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：不拘 / 3 年以上"
+                    value={tmplForm.experience_required} onChange={e => setTmplForm(f => ({ ...f, experience_required: e.target.value }))} />
+                </Field>
+                <Field label="學歷要求">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：不拘 / 大學以上"
+                    value={tmplForm.education_required} onChange={e => setTmplForm(f => ({ ...f, education_required: e.target.value }))} />
+                </Field>
+                <Field label="科系要求">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：不限 / 商管科系"
+                    value={tmplForm.major_required} onChange={e => setTmplForm(f => ({ ...f, major_required: e.target.value }))} />
+                </Field>
+                <Field label="擅長工具">
+                  <input className="form-input" style={{ width: '100%' }} placeholder="例：Excel / Python"
+                    value={tmplForm.tool_required} onChange={e => setTmplForm(f => ({ ...f, tool_required: e.target.value }))} />
+                </Field>
+              </div>
+              <Field label="其他條件">
+                <textarea className="form-input" rows={3} style={{ width: '100%' }} placeholder="其他特殊條件..."
+                  value={tmplForm.other_conditions} onChange={e => setTmplForm(f => ({ ...f, other_conditions: e.target.value }))} />
+              </Field>
+              <Field label="新增人力原因（預設值）">
+                <textarea className="form-input" rows={2} style={{ width: '100%' }} placeholder="例：人員流動需補人"
+                  value={tmplForm.new_reason} onChange={e => setTmplForm(f => ({ ...f, new_reason: e.target.value }))} />
+              </Field>
+            </>
           )}
         </Modal>
       )}

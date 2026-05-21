@@ -31,7 +31,6 @@ const STATUS_COLORS = {
   '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
 }
 
-const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
 const fmtCur = (n, cur) => {
   if (n == null) return '-'
@@ -918,8 +917,8 @@ export default function ExpenseRequests() {
                         <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '4px 8px' }}>{li.name}</td>
                           <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtCur(li.unit_price, showDetail.currency)}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmtCur(li.subtotal, showDetail.currency)}</td>
                         </tr>
                       ))
                     : (

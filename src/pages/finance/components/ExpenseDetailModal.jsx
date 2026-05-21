@@ -2,8 +2,7 @@ import { supabase } from '../../../lib/supabase'
 import { exportExpenseRequestPdf } from '../../../lib/exportPdf'
 import ApprovalDetailModal from '../../../components/ApprovalDetailModal'
 import { toast } from '../../../lib/toast'
-
-const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+import { formatCurrency } from '../../../lib/currency'
 
 /**
  * ExpenseDetailModal — read-only detail view for an expense request,
@@ -26,6 +25,7 @@ export default function ExpenseDetailModal({
   if (!request) return null
 
   const showDetail = request
+  const fmtAmt = (n) => n != null ? formatCurrency(n, showDetail.currency || 'TWD') : '-'
   const empRow = employees.find(e => e.name === showDetail.employee)
   const isNonExpense = showDetail.is_expense === false
 
@@ -65,8 +65,8 @@ export default function ExpenseDetailModal({
                   <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                     <td style={{ padding: '4px 8px' }}>{li.name}</td>
                     <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
-                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmt(li.unit_price)}</td>
-                    <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmt(li.subtotal)}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtAmt(li.unit_price)}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmtAmt(li.subtotal)}</td>
                   </tr>
                 ))
               : (
@@ -86,12 +86,20 @@ export default function ExpenseDetailModal({
     label: '金額',
     value: (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8 }}>
-        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估金額</div><div style={{ fontWeight: 700 }}>{fmt(showDetail.estimated_amount)}</div></div>
-        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmt(showDetail.actual_amount) : '—'}</div></div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+            預估金額
+            {showDetail.currency && showDetail.currency !== 'TWD' && (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{showDetail.currency}</span>
+            )}
+          </div>
+          <div style={{ fontWeight: 700 }}>{fmtAmt(showDetail.estimated_amount)}</div>
+        </div>
+        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>實際金額</div><div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmtAmt(showDetail.actual_amount) : '—'}</div></div>
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>差異</div>
           <div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-            {showDetail.difference != null ? fmt(showDetail.difference) : '—'}
+            {showDetail.difference != null ? fmtAmt(showDetail.difference) : '—'}
           </div>
         </div>
       </div>

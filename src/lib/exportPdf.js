@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
+import { formatCurrency } from './currency'
 
 import { toast } from './toast'
 // Common PDF setup with Chinese-friendly font
@@ -215,7 +216,7 @@ export function exportTaxReportPdf(reportData) {
 //   attachments               附件陣列 [{url, name, type}]，圖檔會內嵌
 export function exportExpenseRequestPdf(req, opts = {}) {
   if (!req) return
-  const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+  const fmt = (n) => n != null ? formatCurrency(n, req.currency || 'TWD') : '-'
   const isNonExpense = req.is_expense === false
 
   const rawItems = req.items

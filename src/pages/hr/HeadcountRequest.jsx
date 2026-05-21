@@ -588,8 +588,7 @@ export default function HeadcountRequest() {
           maxWidth={760}
         >
           {/* 套用範本列 */}
-          {templates.length > 0 && (
-            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
               <BookOpen size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>套用範本</span>
               <select
@@ -616,7 +615,6 @@ export default function HeadcountRequest() {
                 套用
               </button>
             </div>
-          )}
 
           {/* 區塊 1：基本資訊 */}
           <SectionTitle>📋 基本資訊</SectionTitle>

@@ -266,10 +266,12 @@ export default function Sidebar() {
     '/hr/labor-law-rates':   'nav.salary.law',
     '/hr/insurance-grade':   'nav.salary.law',
     // ── 人才發展 ──
-    '/hr/recruitment': 'nav.talent',
-    '/hr/training':    'nav.talent',
-    '/hr/probation':   'nav.talent',
-    '/hr/transfer':    'nav.talent',
+    '/hr/recruitment':        'nav.talent',
+    '/hr/training':           'nav.talent',
+    '/hr/probation':          'nav.talent',
+    '/hr/transfer':           'nav.talent',
+    '/hr/contract-employees': 'nav.talent',
+    '/hr/foreign-workers':    'nav.talent',
     // ── 員工體驗（除員工自助）──
     '/hr/surveys':   'nav.experience_mgr',
     '/hr/assistant': 'nav.experience_mgr',

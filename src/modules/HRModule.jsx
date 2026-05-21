@@ -48,6 +48,8 @@ import ShiftSwaps from '../pages/hr/ShiftSwaps'
 import FormBuilder from '../pages/hr/FormBuilder'
 import CustomFormFill from '../pages/hr/CustomFormFill'
 import FormSubmissions from '../pages/hr/FormSubmissions'
+import ContractEmployees from '../pages/hr/ContractEmployees'
+import ForeignWorkers from '../pages/hr/ForeignWorkers'
 
 export default memo(function HRModule() {
   return (
@@ -100,6 +102,8 @@ export default memo(function HRModule() {
       <Route path="form-builder" element={<FormBuilder />} />
       <Route path="insurance-grade" element={<InsuranceGradeMonitor />} />
       <Route path="labor-law-rates" element={<LaborLawRates />} />
+      <Route path="contract-employees" element={<ContractEmployees />} />
+      <Route path="foreign-workers" element={<ForeignWorkers />} />
     </Routes>
   )
 })

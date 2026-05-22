@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
-import { X, CheckCircle2, XCircle, AlertCircle, UserCheck, RotateCcw, Send } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, CheckCircle2, XCircle, UserCheck, RotateCcw, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../LoadingSpinner'
+import { ModalOverlay } from '../Modal'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 
@@ -51,16 +52,15 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
   if (loading || !audit) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <ModalOverlay onClose={onClose}>
         <LoadingSpinner />
-      </div>
+      </ModalOverlay>
     )
   }
 
   const isDraft = audit.status === '草稿'
   const isConfirming = audit.status === '待確認'
   const isApproving = audit.status === '申請中'
-  const isFinalized = audit.status === '已核准' || audit.status === '已退回'
   const isAuditor = profile?.id === audit.auditor_id
 
   // 群組化 items
@@ -176,7 +176,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const s = STATUS_BADGE[audit.status] || {}
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+    <ModalOverlay onClose={onClose}>
       <div className="card" style={{ width: 'min(900px, 96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ padding: 16, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -335,7 +335,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
           )}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 

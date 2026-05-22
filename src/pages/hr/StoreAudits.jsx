@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ClipboardCheck, Plus, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ClipboardCheck, Plus, Search, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { ModalOverlay } from '../../components/Modal'
 import { toast } from '../../lib/toast'
 import StoreAuditDetailModal from '../../components/audit/StoreAuditDetailModal'
 
@@ -211,12 +213,12 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="card" style={{ width: 'min(520px, 92vw)', maxHeight: '90vh', overflowY: 'auto' }}>
+    <ModalOverlay onClose={onClose}>
+      <div className="card" style={{ width: 'min(520px, 92vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: 20, borderBottom: '1px solid var(--border)' }}>
           <h3 style={{ margin: 0 }}>新增門市稽核單</h3>
         </div>
-        <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+        <div style={{ padding: 20, display: 'grid', gap: 12, overflowY: 'auto', flex: 1 }}>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>門市 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
             <select className="form-input" value={storeId} onChange={e => setStoreId(e.target.value)} style={{ width: '100%' }}>
@@ -248,14 +250,21 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
             </div>
           </div>
           <div>
-            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>簽核鏈（可選，未選送出後直接核准）</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>簽核鏈（可選，未選送出後直接核准）</label>
+              <Link to="/process/settings/chains" target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--accent-cyan)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <Settings size={12} /> 設定簽核鏈
+              </Link>
+            </div>
             <select className="form-input" value={chainId} onChange={e => setChainId(e.target.value)} style={{ width: '100%' }}>
-              <option value="">不走簽核鏈</option>
+              <option value="">不走簽核鏈（送出後直接核准）</option>
               {chains.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              （簽核鏈於組織管理 → 簽核流程設定，category 填「門市稽核」）
-            </div>
+            {chains.length === 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                沒有可用簽核鏈，點右上「設定簽核鏈」前往新增（category 選「門市稽核」）
+              </div>
+            )}
           </div>
         </div>
         <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -263,6 +272,6 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
           <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? '建立中…' : '建立 + 填表'}</button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

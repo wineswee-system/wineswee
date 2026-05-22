@@ -83,9 +83,10 @@ export default function StoreAudits() {
             <p>共 {list.length} 筆 · 待確認 {counts['待確認']} · 簽核中 {counts['申請中']}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/process/settings/chains" target="_blank" rel="noopener"
+            <Link to="/process/settings/chains/edit?formType=store_audit&label=門市稽核&mode=amount_grouped"
               className="btn btn-secondary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+              title="設定門市稽核專用的簽核流程（獨立分類，與其他簽核不混用）">
               <Settings size={16} /> 稽核簽核設定
             </Link>
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>

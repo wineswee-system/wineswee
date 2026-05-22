@@ -12,7 +12,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [profileReady, setProfileReady] = useState(false)
   const profileLoaded = useRef(false)
-  const [empId, setEmpId] = useState(null)
 
   const loadProfile = useCallback(async (authUser) => {
     if (!authUser?.email) {
@@ -36,26 +35,22 @@ export function AuthProvider({ children }) {
         emp = empByEmail
       }
       setProfile(emp || null)
-      setEmpId(emp?.id || null)
       if (!emp) return
 
-      // Load organization
-      if (emp.organization_id) {
-        const { data: org } = await supabase
-          .from('organizations').select('id, name, slug, plan, status').eq('id', emp.organization_id).maybeSingle()
-        setOrganization(org || null)
-      }
-
-      // Load role + effective permissions (role baseline + individual grant/revoke overrides)
-      if (emp.role_id) {
-        const { data: roleData } = await supabase
-          .from('roles').select('*').eq('id', emp.role_id).maybeSingle()
-        setRole(roleData || null)
-      }
+      // Fetch org, role, and permissions in parallel (independent queries)
+      const [orgResult, roleResult, permsResult] = await Promise.all([
+        emp.organization_id
+          ? supabase.from('organizations').select('id, name, slug, plan, status').eq('id', emp.organization_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        emp.role_id
+          ? supabase.from('roles').select('*').eq('id', emp.role_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.rpc('get_employee_effective_permissions', { p_emp_id: emp.id }),
+      ])
+      setOrganization(orgResult.data || null)
+      setRole(roleResult.data || null)
       // 用 effective_permissions RPC 抓含個人 override 的最終清單
-      const { data: perms } = await supabase
-        .rpc('get_employee_effective_permissions', { p_emp_id: emp.id })
-      setPermissions((perms || []).map(p => p.code).filter(Boolean))
+      setPermissions((permsResult.data || []).map(p => p.code).filter(Boolean))
     } catch (err) {
       console.error('Failed to load employee profile:', err)
       setProfile(null)
@@ -102,6 +97,7 @@ export function AuthProvider({ children }) {
 
   // 強制登出：Realtime + polling 雙保險
   useEffect(() => {
+    const empId = profile?.id
     if (!empId) return
     const loginTime = Date.now()
 
@@ -137,7 +133,7 @@ export function AuthProvider({ children }) {
       supabase.removeChannel(channel)
       clearInterval(timer)
     }
-  }, [empId])
+  }, [profile?.id])
 
   const signIn = useCallback((email, password) =>
     supabase.auth.signInWithPassword({ email, password }), [])
@@ -145,7 +141,6 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setUser(null); setProfile(null); setOrganization(null); setRole(null); setPermissions([])
-    setEmpId(null)
     profileLoaded.current = false
   }, [])
 

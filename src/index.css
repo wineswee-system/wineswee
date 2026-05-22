@@ -33,6 +33,7 @@
   --accent-orange-dim: rgba(251, 146, 60, 0.15);
   --accent-red: #f87171;
   --accent-red-dim: rgba(248, 113, 113, 0.15);
+  --accent-red-subtle: rgba(248, 113, 113, 0.05);
   --accent-pink: #f472b6;
   --accent-pink-dim: rgba(244, 114, 182, 0.15);
   --accent-yellow: #fbbf24;
@@ -104,6 +105,7 @@
   --accent-orange-dim: rgba(245, 158, 11, 0.10);
   --accent-red: #ef4444;
   --accent-red-dim: rgba(239, 68, 68, 0.10);
+  --accent-red-subtle: rgba(239, 68, 68, 0.05);
   --accent-pink: #ec4899;
   --accent-pink-dim: rgba(236, 72, 153, 0.10);
   --accent-yellow: #eab308;

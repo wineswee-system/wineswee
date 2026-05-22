@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { X, CheckCircle2, XCircle, RotateCcw, Send, Edit3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -10,11 +10,11 @@ import SignaturePad from './SignaturePad'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 const STATUS_BADGE = {
-  '草稿':   { bg: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)' },
-  '待確認': { bg: 'rgba(99,102,241,0.15)',   color: '#6366f1' },
-  '申請中': { bg: 'rgba(245,158,11,0.15)',   color: 'var(--accent-orange)' },
-  '已核准': { bg: 'rgba(34,197,94,0.15)',    color: 'var(--accent-green)' },
-  '已退回': { bg: 'rgba(239,68,68,0.15)',    color: 'var(--accent-red)' },
+  '草稿':   { bg: 'var(--bg-secondary)',      color: 'var(--text-muted)' },
+  '待確認': { bg: 'var(--accent-purple-dim)',  color: 'var(--accent-purple)' },
+  '申請中': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' },
+  '已核准': { bg: 'var(--accent-green-dim)',  color: 'var(--accent-green)' },
+  '已退回': { bg: 'var(--accent-red-dim)',    color: 'var(--accent-red)' },
 }
 
 export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
@@ -27,8 +27,9 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const [chainSteps, setChainSteps] = useState([])
   const [employees, setEmployees] = useState([])
   const [signingIdx, setSigningIdx] = useState(null)  // 哪位當班人員正在簽名
+  const employeeOptions = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     const [a, i, d, e] = await Promise.all([
       supabase.from('store_audits').select('*').eq('id', auditId).single(),
@@ -50,8 +51,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       setChainSteps(cs || [])
     }
     setLoading(false)
-  }
-  useEffect(() => { if (auditId) load() }, [auditId]) // eslint-disable-line
+  }, [auditId, onClose])
+  useEffect(() => { if (auditId) load() }, [auditId, load])
 
   if (loading || !audit) {
     return (
@@ -177,7 +178,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   // ─── 當班人員管理（草稿時可改）───
   const addOnDuty = () => {
     if (onDuty.length >= 3) { toast.warning('最多 3 人'); return }
-    setOnDuty(prev => [...prev, { employee_id: null, employee_name: '', sort_order: prev.length, confirmed: false }])
+    setOnDuty(prev => [...prev, { employee_id: null, employee_name: '', sort_order: prev.length, confirmed: false, _key: crypto.randomUUID() }])
   }
   const updateOnDuty = (idx, empId) => {
     const emp = employees.find(e => e.id === Number(empId))
@@ -251,13 +252,13 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
             {isDraft ? (
               <>
                 {onDuty.map((d, idx) => (
-                  <div key={idx} style={{ marginBottom: 8, padding: 8, background: 'var(--bg-primary)', borderRadius: 6 }}>
+                  <div key={d._key ?? d.id ?? idx} style={{ marginBottom: 8, padding: 8, background: 'var(--bg-primary)', borderRadius: 6 }}>
                     <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <SearchableSelect
                           value={d.employee_id || ''}
                           onChange={(v) => updateOnDuty(idx, v)}
-                          options={empOptions(employees, { keyBy: 'id' })}
+                          options={employeeOptions}
                           placeholder="選當班人員"
                         />
                       </div>
@@ -302,10 +303,10 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
               <div style={{ marginTop: 20 }}>
                 <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>簽核流程</h4>
                 {chainSteps.map((cs, i) => {
-                  const done = isApproving ? i < audit.current_step : (audit.status === '已核准' ? true : false)
+                  const done = isApproving ? i < audit.current_step : audit.status === '已核准'
                   const current = isApproving && i === audit.current_step
                   return (
-                    <div key={cs.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: current ? 'rgba(245,158,11,0.1)' : 'transparent', fontSize: 12 }}>
+                    <div key={cs.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: current ? 'var(--accent-orange-dim)' : 'transparent', fontSize: 12 }}>
                       <div style={{ width: 18, height: 18, borderRadius: '50%', background: done ? 'var(--accent-green)' : current ? 'var(--accent-orange)' : 'var(--bg-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
                         {done ? '✓' : i + 1}
                       </div>
@@ -317,7 +318,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
             )}
 
             {audit.reject_reason && (
-              <div style={{ marginTop: 16, padding: 8, background: 'rgba(239,68,68,0.1)', borderRadius: 6, fontSize: 12 }}>
+              <div style={{ marginTop: 16, padding: 8, background: 'var(--accent-red-dim)', borderRadius: 6, fontSize: 12 }}>
                 <div style={{ color: 'var(--accent-red)', fontWeight: 700, marginBottom: 4 }}>退回原因</div>
                 <div>{audit.reject_reason}</div>
               </div>
@@ -376,12 +377,13 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
 // ─── 評核項目單列 ───
 function ItemRow({ item, employees, editable, onChange }) {
+  const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
   const failed = item.passed === false
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8, padding: '8px 4px',
       borderBottom: '1px solid var(--border)', alignItems: 'center', fontSize: 13,
-      background: failed ? 'rgba(239,68,68,0.04)' : 'transparent',
+      background: failed ? 'var(--accent-red-subtle)' : 'transparent',
     }}>
       <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.item_no}</div>
       <div>
@@ -394,7 +396,7 @@ function ItemRow({ item, employees, editable, onChange }) {
                 const emp = employees.find(x => x.id === Number(v))
                 onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
               }}
-              options={empOptions(employees, { keyBy: 'id' })}
+              options={empOpts}
               placeholder="未指定責任人（算當班全體）"
             />
           </div>
@@ -427,7 +429,7 @@ function ItemRow({ item, employees, editable, onChange }) {
         ) : (
           <span style={{
             padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-            background: item.passed === true ? 'rgba(34,197,94,0.12)' : item.passed === false ? 'rgba(239,68,68,0.12)' : 'var(--bg-primary)',
+            background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : 'var(--bg-primary)',
             color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : 'var(--text-muted)',
           }}>
             {item.passed === true ? '✓ 合格' : item.passed === false ? '✗ 不合格' : '—'}

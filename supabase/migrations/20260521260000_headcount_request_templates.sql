@@ -15,36 +15,44 @@ CREATE INDEX IF NOT EXISTS idx_hrt_org ON headcount_request_templates(organizati
 ALTER TABLE headcount_request_templates ENABLE ROW LEVEL SECURITY;
 
 -- 同組織成員可讀
-CREATE POLICY "hrt_select" ON headcount_request_templates
-  FOR SELECT USING (
-    organization_id IN (
-      SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "hrt_select" ON headcount_request_templates
+    FOR SELECT USING (
+      organization_id IN (
+        SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 同組織成員可建立
-CREATE POLICY "hrt_insert" ON headcount_request_templates
-  FOR INSERT WITH CHECK (
-    organization_id IN (
-      SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "hrt_insert" ON headcount_request_templates
+    FOR INSERT WITH CHECK (
+      organization_id IN (
+        SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 同組織成員可更新
-CREATE POLICY "hrt_update" ON headcount_request_templates
-  FOR UPDATE USING (
-    organization_id IN (
-      SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "hrt_update" ON headcount_request_templates
+    FOR UPDATE USING (
+      organization_id IN (
+        SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 同組織成員可刪除
-CREATE POLICY "hrt_delete" ON headcount_request_templates
-  FOR DELETE USING (
-    organization_id IN (
-      SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "hrt_delete" ON headcount_request_templates
+    FOR DELETE USING (
+      organization_id IN (
+        SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- updated_at 自動更新
 CREATE OR REPLACE FUNCTION set_hrt_updated_at()

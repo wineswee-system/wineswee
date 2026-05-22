@@ -129,7 +129,7 @@ export function AuthProvider({ children }) {
         const flagTime = new Date(data.force_logout_at).getTime()
         if (flagTime > loginTime) supabase.auth.signOut()
       }
-    }, 8000)
+    }, 60000)
 
     return () => {
       supabase.removeChannel(channel)

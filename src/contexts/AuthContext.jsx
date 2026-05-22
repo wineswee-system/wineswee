@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -59,6 +59,8 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Failed to load employee profile:', err)
       setProfile(null)
+      // Allow retry on next auth event
+      profileLoaded.current = false
     } finally {
       setProfileReady(true)
     }
@@ -118,7 +120,7 @@ export function AuthProvider({ children }) {
       })
       .subscribe()
 
-    // Polling 備援：每 8 秒查一次，如果 force_logout_at 比本次登入晚就登出
+    // Polling 備援：每 60 秒查一次，如果 force_logout_at 比本次登入晚就登出
     const timer = setInterval(async () => {
       const { data } = await supabase
         .from('employees')
@@ -137,31 +139,31 @@ export function AuthProvider({ children }) {
     }
   }, [empId])
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password })
+  const signIn = useCallback((email, password) =>
+    supabase.auth.signInWithPassword({ email, password }), [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setUser(null); setProfile(null); setOrganization(null); setRole(null); setPermissions([])
     setEmpId(null)
     profileLoaded.current = false
-  }
+  }, [])
 
   const hasPermission = useCallback((code) => {
     if (role?.name === 'super_admin') return true
     return permissions.includes(code)
   }, [permissions, role])
 
-  const isAdmin = role?.name === 'admin' || role?.name === 'super_admin'
-  const isSuperAdmin = role?.name === 'super_admin'
+  const value = useMemo(() => ({
+    user, profile, organization, role, permissions, loading, profileReady,
+    isAuthenticated: !!user,
+    isAdmin: role?.name === 'admin' || role?.name === 'super_admin',
+    isSuperAdmin: role?.name === 'super_admin',
+    hasPermission, signIn, signOut,
+  }), [user, profile, organization, role, permissions, loading, profileReady, hasPermission, signIn, signOut])
 
   return (
-    <AuthContext.Provider value={{
-      user, profile, organization, role, permissions, loading, profileReady,
-      isAuthenticated: !!user,
-      isAdmin, isSuperAdmin, hasPermission,
-      signIn, signOut,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

@@ -7,6 +7,7 @@ import { ModalOverlay } from '../Modal'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import SignaturePad from './SignaturePad'
+import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 const STATUS_BADGE = {
   '草稿':   { bg: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)' },
@@ -33,7 +34,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       supabase.from('store_audits').select('*').eq('id', auditId).single(),
       supabase.from('store_audit_items').select('*').eq('audit_id', auditId).order('category_code').order('item_no'),
       supabase.from('store_audit_on_duty').select('*').eq('audit_id', auditId).order('sort_order'),
-      supabase.from('employees').select('id, name, status').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, position, dept:departments(name), store:stores(name)').eq('status', '在職').order('name'),
     ])
     if (a.error) { toast.error('載入失敗：' + a.error.message); onClose(); return }
     setAudit(a.data)
@@ -251,12 +252,16 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
               <>
                 {onDuty.map((d, idx) => (
                   <div key={idx} style={{ marginBottom: 8, padding: 8, background: 'var(--bg-primary)', borderRadius: 6 }}>
-                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                      <select className="form-input" style={{ flex: 1, fontSize: 12 }} value={d.employee_id || ''} onChange={e => updateOnDuty(idx, e.target.value)}>
-                        <option value="">請選擇</option>
-                        {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                      </select>
-                      <button className="btn btn-sm btn-secondary" style={{ padding: '0 8px' }} onClick={() => removeOnDuty(idx)}>×</button>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <SearchableSelect
+                          value={d.employee_id || ''}
+                          onChange={(v) => updateOnDuty(idx, v)}
+                          options={empOptions(employees, { keyBy: 'id' })}
+                          placeholder="選當班人員"
+                        />
+                      </div>
+                      <button className="btn btn-sm btn-secondary" style={{ padding: '0 8px', height: 36 }} onClick={() => removeOnDuty(idx)}>×</button>
                     </div>
                     {d.employee_id && (
                       d.signature_data_url ? (
@@ -382,15 +387,17 @@ function ItemRow({ item, employees, editable, onChange }) {
       <div>
         {item.item_text}
         {failed && editable && (
-          <select className="form-input" style={{ width: '100%', marginTop: 4, fontSize: 11, padding: '2px 6px' }}
-            value={item.responsible_employee_id || ''}
-            onChange={e => {
-              const emp = employees.find(x => x.id === Number(e.target.value))
-              onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
-            }}>
-            <option value="">未指定（算當班全體）</option>
-            {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-          </select>
+          <div style={{ width: '100%', marginTop: 4 }}>
+            <SearchableSelect
+              value={item.responsible_employee_id || ''}
+              onChange={(v) => {
+                const emp = employees.find(x => x.id === Number(v))
+                onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
+              }}
+              options={empOptions(employees, { keyBy: 'id' })}
+              placeholder="未指定責任人（算當班全體）"
+            />
+          </div>
         )}
         {failed && !editable && item.responsible_employee_name && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>責任人：{item.responsible_employee_name}</div>

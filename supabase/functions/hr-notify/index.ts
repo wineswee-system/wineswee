@@ -525,6 +525,95 @@ function buildFormSubmissionNotification(
   };
 }
 
+// ── store_audit：門市稽核通知 ────────────────────────────────
+function buildStoreAuditNotification(
+  variant: "on_duty_assigned" | "step_assigned" | "approved" | "rejected",
+  details: {
+    audit_id: number; store_name: string; audit_date: string;
+    shift?: string | null; auditor_name?: string;
+    failed_count?: number; total_deducted?: number;
+    current_step_label?: string; current_step_index?: number; total_steps?: number;
+    reject_reason?: string | null; approver?: string | null;
+    liff_url?: string | null;
+  },
+) {
+  const aid = details.audit_id;
+  const isAction = variant === "on_duty_assigned" || variant === "step_assigned";
+  const isOnDuty = variant === "on_duty_assigned";
+  const isApproved = variant === "approved";
+  const headerColor = isOnDuty ? "#6366f1"
+                    : variant === "step_assigned" ? "#0EA5E9"
+                    : isApproved ? "#16a34a" : "#dc2626";
+  const emoji = isOnDuty ? "📋" : variant === "step_assigned" ? "🔍"
+              : isApproved ? "✅" : "❌";
+  const headerLabel = isOnDuty
+    ? `稽核確認：${details.store_name}`
+    : variant === "step_assigned" ? `待你簽核：${details.store_name}`
+    : isApproved ? `稽核已通過：${details.store_name}`
+    : `稽核已退回：${details.store_name}`;
+  const altText = `${emoji} ${headerLabel}`;
+
+  const bodyRows: object[] = [
+    row("門市", details.store_name),
+    row("日期", `${details.audit_date}${details.shift ? ` · ${details.shift}` : ""}`),
+    row("稽核員", details.auditor_name || "—"),
+  ];
+  if (typeof details.failed_count === "number") {
+    bodyRows.push(row("不合格項目", `${details.failed_count} 項`, details.failed_count > 0 ? "#dc2626" : "#111111"));
+  }
+  if (typeof details.total_deducted === "number" && details.total_deducted > 0) {
+    bodyRows.push(row("扣分", `${details.total_deducted} 分`, "#dc2626"));
+  }
+  if (variant === "step_assigned" && details.current_step_label) {
+    bodyRows.push(row("關卡", `第 ${(details.current_step_index ?? 0) + 1}/${details.total_steps ?? "?"} 關 · ${details.current_step_label}`, "#0EA5E9"));
+  }
+  if (variant === "rejected" && details.reject_reason) {
+    bodyRows.push({ type: "separator", margin: "md" });
+    bodyRows.push({ type: "text", text: "退回原因", size: "xs", color: "#9CA3AF", margin: "md" });
+    bodyRows.push({ type: "text", text: details.reject_reason, size: "sm", color: "#dc2626", wrap: true, margin: "xs" });
+  }
+  if (isApproved && details.approver) {
+    bodyRows.push(row("核簽人", details.approver, "#16a34a"));
+  }
+
+  const footerButtons: object[] = [];
+  if (isAction) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: isOnDuty ? "✅ 確認屬實" : "✅ 核准",
+          data: `action=approve&type=request&rt=store_audit&id=${aid}`,
+          displayText: isOnDuty ? "確認" : "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=request&rt=store_audit&id=${aid}`,
+          displayText: "退回" } },
+    );
+  }
+  if (details.liff_url) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: isAction ? "📋 看完整詳情" : "📋 看詳情", uri: details.liff_url } });
+  }
+
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [
+          { type: "text", text: `${emoji} ${headerLabel}`, weight: "bold", color: "#FFFFFF", size: "md", wrap: true },
+          { type: "text", text: `#${aid}`, size: "xs", color: "#FFFFFFAA", margin: "xs" },
+        ],
+      },
+      body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: bodyRows },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
+    },
+  };
+}
+
 // ══════════════════════════════════════════════════════════════
 // Main Handler
 // ══════════════════════════════════════════════════════════════
@@ -774,6 +863,14 @@ serve(async (req) => {
       message = buildFormSubmissionNotification("approved", details);
     } else if (type === "form_submission_rejected") {
       message = buildFormSubmissionNotification("rejected", details);
+    } else if (type === "store_audit_on_duty_assigned") {
+      message = buildStoreAuditNotification("on_duty_assigned", details);
+    } else if (type === "store_audit_step_assigned") {
+      message = buildStoreAuditNotification("step_assigned", details);
+    } else if (type === "store_audit_approved") {
+      message = buildStoreAuditNotification("approved", details);
+    } else if (type === "store_audit_rejected") {
+      message = buildStoreAuditNotification("rejected", details);
     } else if (type === "task_auto_started") {
       // 補抓 task 完整欄位（trigger 只丟 task_id + 簡單 details，這裡 hydrate）
       let enriched = { ...details, liff_id: acct?.liffId || null };

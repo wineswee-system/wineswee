@@ -250,15 +250,20 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
   useEffect(() => {
     if (anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect()
-      const popupH = 380  // approximate popup height
-      const spaceAbove = rect.top
-      const spaceBelow = window.innerHeight - rect.bottom
+      // body zoom 使 getBoundingClientRect 回傳縮放座標，position:fixed 需除以 scale
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
+      const rTop    = rect.top    / scale
+      const rBottom = rect.bottom / scale
+      const rLeft   = rect.left   / scale
+      const popupH = 380
+      const spaceAbove = rTop
+      const spaceBelow = window.innerHeight - rBottom
       const top = spaceAbove > popupH
-        ? rect.top - popupH - 4   // above
+        ? rTop - popupH - 4
         : spaceBelow > popupH
-          ? rect.bottom + 4       // below
-          : Math.max(8, (window.innerHeight - popupH) / 2)  // center
-      const left = Math.max(8, Math.min(rect.left - 80, window.innerWidth - 230))
+          ? rBottom + 4
+          : Math.max(8, (window.innerHeight - popupH) / 2)
+      const left = Math.max(8, Math.min(rLeft - 80, window.innerWidth - 230))
       setPos({ top, left })
     }
   }, [])

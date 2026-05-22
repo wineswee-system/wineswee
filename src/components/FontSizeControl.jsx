@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Minus, Plus } from 'lucide-react'
-import { getFontScale, setFontScale, FONT_SCALE_LIMITS } from '../lib/fontScale'
+import { getFontScale, setFontScale, resetFontScale, FONT_SCALE_LIMITS } from '../lib/fontScale'
 
 // 緊湊版：2 顆小按鈕，塞進 sidebar 底部 user 列旁邊。
-// 雙擊 A 字 → 重設回預設
+// 雙擊 → 清除偏好，回到自動縮放（依視窗寬度計算）
 export default function FontSizeControl() {
   const [scale, setScale] = useState(getFontScale())
 
@@ -15,7 +15,7 @@ export default function FontSizeControl() {
     const next = Math.round((scale + delta) * 100) / 100
     setScale(setFontScale(next))
   }
-  const reset = () => setScale(setFontScale(FONT_SCALE_LIMITS.DEFAULT))
+  const reset = () => setScale(resetFontScale())
 
   const atMin = scale <= FONT_SCALE_LIMITS.MIN + 0.001
   const atMax = scale >= FONT_SCALE_LIMITS.MAX - 0.001
@@ -26,7 +26,7 @@ export default function FontSizeControl() {
         onClick={() => bump(-FONT_SCALE_LIMITS.STEP)}
         onDoubleClick={reset}
         disabled={atMin}
-        title={`縮小字體（目前 ${Math.round(scale * 100)}%，雙擊重設）`}
+        title={`縮小字體（目前 ${Math.round(scale * 100)}%，雙擊回自動）`}
         style={btn(atMin)}
       >
         <Minus size={12} />
@@ -35,7 +35,7 @@ export default function FontSizeControl() {
         onClick={() => bump(FONT_SCALE_LIMITS.STEP)}
         onDoubleClick={reset}
         disabled={atMax}
-        title={`放大字體（目前 ${Math.round(scale * 100)}%，雙擊重設）`}
+        title={`放大字體（目前 ${Math.round(scale * 100)}%，雙擊回自動）`}
         style={btn(atMax)}
       >
         <Plus size={12} />

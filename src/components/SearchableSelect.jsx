@@ -79,25 +79,30 @@ export default function SearchableSelect({
       const el = triggerRef.current
       if (!el) { rafId = requestAnimationFrame(tick); return }
       const rect = el.getBoundingClientRect()
-      let desiredTop = rect.bottom + 4
-      let desiredLeft = rect.left
+      // body zoom 使 getBoundingClientRect 回傳縮放座標，position:fixed 需除以 scale
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
+      let desiredTop = rect.bottom / scale + 4
+      let desiredLeft = rect.left / scale
 
       // 補償：量 popup 實際 viewport 位置 vs 我們設定的 style top，差值反推 offset
+      // （祖先有 CSS transform 時 position:fixed 會相對於該祖先，需要修正）
       const pop = popupRef.current
       if (pop) {
         const popRect = pop.getBoundingClientRect()
         const styleTop = parseFloat(pop.style.top) || 0
         const styleLeft = parseFloat(pop.style.left) || 0
-        const offsetY = popRect.top - styleTop
-        const offsetX = popRect.left - styleLeft
+        // popRect 也是縮放座標，除以 scale 才能和 style 值比較
+        const offsetY = popRect.top / scale - styleTop
+        const offsetX = popRect.left / scale - styleLeft
         // 1px 容忍誤差避免次像素抖動
         if (Math.abs(offsetY) > 0.5) desiredTop -= offsetY
         if (Math.abs(offsetX) > 0.5) desiredLeft -= offsetX
       }
 
-      if (desiredTop !== lastTop || desiredLeft !== lastLeft || rect.width !== lastWidth) {
-        lastTop = desiredTop; lastLeft = desiredLeft; lastWidth = rect.width
-        setPopupPos({ top: desiredTop, left: desiredLeft, width: rect.width })
+      const unscaledWidth = rect.width / scale
+      if (desiredTop !== lastTop || desiredLeft !== lastLeft || unscaledWidth !== lastWidth) {
+        lastTop = desiredTop; lastLeft = desiredLeft; lastWidth = unscaledWidth
+        setPopupPos({ top: desiredTop, left: desiredLeft, width: unscaledWidth })
       }
       rafId = requestAnimationFrame(tick)
     }

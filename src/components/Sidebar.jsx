@@ -29,13 +29,18 @@ if (typeof window !== 'undefined') {
 // 螢幕右側不夠就換到左側顯示。
 function SidebarTooltipLayer({ tip }) {
   if (!tip || !tip.text) return null
-  // 預設右側顯示；如螢幕右邊空間不夠改左側
+  // getBoundingClientRect() 在 body zoom 下回傳縮放後的座標，position:fixed 需要除以 scale
+  const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
   const tooltipWidth = 280
   const margin = 10
-  const showRight = (tip.rect.right + margin + tooltipWidth) < window.innerWidth
+  const r = tip.rect
+  const top  = r.top  / scale + (r.height / scale) / 2
+  const left = r.left  / scale
+  const right = r.right / scale
+  const showRight = (right + margin + tooltipWidth) < window.innerWidth
   const style = {
     position: 'fixed',
-    top: tip.rect.top + tip.rect.height / 2,
+    top,
     transform: 'translateY(-50%)',
     maxWidth: tooltipWidth,
     background: 'rgba(31, 41, 55, 0.95)',
@@ -48,8 +53,8 @@ function SidebarTooltipLayer({ tip }) {
     pointerEvents: 'none',
     boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
   }
-  if (showRight) style.left = tip.rect.right + margin
-  else style.right = window.innerWidth - tip.rect.left + margin
+  if (showRight) style.left = right + margin
+  else style.right = window.innerWidth - left + margin
   return <div style={style}>{tip.text}</div>
 }
 
@@ -324,9 +329,18 @@ export default function Sidebar() {
     const btnEl = btnRefs.current[openDropdown]
     if (!btnEl) return {}
     const rect = btnEl.getBoundingClientRect()
+    // getBoundingClientRect() 傳回的是縮放後座標（body zoom 影響）
+    // position:fixed 使用 viewport 原始座標，需除以縮放比例修正
+    const scale = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')
+    ) || 1
+    const centerX = (rect.left + rect.width / 2) / scale
+    const topY = rect.bottom / scale + 6
+    // 防止右側溢出：保留 20px 邊距
+    const clampedLeft = Math.max(20, Math.min(centerX, window.innerWidth - 20))
     return {
-      top: rect.bottom + 6,
-      left: rect.left + rect.width / 2,
+      top: topY,
+      left: clampedLeft,
       transform: 'translateX(-50%)',
     }
   }

@@ -9,8 +9,15 @@ import { applyFontScale, getFontScale } from './lib/fontScale.js'
 
 const log = logger.forModule('app')
 
-// 套用使用者偏好的字體大小（從 localStorage）
+// 套用字體大小（有使用者偏好用偏好值，否則依視窗寬度自動計算）
 applyFontScale(getFontScale())
+
+// 無使用者偏好時，視窗縮放自動重算比例
+window.addEventListener('resize', () => {
+  if (!localStorage.getItem('app.fontScale')) {
+    applyFontScale(getFontScale())
+  }
+}, { passive: true })
 
 // Initialize event bus with all domain handlers
 registerAllHandlers(getEventBus())

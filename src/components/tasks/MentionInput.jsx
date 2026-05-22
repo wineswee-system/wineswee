@@ -22,7 +22,10 @@ export default function MentionInput({ value, onChange, employees = [], onSubmit
         setMenuOpen(true)
         setMenuStart(atIdx)
         const rect = taRef.current?.getBoundingClientRect()
-        if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.left })
+        if (rect) {
+          const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
+          setMenuPos({ top: rect.bottom / scale + 4, left: rect.left / scale })
+        }
         return
       }
     }

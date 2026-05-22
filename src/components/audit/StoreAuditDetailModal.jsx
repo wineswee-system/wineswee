@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { X, CheckCircle2, XCircle, UserCheck, RotateCcw, Send } from 'lucide-react'
+import { X, CheckCircle2, XCircle, RotateCcw, Send, Edit3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../LoadingSpinner'
 import { ModalOverlay } from '../Modal'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import SignaturePad from './SignaturePad'
 
 const STATUS_BADGE = {
   '草稿':   { bg: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)' },
@@ -24,6 +25,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const [onDuty, setOnDuty] = useState([])
   const [chainSteps, setChainSteps] = useState([])
   const [employees, setEmployees] = useState([])
+  const [signingIdx, setSigningIdx] = useState(null)  // 哪位當班人員正在簽名
 
   const load = async () => {
     setLoading(true)
@@ -59,7 +61,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   }
 
   const isDraft = audit.status === '草稿'
-  const isConfirming = audit.status === '待確認'
   const isApproving = audit.status === '申請中'
   const isAuditor = profile?.id === audit.auditor_id
 
@@ -96,36 +97,24 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const handleSubmit = async () => {
     if (pending > 0) { toast.warning(`還有 ${pending} 項未評核`); return }
     if (onDuty.length === 0) { toast.warning('請至少選 1 名當班人員'); return }
+    const unsigned = onDuty.filter(d => !d.signature_data_url)
+    if (unsigned.length > 0) {
+      toast.warning(`還有 ${unsigned.length} 位當班人員未簽名（${unsigned.map(d => d.employee_name).join('、')}）`)
+      return
+    }
     setSaving(true)
     const { data, error } = await supabase.rpc('submit_store_audit', {
       p_audit_id: auditId,
-      p_on_duty: onDuty.map(d => ({ employee_id: d.employee_id, employee_name: d.employee_name })),
+      p_on_duty: onDuty.map(d => ({
+        employee_id: d.employee_id,
+        employee_name: d.employee_name,
+        signature: d.signature_data_url,
+      })),
     })
     setSaving(false)
     if (error) { toast.error('送出失敗：' + error.message); return }
     if (!data?.ok) { toast.error('送出失敗：' + (data?.error || 'unknown')); return }
-    toast.success('已送出，待當班人員確認')
-    onChanged?.(); load()
-  }
-
-  // ─── 當班人員確認 ───
-  const handleConfirm = async (action) => {
-    let reason = null
-    if (action === 'reject') {
-      reason = prompt('退回原因？')
-      if (!reason?.trim()) return
-    } else {
-      const ok = await confirm({ message: '確認此份稽核單內容無誤？' })
-      if (!ok) return
-    }
-    setSaving(true)
-    const { data, error } = await supabase.rpc('confirm_store_audit_on_duty', {
-      p_audit_id: auditId, p_action: action, p_reason: reason,
-    })
-    setSaving(false)
-    if (error) { toast.error('操作失敗：' + error.message); return }
-    if (!data?.ok) { toast.error('操作失敗：' + (data?.error || 'unknown')); return }
-    toast.success(action === 'confirm' ? '已確認' : '已退回')
+    toast.success(data.event === 'auto_approved_no_chain' ? '已核准（無簽核鏈設定）' : '已送出，進入簽核流程')
     onChanged?.(); load()
   }
 
@@ -235,16 +224,31 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
           {/* 右：當班人員 + 簽核流程 */}
           <div style={{ padding: 16, overflowY: 'auto', background: 'var(--bg-secondary)' }}>
-            <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>當班人員（1~3 人）</h4>
+            <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>當班人員（1~3 人）{isDraft && '— 請現場簽名'}</h4>
             {isDraft ? (
               <>
                 {onDuty.map((d, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                    <select className="form-input" style={{ flex: 1, fontSize: 12 }} value={d.employee_id || ''} onChange={e => updateOnDuty(idx, e.target.value)}>
-                      <option value="">請選擇</option>
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                    </select>
-                    <button className="btn btn-sm btn-secondary" style={{ padding: '0 8px' }} onClick={() => removeOnDuty(idx)}>×</button>
+                  <div key={idx} style={{ marginBottom: 8, padding: 8, background: 'var(--bg-primary)', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                      <select className="form-input" style={{ flex: 1, fontSize: 12 }} value={d.employee_id || ''} onChange={e => updateOnDuty(idx, e.target.value)}>
+                        <option value="">請選擇</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      </select>
+                      <button className="btn btn-sm btn-secondary" style={{ padding: '0 8px' }} onClick={() => removeOnDuty(idx)}>×</button>
+                    </div>
+                    {d.employee_id && (
+                      d.signature_data_url ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                          <img src={d.signature_data_url} alt="簽名" style={{ height: 30, background: '#fff', borderRadius: 4, border: '1px solid var(--border)' }} />
+                          <span style={{ color: 'var(--accent-green)', flex: 1 }}>✓ 已簽</span>
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => setSigningIdx(idx)}>重簽</button>
+                        </div>
+                      ) : (
+                        <button className="btn btn-sm btn-primary" style={{ width: '100%', fontSize: 11, padding: '4px' }} onClick={() => setSigningIdx(idx)}>
+                          <Edit3 size={12} /> 請當班人員簽名
+                        </button>
+                      )
+                    )}
                   </div>
                 ))}
                 {onDuty.length < 3 && (
@@ -254,12 +258,13 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
             ) : (
               <div>
                 {onDuty.map(d => (
-                  <div key={d.id} style={{ padding: 8, background: 'var(--bg-primary)', borderRadius: 6, marginBottom: 4, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{d.employee_name}</span>
-                    {d.confirmed ? (
-                      <span style={{ color: 'var(--accent-green)', fontSize: 11 }}>✓ 已確認</span>
-                    ) : (
-                      <span style={{ color: 'var(--accent-orange)', fontSize: 11 }}>等待確認</span>
+                  <div key={d.id} style={{ padding: 8, background: 'var(--bg-primary)', borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span>{d.employee_name}</span>
+                      <span style={{ color: 'var(--accent-green)', fontSize: 11 }}>✓ 已簽</span>
+                    </div>
+                    {d.signature_data_url && (
+                      <img src={d.signature_data_url} alt="簽名" style={{ height: 36, background: '#fff', borderRadius: 4, border: '1px solid var(--border)' }} />
                     )}
                   </div>
                 ))}
@@ -308,16 +313,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
               <Send size={14} /> 送出（待當班確認）
             </button>
           )}
-          {isConfirming && onDuty.some(d => d.employee_id === profile?.id && !d.confirmed) && (
-            <>
-              <button className="btn btn-warning" onClick={() => handleConfirm('reject')} disabled={saving}>
-                <XCircle size={14} /> 退回
-              </button>
-              <button className="btn btn-primary" onClick={() => handleConfirm('confirm')} disabled={saving}>
-                <UserCheck size={14} /> 確認屬實
-              </button>
-            </>
-          )}
+          {/* 「待確認」狀態保留供舊資料相容（新流程已改現場簽名） */}
           {isApproving && (
             <>
               <button className="btn btn-warning" onClick={() => handleApprove('reject')} disabled={saving}>
@@ -335,6 +331,18 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
           )}
         </div>
       </div>
+
+      {signingIdx !== null && (
+        <SignaturePad
+          open
+          signerName={onDuty[signingIdx]?.employee_name || ''}
+          onClose={() => setSigningIdx(null)}
+          onConfirm={(dataUrl) => {
+            setOnDuty(prev => prev.map((d, i) => i === signingIdx ? { ...d, signature_data_url: dataUrl } : d))
+            setSigningIdx(null)
+          }}
+        />
+      )}
     </ModalOverlay>
   )
 }

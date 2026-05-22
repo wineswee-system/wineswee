@@ -431,7 +431,7 @@ function FieldRender({ field, value, onChange, pickerData }) {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fileList.length}/{maxFiles} 個</div>
+        <div style={{ fontSize: 13, color: 'var(--accent-red)', marginTop: 4, fontWeight: 600 }}>{fileList.length}/{maxFiles} 個</div>
       </div>
     )
   }

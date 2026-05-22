@@ -93,6 +93,21 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     if (error) toast.error('更新失敗：' + error.message)
   }
 
+  // base64 dataUrl → Blob → 上傳 Storage → 回傳公開 URL
+  const uploadSignature = async (dataUrl, audId, empId) => {
+    // 已經是 URL 直接回傳（重簽情境）
+    if (dataUrl.startsWith('http')) return dataUrl
+    if (!dataUrl.startsWith('data:image')) throw new Error('簽名格式錯誤')
+    const blob = await (await fetch(dataUrl)).blob()
+    const path = `${audId}/${empId || 'anon'}_${Date.now()}.png`
+    const { error } = await supabase.storage
+      .from('audit-signatures')
+      .upload(path, blob, { contentType: 'image/png', upsert: true })
+    if (error) throw error
+    const { data: pub } = supabase.storage.from('audit-signatures').getPublicUrl(path)
+    return pub.publicUrl
+  }
+
   // ─── 送出 ───
   const handleSubmit = async () => {
     if (pending > 0) { toast.warning(`還有 ${pending} 項未評核`); return }
@@ -103,19 +118,26 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       return
     }
     setSaving(true)
-    const { data, error } = await supabase.rpc('submit_store_audit', {
-      p_audit_id: auditId,
-      p_on_duty: onDuty.map(d => ({
+    try {
+      // 平行上傳所有簽名
+      const uploaded = await Promise.all(onDuty.map(async d => ({
         employee_id: d.employee_id,
         employee_name: d.employee_name,
-        signature: d.signature_data_url,
-      })),
-    })
-    setSaving(false)
-    if (error) { toast.error('送出失敗：' + error.message); return }
-    if (!data?.ok) { toast.error('送出失敗：' + (data?.error || 'unknown')); return }
-    toast.success(data.event === 'auto_approved_no_chain' ? '已核准（無簽核鏈設定）' : '已送出，進入簽核流程')
-    onChanged?.(); load()
+        signature: await uploadSignature(d.signature_data_url, auditId, d.employee_id),
+      })))
+      const { data, error } = await supabase.rpc('submit_store_audit', {
+        p_audit_id: auditId,
+        p_on_duty: uploaded,
+      })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.error || 'unknown')
+      toast.success(data.event === 'auto_approved_no_chain' ? '已核准（無簽核鏈設定）' : '已送出，進入簽核流程')
+      onChanged?.(); load()
+    } catch (err) {
+      toast.error('送出失敗：' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ─── 簽核（chain）───

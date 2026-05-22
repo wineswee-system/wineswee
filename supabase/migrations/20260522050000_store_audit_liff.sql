@@ -73,7 +73,7 @@ BEGIN
           'reject_reason', v_audit.reject_reason,
           'liff_url', CASE
             WHEN r_target.liff_id IS NULL OR r_target.liff_id = '' THEN NULL
-            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2FStoreAudit%2F' || p_audit_id
+            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2Fstore-audit%2F' || p_audit_id
           END
         )
       );
@@ -111,7 +111,7 @@ BEGIN
           'total_steps', v_total,
           'liff_url', CASE
             WHEN r_target.liff_id IS NULL OR r_target.liff_id = '' THEN NULL
-            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2FStoreAudit%2F' || p_audit_id
+            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2Fstore-audit%2F' || p_audit_id
           END
         )
       );
@@ -147,7 +147,7 @@ BEGIN
           'approver', v_audit.approver,
           'liff_url', CASE
             WHEN r_target.liff_id IS NULL OR r_target.liff_id = '' THEN NULL
-            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2FStoreAudit%2F' || p_audit_id
+            ELSE 'https://liff.line.me/' || r_target.liff_id || '?to=%2Fstore-audit%2F' || p_audit_id
           END
         )
       );

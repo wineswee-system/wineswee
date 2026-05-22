@@ -34,7 +34,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       supabase.from('store_audits').select('*').eq('id', auditId).single(),
       supabase.from('store_audit_items').select('*').eq('audit_id', auditId).order('category_code').order('item_no'),
       supabase.from('store_audit_on_duty').select('*').eq('audit_id', auditId).order('sort_order'),
-      supabase.from('employees').select('id, name, position, dept:departments(name), store:stores(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, position, dept, store, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
     ])
     if (a.error) { toast.error('載入失敗：' + a.error.message); onClose(); return }
     setAudit(a.data)

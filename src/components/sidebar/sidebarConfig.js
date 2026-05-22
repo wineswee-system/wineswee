@@ -257,6 +257,7 @@ export const groupNav = {
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: DollarSign, label: '門市業績獎金', path: '/hr/store-bonus' },
+        { icon: ClipboardCheck, label: '門市稽核', path: '/hr/store-audits' },
         { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },

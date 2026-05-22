@@ -43,6 +43,7 @@ import TransferRequest from '../pages/hr/TransferRequest'
 import LeaveOfAbsence from '../pages/hr/LeaveOfAbsence'
 import HeadcountRequest from '../pages/hr/HeadcountRequest'
 import StoreBonus from '../pages/hr/StoreBonus'
+import StoreAudits from '../pages/hr/StoreAudits'
 import OffRequests from '../pages/hr/OffRequests'
 import ShiftSwaps from '../pages/hr/ShiftSwaps'
 import FormBuilder from '../pages/hr/FormBuilder'
@@ -96,6 +97,7 @@ export default memo(function HRModule() {
       <Route path="forms/loa" element={<LeaveOfAbsence />} />
       <Route path="forms/headcount" element={<HeadcountRequest />} />
       <Route path="store-bonus" element={<StoreBonus />} />
+      <Route path="store-audits" element={<StoreAudits />} />
       <Route path="off-requests" element={<OffRequests />} />
       <Route path="shift-swaps" element={<ShiftSwaps />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />

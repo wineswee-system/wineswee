@@ -1,4 +1,5 @@
-// 全站字體大小調整：透過 body.style.zoom 整體縮放（瀏覽器原生支援）
+// 全站字體大小調整：透過 #root 的 CSS zoom 整體縮放（瀏覽器原生支援）
+// zoom 放在 #root 而非 body，讓 portal overlay（append 到 body）不受 zoom 影響
 // localStorage 存使用者偏好，登入後 / 重新整理後自動還原。
 // 未設定偏好時自動依視窗寬度計算，基準：1920px = 1.20。
 

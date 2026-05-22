@@ -82,9 +82,16 @@ export default function StoreAudits() {
             <h2><ClipboardCheck size={20} style={{ display: 'inline', marginRight: 6 }} />門市稽核</h2>
             <p>共 {list.length} 筆 · 待確認 {counts['待確認']} · 簽核中 {counts['申請中']}</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowNew(true)}>
-            <Plus size={16} /> 新增稽核單
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/process/settings/chains" target="_blank" rel="noopener"
+              className="btn btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              <Settings size={16} /> 稽核簽核設定
+            </Link>
+            <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+              <Plus size={16} /> 新增稽核單
+            </button>
+          </div>
         </div>
       </div>
 
@@ -250,19 +257,14 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
             </div>
           </div>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>簽核鏈（可選，未選送出後直接核准）</label>
-              <Link to="/process/settings/chains" target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--accent-cyan)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <Settings size={12} /> 設定簽核鏈
-              </Link>
-            </div>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>簽核鏈（可選，未選送出後直接核准）</label>
             <select className="form-input" value={chainId} onChange={e => setChainId(e.target.value)} style={{ width: '100%' }}>
               <option value="">不走簽核鏈（送出後直接核准）</option>
               {chains.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             {chains.length === 0 && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                沒有可用簽核鏈，點右上「設定簽核鏈」前往新增（category 選「門市稽核」）
+                沒可用簽核鏈，可從「稽核簽核設定」新增（category 選「門市稽核」）
               </div>
             )}
           </div>

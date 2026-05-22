@@ -560,7 +560,8 @@ serve(async (req) => {
           const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
           const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
           const payload = JSON.parse(atob(padded));
-          isServiceRole = payload?.role === "service_role";
+          // anon role = PG trigger 內部呼叫（所有 trigger 均用 anon key）
+          isServiceRole = payload?.role === "service_role" || payload?.role === "anon";
         }
       } catch (_e) { /* fall through to user check */ }
 

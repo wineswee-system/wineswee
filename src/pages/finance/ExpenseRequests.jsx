@@ -655,12 +655,20 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // Filter — 「未送核銷」是虛擬狀態，實際 status='已核准'
+  // Filter
+  //   '未送核銷' (虛擬) → DB status='已核准'
+  //   '已核准' 卡片數字 = 累計 → 點下去要顯示 4 種狀態
+  const APPROVED_GROUP = ['已核准', '待核銷', '已核銷', '核銷已退回']
   const q = search.trim()
   const filtered = requests.filter(r => {
     if (tab !== 'all') {
-      const effective = tab === '未送核銷' ? '已核准' : tab
-      if (r.status !== effective) return false
+      if (tab === '未送核銷') {
+        if (r.status !== '已核准') return false
+      } else if (tab === '已核准') {
+        if (!APPROVED_GROUP.includes(r.status)) return false
+      } else {
+        if (r.status !== tab) return false
+      }
     }
     if (!q) return true
     return String(r.id).includes(q)
@@ -668,8 +676,10 @@ export default function ExpenseRequests() {
 
   const counts = {}
   requests.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
-  // 「未送核銷」= 目前狀態是「已核准」但還沒按送核銷的（同一群人，視覺提醒用）
+  // 「未送核銷」= DB 內 status='已核准' 還沒按送核銷的
   counts['未送核銷'] = counts['已核准'] || 0
+  // 「已核准」總數 = 已通過簽核累計（含後續核銷階段）= 未送 + 待核銷 + 已核銷 + 核銷已退回
+  counts['已核准'] = (counts['未送核銷'] || 0) + (counts['待核銷'] || 0) + (counts['已核銷'] || 0) + (counts['核銷已退回'] || 0)
 
   if (loading) return <LoadingSpinner />
 

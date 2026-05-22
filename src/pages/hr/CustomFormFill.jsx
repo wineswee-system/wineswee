@@ -240,7 +240,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
                   borderTop: isFirst ? 'none' : '1px solid var(--border-subtle)',
                 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent-cyan)' }}>{f.label}</div>
-                  {f.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{f.description}</div>}
+                  {f.description && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{f.description}</div>}
                 </div>
               )
             }
@@ -399,7 +399,7 @@ function FieldRender({ field, value, onChange, pickerData }) {
             if (result) onChange(result.url)
           }} />
           {fileList[0] && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
               <a href={fileList[0].url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)' }}>{fileList[0].name}</a>
               <button type="button" onClick={() => onChange(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
             </div>
@@ -423,7 +423,7 @@ function FieldRender({ field, value, onChange, pickerData }) {
         {fileList.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
             {fileList.map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '3px 8px', background: 'var(--glass-light)', borderRadius: 4 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '4px 10px', background: 'var(--glass-light)', borderRadius: 4 }}>
                 <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--accent-cyan)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</a>
                 <button type="button" onClick={() => onChange(fileList.filter((_, j) => j !== i))}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}>✕</button>
@@ -431,7 +431,7 @@ function FieldRender({ field, value, onChange, pickerData }) {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{fileList.length}/{maxFiles} 個</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fileList.length}/{maxFiles} 個</div>
       </div>
     )
   }

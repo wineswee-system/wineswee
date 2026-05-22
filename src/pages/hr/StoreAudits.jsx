@@ -43,11 +43,12 @@ export default function StoreAudits() {
         .eq('organization_id', orgId)
         .order('id', { ascending: false }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
-      supabase.from('approval_chains').select('id, name').eq('organization_id', orgId).eq('category', '門市稽核').order('id'),
+      // 走 form_chain_configs 拿綁定 store_audit 的 chain（single mode 對應的綁定表）
+      supabase.from('form_chain_configs').select('chain_id').eq('form_type', 'store_audit').eq('organization_id', orgId).maybeSingle(),
     ])
     setList(a.data || [])
     setStores(s.data || [])
-    setChains(c.data || [])
+    setChains(c.data?.chain_id ? [c.data] : [])  // [{chain_id:n}]
     setLoading(false)
   }
   useEffect(() => { load() }, [orgId])
@@ -83,10 +84,10 @@ export default function StoreAudits() {
             <p>共 {list.length} 筆 · 待確認 {counts['待確認']} · 簽核中 {counts['申請中']}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/process/settings/chains/edit?formType=store_audit&label=門市稽核&mode=amount_grouped"
+            <Link to="/process/settings/chains/edit?formType=store_audit&label=門市稽核&mode=single"
               className="btn btn-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-              title="設定門市稽核專用的簽核流程（獨立分類，與其他簽核不混用）">
+              title="設定門市稽核專用的簽核流程">
               <Settings size={16} /> 稽核簽核設定
             </Link>
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>
@@ -166,7 +167,7 @@ export default function StoreAudits() {
       {showNew && (
         <NewAuditModal
           stores={stores}
-          chains={chains}
+          boundChainId={chains[0]?.chain_id || null}
           orgId={orgId}
           auditor={profile}
           onClose={() => setShowNew(false)}
@@ -186,14 +187,13 @@ export default function StoreAudits() {
 }
 
 // ─── 新增稽核單 modal（只填表頭，建立後自動帶 42 個項目）─────
-function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
+function NewAuditModal({ stores, boundChainId, orgId, auditor, onClose, onCreated }) {
   const today = new Date().toISOString().slice(0, 10)
   const [storeId, setStoreId] = useState('')
   const [date, setDate] = useState(today)
   const [shift, setShift] = useState('')
   const [arrive, setArrive] = useState('')
   const [depart, setDepart] = useState('')
-  const [chainId, setChainId] = useState('')
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
@@ -211,7 +211,7 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
       depart_time: depart || null,
       auditor_id: auditor?.id || null,
       auditor_name: auditor?.name || '',
-      approval_chain_id: chainId ? Number(chainId) : null,
+      approval_chain_id: boundChainId || null,  // 自動綁設定好的 chain
       status: '草稿',
     }).select().single()
     setSaving(false)
@@ -257,17 +257,10 @@ function NewAuditModal({ stores, chains, orgId, auditor, onClose, onCreated }) {
               <input type="time" className="form-input" value={depart} onChange={e => setDepart(e.target.value)} style={{ width: '100%' }} />
             </div>
           </div>
-          <div>
-            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>簽核鏈（可選，未選送出後直接核准）</label>
-            <select className="form-input" value={chainId} onChange={e => setChainId(e.target.value)} style={{ width: '100%' }}>
-              <option value="">不走簽核鏈（送出後直接核准）</option>
-              {chains.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {chains.length === 0 && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                沒可用簽核鏈，可從「稽核簽核設定」新增（category 選「門市稽核」）
-              </div>
-            )}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 10, background: 'var(--bg-secondary)', borderRadius: 6 }}>
+            {boundChainId
+              ? '✓ 將套用「稽核簽核設定」中的簽核流程'
+              : '⚠ 尚未設定稽核簽核流程，送出後將直接核准（點頁面右上「稽核簽核設定」前往設定）'}
           </div>
         </div>
         <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

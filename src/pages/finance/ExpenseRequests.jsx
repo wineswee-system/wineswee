@@ -25,6 +25,7 @@ import { confirm } from '../../lib/confirm'
 const STATUS_COLORS = {
   '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
   '已核准': { bg: 'var(--accent-green-dim)', color: 'var(--accent-green)' },
+  '未送核銷': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' },  // 視覺提醒：已核准但還沒按「送核銷」
   '待核銷': { bg: 'var(--accent-yellow-dim)', color: 'var(--accent-yellow)' },
   '已核銷': { bg: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' },
   '已駁回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
@@ -654,16 +655,21 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // Filter
+  // Filter — 「未送核銷」是虛擬狀態，實際 status='已核准'
   const q = search.trim()
   const filtered = requests.filter(r => {
-    if (tab !== 'all' && r.status !== tab) return false
+    if (tab !== 'all') {
+      const effective = tab === '未送核銷' ? '已核准' : tab
+      if (r.status !== effective) return false
+    }
     if (!q) return true
     return String(r.id).includes(q)
   })
 
   const counts = {}
   requests.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
+  // 「未送核銷」= 目前狀態是「已核准」但還沒按送核銷的（同一群人，視覺提醒用）
+  counts['未送核銷'] = counts['已核准'] || 0
 
   if (loading) return <LoadingSpinner />
 
@@ -712,7 +718,7 @@ export default function ExpenseRequests() {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
-        {['申請中', '已核准', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
+        {['申請中', '已核准', '未送核銷', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
           <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: tab === s ? `2px solid ${STATUS_COLORS[s].color}` : undefined }}
             onClick={() => setTab(tab === s ? 'all' : s)}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s}</div>

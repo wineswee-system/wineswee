@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Check, X, Printer, Settings, Paperclip, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -30,6 +31,7 @@ export default function PunchCorrection() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
 
@@ -513,7 +515,7 @@ export default function PunchCorrection() {
                 row: detailRow,
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
-                onChanged: () => { load(); setDetailRow(null) },
+                onChanged: () => { load(); setDetailRow(null); returnNav() },
               } : null
             }
           />

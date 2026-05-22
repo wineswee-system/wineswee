@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { RefreshCcw, Search, X as XIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -40,6 +41,7 @@ export default function ShiftSwaps() {
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
+  const returnNav = useReturnNav()
   useEffect(() => {
     const focus = searchParams.get('focus')
     if (!focus || !list.length) return
@@ -117,12 +119,12 @@ export default function ShiftSwaps() {
   const actions = detailRoleNow === 'peer' ? {
     sourceTable: 'shift_swaps', row: detailRow,
     onApprove: doApprovePeer, onReject: doRejectPeer,
-    onChanged: () => { load(); setDetailRow(null) },
+    onChanged: () => { load(); setDetailRow(null); returnNav() },
     approveLabel: '同意', rejectLabel: '拒絕', hideExtra: true,
   } : detailRoleNow === 'manager' ? {
     sourceTable: 'shift_swaps', row: detailRow,
     onApprove: doApproveManager, onReject: doRejectManager,
-    onChanged: () => { load(); setDetailRow(null) },
+    onChanged: () => { load(); setDetailRow(null); returnNav() },
     approveLabel: '核准', rejectLabel: '駁回', hideExtra: true,
   } : null
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { Plus, Search, Info, Paperclip, Printer, Settings } from 'lucide-react'
@@ -32,6 +33,7 @@ export default function Leave() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const [leaves, setLeaves] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -670,7 +672,7 @@ export default function Leave() {
                 row: detailRow,
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
-                onChanged: () => { load(); setDetailRow(null) },
+                onChanged: () => { load(); setDetailRow(null); returnNav() },
                 rejectLabel: '拒絕',
               } : null
             }

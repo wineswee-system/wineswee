@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Search, X as XIcon } from 'lucide-react'
 import { getBusinessTrips, createBusinessTrip, updateBusinessTripStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -24,6 +25,7 @@ export default function BusinessTravel() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const [trips, setTrips] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -391,7 +393,7 @@ export default function BusinessTravel() {
                 row: detailRow,
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
-                onChanged: () => { load(); setDetailRow(null) },
+                onChanged: () => { load(); setDetailRow(null); returnNav() },
               } : null
             }
           />

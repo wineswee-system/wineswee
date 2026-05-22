@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip, Search, X as XIcon } from 'lucide-react'
 import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from '../../lib/db'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
@@ -38,6 +39,7 @@ export default function Overtime() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -627,7 +629,7 @@ export default function Overtime() {
                 row: detailRow,
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
-                onChanged: () => { load(); setDetailRow(null) },
+                onChanged: () => { load(); setDetailRow(null); returnNav() },
               } : null
             }
           />

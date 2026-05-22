@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, ArrowRight, Settings, Search, X as XIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -33,6 +34,7 @@ export default function LeaveOfAbsence() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [search, setSearch] = useState('')
@@ -458,7 +460,7 @@ export default function LeaveOfAbsence() {
                 })
                 if (!res?.ok) toast.error('駁回失敗：' + (res?.error || 'unknown'))
               },
-              onChanged: () => { load(); setDetailRow(null) },
+              onChanged: () => { load(); setDetailRow(null); returnNav() },
               rejectLabel: '駁回',
             } : null
           }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { CalendarOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -39,6 +40,7 @@ export default function OffRequests() {
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
+  const returnNav = useReturnNav()
   useEffect(() => {
     const focus = searchParams.get('focus')
     if (!focus || !list.length) return
@@ -168,7 +170,7 @@ export default function OffRequests() {
               row: detailRow,
               onApprove: doApprove,
               onReject: doReject,
-              onChanged: () => { load(); setDetailRow(null) },
+              onChanged: () => { load(); setDetailRow(null); returnNav() },
               rejectLabel: '退回',
               hideExtra: true,  // 希望休不支援加簽
             } : null

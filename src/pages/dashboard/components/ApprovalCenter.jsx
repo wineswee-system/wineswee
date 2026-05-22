@@ -199,8 +199,8 @@ function PendingApprovalsView() {
   const rows = data[activeTab] || []
 
   const handleRowClick = (row, tabDef) => {
-    // 跳到對應 HR 頁面，帶 ?focus={id} 自動開該 row 的 detail modal
-    navigate(`${tabDef.route}?focus=${row.id}`)
+    // 跳到對應 HR 頁面，帶 ?focus={id} 自動開 detail modal；審核完後 returnTo=/ 回儀表板
+    navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)
   }
 
   if (loading) {

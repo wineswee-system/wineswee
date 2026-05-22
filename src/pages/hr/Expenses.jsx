@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -26,6 +27,7 @@ export default function Expenses() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const [expenses, setExpenses] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -473,7 +475,7 @@ export default function Expenses() {
                 row: detailRow,
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
-                onChanged: () => { load(); setDetailRow(null) },
+                onChanged: () => { load(); setDetailRow(null); returnNav() },
                 approveLabel: '核銷',
               } : null
             }

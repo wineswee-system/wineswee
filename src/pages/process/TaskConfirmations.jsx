@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { CheckSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -16,6 +17,7 @@ const STATUS_BADGE = {
 export default function TaskConfirmations() {
   const { profile } = useAuth()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [detailRow, setDetailRow] = useState(null)
@@ -153,7 +155,7 @@ export default function TaskConfirmations() {
               row: detailRow,
               onApprove: doApprove,
               onReject: doReject,
-              onChanged: () => { load(); setDetailRow(null) },
+              onChanged: () => { load(); setDetailRow(null); returnNav() },
               approveLabel: '確認', rejectLabel: '退回',
               hideExtra: true,  // task 確認暫不支援加簽
             } : null

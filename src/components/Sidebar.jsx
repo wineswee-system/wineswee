@@ -11,7 +11,6 @@ import {
   // ── 補 systemItems / superAdminItems 需要的 icon（老闆 refactor 時漏掉）──
   Award, BarChart3, FileText, Truck,
   Package, Monitor, GitBranch,
-  Mail, Share2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import FontSizeControl from './FontSizeControl'
@@ -63,8 +62,6 @@ function SidebarTooltipLayer({ tip }) {
 const systemItems = [
   { icon: Settings, label: '系統設定', path: '/system/settings' },
   { icon: FileText, label: '表單建立器', path: '/system/form-builder' },
-  { icon: Mail, label: '排程報表', path: '/system/scheduled-reports' },
-  { icon: Share2, label: '圖表分享', path: '/system/embeddable-charts' },
   { icon: UserCog, label: '使用者管理', path: '/system/users' },
   { icon: Shield, label: '員工個別權限', path: '/system/employee-permissions' },
   { icon: Building2, label: '租戶管理', path: '/system/tenants' },

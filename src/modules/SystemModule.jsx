@@ -13,8 +13,6 @@ import TrainingGuide from '../pages/system/TrainingGuide'
 import EmployeePermissions from '../pages/system/EmployeePermissions'
 import OfferLetterTemplates from '../pages/system/OfferLetterTemplates'
 import FormBuilder from '../pages/hr/FormBuilder'
-import ScheduledReports from '../pages/analytics/ScheduledReports'
-import EmbeddableCharts from '../pages/analytics/EmbeddableCharts'
 export default function SystemModule() {
   return (
     <Routes>
@@ -32,8 +30,6 @@ export default function SystemModule() {
       <Route path="approval-rules" element={<ApprovalRules />} />
       <Route path="offer-letter-templates" element={<OfferLetterTemplates />} />
       <Route path="form-builder" element={<FormBuilder />} />
-      <Route path="scheduled-reports" element={<ScheduledReports />} />
-      <Route path="embeddable-charts" element={<EmbeddableCharts />} />
     </Routes>
   )
 }

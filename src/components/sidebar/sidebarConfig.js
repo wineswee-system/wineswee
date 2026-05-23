@@ -352,8 +352,6 @@ export const groupNav = {
         { icon: Search, label: '跨系統分析', path: '/analytics/cross-system' },
         { icon: Layout, label: '自訂儀表板', path: '/analytics/builder' },
         { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
-        { icon: TrendingUp, label: '銷售預測', path: '/analytics/forecast' },
-        { icon: AlertTriangle, label: '異常偵測', path: '/analytics/anomaly' },
       ]
     },
     {

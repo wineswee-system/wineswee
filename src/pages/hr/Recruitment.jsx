@@ -123,6 +123,7 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
           round: intForm.round,
           scheduledAt: intForm.scheduled_at,
           location: intForm.location,
+          candidateId: c.id,
         }).catch(() => {})
       }
     }

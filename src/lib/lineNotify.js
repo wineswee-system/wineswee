@@ -475,16 +475,20 @@ export async function notifyTaskDailySummary(assigneeName, tasks) {
   const bubbles = tasks.slice(0, 10).map(task => {
     const liffUrl = getLiffTaskUrl(task.id, account.liffId)
     const approvalUrl = task.approvalRequired ? buildLiffTaskUrl(task.id, account.liffId, 'request_approval') : null
+    const headerContents = [
+      { type: 'text', text: task.isOverdue ? '⚠️ 任務逾期' : '⏰ 今日到期', color: '#ffffff', weight: 'bold', size: 'sm' },
+      ...(task.instanceName ? [{ type: 'text', text: task.instanceName, color: '#FFFFFFCC', size: 'xs', margin: 'xs', wrap: true, maxLines: 1 }] : []),
+    ]
     return {
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical', paddingAll: '12px',
         backgroundColor: task.isOverdue ? LC.danger : LC.warning,
-        contents: [{ type: 'text', text: task.isOverdue ? '⚠️ 任務逾期' : '⏰ 今日到期', color: '#ffffff', weight: 'bold', size: 'sm' }],
+        contents: headerContents,
       },
       body: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-        contents: buildTaskBody(task.title, assigneeName, department, task.store, task.instanceName || '', task.due_date, task.description, task.notes, task.isOverdue),
+        contents: buildTaskBody(task.title, assigneeName, department, task.store, '', task.due_date, task.description, task.notes, task.isOverdue),
       },
       footer: buildTaskFooter(liffUrl, task.id, task.approvalRequired, approvalUrl),
     }
@@ -776,14 +780,14 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
 /**
  * 面試通知 — 推給被安排為面試官的員工
  * @param {number} interviewerEmployeeId
- * @param {{ candidateName, round, scheduledAt, location }} info
+ * @param {{ candidateName, round, scheduledAt, location, candidateId? }} info
  */
 export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
   if (!interviewerEmployeeId) return { ok: false, reason: 'no_interviewer_id' }
   const account = await resolveLineAccount(interviewerEmployeeId)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  const { candidateName, round, scheduledAt, location } = info
+  const { candidateName, round, scheduledAt, location, candidateId } = info
   const fmtDt = (iso) => iso
     ? new Date(iso).toLocaleString('zh-TW', {
         timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
@@ -804,6 +808,13 @@ export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
     size: 'xs', color: LC.muted, wrap: true, margin: 'md',
   })
 
+  const lid = account.liffId || LIFF_ID
+  const candidateLiffUrl = (() => {
+    const path = candidateId ? `/recruitment?candidate=${candidateId}` : '/recruitment'
+    if (!lid) return `${window.location.origin}/liff${path}`
+    return `https://liff.line.me/${lid}?to=${encodeURIComponent(path)}`
+  })()
+
   const messages = [{
     type: 'flex',
     altText: `📅 面試通知：${candidateName} ${round}`,
@@ -816,6 +827,14 @@ export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
       body: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
         contents: bodyContents,
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '查看職缺 / 應徵資料', uri: candidateLiffUrl },
+          style: 'primary', color: LC.brand, height: 'sm',
+        }],
       },
     },
   }]

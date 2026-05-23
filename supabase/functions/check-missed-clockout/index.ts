@@ -61,6 +61,25 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // 2a. Fetch shift / store from schedules for that day (keyed by employee name)
+    const employeeNames = missedRows.map(m => employeeName(m)).filter(Boolean)
+    type ScheduleRec = { employee: string; shift: string | null; source_store: string | null }
+    const scheduleMap: Record<string, ScheduleRec> = {}
+
+    if (employeeNames.length > 0) {
+      const { data: scheduleRows } = await supabase
+        .from('schedules')
+        .select('employee, shift, source_store')
+        .in('employee', employeeNames)
+        .eq('date', targetDate)
+
+      if (scheduleRows) {
+        for (const s of scheduleRows as ScheduleRec[]) {
+          scheduleMap[s.employee] = s
+        }
+      }
+    }
+
     // 2. Resolve LINE user IDs via multi-OA mapping (keyed by employee_id)
     const employeeIds = missedRows.map(m => m.employee_id).filter(Boolean)
     type LineRec = { line_user_id: string; channel_code: string }
@@ -106,6 +125,29 @@ serve(async (req) => {
         continue
       }
 
+      const sched = scheduleMap[name]
+      const bodyContents: object[] = [
+        { type: 'text', text: `${name} 您好`, weight: 'bold', size: 'md' },
+        { type: 'text', text: `系統偵測到您 ${targetDate} 有上班打卡（${record.clock_in}），但尚未打下班卡。`, size: 'sm', color: '#555555', wrap: true },
+      ]
+      if (sched?.shift || sched?.source_store) {
+        bodyContents.push({ type: 'separator', margin: 'md' })
+        if (sched.source_store) {
+          bodyContents.push({ type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: '門市', size: 'sm', color: '#8c8c8c', flex: 2 },
+            { type: 'text', text: sched.source_store, size: 'sm', color: '#444444', flex: 5 },
+          ]})
+        }
+        if (sched.shift) {
+          bodyContents.push({ type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: '班別', size: 'sm', color: '#8c8c8c', flex: 2 },
+            { type: 'text', text: sched.shift, size: 'sm', color: '#444444', flex: 5 },
+          ]})
+        }
+      }
+      bodyContents.push({ type: 'separator', margin: 'md' })
+      bodyContents.push({ type: 'text', text: '請至系統提交補卡申請', size: 'sm', color: '#8c8c8c', margin: 'md' })
+
       const messages = [{
         type: 'flex',
         altText: `⏰ 提醒：${targetDate} 未打下班卡`,
@@ -120,12 +162,7 @@ serve(async (req) => {
           },
           body: {
             type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '16px',
-            contents: [
-              { type: 'text', text: `${name} 您好`, weight: 'bold', size: 'md' },
-              { type: 'text', text: `系統偵測到您 ${targetDate} 有上班打卡（${record.clock_in}），但尚未打下班卡。`, size: 'sm', color: '#555555', wrap: true },
-              { type: 'separator', margin: 'md' },
-              { type: 'text', text: '請至系統提交補卡申請', size: 'sm', color: '#8c8c8c', margin: 'md' },
-            ],
+            contents: bodyContents,
           },
           footer: {
             type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',

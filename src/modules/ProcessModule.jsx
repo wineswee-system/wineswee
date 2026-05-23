@@ -14,6 +14,10 @@ import ExpenseChains from '../pages/process/settings/ExpenseChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import BusinessApplications from '../pages/process/BusinessApplications'
 import StoreAudits from '../pages/hr/StoreAudits'
+import ExpenseRequests from '../pages/finance/ExpenseRequests'
+import Expenses from '../pages/hr/Expenses'
+import CustomFormFill from '../pages/hr/CustomFormFill'
+import FormSubmissions from '../pages/hr/FormSubmissions'
 
 // 老頁面已下架（2026-05-08），但 2026-05-11 重做為中央 library 管理：
 //   /process/settings/chains         → 全 chain library（取代舊 /process/approval-chains）
@@ -32,6 +36,11 @@ export default function ProcessModule() {
       <Route path="approvals" element={<Approvals />} />
       <Route path="applications" element={<BusinessApplications />} />
       <Route path="store-audits" element={<StoreAudits />} />
+      {/* 業務表單 alias 路由 — 讓頂部 tab 維持「專案流程」 */}
+      <Route path="expense-requests" element={<ExpenseRequests />} />
+      <Route path="expenses" element={<Expenses />} />
+      <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
+      <Route path="forms/submissions" element={<FormSubmissions />} />
       <Route path="task-confirmations" element={<TaskConfirmations />} />
       <Route path="settings/categories" element={<Categories />} />
       <Route path="settings/tags" element={<Tags />} />

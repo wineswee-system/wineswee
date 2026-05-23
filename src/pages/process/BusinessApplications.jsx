@@ -12,8 +12,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 //   - scope='business_non_expense'  → 非費用組
 
 const FIXED_EXPENSE = [
-  { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段', action: '/hr/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
-  { icon: Receipt, name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷）', action: '/hr/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
+  { icon: Receipt, name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
 ]
 
 const COLOR_MAP = {
@@ -52,7 +52,7 @@ export default function BusinessApplications() {
             desc: t.description || '自訂表單',
             color: c.color,
             dim: c.dim,
-            action: `/hr/forms/submissions?template=${t.id}`,
+            action: `/process/forms/submissions?template=${t.id}`,
             tag: '自訂',
           }
           if (t.scope === 'business_expense') exp.push(card)

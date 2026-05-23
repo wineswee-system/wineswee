@@ -601,9 +601,9 @@ function TaskFormBindingsBlock({ bindings }) {
     // 帶 binding_id 跳轉到對應表單頁，submit 時表單頁負責寫回 linked_binding_id
     const u = b.form_id
       ? null  // 已有 form_id 表示已認領 → 點卡只是查狀態
-      : (b.form_type === 'expense_request' ? `/hr/expense-requests?binding_id=${b.id}`
-        : b.form_type === 'expense'         ? `/hr/expenses?binding_id=${b.id}`
-        : `/hr/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
+      : (b.form_type === 'expense_request' ? `/process/expense-requests?binding_id=${b.id}`
+        : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
+        : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
     if (u) window.open(u, '_blank')
   }
   const completed = bindings.filter(b => b.status === '已完成').length

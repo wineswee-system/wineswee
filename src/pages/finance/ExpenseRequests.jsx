@@ -307,6 +307,9 @@ export default function ExpenseRequests() {
 
     // ── 新增路徑（原邏輯）──
     payload.status = '申請中'
+    // 從 URL 取 binding_id（任務頁帶過來的）
+    const bindingId = searchParams.get('binding_id')
+    if (bindingId) payload.linked_binding_id = Number(bindingId)
     const { data, error: insertErr } = await supabase.from('expense_requests').insert(payload).select().single()
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
 

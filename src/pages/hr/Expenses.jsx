@@ -147,7 +147,11 @@ export default function Expenses() {
     }
 
     // ── 新增路徑 ──
-    const { data } = await createExpense({ ...payload, status: '待審核' })
+    // 從 URL 取 binding_id（任務頁帶過來的）
+    const bindingId = searchParams.get('binding_id')
+    const fullPayload = { ...payload, status: '待審核' }
+    if (bindingId) fullPayload.linked_binding_id = Number(bindingId)
+    const { data } = await createExpense(fullPayload)
     if (data) {
       setExpenses(prev => [...prev, data])
       // 附件上傳（與 LIFF 同 bucket）

@@ -159,12 +159,15 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
         if (f.type === 'section') continue
         if (fieldVisible(f, data)) visibleData[f.key] = data[f.key]
       }
+      // 從 URL 取 binding_id（任務頁帶過來的）
+      const bindingId = searchParams.get('binding_id')
       const { error } = await supabase.from('form_submissions').insert({
         organization_id: profile?.organization_id || 1,
         template_id: Number(templateId),
         applicant_id: profile.id,
         data: visibleData,
         status: '申請中',
+        linked_binding_id: bindingId ? Number(bindingId) : null,
       })
       if (error) throw error
       toast.success('已送出申請！')

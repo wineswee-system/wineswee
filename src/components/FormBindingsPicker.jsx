@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, X, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -17,6 +18,9 @@ import { supabase } from '../lib/supabase'
 export default function FormBindingsPicker({ value = [], onChange, readonly = false, lockedKeys = [] }) {
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState([])
+  const triggerRef = useRef(null)
+  const popupRef = useRef(null)
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 240 })
 
   useEffect(() => {
     supabase.from('form_templates')
@@ -39,14 +43,45 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
       })
   }, [])
 
-  // 關閉外部點擊
+  // 關閉外部點擊（含 portal 內）
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (!e.target.closest?.('.fbp-wrapper')) setOpen(false)
+      const inWrapper = triggerRef.current?.contains(e.target)
+      const inPopup = popupRef.current?.contains(e.target)
+      if (!inWrapper && !inPopup) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // 動態追 trigger 位置（含 #root zoom 補償）— 對齊 SearchableSelect 做法
+  useLayoutEffect(() => {
+    if (!open) return
+    let raf = 0
+    const tick = () => {
+      const el = triggerRef.current
+      if (!el) { raf = requestAnimationFrame(tick); return }
+      const rect = el.getBoundingClientRect()
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
+      let top = rect.bottom / scale + 4
+      let left = rect.left / scale
+      // 補償祖先 transform 造成的 offset
+      const pop = popupRef.current
+      if (pop) {
+        const pr = pop.getBoundingClientRect()
+        const styleTop = parseFloat(pop.style.top) || 0
+        const styleLeft = parseFloat(pop.style.left) || 0
+        const offY = pr.top / scale - styleTop
+        const offX = pr.left / scale - styleLeft
+        if (Math.abs(offY) > 0.5) top -= offY
+        if (Math.abs(offX) > 0.5) left -= offX
+      }
+      setPopupPos(p => (p.top === top && p.left === left ? p : { top, left, minWidth: Math.max(rect.width / scale, 240) }))
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
   }, [open])
 
   const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
@@ -104,7 +139,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           )
         })}
         {!readonly && (
-          <button type="button" onClick={() => setOpen(o => !o)}
+          <button ref={triggerRef} type="button" onClick={() => setOpen(o => !o)}
             style={{
               padding: '5px 12px', borderRadius: 14, border: '1px dashed var(--border-medium)',
               background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer',
@@ -116,11 +151,11 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
         )}
       </div>
 
-      {/* 下拉選單 */}
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 100,
-          minWidth: 240, maxHeight: 320, overflowY: 'auto',
+      {/* 下拉選單 — portal 到 body 避免被父層 overflow 遮住 */}
+      {open && createPortal(
+        <div ref={popupRef} style={{
+          position: 'fixed', top: popupPos.top, left: popupPos.left,
+          minWidth: popupPos.minWidth, maxHeight: 320, overflowY: 'auto', zIndex: 11000,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
           borderRadius: 8, boxShadow: 'var(--shadow-xl, 0 8px 24px rgba(0,0,0,0.15))',
         }}>
@@ -154,7 +189,8 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
               </div>
             ))
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

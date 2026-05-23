@@ -22,7 +22,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
   const triggerRef = useRef(null)
   const popupRef = useRef(null)
   const searchRef = useRef(null)
-  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 240 })
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 320 })
 
   useEffect(() => {
     supabase.from('form_templates')
@@ -39,9 +39,9 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           group: t.scope === 'business_expense' ? '費用' : '非費用',
         }))
         setOptions([
-          { form_type: 'store_audit',     form_template_id: null, icon: '🏪', label: '門市稽核',  group: '稽核' },
           { form_type: 'expense_request', form_template_id: null, icon: '🧾', label: '申請費用', group: '費用' },
           { form_type: 'expense',         form_template_id: null, icon: '💸', label: '費用報銷', group: '費用' },
+          { form_type: 'store_audit',     form_template_id: null, icon: '🏪', label: '門市稽核', group: '非費用' },
           ...customForms,
         ])
       })
@@ -81,7 +81,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
         if (Math.abs(offY) > 0.5) top -= offY
         if (Math.abs(offX) > 0.5) left -= offX
       }
-      setPopupPos(p => (p.top === top && p.left === left ? p : { top, left, minWidth: Math.max(rect.width / scale, 240) }))
+      setPopupPos(p => (p.top === top && p.left === left ? p : { top, left, minWidth: Math.max(rect.width / scale, 320) }))
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -174,7 +174,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
       {open && createPortal(
         <div ref={popupRef} style={{
           position: 'fixed', top: popupPos.top, left: popupPos.left,
-          minWidth: popupPos.minWidth, maxHeight: 360, zIndex: 11000,
+          minWidth: popupPos.minWidth, maxHeight: 420, zIndex: 11000,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
           borderRadius: 8, boxShadow: 'var(--shadow-xl, 0 8px 24px rgba(0,0,0,0.15))',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -206,8 +206,17 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           ) : (
             grouped.map(([groupName, items]) => (
               <div key={groupName}>
-                <div style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'var(--bg-secondary)' }}>
-                  {groupName}
+                <div style={{
+                  padding: '8px 14px', fontSize: 11, fontWeight: 700,
+                  color: 'var(--text-muted)', background: 'var(--bg-secondary)',
+                  letterSpacing: '0.5px', textTransform: 'uppercase',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span>{groupName}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '1px 7px',
+                    borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-muted)',
+                  }}>{items.length}</span>
                 </div>
                 {items.map(o => {
                   const sel = isSelected(o)
@@ -215,18 +224,23 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
                   return (
                     <div key={keyOf(o)} onClick={() => toggle(o)}
                       style={{
-                        padding: '8px 12px', cursor: locked ? 'not-allowed' : 'pointer',
+                        padding: '10px 14px', cursor: locked ? 'not-allowed' : 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         background: sel ? 'var(--accent-cyan-dim)' : 'transparent',
                         opacity: locked ? 0.6 : 1,
-                        fontSize: 13,
-                      }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        {o.icon && <span style={{ fontSize: 15, lineHeight: 1 }}>{o.icon}</span>}
+                        fontSize: 14,
+                        transition: 'background .12s ease',
+                        borderBottom: '1px solid var(--border-subtle)',
+                      }}
+                      onMouseEnter={(e) => { if (!sel && !locked) e.currentTarget.style.background = 'var(--bg-secondary)' }}
+                      onMouseLeave={(e) => { if (!sel && !locked) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                        {o.icon && <span style={{ fontSize: 18, lineHeight: 1 }}>{o.icon}</span>}
                         {locked && '🔒 '}
-                        {o.label}
+                        <span style={{ color: 'var(--text-primary)', fontWeight: sel ? 700 : 500 }}>{o.label}</span>
                       </span>
-                      {sel && <Check size={14} style={{ color: 'var(--accent-cyan)' }} />}
+                      {sel && <Check size={16} style={{ color: 'var(--accent-cyan)' }} />}
                     </div>
                   )
                 })}

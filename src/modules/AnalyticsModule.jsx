@@ -14,6 +14,7 @@ import EmbeddableCharts from '../pages/analytics/EmbeddableCharts'
 import ProcessAnalytics from '../pages/analytics/ProcessAnalytics'
 import CrossSystemAnalytics from '../pages/analytics/CrossSystemAnalytics'
 import Alerts from '../pages/analytics/Alerts'
+import CRMAnalytics from '../pages/analytics/CRMAnalytics'
 
 export default function AnalyticsModule() {
   return (
@@ -33,6 +34,7 @@ export default function AnalyticsModule() {
       <Route path="process" element={<ProcessAnalytics />} />
       <Route path="cross-system" element={<CrossSystemAnalytics />} />
       <Route path="alerts" element={<Alerts />} />
+      <Route path="crm" element={<CRMAnalytics />} />
     </Routes>
   )
 }

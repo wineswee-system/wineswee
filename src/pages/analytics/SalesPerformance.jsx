@@ -1,283 +1,156 @@
-import { useState, useEffect } from 'react'
-import { Download, Printer } from 'lucide-react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
-import { Doughnut, Bar, Line } from 'react-chartjs-2'
+import { useEffect, useState } from 'react'
+import { Target, Award, FileCheck, Receipt, RefreshCw } from 'lucide-react'
+import { Bar } from 'react-chartjs-2'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js'
 import { supabase } from '../../lib/supabase'
-import { calculateFunnelConversion, calculateRepPerformance } from '../../lib/crmEngine'
-import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import DateRangePicker from '../../components/DateRangePicker'
+import { KpiCard, SectionHeader, EmptyState, DataTable, NT, NT_K, NUM, PCT } from './components/AnalyticsCommon'
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-const colors = { cyan: '#22d3ee', blue: '#3b82f6', purple: '#a78bfa', green: '#34d399', orange: '#fb923c', red: '#f87171', pink: '#f472b6', yellow: '#fbbf24' }
 const chartOpts = {
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#94a3b8', font: { size: 11, weight: 600 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 } },
-    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: 'rgba(148,163,184,0.15)', borderWidth: 1, padding: 12, cornerRadius: 10 },
+    legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)' },
   },
 }
-const gridStyle = { color: 'rgba(148,163,184,0.06)' }
-const tickStyle = { color: '#64748b', font: { size: 11 } }
 
 export default function SalesPerformance() {
-  const [opportunities, setOpportunities] = useState([])
+  const { profile } = useAuth()
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [dateRange, setDateRange] = useState(null)
 
-  useEffect(() => {
-    supabase.from('opportunities').select('*')
-      .then(({ data, error: err }) => {
-        if (err) throw err
-        setOpportunities(data || [])
-      })
-      .catch(err => {
-        console.error('Failed to load opportunities:', err)
-        setError('資料載入失敗，請重新整理頁面')
-      })
-      .finally(() => setLoading(false))
-  }, [])
+  const load = () => {
+    if (!profile?.organization_id) return
+    setLoading(true)
+    supabase.rpc('fn_sales_analytics', { p_org_id: profile.organization_id })
+      .then(({ data: res, error }) => {
+        if (error) setError(error.message); else setData(res)
+      }).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line
 
   if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)' }}>{error}</div>
+  if (!data) return <LoadingSpinner />
 
-  const filterByDate = (arr) => {
-    if (!dateRange) return arr
-    return arr.filter(r => {
-      const d = (r.created_at || '').slice(0, 10)
-      return d >= dateRange.startDate && d <= dateRange.endDate
-    })
-  }
+  const funnel = data.funnel || []
+  const wonStage = funnel.find(f => f.stage === '贏單')
+  const totalOpps = funnel.reduce((s, f) => s + f.count, 0)
+  const totalAmt = funnel.reduce((s, f) => s + Number(f.amount || 0), 0)
 
-  const filtered = filterByDate(opportunities)
-  const stages = ['初步接觸', '需求分析', '報價', '議價', '贏單', '輸單']
-  const reps = [...new Set(filtered.map(o => o.assignee).filter(Boolean))]
-  const repPerf = calculateRepPerformance(filtered, reps).sort((a, b) => b.totalRevenue - a.totalRevenue)
-  const funnelData = calculateFunnelConversion(filtered)
-
-  // KPI calculations
-  const wonOpps = filtered.filter(o => o.stage === '贏單')
-  const lostOpps = filtered.filter(o => o.stage === '輸單')
-  const totalDeals = filtered.length
-  const wonCount = wonOpps.length
-  const overallWinRate = (wonCount + lostOpps.length) > 0 ? Math.round((wonCount / (wonCount + lostOpps.length)) * 100) : 0
-  const totalRevenue = wonOpps.reduce((s, o) => s + (o.amount || 0), 0)
-  const avgDealSize = wonCount > 0 ? Math.round(totalRevenue / wonCount) : 0
-  const avgCycleDays = wonCount > 0
-    ? Math.round(wonOpps.reduce((s, o) => {
-        const c = new Date(o.created_at)
-        const u = new Date(o.updated_at || o.created_at)
-        return s + Math.max(1, Math.round((u - c) / (1000 * 60 * 60 * 24)))
-      }, 0) / wonCount)
-    : 0
-  const activeOpps = filtered.filter(o => !['贏單', '輸單'].includes(o.stage))
-  const forecastRevenue = activeOpps.reduce((s, o) => s + (o.amount || 0), 0)
-
-  // Chart 1: Pipeline Conversion Funnel
-  const funnelChartData = {
-    labels: funnelData.map(f => f.stage),
+  const funnelChart = {
+    labels: funnel.map(f => f.stage),
     datasets: [{
-      label: '轉換率 (%)',
-      data: funnelData.map(f => f.conversionRate),
-      backgroundColor: [colors.blue, colors.cyan, colors.purple, colors.orange, colors.green],
-      borderRadius: 8, borderSkipped: false, barThickness: 36,
+      label: '商機數',
+      data: funnel.map(f => f.count),
+      backgroundColor: ['#3b82f6', '#22d3ee', '#a78bfa', '#fb923c', '#34d399', '#f87171'],
+      borderRadius: 6,
     }],
   }
 
-  // Chart 2: Win Rate by Rep (horizontal)
-  const winRateData = {
-    labels: repPerf.map(r => r.rep),
-    datasets: [{
-      label: '勝率 (%)',
-      data: repPerf.map(r => r.winRate),
-      backgroundColor: repPerf.map((_, i) => Object.values(colors)[i % 8]),
-      borderRadius: 6, borderSkipped: false, barThickness: 24,
-    }],
-  }
-
-  // Chart 3: Revenue by Rep (Doughnut)
-  const revDoughnutData = {
-    labels: repPerf.map(r => r.rep),
-    datasets: [{
-      data: repPerf.map(r => r.totalRevenue),
-      backgroundColor: repPerf.map((_, i) => Object.values(colors)[i % 8]),
-      borderWidth: 0, hoverOffset: 6,
-    }],
-  }
-
-  // Chart 4: Deal Size Trend (monthly average)
-  const now = new Date()
-  const monthLabels = []
-  const monthAvgDeal = []
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const yr = d.getFullYear(), mo = d.getMonth()
-    monthLabels.push(`${yr}/${String(mo + 1).padStart(2, '0')}`)
-    const monthWon = wonOpps.filter(o => {
-      const od = new Date(o.created_at)
-      return od.getFullYear() === yr && od.getMonth() === mo
-    })
-    monthAvgDeal.push(monthWon.length > 0 ? Math.round(monthWon.reduce((s, o) => s + (o.amount || 0), 0) / monthWon.length) : 0)
-  }
-  const dealSizeLineData = {
-    labels: monthLabels,
-    datasets: [{
-      label: '平均成交金額 (NT$)',
-      data: monthAvgDeal,
-      borderColor: colors.cyan, backgroundColor: 'rgba(34,211,238,0.1)',
-      fill: true, tension: 0.4, pointRadius: 5,
-      pointBackgroundColor: colors.cyan, pointBorderColor: '#0f172a', pointBorderWidth: 2,
-    }],
-  }
-
-  // Chart 5: Sales Cycle by Rep
-  const cycleData = {
-    labels: repPerf.map(r => r.rep),
-    datasets: [{
-      label: '平均成交天數',
-      data: repPerf.map(r => {
-        const repWon = wonOpps.filter(o => o.assignee === r.rep)
-        if (repWon.length === 0) return 0
-        return Math.round(repWon.reduce((s, o) => {
-          const c = new Date(o.created_at)
-          const u = new Date(o.updated_at || o.created_at)
-          return s + Math.max(1, Math.round((u - c) / (1000 * 60 * 60 * 24)))
-        }, 0) / repWon.length)
-      }),
-      backgroundColor: repPerf.map((_, i) => Object.values(colors)[i % 8]),
-      borderRadius: 6, borderSkipped: false, barThickness: 28,
-    }],
-  }
-
-  const handleExportCSV = () => {
-    exportToCSV(repPerf.map(r => ({
-      rep: r.rep, totalDeals: r.totalDeals, wonDeals: r.wonDeals,
-      winRate: r.winRate, totalRevenue: r.totalRevenue, avgDealSize: r.avgDealSize,
-    })), [
-      { key: 'rep', label: '業務代表' }, { key: 'totalDeals', label: '總商機' },
-      { key: 'wonDeals', label: '贏單數' }, { key: 'winRate', label: '勝率 (%)' },
-      { key: 'totalRevenue', label: '總營收' }, { key: 'avgDealSize', label: '平均成交金額' },
-    ], `銷售績效_${new Date().toISOString().slice(0, 10)}`)
-  }
+  const td = data.ticket_distribution || {}
 
   return (
-    <div className="fade-in" id="sales-performance-page">
+    <div className="fade-in">
       <div className="page-header">
-        <h2><span className="header-icon">🏆</span> 銷售績效</h2>
-        <p>業務代表績效分析與排行</p>
-        <div className="export-btn-group" style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          <button className="btn btn-primary" onClick={handleExportCSV} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> 匯出 CSV
-          </button>
-          <button className="btn btn-primary" onClick={() => exportToPDF('sales-performance-page', '銷售績效')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Printer size={15} /> 列印報表
-          </button>
+        <div className="page-header-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
+            <h2><span className="header-icon">🏆</span> 銷售業績</h2>
+            <p>銷售漏斗 · 業務員排行 · 報價轉化 · 客單價分布</p>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary" onClick={load}><RefreshCw size={14} /> 重新載入</button>
         </div>
       </div>
 
-      <DateRangePicker value={dateRange} onChange={setDateRange} />
-
-      {/* KPI Cards */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-blue)', '--card-accent-dim': 'var(--accent-blue-dim)' }}>
-          <div className="stat-card-label">總商機數</div>
-          <div className="stat-card-value">{totalDeals}</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
-          <div className="stat-card-label">贏單數</div>
-          <div className="stat-card-value">{wonCount}</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">整體勝率</div>
-          <div className="stat-card-value">{overallWinRate}%</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
-          <div className="stat-card-label">平均成交金額</div>
-          <div className="stat-card-value">NT$ {avgDealSize.toLocaleString()}</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
-          <div className="stat-card-label">銷售週期(天)</div>
-          <div className="stat-card-value">{avgCycleDays} 天</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-yellow)', '--card-accent-dim': 'var(--accent-yellow-dim)' }}>
-          <div className="stat-card-label">預測營收</div>
-          <div className="stat-card-value">NT$ {forecastRevenue.toLocaleString()}</div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KpiCard label="商機總數" value={NUM(totalOpps)}
+          sub={`總額 ${NT_K(totalAmt)}`} accent="cyan" />
+        <KpiCard label="贏單金額" value={NT_K(wonStage?.amount || 0)}
+          sub={`${wonStage?.count || 0} 件`} accent="green" />
+        <KpiCard label="報價轉化率" value={data.quote_conversion?.unavailable ? '-' : PCT(data.quote_conversion?.conversion_pct)}
+          sub={data.quote_conversion?.unavailable
+            ? '無 quotations 資料'
+            : `${data.quote_conversion?.sales_orders_count || 0} / ${data.quote_conversion?.quotations_count || 0}`}
+          accent="purple" />
+        <KpiCard label="本月平均客單" value={NT(td.avg)}
+          sub={`中位數 ${NT(td.median)} · P90 ${NT(td.p90)}`} accent="orange" />
       </div>
 
-      {/* Sales Rep Leaderboard */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">📊 業務排行榜</div>
-        </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>排名</th><th>業務代表</th><th>總商機</th><th>贏單數</th>
-                <th>勝率</th><th>總營收</th><th>平均成交金額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {repPerf.map((r, i) => (
-                <tr key={r.rep}>
-                  <td>{i + 1}</td>
-                  <td style={{ fontWeight: 600 }}>{r.rep}</td>
-                  <td>{r.totalDeals}</td>
-                  <td>{r.wonDeals}</td>
-                  <td>{r.winRate}%</td>
-                  <td>NT$ {r.totalRevenue.toLocaleString()}</td>
-                  <td>NT$ {r.avgDealSize.toLocaleString()}</td>
-                </tr>
-              ))}
-              {repPerf.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#64748b' }}>尚無資料</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <SectionHeader icon={Target} title="銷售漏斗（按階段）" accent="cyan" />
+      <div className="card" style={{ padding: 16 }}>
+        {funnel.length === 0 ? <EmptyState msg="無商機資料" /> : (
+          <div style={{ height: 280 }}>
+            <Bar data={funnelChart} options={{ ...chartOpts, plugins: { legend: { display: false } },
+              scales: { x: { ticks: { color: '#94a3b8' } }, y: { beginAtZero: true, ticks: { color: '#94a3b8', stepSize: 1 } } } }} />
+          </div>
+        )}
+        {funnel.length > 0 && (
+          <DataTable
+            rows={funnel}
+            columns={[
+              { key: 'stage', label: '階段' },
+              { key: 'count', label: '商機數', render: v => NUM(v) },
+              { key: 'amount', label: '金額', render: v => NT(v) },
+            ]}
+          />
+        )}
       </div>
 
-      {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">🔄 漏斗轉換率</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Bar data={funnelChartData} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, max: 100, grid: gridStyle, ticks: { ...tickStyle, callback: v => `${v}%` } } } }} />
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">🎯 各業務勝率</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Bar data={winRateData} options={{ ...chartOpts, indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100, grid: gridStyle, ticks: { ...tickStyle, callback: v => `${v}%` } }, y: { grid: gridStyle, ticks: tickStyle } } }} />
-          </div>
-        </div>
+      <SectionHeader icon={Award} title="業務員業績排行（按贏單金額）" accent="green" />
+      <div className="card" style={{ padding: 16 }}>
+        <DataTable
+          rows={data.top_reps || []}
+          columns={[
+            { key: 'name', label: '業務員' },
+            { key: 'total_count', label: '總商機', render: v => NUM(v) },
+            { key: 'won_count', label: '贏單數', render: v => NUM(v) },
+            { key: 'won_amount', label: '贏單金額', render: v => NT(v) },
+            { key: '_winrate', label: '勝率', render: (_, r) => r.total_count > 0 ? PCT((r.won_count / r.total_count) * 100, 0) : '-' },
+          ]}
+          emptyMsg="無業務員資料"
+        />
       </div>
 
-      {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">💰 營收佔比</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px', display: 'flex', justifyContent: 'center' }}>
-            <Doughnut data={revDoughnutData} options={{ ...chartOpts, cutout: '55%' }} />
+      <SectionHeader icon={FileCheck} title="報價成功率（近 6 月）" accent="purple" />
+      <div className="card" style={{ padding: 16 }}>
+        {data.quote_conversion?.unavailable ? <EmptyState msg="quotations / sales_orders 表未啟用" /> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>報價數</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>{NUM(data.quote_conversion?.quotations_count)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>成交數</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-green)' }}>{NUM(data.quote_conversion?.sales_orders_count)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>轉化率</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-cyan)' }}>{PCT(data.quote_conversion?.conversion_pct)}</div>
+            </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">📈 月均成交金額趨勢</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Line data={dealSizeLineData} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, callback: v => `NT$ ${(v / 1000).toFixed(0)}K` } } } }} />
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Charts Row 3 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">⏱ 各業務平均成交天數</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Bar data={cycleData} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, callback: v => `${v} 天` } } } }} />
+      <SectionHeader icon={Receipt} title="本月客單價分布" accent="orange" />
+      <div className="card" style={{ padding: 16 }}>
+        {(td.count || 0) === 0 ? <EmptyState msg="本月無 POS 交易" /> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>筆數</div><div style={{ fontSize: 18, fontWeight: 700 }}>{NUM(td.count)}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>平均</div><div style={{ fontSize: 18, fontWeight: 700 }}>{NT(td.avg)}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>中位數</div><div style={{ fontSize: 18, fontWeight: 700 }}>{NT(td.median)}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>P90</div><div style={{ fontSize: 18, fontWeight: 700 }}>{NT(td.p90)}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>最大</div><div style={{ fontSize: 18, fontWeight: 700 }}>{NT(td.max)}</div></div>
           </div>
-        </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+        資料更新時間：{new Date(data.generated_at).toLocaleString('zh-TW')}
       </div>
     </div>
   )

@@ -1,255 +1,147 @@
-import { useState, useEffect } from 'react'
-import { Download, Printer } from 'lucide-react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
-import { Doughnut, Bar, Line } from 'react-chartjs-2'
+import { useEffect, useState } from 'react'
+import { Users, TrendingUp, Clock, GraduationCap, UserX, RefreshCw } from 'lucide-react'
+import { Bar, Line } from 'react-chartjs-2'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend, Filler } from 'chart.js'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { getEmployees, getOvertimeRequests, getLeaveRequests, getRecruitmentJobs } from '../../lib/db'
-import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import DateRangePicker from '../../components/DateRangePicker'
+import { KpiCard, SectionHeader, BarRow, EmptyState, DataTable, NUM, PCT } from './components/AnalyticsCommon'
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
+ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend, Filler)
 
-const colors = { cyan: '#22d3ee', blue: '#3b82f6', purple: '#a78bfa', green: '#34d399', orange: '#fb923c', red: '#f87171', pink: '#f472b6', yellow: '#fbbf24' }
 const chartOpts = {
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#94a3b8', font: { size: 11, weight: 600 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 } },
-    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: 'rgba(148,163,184,0.15)', borderWidth: 1, padding: 12, cornerRadius: 10 },
+    legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)' },
   },
 }
-const gridStyle = { color: 'rgba(148,163,184,0.06)' }
-const tickStyle = { color: '#64748b', font: { size: 11 } }
 
 export default function HRAnalytics() {
   const { profile } = useAuth()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [dateRange, setDateRange] = useState(null)
 
-  useEffect(() => {
-    const orgId = profile?.organization_id
-    if (!orgId) { setLoading(false); return }
-    Promise.all([
-      getEmployees(orgId),
-      getOvertimeRequests({ orgId }),
-      getLeaveRequests({ orgId }),
-      getRecruitmentJobs(orgId),
-    ]).then(([emp, ot, leave, recruit]) => {
-      setData({
-        employees: emp.data || [],
-        overtime: ot.data || [],
-        leave: leave.data || [],
-        recruitment: recruit.data || [],
+  const load = () => {
+    if (!profile?.organization_id) return
+    setLoading(true)
+    supabase.rpc('fn_hr_analytics', { p_org_id: profile.organization_id })
+      .then(({ data: res, error }) => {
+        if (error) setError(error.message)
+        else setData(res)
       })
-    }).catch(err => {
-      console.error('Failed to load HR data:', err)
-      setError('資料載入失敗，請重新整理頁面')
-    }).finally(() => {
-      setLoading(false)
-    })
-  }, [profile?.organization_id])
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line
 
   if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)' }}>{error}</div>
+  if (!data) return <LoadingSpinner />
 
-  const filterByDate = (arr, field = 'created_at') => {
-    if (!dateRange) return arr
-    return arr.filter(r => {
-      const d = (r[field] || r.created_at || '').slice(0, 10)
-      return d >= dateRange.startDate && d <= dateRange.endDate
-    })
-  }
-
-  const d = {
-    employees: data.employees,
-    overtime: filterByDate(data.overtime, 'date'),
-    leave: filterByDate(data.leave, 'start_date'),
-    recruitment: filterByDate(data.recruitment),
-  }
-
-  // KPI calculations
-  const activeEmp = d.employees.filter(e => e.status === '在職').length
-  const totalEmp = d.employees.length
-  const now = new Date()
-  const thisMonth = now.toISOString().slice(0, 7)
-  const terminated = d.employees.filter(e => e.status === '離職' && (e.termination_date || '').slice(0, 7) === thisMonth).length
-  const turnoverRate = totalEmp > 0 ? ((terminated / totalEmp) * 100).toFixed(1) : '0.0'
-  const monthOTHours = d.overtime.filter(r => (r.date || '').slice(0, 7) === thisMonth).reduce((s, r) => s + (r.hours || 0), 0)
-  const monthOTCost = d.overtime.filter(r => (r.date || '').slice(0, 7) === thisMonth).reduce((s, r) => s + (r.amount || 0), 0)
-  const totalLeaveDays = d.leave.reduce((s, r) => s + (r.days || 0), 0)
-  const leaveUtilization = activeEmp > 0 ? (totalLeaveDays / activeEmp).toFixed(1) : '0'
-  const openPositions = d.recruitment.filter(r => r.stage !== '到職').length
-
-  // Last 6 months helper
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const dt = new Date(); dt.setMonth(dt.getMonth() - (5 - i)); return dt.toISOString().slice(0, 7)
-  })
-  const monthLabels = months.map(m => m.slice(5) + '月')
-
-  // Headcount Trend — count employees hired on or before each month-end who are still active
-  const headcountData = {
-    labels: monthLabels,
-    datasets: [{
-      label: '在職人數', data: months.map(m => {
-        const end = new Date(m + '-01'); end.setMonth(end.getMonth() + 1); end.setDate(0)
-        const endStr = end.toISOString().slice(0, 10)
-        return data.employees.filter(e => (e.hire_date || '') <= endStr && (e.status === '在職' || (e.termination_date || '') > endStr)).length
-      }),
-      borderColor: colors.cyan, backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: colors.cyan,
-    }],
-  }
-
-  // Turnover Rate Trend
-  const turnoverData = {
-    labels: monthLabels,
-    datasets: [{
-      label: '離職率 (%)', data: months.map(m => {
-        const total = data.employees.filter(e => (e.hire_date || '').slice(0, 7) <= m).length
-        const termed = data.employees.filter(e => e.status === '離職' && (e.termination_date || '').slice(0, 7) === m).length
-        return total > 0 ? parseFloat(((termed / total) * 100).toFixed(1)) : 0
-      }),
-      borderColor: colors.red, backgroundColor: 'rgba(248,113,113,0.08)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: colors.red,
-    }],
-  }
-
-  // Overtime Cost Trend
-  const otHoursByMonth = {}; const otCostByMonth = {}
-  months.forEach(m => { otHoursByMonth[m] = 0; otCostByMonth[m] = 0 })
-  data.overtime.forEach(r => {
-    const m = (r.date || '').slice(0, 7)
-    if (otHoursByMonth[m] !== undefined) { otHoursByMonth[m] += (r.hours || 0); otCostByMonth[m] += (r.amount || 0) }
-  })
-  const overtimeData = {
-    labels: monthLabels,
+  const maxStruct = Math.max(...(data.structure_by_dept || []).map(s => s.count), 1)
+  const trend = data.salary_trend || []
+  const salaryChart = {
+    labels: trend.map(t => t.month.slice(5) + '月'),
     datasets: [
-      { label: '加班時數', data: months.map(m => otHoursByMonth[m]), backgroundColor: colors.blue + '99', borderRadius: 6, barThickness: 20, yAxisID: 'y' },
-      { label: '加班費用', data: months.map(m => otCostByMonth[m]), backgroundColor: colors.orange + '99', borderRadius: 6, barThickness: 20, yAxisID: 'y1' },
+      { label: '薪資總額', data: trend.map(t => t.total),
+        borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.1)',
+        fill: true, tension: 0.4, pointRadius: 3 },
     ],
   }
-
-  // Leave Utilization by type (Doughnut)
-  const leaveByType = {}
-  data.leave.forEach(r => { const t = r.leave_type || '其他'; leaveByType[t] = (leaveByType[t] || 0) + (r.days || 0) })
-  const leaveLabels = Object.keys(leaveByType)
-  const leaveColors = [colors.blue, colors.green, colors.purple, colors.orange, colors.pink, colors.yellow, colors.cyan, colors.red]
-  const leaveData = {
-    labels: leaveLabels,
-    datasets: [{ data: leaveLabels.map(t => leaveByType[t]), backgroundColor: leaveLabels.map((_, i) => leaveColors[i % leaveColors.length]), borderWidth: 0 }],
-  }
-
-  // Department Headcount
-  const deptCount = {}
-  data.employees.filter(e => e.status === '在職').forEach(e => { const dep = e.dept || '未分類'; deptCount[dep] = (deptCount[dep] || 0) + 1 })
-  const deptLabels = Object.keys(deptCount)
-  const deptData = {
-    labels: deptLabels,
-    datasets: [{ label: '人數', data: deptLabels.map(d => deptCount[d]), backgroundColor: deptLabels.map((_, i) => leaveColors[i % leaveColors.length]), borderRadius: 6, barThickness: 28 }],
-  }
-
-  // Recruitment Funnel
-  const recruitStages = ['投遞', '面試', '錄取', '到職']
-  const recruitData = {
-    labels: recruitStages,
-    datasets: [{ label: '人數', data: recruitStages.map(s => d.recruitment.filter(r => r.stage === s).length), backgroundColor: [colors.blue, colors.purple, colors.orange, colors.green], borderRadius: 6, barThickness: 28 }],
-  }
-
-  const handleExportCSV = () => {
-    const kpiRows = [
-      { label: '在職人數', value: activeEmp },
-      { label: '月離職率 (%)', value: turnoverRate },
-      { label: '本月加班時數', value: monthOTHours },
-      { label: '加班費用', value: monthOTCost },
-      { label: '人均請假天數', value: leaveUtilization },
-      { label: '招募中職位', value: openPositions },
-    ]
-    exportToCSV(kpiRows, [
-      { key: 'label', label: '指標' },
-      { key: 'value', label: '數值' },
-    ], `人資分析_${new Date().toISOString().slice(0, 10)}`)
+  const attrition = data.attrition?.by_month || []
+  const attritionChart = {
+    labels: attrition.map(a => a.month.slice(5) + '月'),
+    datasets: [{ label: '離職人數', data: attrition.map(a => a.count), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 }],
   }
 
   return (
-    <div className="fade-in" id="hr-analytics-page">
+    <div className="fade-in">
       <div className="page-header">
-        <h2><span className="header-icon">👥</span> 人資分析</h2>
-        <p>人力資源數據整合分析</p>
-        <div className="export-btn-group" style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          <button className="btn btn-primary" onClick={handleExportCSV} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> 匯出 CSV
-          </button>
-          <button className="btn btn-primary" onClick={() => exportToPDF('hr-analytics-page', '人資分析')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Printer size={15} /> 列印報表
-          </button>
+        <div className="page-header-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
+            <h2><span className="header-icon">👥</span> 人資分析</h2>
+            <p>員工結構 · 薪資 · 出勤 · 離職 · 加班 · 培訓</p>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary" onClick={load}><RefreshCw size={14} /> 重新載入</button>
         </div>
       </div>
 
-      <DateRangePicker value={dateRange} onChange={setDateRange} />
-
-      {/* KPI */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-        {[
-          { label: '在職人數', value: activeEmp, color: 'cyan' },
-          { label: '月離職率', value: `${turnoverRate}%`, color: parseFloat(turnoverRate) > 5 ? 'red' : 'green' },
-          { label: '本月加班時數', value: `${monthOTHours}h`, color: 'blue' },
-          { label: '加班費用', value: `NT$${(monthOTCost / 1000).toFixed(0)}K`, color: 'orange' },
-          { label: '請假利用率', value: `${leaveUtilization}天/人`, color: 'purple' },
-          { label: '招募中職位', value: openPositions, color: openPositions > 0 ? 'yellow' : 'green' },
-        ].map((s, i) => (
-          <div key={i} className="stat-card" style={{ '--card-accent': `var(--accent-${s.color})`, '--card-accent-dim': `var(--accent-${s.color}-dim)` }}>
-            <div className="stat-card-label">{s.label}</div>
-            <div className="stat-card-value">{s.value}</div>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KpiCard label="在職人數" value={NUM(data.active_count)} accent="cyan" />
+        <KpiCard label="今年離職率" value={PCT(data.attrition?.rate_pct)}
+          sub={`累計 ${data.attrition?.ytd_terms || 0} 人`}
+          accent={data.attrition?.rate_pct > 10 ? 'red' : 'green'} />
+        <KpiCard label="本月加班時數" value={`${data.overtime?.this_month_total_hours || 0} h`}
+          sub={`人均 ${data.overtime?.per_employee_avg || 0} h`}
+          accent={data.overtime?.per_employee_avg > 46 ? 'red' : 'cyan'} />
+        <KpiCard label="人均培訓堂數" value={`${data.training?.avg_per_employee || 0} 堂/年`}
+          sub={data.training?.unavailable ? '培訓表未啟用' : `今年完成 ${data.training?.completed_this_year || 0} 堂`}
+          accent="purple" />
       </div>
 
-      {/* Charts Row 1 — Headcount & Turnover */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">📈 在職人數趨勢</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Line data={headcountData} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, stepSize: 1 } } } }} />
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">📉 離職率趨勢</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Line data={turnoverData} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: tickStyle } } }} />
-          </div>
-        </div>
+      <SectionHeader icon={Users} title="員工結構（依部門）" accent="cyan" />
+      <div className="card" style={{ padding: 16 }}>
+        {(data.structure_by_dept || []).length === 0 ? <EmptyState /> :
+          (data.structure_by_dept || []).map(s => (
+            <BarRow key={s.dept} label={s.dept} value={s.count} max={maxStruct} accent="cyan" />
+          ))
+        }
       </div>
 
-      {/* Charts Row 2 — Overtime & Leave */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">⏰ 加班時數與費用趨勢</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Bar data={overtimeData} options={{ ...chartOpts, scales: { x: { grid: { display: false }, ticks: tickStyle }, y: { beginAtZero: true, position: 'left', grid: gridStyle, ticks: tickStyle, title: { display: true, text: '時數', color: '#64748b' } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: tickStyle, title: { display: true, text: '費用 (NT$)', color: '#64748b' } } } }} />
+      <SectionHeader icon={TrendingUp} title="月薪資成本趨勢（近 12 月）" accent="green" />
+      <div className="card" style={{ padding: 16 }}>
+        {trend.length === 0 ? <EmptyState msg="無薪資資料" /> : (
+          <div style={{ height: 240 }}>
+            <Line data={salaryChart} options={{ ...chartOpts, scales: { x: { ticks: { color: '#94a3b8' } }, y: { beginAtZero: true, ticks: { color: '#94a3b8' } } } }} />
           </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">🏖️ 請假類型分布</div></div>
-          <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px 8px' }}>
-            <Doughnut data={leaveData} options={{ ...chartOpts, cutout: '55%', plugins: { ...chartOpts.plugins, legend: { ...chartOpts.plugins.legend, position: 'bottom' } } }} />
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Charts Row 3 — Department & Recruitment */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">🏢 部門人數分布</div></div>
-          <div style={{ height: 260, padding: '0 8px 8px' }}>
-            <Bar data={deptData} options={{ ...chartOpts, plugins: { ...chartOpts.plugins, legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, stepSize: 1 } } } }} />
+      <SectionHeader icon={Clock} title="本月出勤狀況（依部門）" accent="blue" />
+      <div className="card" style={{ padding: 16 }}>
+        <DataTable
+          rows={data.attendance_by_dept || []}
+          columns={[
+            { key: 'dept', label: '部門' },
+            { key: 'attendance_days', label: '出勤人日', render: v => NUM(v) },
+            { key: 'absence_days', label: '缺勤', render: v => NUM(v) },
+            { key: 'late_count', label: '遲到', render: v => NUM(v) },
+          ]}
+          emptyMsg="本月無出勤紀錄"
+        />
+      </div>
+
+      <SectionHeader icon={UserX} title="離職趨勢（近 12 月）" accent="red" />
+      <div className="card" style={{ padding: 16 }}>
+        {attrition.length === 0 ? <EmptyState msg="無離職紀錄" /> : (
+          <div style={{ height: 200 }}>
+            <Bar data={attritionChart} options={{ ...chartOpts, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { beginAtZero: true, ticks: { color: '#94a3b8', stepSize: 1 } } } }} />
           </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">🎯 招募漏斗</div></div>
-          <div style={{ height: 260, padding: '0 8px 8px' }}>
-            <Bar data={recruitData} options={{ ...chartOpts, plugins: { ...chartOpts.plugins, legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, stepSize: 1 } } } }} />
-          </div>
-        </div>
+        )}
+      </div>
+
+      <SectionHeader icon={Clock} title="加班時數 Top 5（本月，已核准）" accent="orange" />
+      <div className="card" style={{ padding: 16 }}>
+        <DataTable
+          rows={data.overtime?.top_overtimers || []}
+          columns={[
+            { key: 'name', label: '員工' },
+            { key: 'hours', label: '加班時數', render: v => `${v} h` },
+          ]}
+          emptyMsg="本月無加班"
+        />
+      </div>
+
+      {data.training?.unavailable && (
+        <SectionHeader icon={GraduationCap} title="培訓資料" accent="purple" extra={
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>training_enrollments 表未啟用，補完即顯示</span>
+        } />
+      )}
+
+      <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+        資料更新時間：{new Date(data.generated_at).toLocaleString('zh-TW')}
       </div>
     </div>
   )

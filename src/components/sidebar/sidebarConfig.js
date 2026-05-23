@@ -366,6 +366,7 @@ export const groupNav = {
         { icon: Package, label: '庫存分析', path: '/analytics/inventory' },
         { icon: ShoppingBag, label: 'POS 分析', path: '/analytics/pos' },
         { icon: Factory, label: '製造分析', path: '/analytics/manufacturing' },
+        { icon: Users, label: 'CRM 分析', path: '/analytics/crm' },
       ]
     },
     {

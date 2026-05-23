@@ -6,7 +6,7 @@ import {
   Users, Settings, Columns, GitBranch, MoreVertical, GripVertical
 } from 'lucide-react'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
-import FormBindingsPicker from '../../../components/FormBindingsPicker'
+import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
 import ProjectMembers from '../../../components/tasks/ProjectMembers'
 import ChangelogPanel from '../../../components/ChangelogPanel'
 import { ProjectCustomFieldsAdmin } from '../../../components/tasks/CustomFieldsEditor'
@@ -73,13 +73,9 @@ export default function ProjectDetailPanel({
   setDragOverTaskId,
   addingTaskWfId,
   setAddingTaskWfId,
-  addTaskForm,
-  setAddTaskForm,
   handleAddTaskToWorkflow,
   addingDirectTask,
   setAddingDirectTask,
-  directTaskForm,
-  setDirectTaskForm,
   handleAddDirectTask,
   handleTaskStatusChange,
   showModal,
@@ -485,39 +481,7 @@ export default function ProjectDetailPanel({
                 )
               })}
 
-              {addingTaskWfId === w.id && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 4px 4px 24px' }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      className="form-input"
-                      style={{ flex: '1 1 160px', fontSize: 12 }}
-                      placeholder="任務名稱 *"
-                      autoFocus
-                      value={addTaskForm.title}
-                      onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
-                    />
-                    <div style={{ flex: '0 0 130px' }}>
-                      <SearchableSelect
-                        value={addTaskForm.assignee}
-                        onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
-                        options={empOptions(employees, { keyBy: 'name' })}
-                        placeholder="負責人"
-                      />
-                    </div>
-                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
-                      value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                      disabled={!addTaskForm.title.trim()} onClick={() => handleAddTaskToWorkflow(w.id)}>確認</button>
-                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
-                      onClick={() => setAddingTaskWfId(null)}>取消</button>
-                  </div>
-                  <FormBindingsPicker
-                    value={addTaskForm.required_forms || []}
-                    onChange={v => setAddTaskForm(f => ({ ...f, required_forms: v }))}
-                  />
-                </div>
-              )}
+              {/* inline form 已改為彈出 modal — modal 統一在元件最下面 render */}
             </div>}
           </div>
         )
@@ -583,43 +547,7 @@ export default function ProjectDetailPanel({
                   </div>
                 )
               })}
-              {addingDirectTask && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px', flexWrap: 'wrap' }}>
-                  <input
-                    className="form-input" style={{ flex: '1 1 160px', fontSize: 12 }}
-                    placeholder="任務名稱 *" autoFocus
-                    value={directTaskForm.title}
-                    onChange={e => setDirectTaskForm(f => ({ ...f, title: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && handleAddDirectTask()}
-                  />
-                  <div style={{ flex: '0 0 130px' }}>
-                    <SearchableSelect
-                      value={directTaskForm.assignee}
-                      onChange={(v) => setDirectTaskForm(f => ({ ...f, assignee: v || '' }))}
-                      options={empOptions(employees, { keyBy: 'name' })}
-                      placeholder="負責人"
-                    />
-                  </div>
-                  <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
-                    value={directTaskForm.due_date} onChange={e => setDirectTaskForm(f => ({ ...f, due_date: e.target.value }))} />
-                  <select className="form-input" style={{ flex: '0 0 70px', fontSize: 12 }}
-                    value={directTaskForm.priority} onChange={e => setDirectTaskForm(f => ({ ...f, priority: e.target.value }))}>
-                    <option>高</option><option>中</option><option>低</option>
-                  </select>
-                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                    disabled={!directTaskForm.title.trim()} onClick={handleAddDirectTask}>確認</button>
-                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
-                    onClick={() => setAddingDirectTask(false)}>取消</button>
-                </div>
-              )}
-              {addingDirectTask && (
-                <div style={{ padding: '0 4px 4px 24px' }}>
-                  <FormBindingsPicker
-                    value={directTaskForm.required_forms || []}
-                    onChange={v => setDirectTaskForm(f => ({ ...f, required_forms: v }))}
-                  />
-                </div>
-              )}
+              {/* inline form 已改為彈出 modal */}
             </div>
           </div>
         )
@@ -836,6 +764,26 @@ export default function ProjectDetailPanel({
         required={inputModal.required}
         onConfirm={inputModal.onConfirm || (() => {})}
         onCancel={closeInput}
+      />
+
+      {/* 新增工作流程任務 (open when addingTaskWfId set) */}
+      <TaskQuickCreateModal
+        open={addingTaskWfId !== null}
+        title="新增工作流程任務"
+        employees={employees}
+        stores={stores}
+        onClose={() => setAddingTaskWfId(null)}
+        onSubmit={(formData) => handleAddTaskToWorkflow(addingTaskWfId, formData)}
+      />
+
+      {/* 新增獨立專案任務 (open when addingDirectTask) */}
+      <TaskQuickCreateModal
+        open={addingDirectTask}
+        title="新增專案任務"
+        employees={employees}
+        stores={stores}
+        onClose={() => setAddingDirectTask(false)}
+        onSubmit={(formData) => handleAddDirectTask(formData)}
       />
     </div>
   )

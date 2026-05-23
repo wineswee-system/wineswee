@@ -185,13 +185,191 @@ function buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl) {
   }
 }
 
+// ─── Typed task notification ──────────────────────────────────────────────────
+// All body sections are data-driven — fields render only when their data exists.
+//
+// extras.formBindings   Array<{ label, required_status?, description?, form_id? }>
+// extras.approvalRequired  boolean
+// extras.completedTasks    Array<string>  (names of completed predecessor tasks)
+// instanceName (3rd arg)   → subtitle in header (workflow / project context)
+
+function _detectTaskType(extras) {
+  if (extras.formBindings?.length > 0) return 'forms'
+  if (extras.approvalRequired) return 'approval'
+  return 'normal'
+}
+
+const _TASK_STYLES = {
+  normal:   { bg: LC.brand,    icon: '📋', label: '任務通知' },
+  forms:    { bg: LC.brand,    icon: '📋', label: '任務通知（含表單）' },
+  approval: { bg: LC.approval, icon: '🔏', label: '簽核任務' },
+}
+
+function _buildTypedHeader(type, instanceName, isOverdue) {
+  const s = _TASK_STYLES[type] || _TASK_STYLES.normal
+  const mainRow = [
+    { type: 'text', text: `${s.icon} ${s.label}`, color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
+    ...(isOverdue ? [{
+      type: 'box', layout: 'vertical', backgroundColor: LC.danger, cornerRadius: '4px',
+      paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
+      contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
+    }] : []),
+  ]
+  const rows = [{ type: 'box', layout: 'horizontal', alignItems: 'center', contents: mainRow }]
+  if (instanceName?.trim()) {
+    rows.push({ type: 'text', text: instanceName.trim(), color: '#FFFFFFCC', size: 'xs', margin: 'xs', wrap: true, maxLines: 1 })
+  }
+  return { type: 'box', layout: 'vertical', backgroundColor: s.bg, paddingAll: '14px', contents: rows }
+}
+
+function _buildTypedBody(taskTitle, taskId, assigneeName, department, store, dueDate, description, notes, isOverdue, extras = {}) {
+  const shortId = taskId ? `#${String(taskId).slice(0, 6)}` : null
+  const dueLabel = dueDate
+    ? new Date(dueDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '未設定'
+  const infoLine = [assigneeName, department, store].filter(Boolean).join('  |  ')
+
+  const contents = [
+    ...(shortId ? [{ type: 'text', text: shortId, size: 'xxs', color: '#CCCCCC' }] : []),
+    { type: 'text', text: taskTitle, weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+    { type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true },
+  ]
+
+  if (extras.approvalRequired) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({
+      type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm', paddingAll: '8px', cornerRadius: '4px',
+      contents: [
+        { type: 'text', text: '⚠️', size: 'sm', flex: 0 },
+        { type: 'text', text: '完成後需主管簽核', size: 'sm', color: LC.approval, flex: 1, wrap: true, weight: 'bold' },
+      ],
+    })
+  }
+
+  if (description && String(description).trim()) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: String(description).trim(), size: 'sm', color: LC.dark, wrap: true, margin: 'sm' })
+  }
+
+  if (notes && String(notes).trim()) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: '📌 備註', size: 'sm', color: LC.soft, margin: 'sm' })
+    contents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: LC.dark, wrap: true })
+  }
+
+  const formBindings = Array.isArray(extras.formBindings) ? extras.formBindings : []
+  if (formBindings.length > 0) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: `📋 需完成表單（${formBindings.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' })
+    for (const b of formBindings) {
+      contents.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '•', size: 'sm', color: LC.brand, flex: 0 },
+          { type: 'text', text: b.label || '未命名表單', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      })
+    }
+  }
+
+  const completedTasks = Array.isArray(extras.completedTasks) ? extras.completedTasks : []
+  if (completedTasks.length > 0) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: `✅ 前置已完成：${completedTasks.join('、')}`, size: 'xs', color: LC.soft, wrap: true, margin: 'sm' })
+  }
+
+  return contents
+}
+
+function _buildTypedFooter(liffUrl, taskId, approvalRequired, approvalUrl, formBindings) {
+  const hasForms = Array.isArray(formBindings) && formBindings.length > 0
+  if (hasForms && !approvalRequired) {
+    return {
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+      contents: [{
+        type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '查看任務 / 填表單', uri: liffUrl },
+      }],
+    }
+  }
+  const primaryAction = approvalRequired
+    ? { type: 'uri', label: '請求簽核', uri: approvalUrl }
+    : { type: 'postback', label: '回報完成', data: `action=complete&type=task&id=${taskId}`, displayText: '回報完成' }
+  return {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      {
+        type: 'button', style: 'primary', height: 'sm',
+        color: approvalRequired ? LC.warning : LC.success,
+        action: primaryAction,
+      },
+      {
+        type: 'button', style: 'secondary', height: 'sm',
+        action: { type: 'uri', label: '查看任務', uri: liffUrl },
+      },
+    ],
+  }
+}
+
+// One carousel bubble per form — renders whatever fields are present on the binding
+function _buildFormBubble(binding, index, total, instanceName, liffUrl) {
+  const bodyContents = [
+    { type: 'text', text: binding.label || '未命名表單', weight: 'bold', size: 'sm', wrap: true },
+  ]
+  if (binding.required_status) {
+    bodyContents.push({ type: 'text', text: `需達狀態：${binding.required_status}`, size: 'sm', color: LC.muted })
+  }
+  if (binding.description && String(binding.description).trim()) {
+    bodyContents.push({ type: 'separator', margin: 'sm' })
+    bodyContents.push({ type: 'text', text: String(binding.description).trim(), size: 'sm', color: LC.dark, wrap: true, margin: 'sm' })
+  }
+
+  const formUrl = binding.form_id
+    ? `${liffUrl}${liffUrl.includes('?') ? '&' : '?'}form=${binding.form_id}`
+    : liffUrl
+
+  const headerRows = [
+    { type: 'text', text: `📄 表單 ${index + 1} / ${total}`, color: '#FFFFFF', weight: 'bold', size: 'sm' },
+  ]
+  if (instanceName?.trim()) {
+    headerRows.push({ type: 'text', text: instanceName.trim(), color: '#FFFFFFCC', size: 'xs', margin: 'xs', wrap: true, maxLines: 1 })
+  }
+
+  return {
+    type: 'bubble', size: 'kilo',
+    header: {
+      type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+      contents: headerRows,
+    },
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+      contents: bodyContents,
+    },
+    footer: {
+      type: 'box', layout: 'vertical', paddingAll: '14px',
+      contents: [{
+        type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '填寫表單', uri: formUrl },
+      }],
+    },
+  }
+}
+
 /**
  * Notify a task assignee via LINE.
  * @param {string} assigneeName
  * @param {string} taskTitle
- * @param {string} instanceName
+ * @param {string} instanceName  - workflow / project name shown as subtitle in header
  * @param {number} taskId
- * @param {object} [extras] - { dueDate, description, notes, store, department, approvalRequired }
+ * @param {object} [extras] - { dueDate, description, notes, store, department,
+ *                              approvalRequired, formBindings, completedTasks }
+ *   formBindings:   Array<{ label, required_status?, description?, form_id? }>
+ *   completedTasks: Array<string>  names of completed predecessor tasks (cascade)
  */
 export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, taskId, extras = {}) {
   if (!assigneeName) return { ok: false, reason: 'no_assignee' }
@@ -199,37 +377,40 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
   const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  const { dueDate, description, notes, store, approvalRequired } = extras
+  const { dueDate, description, notes, store, approvalRequired, formBindings } = extras
   const department = extras.department || await resolveEmployeeDept(assigneeName)
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
   const approvalUrl = approvalRequired ? buildLiffTaskUrl(taskId, account.liffId, 'request_approval') : null
 
+  const type = _detectTaskType(extras)
+  const typeSuffix = type === 'forms' ? '（含表單）' : type === 'approval' ? '（待簽核）' : ''
+
+  const taskBubble = {
+    type: 'bubble', size: 'kilo',
+    header: _buildTypedHeader(type, instanceName, isOverdue),
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+      contents: _buildTypedBody(taskTitle, taskId, assigneeName, department, store, dueDate, description, notes, isOverdue, extras),
+    },
+    footer: _buildTypedFooter(liffUrl, taskId, approvalRequired, approvalUrl, formBindings),
+  }
+
+  const hasForms = Array.isArray(formBindings) && formBindings.length > 0
+  const contents = hasForms
+    ? {
+        type: 'carousel',
+        contents: [
+          taskBubble,
+          ...formBindings.map((b, i) => _buildFormBubble(b, i, formBindings.length, instanceName, liffUrl)),
+        ],
+      }
+    : taskBubble
+
   const messages = [{
     type: 'flex',
-    altText: `${isOverdue ? '⚠️ [逾期] ' : ''}📋 任務通知：${taskTitle}`,
-    contents: {
-      type: 'bubble', size: 'kilo',
-      header: {
-        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
-        contents: [{
-          type: 'box', layout: 'horizontal', alignItems: 'center',
-          contents: [
-            { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
-            ...(isOverdue ? [{
-              type: 'box', layout: 'vertical', backgroundColor: LC.danger, cornerRadius: '4px',
-              paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
-              contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
-            }] : []),
-          ],
-        }],
-      },
-      body: {
-        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-        contents: buildTaskBody(taskTitle, assigneeName, department, store, instanceName, dueDate, description, notes, isOverdue),
-      },
-      footer: buildTaskFooter(liffUrl, taskId, approvalRequired, approvalUrl),
-    },
+    altText: `${isOverdue ? '⚠️ [逾期] ' : ''}📋 任務通知${typeSuffix}：${taskTitle}`,
+    contents,
   }]
 
   return sendLinePush(account.lineUserId, messages)

@@ -603,6 +603,7 @@ function TaskFormBindingsBlock({ bindings }) {
       ? null  // 已有 form_id 表示已認領 → 點卡只是查狀態
       : (b.form_type === 'expense_request' ? `/process/expense-requests?binding_id=${b.id}`
         : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
+        : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
         : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
     if (u) window.open(u, '_blank')
   }

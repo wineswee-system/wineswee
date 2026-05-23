@@ -40,6 +40,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
         setOptions([
           { form_type: 'expense_request', form_template_id: null, label: '申請費用', group: '費用' },
           { form_type: 'expense',         form_template_id: null, label: '費用報銷', group: '費用' },
+          { form_type: 'store_audit',     form_template_id: null, label: '門市稽核', group: '稽核' },
           ...customForms,
         ])
       })

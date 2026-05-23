@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ClipboardCheck, Plus, Search, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -31,6 +31,20 @@ export default function StoreAudits() {
 
   const [showNew, setShowNew] = useState(false)
   const [detailId, setDetailId] = useState(null)
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  // 從任務綁定跳過來：?new=1&binding_id=N → 自動開新建 modal
+  const bindingId = searchParams.get('binding_id')
+    ? Number(searchParams.get('binding_id')) : null
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowNew(true)
+      // 開完就把 new=1 拿掉，避免關 modal 再回來又彈出（binding_id 留著給 onCreated 用）
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const orgId = profile?.organization_id
 
@@ -170,8 +184,17 @@ export default function StoreAudits() {
           boundChainId={chains[0]?.chain_id || null}
           orgId={orgId}
           auditor={profile}
+          bindingId={bindingId}
           onClose={() => setShowNew(false)}
-          onCreated={id => { setShowNew(false); setDetailId(id); load() }}
+          onCreated={id => {
+            setShowNew(false); setDetailId(id); load()
+            // 從任務綁定來的就把 binding_id 清掉
+            if (bindingId) {
+              const next = new URLSearchParams(searchParams)
+              next.delete('binding_id')
+              setSearchParams(next, { replace: true })
+            }
+          }}
         />
       )}
 
@@ -187,7 +210,7 @@ export default function StoreAudits() {
 }
 
 // ─── 新增稽核單 modal（只填表頭，建立後自動帶 42 個項目）─────
-function NewAuditModal({ stores, boundChainId, orgId, auditor, onClose, onCreated }) {
+function NewAuditModal({ stores, boundChainId, orgId, auditor, bindingId, onClose, onCreated }) {
   const today = new Date().toISOString().slice(0, 10)
   const [storeId, setStoreId] = useState('')
   const [date, setDate] = useState(today)
@@ -213,6 +236,7 @@ function NewAuditModal({ stores, boundChainId, orgId, auditor, onClose, onCreate
       auditor_name: auditor?.name || '',
       approval_chain_id: boundChainId || null,  // 自動綁設定好的 chain
       status: '草稿',
+      linked_binding_id: bindingId || null,  // 從任務綁定跳過來時帶上
     }).select().single()
     setSaving(false)
     if (error) { toast.error('建立失敗：' + error.message); return }

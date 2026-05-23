@@ -35,12 +35,13 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           form_type: 'form_submission',
           form_template_id: t.id,
           label: t.name,
+          icon: '📋',
           group: t.scope === 'business_expense' ? '費用' : '非費用',
         }))
         setOptions([
-          { form_type: 'expense_request', form_template_id: null, label: '申請費用', group: '費用' },
-          { form_type: 'expense',         form_template_id: null, label: '費用報銷', group: '費用' },
-          { form_type: 'store_audit',     form_template_id: null, label: '門市稽核', group: '稽核' },
+          { form_type: 'store_audit',     form_template_id: null, icon: '🏪', label: '門市稽核',  group: '稽核' },
+          { form_type: 'expense_request', form_template_id: null, icon: '🧾', label: '申請費用', group: '費用' },
+          { form_type: 'expense',         form_template_id: null, icon: '💸', label: '費用報銷', group: '費用' },
           ...customForms,
         ])
       })
@@ -220,7 +221,11 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
                         opacity: locked ? 0.6 : 1,
                         fontSize: 13,
                       }}>
-                      <span>{locked && '🔒 '}{o.label}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {o.icon && <span style={{ fontSize: 15, lineHeight: 1 }}>{o.icon}</span>}
+                        {locked && '🔒 '}
+                        {o.label}
+                      </span>
                       {sel && <Check size={14} style={{ color: 'var(--accent-cyan)' }} />}
                     </div>
                   )

@@ -13,6 +13,7 @@ import Chains from '../pages/process/settings/Chains'
 import ExpenseChains from '../pages/process/settings/ExpenseChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import BusinessApplications from '../pages/process/BusinessApplications'
+import StoreAudits from '../pages/hr/StoreAudits'
 
 // 老頁面已下架（2026-05-08），但 2026-05-11 重做為中央 library 管理：
 //   /process/settings/chains         → 全 chain library（取代舊 /process/approval-chains）
@@ -30,6 +31,7 @@ export default function ProcessModule() {
       <Route path="sop" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
       <Route path="applications" element={<BusinessApplications />} />
+      <Route path="store-audits" element={<StoreAudits />} />
       <Route path="task-confirmations" element={<TaskConfirmations />} />
       <Route path="settings/categories" element={<Categories />} />
       <Route path="settings/tags" element={<Tags />} />

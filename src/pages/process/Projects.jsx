@@ -435,44 +435,53 @@ export default function Projects() {
     }
   }
 
-  const handleAddTaskToWorkflow = async (wfId) => {
-    if (!addTaskForm.title.trim()) return
+  // 可從 inline form (使用 state addTaskForm) 或 modal (傳 formData) 呼叫
+  const handleAddTaskToWorkflow = async (wfId, formData) => {
+    const fd = formData || addTaskForm
+    if (!fd.title?.trim()) return false
     const instTasks = tasks.filter(t => t.workflow_instance_id === wfId)
     const maxOrder = instTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
     const wf = workflows.find(w => w.id === wfId)
-    const empId = addTaskForm.assignee
-      ? (employees.find(e => e.name === addTaskForm.assignee)?.id || null)
+    const empId = fd.assignee
+      ? (employees.find(e => e.name === fd.assignee)?.id || null)
       : null
     const isFirstStep = instTasks.length === 0
     const { data } = await createTask({
       workflow_instance_id: wfId,
       project_id: selected?.id || null,
-      title: addTaskForm.title.trim(),
-      assignee: addTaskForm.assignee || null,
+      title: fd.title.trim(),
+      description: fd.description || null,
+      assignee: fd.assignee || null,
       assignee_id: empId,
-      due_date: addTaskForm.due_date || null,
+      store: fd.store || null,
+      planned_start: fd.planned_start || null,
+      due_date: fd.due_date || null,
+      role: fd.role || null,
       status: isFirstStep ? '進行中' : '待處理',
       step_order: maxOrder + 1,
       bucket: 'Workflow',
       category: 'Workflow',
-      priority: '中',
+      priority: fd.priority || '中',
       organization_id: profile?.organization_id || null,
     })
-    if (data) {
-      // 綁定表單
-      for (const f of (addTaskForm.required_forms || [])) {
-        await supabase.rpc('create_task_form_binding', {
-          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
-        })
-      }
-      setTasks(prev => [...prev, data])
+    if (!data) return false
+    // 綁定表單
+    for (const f of (fd.required_forms || [])) {
+      await supabase.rpc('create_task_form_binding', {
+        p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+      })
+    }
+    setTasks(prev => [...prev, data])
+    if (!formData) {
+      // inline path: 清空 state
       setAddTaskForm({ title: '', assignee: '', due_date: '', required_forms: [] })
       setAddingTaskWfId(null)
-      if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
-        dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-        approvalRequired: data.status === '待簽核',
-      }).catch(() => {})
     }
+    if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
+      dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+      approvalRequired: data.status === '待簽核',
+    }).catch(() => {})
+    return true
   }
 
   const handleAddDirectTask = async () => {

@@ -74,8 +74,8 @@ export default function BusinessApplications() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><ClipboardList size={20} style={{ display: 'inline', marginRight: 6 }} />業務申請</h2>
-            <p>費用 / 非費用 類申請，分組管理</p>
+            <h2><ClipboardList size={20} style={{ display: 'inline', marginRight: 6 }} />表單設定</h2>
+            <p>費用 / 非費用類表單入口（被任務綁定時也從這些表單填寫）</p>
           </div>
         </div>
       </div>

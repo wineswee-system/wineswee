@@ -296,8 +296,7 @@ export const groupNav = {
       children: [
         { icon: BarChart3, label: 'HR 報表', path: '/hr/report' },
         { icon: Plane, label: '公出差旅', path: '/hr/travel' },
-        { icon: FileEdit, label: '費用申請與核銷', path: '/hr/expense-requests' },
-        { icon: Receipt, label: '費用報銷', path: '/hr/expenses' },
+        // 費用申請 / 費用報銷 已移到「專案流程 → 表單設定」
         { icon: FolderOpen, label: '文件管理', path: '/hr/documents' },
         { icon: FileCheck, label: '勞檢報表', path: '/hr/labor-inspection' },
       ]
@@ -313,7 +312,7 @@ export const groupNav = {
         { icon: FolderOpen, label: '專案', path: '/process/projects', title: '專案管理：建立和追蹤多步驟的工作（例：新店開幕、系統上線）' },
         { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
         { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
-        { icon: ClipboardList, label: '業務申請', path: '/process/applications', title: '費用 / 非費用類申請（門市報修、叫貨驗收、費用申請）' },
+        { icon: ClipboardList, label: '表單設定', path: '/process/applications', title: '費用 / 非費用類表單（門市報修、叫貨驗收、費用申請、費用報銷）' },
         { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },
         { icon: CheckSquare, label: '任務確認', path: '/process/task-confirmations', title: '任務 chain 步驟確認' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists', title: '標準作業檢查表（例：每日開店清單）' },

@@ -9,7 +9,7 @@ import {
   Handshake, TrendingUp, Megaphone, HeadphonesIcon, Sparkles,
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
-  Share2, Layout, Mail, Factory, ShoppingBag, Calculator,
+  Layout, Factory, ShoppingBag, Calculator,
   UserCheck, Shield, Send, Search, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
@@ -367,14 +367,6 @@ export const groupNav = {
         { icon: ShoppingBag, label: 'POS 分析', path: '/analytics/pos' },
         { icon: Factory, label: '製造分析', path: '/analytics/manufacturing' },
         { icon: Users, label: 'CRM 分析', path: '/analytics/crm' },
-      ]
-    },
-    {
-      label: '輸出與分享',
-      icon: Share2,
-      children: [
-        { icon: Mail, label: '排程報表', path: '/analytics/reports' },
-        { icon: Share2, label: '圖表分享', path: '/analytics/embed' },
       ]
     },
   ],

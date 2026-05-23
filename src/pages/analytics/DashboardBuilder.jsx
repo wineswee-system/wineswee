@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, GripVertical, Save, Layout, Settings, BarChart3, PieChart, TrendingUp, Table } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Save, Layout, Settings, BarChart3, PieChart, TrendingUp, Table, FileText, Lock } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal from '../../components/Modal'
 
@@ -67,6 +68,44 @@ const defaultWidgets = [
   { id: 'w3', title: '庫存類別比例', type: 'doughnut', dataSource: 'stock_levels', metric: 'sum', groupBy: 'category', size: '1x1' },
   { id: 'w4', title: '出勤狀態', type: 'bar', dataSource: 'attendance_records', metric: 'count', groupBy: 'status', size: '1x1' },
 ]
+
+// ── 3 個預設範本：老闆 / 店長 / HR ──
+const TEMPLATES = {
+  boss: {
+    name: '老闆版',
+    desc: '全公司營運概覽（營收、商機、應收、人力）',
+    widgets: [
+      { id: 'b1', title: '本月應收餘額', type: 'stat', dataSource: 'accounts_receivable', metric: 'sum', groupBy: 'status', size: '1x1' },
+      { id: 'b2', title: '本月應付餘額', type: 'stat', dataSource: 'accounts_payable', metric: 'sum', groupBy: 'status', size: '1x1' },
+      { id: 'b3', title: '商機總金額', type: 'stat', dataSource: 'opportunities', metric: 'sum', groupBy: 'stage', size: '1x1' },
+      { id: 'b4', title: '在職人數', type: 'stat', dataSource: 'employees', metric: 'count', groupBy: 'status', size: '1x1' },
+      { id: 'b5', title: '月營收趨勢', type: 'line', dataSource: 'accounts_receivable', metric: 'sum', groupBy: 'month', size: '2x1' },
+      { id: 'b6', title: '商機階段分布', type: 'bar', dataSource: 'opportunities', metric: 'count', groupBy: 'stage', size: '1x1' },
+    ],
+  },
+  manager: {
+    name: '店長版',
+    desc: '門市營運（POS 交易、商機、員工出勤）',
+    widgets: [
+      { id: 'm1', title: '本月 POS 營收', type: 'stat', dataSource: 'pos_transactions', metric: 'sum', groupBy: 'status', size: '1x1' },
+      { id: 'm2', title: '交易筆數', type: 'stat', dataSource: 'pos_transactions', metric: 'count', groupBy: 'status', size: '1x1' },
+      { id: 'm3', title: '出勤狀態', type: 'doughnut', dataSource: 'attendance_records', metric: 'count', groupBy: 'status', size: '1x1' },
+      { id: 'm4', title: '商機階段', type: 'bar', dataSource: 'opportunities', metric: 'count', groupBy: 'stage', size: '1x1' },
+      { id: 'm5', title: '月營業趨勢', type: 'line', dataSource: 'pos_transactions', metric: 'sum', groupBy: 'month', size: '3x1' },
+    ],
+  },
+  hr: {
+    name: 'HR 版',
+    desc: '人資指標（員工、出勤、部門）',
+    widgets: [
+      { id: 'h1', title: '在職總數', type: 'stat', dataSource: 'employees', metric: 'count', groupBy: 'status', size: '1x1' },
+      { id: 'h2', title: '部門分布', type: 'doughnut', dataSource: 'employees', metric: 'count', groupBy: 'department', size: '1x1' },
+      { id: 'h3', title: '出勤狀態', type: 'bar', dataSource: 'attendance_records', metric: 'count', groupBy: 'status', size: '1x1' },
+      { id: 'h4', title: '出勤總時數', type: 'stat', dataSource: 'attendance_records', metric: 'sum', groupBy: 'status', size: '1x1' },
+      { id: 'h5', title: '員工結構', type: 'table', dataSource: 'employees', metric: 'count', groupBy: 'department', size: '3x1' },
+    ],
+  },
+}
 
 function aggregate(rows, metric, groupBy) {
   const groups = {}
@@ -188,6 +227,10 @@ function WidgetContent({ widget, data }) {
 
 // ── Main component ──
 export default function DashboardBuilder() {
+  const { role } = useAuth()
+  // RBAC：只 admin / super_admin / manager 可編輯，其他角色僅瀏覽
+  const canEdit = ['super_admin', 'admin', 'manager'].includes(role?.name)
+
   const [widgets, setWidgets] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -196,9 +239,20 @@ export default function DashboardBuilder() {
   })
   const [editingId, setEditingId] = useState(null)
   const [showPalette, setShowPalette] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
   const [data, setData] = useState({})
   const [loading, setLoading] = useState(true)
   const [dragIdx, setDragIdx] = useState(null)
+
+  const applyTemplate = (key) => {
+    if (!canEdit) return
+    if (!window.confirm(`套用「${TEMPLATES[key].name}」會取代目前儀表板，確定？`)) return
+    const next = TEMPLATES[key].widgets.map(w => ({ ...w, id: `${key}_${Date.now()}_${w.id}` }))
+    setWidgets(next)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    setShowTemplates(false)
+    toast.success(`已套用「${TEMPLATES[key].name}」`)
+  }
 
   // Fetch all needed data sources
   useEffect(() => {
@@ -274,14 +328,59 @@ export default function DashboardBuilder() {
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>拖曳排列、設定資料來源，打造專屬分析面板</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={handleSave} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Save size={15} /> 儲存
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowPalette(!showPalette)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={15} /> 新增元件
-          </button>
+          {canEdit ? (
+            <>
+              <button className="btn btn-secondary" onClick={() => setShowTemplates(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FileText size={15} /> 套用範本
+              </button>
+              <button className="btn btn-primary" onClick={handleSave} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Save size={15} /> 儲存
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowPalette(!showPalette)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={15} /> 新增元件
+              </button>
+            </>
+          ) : (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8,
+              background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)',
+              fontSize: 12, fontWeight: 600,
+            }}>
+              <Lock size={14} /> 僅瀏覽（需 manager 以上角色才能編輯）
+            </span>
+          )}
         </div>
       </div>
+
+      {/* 範本選單 */}
+      {showTemplates && (
+        <Modal onClose={() => setShowTemplates(false)} title="選擇範本">
+          <div style={{ display: 'grid', gap: 12, padding: 4 }}>
+            {Object.entries(TEMPLATES).map(([key, tpl]) => (
+              <div key={key} onClick={() => applyTemplate(key)}
+                style={{
+                  padding: 16, borderRadius: 10, cursor: 'pointer',
+                  background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
+              >
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {tpl.name}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {tpl.desc}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 6 }}>
+                  {tpl.widgets.length} 個元件 · 點擊套用
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
 
       {/* Widget palette */}
       {showPalette && (
@@ -314,10 +413,10 @@ export default function DashboardBuilder() {
               <div
                 key={w.id}
                 className="card"
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(idx)}
+                draggable={canEdit}
+                onDragStart={() => canEdit && handleDragStart(idx)}
+                onDragOver={canEdit ? handleDragOver : undefined}
+                onDrop={() => canEdit && handleDrop(idx)}
                 style={{
                   gridColumn: `span ${span}`,
                   padding: 0, overflow: 'hidden',
@@ -334,14 +433,16 @@ export default function DashboardBuilder() {
                     <GripVertical size={14} style={{ color: 'var(--text-muted)', cursor: 'grab' }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{w.title}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button onClick={() => setEditingId(w.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }} title="設定">
-                      <Settings size={14} />
-                    </button>
-                    <button onClick={() => deleteWidget(w.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }} title="刪除">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {canEdit && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => setEditingId(w.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }} title="設定">
+                        <Settings size={14} />
+                      </button>
+                      <button onClick={() => deleteWidget(w.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }} title="刪除">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {/* Widget content */}
                 <div style={{ padding: 16, height: w.type === 'stat' ? 120 : 220 }}>

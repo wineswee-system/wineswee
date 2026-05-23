@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link2, TrendingUp, Users, Package, Factory, ShoppingBag, AlertTriangle, Clock, DollarSign, Truck, Download, RefreshCw } from 'lucide-react'
+import { Link2, TrendingUp, Users, Factory, ShoppingBag, AlertTriangle, Clock, DollarSign, UserX, RefreshCw } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler, RadialLinearScale } from 'chart.js'
 import { Bar, Doughnut, Line, Radar } from 'react-chartjs-2'
 import {
@@ -16,6 +16,7 @@ import ProfitabilityTab from './components/CrossSystemProfitabilityTab'
 import Customer360Tab from './components/CrossSystemCustomer360Tab'
 import SupplyRiskTab from './components/CrossSystemSupplyRiskTab'
 import CycleTimeTab from './components/CrossSystemCycleTimeTab'
+import AttritionImpactTab from './components/CrossSystemAttritionImpactTab'
 import { colors, chartOpts, gridStyle, tickStyle } from './components/crossSystemConstants'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler, RadialLinearScale)
@@ -28,6 +29,7 @@ const TABS = [
   { key: 'labor-cost', label: '人工成本', icon: Factory, color: colors.orange },
   { key: 'promo-roi', label: '促銷 ROI', icon: ShoppingBag, color: colors.pink },
   { key: 'cycle-time', label: '流程效率', icon: Clock, color: colors.purple },
+  { key: 'attrition-impact', label: '離職資產追蹤', icon: UserX, color: colors.red },
 ]
 
 export default function CrossSystemAnalytics() {
@@ -102,6 +104,7 @@ export default function CrossSystemAnalytics() {
       {activeTab === 'labor-cost' && <LaborCostTab data={data.laborCost} />}
       {activeTab === 'promo-roi' && <PromoROITab data={data.promoROI} />}
       {activeTab === 'cycle-time' && <CycleTimeTab data={data.cycleTime} StatCard={StatCard} EmptyState={EmptyState} />}
+      {activeTab === 'attrition-impact' && <AttritionImpactTab />}
     </div>
   )
 }

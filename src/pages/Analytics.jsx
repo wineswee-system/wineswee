@@ -1,415 +1,374 @@
-import { useState, useEffect, useCallback } from 'react'
-import { ModalOverlay } from '../components/Modal'
-import { createPortal } from 'react-dom'
-import { Download, Printer, ArrowLeftRight, Filter, X } from 'lucide-react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler } from 'chart.js'
-import { Doughnut, Bar, Line } from 'react-chartjs-2'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  TrendingUp, TrendingDown, Minus, Download, RefreshCw,
+  DollarSign, Users, AlertCircle, Activity, ArrowRight,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { calculateProfitability } from '../lib/automation'
-import { exportToCSV, exportToPDF } from '../lib/exportUtils'
+import { useAuth } from '../contexts/AuthContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import DateRangePicker from '../components/DateRangePicker'
+import { exportToCSV } from '../lib/exportUtils'
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler)
+// ════════════════════════════════════════════════════════════════
+// 老闆首頁 — 4 區塊：今日營運 / 本月財務 / 人力健康 / 要處理的事
+// 一支 RPC fn_dashboard_overview 全部聚合好回 JSON，前端只做渲染
+// ════════════════════════════════════════════════════════════════
 
-const colors = { cyan: '#22d3ee', blue: '#3b82f6', purple: '#a78bfa', green: '#34d399', orange: '#fb923c', red: '#f87171', pink: '#f472b6', yellow: '#fbbf24' }
-const chartOpts = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#94a3b8', font: { size: 11, weight: 600 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 } },
-    tooltip: { backgroundColor: 'rgba(15,23,55,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: 'rgba(148,163,184,0.15)', borderWidth: 1, padding: 12, cornerRadius: 10 },
-  },
+const NT = (n) => `NT$ ${Math.round(Number(n) || 0).toLocaleString()}`
+const NT_K = (n) => {
+  const v = Math.round(Number(n) || 0)
+  if (v >= 1_000_000) return `NT$${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000)     return `NT$${(v / 1_000).toFixed(0)}K`
+  return `NT$${v}`
 }
-const gridStyle = { color: 'rgba(148,163,184,0.06)' }
-const tickStyle = { color: '#64748b', font: { size: 11 } }
+const PCT = (n) => `${(Number(n) || 0).toFixed(1)}%`
 
-const btnToggle = (active) => ({
-  padding: '6px 14px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
-  background: active ? 'var(--accent-cyan)' : 'var(--bg-elevated)', color: active ? '#0f172a' : 'var(--text-secondary)',
-  transition: 'all 0.15s ease',
-})
+// 相對比較箭頭 + 顏色
+function TrendBadge({ current, baseline, suffix = '', invert = false }) {
+  if (!baseline || baseline === 0) {
+    return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>無上期資料</span>
+  }
+  const diff = current - baseline
+  const pct = (diff / Math.abs(baseline)) * 100
+  const isUp = diff > 0
+  // invert=true：例如 AR 餘額越低越好，上升=紅
+  const good = invert ? !isUp : isUp
+  const color = Math.abs(pct) < 0.5 ? 'var(--text-muted)'
+                : good ? 'var(--accent-green)' : 'var(--accent-red)'
+  const Icon = Math.abs(pct) < 0.5 ? Minus : (isUp ? TrendingUp : TrendingDown)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color, fontWeight: 600 }}>
+      <Icon size={12} />
+      {Math.abs(pct).toFixed(1)}%{suffix}
+    </span>
+  )
+}
+
+function KpiCard({ label, value, sub, baselineLabel, current, baseline, invert, accent = 'cyan', onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 12, padding: 16,
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.15s ease',
+        borderLeft: `3px solid var(--accent-${accent})`,
+      }}
+      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.borderColor = `var(--accent-${accent})` }}
+      onMouseLeave={(e) => { if (onClick) e.currentTarget.style.borderColor = 'var(--border-subtle)' }}
+    >
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {baseline !== undefined && current !== undefined && (
+          <TrendBadge current={current} baseline={baseline} invert={invert} />
+        )}
+        {sub && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</span>}
+        {baselineLabel && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>vs {baselineLabel}</span>}
+      </div>
+    </div>
+  )
+}
+
+function SectionHeader({ icon: Icon, title, accent = 'cyan' }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 20 }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 8,
+        background: `var(--accent-${accent}-dim)`, color: `var(--accent-${accent})`,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={16} />
+      </div>
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h3>
+    </div>
+  )
+}
+
+function TodoRow({ count, label, sub, accent, onClick }) {
+  if (!count || count === 0) return null
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 14px', borderRadius: 8,
+        background: `var(--accent-${accent}-dim)`,
+        border: `1px solid var(--accent-${accent})`,
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
+      <div style={{
+        fontSize: 22, fontWeight: 800, color: `var(--accent-${accent})`,
+        minWidth: 50, textAlign: 'center',
+      }}>{count}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
+      </div>
+      {onClick && <ArrowRight size={16} style={{ color: `var(--accent-${accent})` }} />}
+    </div>
+  )
+}
 
 export default function Analytics() {
+  const navigate = useNavigate()
+  const { profile } = useAuth()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [dateRange, setDateRange] = useState(null)
-  const [showComparison, setShowComparison] = useState(false)
-  const [deptFilter, setDeptFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [drillDown, setDrillDown] = useState(null)
 
-  useEffect(() => {
-    const month = new Date().toISOString().slice(0, 7)
-    Promise.all([
-      supabase.from('employees').select('*'),
-      supabase.from('tasks').select('*'),
-      supabase.from('attendance_records').select('*'),
-      supabase.from('opportunities').select('*'),
-      supabase.from('stock_levels').select('*'),
-      supabase.from('accounts_receivable').select('*'),
-      supabase.from('accounts_payable').select('*'),
-      supabase.from('salary_records').select('*').eq('month', month),
-      calculateProfitability(month),
-      supabase.from('departments').select('id, name'),
-    ]).then(([emp, tasks, att, opps, stock, ar, ap, sal, profit, depts]) => {
-      setData({
-        employees: emp.data || [], tasks: tasks.data || [], attendance: att.data || [],
-        opportunities: opps.data || [], stock: stock.data || [],
-        ar: ar.data || [], ap: ap.data || [], salary: sal.data || [],
-        profit: profit || { revenue: 0, totalCost: 0, grossProfit: 0, grossMargin: 0 },
-        departments: depts.data || [],
+  const load = () => {
+    if (!profile?.organization_id) return
+    setLoading(true)
+    supabase.rpc('fn_dashboard_overview', { p_org_id: profile.organization_id })
+      .then(({ data: res, error }) => {
+        if (error) { setError(error.message); return }
+        setData(res)
       })
-    }).catch(err => {
-      console.error('Failed to load data:', err)
-      setError('資料載入失敗，請重新整理頁面')
-    }).finally(() => {
-      setLoading(false)
-    })
-  }, [])
+      .finally(() => setLoading(false))
+  }
 
-  const handlePipelineClick = useCallback((_, elements) => {
-    if (!data || !elements?.length) return
-    const stages = ['初步接觸', '需求分析', '報價', '議價', '贏單', '輸單']
-    const idx = elements[0].index
-    const stage = stages[idx]
-    const opps = data.opportunities || []
-    const rows = opps.filter(o => o.stage === stage).map(o => ({ title: o.title || o.customer_name, amount: `NT$ ${(o.amount || 0).toLocaleString()}`, assignee: o.assignee || '-', date: (o.created_at || '').slice(0, 10) }))
-    setDrillDown({ title: `銷售漏斗 → ${stage}（${rows.length} 筆）`, rows, columns: [{ key: 'title', label: '商機' }, { key: 'amount', label: '金額' }, { key: 'assignee', label: '負責人' }, { key: 'date', label: '建立日期' }] })
-  }, [data])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line
 
-  const handleARAgingClick = useCallback((_, elements) => {
-    if (!data || !elements?.length) return
-    const labels = ['未到期', '1-30天', '31-60天', '60天+']
-    const bucketLabel = labels[elements[0].index]
-    const today2 = new Date()
-    const bucketFilter = (r) => {
-      const days = Math.floor((today2 - new Date(r.due_date)) / 86400000)
-      const amt = (r.amount || 0) - (r.paid_amount || 0)
-      if (amt <= 0) return false
-      if (elements[0].index === 0) return days <= 0
-      if (elements[0].index === 1) return days > 0 && days <= 30
-      if (elements[0].index === 2) return days > 30 && days <= 60
-      return days > 60
-    }
-    const rows = (data.ar || []).filter(r => r.status !== '已收款').filter(bucketFilter).map(r => ({ customer: r.customer_name || '-', amount: `NT$ ${(r.amount || 0).toLocaleString()}`, balance: `NT$ ${((r.amount || 0) - (r.paid_amount || 0)).toLocaleString()}`, due: (r.due_date || '').slice(0, 10) }))
-    setDrillDown({ title: `應收帳齡 → ${bucketLabel}（${rows.length} 筆）`, rows, columns: [{ key: 'customer', label: '客戶' }, { key: 'amount', label: '應收金額' }, { key: 'balance', label: '餘額' }, { key: 'due', label: '到期日' }] })
-  }, [data])
-
-  const handleStockClick = useCallback((_, elements) => {
-    if (!data || !elements?.length) return
-    const isLow = elements[0].index === 1
-    const rows = (data.stock || []).filter(s => isLow ? (s.quantity || 0) <= (s.min_qty || 10) : (s.quantity || 0) > (s.min_qty || 10)).map(s => ({ name: s.sku_name || s.name || '-', qty: s.quantity || 0, min: s.min_qty || 10, warehouse: s.warehouse || '-' }))
-    setDrillDown({ title: `庫存 → ${isLow ? '低庫存' : '正常'}（${rows.length} 筆）`, rows, columns: [{ key: 'name', label: 'SKU' }, { key: 'qty', label: '數量' }, { key: 'min', label: '安全量' }, { key: 'warehouse', label: '倉庫' }] })
-  }, [data])
+  const exportKpi = () => {
+    if (!data) return
+    const rows = [
+      { 區塊: '今日營運', 指標: '營收', 數值: data.today_ops.revenue.today, 上期: data.today_ops.revenue.yesterday },
+      { 區塊: '今日營運', 指標: '訂單數', 數值: data.today_ops.orders.today, 上期: data.today_ops.orders.yesterday },
+      { 區塊: '今日營運', 指標: '平均客單', 數值: data.today_ops.avg_ticket.today, 上期: data.today_ops.avg_ticket.yesterday },
+      { 區塊: '本月財務', 指標: 'AR 餘額', 數值: data.month_finance.ar_balance },
+      { 區塊: '本月財務', 指標: 'AP 餘額', 數值: data.month_finance.ap_balance },
+      { 區塊: '本月財務', 指標: '本月毛利率', 數值: data.month_finance.margin_pct + '%', 上期: data.month_finance.last_month_margin_pct + '%' },
+      { 區塊: '人力健康', 指標: '在職人數', 數值: data.hr_health.active_count },
+      { 區塊: '人力健康', 指標: '本月離職', 數值: data.hr_health.term_this_month },
+      { 區塊: '人力健康', 指標: '出勤率', 數值: data.hr_health.attendance_rate_today + '%' },
+      { 區塊: '人力健康', 指標: '加班總時數', 數值: data.hr_health.month_ot_hours },
+      { 區塊: '要處理', 指標: '逾期 AR 筆數', 數值: data.todos.ar_overdue.count },
+      { 區塊: '要處理', 指標: '低庫存 SKU', 數值: data.todos.low_stock_count },
+      { 區塊: '要處理', 指標: '簽核卡關 > 3 天', 數值: data.todos.stuck_tasks_count },
+      { 區塊: '要處理', 指標: '合約 30 天內到期', 數值: data.todos.expiring_contracts_30d },
+    ]
+    const cols = [{ key: '區塊', label: '區塊' }, { key: '指標', label: '指標' }, { key: '數值', label: '數值' }, { key: '上期', label: '上期' }]
+    exportToCSV(rows, cols, `老闆首頁_${data.today}`)
+  }
 
   if (loading) return <LoadingSpinner />
-  if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
+  if (error) return (
+    <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}>
+      <h3>載入失敗：{error}</h3>
+      <button className="btn btn-primary" onClick={load} style={{ marginTop: 16 }}>重試</button>
+    </div>
+  )
+  if (!data) return <LoadingSpinner />
 
-  const filterByDate = (arr, range) => {
-    const r = range || dateRange
-    if (!r) return arr
-    return arr.filter(rec => {
-      const d = (rec.created_at || '').slice(0, 10)
-      return d >= r.startDate && d <= r.endDate
-    })
-  }
-
-  // Previous period calculation for MoM/YoY comparison
-  const getPrevRange = () => {
-    if (!dateRange) return null
-    const start = new Date(dateRange.startDate)
-    const end = new Date(dateRange.endDate)
-    const diff = end - start
-    const prevEnd = new Date(start.getTime() - 86400000)
-    const prevStart = new Date(prevEnd.getTime() - diff)
-    return { startDate: prevStart.toISOString().slice(0, 10), endDate: prevEnd.toISOString().slice(0, 10) }
-  }
-
-  const filterByDept = (arr) => {
-    if (!deptFilter) return arr
-    return arr.filter(r => String(r.department_id || r.department || '') === deptFilter)
-  }
-
-  const filterByCategory = (arr) => {
-    if (!categoryFilter) return arr
-    return arr.filter(r => (r.category || r.sku_category || '') === categoryFilter)
-  }
-
-  const applyFilters = (arr, range) => filterByCategory(filterByDept(filterByDate(arr, range)))
-
-  const d = {
-    ...data,
-    opportunities: applyFilters(data.opportunities),
-    ar: applyFilters(data.ar),
-    ap: applyFilters(data.ap),
-    tasks: applyFilters(data.tasks),
-    attendance: applyFilters(data.attendance),
-  }
-
-  // Previous period data for comparison
-  const prevRange = getPrevRange()
-  const prev = showComparison && prevRange ? {
-    ar: filterByDate(data.ar, prevRange),
-    ap: filterByDate(data.ap, prevRange),
-    opportunities: filterByDate(data.opportunities, prevRange),
-  } : null
-
-  // Extract unique categories from stock
-  const categories = [...new Set(data.stock.map(s => s.category || s.sku_category).filter(Boolean))]
-
-  const activeEmp = d.employees.filter(e => e.status === '在職').length
-  const totalSalary = d.salary.reduce((s, r) => s + (r.net_salary || 0), 0)
-  const wonAmount = d.opportunities.filter(o => o.stage === '贏單').reduce((s, o) => s + (o.amount || 0), 0)
-  const arTotal = d.ar.reduce((s, r) => s + (r.amount || 0), 0)
-  const arPaid = d.ar.reduce((s, r) => s + (r.paid_amount || 0), 0)
-  const apTotal = d.ap.reduce((s, r) => s + (r.amount || 0), 0)
-  const apPaid = d.ap.reduce((s, r) => s + (r.paid_amount || 0), 0)
-  const lowStock = d.stock.filter(s => (s.quantity || 0) <= (s.min_qty || 10)).length
-
-  // CRM Pipeline
-  const stages = ['初步接觸', '需求分析', '報價', '議價', '贏單', '輸單']
-  const pipelineData = {
-    labels: stages,
-    datasets: [{ label: '商機數', data: stages.map(s => d.opportunities.filter(o => o.stage === s).length), backgroundColor: [colors.blue, colors.cyan, colors.purple, colors.orange, colors.green, colors.red], borderRadius: 6, barThickness: 28 }],
-  }
-
-  // AR Aging
-  const today = new Date()
-  const arAging = { current: 0, d30: 0, d60: 0, d90: 0 }
-  d.ar.filter(r => r.status !== '已收款').forEach(r => {
-    const days = Math.floor((today - new Date(r.due_date)) / 86400000)
-    const amt = (r.amount || 0) - (r.paid_amount || 0)
-    if (days <= 0) arAging.current += amt; else if (days <= 30) arAging.d30 += amt; else if (days <= 60) arAging.d60 += amt; else arAging.d90 += amt
-  })
-  const arAgingData = {
-    labels: ['未到期', '1-30天', '31-60天', '60天+'],
-    datasets: [{ data: [arAging.current, arAging.d30, arAging.d60, arAging.d90], backgroundColor: [colors.green, colors.yellow, colors.orange, colors.red], borderWidth: 0 }],
-  }
-
-  // Inventory Health
-  const stockOk = d.stock.filter(s => (s.quantity || 0) > (s.min_qty || 10)).length
-  const stockData = {
-    labels: ['正常', '低庫存'],
-    datasets: [{ data: [stockOk, lowStock], backgroundColor: [colors.green, colors.red], borderWidth: 0 }],
-  }
-
-  // Revenue Trend — real data from AR (revenue) and AP (cost) grouped by month
-  const months = (() => {
-    if (dateRange) {
-      const s = new Date(dateRange.startDate)
-      const e = new Date(dateRange.endDate)
-      const result = []
-      const cur = new Date(s.getFullYear(), s.getMonth(), 1)
-      while (cur <= e) {
-        result.push(cur.toISOString().slice(0, 7))
-        cur.setMonth(cur.getMonth() + 1)
-      }
-      return result.length > 0 ? result : [new Date().toISOString().slice(0, 7)]
-    }
-    return Array.from({ length: 6 }, (_, i) => { const dt = new Date(); dt.setMonth(dt.getMonth() - (5 - i)); return dt.toISOString().slice(0, 7) })
-  })()
-  const revenueByMonth = {}
-  const costByMonth = {}
-  months.forEach(m => { revenueByMonth[m] = 0; costByMonth[m] = 0 })
-  d.ar.forEach(r => { const m = (r.created_at || '').slice(0, 7); if (revenueByMonth[m] !== undefined) revenueByMonth[m] += (r.paid_amount || 0) })
-  d.ap.forEach(r => { const m = (r.created_at || '').slice(0, 7); if (costByMonth[m] !== undefined) costByMonth[m] += (r.amount || 0) })
-
-  // Previous period revenue/cost for comparison
-  const prevRevenueByMonth = {}
-  const prevCostByMonth = {}
-  if (prev) {
-    months.forEach(m => { prevRevenueByMonth[m] = 0; prevCostByMonth[m] = 0 })
-    // Map previous period months to current period month slots
-    const prevMonths = (() => {
-      const s = new Date(prevRange.startDate)
-      const e = new Date(prevRange.endDate)
-      const result = []
-      const cur = new Date(s.getFullYear(), s.getMonth(), 1)
-      while (cur <= e) { result.push(cur.toISOString().slice(0, 7)); cur.setMonth(cur.getMonth() + 1) }
-      return result
-    })()
-    prev.ar.forEach(r => { const m = (r.created_at || '').slice(0, 7); const idx = prevMonths.indexOf(m); if (idx >= 0 && months[idx]) prevRevenueByMonth[months[idx]] = (prevRevenueByMonth[months[idx]] || 0) + (r.paid_amount || 0) })
-    prev.ap.forEach(r => { const m = (r.created_at || '').slice(0, 7); const idx = prevMonths.indexOf(m); if (idx >= 0 && months[idx]) prevCostByMonth[months[idx]] = (prevCostByMonth[months[idx]] || 0) + (r.amount || 0) })
-  }
-
-  const revTrendDatasets = [
-    { label: '營收', data: months.map(m => Math.round(revenueByMonth[m])), borderColor: colors.cyan, backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: colors.cyan },
-    { label: '成本', data: months.map(m => Math.round(costByMonth[m])), borderColor: colors.orange, backgroundColor: 'rgba(251,146,60,0.08)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: colors.orange },
-  ]
-  if (prev) {
-    revTrendDatasets.push(
-      { label: '上期營收', data: months.map(m => Math.round(prevRevenueByMonth[m] || 0)), borderColor: colors.cyan, backgroundColor: 'transparent', borderDash: [6, 4], tension: 0.4, pointRadius: 3, pointBackgroundColor: colors.cyan, fill: false },
-      { label: '上期成本', data: months.map(m => Math.round(prevCostByMonth[m] || 0)), borderColor: colors.orange, backgroundColor: 'transparent', borderDash: [6, 4], tension: 0.4, pointRadius: 3, pointBackgroundColor: colors.orange, fill: false },
-    )
-  }
-  const revTrend = { labels: months.map(m => m.slice(5) + '月'), datasets: revTrendDatasets }
-
-  // Task Completion
-  const taskData = {
-    labels: ['已完成', '進行中', '未開始'],
-    datasets: [{ data: [d.tasks.filter(t => t.status === '已完成').length, d.tasks.filter(t => t.status === '進行中').length, d.tasks.filter(t => t.status === '未開始').length], backgroundColor: [colors.green, colors.blue, colors.orange], borderWidth: 0 }],
-  }
-
-  const handleExportCSV = () => {
-    const kpiData = [
-      { label: '在職人數', value: activeEmp },
-      { label: '本月薪資', value: totalSalary },
-      { label: '贏單金額', value: wonAmount },
-      { label: '應收餘額', value: arTotal - arPaid },
-      { label: '應付餘額', value: apTotal - apPaid },
-      { label: '低庫存品項', value: lowStock },
-      { label: '營收', value: d.profit.revenue },
-      { label: '總成本', value: d.profit.totalCost },
-      { label: '毛利', value: d.profit.grossProfit },
-      { label: '毛利率 (%)', value: d.profit.grossMargin },
-    ]
-    exportToCSV(kpiData, [
-      { key: 'label', label: '指標' },
-      { key: 'value', label: '數值' },
-    ], `BI營運看板_${new Date().toISOString().slice(0, 10)}`)
-  }
+  const t = data.today_ops
+  const f = data.month_finance
+  const h = data.hr_health
+  const todos = data.todos
 
   return (
-    <div className="fade-in" id="analytics-page">
+    <div className="fade-in">
       <div className="page-header">
-        <h2><span className="header-icon">📈</span> BI 營運看板</h2>
-        <p>跨模組數據整合分析</p>
-        <div className="export-btn-group" style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          <button className="btn btn-primary" onClick={handleExportCSV} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> 匯出 CSV
+        <div className="page-header-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
+            <h2><span className="header-icon">📊</span> 營運總覽</h2>
+            <p>今日 {data.today} · 一頁掃完公司健康度</p>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary" onClick={load} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <RefreshCw size={14} /> 重新載入
           </button>
-          <button className="btn btn-primary" onClick={() => exportToPDF('analytics-page', 'BI營運看板')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Printer size={15} /> 列印報表
+          <button className="btn btn-primary" onClick={exportKpi} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Download size={14} /> 匯出 CSV
           </button>
         </div>
       </div>
 
-      <DateRangePicker value={dateRange} onChange={setDateRange} />
+      {/* ─── 區塊 1: 今日營運 ────────────────────────────────────── */}
+      <SectionHeader icon={Activity} title="🎯 今日營運" accent="cyan" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KpiCard
+          label="今日營收"
+          value={NT_K(t.revenue.today)}
+          current={t.revenue.today}
+          baseline={t.revenue.yesterday}
+          baselineLabel="昨日"
+          accent="cyan"
+          onClick={() => navigate('/pos')}
+        />
+        <KpiCard
+          label="今日訂單數"
+          value={t.orders.today}
+          current={t.orders.today}
+          baseline={t.orders.yesterday}
+          baselineLabel="昨日"
+          accent="blue"
+        />
+        <KpiCard
+          label="平均客單"
+          value={NT(t.avg_ticket.today)}
+          current={t.avg_ticket.today}
+          baseline={t.avg_ticket.yesterday}
+          baselineLabel="昨日"
+          accent="purple"
+        />
+        <KpiCard
+          label="vs 上週同日"
+          value={NT_K(t.revenue.today)}
+          current={t.revenue.today}
+          baseline={t.revenue.last_week_same}
+          baselineLabel="上週同日"
+          accent="green"
+        />
+      </div>
 
-      {/* Filters: Period Comparison + Department + Category */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button style={btnToggle(showComparison)} onClick={() => setShowComparison(v => !v)}>
-          <ArrowLeftRight size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {showComparison ? '隱藏同期比較' : '同期比較'}
-        </button>
-        {showComparison && dateRange && prevRange && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            上期：{prevRange.startDate} ~ {prevRange.endDate}
-          </span>
+      {/* ─── 區塊 2: 本月財務 ────────────────────────────────────── */}
+      <SectionHeader icon={DollarSign} title="💰 本月財務" accent="green" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KpiCard
+          label="應收餘額"
+          value={NT_K(f.ar_balance)}
+          sub={`逾期 ${todos.ar_overdue.count} 筆`}
+          accent="orange"
+          onClick={() => navigate('/finance')}
+        />
+        <KpiCard
+          label="應付餘額"
+          value={NT_K(f.ap_balance)}
+          accent="red"
+          onClick={() => navigate('/finance/ap')}
+        />
+        <KpiCard
+          label="本月毛利率"
+          value={PCT(f.margin_pct)}
+          current={f.margin_pct}
+          baseline={f.last_month_margin_pct}
+          baselineLabel="上月"
+          accent="green"
+        />
+        <KpiCard
+          label="本月營收"
+          value={NT_K(f.revenue)}
+          current={f.revenue}
+          baseline={f.last_month_revenue}
+          baselineLabel="上月"
+          accent="cyan"
+        />
+      </div>
+
+      {/* ─── 區塊 3: 人力健康度 ──────────────────────────────────── */}
+      <SectionHeader icon={Users} title="👥 人力健康度" accent="purple" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KpiCard
+          label="在職人數"
+          value={h.active_count}
+          sub={`本月離職 ${h.term_this_month} 人 (${PCT(h.term_rate_pct)})`}
+          accent="purple"
+          onClick={() => navigate('/hr')}
+        />
+        <KpiCard
+          label="今日出勤率"
+          value={PCT(h.attendance_rate_today)}
+          sub={`${h.today_attend_count} / ${h.should_attend_count} 人`}
+          accent={h.attendance_rate_today >= 90 ? 'green' : 'orange'}
+        />
+        <KpiCard
+          label="本月加班時數"
+          value={`${h.month_ot_hours} 小時`}
+          sub={h.active_count > 0 ? `人均 ${(h.month_ot_hours / h.active_count).toFixed(1)} h` : ''}
+          accent={h.month_ot_hours > 46 * h.active_count ? 'red' : 'cyan'}
+        />
+        <KpiCard
+          label="離職率"
+          value={PCT(h.term_rate_pct)}
+          sub={`本月 ${h.term_this_month} 人離職`}
+          accent={h.term_rate_pct > 5 ? 'red' : 'green'}
+        />
+      </div>
+
+      {/* ─── 區塊 4: 要處理的事 ──────────────────────────────────── */}
+      <SectionHeader icon={AlertCircle} title="⚠️ 要處理的事" accent="red" />
+      <div style={{ display: 'grid', gap: 8 }}>
+        <TodoRow
+          count={todos.ar_overdue.count}
+          accent="red"
+          label={`逾期應收：${todos.ar_overdue.count} 筆，總額 ${NT_K(todos.ar_overdue.amount)}`}
+          sub="點擊查看帳齡分析 + 催收清單"
+          onClick={() => navigate('/finance')}
+        />
+        <TodoRow
+          count={todos.low_stock_count}
+          accent="orange"
+          label={`低庫存 SKU：${todos.low_stock_count} 個品項已低於安全庫存`}
+          sub="點擊查看補貨建議"
+          onClick={() => navigate('/wms')}
+        />
+        <TodoRow
+          count={todos.stuck_tasks_count}
+          accent="orange"
+          label={`簽核卡關 > 3 天：${todos.stuck_tasks_count} 件`}
+          sub="點擊查看簽核中心"
+          onClick={() => navigate('/approval-center')}
+        />
+        <TodoRow
+          count={todos.expiring_contracts_30d}
+          accent="cyan"
+          label={`合約 30 天內到期：${todos.expiring_contracts_30d} 份`}
+          sub="點擊查看員工合約管理"
+          onClick={() => navigate('/hr/contracts')}
+        />
+        {todos.doc_expiring_30d > 0 && (
+          <TodoRow
+            count={todos.doc_expiring_30d}
+            accent="cyan"
+            label={`移工證件 30 天內到期：${todos.doc_expiring_30d} 份`}
+            sub="點擊查看外籍員工管理"
+            onClick={() => navigate('/hr/foreign-workers')}
+          />
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-          <Filter size={14} style={{ color: 'var(--text-muted)' }} />
-          <select className="form-input" value={deptFilter} onChange={e => setDeptFilter(e.target.value)} style={{ padding: '5px 10px', fontSize: 13, minWidth: 120 }}>
-            <option value="">全部部門</option>
-            {(data.departments || []).map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
-          </select>
-          <select className="form-input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ padding: '5px 10px', fontSize: 13, minWidth: 120 }}>
-            <option value="">全部類別</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
+        {todos.ar_overdue.count === 0 && todos.low_stock_count === 0
+          && todos.stuck_tasks_count === 0 && todos.expiring_contracts_30d === 0 && (
+          <div style={{
+            padding: 24, borderRadius: 12, background: 'var(--accent-green-dim)',
+            border: '1px solid var(--accent-green)', textAlign: 'center',
+            color: 'var(--accent-green)', fontWeight: 700,
+          }}>
+            🎉 目前沒有待處理事項
+          </div>
+        )}
       </div>
 
-      {/* KPI */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      {/* 入口列：跳到更深的分析 */}
+      <SectionHeader icon={ArrowRight} title="🔍 深入分析" accent="cyan" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {[
-          { label: '在職人數', value: activeEmp, color: 'cyan' },
-          { label: '本月薪資', value: `NT$${(totalSalary / 1000).toFixed(0)}K`, color: 'purple' },
-          { label: '贏單金額', value: `NT$${(wonAmount / 1000).toFixed(0)}K`, color: 'green' },
-          { label: '應收餘額', value: `NT$${((arTotal - arPaid) / 1000).toFixed(0)}K`, color: 'orange' },
-          { label: '應付餘額', value: `NT$${((apTotal - apPaid) / 1000).toFixed(0)}K`, color: 'red' },
-          { label: '低庫存', value: lowStock, color: lowStock > 0 ? 'red' : 'green' },
-        ].map((s, i) => (
-          <div key={i} className="stat-card" style={{ '--card-accent': `var(--accent-${s.color})`, '--card-accent-dim': `var(--accent-${s.color}-dim)` }}>
-            <div className="stat-card-label">{s.label}</div>
-            <div className="stat-card-value">{s.value}</div>
+          { label: '預警中心', path: '/analytics/alerts', accent: 'red', desc: '完整預警清單' },
+          { label: '財務分析', path: '/analytics/finance', accent: 'green', desc: 'AR/AP/毛利/預算' },
+          { label: '人資分析', path: '/analytics/hr', accent: 'purple', desc: '出勤/薪資/離職' },
+          { label: '跨系統分析', path: '/analytics/cross-system', accent: 'cyan', desc: '7 種跨域洞見' },
+        ].map(item => (
+          <div key={item.path}
+            onClick={() => navigate(item.path)}
+            style={{
+              padding: '14px 16px', borderRadius: 10, cursor: 'pointer',
+              background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+              borderLeft: `3px solid var(--accent-${item.accent})`,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{item.label} →</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{item.desc}</div>
           </div>
         ))}
       </div>
 
-      {/* Profitability */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {[
-          { label: '營收', value: `NT$ ${d.profit.revenue.toLocaleString()}`, color: 'green' },
-          { label: '總成本', value: `NT$ ${d.profit.totalCost.toLocaleString()}`, color: 'orange' },
-          { label: '毛利', value: `NT$ ${d.profit.grossProfit.toLocaleString()}`, color: d.profit.grossProfit >= 0 ? 'cyan' : 'red' },
-          { label: '毛利率', value: `${d.profit.grossMargin}%`, color: d.profit.grossMargin >= 30 ? 'green' : 'orange' },
-        ].map((s, i) => (
-          <div key={i} className="stat-card" style={{ '--card-accent': `var(--accent-${s.color})`, '--card-accent-dim': `var(--accent-${s.color}-dim)` }}>
-            <div className="stat-card-label">{s.label}</div>
-            <div className="stat-card-value">{s.value}</div>
-          </div>
-        ))}
+      <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+        資料更新時間：{new Date(data.generated_at).toLocaleString('zh-TW')}
       </div>
-
-      {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <div className="card-header"><div className="card-title">📈 營收 vs 成本趨勢</div></div>
-          <div style={{ height: 280, padding: '0 8px 8px' }}>
-            <Line data={revTrend} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: tickStyle } } }} />
-          </div>
-        </div>
-        <div className="card" style={{ cursor: 'pointer' }}>
-          <div className="card-header"><div className="card-title">📊 應收帳齡分析 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>點擊下鑽</span></div></div>
-          <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px 8px' }}>
-            <Doughnut data={arAgingData} options={{ ...chartOpts, onClick: handleARAgingClick, cutout: '55%', plugins: { ...chartOpts.plugins, legend: { ...chartOpts.plugins.legend, position: 'bottom' } } }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-        <div className="card" style={{ cursor: 'pointer' }}>
-          <div className="card-header"><div className="card-title">🤝 銷售漏斗 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>點擊下鑽</span></div></div>
-          <div style={{ height: 240, padding: '0 8px 8px' }}>
-            <Bar data={pipelineData} options={{ ...chartOpts, onClick: handlePipelineClick, plugins: { ...chartOpts.plugins, legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: tickStyle }, y: { beginAtZero: true, grid: gridStyle, ticks: { ...tickStyle, stepSize: 1 } } } }} />
-          </div>
-        </div>
-        <div className="card" style={{ cursor: 'pointer' }}>
-          <div className="card-header"><div className="card-title">📦 庫存健康度 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>點擊下鑽</span></div></div>
-          <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px 8px' }}>
-            <Doughnut data={stockData} options={{ ...chartOpts, onClick: handleStockClick, cutout: '55%', plugins: { ...chartOpts.plugins, legend: { ...chartOpts.plugins.legend, position: 'bottom' } } }} />
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><div className="card-title">⚙️ 任務完成率</div></div>
-          <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px 8px' }}>
-            <Doughnut data={taskData} options={{ ...chartOpts, cutout: '55%', plugins: { ...chartOpts.plugins, legend: { ...chartOpts.plugins.legend, position: 'bottom' } } }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Drill-down Modal */}
-      {drillDown && (
-        <ModalOverlay onClose={() => setDrillDown(null)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, maxWidth: 800, width: '90%', maxHeight: '80vh', overflow: 'auto', boxShadow: 'var(--shadow-xl)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 16 }}>{drillDown.title}</h3>
-              <button onClick={() => setDrillDown(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={18} /></button>
-            </div>
-            {drillDown.rows.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 32 }}>此區間無資料</p>
-            ) : (
-              <div className="data-table-wrapper">
-                <table className="data-table">
-                  <thead><tr>{drillDown.columns.map(c => <th key={c.key}>{c.label}</th>)}</tr></thead>
-                  <tbody>
-                    {drillDown.rows.map((row, i) => (
-                      <tr key={i}>{drillDown.columns.map(c => <td key={c.key}>{row[c.key]}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div style={{ marginTop: 12, textAlign: 'right' }}>
-              <button className="btn btn-primary" onClick={() => { exportToCSV(drillDown.rows, drillDown.columns, `下鑽_${new Date().toISOString().slice(0,10)}`); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Download size={14} /> 匯出明細
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
     </div>
   )
 }

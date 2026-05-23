@@ -347,12 +347,13 @@ export const groupNav = {
       label: 'BI 分析',
       icon: BarChart3,
       children: [
-        { icon: BarChart3, label: 'BI 營運看板', path: '/analytics' },
-        { icon: TrendingUp, label: '銷售預測', path: '/analytics/forecast' },
-        { icon: AlertTriangle, label: '異常偵測', path: '/analytics/anomaly' },
+        { icon: BarChart3, label: '營運總覽', path: '/analytics' },
+        { icon: AlertTriangle, label: '預警中心', path: '/analytics/alerts' },
+        { icon: Search, label: '跨系統分析', path: '/analytics/cross-system' },
         { icon: Layout, label: '自訂儀表板', path: '/analytics/builder' },
         { icon: GitBranch, label: '流程分析', path: '/analytics/process' },
-        { icon: Search, label: '跨系統分析', path: '/analytics/cross-system' },
+        { icon: TrendingUp, label: '銷售預測', path: '/analytics/forecast' },
+        { icon: AlertTriangle, label: '異常偵測', path: '/analytics/anomaly' },
       ]
     },
     {

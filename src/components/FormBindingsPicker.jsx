@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, X, Check } from 'lucide-react'
+import { ChevronDown, X, Check, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 /**
@@ -18,8 +18,10 @@ import { supabase } from '../lib/supabase'
 export default function FormBindingsPicker({ value = [], onChange, readonly = false, lockedKeys = [] }) {
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState([])
+  const [query, setQuery] = useState('')
   const triggerRef = useRef(null)
   const popupRef = useRef(null)
+  const searchRef = useRef(null)
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 240 })
 
   useEffect(() => {
@@ -98,15 +100,30 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
     }
   }
 
+  // 套用搜尋 filter
+  const filteredOptions = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return options
+    return options.filter(o => `${o.label} ${o.group}`.toLowerCase().includes(q))
+  }, [options, query])
+
   // 分群
   const grouped = useMemo(() => {
     const m = new Map()
-    for (const o of options) {
+    for (const o of filteredOptions) {
       if (!m.has(o.group)) m.set(o.group, [])
       m.get(o.group).push(o)
     }
     return [...m.entries()]
-  }, [options])
+  }, [filteredOptions])
+
+  // 打開時 reset query + focus 搜尋
+  useEffect(() => {
+    if (open) {
+      setQuery('')
+      setTimeout(() => searchRef.current?.focus(), 0)
+    }
+  }, [open])
 
   return (
     <div className="fbp-wrapper" style={{ position: 'relative' }}>
@@ -155,13 +172,34 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
       {open && createPortal(
         <div ref={popupRef} style={{
           position: 'fixed', top: popupPos.top, left: popupPos.left,
-          minWidth: popupPos.minWidth, maxHeight: 320, overflowY: 'auto', zIndex: 11000,
+          minWidth: popupPos.minWidth, maxHeight: 360, zIndex: 11000,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
           borderRadius: 8, boxShadow: 'var(--shadow-xl, 0 8px 24px rgba(0,0,0,0.15))',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
+          {/* 搜尋框 — 表單變多時方便找 */}
+          <div style={{ padding: 8, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={`搜尋表單（共 ${options.length} 張）`}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 13 }} />
+            {query && (
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                color: 'var(--accent-cyan)', background: 'var(--bg-secondary)',
+                padding: '2px 6px', borderRadius: 6, flexShrink: 0,
+              }}>{filteredOptions.length}/{options.length}</span>
+            )}
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto' }}>
           {options.length === 0 ? (
             <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
               載入中或無可用表單
+            </div>
+          ) : filteredOptions.length === 0 ? (
+            <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+              找不到符合「{query}」的表單
             </div>
           ) : (
             grouped.map(([groupName, items]) => (
@@ -189,6 +227,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
               </div>
             ))
           )}
+          </div>
         </div>,
         document.body
       )}

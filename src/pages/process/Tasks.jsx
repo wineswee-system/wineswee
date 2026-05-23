@@ -323,7 +323,9 @@ export default function Tasks() {
           const dept = emp ? (departments.find(d => d.id === emp.department_id)?.name || emp.dept || '') : ''
           const iconBtnStyle = { background: 'none', border: 'none', cursor: 'pointer', padding: 5, borderRadius: 6, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', flexShrink: 0 }
           return (
-            <div key={t.id} className="card" style={{ marginBottom: 10, padding: '12px 16px' }}>
+            <div key={t.id} className="card" style={{ marginBottom: 10, padding: '12px 16px', cursor: 'pointer' }}
+              onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+              title="點擊編輯">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
                 {/* Col 1: task info */}
@@ -356,8 +358,9 @@ export default function Tasks() {
                   </div>
                 </div>
 
-                {/* Col 2: controls */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {/* Col 2: controls — stopPropagation 避免觸發外層 row 點擊編輯 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                  onClick={e => e.stopPropagation()}>
                   <select className="form-input" style={{ padding: '2px 6px', fontSize: 12, minWidth: 0, maxWidth: 110 }}
                     value={t.project_id || ''}
                     onChange={e => handleProjectChange(t.id, e.target.value)}>

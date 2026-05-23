@@ -26,7 +26,7 @@ const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱
 const PRIORITY_LIST = ['低', '中', '高']
 
 export default function TaskDetailPanel({
-  step: task, instance, allSteps, employees, stores, checklists,
+  step: task, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
 }) {
   const { profile } = useAuth()

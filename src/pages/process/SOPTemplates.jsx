@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Rocket, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Rocket, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createTask, createChecklist } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
@@ -7,7 +7,6 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import FormBindingsPicker from '../../components/FormBindingsPicker'
-import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -101,7 +100,6 @@ export default function SOPTemplates() {
   const [templates, setTemplates] = useState([])
   const [locations, setLocations] = useState([])
   const [employees, setEmployees] = useState([])
-  const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
@@ -118,8 +116,7 @@ export default function SOPTemplates() {
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
-      supabase.from('departments').select('*').order('name'),
-    ]).then(async ([t, l, e, d]) => {
+    ]).then(async ([t, l, e]) => {
       let tpls = t.data || []
       // If no templates in DB, seed defaults
       if (tpls.length === 0) {
@@ -136,7 +133,6 @@ export default function SOPTemplates() {
       setTemplates(tpls)
       setLocations(l.data || [])
       setEmployees(e.data || [])
-      setDepartments(d.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -257,13 +253,6 @@ export default function SOPTemplates() {
       toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
-
-  const deptBtnStyle = (active) => ({
-    padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
-    background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: active ? '#fff' : 'var(--text-secondary)',
-    cursor: 'pointer', fontSize: 12, fontWeight: 500
-  })
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

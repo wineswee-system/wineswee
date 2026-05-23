@@ -11,7 +11,6 @@ import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
 import FormBindingsPicker from '../../components/FormBindingsPicker'
 import { useAuth } from '../../contexts/AuthContext'
-import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -187,7 +186,6 @@ export default function Tasks() {
     return t.status !== '已完成'
   })
 
-  const pendingCount = allItems.filter(t => t.status === '未開始' || t.status === '待簽核').length
   const activeCount = allItems.filter(t => t.status === '進行中').length
   const doneCount = allItems.filter(t => t.status === '已完成').length
 

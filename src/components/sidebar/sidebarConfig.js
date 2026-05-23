@@ -10,7 +10,7 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Share2, Layout, Mail, Factory, ShoppingBag, Calculator,
-  UserCheck, Shield, Send, Search, AlertOctagon, UserPlus, Layers,
+  UserCheck, Shield, Send, Search, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2,

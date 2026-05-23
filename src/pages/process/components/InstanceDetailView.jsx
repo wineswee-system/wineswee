@@ -8,7 +8,6 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import FormBindingsPicker from '../../../components/FormBindingsPicker'
-import { empLabel } from '../../../lib/empLabel'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
 
@@ -28,7 +27,6 @@ export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
   approvalChains = [],
   currentUser = '', isAdmin = false, isSuperAdmin = false,
-  currentEmpId = null,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
   showAddTaskModal, taskForm, setTaskForm, setShowAddTaskModal,

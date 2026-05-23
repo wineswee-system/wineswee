@@ -36,12 +36,10 @@ const CATEGORIES = [
   },
   {
     key: 'expense',
-    title: '💰 費用 / 出差',
-    desc: '出差、費用、報銷類表單',
+    title: '💰 出差',
+    desc: '出差申請（費用相關已移到「流程 → 業務申請」）',
     forms: [
       { icon: Briefcase, name: '出差申請', desc: '外出辦公、洽公申請', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/travel' },
-      { icon: Wallet,    name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段（採購／預算／事項）', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/expense-requests', tag: '兩階段' },
-      { icon: Receipt,   name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷）', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', action: '/hr/expenses' },
     ],
   },
   {
@@ -74,7 +72,8 @@ export default function HRForms() {
   const navigate = useNavigate()
   const [customByCategory, setCustomByCategory] = useState({})
   useEffect(() => {
-    supabase.from('form_templates').select('*').eq('is_active', true).order('sort_order').then(({ data }) => {
+    // 只抓 scope='hr' 的自訂表單；business_expense/business_non_expense 已搬到「業務申請」
+    supabase.from('form_templates').select('*').eq('is_active', true).eq('scope', 'hr').order('sort_order').then(({ data }) => {
       const grouped = {}
       for (const t of (data || [])) {
         if (!grouped[t.category]) grouped[t.category] = []
@@ -108,9 +107,7 @@ export default function HRForms() {
             <button className="btn btn-secondary" onClick={() => navigate('/hr/forms/submissions')} style={{ width: 'auto', fontSize: 12 }}>
               <FileText size={12} /> 我的提交
             </button>
-            <button className="btn btn-secondary" onClick={() => navigate('/hr/form-builder')} style={{ width: 'auto', fontSize: 12 }}>
-              <Settings size={12} /> 表單建立器
-            </button>
+            {/* 表單建立器已搬到系統設定 (/system/form-builder)，admin 才看得到 */}
           </div>
         </div>
       </div>

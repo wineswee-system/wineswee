@@ -12,6 +12,7 @@ import ApprovalRules from '../pages/system/ApprovalRules'
 import TrainingGuide from '../pages/system/TrainingGuide'
 import EmployeePermissions from '../pages/system/EmployeePermissions'
 import OfferLetterTemplates from '../pages/system/OfferLetterTemplates'
+import FormBuilder from '../pages/hr/FormBuilder'
 export default function SystemModule() {
   return (
     <Routes>
@@ -28,6 +29,7 @@ export default function SystemModule() {
       <Route path="tenants" element={<TenantAdmin />} />
       <Route path="approval-rules" element={<ApprovalRules />} />
       <Route path="offer-letter-templates" element={<OfferLetterTemplates />} />
+      <Route path="form-builder" element={<FormBuilder />} />
     </Routes>
   )
 }

@@ -313,6 +313,7 @@ export const groupNav = {
         { icon: FolderOpen, label: '專案', path: '/process/projects', title: '專案管理：建立和追蹤多步驟的工作（例：新店開幕、系統上線）' },
         { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
         { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
+        { icon: ClipboardList, label: '業務申請', path: '/process/applications', title: '費用 / 非費用類申請（門市報修、叫貨驗收、費用申請）' },
         { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },
         { icon: CheckSquare, label: '任務確認', path: '/process/task-confirmations', title: '任務 chain 步驟確認' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists', title: '標準作業檢查表（例：每日開店清單）' },
@@ -323,6 +324,7 @@ export const groupNav = {
       icon: Settings,
       children: [
         { icon: FileCheck, label: '簽核規則', path: '/system/approval-rules', title: '簽核規則：定義「什麼條件觸發什麼簽核流程」（例：金額>1萬走 3 關）' },
+        { icon: FileText, label: '表單建立器', path: '/system/form-builder', title: '建立自訂表單模板（門市報修、叫貨驗收等業務申請用）' },
         { icon: Workflow, label: '簽核鏈設定', path: '/process/settings/chains', title: '簽核鏈：定義「一條簽核路徑有哪些關卡、誰簽」' },
         { icon: DollarSign, label: '費用簽核設定', path: '/process/settings/expense-chains', title: '依費用金額分組設定不同簽核鏈（例：< 1 萬走簡易、>= 1 萬走完整）' },
         { icon: FolderTree, label: '分類管理', path: '/process/settings/categories', title: '專案 / 任務的分類標籤管理' },

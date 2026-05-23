@@ -61,6 +61,7 @@ function SidebarTooltipLayer({ tip }) {
 // System nav for sidebar
 const systemItems = [
   { icon: Settings, label: '系統設定', path: '/system/settings' },
+  { icon: FileText, label: '表單建立器', path: '/system/form-builder' },
   { icon: UserCog, label: '使用者管理', path: '/system/users' },
   { icon: Shield, label: '員工個別權限', path: '/system/employee-permissions' },
   { icon: Building2, label: '租戶管理', path: '/system/tenants' },

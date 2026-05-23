@@ -484,32 +484,38 @@ export default function Projects() {
     return true
   }
 
-  const handleAddDirectTask = async () => {
-    if (!directTaskForm.title.trim() || !selected) return
+  const handleAddDirectTask = async (formData) => {
+    const fd = formData || directTaskForm
+    if (!fd.title?.trim() || !selected) return false
     const directTasks = tasks.filter(t => t.project_id === selected.id && !t.workflow_instance_id)
     const maxOrder = directTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
+    const empId = fd.assignee ? (employees.find(e => e.name === fd.assignee)?.id || null) : null
     const { data } = await createTask({
       project_id: selected.id,
-      title: directTaskForm.title.trim(),
-      assignee: directTaskForm.assignee || null,
-      due_date: directTaskForm.due_date || null,
-      priority: directTaskForm.priority || '中',
+      title: fd.title.trim(),
+      description: fd.description || null,
+      assignee: fd.assignee || null,
+      assignee_id: empId,
+      store: fd.store || null,
+      planned_start: fd.planned_start || null,
+      due_date: fd.due_date || null,
+      role: fd.role || null,
+      priority: fd.priority || '中',
       status: '待處理',
       step_order: maxOrder + 1,
       bucket: 'Project',
       category: 'Project',
+      organization_id: profile?.organization_id || null,
     })
-    if (data) {
-      // 綁定表單
-      for (const f of (directTaskForm.required_forms || [])) {
-        await supabase.rpc('create_task_form_binding', {
-          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
-        })
-      }
-      setTasks(prev => [...prev, data])
-      setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中', required_forms: [] })
-      setAddingDirectTask(false)
+    if (!data) return false
+    // 綁定表單
+    for (const f of (fd.required_forms || [])) {
+      await supabase.rpc('create_task_form_binding', {
+        p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+      })
     }
+    setTasks(prev => [...prev, data])
+    return true
   }
 
   const addComment = async (projectId) => {

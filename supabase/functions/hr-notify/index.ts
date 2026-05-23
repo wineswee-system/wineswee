@@ -388,6 +388,89 @@ function buildTaskAutoStarted(details: {
   };
 }
 
+// ── task_with_bindings_assigned：任務剛被綁表單時，列出需完成的表單清單 ─────
+function buildTaskWithBindingsAssigned(details: {
+  task_id?: number;
+  task_title?: string;
+  workflow_name?: string;
+  due_date?: string;
+  due_time?: string;
+  store?: string;
+  bindings?: Array<{ label?: string; required_status?: string }>;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', warning: '#f59e0b',
+    danger: '#ef4444', muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+
+  // 到期 label
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const dt = new Date(`${details.due_date}T${details.due_time || '17:00'}:00+08:00`);
+    if (!isNaN(dt.getTime())) {
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const hh = String(dt.getHours()).padStart(2, '0');
+      const mi = String(dt.getMinutes()).padStart(2, '0');
+      dueLabel = `${mm}/${dd} ${hh}:${mi}`;
+      isOverdue = dt < new Date();
+    }
+  }
+
+  const body: any[] = [
+    { type: 'text', text: details.task_title || '未命名任務', weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
+  if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
+
+  // bindings 清單
+  const bindings = Array.isArray(details.bindings) ? details.bindings : [];
+  if (bindings.length > 0) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: `📋 需完成表單（${bindings.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' });
+    for (const b of bindings) {
+      body.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '•', size: 'sm', color: LC.brand, flex: 0 },
+          { type: 'text', text: b.label || '未命名表單', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      });
+    }
+  }
+
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '查看任務 / 填表單', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `📋 新任務（含需填表單）：${details.task_title || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📋 任務通知（含需填表單）', color: '#FFFFFF', weight: 'bold', size: 'md' }],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
 // ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
 function buildExpiryBatchNotification(alerts: any[]) {
   const DOC_LABELS: Record<string, string> = {
@@ -832,9 +915,9 @@ serve(async (req) => {
     }
 
     // ── All remaining: send to the employee_id ──
-    // task_auto_started 需要 liff_id（建 LIFF URL），多走一條 resolveLineAccount
-    const isTaskAutoStarted = type === "task_auto_started";
-    const acct = isTaskAutoStarted ? await resolveLineAccount(db, employee_id) : null;
+    // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
+    const needsLiff = type === "task_auto_started" || type === "task_with_bindings_assigned";
+    const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
     const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
       console.log(`No LINE mapping for employee ${employee_id}, skipping`);
@@ -905,6 +988,8 @@ serve(async (req) => {
         }
       }
       message = buildTaskAutoStarted(enriched);
+    } else if (type === "task_with_bindings_assigned") {
+      message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

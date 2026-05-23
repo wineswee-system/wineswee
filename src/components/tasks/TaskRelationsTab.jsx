@@ -10,6 +10,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
 import { toast } from '../../lib/toast'
+import FormBindingsPicker from '../FormBindingsPicker'
 
 const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
 const sectionStyle = {
@@ -26,6 +27,10 @@ export default function TaskRelationsTab({
   allSteps,
   sopTemplates,
   triggeredInstances, setTriggeredInstances,
+  // 新增：綁定表單 + 工作流 / 專案
+  formBindings = [], setFormBindings = () => {},
+  form = {}, setAndDirty = () => {},
+  allWorkflowInstances = [], allProjects = [],
 }) {
   const [triggerTemplateId, setTriggerTemplateId] = useState('')
   const [triggering, setTriggering] = useState(false)
@@ -143,6 +148,65 @@ export default function TaskRelationsTab({
 
   return (
     <>
+      {/* ═══ 綁定表單 ═══ */}
+      <div style={sectionStyle}>
+        <div style={{ ...labelStyle, marginTop: 0 }}>
+          📋 綁定表單（選填）
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+          執行人需填完選定的表單，全部完成才能完成此任務。已填過的綁定（🔒）不能移除。
+        </div>
+        <FormBindingsPicker
+          value={formBindings.map(b => ({ form_type: b.form_type, form_template_id: b.form_template_id, label: b.form_label, _binding_id: b.id, _has_form: !!b.form_id }))}
+          onChange={async (next) => {
+            const curr = formBindings
+            const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
+            const nextKeys = new Set(next.map(keyOf))
+            const currKeys = new Set(curr.map(keyOf))
+            for (const item of next) {
+              if (!currKeys.has(keyOf(item))) {
+                await supabase.rpc('create_task_form_binding', {
+                  p_task_id: task.id, p_form_type: item.form_type, p_form_template_id: item.form_template_id || null,
+                })
+              }
+            }
+            for (const item of curr) {
+              if (!nextKeys.has(keyOf(item)) && !item.form_id) {
+                await supabase.from('task_form_bindings').delete().eq('id', item.id)
+              }
+            }
+            const { data } = await supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')
+            setFormBindings(data || [])
+          }}
+          lockedKeys={formBindings.filter(b => b.form_id).map(b => `${b.form_type}-${b.form_template_id ?? 'null'}`)}
+        />
+      </div>
+
+      {/* ═══ 工作流 / 專案 ═══ */}
+      <div style={sectionStyle}>
+        <div style={{ ...labelStyle, marginTop: 0 }}>🔗 所屬流程與專案</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>工作流</div>
+            <select className="form-input" style={{ width: '100%' }} value={form.workflow_instance_id || ''}
+              onChange={e => setAndDirty('workflow_instance_id', e.target.value ? Number(e.target.value) : '')}>
+              <option value="">未指定</option>
+              {allWorkflowInstances.map(w => (
+                <option key={w.id} value={w.id}>{w.template_name}{w.status ? ` (${w.status})` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>專案</div>
+            <select className="form-input" style={{ width: '100%' }} value={form.project_id || ''}
+              onChange={e => setAndDirty('project_id', e.target.value ? Number(e.target.value) : '')}>
+              <option value="">未指定</option>
+              {allProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* ═══ Checklists ═══ */}
       <div style={sectionStyle}>
         <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

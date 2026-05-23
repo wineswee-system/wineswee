@@ -23,7 +23,6 @@ import TaskApprovalTab from './TaskApprovalTab'
 import TaskDiscussionTab from './TaskDiscussionTab'
 import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
-import FormBindingsPicker from '../FormBindingsPicker'
 
 const STATUS_LIST = ['未開始', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -397,27 +396,7 @@ export default function TaskModal({
                   </div>
                 </div>
 
-                {/* Row 3: 工作流 / 專案 */}
-                <div style={fieldGrid}>
-                  <div>
-                    <div style={labelStyle}>工作流</div>
-                    <select className="form-input" style={{ width: '100%' }} value={form.workflow_instance_id}
-                      onChange={e => setAndDirty('workflow_instance_id', e.target.value ? Number(e.target.value) : '')}>
-                      <option value="">未指定</option>
-                      {allWorkflowInstances.map(w => (
-                        <option key={w.id} value={w.id}>{w.template_name}{w.status ? ` (${w.status})` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={labelStyle}>專案</div>
-                    <select className="form-input" style={{ width: '100%' }} value={form.project_id}
-                      onChange={e => setAndDirty('project_id', e.target.value ? Number(e.target.value) : '')}>
-                      <option value="">未指定</option>
-                      {allProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                </div>
+                {/* 工作流 / 專案 已搬到「關聯」tab */}
 
                 {/* 所在欄位（如有） */}
                 {sections.length > 0 && (
@@ -479,37 +458,7 @@ export default function TaskModal({
                 </div>
               </div>
 
-              {/* 📋 綁定表單 — 移到日期區下方，編輯時容易看到 */}
-              <div style={{ ...sectionStyle, padding: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-                  執行人需填完選定的表單，全部完成才能完成此任務。已填過的綁定（🔒）不能移除；移除未填的會清掉 binding。
-                </div>
-                <FormBindingsPicker
-                  value={formBindings.map(b => ({ form_type: b.form_type, form_template_id: b.form_template_id, label: b.form_label, _binding_id: b.id, _has_form: !!b.form_id }))}
-                  onChange={async (next) => {
-                    const curr = formBindings
-                    const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
-                    const nextKeys = new Set(next.map(keyOf))
-                    const currKeys = new Set(curr.map(keyOf))
-                    for (const item of next) {
-                      if (!currKeys.has(keyOf(item))) {
-                        await supabase.rpc('create_task_form_binding', {
-                          p_task_id: task.id, p_form_type: item.form_type, p_form_template_id: item.form_template_id || null,
-                        })
-                      }
-                    }
-                    for (const item of curr) {
-                      if (!nextKeys.has(keyOf(item)) && !item.form_id) {
-                        await supabase.from('task_form_bindings').delete().eq('id', item.id)
-                      }
-                    }
-                    const { data } = await supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')
-                    setFormBindings(data || [])
-                  }}
-                  lockedKeys={formBindings.filter(b => b.form_id).map(b => `${b.form_type}-${b.form_template_id ?? 'null'}`)}
-                />
-              </div>
+              {/* 綁定表單已搬到「關聯」tab */}
 
               {/* Recurrence */}
               <div style={sectionStyle}>
@@ -577,6 +526,13 @@ export default function TaskModal({
               sopTemplates={sopTemplates}
               triggeredInstances={triggeredInstances}
               setTriggeredInstances={setTriggeredInstances}
+              // ── 新增：綁定表單 + 工作流 / 專案 ──
+              formBindings={formBindings}
+              setFormBindings={setFormBindings}
+              form={form}
+              setAndDirty={setAndDirty}
+              allWorkflowInstances={allWorkflowInstances}
+              allProjects={allProjects}
             />
           )}
 

@@ -22,7 +22,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
   const triggerRef = useRef(null)
   const popupRef = useRef(null)
   const searchRef = useRef(null)
-  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 320 })
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0, minWidth: 320, flipUp: false })
 
   useEffect(() => {
     supabase.from('form_templates')
@@ -59,7 +59,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // 動態追 trigger 位置（含 #root zoom 補償）— 對齊 SearchableSelect 做法
+  // 動態追 trigger 位置（含 #root zoom 補償）+ 上下空間自動翻轉
   useLayoutEffect(() => {
     if (!open) return
     let raf = 0
@@ -68,10 +68,21 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
       if (!el) { raf = requestAnimationFrame(tick); return }
       const rect = el.getBoundingClientRect()
       const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-font-scale')) || 1
-      let top = rect.bottom / scale + 4
-      let left = rect.left / scale
-      // 補償祖先 transform 造成的 offset
+      const viewportH = window.innerHeight / scale
+      const triggerTop = rect.top / scale
+      const triggerBottom = rect.bottom / scale
+      const spaceBelow = viewportH - triggerBottom
+      const spaceAbove = triggerTop
+      // 量目前 popup 實際高度（首 frame 還沒 render 時用估計值 420）
       const pop = popupRef.current
+      const popHeight = pop ? pop.getBoundingClientRect().height / scale : 420
+      // 下方放不下 + 上方空間更多 → 翻到上面
+      const flipUp = spaceBelow < popHeight + 8 && spaceAbove > spaceBelow
+
+      let top = flipUp ? triggerTop - popHeight - 4 : triggerBottom + 4
+      let left = rect.left / scale
+
+      // 補償祖先 transform 造成的 offset
       if (pop) {
         const pr = pop.getBoundingClientRect()
         const styleTop = parseFloat(pop.style.top) || 0
@@ -81,7 +92,8 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
         if (Math.abs(offY) > 0.5) top -= offY
         if (Math.abs(offX) > 0.5) left -= offX
       }
-      setPopupPos(p => (p.top === top && p.left === left ? p : { top, left, minWidth: Math.max(rect.width / scale, 320) }))
+      setPopupPos(p => (p.top === top && p.left === left && p.flipUp === flipUp ? p
+        : { top, left, minWidth: Math.max(rect.width / scale, 320), flipUp }))
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)

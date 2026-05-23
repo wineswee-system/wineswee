@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import FormBindingsPicker from '../../components/FormBindingsPicker'
 import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
@@ -111,29 +112,8 @@ export default function SOPTemplates() {
   const [deployResult, setDeployResult] = useState(null)
   const [deployForm, setDeployForm] = useState({ location: '', assignees: {} })
   const [newTemplate, setNewTemplate] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }] })
-  const [formOptions, setFormOptions] = useState([])  // 可綁定的表單清單
 
   useEffect(() => {
-    // 載入可綁定的表單清單（業務申請類自訂表單）
-    supabase.from('form_templates')
-      .select('id, name, scope')
-      .eq('is_active', true)
-      .in('scope', ['business_expense', 'business_non_expense'])
-      .order('name')
-      .then(({ data }) => {
-        const customForms = (data || []).map(t => ({
-          form_type: 'form_submission',
-          form_template_id: t.id,
-          label: t.name,
-          group: t.scope === 'business_expense' ? '費用' : '非費用',
-        }))
-        setFormOptions([
-          { form_type: 'expense_request', form_template_id: null, label: '申請費用', group: '費用' },
-          { form_type: 'expense',         form_template_id: null, label: '費用報銷', group: '費用' },
-          ...customForms,
-        ])
-      })
-
     Promise.all([
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('stores').select('*').order('name'),
@@ -265,18 +245,6 @@ export default function SOPTemplates() {
   const addStep = () => setNewTemplate(t => ({ ...t, steps: [...t.steps, { title: '', role: '', priority: '中', description: '', required_forms: [] }] }))
   const updateStep = (i, k, v) => setNewTemplate(t => ({ ...t, steps: t.steps.map((s, j) => j === i ? { ...s, [k]: v } : s) }))
   const removeStep = (i) => setNewTemplate(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
-  const toggleStepForm = (stepIdx, opt) => setNewTemplate(t => ({
-    ...t,
-    steps: t.steps.map((s, j) => {
-      if (j !== stepIdx) return s
-      const forms = s.required_forms || []
-      const exists = forms.some(f => f.form_type === opt.form_type && (f.form_template_id ?? null) === (opt.form_template_id ?? null))
-      const next = exists
-        ? forms.filter(f => !(f.form_type === opt.form_type && (f.form_template_id ?? null) === (opt.form_template_id ?? null)))
-        : [...forms, { form_type: opt.form_type, form_template_id: opt.form_template_id, label: opt.label }]
-      return { ...s, required_forms: next }
-    }),
-  }))
 
   const handleDelete = async (id) => {
     if (!(await confirm({ message: '確定刪除此範本？' }))) return
@@ -465,8 +433,6 @@ export default function SOPTemplates() {
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: '12px 0 8px' }}>步驟</div>
           {newTemplate.steps.map((step, i) => {
             const stepForms = step.required_forms || []
-            const isBound = (opt) => stepForms.some(f =>
-              f.form_type === opt.form_type && (f.form_template_id ?? null) === (opt.form_template_id ?? null))
             return (
               <div key={i} style={{
                 marginBottom: 8, padding: '10px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
@@ -493,32 +459,16 @@ export default function SOPTemplates() {
                 </div>
 
                 {/* 綁定表單 — 完成 step 前必須填完這些表單 */}
-                {formOptions.length > 0 && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                      綁定表單（完成此 step 前需填完）{stepForms.length > 0 && ` · 已綁 ${stepForms.length} 張`}
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {formOptions.map(opt => {
-                        const active = isBound(opt)
-                        return (
-                          <button key={`${opt.form_type}-${opt.form_template_id ?? 0}`}
-                            onClick={() => toggleStepForm(i, opt)}
-                            style={{
-                              padding: '4px 10px', borderRadius: 14, fontSize: 11, cursor: 'pointer',
-                              border: active ? '1px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
-                              background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
-                              color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                              fontWeight: active ? 700 : 400,
-                            }}>
-                            {active && '✓ '}{opt.label}
-                            <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>· {opt.group}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>綁定表單（完成此 step 前需填完）</div>
+                  <FormBindingsPicker
+                    value={stepForms}
+                    onChange={(next) => setNewTemplate(t => ({
+                      ...t,
+                      steps: t.steps.map((s, j) => j === i ? { ...s, required_forms: next } : s),
+                    }))}
+                  />
+                </div>
               </div>
             )
           })}

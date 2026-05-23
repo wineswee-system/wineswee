@@ -9,6 +9,7 @@ import TaskKanban from '../../components/tasks/TaskKanban'
 import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
+import FormBindingsPicker from '../../components/FormBindingsPicker'
 import { useAuth } from '../../contexts/AuthContext'
 import { empLabel } from '../../lib/empLabel'
 
@@ -39,7 +40,6 @@ export default function Tasks() {
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: 'General', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
-  const [formOptions, setFormOptions] = useState([])  // 可綁定的表單清單
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -53,20 +53,7 @@ export default function Tasks() {
       getCategories('task'),
       getWorkflows(),
       getApprovalChains(),
-      supabase.from('form_templates').select('id, name, scope').eq('is_active', true).in('scope', ['business_expense', 'business_non_expense']).order('name'),
-    ]).then(([t, e, s, d, p, cat, wf, ac, ft]) => {
-      // 載入可綁定表單清單
-      const customForms = (ft.data || []).map(f => ({
-        form_type: 'form_submission',
-        form_template_id: f.id,
-        label: f.name,
-        group: f.scope === 'business_expense' ? '費用' : '非費用',
-      }))
-      setFormOptions([
-        { form_type: 'expense_request', form_template_id: null, label: '申請費用', group: '費用' },
-        { form_type: 'expense',         form_template_id: null, label: '費用報銷', group: '費用' },
-        ...customForms,
-      ])
+    ]).then(([t, e, s, d, p, cat, wf, ac]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
@@ -602,45 +589,16 @@ export default function Tasks() {
           </div>
 
           {/* 綁定表單 — 任務完成前需填完這些表單 */}
-          {formOptions.length > 0 && (
-            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                📋 綁定表單（選填）
-                {(form.required_forms || []).length > 0 && (
-                  <span style={{ marginLeft: 6, color: 'var(--accent-cyan)' }}>· 已綁 {form.required_forms.length} 張</span>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                員工開任務後要填完選定的表單，全部核准才能完成任務
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {formOptions.map(opt => {
-                  const active = (form.required_forms || []).some(f =>
-                    f.form_type === opt.form_type && (f.form_template_id ?? null) === (opt.form_template_id ?? null))
-                  return (
-                    <button key={`${opt.form_type}-${opt.form_template_id ?? 0}`} type="button"
-                      onClick={() => {
-                        const current = form.required_forms || []
-                        const next = active
-                          ? current.filter(f => !(f.form_type === opt.form_type && (f.form_template_id ?? null) === (opt.form_template_id ?? null)))
-                          : [...current, { form_type: opt.form_type, form_template_id: opt.form_template_id, label: opt.label }]
-                        set('required_forms', next)
-                      }}
-                      style={{
-                        padding: '5px 12px', borderRadius: 14, fontSize: 12, cursor: 'pointer',
-                        border: active ? '1px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
-                        background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
-                        color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                        fontWeight: active ? 700 : 400,
-                      }}>
-                      {active && '✓ '}{opt.label}
-                      <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>· {opt.group}</span>
-                    </button>
-                  )
-                })}
-              </div>
+          <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              員工開任務後要填完選定的表單，全部核准才能完成任務
             </div>
-          )}
+            <FormBindingsPicker
+              value={form.required_forms || []}
+              onChange={v => set('required_forms', v)}
+            />
+          </div>
 
           <Field label="說明（選填）">
             <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} placeholder="任務說明、注意事項..." value={form.description} onChange={e => set('description', e.target.value)} />

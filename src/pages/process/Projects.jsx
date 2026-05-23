@@ -99,9 +99,9 @@ export default function Projects() {
   const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
   // Task interaction in project detail
   const [addingTaskWfId, setAddingTaskWfId] = useState(null)
-  const [addTaskForm, setAddTaskForm] = useState({ title: '', assignee: '', due_date: '' })
+  const [addTaskForm, setAddTaskForm] = useState({ title: '', assignee: '', due_date: '', required_forms: [] })
   const [addingDirectTask, setAddingDirectTask] = useState(false)
-  const [directTaskForm, setDirectTaskForm] = useState({ title: '', assignee: '', due_date: '', priority: '中' })
+  const [directTaskForm, setDirectTaskForm] = useState({ title: '', assignee: '', due_date: '', priority: '中', required_forms: [] })
   const [collapsedWfIds, setCollapsedWfIds] = useState(new Set())
   const toggleWf = (id) => setCollapsedWfIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const [wfMenuId, setWfMenuId] = useState(null)
@@ -459,8 +459,14 @@ export default function Projects() {
       organization_id: profile?.organization_id || null,
     })
     if (data) {
+      // 綁定表單
+      for (const f of (addTaskForm.required_forms || [])) {
+        await supabase.rpc('create_task_form_binding', {
+          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+        })
+      }
       setTasks(prev => [...prev, data])
-      setAddTaskForm({ title: '', assignee: '', due_date: '' })
+      setAddTaskForm({ title: '', assignee: '', due_date: '', required_forms: [] })
       setAddingTaskWfId(null)
       if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
         dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
@@ -485,8 +491,14 @@ export default function Projects() {
       category: 'Project',
     })
     if (data) {
+      // 綁定表單
+      for (const f of (directTaskForm.required_forms || [])) {
+        await supabase.rpc('create_task_form_binding', {
+          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+        })
+      }
       setTasks(prev => [...prev, data])
-      setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中' })
+      setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中', required_forms: [] })
       setAddingDirectTask(false)
     }
   }

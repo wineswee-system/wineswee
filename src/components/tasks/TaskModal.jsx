@@ -23,6 +23,7 @@ import TaskApprovalTab from './TaskApprovalTab'
 import TaskDiscussionTab from './TaskDiscussionTab'
 import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
+import FormBindingsPicker from '../FormBindingsPicker'
 
 const STATUS_LIST = ['未開始', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -55,6 +56,7 @@ export default function TaskModal({
 
   const [comments, setComments] = useState([])
   const [attachments, setAttachments] = useState([])
+  const [formBindings, setFormBindings] = useState([])
   const [linkedChecklists, setLinkedChecklists] = useState([])
   const [checklistItemsMap, setChecklistItemsMap] = useState({})
   const [dependencies, setDependencies] = useState([])
@@ -116,17 +118,19 @@ export default function TaskModal({
       safe(getApprovalChains()),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
+      safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
       safe(supabase.from('projects').select('id, name').order('name')),
       safe(supabase.from('workflow_instances').select('id, template_name, status').order('id')),
-    ]).then(([c, a, cl, d, ac, af, tc, tpl, trig, proj, wfAll]) => {
+    ]).then(([c, a, cl, d, ac, af, tc, bindings, tpl, trig, proj, wfAll]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
       setApprovalChains(ac.data?.length ? ac.data : approvalChainsProp)
       setConfirmations(tc.data || [])
+      setFormBindings(bindings.data || [])
       setSopTemplates(tpl.data || [])
       setTriggeredInstances(trig.data || [])
       setAllProjects(proj.data || [])
@@ -519,6 +523,42 @@ export default function TaskModal({
                   <TaskCustomFieldsView taskId={task.id} projectId={Number(form.project_id)} employees={employees} />
                 </div>
               )}
+
+              {/* 綁定表單 — 任務完成前需填完這些表單 */}
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  已填過的綁定（🔒）不能移除；新加的會建立新 binding，移除未填的會清掉 binding
+                </div>
+                <FormBindingsPicker
+                  value={formBindings.map(b => ({ form_type: b.form_type, form_template_id: b.form_template_id, label: b.form_label, _binding_id: b.id, _has_form: !!b.form_id }))}
+                  onChange={async (next) => {
+                    const curr = formBindings
+                    // 用 key 比對
+                    const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
+                    const nextKeys = new Set(next.map(keyOf))
+                    const currKeys = new Set(curr.map(keyOf))
+                    // 新增
+                    for (const item of next) {
+                      if (!currKeys.has(keyOf(item))) {
+                        await supabase.rpc('create_task_form_binding', {
+                          p_task_id: task.id, p_form_type: item.form_type, p_form_template_id: item.form_template_id || null,
+                        })
+                      }
+                    }
+                    // 移除（只刪未填過的）
+                    for (const item of curr) {
+                      if (!nextKeys.has(keyOf(item)) && !item.form_id) {
+                        await supabase.from('task_form_bindings').delete().eq('id', item.id)
+                      }
+                    }
+                    // refresh
+                    const { data } = await supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')
+                    setFormBindings(data || [])
+                  }}
+                  lockedKeys={formBindings.filter(b => b.form_id).map(b => `${b.form_type}-${b.form_template_id ?? 'null'}`)}
+                />
+              </div>
 
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
                 ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}

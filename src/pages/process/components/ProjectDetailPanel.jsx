@@ -6,6 +6,7 @@ import {
   Users, Settings, Columns, GitBranch, MoreVertical, GripVertical
 } from 'lucide-react'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
+import FormBindingsPicker from '../../../components/FormBindingsPicker'
 import ProjectMembers from '../../../components/tasks/ProjectMembers'
 import ChangelogPanel from '../../../components/ChangelogPanel'
 import { ProjectCustomFieldsAdmin } from '../../../components/tasks/CustomFieldsEditor'
@@ -485,30 +486,36 @@ export default function ProjectDetailPanel({
               })}
 
               {addingTaskWfId === w.id && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 4px 4px 24px', flexWrap: 'wrap' }}>
-                  <input
-                    className="form-input"
-                    style={{ flex: '1 1 160px', fontSize: 12 }}
-                    placeholder="任務名稱 *"
-                    autoFocus
-                    value={addTaskForm.title}
-                    onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
-                  />
-                  <div style={{ flex: '0 0 130px' }}>
-                    <SearchableSelect
-                      value={addTaskForm.assignee}
-                      onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
-                      options={empOptions(employees, { keyBy: 'name' })}
-                      placeholder="負責人"
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 4px 4px 24px' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      className="form-input"
+                      style={{ flex: '1 1 160px', fontSize: 12 }}
+                      placeholder="任務名稱 *"
+                      autoFocus
+                      value={addTaskForm.title}
+                      onChange={e => setAddTaskForm(f => ({ ...f, title: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && handleAddTaskToWorkflow(w.id)}
                     />
+                    <div style={{ flex: '0 0 130px' }}>
+                      <SearchableSelect
+                        value={addTaskForm.assignee}
+                        onChange={(v) => setAddTaskForm(f => ({ ...f, assignee: v || '' }))}
+                        options={empOptions(employees, { keyBy: 'name' })}
+                        placeholder="負責人"
+                      />
+                    </div>
+                    <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
+                      value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
+                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
+                      disabled={!addTaskForm.title.trim()} onClick={() => handleAddTaskToWorkflow(w.id)}>確認</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
+                      onClick={() => setAddingTaskWfId(null)}>取消</button>
                   </div>
-                  <input className="form-input" type="date" style={{ flex: '0 0 130px', fontSize: 12 }}
-                    value={addTaskForm.due_date} onChange={e => setAddTaskForm(f => ({ ...f, due_date: e.target.value }))} />
-                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                    disabled={!addTaskForm.title.trim()} onClick={() => handleAddTaskToWorkflow(w.id)}>確認</button>
-                  <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
-                    onClick={() => setAddingTaskWfId(null)}>取消</button>
+                  <FormBindingsPicker
+                    value={addTaskForm.required_forms || []}
+                    onChange={v => setAddTaskForm(f => ({ ...f, required_forms: v }))}
+                  />
                 </div>
               )}
             </div>}
@@ -603,6 +610,14 @@ export default function ProjectDetailPanel({
                     disabled={!directTaskForm.title.trim()} onClick={handleAddDirectTask}>確認</button>
                   <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}
                     onClick={() => setAddingDirectTask(false)}>取消</button>
+                </div>
+              )}
+              {addingDirectTask && (
+                <div style={{ padding: '0 4px 4px 24px' }}>
+                  <FormBindingsPicker
+                    value={directTaskForm.required_forms || []}
+                    onChange={v => setDirectTaskForm(f => ({ ...f, required_forms: v }))}
+                  />
                 </div>
               )}
             </div>

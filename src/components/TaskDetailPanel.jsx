@@ -47,6 +47,7 @@ export default function TaskDetailPanel({
   const [approvalPriority, setApprovalPriority] = useState('中')
   const [approvalMode, setApprovalMode] = useState('sequential')
   const [confirmations, setConfirmations] = useState([])
+  const [formBindings, setFormBindings] = useState([])
   const [newConfirmApprover, setNewConfirmApprover] = useState('')
   const [newConfirmPriority, setNewConfirmPriority] = useState('中')
   const [saving, setSaving] = useState(false)
@@ -94,17 +95,19 @@ export default function TaskDetailPanel({
       safe(getApprovalChains()),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
+      safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
       safe(supabase.from('projects').select('id, name').order('name')),
       safe(supabase.from('workflow_instances').select('id, template_name, status').order('id')),
-    ]).then(([c, a, cl, d, ac, af, tc, tpl, trig, proj, wfAll]) => {
+    ]).then(([c, a, cl, d, ac, af, tc, bindings, tpl, trig, proj, wfAll]) => {
       setComments(c.data || [])
       setAttachments(a.data || [])
       setLinkedChecklists(cl.data || [])
       setDependencies(d.data || [])
       setApprovalChains(ac.data || [])
       setConfirmations(tc.data || [])
+      setFormBindings(bindings.data || [])
       setSopTemplates(tpl.data || [])
       setTriggeredInstances(trig.data || [])
       setAllProjects(proj.data || [])
@@ -488,6 +491,11 @@ export default function TaskDetailPanel({
                   </span>
                 )}
               </div>
+
+              {/* 綁定表單清單（流程 step 設定的必填表單）*/}
+              {formBindings.length > 0 && (
+                <TaskFormBindingsBlock bindings={formBindings} taskId={task.id} />
+              )}
             </>
           )}
 
@@ -578,5 +586,63 @@ export default function TaskDetailPanel({
       />
     </div>,
     document.body
+  )
+}
+
+// ─── 綁定表單顯示元件（流程任務內的「需完成事項」清單）───
+function TaskFormBindingsBlock({ bindings }) {
+  const STATUS_STYLE = {
+    '未填':   { bg: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)',     icon: '⚪' },
+    '簽核中': { bg: 'rgba(245,158,11,0.15)',   color: 'var(--accent-orange)', icon: '🔵' },
+    '已退回': { bg: 'rgba(239,68,68,0.15)',    color: 'var(--accent-red)',    icon: '❌' },
+    '已完成': { bg: 'rgba(34,197,94,0.15)',    color: 'var(--accent-green)',  icon: '✅' },
+  }
+  const navTo = (b) => {
+    // 帶 binding_id 跳轉到對應表單頁，submit 時表單頁負責寫回 linked_binding_id
+    const u = b.form_id
+      ? null  // 已有 form_id 表示已認領 → 點卡只是查狀態
+      : (b.form_type === 'expense_request' ? `/hr/expense-requests?binding_id=${b.id}`
+        : b.form_type === 'expense'         ? `/hr/expenses?binding_id=${b.id}`
+        : `/hr/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
+    if (u) window.open(u, '_blank')
+  }
+  const completed = bindings.filter(b => b.status === '已完成').length
+  return (
+    <div style={{ marginBottom: 16, padding: 12, background: 'var(--glass-light)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📋 需完成表單</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{completed}/{bindings.length} 完成</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {bindings.map(b => {
+          const s = STATUS_STYLE[b.status] || STATUS_STYLE['未填']
+          return (
+            <div key={b.id} onClick={() => navTo(b)}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', borderRadius: 6, background: 'var(--bg-card)',
+                cursor: b.form_id ? 'default' : 'pointer',
+                border: '1px solid var(--border-subtle)',
+              }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {s.icon} {b.form_label}
+                  {b.form_id && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{b.form_id}</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  完成條件：{b.required_status}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{b.status}</span>
+                {!b.form_id && (
+                  <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>→ 去填寫</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

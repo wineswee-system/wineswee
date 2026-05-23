@@ -239,7 +239,7 @@ export const groupNav = {
         { icon: UserMinus, label: '離職申請', path: '/hr/forms/resignation' },
         { icon: PauseCircle, label: '留職停薪', path: '/hr/forms/loa' },
         { icon: ArrowRightLeft, label: '人事異動', path: '/hr/forms/transfer' },
-        { icon: Settings, label: '表單建立器', path: '/hr/form-builder' },
+        // 表單建立器已搬到「系統設定 → 表單建立器」
         { icon: FileText, label: '文件範本', path: '/org/templates' },
         { icon: Trash2, label: '最近刪除', path: '/hr/recently-deleted' },
       ]
@@ -257,7 +257,7 @@ export const groupNav = {
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: DollarSign, label: '門市業績獎金', path: '/hr/store-bonus' },
-        { icon: ClipboardCheck, label: '門市稽核', path: '/hr/store-audits' },
+        // 門市稽核已搬到「專案流程 → 門市稽核」
         { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },
@@ -313,6 +313,7 @@ export const groupNav = {
         { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
         { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
         { icon: ClipboardList, label: '表單設定', path: '/process/applications', title: '費用 / 非費用類表單（門市報修、叫貨驗收、費用申請、費用報銷）' },
+        { icon: ClipboardCheck, label: '門市稽核', path: '/hr/store-audits', title: '門市稽核：填寫稽核表 → 簽核 → 缺失/小過自動寫入業績獎金' },
         { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },
         { icon: CheckSquare, label: '任務確認', path: '/process/task-confirmations', title: '任務 chain 步驟確認' },
         { icon: CheckSquare, label: '查核清單', path: '/process/checklists', title: '標準作業檢查表（例：每日開店清單）' },

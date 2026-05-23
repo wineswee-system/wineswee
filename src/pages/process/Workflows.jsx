@@ -66,7 +66,7 @@ export default function Workflows() {
 
   // Modals
   const [showAddTaskModal, setShowAddTaskModal] = useState(false)
-  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
+  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [notesStep, setNotesStep] = useState(null)
   const [notesText, setNotesText] = useState('')
@@ -566,8 +566,15 @@ export default function Workflows() {
         }
       }
 
+      // 綁定表單
+      for (const f of (taskForm.required_forms || [])) {
+        await supabase.rpc('create_task_form_binding', {
+          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+        })
+      }
+
       setShowAddTaskModal(false)
-      setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00' })
+      setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
 
       if (subFailures.length > 0) {
         toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)

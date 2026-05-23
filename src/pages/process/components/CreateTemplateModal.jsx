@@ -1,5 +1,6 @@
-import { Plus, Trash2, CheckSquare, Shield, Settings } from 'lucide-react'
+import { Plus, Trash2, CheckSquare, Shield, Settings, FileText } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import FormBindingsPicker from '../../../components/FormBindingsPicker'
 
 export default function CreateTemplateModal({
   newTpl, setNewTpl, onClose, onSubmit,
@@ -8,7 +9,7 @@ export default function CreateTemplateModal({
 }) {
   const addTplStep = () => setNewTpl(t => ({
     ...t,
-    steps: [...t.steps, { title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }],
+    steps: [...t.steps, { title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '', required_forms: [] }],
   }))
   const updateTplStep = (i, k, v) => setNewTpl(t => ({ ...t, steps: t.steps.map((s, j) => j === i ? { ...s, [k]: v } : s) }))
   const removeTplStep = (i) => setNewTpl(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
@@ -105,6 +106,17 @@ export default function CreateTemplateModal({
                 ))}
               </select>
             </Field>
+          </div>
+          {/* 綁定表單 — 完成 step 前需填完 */}
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <FileText size={11} style={{ color: 'var(--accent-cyan)' }} />
+              綁定表單（完成此 step 前需填完）
+            </div>
+            <FormBindingsPicker
+              value={step.required_forms || []}
+              onChange={(next) => updateTplStep(i, 'required_forms', next)}
+            />
           </div>
         </div>
       ))}

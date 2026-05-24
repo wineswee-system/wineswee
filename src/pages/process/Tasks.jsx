@@ -108,10 +108,21 @@ export default function Tasks() {
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return false }
     setFormErrors({})
     const chainId = form.approval_mode === 'chain' && form.approval_chain_id ? Number(form.approval_chain_id) : null
+
+    // 解析 assignee_id：從 employees 找名字匹配的 id（跟 Projects.jsx 一致）
+    const assigneeName = (form.assignee || '').trim()
+    const empId = assigneeName
+      ? (employees.find(e => e.name === assigneeName)?.id || null)
+      : null
+    if (assigneeName && empId === null && employees.length > 0) {
+      console.warn('[Tasks] assignee 找不到對應員工，可能名字不符', { assigneeName, employees_count: employees.length })
+    }
+
     const { data } = await createTask({
       title: form.title,
       workflow: form.workflow || null,
-      assignee: form.assignee || null,
+      assignee: assigneeName || null,
+      assignee_id: empId,
       due_date: form.due_date || null,
       planned_start: form.planned_start || null,
       store: form.store || null,

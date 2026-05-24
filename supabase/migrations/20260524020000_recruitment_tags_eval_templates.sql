@@ -66,7 +66,7 @@ ALTER TABLE public.interview_evaluation_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "eval_tpl_org" ON public.interview_evaluation_templates;
 CREATE POLICY "eval_tpl_org" ON public.interview_evaluation_templates
   USING (organization_id = (
-    SELECT organization_id FROM employees WHERE id = (auth.uid())::int
+    SELECT organization_id FROM employees WHERE auth_user_id = auth.uid() LIMIT 1
   ));
 
 GRANT SELECT, INSERT, UPDATE, DELETE

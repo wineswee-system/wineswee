@@ -464,6 +464,13 @@ export default function Recruitment() {
   const [tagInput,    setTagInput]    = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
 
+  // 面試 tab 直接新增（不用點進候選人）
+  const [showQuickIntModal, setShowQuickIntModal] = useState(false)
+  const [quickIntForm, setQuickIntForm] = useState({
+    candidate_id: '', round: '初試', scheduled_at: '',
+    interviewer_id: '', location: '', note: '',
+  })
+
   // ── 重複偵測 + 黑名單（email/phone 任一相符）──
   const candDupCheck = useMemo(() => {
     const e = (candForm.email || '').trim().toLowerCase()
@@ -1100,7 +1107,16 @@ export default function Recruitment() {
 
       {/* ─── 面試 ─── */}
       {tab === 'interviews' && (
-        <div className="card">
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary" onClick={() => {
+              setQuickIntForm({ candidate_id: '', round: '初試', scheduled_at: '', interviewer_id: '', location: '', note: '' })
+              setShowQuickIntModal(true)
+            }}>
+              <Plus size={14} /> 新增面試
+            </button>
+          </div>
+          <div className="card">
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
@@ -1141,7 +1157,115 @@ export default function Recruitment() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+
+          {/* ─── 新增面試 modal（從面試 tab 直接開）─── */}
+          {showQuickIntModal && (
+            <Modal title="新增面試" onClose={() => setShowQuickIntModal(false)} onSubmit={async () => {
+              if (!quickIntForm.candidate_id) { toast('請選候選人'); return }
+              if (!quickIntForm.scheduled_at) { toast('請填面試時間'); return }
+              const { data } = await createInterview({
+                candidate_id: Number(quickIntForm.candidate_id),
+                round: quickIntForm.round,
+                scheduled_at: quickIntForm.scheduled_at,
+                interviewer_id: quickIntForm.interviewer_id || null,
+                location: quickIntForm.location || null,
+                note: quickIntForm.note || null,
+                result: '待定',
+                organization_id: orgId,
+              })
+              if (data) {
+                setShowQuickIntModal(false)
+                refreshInterviews()
+                // 同步 LINE 通知 + 階段推進的 trigger 已在 DB 跑（20260524010000）
+                if (quickIntForm.interviewer_id) {
+                  const cand = candidates.find(c => c.id === Number(quickIntForm.candidate_id))
+                  if (cand) {
+                    const prior = interviews.filter(iv => iv.candidate_id === cand.id)
+                    const interviewSeq = prior.length + 1
+                    const job = cand.recruitment_jobs || {}
+                    notifyInterviewScheduled(Number(quickIntForm.interviewer_id), {
+                      candidateName: cand.name, round: quickIntForm.round,
+                      scheduledAt: quickIntForm.scheduled_at, location: quickIntForm.location,
+                      candidateId: cand.id, jobTitle: job.title, jobDept: job.dept,
+                      source: cand.source, phone: cand.phone, email: cand.email,
+                      resumeUrl: cand.resume_url, candidateStage: cand.stage,
+                      note: quickIntForm.note, interviewSeq,
+                    }).catch(() => {})
+                  }
+                }
+              }
+            }} submitLabel="新增">
+              <Field label="候選人" required>
+                <select className="form-input" style={{ width: '100%' }} value={quickIntForm.candidate_id}
+                  onChange={e => setQuickIntForm(f => ({ ...f, candidate_id: e.target.value }))}>
+                  <option value="">請選擇候選人</option>
+                  {candidates
+                    .filter(c => !['已錄取', '淘汰'].includes(c.stage))
+                    .map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.recruitment_jobs?.title ? ` — ${c.recruitment_jobs.title}` : ''}（{c.stage}）
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="輪次">
+                  <select className="form-input" style={{ width: '100%' }} value={quickIntForm.round}
+                    onChange={e => setQuickIntForm(f => ({ ...f, round: e.target.value }))}>
+                    {ROUNDS.map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </Field>
+                <Field label="時間" required>
+                  <input className="form-input" type="datetime-local" style={{ width: '100%' }}
+                    value={quickIntForm.scheduled_at}
+                    onChange={e => setQuickIntForm(f => ({ ...f, scheduled_at: e.target.value }))} />
+                </Field>
+              </div>
+              <Field label="面試官">
+                <select className="form-input" style={{ width: '100%' }} value={quickIntForm.interviewer_id}
+                  onChange={e => setQuickIntForm(f => ({ ...f, interviewer_id: e.target.value }))}>
+                  <option value="">請選擇</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+                {(() => {
+                  if (!quickIntForm.interviewer_id || !quickIntForm.scheduled_at) return null
+                  const target = new Date(quickIntForm.scheduled_at).getTime()
+                  if (isNaN(target)) return null
+                  const HOUR = 60 * 60 * 1000
+                  const list = interviews.filter(iv =>
+                    String(iv.interviewer_id) === String(quickIntForm.interviewer_id)
+                    && iv.scheduled_at
+                    && Math.abs(new Date(iv.scheduled_at).getTime() - target) < HOUR
+                  )
+                  if (list.length === 0) return null
+                  const empName = employees.find(e => String(e.id) === String(quickIntForm.interviewer_id))?.name || '面試官'
+                  return (
+                    <div style={{
+                      marginTop: 6, padding: '6px 8px', borderRadius: 4,
+                      background: 'rgba(245,158,11,0.12)', border: '1px solid var(--accent-orange)',
+                      fontSize: 11, color: 'var(--accent-orange)',
+                    }}>
+                      ⚠️ {empName} 在此時段 ±1 小時內已有 {list.length} 場面試
+                    </div>
+                  )
+                })()}
+              </Field>
+              <Field label="地點">
+                <input className="form-input" style={{ width: '100%' }}
+                  value={quickIntForm.location}
+                  onChange={e => setQuickIntForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="例：會議室 A / 視訊連結" />
+              </Field>
+              <Field label="備註">
+                <textarea className="form-input" style={{ width: '100%' }} rows={2}
+                  value={quickIntForm.note}
+                  onChange={e => setQuickIntForm(f => ({ ...f, note: e.target.value }))}
+                  placeholder="注意事項、特別交代等" />
+              </Field>
+            </Modal>
+          )}
+        </>
       )}
 
       {/* ─── 錄取簽呈 ─── */}

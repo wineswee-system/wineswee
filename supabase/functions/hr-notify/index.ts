@@ -304,23 +304,22 @@ function buildTaskAutoStarted(details: {
   };
 
   // 到期 label（Asia/Taipei，MM/DD HH:MM）
-  // due_date: 可能是 "YYYY-MM-DD" 或 ISO timestamp（PG 序列化 DATE/TIMESTAMP）
-  // due_time: 可能是 "HH:MM" 或 "HH:MM:SS"（PG TIME 序列化會帶秒）
+  // due_date / due_time 都是「台灣本地時間」字串，不過 Date 直接格式化，
+  // 避免 Deno UTC runtime 用 getHours() 拿到偏移後的時間。
   let dueLabel = '未設定';
   let isOverdue = false;
   if (details.due_date) {
-    const rawDate = String(details.due_date).slice(0, 10); // 取 YYYY-MM-DD 部分
+    const rawDate = String(details.due_date).slice(0, 10);          // YYYY-MM-DD
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
     const rawTime = String(details.due_time || '17:00');
     const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
-    const timeStr = tm ? `${tm[1].padStart(2, '0')}:${tm[2].padStart(2, '0')}` : '17:00';
-    const dt = new Date(`${rawDate}T${timeStr}:00+08:00`);
-    if (!isNaN(dt.getTime())) {
-      const mm = String(dt.getMonth() + 1).padStart(2, '0');
-      const dd = String(dt.getDate()).padStart(2, '0');
-      const hh = String(dt.getHours()).padStart(2, '0');
-      const mi = String(dt.getMinutes()).padStart(2, '0');
-      dueLabel = `${mm}/${dd} ${hh}:${mi}`;
-      isOverdue = dt < new Date();
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      // overdue 用 +08:00 ISO 字串建 Date（new Date 內部是 UTC ms，比較是正確的）
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
     }
   }
 
@@ -505,23 +504,20 @@ function buildTaskWithBindingsAssigned(details: {
     danger: '#ef4444', muted: '#666666', dark: '#444444', soft: '#8c8c8c',
   };
 
-  // 到期 label
-  // due_date 可能是 "YYYY-MM-DD" 或 ISO timestamp; due_time 可能是 "HH:MM" 或 "HH:MM:SS"
+  // 到期 label（同 buildTaskAutoStarted：不過 Date 直接格式化避免 Deno UTC 偏移）
   let dueLabel = '未設定';
   let isOverdue = false;
   if (details.due_date) {
     const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
     const rawTime = String(details.due_time || '17:00');
     const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
-    const timeStr = tm ? `${tm[1].padStart(2, '0')}:${tm[2].padStart(2, '0')}` : '17:00';
-    const dt = new Date(`${rawDate}T${timeStr}:00+08:00`);
-    if (!isNaN(dt.getTime())) {
-      const mm = String(dt.getMonth() + 1).padStart(2, '0');
-      const dd = String(dt.getDate()).padStart(2, '0');
-      const hh = String(dt.getHours()).padStart(2, '0');
-      const mi = String(dt.getMinutes()).padStart(2, '0');
-      dueLabel = `${mm}/${dd} ${hh}:${mi}`;
-      isOverdue = dt < new Date();
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
     }
   }
 

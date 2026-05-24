@@ -1,31 +1,52 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Rocket, Tag, MoreVertical, Trash2 } from 'lucide-react'
 
 function TemplateMenu({ tpl, onDelete }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = (e) => {
+      if (btnRef.current?.contains(e.target)) return
+      if (menuRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  const toggle = (e) => {
+    e.stopPropagation()
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      // 寬度 140，右對齊到按鈕右緣
+      setPos({ top: r.bottom + 4, left: r.right - 140 })
+    }
+    setOpen(v => !v)
+  }
+
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        ref={btnRef}
+        onClick={toggle}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)', borderRadius: 4 }}
       >
         <MoreVertical size={16} />
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: '100%', zIndex: 200,
-          background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
-          borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', minWidth: 140, padding: 4,
-        }}>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+            background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+            borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', minWidth: 140, padding: 4,
+          }}
+        >
           <button
             onClick={e => { e.stopPropagation(); setOpen(false); onDelete(tpl) }}
             style={{
@@ -37,9 +58,10 @@ function TemplateMenu({ tpl, onDelete }) {
           >
             <Trash2 size={14} /> 刪除範本
           </button>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
 

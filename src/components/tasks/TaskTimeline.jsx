@@ -10,29 +10,49 @@ function daysBetween(a, b) {
 export default function TaskTimeline({ tasks, dependencies = [], onTaskClick }) {
   const [hovered, setHovered] = useState(null)
 
-  const { rows, start, days } = useMemo(() => {
+  const MAX_DAYS = 180 // 防爆：日期區間超過半年就 clip，避免 89 tasks × 4000 days DOM 炸瀏覽器
+  const { rows, start, days, clipped } = useMemo(() => {
     const withDates = tasks.filter(t => t.planned_start || t.due_date)
-    if (!withDates.length) return { rows: [], start: new Date(), days: 0 }
+    if (!withDates.length) return { rows: [], start: new Date(), days: 0, clipped: false }
 
-    const parse = (s) => s ? new Date(s) : null
-    const starts = withDates.map(t => parse(t.planned_start) || parse(t.due_date))
-    const ends = withDates.map(t => parse(t.due_date) || parse(t.planned_start))
+    const parse = (s) => {
+      if (!s) return null
+      const d = new Date(s)
+      return isNaN(d.getTime()) ? null : d
+    }
+    const starts = withDates.map(t => parse(t.planned_start) || parse(t.due_date)).filter(Boolean)
+    const ends = withDates.map(t => parse(t.due_date) || parse(t.planned_start)).filter(Boolean)
+    if (!starts.length) return { rows: [], start: new Date(), days: 0, clipped: false }
 
-    const minDate = new Date(Math.min(...starts.map(d => d.getTime())))
-    const maxDate = new Date(Math.max(...ends.map(d => d.getTime())))
+    let minDate = new Date(Math.min(...starts.map(d => d.getTime())))
+    let maxDate = new Date(Math.max(...ends.map(d => d.getTime())))
     minDate.setDate(minDate.getDate() - 2)
     maxDate.setDate(maxDate.getDate() + 2)
-    const totalDays = daysBetween(minDate, maxDate) + 1
+    let totalDays = daysBetween(minDate, maxDate) + 1
+    let isClipped = false
+    if (totalDays > MAX_DAYS) {
+      // clip 成「今天 ± 90 天」視窗
+      const now = new Date(); now.setHours(0, 0, 0, 0)
+      minDate = new Date(now); minDate.setDate(now.getDate() - 30)
+      maxDate = new Date(now); maxDate.setDate(now.getDate() + MAX_DAYS - 30)
+      totalDays = MAX_DAYS
+      isClipped = true
+    }
 
     const rows = withDates.map(t => {
       const s = parse(t.planned_start) || parse(t.due_date)
       const e = parse(t.due_date) || parse(t.planned_start)
-      const offset = daysBetween(minDate, s)
-      const span = Math.max(1, daysBetween(s, e) + 1)
+      if (!s || !e) return null
+      // 在 clip 視窗外的任務跳過
+      if (e < minDate || s > maxDate) return null
+      const clampedStart = s < minDate ? minDate : s
+      const clampedEnd = e > maxDate ? maxDate : e
+      const offset = daysBetween(minDate, clampedStart)
+      const span = Math.max(1, daysBetween(clampedStart, clampedEnd) + 1)
       return { task: t, offset, span }
-    })
+    }).filter(Boolean)
 
-    return { rows, start: minDate, days: totalDays }
+    return { rows, start: minDate, days: totalDays, clipped: isClipped }
   }, [tasks])
 
   if (rows.length === 0) {
@@ -57,6 +77,11 @@ export default function TaskTimeline({ tasks, dependencies = [], onTaskClick }) 
 
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+      {clipped && (
+        <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)', borderBottom: '1px solid var(--border-subtle)' }}>
+          ⚠ 任務日期區間超過 {MAX_DAYS} 天，已 clip 成「今天前後 {MAX_DAYS} 天」視窗（避免渲染負擔）
+        </div>
+      )}
       <div style={{ minWidth: 220 + days * DAY_PX, position: 'relative' }}>
         {/* Header days */}
         <div style={{ display: 'flex', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 2, borderBottom: '1px solid var(--border-medium)' }}>

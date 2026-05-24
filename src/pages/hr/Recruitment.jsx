@@ -355,9 +355,10 @@ export default function Recruitment() {
   const [showOfferModal,  setShowOfferModal]  = useState(false)
   const [offerTarget,     setOfferTarget]     = useState(null)
 
-  const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職' })
+  const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職', headcount: 1, description: '' })
   const [editingJob,  setEditingJob]  = useState(null)
-  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '' })
+  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '' })
+  const [resumeUploading, setResumeUploading] = useState(false)
   const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -423,7 +424,10 @@ export default function Recruitment() {
 
   const openEditJob = (j) => {
     setEditingJob(j)
-    setJobForm({ title: j.title, dept: j.dept || '', location: j.location || '', type: j.type || '全職' })
+    setJobForm({
+      title: j.title, dept: j.dept || '', location: j.location || '', type: j.type || '全職',
+      headcount: j.headcount || 1, description: j.description || '',
+    })
     setShowJobModal(true)
   }
 
@@ -441,6 +445,7 @@ export default function Recruitment() {
       phone:           candForm.phone   || null,
       source:          candForm.source,
       notes:           candForm.notes   || null,
+      resume_url:      candForm.resume_url || null,
       job_id:          candForm.job_id  ? Number(candForm.job_id) : null,
       organization_id: orgId,
       created_by:      profile?.id      || null,
@@ -449,7 +454,7 @@ export default function Recruitment() {
     if (data) {
       setCandidates(prev => [...prev, data])
       setShowCandModal(false)
-      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '' })
+      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '' })
       if (data.job_id) {
         const job = jobs.find(j => j.id === data.job_id)
         if (job) updateRecruitmentJob(job.id, { applicants: (job.applicants || 0) + 1 })
@@ -1161,11 +1166,24 @@ export default function Recruitment() {
               </select>
             </Field>
           </div>
-          <Field label="類型">
-            <select className="form-input" style={{ width: '100%' }} value={jobForm.type}
-              onChange={e => setJobForm(f => ({ ...f, type: e.target.value }))}>
-              <option>全職</option><option>兼職</option><option>約聘</option>
-            </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="類型">
+              <select className="form-input" style={{ width: '100%' }} value={jobForm.type}
+                onChange={e => setJobForm(f => ({ ...f, type: e.target.value }))}>
+                <option>全職</option><option>兼職</option><option>約聘</option><option>工讀</option>
+              </select>
+            </Field>
+            <Field label="需求人數">
+              <input className="form-input" type="number" min="1" style={{ width: '100%' }}
+                value={jobForm.headcount}
+                onChange={e => setJobForm(f => ({ ...f, headcount: Math.max(1, Number(e.target.value) || 1) }))} />
+            </Field>
+          </div>
+          <Field label="職務說明">
+            <textarea className="form-input" style={{ width: '100%' }} rows={4}
+              placeholder="工作內容、必備條件、加分項目..."
+              value={jobForm.description}
+              onChange={e => setJobForm(f => ({ ...f, description: e.target.value }))} />
           </Field>
         </Modal>
       )}
@@ -1202,6 +1220,46 @@ export default function Recruitment() {
               </select>
             </Field>
           </div>
+          <Field label="履歷">
+            {candForm.resume_url ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px',
+                background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                <a href={candForm.resume_url} target="_blank" rel="noreferrer"
+                   style={{ color: 'var(--accent-cyan)', fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  📄 已上傳：{candForm.resume_url.split('/').pop()}
+                </a>
+                <button type="button" onClick={() => setCandForm(f => ({ ...f, resume_url: '' }))}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 0, fontSize: 13 }}>
+                  ✕ 移除
+                </button>
+              </div>
+            ) : (
+              <input className="form-input" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                disabled={resumeUploading}
+                style={{ width: '100%' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  if (file.size > 10 * 1024 * 1024) { toast('檔案請小於 10MB'); return }
+                  setResumeUploading(true)
+                  try {
+                    const safe = file.name.replace(/[^\w.\-]/g, '_')
+                    const path = `resumes/${orgId || 'org'}/${Date.now()}_${safe}`
+                    const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: false })
+                    if (upErr) { toast('上傳失敗：' + upErr.message); return }
+                    const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(path)
+                    setCandForm(f => ({ ...f, resume_url: publicUrl }))
+                    toast.success('履歷已上傳')
+                  } finally {
+                    setResumeUploading(false)
+                    e.target.value = ''  // reset 才能再次上傳同檔名
+                  }
+                }} />
+            )}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              支援 PDF / Word / 圖片，10MB 內。儲存後面試官會看到 📄 看履歷 按鈕
+            </div>
+          </Field>
           <Field label="備註">
             <textarea className="form-input" style={{ width: '100%' }} rows={2} value={candForm.notes}
               onChange={e => setCandForm(f => ({ ...f, notes: e.target.value }))} />

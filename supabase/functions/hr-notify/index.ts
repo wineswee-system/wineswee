@@ -304,10 +304,16 @@ function buildTaskAutoStarted(details: {
   };
 
   // 到期 label（Asia/Taipei，MM/DD HH:MM）
+  // due_date: 可能是 "YYYY-MM-DD" 或 ISO timestamp（PG 序列化 DATE/TIMESTAMP）
+  // due_time: 可能是 "HH:MM" 或 "HH:MM:SS"（PG TIME 序列化會帶秒）
   let dueLabel = '未設定';
   let isOverdue = false;
   if (details.due_date) {
-    const dt = new Date(`${details.due_date}T${details.due_time || '17:00'}:00+08:00`);
+    const rawDate = String(details.due_date).slice(0, 10); // 取 YYYY-MM-DD 部分
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const timeStr = tm ? `${tm[1].padStart(2, '0')}:${tm[2].padStart(2, '0')}` : '17:00';
+    const dt = new Date(`${rawDate}T${timeStr}:00+08:00`);
     if (!isNaN(dt.getTime())) {
       const mm = String(dt.getMonth() + 1).padStart(2, '0');
       const dd = String(dt.getDate()).padStart(2, '0');
@@ -500,10 +506,15 @@ function buildTaskWithBindingsAssigned(details: {
   };
 
   // 到期 label
+  // due_date 可能是 "YYYY-MM-DD" 或 ISO timestamp; due_time 可能是 "HH:MM" 或 "HH:MM:SS"
   let dueLabel = '未設定';
   let isOverdue = false;
   if (details.due_date) {
-    const dt = new Date(`${details.due_date}T${details.due_time || '17:00'}:00+08:00`);
+    const rawDate = String(details.due_date).slice(0, 10);
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const timeStr = tm ? `${tm[1].padStart(2, '0')}:${tm[2].padStart(2, '0')}` : '17:00';
+    const dt = new Date(`${rawDate}T${timeStr}:00+08:00`);
     if (!isNaN(dt.getTime())) {
       const mm = String(dt.getMonth() + 1).padStart(2, '0');
       const dd = String(dt.getDate()).padStart(2, '0');

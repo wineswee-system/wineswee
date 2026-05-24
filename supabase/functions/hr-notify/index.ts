@@ -388,6 +388,101 @@ function buildTaskAutoStarted(details: {
   };
 }
 
+// ── interview_completed：面試官打完成績，通知負責 HR ─────
+function buildInterviewCompleted(details: {
+  candidate_id?: number;
+  candidate_name?: string;
+  interview_id?: number;
+  round?: string;
+  result?: string;
+  score?: number | null;
+  note?: string;
+  interviewer_name?: string;
+  job_id?: number;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', danger: '#ef4444',
+    muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+  const passed = details.result === '通過';
+  const headerColor = passed ? LC.success : LC.danger;
+  const emoji = passed ? '✅' : '❌';
+
+  const body: any[] = [
+    { type: 'text', text: details.candidate_name || '未命名候選人',
+      weight: 'bold', size: 'lg', wrap: true, color: LC.dark },
+    { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '輪次', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: details.round || '—', size: 'sm', color: LC.dark, flex: 5 },
+      ] },
+    { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '結果', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: `${emoji} ${details.result || '—'}`,
+          size: 'sm', weight: 'bold', color: headerColor, flex: 5 },
+      ] },
+  ];
+  if (details.score != null) {
+    body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '評分', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: `${details.score} / 5`, size: 'sm', weight: 'bold', color: LC.brand, flex: 5 },
+      ] });
+  }
+  if (details.interviewer_name) {
+    body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '面試官', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: details.interviewer_name, size: 'sm', color: LC.dark, flex: 5 },
+      ] });
+  }
+  if (details.note) {
+    body.push({ type: 'separator', margin: 'md' });
+    body.push({
+      type: 'box', layout: 'vertical', paddingAll: '8px', cornerRadius: '6px',
+      backgroundColor: '#F9FAFB',
+      contents: [
+        { type: 'text', text: '📝 面試官備註', size: 'xxs', color: LC.muted, weight: 'bold' },
+        { type: 'text', text: details.note, size: 'sm', color: LC.dark, wrap: true, margin: 'xs' },
+      ],
+    });
+  }
+
+  // 進招募管理頁開該候選人
+  const candidateUrl = details.candidate_id && details.liff_id
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent('/recruitment?candidate=' + details.candidate_id)}`
+    : null;
+
+  const footer = candidateUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+    contents: [{
+      type: 'button',
+      action: { type: 'uri', label: '查看候選人 / 安排下一輪', uri: candidateUrl },
+      style: 'primary', color: LC.brand, height: 'sm',
+    }],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `${emoji} 面試結果：${details.candidate_name || ''}（${details.round || ''}）${details.result || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: headerColor, paddingAll: '14px',
+        contents: [
+          { type: 'text', text: '📋 面試結果通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', contents: body,
+      },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
 // ── task_with_bindings_assigned：任務剛被綁表單時，列出需完成的表單清單 ─────
 function buildTaskWithBindingsAssigned(details: {
   task_id?: number;
@@ -916,7 +1011,7 @@ serve(async (req) => {
 
     // ── All remaining: send to the employee_id ──
     // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
-    const needsLiff = type === "task_auto_started" || type === "task_with_bindings_assigned";
+    const needsLiff = type === "task_auto_started" || type === "task_with_bindings_assigned" || type === "interview_completed";
     const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
     const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
@@ -990,6 +1085,8 @@ serve(async (req) => {
       message = buildTaskAutoStarted(enriched);
     } else if (type === "task_with_bindings_assigned") {
       message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "interview_completed") {
+      message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

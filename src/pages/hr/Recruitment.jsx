@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
@@ -95,10 +95,26 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 }
 
 // ─── Candidate detail side panel ───
-function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
+function CandidatePanel({ c, interviews, allInterviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
   const [showIntForm, setShowIntForm] = useState(false)
   const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
+
+  // ── 面試官時段衝突檢查（同面試官 ±60 分內已有面試）──
+  const scheduleConflict = useMemo(() => {
+    if (!intForm.interviewer_id || !intForm.scheduled_at) return null
+    const target = new Date(intForm.scheduled_at).getTime()
+    if (isNaN(target)) return null
+    const HOUR = 60 * 60 * 1000
+    const list = (allInterviews || []).filter(iv =>
+      String(iv.interviewer_id) === String(intForm.interviewer_id)
+      && iv.scheduled_at
+      && Math.abs(new Date(iv.scheduled_at).getTime() - target) < HOUR
+    )
+    if (list.length === 0) return null
+    const empName = employees.find(e => String(e.id) === String(intForm.interviewer_id))?.name || '面試官'
+    return { count: list.length, empName, list }
+  }, [intForm.interviewer_id, intForm.scheduled_at, allInterviews, employees])
 
   const handleAddInterview = async () => {
     if (!intForm.scheduled_at) { toast('請填寫面試時間'); return }
@@ -214,6 +230,22 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
                   <option value="">請選擇</option>
                   {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
+                {scheduleConflict && (
+                  <div style={{
+                    marginTop: 6, padding: '6px 8px', borderRadius: 4,
+                    background: 'rgba(245,158,11,0.12)', border: '1px solid var(--accent-orange)',
+                    fontSize: 11, color: 'var(--accent-orange)', lineHeight: 1.5,
+                  }}>
+                    ⚠️ {scheduleConflict.empName} 在此時段 ±1 小時內已有 {scheduleConflict.count} 場面試
+                    <div style={{ marginTop: 2, color: 'var(--text-muted)' }}>
+                      {scheduleConflict.list.slice(0, 3).map(iv => (
+                        <div key={iv.id}>
+                          · {new Date(iv.scheduled_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} {iv.round}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>地點</div>
@@ -359,6 +391,21 @@ export default function Recruitment() {
   const [editingJob,  setEditingJob]  = useState(null)
   const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '' })
   const [resumeUploading, setResumeUploading] = useState(false)
+
+  // ── 重複偵測 + 黑名單（email/phone 任一相符）──
+  const candDupCheck = useMemo(() => {
+    const e = (candForm.email || '').trim().toLowerCase()
+    const p = (candForm.phone || '').trim().replace(/[^\d]/g, '')
+    if (!e && !p) return null
+    const matches = candidates.filter(c => {
+      const ce = (c.email || '').trim().toLowerCase()
+      const cp = (c.phone || '').trim().replace(/[^\d]/g, '')
+      return (e && ce && ce === e) || (p && cp && cp === p)
+    })
+    if (matches.length === 0) return null
+    const blacklisted = matches.some(c => c.stage === '淘汰')
+    return { matches, blacklisted }
+  }, [candForm.email, candForm.phone, candidates])
   const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -805,6 +852,62 @@ export default function Recruitment() {
             )
           })()}
 
+          {/* ── 來源效益分析 ── */}
+          {candidates.length > 0 && (() => {
+            const bySrc = {}
+            candidates.forEach(c => {
+              const k = c.source || '未指定'
+              if (!bySrc[k]) bySrc[k] = { total: 0, hired: 0, dropped: 0 }
+              bySrc[k].total += 1
+              if (c.stage === '已錄取') bySrc[k].hired += 1
+              if (c.stage === '淘汰')   bySrc[k].dropped += 1
+            })
+            const arr = Object.entries(bySrc)
+              .map(([source, v]) => ({
+                source, ...v,
+                hireRate: v.total ? Math.round((v.hired / v.total) * 100) : 0,
+              }))
+              .sort((a, b) => b.total - a.total)
+            const maxTotal = Math.max(...arr.map(x => x.total), 1)
+            return (
+              <div className="card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14 }}>
+                  來源效益（依錄取率排序）
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {arr.map(s => (
+                    <div key={s.source} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 90, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', flexShrink: 0 }}>
+                        {s.source}
+                      </div>
+                      <div style={{ flex: 1, height: 20, background: 'var(--bg-tertiary)', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+                        <div style={{
+                          height: '100%', width: `${(s.total / maxTotal) * 100}%`,
+                          background: 'var(--accent-cyan)', opacity: 0.4,
+                        }} />
+                      </div>
+                      <div style={{ width: 48, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                        {s.total} 人
+                      </div>
+                      <div style={{
+                        width: 60, fontSize: 12, fontWeight: 700, flexShrink: 0, textAlign: 'right',
+                        color: s.hireRate >= 20 ? 'var(--accent-green)' : s.hireRate >= 10 ? 'var(--accent-orange)' : 'var(--text-muted)',
+                      }}>
+                        錄取 {s.hireRate}%
+                      </div>
+                      <div style={{ width: 60, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>
+                        淘汰 {s.dropped}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+                  💡 錄取率 ≥ 20% 標綠（高效管道）；&lt; 10% 灰（建議檢討）
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="card">
             <div className="data-table-wrapper">
               <table className="data-table">
@@ -896,6 +999,7 @@ export default function Recruitment() {
             <CandidatePanel
               c={selectedCand}
               interviews={candInterviews}
+              allInterviews={interviews}
               onClose={() => setSelectedCand(null)}
               onDelete={handleDeleteCandidate}
               orgId={orgId}
@@ -1205,6 +1309,33 @@ export default function Recruitment() {
                 onChange={e => setCandForm(f => ({ ...f, phone: e.target.value }))} />
             </Field>
           </div>
+          {candDupCheck && (
+            <div style={{
+              marginBottom: 12, padding: '8px 10px', borderRadius: 6,
+              background: candDupCheck.blacklisted
+                ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+              border: `1px solid ${candDupCheck.blacklisted ? 'var(--accent-red)' : 'var(--accent-orange)'}`,
+              fontSize: 12, color: candDupCheck.blacklisted ? 'var(--accent-red)' : 'var(--accent-orange)',
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {candDupCheck.blacklisted ? '🚫 黑名單警告' : '⚠️ 候選人已存在'}
+              </div>
+              <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                {candDupCheck.matches.slice(0, 3).map(m => (
+                  <div key={m.id}>
+                    · <b>{m.name}</b>（{m.email || m.phone}）
+                    · 階段：<b>{m.stage}</b>
+                    {m.created_at && ` · ${m.created_at.slice(0, 10)}`}
+                  </div>
+                ))}
+              </div>
+              {candDupCheck.blacklisted && (
+                <div style={{ marginTop: 4, fontSize: 11 }}>
+                  此 email/電話曾被淘汰，請確認是否要重新評估再建檔
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="應徵職缺">
               <select className="form-input" style={{ width: '100%' }} value={candForm.job_id}

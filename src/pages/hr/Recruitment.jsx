@@ -82,6 +82,16 @@ function CandidateCard({ c, onSelect, onStageChange }) {
         {c.recruitment_jobs?.title || '—'} · {c.source}
       </div>
       {c.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.email}</div>}
+      {Array.isArray(c.tags) && c.tags.length > 0 && (
+        <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {c.tags.slice(0, 4).map(t => (
+            <span key={t} style={{
+              padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600,
+              background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+            }}>{t}</span>
+          ))}
+        </div>
+      )}
       <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {STAGES.filter(s => s !== c.stage).slice(0, 2).map(s => (
           <button key={s} className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}
@@ -95,10 +105,29 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 }
 
 // ─── Candidate detail side panel ───
-function CandidatePanel({ c, interviews, allInterviews, onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
+function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates = [], onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
   const [showIntForm, setShowIntForm] = useState(false)
-  const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
+  const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0, scores: {} })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
+
+  // 撈該候選人 job 的評核範本
+  const evalTemplate = useMemo(() => {
+    const job = jobs.find(j => j.id === c.job_id)
+    if (!job?.evaluation_template_id) return null
+    return evalTemplates.find(t => t.id === job.evaluation_template_id) || null
+  }, [jobs, c.job_id, evalTemplates])
+
+  // 多維度評分總分（依 weight 加權平均，最多 5 分）
+  const weightedScore = useMemo(() => {
+    if (!evalTemplate?.dimensions?.length) return null
+    let sum = 0, w = 0
+    for (const d of evalTemplate.dimensions) {
+      const v = Number(intForm.scores?.[d.key] || 0)
+      const weight = Number(d.weight || 1)
+      if (v > 0) { sum += v * weight; w += weight }
+    }
+    return w > 0 ? Math.round((sum / w) * 10) / 10 : 0
+  }, [evalTemplate, intForm.scores])
 
   // ── 面試官時段衝突檢查（同面試官 ±60 分內已有面試）──
   const scheduleConflict = useMemo(() => {
@@ -118,6 +147,8 @@ function CandidatePanel({ c, interviews, allInterviews, onClose, onDelete, orgId
 
   const handleAddInterview = async () => {
     if (!intForm.scheduled_at) { toast('請填寫面試時間'); return }
+    // 多維評核 → 用加權平均當總分；否則用單 1-5 星
+    const finalScore = evalTemplate ? (weightedScore || null) : (intForm.score || null)
     const { data } = await createInterview({
       round: intForm.round,
       scheduled_at: intForm.scheduled_at,
@@ -125,14 +156,15 @@ function CandidatePanel({ c, interviews, allInterviews, onClose, onDelete, orgId
       result: intForm.result,
       note: intForm.note,
       location: intForm.location,
-      score: intForm.score || null,
+      score: finalScore,
+      scores: evalTemplate ? intForm.scores : null,
       candidate_id: c.id,
       organization_id: orgId,
     })
     if (data) {
       onRefreshInterviews()
       setShowIntForm(false)
-      setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
+      setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0, scores: {} })
       if (intForm.interviewer_id) {
         // 算這位候選人到目前為止已有幾次面試（含本次）+ 取上一次有分數的成績
         const prior = (interviews || []).filter(iv => iv.candidate_id === c.id)
@@ -257,18 +289,56 @@ function CandidatePanel({ c, interviews, allInterviews, onClose, onDelete, orgId
                 <input className="input" style={{ fontSize: 12, width: '100%' }}
                   value={intForm.note} onChange={e => iset('note', e.target.value)} placeholder="注意事項等" />
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>評分（1-5）</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[1,2,3,4,5].map(n => (
-                    <button key={n} onClick={() => iset('score', intForm.score === n ? 0 : n)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
-                      <Star size={18} fill={n <= intForm.score ? 'var(--accent-orange)' : 'none'}
-                        style={{ color: n <= intForm.score ? 'var(--accent-orange)' : 'var(--text-muted)' }} />
-                    </button>
-                  ))}
+              {evalTemplate ? (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    多維度評核 — <b style={{ color: 'var(--accent-cyan)' }}>{evalTemplate.name}</b>
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {(evalTemplate.dimensions || []).map(d => (
+                      <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 90, fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {d.label}
+                          {d.weight && d.weight !== 1 && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>×{d.weight}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          {Array.from({ length: d.max || 5 }, (_, i) => i + 1).map(n => {
+                            const v = Number(intForm.scores?.[d.key] || 0)
+                            return (
+                              <button key={n}
+                                onClick={() => iset('scores', { ...intForm.scores, [d.key]: v === n ? 0 : n })}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1 }}>
+                                <Star size={14} fill={n <= v ? 'var(--accent-orange)' : 'none'}
+                                  style={{ color: n <= v ? 'var(--accent-orange)' : 'var(--text-muted)' }} />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {weightedScore > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: 'var(--accent-cyan)', fontWeight: 700, textAlign: 'right' }}>
+                      加權平均：{weightedScore} / 5
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>評分（1-5）</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <button key={n} onClick={() => iset('score', intForm.score === n ? 0 : n)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                        <Star size={18} fill={n <= intForm.score ? 'var(--accent-orange)' : 'none'}
+                          style={{ color: n <= intForm.score ? 'var(--accent-orange)' : 'var(--text-muted)' }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleAddInterview}>確認</button>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowIntForm(false)}>取消</button>
@@ -374,6 +444,7 @@ export default function Recruitment() {
   const [interviews,    setInterviews]    = useState([])
   const [offerTemplates, setOfferTemplates] = useState([])
   const [offerLetters,   setOfferLetters]   = useState([])
+  const [evalTemplates,  setEvalTemplates]  = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
@@ -387,9 +458,10 @@ export default function Recruitment() {
   const [showOfferModal,  setShowOfferModal]  = useState(false)
   const [offerTarget,     setOfferTarget]     = useState(null)
 
-  const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職', headcount: 1, description: '' })
+  const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職', headcount: 1, description: '', evaluation_template_id: '' })
   const [editingJob,  setEditingJob]  = useState(null)
-  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '' })
+  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+  const [tagInput,    setTagInput]    = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
 
   // ── 重複偵測 + 黑名單（email/phone 任一相符）──
@@ -419,7 +491,7 @@ export default function Recruitment() {
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return }
     try {
-      const [j, d, l, e, c, iv, ot, ol, hc] = await Promise.all([
+      const [j, d, l, e, c, iv, ot, ol, hc, et] = await Promise.all([
         getRecruitmentJobs(orgId),
         supabase.from('departments').select('id,name').eq('organization_id', orgId).order('name'),
         supabase.from('stores').select('id,name').eq('organization_id', orgId).order('name'),
@@ -429,6 +501,8 @@ export default function Recruitment() {
         getOfferLetterTemplates(orgId),
         getOfferLetters(orgId),
         getHeadcountRequests(orgId),
+        supabase.from('interview_evaluation_templates').select('*')
+          .eq('organization_id', orgId).order('is_default', { ascending: false }).order('name'),
       ])
       const depts = d.data || []
       const locs  = l.data || []
@@ -441,6 +515,7 @@ export default function Recruitment() {
       setOfferTemplates(ot.data || [])
       setOfferLetters(ol.data || [])
       setHeadcountReqs(hc.data || [])
+      setEvalTemplates(et.data || [])
       setJobForm(f => ({ ...f, dept: depts[0]?.name || '', location: locs[0]?.name || '' }))
     } catch (err) {
       console.error('Recruitment load error:', err)
@@ -458,12 +533,17 @@ export default function Recruitment() {
   // ── Job handlers ──
   const handleAddJob = async () => {
     if (!jobForm.title) return
+    // 處理空字串 FK：evaluation_template_id 空字串會被 PG 當 invalid，要轉 null
+    const payload = {
+      ...jobForm,
+      evaluation_template_id: jobForm.evaluation_template_id ? Number(jobForm.evaluation_template_id) : null,
+    }
     if (editingJob) {
-      const { data } = await updateRecruitmentJob(editingJob.id, jobForm)
+      const { data } = await updateRecruitmentJob(editingJob.id, payload)
       if (data) { setJobs(prev => prev.map(j => j.id === editingJob.id ? data : j)); setShowJobModal(false); setEditingJob(null) }
     } else {
       const { data } = await createRecruitmentJob({
-        ...jobForm, applicants: 0, status: '招募中', organization_id: orgId,
+        ...payload, applicants: 0, status: '招募中', organization_id: orgId,
       })
       if (data) { setJobs(prev => [...prev, data]); setShowJobModal(false) }
     }
@@ -474,6 +554,7 @@ export default function Recruitment() {
     setJobForm({
       title: j.title, dept: j.dept || '', location: j.location || '', type: j.type || '全職',
       headcount: j.headcount || 1, description: j.description || '',
+      evaluation_template_id: j.evaluation_template_id || '',
     })
     setShowJobModal(true)
   }
@@ -493,6 +574,7 @@ export default function Recruitment() {
       source:          candForm.source,
       notes:           candForm.notes   || null,
       resume_url:      candForm.resume_url || null,
+      tags:            candForm.tags?.length ? candForm.tags : null,
       job_id:          candForm.job_id  ? Number(candForm.job_id) : null,
       organization_id: orgId,
       created_by:      profile?.id      || null,
@@ -501,7 +583,8 @@ export default function Recruitment() {
     if (data) {
       setCandidates(prev => [...prev, data])
       setShowCandModal(false)
-      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '' })
+      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+      setTagInput('')
       if (data.job_id) {
         const job = jobs.find(j => j.id === data.job_id)
         if (job) updateRecruitmentJob(job.id, { applicants: (job.applicants || 0) + 1 })
@@ -1000,6 +1083,8 @@ export default function Recruitment() {
               c={selectedCand}
               interviews={candInterviews}
               allInterviews={interviews}
+              jobs={jobs}
+              evalTemplates={evalTemplates}
               onClose={() => setSelectedCand(null)}
               onDelete={handleDeleteCandidate}
               orgId={orgId}
@@ -1289,6 +1374,26 @@ export default function Recruitment() {
               value={jobForm.description}
               onChange={e => setJobForm(f => ({ ...f, description: e.target.value }))} />
           </Field>
+          <Field label="面試評核範本">
+            <select className="form-input" style={{ width: '100%' }} value={jobForm.evaluation_template_id}
+              onChange={e => setJobForm(f => ({ ...f, evaluation_template_id: e.target.value }))}>
+              <option value="">預設（單一 1-5 分）</option>
+              {evalTemplates.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.is_default ? '（預設）' : ''} · {(t.dimensions || []).length} 維度
+                </option>
+              ))}
+            </select>
+            {jobForm.evaluation_template_id && (() => {
+              const t = evalTemplates.find(x => String(x.id) === String(jobForm.evaluation_template_id))
+              if (!t) return null
+              return (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {(t.dimensions || []).map(d => d.label || d.key).join(' · ')}
+                </div>
+              )
+            })()}
+          </Field>
         </Modal>
       )}
 
@@ -1390,6 +1495,39 @@ export default function Recruitment() {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               支援 PDF / Word / 圖片，10MB 內。儲存後面試官會看到 📄 看履歷 按鈕
             </div>
+          </Field>
+          <Field label="標籤">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+              {(candForm.tags || []).map(t => (
+                <span key={t} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '3px 8px', borderRadius: 12, fontSize: 12,
+                  background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+                  border: '1px solid var(--accent-cyan)',
+                }}>
+                  {t}
+                  <button type="button"
+                    onClick={() => setCandForm(f => ({ ...f, tags: f.tags.filter(x => x !== t) }))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+            <input className="form-input" style={{ width: '100%' }}
+              placeholder="輸入標籤後按 Enter（例：積極、有興趣加薪）"
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && tagInput.trim()) {
+                  e.preventDefault()
+                  const tag = tagInput.trim()
+                  if (!(candForm.tags || []).includes(tag)) {
+                    setCandForm(f => ({ ...f, tags: [...(f.tags || []), tag] }))
+                  }
+                  setTagInput('')
+                }
+              }} />
           </Field>
           <Field label="備註">
             <textarea className="form-input" style={{ width: '100%' }} rows={2} value={candForm.notes}

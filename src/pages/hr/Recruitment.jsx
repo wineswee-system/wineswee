@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
   getCandidates, createCandidate, updateCandidate, deleteCandidate,
@@ -258,10 +259,12 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
               </div>
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>面試官</div>
-                <select className="input" style={{ fontSize: 12, width: '100%' }} value={intForm.interviewer_id} onChange={e => iset('interviewer_id', e.target.value)}>
-                  <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={intForm.interviewer_id}
+                  onChange={v => iset('interviewer_id', v)}
+                  options={empOptions(employees)}
+                  placeholder="搜尋員工…"
+                />
                 {scheduleConflict && (
                   <div style={{
                     marginTop: 6, padding: '6px 8px', borderRadius: 4,
@@ -502,7 +505,8 @@ export default function Recruitment() {
         getRecruitmentJobs(orgId),
         supabase.from('departments').select('id,name').eq('organization_id', orgId).order('name'),
         supabase.from('stores').select('id,name').eq('organization_id', orgId).order('name'),
-        supabase.from('employees').select('id,name').eq('organization_id', orgId).eq('status', 'active').order('name'),
+        supabase.from('employees').select('id, name, name_en, position, dept, store')
+          .eq('organization_id', orgId).eq('status', '在職').order('name'),
         getCandidates(orgId),
         getInterviews(orgId),
         getOfferLetterTemplates(orgId),
@@ -1223,11 +1227,12 @@ export default function Recruitment() {
                 </Field>
               </div>
               <Field label="面試官">
-                <select className="form-input" style={{ width: '100%' }} value={quickIntForm.interviewer_id}
-                  onChange={e => setQuickIntForm(f => ({ ...f, interviewer_id: e.target.value }))}>
-                  <option value="">請選擇</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={quickIntForm.interviewer_id}
+                  onChange={v => setQuickIntForm(f => ({ ...f, interviewer_id: v }))}
+                  options={empOptions(employees)}
+                  placeholder="搜尋員工…"
+                />
                 {(() => {
                   if (!quickIntForm.interviewer_id || !quickIntForm.scheduled_at) return null
                   const target = new Date(quickIntForm.scheduled_at).getTime()

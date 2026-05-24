@@ -38,7 +38,7 @@ export default function Tasks() {
   const [filterProject, setFilterProject] = useState('')
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
-  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: 'General', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -158,18 +158,22 @@ export default function Tasks() {
       }
       setTasks(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: 'General', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
     }
   }
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
+  // Normalise legacy English bucket values to Traditional Chinese display names
+  const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
+
   // Unified items — workflow tasks hidden until they become in-progress
   const allItems = tasks.filter(t => !(t.workflow_instance_id && t.status === '待簽核')).map(t => ({
     id: t.id,
     title: t.title,
     assignee: t.assignee,
+    assignee_id: t.assignee_id,
     workflow: t.workflow || '',
     project_id: t.project_id || null,
     projectName: projects.find(p => p.id === t.project_id)?.name || '',
@@ -177,14 +181,15 @@ export default function Tasks() {
     due_date: t.due_date,
     priority: t.priority || '中',
     status: t.status,
-    bucket: t.bucket || (t.workflow_instance_id ? 'Workflow' : 'General'),
+    bucket: normBucket(t.bucket || (t.workflow_instance_id ? 'Workflow' : 'General')),
   }))
 
   const workflows = [...new Set(allItems.map(t => t.workflow).filter(Boolean))].sort()
 
   // Filter
   const filtered = allItems.filter(t => {
-    if (t.bucket === 'Personal' && !isSuperAdmin && t.assignee !== profile?.name) return false
+    // 私人工作：只有本人或 super_admin 可見
+    if (t.bucket === '私人工作' && !isSuperAdmin && t.assignee_id !== profile?.id && t.assignee !== profile?.name) return false
     if (filterAssignee && t.assignee !== filterAssignee) return false
     if (filterStore && t.store !== filterStore) return false
     if (filterBucket && t.bucket !== filterBucket) return false
@@ -510,7 +515,7 @@ export default function Tasks() {
                 <option value="">— 選擇分類 —</option>
                 {taskCategories.length > 0
                   ? taskCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
-                  : ['General', 'Personal', 'Workflow'].map(b => <option key={b}>{b}</option>)}
+                  : ['一般工作', '私人工作', '工作流程'].map(b => <option key={b}>{b}</option>)}
               </select>
             </Field>
             <Field label="角色">

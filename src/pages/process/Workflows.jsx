@@ -269,7 +269,7 @@ export default function Workflows() {
           // 第 1 步「進行中」直接開工；後面用「待處理」（等前一步），不要 '待簽核'（那是有 chain 才用）
           status: i === 0 ? '進行中' : '待處理',
           started_at: i === 0 ? new Date().toISOString() : null,
-          bucket: 'Workflow', category: 'Workflow',
+          bucket: '工作流程', category: '工作流程',
           priority: s.priority || '中',
           organization_id: profile?.organization_id || null,
         }
@@ -399,8 +399,8 @@ export default function Workflows() {
       priority: origTask.priority || '中',
       role: origTask.role || null,
       status: cloneNeedsApproval ? '待簽核' : '待處理',
-      bucket: origTask.bucket || 'Workflow',
-      category: origTask.category || 'Workflow',
+      bucket: origTask.bucket || '工作流程',
+      category: origTask.category || '工作流程',
       organization_id: profile?.organization_id || null,
       approval_chain_id: origTask.approval_chain_id || null,
       confirmation_required: origTask.confirmation_required || false,
@@ -508,7 +508,7 @@ export default function Workflows() {
       role: taskForm.role || null,
       status: initStatus,
       started_at: initStatus === '進行中' ? new Date().toISOString() : null,
-      bucket: 'Workflow', category: 'Workflow',
+      bucket: '工作流程', category: '工作流程',
       organization_id: profile?.organization_id || null,
       approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
       confirmation_required: !!(useChain || usePeople),
@@ -931,7 +931,7 @@ export default function Workflows() {
             due_time: cfg.due_time,
             reminder_at: reminderAt,
             notes: cfg.notes || null,
-            bucket: 'Workflow', category: 'Workflow',
+            bucket: '工作流程', category: '工作流程',
             priority: cfg.priority,
             organization_id: profile?.organization_id || null,
             // ★ 關聯欄位

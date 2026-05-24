@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Bell, Copy, Repeat, Calendar, Activity as ActivityIcon } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Bell, Copy, Repeat, Calendar, Activity as ActivityIcon, Info } from 'lucide-react'
 import InputModal from '../ui/InputModal'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import {
@@ -26,6 +26,11 @@ import { TaskCustomFieldsView } from './CustomFieldsEditor'
 
 const STATUS_LIST = ['未開始', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
+// 大分類 (bucket) — Chinese names; also normalises legacy English values from DB
+const BUCKET_OPTIONS = ['一般工作', '私人工作', '工作流程', '專案']
+const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
+// 業務分類 (category) options
+const CATEGORY_OPTIONS = ['工作流程', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
 
 export default function TaskModal({
   task, employees = [], sections = [], stores = [],
@@ -38,7 +43,7 @@ export default function TaskModal({
   const [form, setForm] = useState({
     title: '', status: '未開始', priority: '中',
     assignee: '', assignee_id: null,
-    category: '', store: '',
+    bucket: '一般工作', category: '', store: '',
     planned_start: '', due_date: '', due_time: '', reminder_at: '',
     section_id: '', recurrence_rule: '',
     notes: '', description: '',
@@ -90,6 +95,7 @@ export default function TaskModal({
       priority: task.priority || '中',
       assignee: task.assignee || '',
       assignee_id: resolvedId,
+      bucket: normBucket(task.bucket),
       category: task.category || '',
       store: task.store || '',
       planned_start: task.planned_start || '',
@@ -182,6 +188,7 @@ export default function TaskModal({
       priority: form.priority,
       assignee_id: form.assignee_id ?? employees.find(e => e.name === form.assignee)?.id ?? null,
       assignee: form.assignee || null,
+      bucket: form.bucket || null,
       category: form.category || null,
       store: form.store || null,
       planned_start: form.planned_start || null,
@@ -345,8 +352,8 @@ export default function TaskModal({
           {activeTab === 'basic' && (
             <>
               <div style={sectionStyle}>
-                {/* Row 1: 狀態 / 優先級 / 分類 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 1fr', gap: 12 }}>
+                {/* Row 1: 狀態 / 優先級 / 類型(bucket) / 業務分類(category) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 0.9fr 0.9fr', gap: 12 }}>
                   <div>
                     <div style={labelStyle}>狀態</div>
                     <select className="form-input" style={{ width: '100%' }} value={form.status}
@@ -362,11 +369,18 @@ export default function TaskModal({
                     </select>
                   </div>
                   <div>
-                    <div style={labelStyle}>分類</div>
+                    <div style={labelStyle}>類型</div>
+                    <select className="form-input" style={{ width: '100%' }} value={form.bucket}
+                      onChange={e => setAndDirty('bucket', e.target.value)}>
+                      {BUCKET_OPTIONS.map(b => <option key={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={labelStyle}>業務分類</div>
                     <select className="form-input" style={{ width: '100%' }} value={form.category}
                       onChange={e => setAndDirty('category', e.target.value)}>
                       <option value="">未指定</option>
-                      {['Workflow', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷'].map(c => <option key={c}>{c}</option>)}
+                      {CATEGORY_OPTIONS.map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
@@ -448,12 +462,13 @@ export default function TaskModal({
                     </div>
                   </div>
                   <div>
-                    <div style={labelStyle}>實際完成日</div>
-                    <input className="form-input" type="datetime-local" style={{ width: '100%', opacity: 0.7 }}
-                      readOnly
-                      value={task.completed_at ? task.completed_at.slice(0, 16) : ''}
-                      placeholder="標記已完成時自動填入"
-                    />
+                    <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      實際完成日
+                      <Info size={12} title="完成時自動記錄時間戳記" style={{ color: 'var(--text-muted)', cursor: 'default', flexShrink: 0 }} />
+                    </div>
+                    <div style={{ fontSize: 14, color: task.completed_at ? 'var(--text-secondary)' : 'var(--text-muted)', padding: '7px 10px', lineHeight: '1.4' }}>
+                      {task.completed_at ? task.completed_at.replace('T', ' ').slice(0, 16) : '—'}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Bell, Copy } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Bell, Copy, Info } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 import { toast } from '../lib/toast'
@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
 import { confirm } from '../lib/confirm'
-import { logChanges } from '../lib/auditLogger'
+import { useAuditLog } from '../lib/useAuditLog'
 
 import TaskRelationsTab from './tasks/TaskRelationsTab'
 import TaskApprovalTab from './tasks/TaskApprovalTab'
@@ -25,11 +25,31 @@ import TaskDiscussionTab from './tasks/TaskDiscussionTab'
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
+// Human-readable labels for audit log entries
+const TASK_FIELD_LABELS = {
+  title:                '標題',
+  status:               '狀態',
+  priority:             '優先度',
+  assignee:             '負責人',
+  store:                '門市',
+  category:             '分類',
+  planned_start:        '計畫開始日',
+  due_date:             '預計完成日',
+  due_time:             '預計完成時間',
+  reminder_at:          '提醒時間',
+  notes:                '備註',
+  workflow_instance_id: '工作流',
+  project_id:           '專案',
+  confirmation_mode:    '簽核模式',
+  completed_at:         '實際完成日',
+}
+
 export default function TaskDetailPanel({
   step: task, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
 }) {
   const { profile } = useAuth()
+  const { logAction, logFieldChange } = useAuditLog()
   const [form, setForm] = useState({})
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -215,16 +235,12 @@ export default function TaskDetailPanel({
     if (data) {
       onUpdate(data)
       setIsDirty(false)
-      logChanges({
-        user: profile?.name || 'unknown',
-        action: '任務更新',
-        target: task.title,
-        targetTable: 'tasks',
-        targetId: task.id,
-        oldData: task,
-        newData: data,
-        orgId: profile?.organization_id || null,
-      }).catch(() => {})
+      // Log each changed field individually
+      Promise.all(
+        Object.entries(TASK_FIELD_LABELS)
+          .filter(([key]) => String(task[key] ?? '') !== String(data[key] ?? ''))
+          .map(([key, label]) => logFieldChange('tasks', task.id, label, task[key], data[key], task.title))
+      ).catch(() => {})
       if (form.status === '已完成' && prevStatus !== '已完成') {
         const triggerDeps = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
         for (const dep of triggerDeps) {
@@ -242,6 +258,7 @@ export default function TaskDetailPanel({
   const handleDelete = async () => {
     if (!(await confirm({ message: '確定刪除此任務？' }))) return
     await deleteTask(task.id)
+    logAction('刪除', 'tasks', task.id, task.title)
     onDelete(task.id)
   }
 
@@ -467,12 +484,13 @@ export default function TaskDetailPanel({
                     </div>
                   </div>
                   <div>
-                    <div style={labelStyle}>實際完成日</div>
-                    <input className="form-input" type="datetime-local" style={{ width: '100%', opacity: 0.7 }}
-                      readOnly
-                      value={task.completed_at ? task.completed_at.slice(0, 16) : ''}
-                      placeholder="標記已完成時自動填入"
-                    />
+                    <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      實際完成日
+                      <Info size={12} title="完成時自動記錄時間戳記" style={{ color: 'var(--text-muted)', cursor: 'default', flexShrink: 0 }} />
+                    </div>
+                    <div style={{ fontSize: 14, color: task.completed_at ? 'var(--text-secondary)' : 'var(--text-muted)', padding: '7px 10px', lineHeight: '1.4' }}>
+                      {task.completed_at ? task.completed_at.replace('T', ' ').slice(0, 16) : '—'}
+                    </div>
                   </div>
                 </div>
               </div>

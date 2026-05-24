@@ -459,8 +459,8 @@ export default function Projects() {
       role: fd.role || null,
       status: isFirstStep ? '進行中' : '待處理',
       step_order: maxOrder + 1,
-      bucket: 'Workflow',
-      category: 'Workflow',
+      bucket: '工作流程',
+      category: '工作流程',
       priority: fd.priority || '中',
       organization_id: profile?.organization_id || null,
     })

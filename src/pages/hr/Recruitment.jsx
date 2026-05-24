@@ -118,12 +118,33 @@ function CandidatePanel({ c, interviews, onClose, onDelete, orgId, employees, on
       setShowIntForm(false)
       setIntForm({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0 })
       if (intForm.interviewer_id) {
+        // 算這位候選人到目前為止已有幾次面試（含本次）+ 取上一次有分數的成績
+        const prior = (interviews || []).filter(iv => iv.candidate_id === c.id)
+        const interviewSeq = prior.length + 1
+        const previousScore = (() => {
+          const scored = prior
+            .filter(iv => iv.score != null && iv.score !== '')
+            .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at))
+          return scored[0]?.score ?? null
+        })()
+        const job = c.recruitment_jobs || {}
         notifyInterviewScheduled(Number(intForm.interviewer_id), {
           candidateName: c.name,
           round: intForm.round,
           scheduledAt: intForm.scheduled_at,
           location: intForm.location,
           candidateId: c.id,
+          // 擴充資訊
+          jobTitle: job.title || null,
+          jobDept: job.dept || null,
+          source: c.source || null,
+          phone: c.phone || null,
+          email: c.email || null,
+          resumeUrl: c.resume_url || null,
+          candidateStage: c.stage || null,
+          note: intForm.note || null,
+          interviewSeq,
+          previousScore,
         }).catch(() => {})
       }
     }

@@ -780,14 +780,23 @@ export async function notifyCoverInvitationFromWeb(candidates, info) {
 /**
  * 面試通知 — 推給被安排為面試官的員工
  * @param {number} interviewerEmployeeId
- * @param {{ candidateName, round, scheduledAt, location, candidateId? }} info
+ * @param {{
+ *   candidateName, round, scheduledAt, location, candidateId?,
+ *   jobTitle?, jobDept?, source?, phone?, email?,
+ *   resumeUrl?, candidateStage?, note?, interviewSeq?, previousScore?
+ * }} info
  */
 export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
   if (!interviewerEmployeeId) return { ok: false, reason: 'no_interviewer_id' }
   const account = await resolveLineAccount(interviewerEmployeeId)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
 
-  const { candidateName, round, scheduledAt, location, candidateId } = info
+  const {
+    candidateName, round, scheduledAt, location, candidateId,
+    jobTitle, jobDept, source, phone, email,
+    resumeUrl, candidateStage, note, interviewSeq, previousScore,
+  } = info
+
   const fmtDt = (iso) => iso
     ? new Date(iso).toLocaleString('zh-TW', {
         timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
@@ -795,46 +804,126 @@ export async function notifyInterviewScheduled(interviewerEmployeeId, info) {
       })
     : '—'
 
-  const bodyContents = [
-    { type: 'text', text: `候選人：${candidateName || '—'}`, weight: 'bold', size: 'sm', wrap: true },
-    { type: 'text', text: `輪次：${round || '—'}`, size: 'sm', color: LC.soft, margin: 'sm' },
-    { type: 'text', text: `時間：${fmtDt(scheduledAt)}`, size: 'sm', color: LC.dark, margin: 'sm' },
-  ]
-  if (location) {
-    bodyContents.push({ type: 'text', text: `地點：${location}`, size: 'sm', color: LC.dark, margin: 'xs' })
-  }
-  bodyContents.push({
-    type: 'text', text: '您已被安排為此場面試的面試官，請準時出席。',
-    size: 'xs', color: LC.muted, wrap: true, margin: 'md',
+  // 兩欄 row：label 左固定，value 右可換行
+  const row = (label, value, opts = {}) => ({
+    type: 'box', layout: 'horizontal', spacing: 'sm', margin: opts.margin || 'sm',
+    contents: [
+      { type: 'text', text: label, size: 'xs', color: LC.muted, flex: 2 },
+      { type: 'text', text: value || '—', size: 'sm',
+        color: opts.color || LC.dark, flex: 5, wrap: true,
+        weight: opts.weight || 'regular' },
+    ],
   })
 
+  const bodyContents = []
+
+  // ── 標題列：候選人 + 階段 ──
+  bodyContents.push({
+    type: 'box', layout: 'horizontal', alignItems: 'center', spacing: 'sm',
+    contents: [
+      { type: 'text', text: candidateName || '—', weight: 'bold', size: 'lg', color: LC.dark, flex: 1, wrap: true },
+      ...(candidateStage ? [{
+        type: 'text', text: candidateStage, size: 'xxs', color: LC.brand, weight: 'bold',
+        align: 'end', flex: 0,
+      }] : []),
+    ],
+  })
+  if (interviewSeq) {
+    bodyContents.push({ type: 'text', text: `第 ${interviewSeq} 次面試`, size: 'xs', color: LC.soft, margin: 'xs' })
+  }
+  bodyContents.push({ type: 'separator', margin: 'md' })
+
+  // ── 面試資訊 ──
+  bodyContents.push(row('輪次', round))
+  bodyContents.push(row('時間', fmtDt(scheduledAt), { color: LC.brand, weight: 'bold' }))
+  if (location) bodyContents.push(row('地點', location))
+
+  // ── 職缺資訊 ──
+  if (jobTitle || jobDept || source) {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    if (jobTitle) bodyContents.push(row('職缺', jobTitle, { weight: 'bold' }))
+    if (jobDept)  bodyContents.push(row('部門', jobDept))
+    if (source)   bodyContents.push(row('來源', source))
+  }
+
+  // ── 聯絡資訊 ──
+  if (phone || email) {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    if (phone) bodyContents.push(row('電話', phone))
+    if (email) bodyContents.push(row('Email', email))
+  }
+
+  // ── 前次評分 ──
+  if (previousScore != null && previousScore !== '') {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    bodyContents.push(row('前次評分', String(previousScore), { color: LC.brand, weight: 'bold' }))
+  }
+
+  // ── 安排者備註 ──
+  if (note) {
+    bodyContents.push({ type: 'separator', margin: 'md' })
+    bodyContents.push({
+      type: 'box', layout: 'vertical', paddingAll: '8px', cornerRadius: '6px',
+      backgroundColor: '#F9FAFB',
+      contents: [
+        { type: 'text', text: '📝 安排者備註', size: 'xxs', color: LC.muted, weight: 'bold' },
+        { type: 'text', text: note, size: 'sm', color: LC.dark, wrap: true, margin: 'xs' },
+      ],
+    })
+  }
+
+  bodyContents.push({
+    type: 'text', text: '請準時出席並準備面試評核',
+    size: 'xxs', color: LC.muted, wrap: true, margin: 'md', align: 'center',
+  })
+
+  // ── footer ──
   const lid = account.liffId || LIFF_ID
   const candidateLiffUrl = (() => {
     const path = candidateId ? `/recruitment?candidate=${candidateId}` : '/recruitment'
-    if (!lid) return `${window.location.origin}/liff${path}`
+    if (!lid) return `${(typeof window !== 'undefined' ? window.location.origin : '')}/liff${path}`
     return `https://liff.line.me/${lid}?to=${encodeURIComponent(path)}`
   })()
 
+  const footerButtons = [{
+    type: 'button',
+    action: { type: 'uri', label: '查看應徵資料', uri: candidateLiffUrl },
+    style: 'primary', color: LC.brand, height: 'sm',
+  }]
+  if (resumeUrl) {
+    footerButtons.push({
+      type: 'button',
+      action: { type: 'uri', label: '📄 看履歷', uri: resumeUrl },
+      style: 'secondary', height: 'sm',
+    })
+  }
+  if (phone) {
+    footerButtons.push({
+      type: 'button',
+      action: { type: 'uri', label: `📞 ${phone}`, uri: `tel:${phone.replace(/[^\d+]/g, '')}` },
+      style: 'secondary', height: 'sm',
+    })
+  }
+
   const messages = [{
     type: 'flex',
-    altText: `📅 面試通知：${candidateName} ${round}`,
+    altText: `📅 面試通知：${candidateName} ${round}${jobTitle ? ' (' + jobTitle + ')' : ''}`,
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
         type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
-        contents: [{ type: 'text', text: '📅 面試通知', color: '#ffffff', weight: 'bold', size: 'md' }],
+        contents: [
+          { type: 'text', text: '📅 面試通知', color: '#ffffff', weight: 'bold', size: 'md' },
+          ...(jobTitle ? [{ type: 'text', text: jobTitle, color: '#FFFFFFCC', size: 'xs', margin: 'xs' }] : []),
+        ],
       },
       body: {
         type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
         contents: bodyContents,
       },
       footer: {
-        type: 'box', layout: 'vertical', paddingAll: '12px',
-        contents: [{
-          type: 'button',
-          action: { type: 'uri', label: '查看職缺 / 應徵資料', uri: candidateLiffUrl },
-          style: 'primary', color: LC.brand, height: 'sm',
-        }],
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: footerButtons,
       },
     },
   }]

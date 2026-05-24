@@ -6,6 +6,7 @@ export default function CreateTemplateModal({
   newTpl, setNewTpl, onClose, onSubmit,
   checklists = [], approvalChains = [],
   categories = [], onManageCategories,
+  isEdit = false,
 }) {
   const addTplStep = () => setNewTpl(t => ({
     ...t,
@@ -15,7 +16,7 @@ export default function CreateTemplateModal({
   const removeTplStep = (i) => setNewTpl(t => ({ ...t, steps: t.steps.filter((_, j) => j !== i) }))
 
   return (
-    <Modal title="新增流程範本" onClose={onClose} onSubmit={onSubmit} submitLabel="建立範本">
+    <Modal title={isEdit ? '編輯流程範本' : '新增流程範本'} onClose={onClose} onSubmit={onSubmit} submitLabel={isEdit ? '儲存變更' : '建立範本'}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
         <Field label="範本名稱" required>
           <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"

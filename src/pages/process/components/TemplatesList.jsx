@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Rocket, Tag, MoreVertical, Trash2 } from 'lucide-react'
+import { Plus, Rocket, Tag, MoreVertical, Trash2, Edit3 } from 'lucide-react'
 
-function TemplateMenu({ tpl, onDelete }) {
+function TemplateMenu({ tpl, onEdit, onDelete }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const btnRef = useRef(null)
@@ -47,17 +47,36 @@ function TemplateMenu({ tpl, onDelete }) {
             borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', minWidth: 140, padding: 4,
           }}
         >
-          <button
-            onClick={e => { e.stopPropagation(); setOpen(false); onDelete(tpl) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              width: '100%', padding: '8px 12px', fontSize: 13,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--accent-red)', borderRadius: 6,
-            }}
-          >
-            <Trash2 size={14} /> 刪除範本
-          </button>
+          {onEdit && (
+            <button
+              onClick={e => { e.stopPropagation(); setOpen(false); onEdit(tpl) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '8px 12px', fontSize: 13,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-primary)', borderRadius: 6,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <Edit3 size={14} /> 編輯範本
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); setOpen(false); onDelete(tpl) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '8px 12px', fontSize: 13,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--accent-red)', borderRadius: 6,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <Trash2 size={14} /> 刪除範本
+            </button>
+          )}
         </div>,
         document.body
       )}
@@ -65,7 +84,7 @@ function TemplateMenu({ tpl, onDelete }) {
   )
 }
 
-export default function TemplatesList({ templates, onDeploy, onDelete, onCreateNew, onManageCategories }) {
+export default function TemplatesList({ templates, onDeploy, onEdit, onDelete, onCreateNew, onManageCategories }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 4 }}>
@@ -92,7 +111,7 @@ export default function TemplatesList({ templates, onDeploy, onDelete, onCreateN
                 <button className="btn btn-sm btn-primary" style={{ padding: '6px 14px' }} onClick={() => onDeploy(tpl)}>
                   <Rocket size={13} /> 部署
                 </button>
-                {onDelete && <TemplateMenu tpl={tpl} onDelete={onDelete} />}
+                {(onEdit || onDelete) && <TemplateMenu tpl={tpl} onEdit={onEdit} onDelete={onDelete} />}
               </div>
             </div>
           </div>

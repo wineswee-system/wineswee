@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Rocket, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Rocket, Trash2, ChevronDown, ChevronRight, Edit3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createTask, createChecklist } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
@@ -104,6 +104,7 @@ export default function SOPTemplates() {
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingTplId, setEditingTplId] = useState(null)
   const [showDeployModal, setShowDeployModal] = useState(false)
   const [deployTemplate, setDeployTemplate] = useState(null)
   const [deploying, setDeploying] = useState(false)
@@ -215,22 +216,64 @@ export default function SOPTemplates() {
     setShowDeployModal(true)
   }
 
-  // ── Create Template ──
+  // ── Create / Edit Template ──
+  const resetNewTemplate = () => setNewTemplate({
+    name: '', category: '展店', description: '',
+    steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }],
+  })
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setEditingTplId(null)
+    resetNewTemplate()
+  }
+  const openCreate = () => {
+    setEditingTplId(null)
+    resetNewTemplate()
+    setShowCreateModal(true)
+  }
+  const openEdit = (tpl) => {
+    setEditingTplId(tpl.id)
+    setNewTemplate({
+      name: tpl.name || '',
+      category: tpl.category || '展店',
+      description: tpl.description || '',
+      steps: (tpl.steps && tpl.steps.length > 0)
+        ? tpl.steps.map(s => ({
+            title: s.title || '',
+            role: s.role || '',
+            priority: s.priority || '中',
+            description: s.description || '',
+            required_forms: s.required_forms || [],
+          }))
+        : [{ title: '', role: '', priority: '中', description: '', required_forms: [] }],
+    })
+    setShowCreateModal(true)
+  }
   const handleCreateTemplate = async () => {
     if (!newTemplate.name || !newTemplate.steps.some(s => s.title)) return
     try {
       const validSteps = newTemplate.steps.filter(s => s.title)
-      const { data, error } = await supabase.from('sop_templates').insert({
+      const payload = {
         name: newTemplate.name,
         category: newTemplate.category,
         description: newTemplate.description,
         steps: validSteps,
-      }).select().single()
+      }
+      if (editingTplId) {
+        const { data, error } = await supabase.from('sop_templates').update(payload).eq('id', editingTplId).select().single()
+        if (error) throw error
+        if (data) {
+          setTemplates(prev => prev.map(t => t.id === data.id ? data : t))
+          toast.success(`範本「${data.name}」已更新`)
+          closeCreateModal()
+        }
+        return
+      }
+      const { data, error } = await supabase.from('sop_templates').insert(payload).select().single()
       if (error) throw error
       if (data) {
         setTemplates(prev => [...prev, data])
-        setShowCreateModal(false)
-        setNewTemplate({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '' }] })
+        closeCreateModal()
       }
     } catch (err) {
       console.error('Operation failed:', err)
@@ -265,7 +308,7 @@ export default function SOPTemplates() {
             <h2><span className="header-icon">📑</span> SOP 範本</h2>
             <p>標準作業流程範本，一鍵部署到新分店</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}><Plus size={14} /> 新增範本</button>
+          <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增範本</button>
         </div>
       </div>
 
@@ -307,7 +350,10 @@ export default function SOPTemplates() {
                   <button className="btn btn-sm btn-primary" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => openDeploy(tpl)}>
                     <Rocket size={13} /> 部署
                   </button>
-                  <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '6px 10px', color: 'var(--accent-red)' }} onClick={() => handleDelete(tpl.id)}>
+                  <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '6px 10px' }} onClick={() => openEdit(tpl)} title="編輯">
+                    <Edit3 size={13} />
+                  </button>
+                  <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '6px 10px', color: 'var(--accent-red)' }} onClick={() => handleDelete(tpl.id)} title="刪除">
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -401,9 +447,9 @@ export default function SOPTemplates() {
         </Modal>
       )}
 
-      {/* Create Template Modal */}
+      {/* Create / Edit Template Modal */}
       {showCreateModal && (
-        <Modal title="新增 SOP 範本" onClose={() => setShowCreateModal(false)} onSubmit={handleCreateTemplate} submitText="建立範本">
+        <Modal title={editingTplId ? '編輯 SOP 範本' : '新增 SOP 範本'} onClose={closeCreateModal} onSubmit={handleCreateTemplate} submitText={editingTplId ? '儲存變更' : '建立範本'}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <Field label="範本名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"

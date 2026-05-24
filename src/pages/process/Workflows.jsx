@@ -74,8 +74,9 @@ export default function Workflows() {
   const [editForm, setEditForm] = useState({ assignee: '', groups: [], project_id: '' })
   const [lineGroups, setLineGroups] = useState([])
 
-  // Create SOP template
+  // Create / Edit SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
+  const [editingTplId, setEditingTplId] = useState(null)
   const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
   const [approvalChains, setApprovalChains] = useState([])
 
@@ -696,7 +697,38 @@ export default function Workflows() {
     }
   }
 
-  // ── Create SOP Template ──
+  // ── Create / Update SOP Template ──
+  const resetNewTpl = () => setNewTpl({
+    name: '', category: '展店', description: '',
+    steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }],
+    approval_chain_id: '',
+  })
+  const closeTplModal = () => {
+    setShowCreateTplModal(false)
+    setEditingTplId(null)
+    resetNewTpl()
+  }
+  const handleEditTemplate = (tpl) => {
+    setEditingTplId(tpl.id)
+    setNewTpl({
+      name: tpl.name || '',
+      category: tpl.category || '展店',
+      description: tpl.description || '',
+      steps: (tpl.steps && tpl.steps.length > 0)
+        ? tpl.steps.map(s => ({
+            title: s.title || '',
+            role: s.role || '',
+            priority: s.priority || '中',
+            description: s.description || '',
+            checklist_id: s.checklist_id || '',
+            approval_chain_id: s.approval_chain_id || '',
+            required_forms: s.required_forms || [],
+          }))
+        : [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '', required_forms: [] }],
+      approval_chain_id: tpl.approval_chain_id || '',
+    })
+    setShowCreateTplModal(true)
+  }
   const handleCreateTpl = async () => {
     if (!newTpl.name?.trim()) {
       toast.warning('請填寫範本名稱')
@@ -711,13 +743,30 @@ export default function Workflows() {
       checklist_id: s.checklist_id || null,
       approval_chain_id: s.approval_chain_id || null,
     }))
-    const { data, error } = await supabase.from('sop_templates').insert({
+    const payload = {
       name: newTpl.name.trim(),
       category: newTpl.category,
       description: newTpl.description,
       steps: validSteps,
       approval_chain_id: newTpl.approval_chain_id || null,
-    }).select().single()
+    }
+
+    if (editingTplId) {
+      const { data, error } = await supabase.from('sop_templates').update(payload).eq('id', editingTplId).select().single()
+      if (error) {
+        toast.error('儲存失敗：' + error.message)
+        console.error('sop_templates update error', error)
+        return
+      }
+      if (data) {
+        setTemplates(prev => prev.map(t => t.id === data.id ? data : t))
+        toast.success(`範本「${data.name}」已更新`)
+        closeTplModal()
+      }
+      return
+    }
+
+    const { data, error } = await supabase.from('sop_templates').insert(payload).select().single()
     if (error) {
       toast.error('建立失敗：' + error.message)
       console.error('sop_templates insert error', error)
@@ -725,8 +774,7 @@ export default function Workflows() {
     }
     if (data) {
       setTemplates(prev => [...prev, data])
-      setShowCreateTplModal(false)
-      setNewTpl({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
+      closeTplModal()
     }
   }
 
@@ -1242,8 +1290,9 @@ export default function Workflows() {
         <TemplatesList
           templates={templates}
           onDeploy={tpl => { setDeployTemplate(tpl); setDeployForm({ location: '', assignees: {} }); setDeployResult(null); setShowDeployModal(true) }}
+          onEdit={handleEditTemplate}
           onDelete={handleDeleteTemplate}
-          onCreateNew={() => setShowCreateTplModal(true)}
+          onCreateNew={() => { setEditingTplId(null); resetNewTpl(); setShowCreateTplModal(true) }}
           onManageCategories={() => setShowCategoryModal(true)}
         />
       )}
@@ -1291,16 +1340,17 @@ export default function Workflows() {
         />
       )}
 
-      {/* ══ Create Template Modal ══ */}
+      {/* ══ Create / Edit Template Modal ══ */}
       {showCreateTplModal && (
         <CreateTemplateModal
           newTpl={newTpl} setNewTpl={setNewTpl}
-          onClose={() => setShowCreateTplModal(false)}
+          onClose={closeTplModal}
           onSubmit={handleCreateTpl}
           checklists={checklists}
           approvalChains={approvalChains}
           categories={categories}
           onManageCategories={() => setShowCategoryModal(true)}
+          isEdit={!!editingTplId}
         />
       )}
 

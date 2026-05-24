@@ -35,83 +35,72 @@ END $$;
 
 
 -- ═════════════════════════════════════════════════════════════════════════
--- 1. expense_requests soft delete → reset binding
--- ═════════════════════════════════════════════════════════════════════════
-DROP TRIGGER IF EXISTS trg_exp_req_reset_on_soft_delete ON public.expense_requests;
-CREATE TRIGGER trg_exp_req_reset_on_soft_delete
-  AFTER UPDATE OF deleted_at ON public.expense_requests
-  FOR EACH ROW EXECUTE FUNCTION public._reset_binding_on_form_soft_delete();
-
-
--- ═════════════════════════════════════════════════════════════════════════
--- 2. expenses soft delete → reset binding
--- ═════════════════════════════════════════════════════════════════════════
-DROP TRIGGER IF EXISTS trg_exp_reset_on_soft_delete ON public.expenses;
-CREATE TRIGGER trg_exp_reset_on_soft_delete
-  AFTER UPDATE OF deleted_at ON public.expenses
-  FOR EACH ROW EXECUTE FUNCTION public._reset_binding_on_form_soft_delete();
-
-
--- ═════════════════════════════════════════════════════════════════════════
--- 3. form_submissions soft delete → reset binding
--- ═════════════════════════════════════════════════════════════════════════
-DROP TRIGGER IF EXISTS trg_form_sub_reset_on_soft_delete ON public.form_submissions;
-CREATE TRIGGER trg_form_sub_reset_on_soft_delete
-  AFTER UPDATE OF deleted_at ON public.form_submissions
-  FOR EACH ROW EXECUTE FUNCTION public._reset_binding_on_form_soft_delete();
-
-
--- ═════════════════════════════════════════════════════════════════════════
--- 4. store_audits soft delete → reset binding（如果 store_audits 也有 deleted_at）
+-- 1~4. 全部 4 張表都用 DO block 偵測 deleted_at 欄位才掛 trigger
+--      (expenses 沒這欄位，全包起來防 schema drift)
 -- ═════════════════════════════════════════════════════════════════════════
 DO $$
+DECLARE
+  tbl  TEXT;
+  trig TEXT;
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND table_name = 'store_audits'
-       AND column_name = 'deleted_at'
-  ) THEN
-    EXECUTE 'DROP TRIGGER IF EXISTS trg_store_audit_reset_on_soft_delete ON public.store_audits';
-    EXECUTE 'CREATE TRIGGER trg_store_audit_reset_on_soft_delete
-             AFTER UPDATE OF deleted_at ON public.store_audits
-             FOR EACH ROW EXECUTE FUNCTION public._reset_binding_on_form_soft_delete()';
-  END IF;
+  FOR tbl, trig IN VALUES
+    ('expense_requests',  'trg_exp_req_reset_on_soft_delete'),
+    ('expenses',          'trg_exp_reset_on_soft_delete'),
+    ('form_submissions',  'trg_form_sub_reset_on_soft_delete'),
+    ('store_audits',      'trg_store_audit_reset_on_soft_delete')
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = tbl
+         AND column_name = 'deleted_at'
+    ) THEN
+      EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I', trig, tbl);
+      EXECUTE format('CREATE TRIGGER %I
+                      AFTER UPDATE OF deleted_at ON public.%I
+                      FOR EACH ROW EXECUTE FUNCTION public._reset_binding_on_form_soft_delete()',
+                     trig, tbl);
+      RAISE NOTICE '✓ trigger 已掛: %.%', tbl, trig;
+    ELSE
+      RAISE NOTICE '⊘ skip %（沒 deleted_at 欄位）', tbl;
+    END IF;
+  END LOOP;
 END $$;
 
 
 -- ═════════════════════════════════════════════════════════════════════════
--- 5. 一次性 sweep：找出 form_id 指向「已軟刪」表單的 binding 全 reset
+-- 5. 一次性 sweep：把 form_id 指向已軟刪 row 的 binding 全 reset
+--    每張表都用 DO block 確認有 deleted_at 才跑
 -- ═════════════════════════════════════════════════════════════════════════
--- expense_requests
-UPDATE public.task_form_bindings tfb
-   SET status = '未填', form_id = NULL, completed_at = NULL
- WHERE form_type = 'expense_request'
-   AND form_id IS NOT NULL
-   AND EXISTS (
-     SELECT 1 FROM public.expense_requests er
-      WHERE er.id = tfb.form_id AND er.deleted_at IS NOT NULL
-   );
-
--- expenses
-UPDATE public.task_form_bindings tfb
-   SET status = '未填', form_id = NULL, completed_at = NULL
- WHERE form_type = 'expense'
-   AND form_id IS NOT NULL
-   AND EXISTS (
-     SELECT 1 FROM public.expenses e
-      WHERE e.id = tfb.form_id AND e.deleted_at IS NOT NULL
-   );
-
--- form_submissions
-UPDATE public.task_form_bindings tfb
-   SET status = '未填', form_id = NULL, completed_at = NULL
- WHERE form_type = 'form_submission'
-   AND form_id IS NOT NULL
-   AND EXISTS (
-     SELECT 1 FROM public.form_submissions fs
-      WHERE fs.id = tfb.form_id AND fs.deleted_at IS NOT NULL
-   );
+DO $$
+DECLARE
+  tbl       TEXT;
+  form_type TEXT;
+BEGIN
+  FOR tbl, form_type IN VALUES
+    ('expense_requests',  'expense_request'),
+    ('expenses',          'expense'),
+    ('form_submissions',  'form_submission'),
+    ('store_audits',      'store_audit')
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = tbl
+         AND column_name = 'deleted_at'
+    ) THEN
+      EXECUTE format('
+        UPDATE public.task_form_bindings tfb
+           SET status = %L, form_id = NULL, completed_at = NULL
+         WHERE form_type = %L
+           AND form_id IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM public.%I r
+              WHERE r.id = tfb.form_id AND r.deleted_at IS NOT NULL
+           )', '未填', form_type, tbl);
+    END IF;
+  END LOOP;
+END $$;
 
 COMMIT;
 

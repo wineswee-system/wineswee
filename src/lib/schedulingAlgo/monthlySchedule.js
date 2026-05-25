@@ -13,6 +13,27 @@ import { validateMonthlyResult } from './validation'
 import { computeStats } from './stats'
 import { runProgrammaticSchedule } from './weeklySchedule'
 
+/**
+ * 把月制目標 (FT 10 / PT 15) 按 cycle 跨的 calendar month 比例分配。
+ * 例：cycle 5/13~6/9 共 28 天 → 五月 19/31 + 六月 9/30 → 月制 10 → cycle 目標 9
+ * 這樣即使 cycle 跨月，每個月最後實際拿到的休假天數仍會符合月制設定。
+ */
+function proRateMonthlyTarget(cycleDates, monthlyTarget) {
+  if (!cycleDates || cycleDates.length === 0) return monthlyTarget
+  const byMonth = {}
+  for (const d of cycleDates) {
+    const ym = String(d).slice(0, 7)
+    byMonth[ym] = (byMonth[ym] || 0) + 1
+  }
+  let total = 0
+  for (const [ym, count] of Object.entries(byMonth)) {
+    const [yr, mo] = ym.split('-').map(Number)
+    const daysInMonth = new Date(yr, mo, 0).getDate() // mo 1-12, day 0 = last day of prev month
+    total += (count / daysInMonth) * monthlyTarget
+  }
+  return Math.round(total)
+}
+
 export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const { monthDates, previousWeek } = data
   console.log('[Monthly] monthDates:', monthDates?.length, 'first:', monthDates?.[0], 'last:', monthDates?.[monthDates?.length - 1])
@@ -20,6 +41,22 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     console.warn('[Monthly] No monthDates, falling back to weekly')
     return runProgrammaticSchedule(data)
   }
+
+  // ── 月制目標 → cycle 比例分配 ──
+  // 設定的 ft/pt_monthly_rest_days 是「每月」目標；cycle 若跨月就要按比例算
+  const ftMonthlyTarget = data.storeSettings?.ft_monthly_rest_days ?? 10
+  const ptMonthlyTarget = data.storeSettings?.pt_monthly_rest_days ?? 15
+  const ftCycleTarget = proRateMonthlyTarget(monthDates, ftMonthlyTarget)
+  const ptCycleTarget = proRateMonthlyTarget(monthDates, ptMonthlyTarget)
+  console.log(`[Monthly] 月制目標 FT=${ftMonthlyTarget}/PT=${ptMonthlyTarget} → cycle 目標 FT=${ftCycleTarget}/PT=${ptCycleTarget}（cycle ${monthDates.length} 天）`)
+
+  // 深拷一份 storeSettings 改寫 rest target 給 weekly + final correction 用
+  const cycleStoreSettings = {
+    ...data.storeSettings,
+    ft_monthly_rest_days: ftCycleTarget,
+    pt_monthly_rest_days: ptCycleTarget,
+  }
+  data = { ...data, storeSettings: cycleStoreSettings }
 
   const weeks = splitIntoWeeks(monthDates)
   console.log('[Monthly] Split into', weeks.length, 'weeks:', weeks.map(w => w[0] + '~' + w[w.length - 1]))

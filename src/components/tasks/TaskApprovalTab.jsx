@@ -8,6 +8,7 @@ import {
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { notifyApproval } from '../../lib/lineNotify'
+import { useAuditLog } from '../../lib/useAuditLog'
 
 const PRIORITY_LIST = ['低', '中', '高']
 
@@ -33,6 +34,8 @@ export default function TaskApprovalTab({
   openInput, closeInput,
   onUpdate,
 }) {
+
+  const { logAction, logFieldChange } = useAuditLog()
 
   // ── Task Confirmations ──
   const handleAddConfirmation = async () => {
@@ -64,6 +67,11 @@ export default function TaskApprovalTab({
       responded_at: new Date().toISOString(),
     })
     if (!data) return
+
+    // Log individual approval/rejection decision
+    const conf = confirmations.find(c => c.id === id)
+    logAction(status === 'approved' ? '核准' : '拒絕', 'task_confirmations', id,
+      `${task.title} — ${conf?.approver || ''}`)
 
     const mode = form.confirmation_mode || task.confirmation_mode || 'parallel'
     let next = confirmations.map(c => c.id === id ? data : c)
@@ -169,7 +177,11 @@ export default function TaskApprovalTab({
         const { data: completedTask } = await updateTask(task.id, {
           status: '已完成', completed_at: new Date().toISOString(),
         })
-        if (completedTask) onUpdate(completedTask)
+        if (completedTask) {
+          logFieldChange('tasks', task.id, '狀態', task.status, '已完成', task.title)
+          logFieldChange('tasks', task.id, '實際完成日', task.completed_at, completedTask.completed_at, task.title)
+          onUpdate(completedTask)
+        }
       }
     } else {
       const nextStep = updated.find(s => s.status === '等待中')
@@ -193,7 +205,11 @@ export default function TaskApprovalTab({
         const { data: completedTask } = await updateTask(task.id, {
           status: '已完成', completed_at: new Date().toISOString(),
         })
-        if (completedTask) onUpdate(completedTask)
+        if (completedTask) {
+          logFieldChange('tasks', task.id, '狀態', task.status, '已完成', task.title)
+          logFieldChange('tasks', task.id, '實際完成日', task.completed_at, completedTask.completed_at, task.title)
+          onUpdate(completedTask)
+        }
       }
     }
   }

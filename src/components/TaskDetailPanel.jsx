@@ -17,6 +17,8 @@ import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
 import { confirm } from '../lib/confirm'
 import { useAuditLog } from '../lib/useAuditLog'
+import { diffAndLogTask } from '../lib/taskAudit'
+import { fmtDateTimeTW } from '../lib/datetime'
 
 import TaskRelationsTab from './tasks/TaskRelationsTab'
 import TaskApprovalTab from './tasks/TaskApprovalTab'
@@ -25,24 +27,6 @@ import TaskDiscussionTab from './tasks/TaskDiscussionTab'
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
-// Human-readable labels for audit log entries
-const TASK_FIELD_LABELS = {
-  title:                '標題',
-  status:               '狀態',
-  priority:             '優先度',
-  assignee:             '負責人',
-  store:                '門市',
-  category:             '分類',
-  planned_start:        '計畫開始日',
-  due_date:             '預計完成日',
-  due_time:             '預計完成時間',
-  reminder_at:          '提醒時間',
-  notes:                '備註',
-  workflow_instance_id: '工作流',
-  project_id:           '專案',
-  confirmation_mode:    '簽核模式',
-  completed_at:         '實際完成日',
-}
 
 export default function TaskDetailPanel({
   step: task, allSteps, employees, stores, checklists,
@@ -235,20 +219,19 @@ export default function TaskDetailPanel({
     if (data) {
       onUpdate(data)
       setIsDirty(false)
-      // Log each changed field individually
-      Promise.all(
-        Object.entries(TASK_FIELD_LABELS)
-          .filter(([key]) => String(task[key] ?? '') !== String(data[key] ?? ''))
-          .map(([key, label]) => logFieldChange('tasks', task.id, label, task[key], data[key], task.title))
-      ).catch(() => {})
+      diffAndLogTask(logFieldChange, task, data)
       if (form.status === '已完成' && prevStatus !== '已完成') {
         const triggerDeps = dependencies.filter(d => d.task_id === task.id && d.dep_type === 'trigger')
         for (const dep of triggerDeps) {
-          await supabase
+          const { data: cascaded } = await supabase
             .from('tasks')
             .update({ status: '進行中' })
             .eq('id', dep.depends_on_task_id)
             .eq('status', '待簽核')
+            .select()
+          if (cascaded?.length) {
+            logFieldChange('tasks', dep.depends_on_task_id, '狀態', '待簽核', '進行中', cascaded[0].title)
+          }
         }
       }
     }
@@ -257,7 +240,8 @@ export default function TaskDetailPanel({
 
   const handleDelete = async () => {
     if (!(await confirm({ message: '確定刪除此任務？' }))) return
-    await deleteTask(task.id)
+    const { error } = await deleteTask(task.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
     logAction('刪除', 'tasks', task.id, task.title)
     onDelete(task.id)
   }
@@ -489,7 +473,7 @@ export default function TaskDetailPanel({
                       <Info size={12} title="完成時自動記錄時間戳記" style={{ color: 'var(--text-muted)', cursor: 'default', flexShrink: 0 }} />
                     </div>
                     <div style={{ fontSize: 14, color: task.completed_at ? 'var(--text-secondary)' : 'var(--text-muted)', padding: '7px 10px', lineHeight: '1.4' }}>
-                      {task.completed_at ? task.completed_at.replace('T', ' ').slice(0, 16) : '—'}
+                      {task.completed_at ? fmtDateTimeTW(task.completed_at) : '—'}
                     </div>
                   </div>
                 </div>
@@ -532,6 +516,12 @@ export default function TaskDetailPanel({
               sopTemplates={sopTemplates}
               triggeredInstances={triggeredInstances}
               setTriggeredInstances={setTriggeredInstances}
+              formBindings={formBindings}
+              setFormBindings={setFormBindings}
+              form={form}
+              setAndDirty={setAndDirty}
+              allWorkflowInstances={allWorkflowInstances}
+              allProjects={allProjects}
             />
           )}
 

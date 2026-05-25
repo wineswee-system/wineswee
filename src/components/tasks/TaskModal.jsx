@@ -14,6 +14,10 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { confirm } from '../../lib/confirm'
+import { toast } from '../../lib/toast'
+import { useAuditLog } from '../../lib/useAuditLog'
+import { diffAndLogTask } from '../../lib/taskAudit'
+import { fmtDateTimeTW } from '../../lib/datetime'
 import { describeRule, materializeNextInstance } from '../../lib/recurrence'
 import { notifyWatchers } from '../../lib/mentions'
 import ChangelogPanel from '../ChangelogPanel'
@@ -38,6 +42,7 @@ export default function TaskModal({
   currentUser, onClose, onChange, onDelete, onDuplicate,
 }) {
   const { profile } = useAuth()
+  const { logAction, logFieldChange } = useAuditLog()
   const user = currentUser || profile
 
   const [form, setForm] = useState({
@@ -212,6 +217,7 @@ export default function TaskModal({
       }
       setIsDirty(false)
       setActivityRefresh(k => k + 1)
+      diffAndLogTask(logFieldChange, task, data)
       notifyWatchers(task.id, { taskTitle: data.title, action: '任務已更新', actor: user?.name }).catch(() => {})
       onChange?.(data)
     }
@@ -220,7 +226,9 @@ export default function TaskModal({
 
   const handleDelete = async () => {
     if (!(await confirm({ message: `刪除任務「${task.title}」？` }))) return
-    await deleteTask(task.id)
+    const { error } = await deleteTask(task.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    logAction('刪除', 'tasks', task.id, task.title)
     onDelete?.(task.id)
     onClose?.()
   }
@@ -467,7 +475,7 @@ export default function TaskModal({
                       <Info size={12} title="完成時自動記錄時間戳記" style={{ color: 'var(--text-muted)', cursor: 'default', flexShrink: 0 }} />
                     </div>
                     <div style={{ fontSize: 14, color: task.completed_at ? 'var(--text-secondary)' : 'var(--text-muted)', padding: '7px 10px', lineHeight: '1.4' }}>
-                      {task.completed_at ? task.completed_at.replace('T', ' ').slice(0, 16) : '—'}
+                      {task.completed_at ? fmtDateTimeTW(task.completed_at) : '—'}
                     </div>
                   </div>
                 </div>

@@ -11,11 +11,18 @@ import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
 import FormBindingsPicker from '../../components/FormBindingsPicker'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAuditLog } from '../../lib/useAuditLog'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+
+// Normalise legacy English bucket values → Traditional Chinese display names.
+// Module-level so the lookup object isn't recreated on every render.
+const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
+
 export default function Tasks() {
   const { profile, isSuperAdmin } = useAuth()
+  const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('all')
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
   const [tasks, setTasks] = useState([])
@@ -78,27 +85,45 @@ export default function Tasks() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleStatusChange = async (id, status) => {
+    const oldTask = tasks.find(t => t.id === id)
     const completedAt = status === '已完成' ? new Date().toISOString() : null
-    const { data } = await updateTask(id, { status, completed_at: completedAt })
+    const { data, error } = await updateTask(id, { status, completed_at: completedAt })
+    if (error) { toast.error('更新失敗：' + error.message); return }
     if (data) {
       setTasks(prev => prev.map(t => t.id === id ? data : t))
+      if (oldTask) {
+        logFieldChange('tasks', id, '狀態', oldTask.status, data.status, oldTask.title)
+        if (data.completed_at !== oldTask.completed_at)
+          logFieldChange('tasks', id, '實際完成日', oldTask.completed_at, data.completed_at, oldTask.title)
+      }
     }
   }
 
   const handleDeleteTask = async (id) => {
     if (!(await confirm({ message: '確定刪除此任務？' }))) return
-    await deleteTask(id)
+    const oldTask = tasks.find(t => t.id === id)
+    const { error } = await deleteTask(id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
     setTasks(prev => prev.filter(t => t.id !== id))
+    logAction('刪除', 'tasks', id, oldTask?.title)
   }
 
   const handleProjectChange = async (id, projectId) => {
+    const oldTask = tasks.find(t => t.id === id)
     const { data } = await updateTask(id, { project_id: projectId ? Number(projectId) : null })
-    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+    if (data) {
+      setTasks(prev => prev.map(t => t.id === id ? data : t))
+      if (oldTask) logFieldChange('tasks', id, '專案', oldTask.project_id, data.project_id, oldTask.title)
+    }
   }
 
   const handleWorkflowChange = async (id, workflowName) => {
+    const oldTask = tasks.find(t => t.id === id)
     const { data } = await updateTask(id, { workflow: workflowName || null })
-    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+    if (data) {
+      setTasks(prev => prev.map(t => t.id === id ? data : t))
+      if (oldTask) logFieldChange('tasks', id, '工作流', oldTask.workflow, data.workflow, oldTask.title)
+    }
   }
 
   const handleSubmit = async () => {
@@ -165,8 +190,8 @@ export default function Tasks() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
-  // Normalise legacy English bucket values to Traditional Chinese display names
-  const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
+  // Pre-build a project lookup map to avoid O(n²) .find() inside .map()
+  const projectMap = new Map(projects.map(p => [p.id, p.name]))
 
   // Unified items — workflow tasks hidden until they become in-progress
   const allItems = tasks.filter(t => !(t.workflow_instance_id && t.status === '待簽核')).map(t => ({
@@ -176,7 +201,7 @@ export default function Tasks() {
     assignee_id: t.assignee_id,
     workflow: t.workflow || '',
     project_id: t.project_id || null,
-    projectName: projects.find(p => p.id === t.project_id)?.name || '',
+    projectName: projectMap.get(t.project_id) || '',
     store: t.store || '',
     due_date: t.due_date,
     priority: t.priority || '中',

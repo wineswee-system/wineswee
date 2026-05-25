@@ -20,6 +20,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAuditLog } from '../../lib/useAuditLog'
 
 import InstanceDetailView from './components/InstanceDetailView'
 import AiAssistantTab from './components/AiAssistantTab'
@@ -42,6 +43,7 @@ export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const currentUser = profile?.name || '管理員'
+  const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('active')
   const [workflows, setWorkflows] = useState([])
   const [instances, setInstances] = useState([])
@@ -170,10 +172,16 @@ export default function Workflows() {
     //   trigger trg_task_intercept_complete_for_chain 會自動把
     //   「已完成 + 有 chain」攔截轉 '待確認' + 建 task_confirmations，
     //   前端不需要繞道，直接送 '已完成' 讓 DB 處理。
+    const oldTask = tasks.find(t => t.id === taskId)
     const completedAt = newStatus === '已完成' ? new Date().toISOString() : null
     const { data, error } = await updateTask(taskId, { status: newStatus, completed_at: completedAt })
     if (error) { toast.error('更新失敗：' + error.message); return }
     if (data) {
+      if (oldTask) {
+        logFieldChange('tasks', taskId, '狀態', oldTask.status, data.status, oldTask.title)
+        if (data.completed_at !== oldTask.completed_at)
+          logFieldChange('tasks', taskId, '實際完成日', oldTask.completed_at, data.completed_at, oldTask.title)
+      }
       const updatedTasks = tasks.map(t => t.id === taskId ? data : t)
       setAllTasks(updatedTasks)
 
@@ -340,6 +348,7 @@ export default function Workflows() {
     })
     if (data) {
       setAllTasks(prev => prev.map(t => t.id === taskId ? data : t))
+      logAction(action === 'approved' ? '核准' : '駁回', 'tasks', taskId, data.title)
 
       // ★ 推 LINE 給原執行人（核准 / 駁回都推，跟 LIFF TaskConfirmations.jsx 行為對齊）
       if (data.assignee) {
@@ -370,7 +379,10 @@ export default function Workflows() {
   const handleSaveNotes = async () => {
     if (!notesStep) return
     const { data } = await updateTask(notesStep.id, { notes: notesText })
-    if (data) setAllTasks(prev => prev.map(t => t.id === notesStep.id ? data : t))
+    if (data) {
+      setAllTasks(prev => prev.map(t => t.id === notesStep.id ? data : t))
+      logFieldChange('tasks', notesStep.id, '備註', notesStep.notes ?? '', notesText, notesStep.title)
+    }
     setShowNotesModal(false)
   }
 

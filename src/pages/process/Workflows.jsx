@@ -1030,6 +1030,20 @@ export default function Workflows() {
                 subFailures.push(`第 ${i + 1} 步「審批人員」未掛上：${error.message}`)
               }
             }
+            // 綁定表單：對該 step 設定的 required_forms 建 task_form_bindings
+            //   ※ 漏這段會導致範本裡掛的表單部署後完全消失（任務沒有 binding）
+            const reqForms = tplSteps[i].required_forms || []
+            for (const f of reqForms) {
+              const { error } = await supabase.rpc('create_task_form_binding', {
+                p_task_id: taskId,
+                p_form_type: f.form_type,
+                p_form_template_id: f.form_template_id || null,
+              })
+              if (error) {
+                console.error(`[deploy] step ${i + 1} form_binding 失敗:`, error)
+                subFailures.push(`第 ${i + 1} 步「表單綁定」未掛上：${error.message}`)
+              }
+            }
           }
           if (subFailures.length > 0) {
             toast.error(`流程已建立，但有 ${subFailures.length} 項子設定失敗：\n\n${subFailures.join('\n')}\n\n請到流程詳細頁手動補上。`)

@@ -415,13 +415,15 @@ export function runProgrammaticSchedule(data) {
         const weekHours = getEmpWeekHours(emp.name)
         if (weekHours + netH > hoursRange[emp.name].max + 2) return null
         // ★ PT 月工時 cap hard check — 防止 PT 被排爆 ★
+        // actualTimes 每週 reset，要加 monthlyCtx.hoursAccumulated 才是 cycle 累計
         if (isPTEmp(emp)) {
           const monthCap = monthTargetMap[emp.name]?.max
           if (monthCap) {
-            const monthHrsSoFar = Object.entries(actualTimes)
+            const thisWeekH = Object.entries(actualTimes)
               .filter(([k]) => k.startsWith(emp.name + '_'))
               .reduce((s, [, v]) => s + (v?.hours || 0), 0)
-            if (monthHrsSoFar + netH > monthCap) return null
+            const prevWeeksH = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
+            if (prevWeeksH + thisWeekH + netH > monthCap) return null
           }
         }
         if (emp.can_open === false && startH < storeOpenH + 2) return null
@@ -622,9 +624,14 @@ export function runProgrammaticSchedule(data) {
 
         // 候選分 2 層：(1) 未派 (2) PT 休 — 不動 FT 休（保 FT 月休目標）
         // 並 check PT 月工時 cap：不能拉爆 PT
-        const monthHoursOf = (emp) => Object.entries(actualTimes)
-          .filter(([k]) => k.startsWith(emp.name + '_'))
-          .reduce((s, [, v]) => s + (v?.hours || 0), 0)
+        // actualTimes 每週 reset → 用 monthlyCtx.hoursAccumulated + this week
+        const monthHoursOf = (emp) => {
+          const thisWeek = Object.entries(actualTimes)
+            .filter(([k]) => k.startsWith(emp.name + '_'))
+            .reduce((s, [, v]) => s + (v?.hours || 0), 0)
+          const prevWeeks = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
+          return prevWeeks + thisWeek
+        }
         const ptOverCap = (emp) => {
           const cap = monthTargetMap[emp.name]?.max
           if (!cap) return false

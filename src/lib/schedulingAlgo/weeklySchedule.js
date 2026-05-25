@@ -162,18 +162,7 @@ export function runProgrammaticSchedule(data) {
       const daySlots = timeSlots.filter(s =>
         s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
       )
-      // 改用 person-hour 算最少工作人數：
-      //   舊：max(required_count) — 只看 peak hour，導致 restDayPlan 過度預留休假
-      //   新：max(peak, ceil(總人時/8h)) — 避免「peak 3 但日總工作量需要 4 個 8h 班」漏算
-      const peakReq = Math.max(0, ...daySlots.map(s => s.required_count))
-      const totalPersonHours = daySlots.reduce((sum, s) => {
-        const startH = parseTime(s.start_time)
-        const endH = parseTime(s.end_time)
-        const dur = endH <= startH ? (endH + 24 - startH) : (endH - startH)
-        return sum + (s.required_count * Math.max(1, dur))
-      }, 0)
-      const shiftsNeeded = Math.ceil(totalPersonHours / 8)
-      minWorkersPerDay[date] = Math.max(peakReq, shiftsNeeded, dayMinStaff)
+      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), dayMinStaff)
     } else {
       const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
       minWorkersPerDay[date] = total || dayMinStaff
@@ -227,48 +216,22 @@ export function runProgrammaticSchedule(data) {
     return aIsPT - bIsPT
   })
 
-  // 休假分散化 — 避免「2 個 FT 同日連休 2 天」這種整齊到不自然的 pattern
-  // 評分（越低越優先選為休假日）：
-  //   demand            ← 原本就有，低需求日優先休
-  //   peerResting × 2.5 ← 別人已休該日 → 提高分數（避免同日多人休）
-  //   adjacent × 3      ← emp 自己前後 1 天已休 → 提高分數（避免連休）
-  //   jitter × 0.5      ← 微量隨機，破 tie 不整齊
-  const adjacentRestCount = (empName, date) => {
-    const idx = weekDates.indexOf(date)
-    let cnt = 0
-    if (idx > 0 && restDayPlan[empName].has(weekDates[idx - 1])) cnt++
-    if (idx < weekDates.length - 1 && restDayPlan[empName].has(weekDates[idx + 1])) cnt++
-    return cnt
-  }
-  const restSpreadScore = (empName, date) => {
-    const demand = minWorkersPerDay[date] || minStaff
-    const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
-    const adj = adjacentRestCount(empName, date)
-    return demand + peerResting * 2.5 + adj * 3 + Math.random() * 0.5
-  }
-  // 每加一個 rest 重新評分（peer 跟 adj 會變），用 while + re-sort
-  const pickRestDays = (empName, count, minStaffPerDay) => {
-    let needed = count
-    while (needed > 0) {
-      const candidates = weekDates
-        .filter(d => !restDayPlan[empName].has(d) && !schedule[empName][d])
-        .map(d => ({ date: d, score: restSpreadScore(empName, d) }))
-        .filter(c => {
-          const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
-          const workingAfter = employees.length - restingOnDay - 1
-          return workingAfter >= (minStaffPerDay(c.date))
-        })
-        .sort((a, b) => a.score - b.score)
-      if (candidates.length === 0) break
-      restDayPlan[empName].add(candidates[0].date)
-      needed--
-    }
-  }
-
   for (const emp of ftFirstOrder) {
     const remaining = getMonthRestRemaining(emp.name)
     if (remaining <= 0) continue
-    pickRestDays(emp.name, remaining, (d) => minWorkersPerDay[d] || minStaff)
+    const candidates = weekDates
+      .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
+      .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
+      .sort((a, b) => a.demand - b.demand)
+    let needed = remaining
+    for (const c of candidates) {
+      if (needed <= 0) break
+      const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
+      const workingAfter = employees.length - restingOnDay - 1
+      if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
+      restDayPlan[emp.name].add(c.date)
+      needed--
+    }
   }
 
   const maxMinWorkers = Math.max(...weekDates.map(d => minWorkersPerDay[d] || minStaff))
@@ -278,8 +241,19 @@ export function runProgrammaticSchedule(data) {
       if (isPT) continue
       const remaining = getMonthRestRemaining(emp.name)
       if (remaining <= 0) continue
-      // 第二輪允許 minStaff - 1（讓 FT 月休能補到目標）
-      pickRestDays(emp.name, remaining, (d) => Math.max(1, (minWorkersPerDay[d] || minStaff) - 1))
+      const candidates = weekDates
+        .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
+        .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
+        .sort((a, b) => a.demand - b.demand)
+      let needed = remaining
+      for (const c of candidates) {
+        if (needed <= 0) break
+        const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
+        const workingAfter = employees.length - restingOnDay - 1
+        if (workingAfter < Math.max(1, (minWorkersPerDay[c.date] || minStaff) - 1)) continue
+        restDayPlan[emp.name].add(c.date)
+        needed--
+      }
     }
   }
 
@@ -429,18 +403,6 @@ export function runProgrammaticSchedule(data) {
         if (grossH > wsConstraints.dailyAbsoluteMax) return null
         const weekHours = getEmpWeekHours(emp.name)
         if (weekHours + netH > hoursRange[emp.name].max + 2) return null
-        // ★ PT 月工時 cap hard check — 防止 PT 被排爆 ★
-        // actualTimes 每週 reset，要加 monthlyCtx.hoursAccumulated 才是 cycle 累計
-        if (isPTEmp(emp)) {
-          const monthCap = monthTargetMap[emp.name]?.max
-          if (monthCap) {
-            const thisWeekH = Object.entries(actualTimes)
-              .filter(([k]) => k.startsWith(emp.name + '_'))
-              .reduce((s, [, v]) => s + (v?.hours || 0), 0)
-            const prevWeeksH = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
-            if (prevWeeksH + thisWeekH + netH > monthCap) return null
-          }
-        }
         if (emp.can_open === false && startH < storeOpenH + 2) return null
         if (emp.can_close === false && endH > effectiveCloseH - 2) return null
         const dateIdx = weekDates.indexOf(date)
@@ -452,14 +414,6 @@ export function runProgrammaticSchedule(data) {
             if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
           }
         }
-        // ★ 連續上班天數 hard check（FT 12 / PT 6）— 時段制原本沒檢查 ★
-        const fakeShiftDef = {
-          name: '__time_slot_window__',
-          start_time: fmtH(startH),
-          end_time: fmtH(endH),
-          break_minutes: (grossH - netH) * 60,
-        }
-        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
         return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
       }
 
@@ -591,107 +545,6 @@ export function runProgrammaticSchedule(data) {
         } else {
           if (!isPTEmp(emp)) { /* 不休，留空 */ }
           else schedule[emp.name][date] = '休'
-        }
-      }
-
-      // ── Phase 4: Force-fill 補滿時段需求（門市需求必須對齊）──
-      // required_count 改成硬約束。優先級：未派 → PT 休 → FT 休
-      // 即使破週工時上限也要補（差太多會被 validation 抓出來）
-      const tryForceWindow = (emp, startH, grossH) => {
-        const endH = startH + grossH
-        if (startH < storeOpenH || endH > effectiveCloseH + 0.5) return null
-        if (grossH > wsConstraints.dailyAbsoluteMax) return null
-        if (emp.can_open === false && startH < storeOpenH + 2) return null
-        if (emp.can_close === false && endH > effectiveCloseH - 2) return null
-        const dateIdx = weekDates.indexOf(date)
-        if (dateIdx > 0) {
-          const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
-          if (prevT) {
-            const prevEndH = parseTime(prevT.end)
-            const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
-            if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
-          }
-        }
-        // 連續上班天數 hard check（FT 12 / PT 6 — 由 isLegallyValid 處理）
-        // 模擬一個 shiftDef 給 isLegallyValid 用
-        const fakeShiftDef = {
-          name: '__force_fill__',
-          start_time: fmtH(startH),
-          end_time: fmtH(endH),
-          break_minutes: (grossH - (grossH >= 6 ? grossH - 1 : grossH - 0.5)) * 60,
-        }
-        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
-
-        const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
-        return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
-      }
-
-      let forceSafety = 0
-      while (forceSafety < 30) {
-        const gap = slotCoverage.find(s => s.covered < s.required_count)
-        if (!gap) break
-        forceSafety++
-
-        const gapStartH = parseTime(gap.start_time)
-        const gapEndH = parseTime(gap.end_time)
-        const gapEndEff = gapEndH <= gapStartH ? gapEndH + 24 : gapEndH
-        const gapLen = gapEndEff - gapStartH
-
-        // 候選分 2 層：(1) 未派 (2) PT 休 — 不動 FT 休（保 FT 月休目標）
-        // 並 check PT 月工時 cap：不能拉爆 PT
-        // actualTimes 每週 reset → 用 monthlyCtx.hoursAccumulated + this week
-        const monthHoursOf = (emp) => {
-          const thisWeek = Object.entries(actualTimes)
-            .filter(([k]) => k.startsWith(emp.name + '_'))
-            .reduce((s, [, v]) => s + (v?.hours || 0), 0)
-          const prevWeeks = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
-          return prevWeeks + thisWeek
-        }
-        const ptOverCap = (emp) => {
-          const cap = monthTargetMap[emp.name]?.max
-          if (!cap) return false
-          return monthHoursOf(emp) >= cap
-        }
-        const tier1 = employees.filter(e =>
-          !schedule[e.name][date] && !offMap.has(`${e.name}_${date}`) && !ptOverCap(e)
-        )
-        const tier2 = employees.filter(e =>
-          isPTEmp(e) && schedule[e.name][date] === '休' && !offMap.has(`${e.name}_${date}`) && !ptOverCap(e)
-        )
-        const tiers = [tier1, tier2]
-
-        let filled = false
-        for (const tier of tiers) {
-          for (const emp of tier) {
-            // grossH: PT 4~6, FT 9
-            const pt = isPTEmp(emp)
-            const grossH = pt ? Math.max(4, Math.min(6, gapLen)) : Math.max(9, gapLen)
-            // 嘗試起點：caplea 含 gap 起點、提早 1~3hr（讓 shift 包住 gap）
-            const tryStarts = [
-              gapStartH,
-              Math.max(storeOpenH, gapStartH - 1),
-              Math.max(storeOpenH, gapStartH - 2),
-              Math.max(storeOpenH, gapStartH - 3),
-              gapStartH + 1,
-            ]
-            for (const sH of tryStarts) {
-              const window = tryForceWindow(emp, sH, grossH)
-              if (!window) continue
-              if (!overlaps(window.start, window.end, gap.start_time, gap.end_time)) continue
-              // 革命前清掉 '休'（這人原本是休）
-              if (schedule[emp.name][date] === '休') delete schedule[emp.name][date]
-              doAssign(emp, window)
-              filled = true
-              break
-            }
-            if (filled) break
-          }
-          if (filled) break
-        }
-
-        if (!filled) {
-          console.warn(`[Schedule] FORCE-FILL FAILED: ${date} slot ${gap.start_time}-${gap.end_time} 需 ${gap.required_count} 只 ${gap.covered}，無人可調`)
-          break // 真的補不出來，避免無限迴圈
         }
       }
     }

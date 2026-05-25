@@ -44,27 +44,23 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
   // H2: Daily hours ≤ absolute max
   if (getShiftHours(shiftDef) > wsc.dailyAbsoluteMax) return false
 
-  // H3: Consecutive work days ≤ 6 (PT) / 12 (FT)
-  // ★ 修：原本只有 dateIdx===0 才回看 previousWeek，導致跨週連續工作沒算到
-  //   → 不管 dateIdx，只要在 current week 沒找到 rest 就一路往 previousWeek 回看
+  // H3: Consecutive work days ≤ 6
   const dateIdx = weekDates.indexOf(date)
   let consec = 1
-  let reachedStart = true  // 是否往回走到當週起點都沒遇到 rest
   for (let i = dateIdx - 1; i >= 0; i--) {
     const s = schedule[emp.name][weekDates[i]]
     if (s && !isAbsence(s)) consec++
-    else { reachedStart = false; break }
+    else break
   }
-  if (reachedStart && data.previousWeek) {
+  if (dateIdx === 0 && data.previousWeek) {
     const prevAssignments = data.previousWeek
       .filter(a => a.employee === emp.name)
       .sort((a, b) => b.date.localeCompare(a.date))
-    const weekStartDate = new Date(weekDates[0])
+    const weekStartDate = new Date(date)
     for (const a of prevAssignments) {
       const prevDate = new Date(a.date)
       const daysBefore = Math.round((weekStartDate - prevDate) / 86400000)
-      // daysBefore 必須跟 consec - dateIdx 對齊（連續日）
-      if (daysBefore !== consec - dateIdx) break
+      if (daysBefore !== consec) break
       if (!isAbsence(a.shift)) consec++
       else break
     }
@@ -391,13 +387,11 @@ export function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // S5: Monthly hours check（用 storeSettings 設定值，按 cycle 天數比例）
+    // S5: Monthly hours check
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-    const ss = data.storeSettings || {}
-    const monthlyMin = isPT ? (ss.pt_monthly_hours_min ?? 80) : (ss.ft_monthly_hours_min ?? 150)
-    const monthlyMax = isPT ? (ss.pt_monthly_hours_max ?? 175) : (ss.ft_monthly_hours_max ?? 175)
-    // 永遠按比例：28 天 cycle 對 30 天月 → ratio = 28/30，不要 hard-code 28+ 算整月
-    const dayRatio = totalDays / 30
+    const monthlyMin = isPT ? 80 : 150
+    const monthlyMax = 175
+    const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
     const proRatedMin = Math.round(monthlyMin * dayRatio)
     const proRatedMax = Math.round(monthlyMax * dayRatio)
     if (totalHours > proRatedMax) {

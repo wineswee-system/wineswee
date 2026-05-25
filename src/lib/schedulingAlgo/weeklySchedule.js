@@ -547,6 +547,83 @@ export function runProgrammaticSchedule(data) {
           else schedule[emp.name][date] = '休'
         }
       }
+
+      // ── Phase 4: Force-fill 補滿時段需求（門市需求必須對齊）──
+      // required_count 改成硬約束。優先級：未派 → PT 休 → FT 休
+      // 即使破週工時上限也要補（差太多會被 validation 抓出來）
+      const tryForceWindow = (emp, startH, grossH) => {
+        const endH = startH + grossH
+        if (startH < storeOpenH || endH > effectiveCloseH + 0.5) return null
+        if (grossH > wsConstraints.dailyAbsoluteMax) return null
+        if (emp.can_open === false && startH < storeOpenH + 2) return null
+        if (emp.can_close === false && endH > effectiveCloseH - 2) return null
+        const dateIdx = weekDates.indexOf(date)
+        if (dateIdx > 0) {
+          const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
+          if (prevT) {
+            const prevEndH = parseTime(prevT.end)
+            const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
+            if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
+          }
+        }
+        const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+        return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
+      }
+
+      let forceSafety = 0
+      while (forceSafety < 30) {
+        const gap = slotCoverage.find(s => s.covered < s.required_count)
+        if (!gap) break
+        forceSafety++
+
+        const gapStartH = parseTime(gap.start_time)
+        const gapEndH = parseTime(gap.end_time)
+        const gapEndEff = gapEndH <= gapStartH ? gapEndH + 24 : gapEndH
+        const gapLen = gapEndEff - gapStartH
+
+        // 候選分 2 層：(1) 未派 (2) PT 休 — 不動 FT 休（保 FT 月休目標）
+        const tier1 = employees.filter(e =>
+          !schedule[e.name][date] && !offMap.has(`${e.name}_${date}`)
+        )
+        const tier2 = employees.filter(e =>
+          isPTEmp(e) && schedule[e.name][date] === '休' && !offMap.has(`${e.name}_${date}`)
+        )
+        const tiers = [tier1, tier2]
+
+        let filled = false
+        for (const tier of tiers) {
+          for (const emp of tier) {
+            // grossH: PT 4~6, FT 9
+            const pt = isPTEmp(emp)
+            const grossH = pt ? Math.max(4, Math.min(6, gapLen)) : Math.max(9, gapLen)
+            // 嘗試起點：caplea 含 gap 起點、提早 1~3hr（讓 shift 包住 gap）
+            const tryStarts = [
+              gapStartH,
+              Math.max(storeOpenH, gapStartH - 1),
+              Math.max(storeOpenH, gapStartH - 2),
+              Math.max(storeOpenH, gapStartH - 3),
+              gapStartH + 1,
+            ]
+            for (const sH of tryStarts) {
+              const window = tryForceWindow(emp, sH, grossH)
+              if (!window) continue
+              if (!overlaps(window.start, window.end, gap.start_time, gap.end_time)) continue
+              // 革命前清掉 '休'（這人原本是休）
+              if (schedule[emp.name][date] === '休') delete schedule[emp.name][date]
+              doAssign(emp, window)
+              filled = true
+              break
+            }
+            if (filled) break
+          }
+          if (filled) break
+        }
+
+        if (!filled) {
+          console.warn(`[Schedule] FORCE-FILL FAILED: ${date} slot ${gap.start_time}-${gap.end_time} 需 ${gap.required_count} 只 ${gap.covered}，無人可調`)
+          break // 真的補不出來，避免無限迴圈
+        }
+      }
     }
 
   } else {

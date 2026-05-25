@@ -44,23 +44,27 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
   // H2: Daily hours ≤ absolute max
   if (getShiftHours(shiftDef) > wsc.dailyAbsoluteMax) return false
 
-  // H3: Consecutive work days ≤ 6
+  // H3: Consecutive work days ≤ 6 (PT) / 12 (FT)
+  // ★ 修：原本只有 dateIdx===0 才回看 previousWeek，導致跨週連續工作沒算到
+  //   → 不管 dateIdx，只要在 current week 沒找到 rest 就一路往 previousWeek 回看
   const dateIdx = weekDates.indexOf(date)
   let consec = 1
+  let reachedStart = true  // 是否往回走到當週起點都沒遇到 rest
   for (let i = dateIdx - 1; i >= 0; i--) {
     const s = schedule[emp.name][weekDates[i]]
     if (s && !isAbsence(s)) consec++
-    else break
+    else { reachedStart = false; break }
   }
-  if (dateIdx === 0 && data.previousWeek) {
+  if (reachedStart && data.previousWeek) {
     const prevAssignments = data.previousWeek
       .filter(a => a.employee === emp.name)
       .sort((a, b) => b.date.localeCompare(a.date))
-    const weekStartDate = new Date(date)
+    const weekStartDate = new Date(weekDates[0])
     for (const a of prevAssignments) {
       const prevDate = new Date(a.date)
       const daysBefore = Math.round((weekStartDate - prevDate) / 86400000)
-      if (daysBefore !== consec) break
+      // daysBefore 必須跟 consec - dateIdx 對齊（連續日）
+      if (daysBefore !== consec - dateIdx) break
       if (!isAbsence(a.shift)) consec++
       else break
     }

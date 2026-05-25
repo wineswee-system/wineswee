@@ -129,6 +129,14 @@ export function runProgrammaticSchedule(data) {
   for (const s of existingSchedules) {
     if (schedule[s.employee]?.[s.date] !== undefined) {
       schedule[s.employee][s.date] = s.shift
+      // ★ 同步補 actualTimes，否則 validation S10 看不到這些 shift 的工時
+      if (!isAbsence(s.shift) && s.actual_start) {
+        actualTimes[`${s.employee}_${s.date}`] = {
+          start: typeof s.actual_start === 'string' ? s.actual_start.slice(0, 5) : s.actual_start,
+          end: typeof s.actual_end === 'string' ? s.actual_end.slice(0, 5) : s.actual_end,
+          hours: s.actual_hours || null,
+        }
+      }
     }
   }
 

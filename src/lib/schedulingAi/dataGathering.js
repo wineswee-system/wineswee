@@ -45,7 +45,7 @@ export async function gatherSchedulingData({
     { data: holidayData },
     { data: timeSlotsData },
   ] = await Promise.all([
-    supabase.from('schedules').select('employee, date, shift, absence_type, source_store')
+    supabase.from('schedules').select('employee, date, shift, absence_type, source_store, actual_start, actual_end, actual_hours')
       .gte('date', dateStart).lte('date', dateEnd),
     supabase.from('off_requests').select('employee, date, status')
       .gte('date', dateStart).lte('date', dateEnd)

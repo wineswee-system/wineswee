@@ -480,7 +480,11 @@ export function runProgrammaticSchedule(data) {
         for (const emp of openers) {
           const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
           const window = tryShift(emp, storeOpenH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) { doAssign(emp, window); break }
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
+            break
+          }
         }
       }
 
@@ -492,8 +496,17 @@ export function runProgrammaticSchedule(data) {
           const startH = effectiveCloseH - grossH
           if (startH < storeOpenH) continue
           const window = tryShift(emp, startH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) { doAssign(emp, window); break }
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
+            break
+          }
         }
+      }
+      if (date === weekDates[0]) {
+        const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
+        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}`).join(' ')
+        console.log(`[DBG ${date}] After Phase1+2: ${summary} | slotCov: ${cov}`)
       }
 
       // Phase 3: 補滿覆蓋
@@ -564,10 +577,18 @@ export function runProgrammaticSchedule(data) {
 
         if (chosenWindow) {
           doAssign(emp, chosenWindow)
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} ${pt?'(PT)':''} → ${chosenWindow.start}~${chosenWindow.end}`)
         } else {
-          if (!isPTEmp(emp)) { /* FT 不休，留空 */ }
-          else schedule[emp.name][date] = '休'
+          if (!isPTEmp(emp)) {
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} 找不到 window → 留空`)
+          }
+          else { schedule[emp.name][date] = '休'; if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) → 休`) }
         }
+      }
+      if (date === weekDates[0]) {
+        const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
+        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}`).join(' ')
+        console.log(`[DBG ${date}] After Phase3: ${summary} | slotCov: ${cov}`)
       }
     }
 
@@ -971,16 +992,19 @@ export function runProgrammaticSchedule(data) {
         // 班別制下 slotCov 是 null → safe === eligible，永遠不會跑這條路
         if (useTimeSlotMode) {
           schedule[emp.name][date] = '休'
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] → 休`)
         } else {
           const sd = eligible[0]
           schedule[emp.name][date] = sd.name
           actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 班別制 → ${sd.name}`)
         }
         continue
       }
       const sd = safe[0]
       schedule[emp.name][date] = sd.name
       actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (safe[0])`)
     }
   }
 

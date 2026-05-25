@@ -429,6 +429,14 @@ export function runProgrammaticSchedule(data) {
             if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
           }
         }
+        // ★ 連續上班天數 hard check（PT 6 / FT 12）— 時段制原本沒檢查 ★
+        const fakeShiftDef = {
+          name: '__time_slot_window__',
+          start_time: fmtH(startH),
+          end_time: fmtH(endH),
+          break_minutes: (grossH - netH) * 60,
+        }
+        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
         return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
       }
 

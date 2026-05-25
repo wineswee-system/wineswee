@@ -162,7 +162,18 @@ export function runProgrammaticSchedule(data) {
       const daySlots = timeSlots.filter(s =>
         s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
       )
-      minWorkersPerDay[date] = Math.max(...daySlots.map(s => s.required_count), dayMinStaff)
+      // 改用 person-hour 算最少工作人數：
+      //   舊：max(required_count) — 只看 peak hour，導致 restDayPlan 過度預留休假
+      //   新：max(peak, ceil(總人時/8h)) — 避免「peak 3 但日總工作量需要 4 個 8h 班」漏算
+      const peakReq = Math.max(0, ...daySlots.map(s => s.required_count))
+      const totalPersonHours = daySlots.reduce((sum, s) => {
+        const startH = parseTime(s.start_time)
+        const endH = parseTime(s.end_time)
+        const dur = endH <= startH ? (endH + 24 - startH) : (endH - startH)
+        return sum + (s.required_count * Math.max(1, dur))
+      }, 0)
+      const shiftsNeeded = Math.ceil(totalPersonHours / 8)
+      minWorkersPerDay[date] = Math.max(peakReq, shiftsNeeded, dayMinStaff)
     } else {
       const total = staffingRules.reduce((sum, r) => sum + (r.required_count || 0), 0)
       minWorkersPerDay[date] = total || dayMinStaff
@@ -600,11 +611,20 @@ export function runProgrammaticSchedule(data) {
         const gapLen = gapEndEff - gapStartH
 
         // 候選分 2 層：(1) 未派 (2) PT 休 — 不動 FT 休（保 FT 月休目標）
+        // 並 check PT 月工時 cap：不能拉爆 PT
+        const monthHoursOf = (emp) => Object.entries(actualTimes)
+          .filter(([k]) => k.startsWith(emp.name + '_'))
+          .reduce((s, [, v]) => s + (v?.hours || 0), 0)
+        const ptOverCap = (emp) => {
+          const cap = monthTargetMap[emp.name]?.max
+          if (!cap) return false
+          return monthHoursOf(emp) >= cap
+        }
         const tier1 = employees.filter(e =>
-          !schedule[e.name][date] && !offMap.has(`${e.name}_${date}`)
+          !schedule[e.name][date] && !offMap.has(`${e.name}_${date}`) && !ptOverCap(e)
         )
         const tier2 = employees.filter(e =>
-          isPTEmp(e) && schedule[e.name][date] === '休' && !offMap.has(`${e.name}_${date}`)
+          isPTEmp(e) && schedule[e.name][date] === '休' && !offMap.has(`${e.name}_${date}`) && !ptOverCap(e)
         )
         const tiers = [tier1, tier2]
 

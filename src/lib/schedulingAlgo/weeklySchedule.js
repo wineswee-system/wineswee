@@ -960,10 +960,22 @@ export function runProgrammaticSchedule(data) {
         return true
       })
       if (eligible.length === 0) continue
-      // 先找不會 over-staff 的；找不到再 fallback 第一個（不放棄）
+      // 先找不會 over-staff 的 safe shift
       const slotCov = computeDaySlotCov(date)
       const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
-      const sd = safe.length > 0 ? safe[0] : eligible[0]
+      if (safe.length === 0) {
+        // 時段制下找不到 safe → 排休（FT 多休一天無妨，絕對不 over-staff）
+        // 班別制下 slotCov 是 null → safe === eligible，永遠不會跑這條路
+        if (useTimeSlotMode) {
+          schedule[emp.name][date] = '休'
+        } else {
+          const sd = eligible[0]
+          schedule[emp.name][date] = sd.name
+          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+        }
+        continue
+      }
+      const sd = safe[0]
       schedule[emp.name][date] = sd.name
       actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
     }

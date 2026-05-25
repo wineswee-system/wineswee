@@ -525,48 +525,39 @@ export function runProgrammaticSchedule(data) {
           }
         }
 
-        const monthHrsSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
-        const empMonthTarget = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
+        // ★ 新版 Phase 3：簡單規則 — 不再分數比較 bestWindow
+        // 邏輯：對每個 emp，掃時間軸找「能填到某個缺人 slot 而且不會 over」的第一個 window 就用
         const ftIdeal = calcFTGross(emp.name)
-        const monthHoursDeficit = empMonthTarget - monthHrsSoFar
-        const ptIdeal = monthHoursDeficit > 30 ? 8 : monthHoursDeficit > 15 ? 7 : 6
         const grossDurations = pt
-          ? [ptIdeal, ptIdeal - 1, ptIdeal - 2, ptIdeal - 3].filter(h => h >= 3 && h <= maxGrossH)
-          : (ftIdeal > 9
-              ? [ftIdeal, ftIdeal - 1, 9].filter(h => h >= 9 && h <= maxGrossH)
-              : [9].filter(h => h <= maxGrossH))
+          ? [6, 5, 4]                                  // PT 試 6/5/4h
+          : [ftIdeal, 9].filter(h => h <= maxGrossH)   // FT 用 ideal 跟 9h fallback
 
-        let bestWindow = null
-        let bestScore = -Infinity
+        const wouldOver = (window) => slotCoverage.some(s => {
+          const maxC = s.max_count || s.required_count + 2
+          if (s.covered < maxC) return false
+          return overlaps(window.start, window.end, s.start_time, s.end_time)
+        })
+        const fillsGap = (window) => slotCoverage.some(s =>
+          s.covered < s.required_count &&
+          overlaps(window.start, window.end, s.start_time, s.end_time)
+        )
 
-        for (const grossH of grossDurations) {
+        let chosenWindow = null
+        outer: for (const grossH of grossDurations) {
           for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
             const window = tryShift(emp, h, grossH)
             if (!window) continue
-            let score = scoreCoverage(window.start, window.end)
-            if (score <= -100) continue
-            const firstUncovered = slotCoverage.find(s => s.covered < s.required_count)
-            if (firstUncovered) {
-              const uncovStart = parseTime(firstUncovered.start_time)
-              if (Math.abs(h - uncovStart) < 1) score += 25
-            }
-            if (!hasOpener && Math.abs(h - storeOpenH) < 0.5) score += 50
-            if (!hasCloser && (h + grossH) >= effectiveCloseH - 0.5) score += 50
-            const afterHours = weekHours + window.netH
-            if (afterHours >= range.min && afterHours <= range.max) score += 15
-            else if (afterHours < range.min) score += 3
-            if (afterHours > range.max) score -= 20
-            if (!pt && afterHours < range.min) score += (window.netH - 8) * 8
-            const fatigue = fatigueMap[emp.name] || 0
-            if (fatigue > 15) score -= fatigue * 0.3
-            if (score > bestScore) { bestScore = score; bestWindow = window }
+            if (wouldOver(window)) continue
+            if (!fillsGap(window)) continue
+            chosenWindow = window
+            break outer
           }
         }
 
-        if (bestWindow && bestScore > -50) {
-          doAssign(emp, bestWindow)
+        if (chosenWindow) {
+          doAssign(emp, chosenWindow)
         } else {
-          if (!isPTEmp(emp)) { /* 不休，留空 */ }
+          if (!isPTEmp(emp)) { /* FT 不休，留空 */ }
           else schedule[emp.name][date] = '休'
         }
       }

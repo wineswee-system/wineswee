@@ -1030,90 +1030,30 @@ export function runProgrammaticSchedule(data) {
   }
   } // end else (shift-based mode)
 
-  // ── Step 3b: Fill unassigned FT cells ──
-  // 時段制下這是 fallback：Phase 4 force-fill 補完後仍有 FT 留空時把人塞上
-  // 為了避免時段制原本的兩個問題：
-  //   1. 格式：時段制下用 tilde 格式（與 fmtLabel 一致）
-  //   2. 不 over-staff：跑前每天重新計算 slotCoverage，遇 max 就跳這個 shift
-  for (const emp of employees) {
-    if (isPTEmp(emp)) continue
-    for (const date of weekDates) {
-      if (schedule[emp.name][date]) continue
-      if (restDayPlan[emp.name].has(date)) continue
-      const dow = new Date(date).getDay()
-      const isWeekend = isWeekendDay(dow)
-
-      // 時段制下：重算當天 slotCoverage 並選不會 over-staff 的 shift
-      if (useTimeSlotMode) {
-        const daySlots = timeSlots.filter(s =>
-          s.day_type === 'all' || (s.day_type === 'weekend' && isWeekend) || (s.day_type === 'weekday' && !isWeekend)
-        )
-        const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
-        for (const e2 of employees) {
-          const s2 = schedule[e2.name][date]
-          if (s2 && !isAbsence(s2)) {
-            const t = actualTimes[`${e2.name}_${date}`]
-            if (t) {
-              const tStart = t.start, tEnd = t.end
-              for (const slot of slotCov) {
-                const ws = parseTime(tStart), we = parseTime(tEnd)
-                const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-                const weEff = we <= ws ? we + 24 : we
-                const seEff = se <= ss ? se + 24 : se
-                if (ws < seEff && weEff > ss) slot.covered++
-              }
-            }
-          }
-        }
-        // 從 shift_definitions 找：覆蓋到的 slot 都未達 max（不 over-staff）
+  // ── Step 3b: Fill unassigned FT cells（只在班別制執行）──
+  // ★ 時段制下，Phase 4 force-fill 已會處理缺人；這個 fallback 反而會：
+  //   1. 用 shiftDef.name (dash 格式) 跟時段制 tilde 不一致
+  //   2. 不檢查 max_count → over-staff（例 5/25 早班 3 個 11-20 over max 2）
+  if (!useTimeSlotMode) {
+    for (const emp of employees) {
+      if (isPTEmp(emp)) continue
+      for (const date of weekDates) {
+        if (schedule[emp.name][date]) continue
+        if (restDayPlan[emp.name].has(date)) continue
+        const dow = new Date(date).getDay()
+        const isWeekend = isWeekendDay(dow)
         const eligible = sortedShifts.filter(sd => {
           if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
           if (sd.day_type === 'weekday' && isWeekend) return false
           if (sd.day_type === 'weekend' && !isWeekend) return false
           if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
-          const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
-          const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
-          for (const slot of slotCov) {
-            const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-            const seEff = se <= ss ? se + 24 : se
-            const overlapsSlot = sdStart < seEff && sdEndEff > ss
-            if (!overlapsSlot) continue
-            const maxC = slot.max_count || slot.required_count + 2
-            if (slot.covered >= maxC) return false  // 會 over → 跳這個 shift
-          }
           return true
         })
         if (eligible.length > 0) {
           const sd = eligible[0]
-          // 時段制：用 fmtLabel tilde 格式（與其他時段制 assignment 一致）
-          const sH = parseTime(sd.start_time)
-          const eH = parseTime(sd.end_time)
-          const fmt = (h) => `${String(Math.floor(h % 24)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`
-          const sStr = sd.start_time.replace(':00', '').replace(/^0/, '')
-          const eStr = sd.end_time.replace(':00', '').replace(/^0/, '')
-          const label = `${sStr}~${eStr}`
-          schedule[emp.name][date] = label
-          actualTimes[`${emp.name}_${date}`] = {
-            start: sd.start_time?.slice(0, 5),
-            end: sd.end_time?.slice(0, 5),
-            hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60,
-          }
-          continue
+          schedule[emp.name][date] = sd.name
+          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
         }
-      }
-
-      // 班別制（或時段制找不到 eligible）：照舊
-      const eligible = sortedShifts.filter(sd => {
-        if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
-        if (sd.day_type === 'weekday' && isWeekend) return false
-        if (sd.day_type === 'weekend' && !isWeekend) return false
-        if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
-        return true
-      })
-      if (eligible.length > 0) {
-        const sd = eligible[0]
-        schedule[emp.name][date] = sd.name
-        actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
       }
     }
   }

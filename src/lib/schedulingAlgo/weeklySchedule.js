@@ -744,7 +744,11 @@ export function runProgrammaticSchedule(data) {
   }
 
   // ── Step 3a: Hybrid Mode — 彈性補班 ──
-  if (storeSettings?.operating_hours || timeSlots.length > 0) {
+  // ★ 時段制下 SKIP — Phase 1-4 + Step 3b 已處理時段需求，跑這個會：
+  //   1. 覆蓋 restDayPlan 排的「休」→ FT 月休天數短少 (H11 違規)
+  //   2. 用 minStaff（不看 max_count）→ over-staff
+  //   3. 寫 "HH:MM-HH:MM" 格式（不一致）
+  if (!useTimeSlotMode && storeSettings?.operating_hours) {
     const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
     for (const date of weekDates) {
       const dow = new Date(date).getDay()

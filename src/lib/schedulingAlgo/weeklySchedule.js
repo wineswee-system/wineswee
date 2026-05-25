@@ -505,7 +505,7 @@ export function runProgrammaticSchedule(data) {
       }
       if (date === weekDates[0]) {
         const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
-        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}`).join(' ')
+        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}/max${s.max_count ?? 'NULL'}`).join(' ')
         console.log(`[DBG ${date}] After Phase1+2: ${summary} | slotCov: ${cov}`)
       }
 
@@ -556,7 +556,9 @@ export function runProgrammaticSchedule(data) {
         const wouldOver = (window) => slotCoverage.some(s => {
           const maxC = s.max_count || s.required_count + 2
           if (s.covered < maxC) return false
-          return overlaps(window.start, window.end, s.start_time, s.end_time)
+          const ov = overlaps(window.start, window.end, s.start_time, s.end_time)
+          if (date === weekDates[0] && ov) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} overlaps ${s.start_time}-${s.end_time} (covered=${s.covered} maxC=${maxC} max_count=${s.max_count} required=${s.required_count})`)
+          return ov
         })
         const fillsGap = (window) => slotCoverage.some(s =>
           s.covered < s.required_count &&

@@ -1030,25 +1030,30 @@ export function runProgrammaticSchedule(data) {
   }
   } // end else (shift-based mode)
 
-  // ── Step 3b: Fill unassigned FT cells ──
-  for (const emp of employees) {
-    if (isPTEmp(emp)) continue
-    for (const date of weekDates) {
-      if (schedule[emp.name][date]) continue
-      if (restDayPlan[emp.name].has(date)) continue
-      const dow = new Date(date).getDay()
-      const isWeekend = isWeekendDay(dow)
-      const eligible = sortedShifts.filter(sd => {
-        if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
-        if (sd.day_type === 'weekday' && isWeekend) return false
-        if (sd.day_type === 'weekend' && !isWeekend) return false
-        if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
-        return true
-      })
-      if (eligible.length > 0) {
-        const sd = eligible[0]
-        schedule[emp.name][date] = sd.name
-        actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+  // ── Step 3b: Fill unassigned FT cells（只在班別制執行）──
+  // ★ 時段制下，Phase 4 force-fill 已會處理缺人；這個 fallback 反而會：
+  //   1. 用 shiftDef.name (dash 格式) 跟時段制 tilde 不一致
+  //   2. 不檢查 max_count → over-staff（例 5/25 早班 3 個 11-20 over max 2）
+  if (!useTimeSlotMode) {
+    for (const emp of employees) {
+      if (isPTEmp(emp)) continue
+      for (const date of weekDates) {
+        if (schedule[emp.name][date]) continue
+        if (restDayPlan[emp.name].has(date)) continue
+        const dow = new Date(date).getDay()
+        const isWeekend = isWeekendDay(dow)
+        const eligible = sortedShifts.filter(sd => {
+          if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
+          if (sd.day_type === 'weekday' && isWeekend) return false
+          if (sd.day_type === 'weekend' && !isWeekend) return false
+          if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
+          return true
+        })
+        if (eligible.length > 0) {
+          const sd = eligible[0]
+          schedule[emp.name][date] = sd.name
+          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+        }
       }
     }
   }

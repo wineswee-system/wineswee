@@ -414,6 +414,16 @@ export function runProgrammaticSchedule(data) {
         if (grossH > wsConstraints.dailyAbsoluteMax) return null
         const weekHours = getEmpWeekHours(emp.name)
         if (weekHours + netH > hoursRange[emp.name].max + 2) return null
+        // ★ PT 月工時 cap hard check — 防止 PT 被排爆 ★
+        if (isPTEmp(emp)) {
+          const monthCap = monthTargetMap[emp.name]?.max
+          if (monthCap) {
+            const monthHrsSoFar = Object.entries(actualTimes)
+              .filter(([k]) => k.startsWith(emp.name + '_'))
+              .reduce((s, [, v]) => s + (v?.hours || 0), 0)
+            if (monthHrsSoFar + netH > monthCap) return null
+          }
+        }
         if (emp.can_open === false && startH < storeOpenH + 2) return null
         if (emp.can_close === false && endH > effectiveCloseH - 2) return null
         const dateIdx = weekDates.indexOf(date)

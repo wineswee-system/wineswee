@@ -387,11 +387,13 @@ export function validateMonthlyResult(assignments, data) {
       }
     }
 
-    // S5: Monthly hours check
+    // S5: Monthly hours check（用 storeSettings 設定值，按 cycle 天數比例）
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-    const monthlyMin = isPT ? 80 : 150
-    const monthlyMax = 175
-    const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
+    const ss = data.storeSettings || {}
+    const monthlyMin = isPT ? (ss.pt_monthly_hours_min ?? 80) : (ss.ft_monthly_hours_min ?? 150)
+    const monthlyMax = isPT ? (ss.pt_monthly_hours_max ?? 175) : (ss.ft_monthly_hours_max ?? 175)
+    // 永遠按比例：28 天 cycle 對 30 天月 → ratio = 28/30，不要 hard-code 28+ 算整月
+    const dayRatio = totalDays / 30
     const proRatedMin = Math.round(monthlyMin * dayRatio)
     const proRatedMax = Math.round(monthlyMax * dayRatio)
     if (totalHours > proRatedMax) {

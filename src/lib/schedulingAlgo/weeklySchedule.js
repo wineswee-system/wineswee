@@ -907,6 +907,44 @@ export function runProgrammaticSchedule(data) {
   } // end else (shift-based mode)
 
   // ── Step 3b: Fill unassigned FT cells ──
+  // 修：時段制下優先選「不會 over-staff（每個 slot 都未達 max）」的 shift
+  //     若全部 over → fallback 仍排第一個 eligible（避免 0/N 全空災難）
+  const computeDaySlotCov = (date) => {
+    if (!useTimeSlotMode) return null
+    const dow = new Date(date).getDay()
+    const isWE = isWeekendDay(dow)
+    const daySlots = timeSlots.filter(s =>
+      s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
+    )
+    const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
+    for (const e2 of employees) {
+      const s2 = schedule[e2.name][date]
+      if (!s2 || isAbsence(s2)) continue
+      const t = actualTimes[`${e2.name}_${date}`]
+      if (!t) continue
+      const ws = parseTime(t.start), we = parseTime(t.end)
+      const weEff = we <= ws ? we + 24 : we
+      for (const slot of slotCov) {
+        const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+        const seEff = se <= ss ? se + 24 : se
+        if (ws < seEff && weEff > ss) slot.covered++
+      }
+    }
+    return slotCov
+  }
+  const shiftWouldOverStaff = (sd, slotCov) => {
+    if (!slotCov) return false
+    const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
+    const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
+    for (const slot of slotCov) {
+      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      if (!(sdStart < seEff && sdEndEff > ss)) continue
+      const maxC = slot.max_count || slot.required_count + 2
+      if (slot.covered >= maxC) return true
+    }
+    return false
+  }
   for (const emp of employees) {
     if (isPTEmp(emp)) continue
     for (const date of weekDates) {
@@ -921,11 +959,13 @@ export function runProgrammaticSchedule(data) {
         if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
         return true
       })
-      if (eligible.length > 0) {
-        const sd = eligible[0]
-        schedule[emp.name][date] = sd.name
-        actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
-      }
+      if (eligible.length === 0) continue
+      // 先找不會 over-staff 的；找不到再 fallback 第一個（不放棄）
+      const slotCov = computeDaySlotCov(date)
+      const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
+      const sd = safe.length > 0 ? safe[0] : eligible[0]
+      schedule[emp.name][date] = sd.name
+      actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
     }
   }
 

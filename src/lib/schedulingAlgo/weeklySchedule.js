@@ -216,22 +216,48 @@ export function runProgrammaticSchedule(data) {
     return aIsPT - bIsPT
   })
 
+  // 休假分散化 — 避免「2 FT 同日連休 2 天」整齊到不自然
+  // 評分（越低越優先選為休假日）：
+  //   demand            ← 低需求日優先休（原本就有）
+  //   peerResting × 2.5 ← 別人已休該日 → +2.5 分（壓制同日多人休）
+  //   adjacent × 3      ← emp 自己前後 1 天已休 → +3 分（壓制連休）
+  //   jitter × 0.5      ← 微量隨機破同分
+  // 每加一筆 rest 重新評分（peer/adj 會變）→ 用 while + re-sort
+  const adjacentRestCount = (empName, date) => {
+    const idx = weekDates.indexOf(date)
+    let cnt = 0
+    if (idx > 0 && restDayPlan[empName].has(weekDates[idx - 1])) cnt++
+    if (idx < weekDates.length - 1 && restDayPlan[empName].has(weekDates[idx + 1])) cnt++
+    return cnt
+  }
+  const restSpreadScore = (empName, date) => {
+    const demand = minWorkersPerDay[date] || minStaff
+    const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
+    const adj = adjacentRestCount(empName, date)
+    return demand + peerResting * 2.5 + adj * 3 + Math.random() * 0.5
+  }
+  const pickRestDays = (empName, count, minStaffPerDay) => {
+    let needed = count
+    while (needed > 0) {
+      const candidates = weekDates
+        .filter(d => !restDayPlan[empName].has(d) && !schedule[empName][d])
+        .map(d => ({ date: d, score: restSpreadScore(empName, d) }))
+        .filter(c => {
+          const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
+          const workingAfter = employees.length - restingOnDay - 1
+          return workingAfter >= minStaffPerDay(c.date)
+        })
+        .sort((a, b) => a.score - b.score)
+      if (candidates.length === 0) break
+      restDayPlan[empName].add(candidates[0].date)
+      needed--
+    }
+  }
+
   for (const emp of ftFirstOrder) {
     const remaining = getMonthRestRemaining(emp.name)
     if (remaining <= 0) continue
-    const candidates = weekDates
-      .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
-      .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
-      .sort((a, b) => a.demand - b.demand)
-    let needed = remaining
-    for (const c of candidates) {
-      if (needed <= 0) break
-      const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
-      const workingAfter = employees.length - restingOnDay - 1
-      if (workingAfter < (minWorkersPerDay[c.date] || minStaff)) continue
-      restDayPlan[emp.name].add(c.date)
-      needed--
-    }
+    pickRestDays(emp.name, remaining, (d) => minWorkersPerDay[d] || minStaff)
   }
 
   const maxMinWorkers = Math.max(...weekDates.map(d => minWorkersPerDay[d] || minStaff))
@@ -241,19 +267,8 @@ export function runProgrammaticSchedule(data) {
       if (isPT) continue
       const remaining = getMonthRestRemaining(emp.name)
       if (remaining <= 0) continue
-      const candidates = weekDates
-        .filter(d => !restDayPlan[emp.name].has(d) && !schedule[emp.name][d])
-        .map(d => ({ date: d, demand: minWorkersPerDay[d] || minStaff }))
-        .sort((a, b) => a.demand - b.demand)
-      let needed = remaining
-      for (const c of candidates) {
-        if (needed <= 0) break
-        const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
-        const workingAfter = employees.length - restingOnDay - 1
-        if (workingAfter < Math.max(1, (minWorkersPerDay[c.date] || minStaff) - 1)) continue
-        restDayPlan[emp.name].add(c.date)
-        needed--
-      }
+      // 第二輪允許 minStaff - 1（讓 FT 月休能補到目標）
+      pickRestDays(emp.name, remaining, (d) => Math.max(1, (minWorkersPerDay[d] || minStaff) - 1))
     }
   }
 

@@ -565,12 +565,14 @@ describe('monthly rest day precision', () => {
       ).length
       expect(restDays, `FT-${i} 月休 ${restDays} 天`).toBe(10)
     }
-    // 兼職不能因為搶休導致正職不足
+    // 兼職：上限 15 沒下限（force-fill 可能拉 PT 休去補時段缺人）
+    // 法定七休一 → 31 天月份至少 ~4 天休
     for (let i = 1; i <= 2; i++) {
       const restDays = result.assignments.filter(
         a => a.employee === `PT-${i}` && isAbsence(a.shift)
       ).length
-      expect(restDays, `PT-${i} 月休 ${restDays} 天`).toBeGreaterThanOrEqual(8)
+      expect(restDays, `PT-${i} 月休 ${restDays} 天，法定下限 4`).toBeGreaterThanOrEqual(4)
+      expect(restDays, `PT-${i} 月休 ${restDays} 天，上限 15`).toBeLessThanOrEqual(15)
     }
   })
 

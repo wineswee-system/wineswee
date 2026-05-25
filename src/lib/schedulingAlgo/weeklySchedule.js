@@ -414,6 +414,14 @@ export function runProgrammaticSchedule(data) {
             if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
           }
         }
+        // ★ 連續上班天數 hard check（FT 12 / PT 6）— 時段制原本沒檢查 ★
+        const fakeShiftDef = {
+          name: '__time_slot_window__',
+          start_time: fmtH(startH),
+          end_time: fmtH(endH),
+          break_minutes: (grossH - netH) * 60,
+        }
+        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
         return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
       }
 
@@ -566,6 +574,16 @@ export function runProgrammaticSchedule(data) {
             if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
           }
         }
+        // 連續上班天數 hard check（FT 12 / PT 6 — 由 isLegallyValid 處理）
+        // 模擬一個 shiftDef 給 isLegallyValid 用
+        const fakeShiftDef = {
+          name: '__force_fill__',
+          start_time: fmtH(startH),
+          end_time: fmtH(endH),
+          break_minutes: (grossH - (grossH >= 6 ? grossH - 1 : grossH - 0.5)) * 60,
+        }
+        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
+
         const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
         return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
       }

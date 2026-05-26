@@ -357,11 +357,13 @@ export function runTimeSlotMode(ctx) {
       }
       // ★ Set cover greedy：列所有 valid window，選補最多 deficit bucket 的
       // Score = 該 window 內 cov < required 的 bucket 數量（純粹數補位量，沒 weight）
-      // Tiebreaker: fill 同 → grossH 小者勝（短班優先）→ startH 大者勝（晚 start 優先）
+      // Tiebreaker: fill 同 → grossH 越接近 PT 標準 6h 越好（避免 4h 短班被偏好
+      //             讓 PT 月工時 < min）→ startH 大者勝（晚 start 優先）
       // 自動行為：
       //   - opener slot 缺人 → fill 高 → 自動排成 opener
       //   - closer slot 缺人 → fill 高 → 自動排成 closer
       //   - 頭重腳輕 → fill 偏 deficit 那邊 → 自動補晚班
+      //   - PT 偏好 6h 班，需要時才用 7-9h 或 4-5h
       //   - fill = 0 → 該 emp 沒地方補 (PT 排休、FT 留空 Step3b 補)
       const computeFill = (window) => {
         const ws = parseTime(window.start), we = parseTime(window.end)
@@ -377,8 +379,10 @@ export function runTimeSlotMode(ctx) {
         }
         return count
       }
+      // grossH 偏離 6h 的距離 — 越小越好（PT 標準 6h，FT 9h 也接近）
+      const grossDistance = (grossH) => Math.abs(grossH - 6)
 
-      let chosen = null  // { window, fill, grossH, h }
+      let chosen = null  // { window, fill, grossH, h, distance }
       for (const grossH of grossDurations) {
         for (let h = storeOpenH; h <= effectiveCloseH - grossH; h += 0.5) {
           const window = tryShift(emp, h, grossH)
@@ -386,11 +390,12 @@ export function runTimeSlotMode(ctx) {
           if (wouldOver(window)) continue
           const fill = computeFill(window)
           if (fill <= 0) continue
+          const distance = grossDistance(grossH)
           if (!chosen ||
               fill > chosen.fill ||
-              (fill === chosen.fill && grossH < chosen.grossH) ||
-              (fill === chosen.fill && grossH === chosen.grossH && h > chosen.h)) {
-            chosen = { window, fill, grossH, h }
+              (fill === chosen.fill && distance < chosen.distance) ||
+              (fill === chosen.fill && distance === chosen.distance && h > chosen.h)) {
+            chosen = { window, fill, grossH, h, distance }
           }
         }
       }

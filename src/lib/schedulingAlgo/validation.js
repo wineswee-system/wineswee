@@ -256,10 +256,6 @@ export function validateResult(assignments, data) {
           return startH < slotEndEff && endEff > slotStart
         }).length
         if (covering < slot.required_count) {
-          // ★ DEBUG: 把實際看到的 day assignments print 出來，方便定位「明明覆蓋卻判定不足」
-          const dayWork = assignments.filter(a => a.date === date && !isAbsence(a.shift))
-          console.log(`[S10 DEBUG] ${date} slot ${slot.start_time}-${slot.end_time}: covered=${covering}/${slot.required_count}`)
-          console.log(`  day work entries:`, dayWork.map(a => `${a.employee}=${a.shift}|actual=${a.actual_start || 'NULL'}~${a.actual_end || 'NULL'}`).join(' || '))
           violations.push({
             employee: '-', constraint: 'S10', law: '營運需求',
             message: `${date} ${slot.start_time}-${slot.end_time}: ${covering}/${slot.required_count} 人（不足）`,

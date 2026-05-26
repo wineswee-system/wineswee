@@ -212,6 +212,13 @@ export default function Schedule() {
   }, [schedules, weekStart])
 
   const getShift = (empName, date) => {
+    // 模擬中：aiDraft 存在時優先用 draft，避免「警告基於 aiDraft 但班表還是
+    // DB 殘留」造成的視覺不一致。發布後 aiDraft 會被清掉，自動 fallback 回
+    // schedules state（DB）。
+    if (aiDraft?.assignments) {
+      const a = aiDraft.assignments.find(a => a.employee === empName && a.date === date)
+      if (a) return a.shift
+    }
     const s = schedules.find(s => s.employee === empName && s.date === date)
     return s?.shift || ''
   }

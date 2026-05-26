@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { supabase } from './supabase'
 import { resolveLineAccount, getLiffTaskUrl } from './lineNotify'
 
@@ -20,13 +21,15 @@ function escapeHtml(str) {
 export function renderMentionsHTML(text, employees = []) {
   if (!text) return ''
   const escaped = text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-  return escaped.replace(MENTION_RE, (match, name) => {
+  const raw = escaped.replace(MENTION_RE, (match, name) => {
     const safeName = escapeHtml(name)
     const emp = employees.find(e => e.name === name)
     const color = emp ? 'var(--accent-cyan)' : 'var(--text-muted)'
     const bg = emp ? 'color-mix(in srgb, var(--accent-cyan) 15%, transparent)' : 'transparent'
     return `<span style="color:${color};background:${bg};padding:1px 4px;border-radius:3px;font-weight:600">@${safeName}</span>`
   })
+  // Defense-in-depth: pass through DOMPurify even though the string is already manually escaped
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['span'], ALLOWED_ATTR: ['style'] })
 }
 
 async function resolveMentionsToEmployees(names) {

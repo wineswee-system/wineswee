@@ -150,10 +150,12 @@ export default function Projects() {
   }, [])
 
   const load = async () => {
+    const orgId = profile?.organization_id
+    if (!orgId) return // Auth not ready; re-triggered when profile resolves (see useEffect below)
     setLoading(true)
     const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes] = await Promise.all([
-      supabase.from('projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
+      supabase.from('projects').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('workflow_instances').select('*').eq('organization_id', orgId).not('project_id', 'is', null).order('sort_order'),
       getEmployees(),
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
@@ -168,9 +170,9 @@ export default function Projects() {
     // when there are 200+ workflow instances (each UUID is 36 chars → 7KB+ query string).
     const wIds = (wRes.data || []).map(w => w.id)
     const [directRes, wfTaskRes] = await Promise.all([
-      supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order'),
+      supabase.from('tasks').select('*').eq('organization_id', orgId).not('project_id', 'is', null).order('step_order'),
       wIds.length > 0
-        ? supabase.from('tasks').select('*').in('workflow_instance_id', wIds).order('step_order')
+        ? supabase.from('tasks').select('*').eq('organization_id', orgId).in('workflow_instance_id', wIds).order('step_order')
         : Promise.resolve({ data: [] }),
     ])
     // Deduplicate: a task may have both project_id and workflow_instance_id set
@@ -190,7 +192,8 @@ export default function Projects() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  // Re-run when auth profile resolves (avoids race where load() fires before profile is ready)
+  useEffect(() => { if (profile?.organization_id) load() }, [profile?.organization_id])
 
   // Live-sync: reflect task & workflow-instance changes from other users/tabs
   useRealtimeTasks(setTasks)

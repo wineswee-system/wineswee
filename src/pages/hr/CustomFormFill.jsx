@@ -385,6 +385,12 @@ function FieldRender({ field, value, onChange, pickerData }) {
     const canAdd = fileList.length < maxFiles
 
     const uploadFile = async (file) => {
+      // Validate size (max 10 MB) and MIME type before uploading
+      const MAX_SIZE = 10 * 1024 * 1024
+      if (file.size > MAX_SIZE) { toast.error('檔案不可超過 10MB'); return null }
+      const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+      if (!ALLOWED_TYPES.includes(file.type)) { toast.error('僅允許圖片（JPG/PNG/GIF/WebP）或 PDF 檔案'); return null }
+
       const path = `form-uploads/${Date.now()}_${safeStorageName(file.name)}`
       const { data: upload, error } = await supabase.storage.from('uploads').upload(path, file)
       if (error) { toast.error('上傳失敗：' + error.message); return null }

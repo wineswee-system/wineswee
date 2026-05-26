@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import DOMPurify from 'dompurify'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { notifyInterviewScheduled } from '../../lib/lineNotify'
@@ -1805,9 +1806,13 @@ function OfferTemplateEditor({ initial, onSave, onCancel }) {
     setSaving(false)
   }
 
-  const previewHtml = fillPreview(
-    body.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>'),
-    SAMPLE_DATA
+  // Sanitize before injecting into dangerouslySetInnerHTML — prevents stored XSS from user-authored body text
+  const previewHtml = DOMPurify.sanitize(
+    fillPreview(
+      body.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>'),
+      SAMPLE_DATA
+    ),
+    { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'span'], ALLOWED_ATTR: ['style'] }
   )
 
   return (

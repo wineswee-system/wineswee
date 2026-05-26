@@ -28,6 +28,7 @@ export default function PortalHome() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
   const [isOvertime, setIsOvertime] = useState(false)
+  const [isLeaveAdj, setIsLeaveAdj] = useState(false)
 
   const today = todayTW()
   const hour = new Date().getHours()
@@ -78,12 +79,16 @@ export default function PortalHome() {
         accuracy: result.accuracy ?? null,   // ?? not || — 0 is a valid GPS accuracy
         ip: result.ip,
         is_overtime: isOvertime,
+        is_leave_adjustment: isLeaveAdj,
       })
 
       setTodayAttendance(data.record)
       setIsOvertime(false)   // reset after successful clock
+      setIsLeaveAdj(false)
       const timeStr = nowTimeTW()
-      const extra = isOvertime ? '，加班申請已送出待審核' : ''
+      const extra = isOvertime ? '，加班申請已送出待審核'
+        : isLeaveAdj  ? '，已標記為請假出勤'
+        : ''
 
       if (action === 'clock_in') {
         setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}${extra}` })
@@ -173,27 +178,29 @@ export default function PortalHome() {
               }}
             >
               {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}
-              {clockingIn ? '定位中...' : isOvertime ? `加班${clockAction}` : clockAction}
+              {clockingIn ? '定位中...' : isOvertime ? `加班${clockAction}` : isLeaveAdj ? `請假${clockAction}` : clockAction}
             </button>
           )}
         </div>
 
-        {/* ── Overtime checkbox — above the clock button, visible whenever a clock action exists ── */}
+        {/* ── Overtime checkbox ── */}
         {clockAction && (
           <label
             style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
-              padding: '8px 12px', borderRadius: 10, marginBottom: 12,
+              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isLeaveAdj ? 'not-allowed' : 'pointer',
+              padding: '8px 12px', borderRadius: 10, marginBottom: 8,
               background: isOvertime ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)',
               border: `1px solid ${isOvertime ? 'var(--accent-orange)' : 'transparent'}`,
               transition: 'all 0.2s', userSelect: 'none',
+              opacity: isLeaveAdj ? 0.4 : 1,
             }}
           >
             <input
               type="checkbox"
               checked={isOvertime}
-              onChange={e => setIsOvertime(e.target.checked)}
-              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-orange)', cursor: 'pointer', flexShrink: 0 }}
+              disabled={isLeaveAdj}
+              onChange={e => { setIsOvertime(e.target.checked); if (e.target.checked) setIsLeaveAdj(false) }}
+              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-orange)', cursor: isLeaveAdj ? 'not-allowed' : 'pointer', flexShrink: 0 }}
             />
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: isOvertime ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>
@@ -203,6 +210,38 @@ export default function PortalHome() {
                 {isOvertime
                   ? '✔ 不受時段限制，系統將自動送出加班申請（待主管審核）'
                   : '勾選後可在排班時段外打卡，並自動建立加班申請'}
+              </div>
+            </div>
+          </label>
+        )}
+
+        {/* ── Leave-adjustment checkbox ── */}
+        {clockAction && (
+          <label
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isOvertime ? 'not-allowed' : 'pointer',
+              padding: '8px 12px', borderRadius: 10, marginBottom: 12,
+              background: isLeaveAdj ? 'var(--accent-blue-dim)' : 'var(--bg-secondary)',
+              border: `1px solid ${isLeaveAdj ? 'var(--accent-blue)' : 'transparent'}`,
+              transition: 'all 0.2s', userSelect: 'none',
+              opacity: isOvertime ? 0.4 : 1,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isLeaveAdj}
+              disabled={isOvertime}
+              onChange={e => { setIsLeaveAdj(e.target.checked); if (e.target.checked) setIsOvertime(false) }}
+              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-blue)', cursor: isOvertime ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+            />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: isLeaveAdj ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
+                延遲／提早打卡（因請假）
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
+                {isLeaveAdj
+                  ? '✔ 遲到上班或提早下班不計罰，標記為請假出勤（須在班別時段內）'
+                  : '今日有請假？勾選後遲到／早退不計入遲到紀錄'}
               </div>
             </div>
           </label>

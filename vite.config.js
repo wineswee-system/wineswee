@@ -28,7 +28,15 @@ export default defineConfig({
   plugins: [employeePortalPlugin(), react(), tailwindcss()],
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    // Security headers for dev server — mirror these in your hosting provider config
+    // (Vercel: vercel.json headers[], Netlify: public/_headers, Nginx: add_header)
+    headers: {
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
+    },
   },
   build: {
     rollupOptions: {

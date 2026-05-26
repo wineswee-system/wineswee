@@ -180,7 +180,7 @@ export default function Tasks() {
       description: form.description || null,
       approval_chain_id: chainId,
       confirmation_mode: form.approval_mode === 'people' ? (form.confirmation_mode || 'parallel') : null,
-      status: '未開始',
+      status: '待處理',
       organization_id: profile?.organization_id || null,
     })
     if (data) {

@@ -203,7 +203,7 @@ export default function Attendance() {
       )}
 
       {tab === 'records' && <>
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">正常</div>
           <div className="stat-card-value">{filtered.filter(r => r.status === '正常').length}</div>
@@ -211,6 +211,10 @@ export default function Attendance() {
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
           <div className="stat-card-label">遲到</div>
           <div className="stat-card-value">{filtered.filter(r => r.status === '遲到').length}</div>
+        </div>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
+          <div className="stat-card-label">加班打卡</div>
+          <div className="stat-card-value">{filtered.filter(r => r.status === '加班').length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)' }}>
           <div className="stat-card-label">未打卡</div>
@@ -264,7 +268,7 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px' }}>
                       {isNotClocked
                         ? <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
-                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
                       }
                     </div>
                     <div style={{ padding: '4px 8px' }}>
@@ -289,11 +293,13 @@ export default function Attendance() {
         const empMap = {}
         for (const r of filtered) {
           if (!r.employee) continue
-          if (!empMap[r.employee]) empMap[r.employee] = { days: 0, hours: 0, late: 0, normal: 0, records: [] }
+          if (!empMap[r.employee]) empMap[r.employee] = { days: 0, hours: 0, late: 0, normal: 0, overtime: 0, leaveAdj: 0, records: [] }
           empMap[r.employee].records.push(r)
           if (r.hours > 0) { empMap[r.employee].days++; empMap[r.employee].hours += Number(r.hours) }
           if (r.status === '遲到') empMap[r.employee].late++
           if (r.status === '正常') empMap[r.employee].normal++
+          if (r.status === '加班') empMap[r.employee].overtime++
+          if (r.status === '請假') empMap[r.employee].leaveAdj++
         }
         const empList = Object.entries(empMap).map(([name, data]) => ({
           name, ...data,
@@ -335,11 +341,11 @@ export default function Attendance() {
                   <thead>
                     <tr>
                       <th>員工</th><th>門市</th><th>出勤天數</th><th>總工時</th><th>平均工時</th>
-                      <th>正常</th><th>遲到</th><th>工時分佈</th>
+                      <th>正常</th><th>遲到</th><th>加班</th><th>請假</th><th>工時分佈</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {empList.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
+                    {empList.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>無資料</td></tr>}
                     {empList.map(e => {
                       const maxHours = Math.max(...empList.map(x => x.hours), 1)
                       const pct = (e.hours / maxHours) * 100
@@ -352,6 +358,8 @@ export default function Attendance() {
                           <td style={{ textAlign: 'center' }}>{e.avg.toFixed(1)}h</td>
                           <td style={{ textAlign: 'center', color: 'var(--accent-green)' }}>{e.normal}</td>
                           <td style={{ textAlign: 'center', color: e.late > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{e.late}</td>
+                          <td style={{ textAlign: 'center', color: e.overtime > 0 ? 'var(--accent-purple)' : 'var(--text-muted)' }}>{e.overtime}</td>
+                          <td style={{ textAlign: 'center', color: e.leaveAdj > 0 ? 'var(--accent-blue)' : 'var(--text-muted)' }}>{e.leaveAdj}</td>
                           <td style={{ minWidth: 120 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--glass-light)', overflow: 'hidden' }}>

@@ -177,7 +177,9 @@ export default function SOPTemplates() {
           role: step.role || null,
           assignee,
           priority: step.priority || '中',
-          status: '待處理',
+          // Step 0 starts immediately (進行中); subsequent steps wait for cascade (待處理)
+          status: i === 0 ? '進行中' : '待處理',
+          started_at: i === 0 ? new Date().toISOString() : null,
           due_date: '',
         })
         if (error) throw error

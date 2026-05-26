@@ -69,7 +69,8 @@ serve(async (req: Request) => {
       action,
       lat, lng, accuracy,
       ip: clientIP,
-      is_overtime = false,   // 加班模式：bypass tolerance windows, auto-create overtime_requests
+      is_overtime         = false,  // 加班模式：bypass tolerance windows, auto-create overtime_requests
+      is_leave_adjustment = false,  // 請假模式：waive late/early-leave penalty, must stay within shift window
     } = body
 
     if (!action) {
@@ -241,6 +242,7 @@ serve(async (req: Request) => {
       lateMinutes: number
       tooEarly: boolean
       tooEarlyMinutes: number
+      resolvedEndMinutes: number | null  // shift/office-hours end in minutes-since-midnight (for leave-adj check)
     }> => {
       const storeTolerance: number = location?.late_tolerance_minutes ?? 5
       const earlyWindow: number    = location?.early_clock_minutes    ?? 30
@@ -256,18 +258,32 @@ serve(async (req: Request) => {
 
       // Resolve the effective shift start: actual_start override → shift_definitions lookup
       let resolvedStartTime: string | null = null
+      let resolvedEndTime:   string | null = null   // end_time from shift_definitions
+
       if (schedule?.actual_start) {
         resolvedStartTime = String(schedule.actual_start).slice(0, 5)
+        // no per-day end override — fall through to shift_def or office hours below
       } else if (schedule?.shift) {
         const { data: shiftDef } = await supabase
           .from('shift_definitions')
-          .select('start_time')
+          .select('start_time, end_time')
           .eq('name', schedule.shift)
           .or(`store_id.eq.${emp.store_id ?? 0},store_id.is.null`)
           .order('store_id', { ascending: false, nullsFirst: false })  // prefer store-specific over global
           .limit(1)
           .maybeSingle()
         resolvedStartTime = shiftDef?.start_time?.slice(0, 5) ?? null
+        resolvedEndTime   = shiftDef?.end_time?.slice(0, 5)   ?? null
+      }
+
+      // Resolve shift end: shift_definitions.end_time → office_hours_end → null
+      const officeEndStr: string | null = (location?.has_office_hours && location?.office_hours_end)
+        ? String(location.office_hours_end).slice(0, 5) : null
+      const effectiveEndStr = resolvedEndTime ?? officeEndStr
+      let resolvedEndMinutes: number | null = null
+      if (effectiveEndStr) {
+        const [eH, eM] = effectiveEndStr.split(':').map(Number)
+        resolvedEndMinutes = eH * 60 + eM
       }
 
       if (resolvedStartTime) {
@@ -277,16 +293,16 @@ serve(async (req: Request) => {
         // Early check — no cross-midnight correction needed (schedule is date-scoped)
         const minsUntilShift = shiftStartMinutes - currentMinutes
         if (minsUntilShift > earlyWindow) {
-          return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift }
+          return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift, resolvedEndMinutes }
         }
 
         // Late check
         let lateMinutes = currentMinutes - shiftStartMinutes
         if (lateMinutes < -720) lateMinutes += 1440  // cross-midnight night shift
         if (lateMinutes > storeTolerance) {
-          return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0 }
+          return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
         }
-        return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0 }
+        return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
       }
 
       // Fallback: store office hours start, else 09:00
@@ -298,14 +314,14 @@ serve(async (req: Request) => {
 
       const minsUntilShift = shiftStartMinutes - currentMinutes
       if (minsUntilShift > earlyWindow) {
-        return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift }
+        return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift, resolvedEndMinutes }
       }
 
       const lateMinutes = currentMinutes - shiftStartMinutes
       if (lateMinutes > storeTolerance) {
-        return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0 }
+        return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
       }
-      return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0 }
+      return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
     }
 
     // ── clock_in ─────────────────────────────────────────
@@ -346,9 +362,10 @@ serve(async (req: Request) => {
         overtimeRequestId = otReq.id
 
       } else {
-        // ── Normal mode: enforce time windows ──────────────────────────────
+        // ── Normal / leave-adjustment mode: enforce time windows ───────────
         const result = await determineLateStatus()
 
+        // tooEarly always blocks — leave adj does not grant early-arrival privilege
         if (result.tooEarly) {
           return new Response(JSON.stringify({
             error: `打卡失敗：距上班時間尚有 ${result.tooEarlyMinutes} 分鐘，超出提前打卡容許範圍（${location?.early_clock_minutes ?? 30} 分鐘）`,
@@ -356,9 +373,26 @@ serve(async (req: Request) => {
           }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
 
-        clockStatus  = result.status
-        isLate       = result.isLate
-        lateMinutes  = result.lateMinutes
+        if (is_leave_adjustment) {
+          // ── Leave-adjustment mode ─────────────────────────────────────────
+          // Must still be within the shift / office-hours window.
+          // Clocking in after shift end means the employee is working overtime —
+          // they should use the overtime checkbox instead.
+          if (result.resolvedEndMinutes !== null && currentMinutes > result.resolvedEndMinutes) {
+            const endLabel = `${String(Math.floor(result.resolvedEndMinutes / 60)).padStart(2, '0')}:${String(result.resolvedEndMinutes % 60).padStart(2, '0')}`
+            return new Response(JSON.stringify({
+              error: `打卡失敗：打卡時間（${timeStr}）已超出班別結束時間（${endLabel}），請改勾選「加班打卡」`,
+            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          }
+          // Waive the late penalty — record as '請假' instead of '遲到'
+          clockStatus = result.isLate ? '請假' : result.status
+          // isLate and lateMinutes remain at defaults (false / 0)
+        } else {
+          // ── Normal mode ───────────────────────────────────────────────────
+          clockStatus  = result.status
+          isLate       = result.isLate
+          lateMinutes  = result.lateMinutes
+        }
       }
 
       const { data, error } = await supabase.from('attendance_records').insert({
@@ -370,8 +404,9 @@ serve(async (req: Request) => {
         total_hours:         0,
         is_late:             isLate,
         late_minutes:        lateMinutes,
-        is_overtime:         is_overtime,
-        overtime_request_id: overtimeRequestId,
+        is_overtime:          is_overtime,
+        overtime_request_id:  overtimeRequestId,
+        is_leave_adjustment:  is_leave_adjustment,
         clock_in_lat:        lat || null,
         clock_in_lng:        lng || null,
         clock_in_distance_m: method === 'gps' && lat && lng && location?.lat != null
@@ -411,8 +446,24 @@ serve(async (req: Request) => {
         })
       }
 
+      // ── Leave-adjustment clock-out: validate still inside shift / office window ──
+      // Clocking out before the shift even starts makes no sense (haven't started work).
+      if (is_leave_adjustment) {
+        const officeStartStr = (location?.has_office_hours && location?.office_hours_start)
+          ? String(location.office_hours_start).slice(0, 5) : null
+        if (officeStartStr) {
+          const [osH, osM] = officeStartStr.split(':').map(Number)
+          if (currentMinutes < osH * 60 + osM) {
+            return new Response(JSON.stringify({
+              error: `打卡失敗：打卡時間（${timeStr}）早於辦公開始時間（${officeStartStr}），尚未開始上班`,
+            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          }
+        }
+      }
+
       // Early-leave check against office hours end (symmetric with late-arrival tolerance).
-      if (!is_overtime && location?.has_office_hours && location?.office_hours_end) {
+      // Skipped when is_overtime OR is_leave_adjustment (employee leaving early due to approved leave).
+      if (!is_overtime && !is_leave_adjustment && location?.has_office_hours && location?.office_hours_end) {
         const storeTolerance: number = location?.late_tolerance_minutes ?? 5
         const officeEndStr = String(location.office_hours_end).slice(0, 5)
         const [oeH, oeM] = officeEndStr.split(':').map(Number)
@@ -440,6 +491,11 @@ serve(async (req: Request) => {
         clock_out:       timeStr,
         clock_out_time:  now.toISOString(),
         total_hours:     parseFloat((workedMinutes / 60).toFixed(2)),
+      }
+
+      if (is_leave_adjustment) {
+        // Stamp flag so HR can see the early-leave was leave-justified (even if clock_in was normal)
+        updatePayload.is_leave_adjustment = true
       }
 
       if (is_overtime) {
@@ -500,6 +556,7 @@ serve(async (req: Request) => {
       locationName: location?.name || '未知',
       ip: resolvedIP,
       is_overtime,
+      is_leave_adjustment,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

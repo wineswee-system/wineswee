@@ -162,6 +162,24 @@ async function executeAction(action, config, context) {
     }
 
     case 'webhook': {
+      // ── SSRF guard ────────────────────────────────────────────
+      // Reject non-HTTPS URLs and any private/loopback/link-local
+      // address ranges to prevent SSRF against cloud metadata endpoints
+      // (e.g. 169.254.169.254) or internal services.
+      let parsedUrl
+      try {
+        parsedUrl = new URL(config.url)
+      } catch {
+        return { error: 'Invalid webhook URL' }
+      }
+      if (parsedUrl.protocol !== 'https:') {
+        return { error: 'Webhook URL must use HTTPS' }
+      }
+      const PRIVATE_IP = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|169\.254\.|::1$|fc00:|fe80:)/i
+      if (PRIVATE_IP.test(parsedUrl.hostname)) {
+        return { error: 'Webhook URL targets a private/internal address' }
+      }
+
       try {
         const res = await fetch(config.url, {
           method: config.method || 'POST',

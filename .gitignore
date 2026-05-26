@@ -3,6 +3,7 @@ dist
 .env
 .env.local
 .env.*.local
+.env.*
 .audit-backup/
 .vercel/
 graphify-out/

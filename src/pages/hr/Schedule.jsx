@@ -570,8 +570,8 @@ export default function Schedule() {
     // Update publish status
     const store = locations.find(l => l.name === storeFilter)
     if (month && store) {
-      const profile = JSON.parse(localStorage.getItem('sme_profile') || '{}')
-      const pubData = { store_id: store.id, month, status: 'published', published_at: new Date().toISOString(), published_by: profile?.name || 'unknown' }
+      // Use authenticated profile from AuthContext — do NOT read from localStorage (untrusted)
+      const pubData = { store_id: store.id, month, status: 'published', published_at: new Date().toISOString(), published_by: authProfile?.name || 'unknown' }
       await supabase.from('schedule_publish_status').upsert(pubData, { onConflict: 'store_id,month' })
       setPublishStatus(pubData)
     }

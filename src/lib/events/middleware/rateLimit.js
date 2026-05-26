@@ -21,6 +21,12 @@ const DEFAULT_CONFIG = {
 const MAX_COUNTERS = 1000
 
 // Sliding window counters: Map<key, { count, windowStart }>
+// NOTE: These counters are in-memory and module-scoped.
+// In a multi-instance deployment (horizontal scaling / serverless) each instance
+// maintains independent counters, effectively multiplying the effective limit by N.
+// For single-instance / SPA-embedded use this is intentional and correct.
+// If EventBus is ever moved server-side, replace with a Redis-backed counter
+// (e.g. Upstash) to enforce limits across instances.
 const _counters = new Map()
 
 function _getOrCreate(key, now, windowMs) {

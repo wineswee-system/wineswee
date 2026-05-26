@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
       // 用 effective_permissions RPC 抓含個人 override 的最終清單
       setPermissions((permsResult.data || []).map(p => p.code).filter(Boolean))
     } catch (err) {
-      console.error('Failed to load employee profile:', err)
+      console.error('Failed to load employee profile:', err?.message ?? 'unknown error')
       setProfile(null)
       // Allow retry on next auth event
       profileLoaded.current = false

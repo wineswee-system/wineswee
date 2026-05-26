@@ -147,13 +147,19 @@ export default function Approvals() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [formsRes, stepsRes, chainsRes, storesRes] = await Promise.all([
-        supabase.from('approval_forms').select('*').order('created_at', { ascending: false }),
-        supabase.from('approval_form_steps').select('*').order('step_order'),
+      // Fetch forms (org-scoped), chains, and stores in parallel.
+      // approval_form_steps has no organization_id column, so we scope it by
+      // filtering to form IDs that already belong to this org (second round-trip).
+      const [formsRes, chainsRes, storesRes] = await Promise.all([
+        supabase.from('approval_forms').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
         getApprovalChains(orgId),
         supabase.from('stores').select('id, name').order('name'),
       ])
       if (formsRes.error) throw formsRes.error
+      const formIds = (formsRes.data || []).map(f => f.id)
+      const stepsRes = formIds.length > 0
+        ? await supabase.from('approval_form_steps').select('*').in('form_id', formIds).order('step_order')
+        : { data: [], error: null }
       if (stepsRes.error) throw stepsRes.error
       const stepsMap = {}
       for (const s of (stepsRes.data || [])) {

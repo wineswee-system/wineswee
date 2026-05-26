@@ -12,18 +12,26 @@ const log = logger.forModule('events.sanitizer')
  * Runs early in the middleware chain (after tenant context, before validator).
  */
 
-// Patterns that indicate potential injection attacks
-const DANGEROUS_PATTERNS = [
-  /<script\b[^>]*>/i,                          // XSS script tags
-  /javascript:/i,                               // XSS javascript: protocol
-  /on\w+\s*=/i,                                 // XSS event handlers (onclick=, etc.)
+// Patterns that indicate potential injection attacks.
+// BLOCK_PATTERNS → high-confidence destructive SQL; event is rejected and routed to DLQ.
+// WARN_PATTERNS  → XSS / ambiguous patterns; event is sanitized but allowed through.
+const BLOCK_PATTERNS = [
   /UNION\s+(?:ALL\s+)?SELECT/i,                // SQL UNION injection
   /;\s*DROP\s+TABLE/i,                          // SQL DROP injection
   /;\s*DELETE\s+FROM/i,                         // SQL DELETE injection
   /'\s*OR\s+'?\d*'?\s*=\s*'?\d*'?/i,           // SQL OR 1=1 injection
+]
+
+const WARN_PATTERNS = [
+  /<script\b[^>]*>/i,                          // XSS script tags
+  /javascript:/i,                               // XSS javascript: protocol
+  /on\w+\s*=/i,                                 // XSS event handlers (onclick=, etc.)
   /--\s*$/,                                      // SQL comment termination
   /\/\*.*\*\//,                                  // SQL block comments
 ]
+
+// Combined for scanForInjection (detection/logging)
+const DANGEROUS_PATTERNS = [...BLOCK_PATTERNS, ...WARN_PATTERNS]
 
 // Fields that should be positive numbers
 const NUMERIC_POSITIVE_FIELDS = [
@@ -124,12 +132,23 @@ export async function sanitizerMiddleware(event, next) {
   // 1. Scan for injection patterns
   const violations = scanForInjection(event.payload)
   if (violations.length > 0) {
-    log.warn('Injection patterns detected in event payload', {
+    // Classify violations: BLOCK high-confidence destructive SQL; WARN+sanitize the rest
+    const blocking = violations.filter(v =>
+      BLOCK_PATTERNS.some(p => p.test(v.value))
+    )
+    if (blocking.length > 0) {
+      log.error('Blocking event: destructive SQL pattern detected in payload', {
+        event_type: event.type,
+        event_id: event.id,
+        violations: blocking,
+      })
+      throw new Error(`Event blocked: SQL injection pattern detected in field(s): ${blocking.map(v => v.field).join(', ')}`)
+    }
+    log.warn('Injection patterns detected in event payload — sanitizing', {
       event_type: event.type,
       event_id: event.id,
       violations,
     })
-    // Sanitize rather than block (defense-in-depth)
   }
 
   // 2. Sanitize all string values in payload

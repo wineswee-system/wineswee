@@ -212,12 +212,14 @@ export default function Schedule() {
   }, [schedules, weekStart])
 
   const getShift = (empName, date) => {
-    // 模擬中：aiDraft 存在時優先用 draft，避免「警告基於 aiDraft 但班表還是
-    // DB 殘留」造成的視覺不一致。發布後 aiDraft 會被清掉，自動 fallback 回
-    // schedules state（DB）。
+    // 模擬中：aiDraft 存在時純看 draft（找不到也不 fallback DB）
+    // 之前 `if (a) return a.shift` 找不到才 fallback schedules → 畫面跟警告
+    // 兩個 source 不同步：畫面顯示 DB 殘留「11:00~17:00」(2 人 cover)，但警告
+    // 基於 draft「休」(1 人 cover) → S10 警告 1/2 跟畫面看不一致的衝突
+    // 發布後 aiDraft 會被清掉，自動 fallback 回 schedules state（DB）
     if (aiDraft?.assignments) {
       const a = aiDraft.assignments.find(a => a.employee === empName && a.date === date)
-      if (a) return a.shift
+      return a?.shift || ''
     }
     const s = schedules.find(s => s.employee === empName && s.date === date)
     return s?.shift || ''

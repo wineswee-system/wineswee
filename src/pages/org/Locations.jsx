@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -8,6 +8,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { geocodeAddress } from '../../lib/geocoding'
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any' }
 
 export default function Locations() {
@@ -17,6 +18,7 @@ export default function Locations() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
   const [editingStore, setEditingStore] = useState(null) // null = new, object = editing
   const [form, setForm] = useState(EMPTY_FORM)
 
@@ -108,6 +110,21 @@ export default function Locations() {
     } catch (err) {
       console.error('Operation failed:', err)
       toast.error('操作失敗：' + (err.message || '未知錯誤'))
+    }
+  }
+
+  const handleGeocode = async () => {
+    if (!form.address) return toast.error('請先填寫地址')
+    setGeocoding(true)
+    try {
+      const { lat, lng, displayName } = await geocodeAddress(form.address)
+      set('lat', lat)
+      set('lng', lng)
+      toast.success(`已解析：${displayName.slice(0, 50)}…`)
+    } catch (err) {
+      toast.error(err.message || '座標解析失敗')
+    } finally {
+      setGeocoding(false)
     }
   }
 
@@ -214,7 +231,21 @@ export default function Locations() {
             </Field>
           </div>
           <Field label="地址">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北市大安區忠孝東路四段 1 號" value={form.address} onChange={e => set('address', e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="form-input" type="text" style={{ flex: 1 }} placeholder="台北市大安區忠孝東路四段 1 號" value={form.address} onChange={e => set('address', e.target.value)} />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                onClick={handleGeocode}
+                disabled={geocoding || !form.address}
+                title="從地址解析 GPS 座標"
+              >
+                {geocoding
+                  ? <span style={{ fontSize: 12 }}>解析中…</span>
+                  : <><MapPin size={12} /> 解析座標</>}
+              </button>
+            </div>
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="電話">
@@ -265,7 +296,7 @@ export default function Locations() {
               </Field>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              提示：可從 Google Maps 右鍵取得座標。員工需在設定範圍內才能打卡。
+              提示：點擊地址旁「解析座標」可自動填入，或從 Google Maps 右鍵取得座標手動輸入。
             </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>

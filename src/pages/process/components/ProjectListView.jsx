@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import ProjectDeployModal from './ProjectDeployModal'
 import ProjectFormModal from './ProjectFormModal'
+import ProjectTemplateModal from './ProjectTemplateModal'
 
 const STATUS_MAP = {
   '規劃中': { color: 'var(--accent-blue)',   bg: 'var(--accent-blue-dim)' },
@@ -66,7 +68,13 @@ export default function ProjectListView({
   handleDeploy,
   openDeploy,
   deployTpl,
+  // template edit/delete
+  onEditTemplate,
+  onDeleteTemplate,
+  tplSaving = false,
 }) {
+  const [editingTpl, setEditingTpl] = useState(null)
+
   return (
     <div className="fade-in">
       <div className="page-header">

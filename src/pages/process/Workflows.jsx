@@ -79,7 +79,7 @@ export default function Workflows() {
   // Create / Edit SOP template
   const [showCreateTplModal, setShowCreateTplModal] = useState(false)
   const [editingTplId, setEditingTplId] = useState(null)
-  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '' }], approval_chain_id: '' })
+  const [newTpl, setNewTpl] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', checklist_id: '', approval_chain_id: '', required_forms: [] }], approval_chain_id: '' })
   const [approvalChains, setApprovalChains] = useState([])
 
   // Workflow categories (流程分類)

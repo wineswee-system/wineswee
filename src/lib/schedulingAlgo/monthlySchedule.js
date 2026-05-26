@@ -284,8 +284,52 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     }
   }
 
+  // ★ Phase A/B 改了 allAssignments → weeklyViolations 的 S10 過時了
+  //   filter 掉舊 S10，對 Phase A/B 後的 allAssignments 重跑 S10 一次
+  //   修「畫面 3 人 cover 但警告 1/2」的 source-不同步 bug
+  const filteredAllViolations = allViolations.filter(v => v.constraint !== 'S10')
+  const freshS10 = []
+  const timeSlotsForS10 = data.timeSlots || []
+  if (timeSlotsForS10.length > 0) {
+    for (const date of monthDates) {
+      const dow = new Date(date).getDay()
+      const isWE = dow === 0 || dow === 6
+      const daySlots = timeSlotsForS10.filter(s =>
+        s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
+      )
+      for (const slot of daySlots) {
+        const slotStart = (() => { const [h, m] = String(slot.start_time).split(':').map(Number); return h + (m || 0) / 60 })()
+        const slotEnd = (() => { const [h, m] = String(slot.end_time).split(':').map(Number); return h + (m || 0) / 60 })()
+        const slotEndEff = slotEnd <= slotStart ? slotEnd + 24 : slotEnd
+        const covering = allAssignments.filter(a => {
+          if (a.date !== date) return false
+          if (a.shift === '休' || a.shift === '補休' || a.shift === '病' || a.shift === '特休' || a.shift === '會議' || a.shift === '產' || a.shift === '事' || a.shift === '婚' || a.shift === '喪' || a.shift === '公' || a.shift === '生' || a.shift === '工傷' || a.shift === '陪產' || a.shift === '未入職' || a.shift === '已離職') return false
+          let st = a.actual_start, en = a.actual_end
+          if (!st || !en) {
+            const m = String(a.shift || '').match(/^(\d{1,2}):?(\d{0,2})\s*[-~]\s*(\d{1,2}):?(\d{0,2})$/)
+            if (m) { st = `${m[1]}:${m[2] || '00'}`; en = `${m[3]}:${m[4] || '00'}` }
+          }
+          if (!st || !en) return false
+          const [sh, sm] = String(st).split(':').map(Number)
+          const [eh, em] = String(en).split(':').map(Number)
+          const startH = sh + (sm || 0) / 60
+          const endH = eh + (em || 0) / 60
+          const endEff = endH <= startH ? endH + 24 : endH
+          return startH < slotEndEff && endEff > slotStart
+        }).length
+        if (covering < slot.required_count) {
+          freshS10.push({
+            employee: '-', constraint: 'S10', law: '營運需求',
+            message: `${date} ${slot.start_time}-${slot.end_time}: ${covering}/${slot.required_count} 人（不足）`,
+            severity: 'warning',
+          })
+        }
+      }
+    }
+  }
+
   const monthlyViolations = validateMonthlyResult(allAssignments, data)
-  const combinedViolations = [...allViolations, ...monthlyViolations]
+  const combinedViolations = [...filteredAllViolations, ...freshS10, ...monthlyViolations]
   const stats = computeStats(
     allAssignments, data.employees, data.shiftDefs,
     monthDates, data.holidays || [],

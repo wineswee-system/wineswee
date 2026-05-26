@@ -143,12 +143,27 @@ export function runProgrammaticSchedule(data) {
   for (const s of existingSchedules) {
     if (schedule[s.employee]?.[s.date] !== undefined) {
       schedule[s.employee][s.date] = s.shift
-      // ★ 同步補 actualTimes，否則 validation S10 看不到這些 shift 的工時
-      if (!isAbsence(s.shift) && s.actual_start) {
-        actualTimes[`${s.employee}_${s.date}`] = {
-          start: typeof s.actual_start === 'string' ? s.actual_start.slice(0, 5) : s.actual_start,
-          end: typeof s.actual_end === 'string' ? s.actual_end.slice(0, 5) : s.actual_end,
-          hours: s.actual_hours || null,
+      // ★ 同步補 actualTimes — Phase 3 hourly buckets / S10 驗證都靠它算覆蓋
+      if (!isAbsence(s.shift)) {
+        let st = s.actual_start
+        let et = s.actual_end
+        let h = s.actual_hours
+        // shift 是 shift_definitions 內 fixed 班但 schedules 表沒填 actual_start/end
+        // → 從 shift_def 補，否則 covered 算 0、整個排班 logic 崩
+        if (!st || !et) {
+          const def = shiftDefs.find(d => d.name === s.shift)
+          if (def) {
+            st = def.start_time
+            et = def.end_time
+            if (!h) h = getShiftHours(def) - (def.break_minutes || 60) / 60
+          }
+        }
+        if (st && et) {
+          actualTimes[`${s.employee}_${s.date}`] = {
+            start: typeof st === 'string' ? st.slice(0, 5) : st,
+            end: typeof et === 'string' ? et.slice(0, 5) : et,
+            hours: h || null,
+          }
         }
       }
     }

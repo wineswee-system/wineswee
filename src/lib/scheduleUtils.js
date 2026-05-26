@@ -138,6 +138,8 @@ export const ABSENCE_TYPES = {
   MENSTRUAL:   '生',
   WORK_INJURY: '工傷',
   PATERNITY:   '陪產',
+  NOT_HIRED:   '未入職',
+  RESIGNED:    '已離職',
 }
 
 export const ABSENCE_CONFIG = {
@@ -158,6 +160,9 @@ export const ABSENCE_CONFIG = {
   '生':   { label: '生理假',   color: '#f43f5e', icon: '🌸', countsAsRest: false, payRate: 0.5 }, // 性平法：每月 1 天，超過併入病假
   '工傷': { label: '公傷病假', color: '#dc2626', icon: '🚑', countsAsRest: false, payRate: 1.0 }, // 勞基法 §59：原領工資補償
   '陪產': { label: '陪產假',   color: '#0891b2', icon: '👨‍👶', countsAsRest: false, payRate: 1.0 }, // 性平法：5 天全薪
+  // 邊界日 — 演算法用，員工尚未/不再服務於公司，countsAsRest=false 避免吃月休配額
+  '未入職': { label: '未入職',  color: '#cbd5e1', icon: '·',  countsAsRest: false, payRate: 0   },
+  '已離職': { label: '已離職',  color: '#cbd5e1', icon: '·',  countsAsRest: false, payRate: 0   },
 }
 
 /**

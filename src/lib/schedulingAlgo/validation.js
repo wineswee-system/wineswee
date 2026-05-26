@@ -287,7 +287,10 @@ export function validateMonthlyResult(assignments, data) {
   for (const d of shiftDefs) shiftDefMap[d.name] = d
 
   for (const emp of employees) {
-    const empAssignments = assignments.filter(a => a.employee === emp.name)
+    // 排除邊界日（未入職 / 已離職）— 員工尚未/不再服務於公司，不算進任何月制驗證
+    const empAssignments = assignments.filter(a =>
+      a.employee === emp.name && a.shift !== '未入職' && a.shift !== '已離職'
+    )
     const workEntries = empAssignments.filter(a => !isAbsence(a.shift))
     const restEntries = empAssignments.filter(a => isAbsence(a.shift))
 

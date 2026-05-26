@@ -114,6 +114,8 @@ export async function gatherSchedulingData({
       is_nursing: e.is_nursing,
       skills: e.skills || [],
       weekly_target_hours: e.weekly_target_hours || null,
+      join_date: e.join_date || null,       // 入職前的日子不排班
+      resign_date: e.resign_date || null,   // 離職後的日子不排班
     })),
     shiftDefs,
     weekDates: weekDates || dates,

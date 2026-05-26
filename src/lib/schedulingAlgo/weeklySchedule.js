@@ -153,6 +153,20 @@ export function runProgrammaticSchedule(data) {
   const restDayPlan = {}
   for (const emp of employees) restDayPlan[emp.name] = new Set()
 
+  // 邊界日（入職前 / 離職後）— 直接寫死 absence label，演算法後續會 skip
+  // 用 NOT_HIRED / RESIGNED（countsAsRest=false）避免吃進月休配額
+  for (const emp of employees) {
+    for (const date of weekDates) {
+      if (emp.join_date && date < emp.join_date) {
+        restDayPlan[emp.name].add(date)
+        schedule[emp.name][date] = '未入職'
+      } else if (emp.resign_date && date > emp.resign_date) {
+        restDayPlan[emp.name].add(date)
+        schedule[emp.name][date] = '已離職'
+      }
+    }
+  }
+
   for (const emp of employees) {
     for (const date of weekDates) {
       if (offMap.has(`${emp.name}_${date}`)) restDayPlan[emp.name].add(date)

@@ -150,7 +150,7 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),

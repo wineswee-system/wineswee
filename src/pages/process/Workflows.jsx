@@ -983,21 +983,9 @@ export default function Workflows() {
             if (depErr) console.error('[deploy] task_dependencies 建立失敗:', depErr)
           }
 
-          // ★ Bug 修：LINE 通知只發給第 1 步負責人
-          //   原本所有 step 的負責人都會立即收到通知 → 老闆是第 N 步審批者，部署當下就被打擾
-          //   修正後：第 1 步當下發；後續步驟由 autoProgressDependents 在前一步完成時接力發
-          const firstStepAssignee = insertedTasks[0]?.assignee
-          if (firstStepAssignee) {
-            const totalSteps = insertedTasks.length
-            const t0 = insertedTasks[0]
-            const title = totalSteps > 1
-              ? `🚀 [立即行動] ${t0.title}（流程共 ${totalSteps} 步，後續會接力通知）`
-              : `🚀 [立即行動] ${t0.title}`
-            notifyTaskAssignee(firstStepAssignee, title, loc || deployTemplate.name, t0.id, {
-              dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
-              approvalRequired: t0.status === '待簽核',
-            }).catch(() => {})
-          }
+          // ★ 第 1 步通知已由 DB trigger trg_task_enqueue_started_notify（AFTER INSERT）接手。
+          //   前端不再重複呼叫，避免同一人收到雙份通知。
+          //   後續步驟由 _task_advance_next_step / autoProgressDependents 在前一步完成後接力通知。
 
           // ★ 掛查核清單 + 確認審批人員（部署時 extras > 範本內建）
           //   ※ 不再吞錯誤；累計失敗最後 alert，避免使用者「設定了卻沒生效」

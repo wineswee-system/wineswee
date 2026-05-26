@@ -262,18 +262,22 @@ export function runProgrammaticSchedule(data) {
   }
 
   // ── Step 1c: 主動分配休假 ──────────────────────────────────────
-  // FT 跟 PT 都按 weeksLeft 分攤排休，避免一次排滿月制 target 把整週塞滿休
-  // 之前 PT 走 `return monthRemaining` 直接拿整月剩餘 → Week 1 想排 10 天但只 3
-  // 天 → 整週 0 工時 → slot 缺人沒人能補 → S10 警告
+  // 按「該週天數佔 cycle 比例」分攤排休（不是按週數平均）
+  // 之前 ceil(target / weeksLeft) → 譬如 PT target=14, weeksLeft=5 → avgPerWeek=3
+  //   Week 1 只 3 天但被分到 3 天休 → 整週 0 工時 → 5/1 slot 缺人 S10 警告
+  // 改成 round(target × weekDays / cycleDays)：Week 1 (3 days) PT 只排 ~2 天休
   const getMonthRestRemaining = (empName) => {
     const target = monthRestTarget[empName] || 10
     const thisWeekUsed = weekDates.filter(d => restDayPlan[empName].has(d)).length
     if (monthlyCtx) {
       const prevUsed = monthlyCtx.restDaysUsed?.[empName] || 0
       const monthRemaining = Math.max(0, target - prevUsed - thisWeekUsed)
-      const weeksLeft = (monthlyCtx.weeksRemaining ?? 0) + 1
-      const avgPerWeek = Math.ceil((target - prevUsed) / weeksLeft)
-      return Math.min(monthRemaining, Math.max(0, avgPerWeek - thisWeekUsed))
+      // 按該週天數比例分攤 — 短週（如 Week 1 = 3 天）按 dayProportion 算
+      // 用 ceil 而非 round，避免 round 後加總 < target 導致月休少 1 天
+      // 靠 monthRemaining cap 收斂（最後幾週被 cap 卡住）→ 加總精確命中 target
+      const cycleDays = monthlyCtx.cycleDays || 28
+      const targetThisWeek = Math.ceil(target * weekDates.length / cycleDays)
+      return Math.min(monthRemaining, Math.max(0, targetThisWeek - thisWeekUsed))
     }
     const weeklyTarget = Math.ceil(target / 4)
     return Math.max(0, weeklyTarget - thisWeekUsed)

@@ -151,6 +151,8 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         weeksRemaining: isCycleMode
           ? weekCycleIdx.slice(i + 1).filter(c => c === weekCycleIdx[i]).length
           : (weeks.length - i - 1),
+        // Step 1c 按 dayProportion 分攤排休用 — 避免短週 Week 1 (3 天) 被分到整週都休
+        cycleDays: monthDates.length,
       },
     }
 

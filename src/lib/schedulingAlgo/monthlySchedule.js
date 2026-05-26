@@ -226,6 +226,24 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           ra.actual_start = picked.start_time?.slice(0, 5) || '11:00'
           ra.actual_end = picked.end_time?.slice(0, 5) || '20:00'
           ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
+        } else {
+          // ★ 終極 fallback：shift_definitions 無對應 safe shift（譬如 PT 該店沒設專屬班）
+          //   → 生成 time-slot 動態 6h window，從該日 storeOpen 開始
+          //   嚴格 enforce cap（PT 月休 10 不能變 12）
+          const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+          const dow = new Date(ra.date).getDay()
+          const oh = data.storeSettings?.operating_hours?.[dayNames[dow]] ||
+                     data.storeSettings?.operatingHours?.[dayNames[dow]]
+          if (oh?.open) {
+            const startStr = oh.open.slice(0, 5)  // 'HH:MM'
+            const [sh, sm] = startStr.split(':').map(Number)
+            const endH = sh + 6  // PT 標準 6h
+            const endStr = `${String(endH % 24).padStart(2, '0')}:${String(sm).padStart(2, '0')}`
+            ra.shift = `${startStr}~${endStr}`
+            ra.actual_start = startStr
+            ra.actual_end = endStr
+            ra.actual_hours = 5  // 6h gross - 1h break
+          }
         }
       }
     }

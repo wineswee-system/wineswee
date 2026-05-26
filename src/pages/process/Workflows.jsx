@@ -15,6 +15,7 @@ import {
   getApprovalChains, drainEntity,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
@@ -141,6 +142,10 @@ export default function Workflows() {
     }).finally(() => setLoading(false))
   }, [])
 
+  // Live-sync: reflect task & workflow-instance changes from other users/tabs
+  useRealtimeTasks(setAllTasks)
+  useRealtimeWorkflowInstances(setInstances)
+
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動展開流程明細
   useEffect(() => {
     const focus = searchParams.get('focus')
@@ -204,6 +209,39 @@ export default function Workflows() {
           await triggerSopOnComplete(data.trigger_template_id_on_complete, data).catch(err => {
             console.warn('Trigger SOP on complete failed:', err)
           })
+        }
+
+        // ★ 條件分支：核准後跳至特定步驟（優先於順序推進）
+        if (data.branch_config?.on_approved && data.workflow_instance_id) {
+          const branchTask = latestTasks.find(t =>
+            t.workflow_instance_id === data.workflow_instance_id &&
+            t.step_order === data.branch_config.on_approved &&
+            t.status === '待處理'
+          )
+          if (branchTask) {
+            const { data: started } = await updateTask(branchTask.id, {
+              status: '進行中', started_at: new Date().toISOString(),
+            })
+            if (started) {
+              latestTasks = latestTasks.map(t => t.id === started.id ? started : t)
+              setAllTasks(latestTasks)
+            }
+          }
+        }
+      }
+
+      // ★ 條件分支：退回後啟動目標步驟
+      if (newStatus === '已退回' && data.branch_config?.on_rejected && data.workflow_instance_id) {
+        const branchTask = latestTasks.find(t =>
+          t.workflow_instance_id === data.workflow_instance_id &&
+          t.step_order === data.branch_config.on_rejected &&
+          t.status === '待處理'
+        )
+        if (branchTask) {
+          const { data: started } = await updateTask(branchTask.id, {
+            status: '進行中', started_at: new Date().toISOString(),
+          })
+          if (started) setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
         }
       }
 
@@ -297,17 +335,36 @@ export default function Workflows() {
     setInstances(prev => [newInst, ...prev])
   }
 
-  // Auto-progress: find tasks that depend on the completed task, start them if all prerequisites met
+  // Auto-progress: find tasks that depend on the completed task, start them if prerequisites met.
+  // Handles both fan-in (prerequisite — ALL prereqs must complete) and
+  // fan-out (trigger — immediately starts the target on completion).
   const autoProgressDependents = async (completedTaskId, instanceId, currentTasks) => {
     let result = [...currentTasks]
-    const { data: deps } = await supabase.from('task_dependencies')
+    const instTasks = () => result.filter(t => t.workflow_instance_id === instanceId)
+
+    const startTask = async (taskId) => {
+      const { data: started } = await updateTask(taskId, { status: '進行中', started_at: new Date().toISOString() })
+      if (started) {
+        result = result.map(t => t.id === started.id ? started : t)
+        setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
+        if (started.assignee) {
+          const inst = instances.find(i => i.id === instanceId)
+          notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
+            dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
+            approvalRequired: started.status === '待簽核',
+          }).catch(() => {})
+        }
+      }
+    }
+
+    // ── Fan-in: prerequisite deps ──────────────────────────────────────────
+    // Task B has dep (task_id=B, depends_on_task_id=completedTask, type=prerequisite)
+    // → B starts only when ALL its prerequisites are done
+    const { data: prereqDeps } = await supabase.from('task_dependencies')
       .select('*').eq('depends_on_task_id', completedTaskId).eq('dep_type', 'prerequisite')
-    if (!deps?.length) return result
 
-    const instTasks = result.filter(t => t.workflow_instance_id === instanceId)
-
-    for (const dep of deps) {
-      const targetTask = instTasks.find(t => t.id === dep.task_id)
+    for (const dep of prereqDeps || []) {
+      const targetTask = instTasks().find(t => t.id === dep.task_id)
       if (!targetTask || targetTask.status !== '待處理') continue
 
       const { data: allPrereqs } = await supabase.from('task_dependencies')
@@ -318,21 +375,21 @@ export default function Workflows() {
         return prereqTask?.status === '已完成'
       })
 
-      if (allMet) {
-        const { data: started } = await updateTask(dep.task_id, { status: '進行中' })
-        if (started) {
-          result = result.map(t => t.id === started.id ? started : t)
-          setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
-          if (started.assignee) {
-            const inst = instances.find(i => i.id === instanceId)
-            notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
-              dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
-              approvalRequired: started.status === '待簽核',
-            }).catch(() => {})
-          }
-        }
-      }
+      if (allMet) await startTask(dep.task_id)
     }
+
+    // ── Fan-out: trigger deps ──────────────────────────────────────────────
+    // Task B has dep (task_id=B, depends_on_task_id=completedTask, type=trigger)
+    // → B starts immediately when completedTask finishes, regardless of other deps
+    const { data: triggerDeps } = await supabase.from('task_dependencies')
+      .select('*').eq('depends_on_task_id', completedTaskId).eq('dep_type', 'trigger')
+
+    for (const dep of triggerDeps || []) {
+      const targetTask = instTasks().find(t => t.id === dep.task_id)
+      if (!targetTask || targetTask.status !== '待處理') continue
+      await startTask(dep.task_id)
+    }
+
     return result
   }
 
@@ -950,6 +1007,13 @@ export default function Workflows() {
             approval_chain_id: extras.approval_chain_id || step.approval_chain_id || null,
             confirmation_mode: extras.confirmation_mode || 'parallel',
             trigger_template_id_on_complete: extras.trigger_template_id || null,
+            // ★ 條件分支：核准/退回後跳至特定步驟（step_order，1-based）
+            branch_config: (step.branch_on_approved || step.branch_on_rejected)
+              ? {
+                  on_approved: step.branch_on_approved || null,
+                  on_rejected: step.branch_on_rejected || null,
+                }
+              : null,
           }
         })
         const { data: insertedTasks, error: tasksErr } = await createTasksBatch(taskRows)

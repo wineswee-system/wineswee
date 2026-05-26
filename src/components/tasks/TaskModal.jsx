@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Bell, Copy, Repeat, Calendar, Activity as ActivityIcon, Info } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Bell, Copy, Repeat, Activity as ActivityIcon, Info } from 'lucide-react'
+import RecurrenceEditor from './RecurrenceEditor'
 import InputModal from '../ui/InputModal'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import {
@@ -10,6 +11,7 @@ import {
   getApprovalChains, getApprovalFormByTask, getApprovalFormSteps,
   getTaskConfirmations,
   getChecklistItems,
+  getCategories,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -18,7 +20,7 @@ import { toast } from '../../lib/toast'
 import { useAuditLog } from '../../lib/useAuditLog'
 import { diffAndLogTask } from '../../lib/taskAudit'
 import { fmtDateTimeTW } from '../../lib/datetime'
-import { describeRule, materializeNextInstance } from '../../lib/recurrence'
+import { materializeNextInstance } from '../../lib/recurrence'
 import { notifyWatchers } from '../../lib/mentions'
 import ChangelogPanel from '../ChangelogPanel'
 import TaskWatchers from './TaskWatchers'
@@ -33,8 +35,8 @@ const PRIORITY_LIST = ['低', '中', '高']
 // 大分類 (bucket) — Chinese names; also normalises legacy English values from DB
 const BUCKET_OPTIONS = ['一般工作', '私人工作', '工作流程', '專案']
 const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
-// 業務分類 (category) options
-const CATEGORY_OPTIONS = ['工作流程', 'HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
+// 業務分類 (category) — loaded from DB scope='task'
+const CATEGORY_FALLBACK = ['一般', '緊急', '日常']
 
 export default function TaskModal({
   task, employees = [], sections = [], stores = [],
@@ -50,7 +52,7 @@ export default function TaskModal({
     assignee: '', assignee_id: null,
     bucket: '一般工作', category: '', store: '',
     planned_start: '', due_date: '', due_time: '', reminder_at: '',
-    section_id: '', recurrence_rule: '',
+    section_id: '', recurrence_rule: '', recurrence_until: '',
     notes: '', description: '',
     workflow_instance_id: '', project_id: '',
     approval_chain_id: '',
@@ -81,6 +83,7 @@ export default function TaskModal({
   const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
   const [sopTemplates, setSopTemplates] = useState([])
   const [triggeredInstances, setTriggeredInstances] = useState([])
+  const [taskCategories, setTaskCategories] = useState([])
 
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
   const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
@@ -88,6 +91,13 @@ export default function TaskModal({
   const closeInput = () => setInputModal(m => ({ ...m, open: false, onConfirm: null }))
 
   useEffect(() => { setIsDirty(false) }, [task?.id])
+
+  useEffect(() => {
+    getCategories('task').then(({ data }) => {
+      if (data?.length) setTaskCategories(data.map(c => c.name))
+      else setTaskCategories(CATEGORY_FALLBACK)
+    }).catch(() => setTaskCategories(CATEGORY_FALLBACK))
+  }, [])
 
   useEffect(() => {
     if (!task) return
@@ -109,6 +119,7 @@ export default function TaskModal({
       reminder_at: task.reminder_at || '',
       section_id: task.section_id || '',
       recurrence_rule: task.recurrence_rule || '',
+      recurrence_until: task.recurrence_until || '',
       notes: task.notes || task.description || '',
       description: task.description || task.notes || '',
       workflow_instance_id: task.workflow_instance_id || '',
@@ -202,6 +213,7 @@ export default function TaskModal({
       reminder_at: form.reminder_at || null,
       section_id: form.section_id ? Number(form.section_id) : null,
       recurrence_rule: form.recurrence_rule || null,
+      recurrence_until: form.recurrence_until || null,
       notes: form.notes || null,
       description: form.notes || null,
       workflow_instance_id: form.workflow_instance_id ? Number(form.workflow_instance_id) : null,
@@ -388,7 +400,7 @@ export default function TaskModal({
                     <select className="form-input" style={{ width: '100%' }} value={form.category}
                       onChange={e => setAndDirty('category', e.target.value)}>
                       <option value="">未指定</option>
-                      {CATEGORY_OPTIONS.map(c => <option key={c}>{c}</option>)}
+                      {taskCategories.map(c => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
@@ -488,22 +500,14 @@ export default function TaskModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)' }}>
                   <Repeat size={14} /> 週期性
                 </div>
-                <select className="form-input" style={{ width: '100%' }} value={form.recurrence_rule}
-                  onChange={e => setAndDirty('recurrence_rule', e.target.value)}>
-                  {[
-                    { value: '', label: '不重複' },
-                    { value: 'FREQ=DAILY', label: '每天' },
-                    { value: 'FREQ=WEEKLY', label: '每週' },
-                    { value: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', label: '工作日' },
-                    { value: 'FREQ=MONTHLY', label: '每月' },
-                  ].map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-                {form.recurrence_rule && (
-                  <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 6, fontWeight: 600 }}>
-                    <Calendar size={10} style={{ display: 'inline', marginRight: 3 }} />
-                    {describeRule(form.recurrence_rule)} · 完成後自動建立下次
-                  </div>
-                )}
+                <RecurrenceEditor
+                  value={form.recurrence_rule}
+                  until={form.recurrence_until}
+                  onChange={(rule, until) => {
+                    setAndDirty('recurrence_rule', rule)
+                    setAndDirty('recurrence_until', until || '')
+                  }}
+                />
               </div>
 
               {/* Notes / description */}

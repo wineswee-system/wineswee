@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
+import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
@@ -111,6 +112,8 @@ export default function Projects() {
   const [dragOverWfId, setDragOverWfId] = useState(null)
   const [dragTaskId, setDragTaskId] = useState(null)
   const [dragOverTaskId, setDragOverTaskId] = useState(null)
+  // Budget actuals
+  const [expenses, setExpenses] = useState([])
 
   const handleWfRename = (w) => {
     openInput('重命名流程', '流程名稱', async (name) => {
@@ -182,7 +185,7 @@ export default function Projects() {
 
   const load = async () => {
     setLoading(true)
-    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes] = await Promise.all([
+    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').not('project_id', 'is', null).order('sort_order'),
       getEmployees(),
@@ -190,6 +193,9 @@ export default function Projects() {
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
       supabase.from('project_templates').select('*').order('id'),
       supabase.from('approval_chains').select('id, name, steps:approval_chain_steps(id)').order('name'),
+      supabase.from('expense_requests')
+        .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
+        .order('created_at', { ascending: false }),
     ])
     // Load tasks that either carry project_id directly OR belong to a project's workflow instance
     const wIds = (wRes.data || []).map(w => w.id)
@@ -206,10 +212,16 @@ export default function Projects() {
     setComments(cRes.data || [])
     setTemplates(tplRes.data || [])
     setApprovalChains(acRes.data || [])
+    setExpenses(expRes.data || [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  // Live-sync: reflect task & workflow-instance changes from other users/tabs
+  useRealtimeTasks(setTasks)
+  useRealtimeWorkflowInstances(setWorkflows)
+
   useEffect(() => {
     if (!wfMenuId) return
     const close = () => setWfMenuId(null)
@@ -701,6 +713,18 @@ export default function Projects() {
   const completedCount = projects.filter(p => p.status === '已完成').length
   const archivedCount = projects.filter(p => ['暫停', '已取消'].includes(p.status)).length
 
+  // ── Budget actuals handlers ──
+  const handleLinkExpense = async (expenseId, projectId) => {
+    const { error } = await supabase.from('expense_requests').update({ project_id: projectId }).eq('id', expenseId)
+    if (error) { toast.error('連結失敗：' + error.message); return }
+    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: projectId } : e))
+  }
+  const handleUnlinkExpense = async (expenseId) => {
+    const { error } = await supabase.from('expense_requests').update({ project_id: null }).eq('id', expenseId)
+    if (error) { toast.error('取消連結失敗：' + error.message); return }
+    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: null } : e))
+  }
+
   // Detail view
   if (selected) {
     const p = selected
@@ -803,6 +827,10 @@ export default function Projects() {
         setPendingWfCreate={setPendingWfCreate}
         pendingTasks={pendingTasks}
         setPendingTasks={setPendingTasks}
+        expenses={expenses}
+        allExpenses={expenses}
+        onLinkExpense={handleLinkExpense}
+        onUnlinkExpense={handleUnlinkExpense}
       />
     )
   }

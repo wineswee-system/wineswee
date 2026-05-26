@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Pencil, Trash2, ShieldCheck, X as XIcon } from 'lucide-react'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon } from 'lucide-react'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -9,9 +9,11 @@ import TaskKanban from '../../components/tasks/TaskKanban'
 import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
+import TaskWorkloadView from '../../components/tasks/TaskWorkloadView'
 import FormBindingsPicker from '../../components/FormBindingsPicker'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
+import { useRealtimeTasks } from '../../lib/hooks/useRealtimeSync'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -81,6 +83,9 @@ export default function Tasks() {
       .catch(err => { console.error('Failed to load:', err); setError('資料載入失敗') })
       .finally(() => setLoading(false))
   }, [])
+
+  // Live-sync: reflect DB changes made by other users or tabs without a full refresh
+  useRealtimeTasks(setTasks)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -257,10 +262,11 @@ export default function Tasks() {
       <div style={{ display: 'flex', marginBottom: 12 }}>
         <div style={{ display: 'flex', border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
           {[
-            { k: 'list',     icon: List,    label: '列表' },
-            { k: 'kanban',   icon: Columns, label: '看板' },
-            { k: 'calendar', icon: CalIcon, label: '月曆' },
+            { k: 'list',     icon: List,      label: '列表' },
+            { k: 'kanban',   icon: Columns,   label: '看板' },
+            { k: 'calendar', icon: CalIcon,   label: '月曆' },
             { k: 'timeline', icon: GitBranch, label: '時程' },
+            { k: 'workload', icon: Users,     label: '工作量' },
           ].map(v => {
             const Icon = v.icon
             const active = view === v.k
@@ -327,6 +333,14 @@ export default function Tasks() {
         </select>
       </div>
 
+
+      {view === 'workload' && (
+        <TaskWorkloadView
+          tasks={tasks.filter(t => !(t.bucket === '私人工作' && !isSuperAdmin && t.assignee_id !== profile?.id && t.assignee !== profile?.name))}
+          employees={employees}
+          onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+        />
+      )}
 
       {view === 'kanban' && (
         <TaskKanban

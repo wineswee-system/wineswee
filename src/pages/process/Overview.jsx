@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp, Check, X, Pencil, Save } from 'lucide-react'
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists, updateTask, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { useRealtimeTable } from '../../lib/hooks/useRealtimeSync'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
 import { checkAndNotifyDailyTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -53,6 +54,27 @@ export default function ProcessOverview() {
       checkAndNotifyDailyTasks().catch(err => console.warn('[Overview] Task daily check failed:', err))
     })
   }, [])
+
+  // Live-sync: tasks table drives both standalone tasks and workflow steps
+  useRealtimeTable('tasks', {
+    onInsert: (row) => {
+      if (row.workflow_instance_id) setSteps((p) => [row, ...p.filter((t) => t.id !== row.id)])
+      else setTasks((p) => [row, ...p.filter((t) => t.id !== row.id)])
+    },
+    onUpdate: (row) => {
+      setSteps((p) => p.map((t) => (t.id === row.id ? row : t)))
+      setTasks((p) => p.map((t) => (t.id === row.id ? row : t)))
+    },
+    onDelete: (row) => {
+      setSteps((p) => p.filter((t) => t.id !== row.id))
+      setTasks((p) => p.filter((t) => t.id !== row.id))
+    },
+  })
+  useRealtimeTable('workflow_instances', {
+    onInsert: (row) => setInstances((p) => [...p.filter((i) => i.id !== row.id), row]),
+    onUpdate: (row) => setInstances((p) => p.map((i) => (i.id === row.id ? row : i))),
+    onDelete: (row) => setInstances((p) => p.filter((i) => i.id !== row.id)),
+  })
 
   const reload = () => {
     setLoading(true)

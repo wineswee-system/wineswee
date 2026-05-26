@@ -42,11 +42,15 @@ function toAmPm(hhmm) {
   return `${h}:${mStr} ${suffix}`
 }
 
-/** Net work minutes between two HH:MM strings, minus break */
+/** Net work minutes between two HH:MM strings, minus break.
+ *  [Fix 9] Handles cross-midnight spans (e.g. 22:00 → 06:00 = 8h not -16h).
+ */
 function calcNetMinutes(start, end, breakMin) {
   const [sh, sm] = start.split(':').map(Number)
   const [eh, em] = end.split(':').map(Number)
-  return (eh * 60 + em) - (sh * 60 + sm) - (parseInt(breakMin) || 0)
+  let gross = (eh * 60 + em) - (sh * 60 + sm)
+  if (gross < 0) gross += 1440  // cross-midnight
+  return gross - (parseInt(breakMin) || 0)
 }
 
 function configStatus(store) {
@@ -114,6 +118,19 @@ export default function ClockRules() {
   }
 
   const handleSubmit = async () => {
+    // [Fix 10] Validate GPS coordinate ranges before saving
+    const latVal = form.lat !== '' ? parseFloat(form.lat) : null
+    const lngVal = form.lng !== '' ? parseFloat(form.lng) : null
+    if (latVal !== null && (isNaN(latVal) || latVal < -90 || latVal > 90)) {
+      return toast.error('緯度須介於 -90 ~ 90 之間')
+    }
+    if (lngVal !== null && (isNaN(lngVal) || lngVal < -180 || lngVal > 180)) {
+      return toast.error('經度須介於 -180 ~ 180 之間')
+    }
+    if ((latVal !== null) !== (lngVal !== null)) {
+      return toast.error('緯度與經度必須同時填寫或同時留空')
+    }
+
     setSaving(true)
     const payload = {
       clock_in_method:            form.clock_in_method,
@@ -428,10 +445,12 @@ export default function ClockRules() {
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📍 GPS 打卡範圍</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label="緯度 (Lat)">
-                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="25.0330" value={form.lat} onChange={e => set('lat', e.target.value)} />
+                {/* [Fix 10] Constrain to valid lat range */}
+                <input className="form-input" type="number" step="any" min={-90} max={90} style={{ width: '100%' }} placeholder="25.0330" value={form.lat} onChange={e => set('lat', e.target.value)} />
               </Field>
               <Field label="經度 (Lng)">
-                <input className="form-input" type="number" step="any" style={{ width: '100%' }} placeholder="121.5654" value={form.lng} onChange={e => set('lng', e.target.value)} />
+                {/* [Fix 10] Constrain to valid lng range */}
+                <input className="form-input" type="number" step="any" min={-180} max={180} style={{ width: '100%' }} placeholder="121.5654" value={form.lng} onChange={e => set('lng', e.target.value)} />
               </Field>
               <Field label="允許範圍（公尺）">
                 <input className="form-input" type="number" min={50} max={2000} style={{ width: '100%' }} placeholder="150" value={form.clock_radius} onChange={e => set('clock_radius', e.target.value)} />

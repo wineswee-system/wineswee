@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
-  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch
 } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import FormBindingsPicker from '../../../components/FormBindingsPicker'
+import WorkflowDagView from '../../../components/tasks/WorkflowDagView'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
 
@@ -47,6 +48,7 @@ export default function InstanceDetailView({
   const [addTaskErrors, setAddTaskErrors] = useState({})
   const [dragStepId, setDragStepId] = useState(null)
   const [dragOverStepId, setDragOverStepId] = useState(null)
+  const [activeTab, setActiveTab] = useState('steps')  // 'steps' | 'dag'
 
   const handleAddTask = () => {
     const errs = {}
@@ -260,10 +262,24 @@ export default function InstanceDetailView({
         )
       })()}
 
-      {/* Task table header */}
+      {/* Tab bar + action button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ClipboardList size={16} /> 步驟任務 ({stats.total})
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            { k: 'steps', icon: <ClipboardList size={14} />, label: `步驟任務 (${stats.total})` },
+            { k: 'dag',   icon: <GitBranch size={14} />,     label: '依賴圖' },
+          ].map(({ k, icon, label }) => {
+            const active = activeTab === k
+            return (
+              <button key={k} onClick={() => setActiveTab(k)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  border:     `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                  background:  active ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+                  color:       active ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                {icon} {label}
+              </button>
+            )
+          })}
         </div>
         <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => {
           setTaskForm({ title: '', assignee: '', store: inst.store || '', planned_start: '', due_date: '', due_time: '17:00' })
@@ -271,7 +287,15 @@ export default function InstanceDetailView({
         }}><Plus size={13} /> 新增任務</button>
       </div>
 
+      {/* DAG view */}
+      {activeTab === 'dag' && (
+        <div className="card" style={{ padding: '16px 20px' }}>
+          <WorkflowDagView steps={instSteps} instanceId={inst.id} />
+        </div>
+      )}
+
       {/* Task table */}
+      {activeTab === 'steps' && (
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="data-table-wrapper">
           <table className="data-table" style={{ fontSize: 13 }}>
@@ -357,6 +381,7 @@ export default function InstanceDetailView({
           </table>
         </div>
       </div>
+      )}
 
       {/* Modals */}
       {showNotesModal && notesStep && (

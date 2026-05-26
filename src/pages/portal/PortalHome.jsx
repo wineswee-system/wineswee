@@ -25,6 +25,7 @@ export default function PortalHome() {
   const [store, setStore] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
+  const [isOvertime, setIsOvertime] = useState(false)
 
   const today = todayTW()
   const hour = new Date().getHours()
@@ -74,16 +75,20 @@ export default function PortalHome() {
         lng: result.lng,
         accuracy: result.accuracy || null,
         ip: result.ip,
+        is_overtime: isOvertime,
       })
 
       setTodayAttendance(data.record)
+      setIsOvertime(false)   // reset after successful clock
       const now = new Date()
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
       if (action === 'clock_in') {
-        setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}` })
+        const extra = isOvertime ? '，加班申請已送出待審核' : ''
+        setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}${extra}` })
       } else {
-        setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}` })
+        const extra = isOvertime ? '，加班申請已送出待審核' : ''
+        setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}${extra}` })
       }
     } catch (err) {
       setClockMsg({ type: 'error', text: err.message })
@@ -122,7 +127,7 @@ export default function PortalHome() {
         background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
         borderRadius: 16, padding: '24px 28px', marginBottom: 24,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: clockAction ? 10 : 0 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
               <Clock size={16} style={{ verticalAlign: -3, marginRight: 6 }} /> 今日打卡
@@ -151,20 +156,54 @@ export default function PortalHome() {
               disabled={clockingIn}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
-                background: clockAction === '下班打卡'
-                  ? 'linear-gradient(135deg, var(--accent-orange), #f59e0b)'
-                  : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
+                background: isOvertime
+                  ? 'linear-gradient(135deg, #f97316, #ea580c)'
+                  : clockAction === '下班打卡'
+                    ? 'linear-gradient(135deg, var(--accent-orange), #f59e0b)'
+                    : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
                 color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
                 opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
-                boxShadow: '0 4px 14px rgba(34,211,238,0.3)',
+                boxShadow: isOvertime
+                  ? '0 4px 14px rgba(249,115,22,0.35)'
+                  : '0 4px 14px rgba(34,211,238,0.3)',
               }}
             >
               {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}
-              {clockingIn ? '定位中...' : clockAction}
+              {clockingIn ? '定位中...' : isOvertime ? `加班${clockAction}` : clockAction}
             </button>
           )}
         </div>
+
+        {/* ── Overtime checkbox — above the clock button, visible whenever a clock action exists ── */}
+        {clockAction && (
+          <label
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+              padding: '8px 12px', borderRadius: 10, marginBottom: 12,
+              background: isOvertime ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)',
+              border: `1px solid ${isOvertime ? 'var(--accent-orange)' : 'transparent'}`,
+              transition: 'all 0.2s', userSelect: 'none',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isOvertime}
+              onChange={e => setIsOvertime(e.target.checked)}
+              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-orange)', cursor: 'pointer', flexShrink: 0 }}
+            />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: isOvertime ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>
+                加班打卡
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
+                {isOvertime
+                  ? '✔ 不受時段限制，系統將自動送出加班申請（待主管審核）'
+                  : '勾選後可在排班時段外打卡，並自動建立加班申請'}
+              </div>
+            </div>
+          </label>
+        )}
 
         {/* Clock message */}
         {clockMsg && (

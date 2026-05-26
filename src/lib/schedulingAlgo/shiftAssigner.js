@@ -1,7 +1,7 @@
 /**
  * Shift Assigner
  * Handles the shift-based (non-time-slot) assignment passes, cross-store borrowing,
- * hybrid gap-fill, and post-assignment opener/closer swaps for a single week.
+ * hybrid gap-fill, post-assignment opener/closer swaps, and FT empty-cell fill for a single week.
  */
 
 import {
@@ -37,13 +37,11 @@ export function isShiftAvailable(emp, shiftDef, date, schedule, shiftDefs, weekD
 /**
  * Run the two-pass shift assignment for all dates in shift-based (non-time-slot) mode.
  * Mutates `schedule` and `actualTimes` in place.
- *
- * @param {Object} ctx - scheduling context extracted from runProgrammaticSchedule
  */
 export function runShiftBasedAssignment(ctx) {
   const {
     employees, weekDates, schedule, actualTimes,
-    sortedShifts, shiftDefs, restDayPlan, offMap,
+    sortedShifts, shiftDefs, restDayPlan,
     prefMap, availMap, fatigueMap, staffingMap,
     targetHoursMap, monthRestTarget,
     minStaff, monthlyCtx, isPTEmp, getEmpWeekHours,
@@ -215,13 +213,20 @@ export function runShiftBasedAssignment(ctx) {
 /**
  * Hybrid mode: scan for hourly coverage gaps and fill them with the best-fit employee.
  * Mutates `schedule` and `actualTimes` in place.
+ *
+ * ★ 時段制下 SKIP — Phase 1-4 + Step 3b 已處理時段需求，跑這個會：
+ *   1. 覆蓋 restDayPlan 排的「休」→ FT 月休天數短少 (H11 違規)
+ *   2. 用 minStaff（不看 max_count）→ over-staff
+ *   3. 寫 "HH:MM-HH:MM" 格式（不一致）
  */
 export function runHybridGapFill(ctx) {
   const {
     employees, weekDates, schedule, actualTimes,
     shiftDefs, offMap, availMap, fatigueMap,
-    targetHoursMap, isPTEmp, getEmpWeekHours, data,
+    targetHoursMap, getEmpWeekHours, useTimeSlotMode, data,
   } = ctx
+
+  if (useTimeSlotMode) return
 
   const storeSettings = data.storeSettings
   if (!storeSettings?.operating_hours) return
@@ -405,6 +410,95 @@ export function runOpenerCloserFixes(ctx) {
           }
         }
       }
+    }
+  }
+}
+
+/**
+ * Fill unassigned FT cells with a "safe" shift (one that doesn't over-staff any time slot).
+ * 時段制下優先選不會 over-staff 的 shift；若全 over → 排休（不 over-staff 優先）。
+ * 班別制下 slotCov 是 null → safe === eligible，永遠取第一個 eligible shift。
+ * Mutates `schedule` and `actualTimes` in place.
+ */
+export function runFillUnassignedFT(ctx) {
+  const {
+    employees, weekDates, schedule, actualTimes,
+    sortedShifts, restDayPlan, timeSlots, useTimeSlotMode,
+    wsConstraints, isPTEmp,
+  } = ctx
+
+  const computeDaySlotCov = (date) => {
+    if (!useTimeSlotMode) return null
+    const dow = new Date(date).getDay()
+    const isWE = isWeekendDay(dow)
+    const daySlots = timeSlots.filter(s =>
+      s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
+    )
+    const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
+    for (const e2 of employees) {
+      const s2 = schedule[e2.name][date]
+      if (!s2 || isAbsence(s2)) continue
+      const t = actualTimes[`${e2.name}_${date}`]
+      if (!t) continue
+      const ws = parseTime(t.start), we = parseTime(t.end)
+      const weEff = we <= ws ? we + 24 : we
+      for (const slot of slotCov) {
+        const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+        const seEff = se <= ss ? se + 24 : se
+        if (ws < seEff && weEff > ss) slot.covered++
+      }
+    }
+    return slotCov
+  }
+
+  const shiftWouldOverStaff = (sd, slotCov) => {
+    if (!slotCov) return false
+    const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
+    const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
+    for (const slot of slotCov) {
+      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      if (!(sdStart < seEff && sdEndEff > ss)) continue
+      const maxC = slot.max_count || slot.required_count + 2
+      if (slot.covered >= maxC) return true
+    }
+    return false
+  }
+
+  for (const emp of employees) {
+    if (isPTEmp(emp)) continue
+    for (const date of weekDates) {
+      if (schedule[emp.name][date]) continue
+      if (restDayPlan[emp.name].has(date)) continue
+      const dow = new Date(date).getDay()
+      const isWeekend = isWeekendDay(dow)
+      const eligible = sortedShifts.filter(sd => {
+        if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
+        if (sd.day_type === 'weekday' && isWeekend) return false
+        if (sd.day_type === 'weekend' && !isWeekend) return false
+        if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
+        return true
+      })
+      if (eligible.length === 0) continue
+      // 先找不會 over-staff 的 safe shift
+      const slotCov = computeDaySlotCov(date)
+      const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
+      if (safe.length === 0) {
+        if (useTimeSlotMode) {
+          schedule[emp.name][date] = '休'
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] → 休`)
+        } else {
+          const sd = eligible[0]
+          schedule[emp.name][date] = sd.name
+          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 班別制 → ${sd.name}`)
+        }
+        continue
+      }
+      const sd = safe[0]
+      schedule[emp.name][date] = sd.name
+      actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (safe[0])`)
     }
   }
 }

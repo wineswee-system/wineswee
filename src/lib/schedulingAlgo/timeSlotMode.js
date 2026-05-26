@@ -1,12 +1,15 @@
 /**
  * Time Slot Coverage Mode (時段覆蓋制)
  * Assigns employee shifts by covering required time slots for a single day.
- * Called by weeklyScheduleCore.js when timeSlots.length > 0.
+ * Called by weeklySchedule.js when timeSlots.length > 0.
  */
 
-import { parseTime, isAbsence, countsAsMonthlyRest, isWeekendDay } from '../scheduleUtils'
+import {
+  parseTime, isAbsence, countsAsMonthlyRest,
+  isWeekendDay, MIN_SHIFT_INTERVAL,
+} from '../scheduleUtils'
+import { isLegallyValid } from './validation'
 
-// Re-exported so weeklyScheduleCore can use it without duplicating the logic.
 export function isPTEmp(emp) {
   return emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 }
@@ -33,14 +36,14 @@ function overlaps(wStart, wEnd, sStart, sEnd) {
  * Run the time-slot coverage assignment for all dates in the week.
  * Mutates `schedule` and `actualTimes` in place.
  *
- * @param {object} ctx - Shared scheduling context built by weeklyScheduleCore
+ * Phase 1: opener / Phase 2: closer / Phase 3: first-fit-fills-gap
  */
 export function runTimeSlotMode(ctx) {
   const {
     employees, weekDates, timeSlots, storeSettings,
-    schedule, actualTimes, restDayPlan, fatigueMap,
+    schedule, actualTimes, restDayPlan,
     targetHoursMap, hoursRange, monthlyCtx, monthTargetMap,
-    monthRestTarget, wsConstraints,
+    monthRestTarget, wsConstraints, shiftDefs, data,
   } = ctx
 
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -156,9 +159,17 @@ export function runTimeSlotMode(ctx) {
         if (prevT) {
           const prevEndH = parseTime(prevT.end)
           const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
-          if ((startH + 24) - effPrevEnd < ctx.MIN_SHIFT_INTERVAL) return null
+          if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
         }
       }
+      // ★ 連續上班天數 hard check（PT 6 / FT 12）— 時段制原本沒檢查 ★
+      const fakeShiftDef = {
+        name: '__time_slot_window__',
+        start_time: fmtH(startH),
+        end_time: fmtH(endH),
+        break_minutes: (grossH - netH) * 60,
+      }
+      if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
       return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
     }
 
@@ -188,17 +199,21 @@ export function runTimeSlotMode(ctx) {
       return score
     }
 
-    // Phase 1: Opener
+    // Phase 1: 開店人員
     if (!hasOpener) {
       const openers = sortByNeed(available.filter(e => e.can_open === true && !schedule[e.name]?.[date]))
       for (const emp of openers) {
         const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
         const window = tryShift(emp, storeOpenH, grossH)
-        if (window && scoreCoverage(window.start, window.end) > -50) { doAssign(emp, window); break }
+        if (window && scoreCoverage(window.start, window.end) > -50) {
+          doAssign(emp, window)
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
+          break
+        }
       }
     }
 
-    // Phase 2: Closer
+    // Phase 2: 關店人員
     if (!hasCloser) {
       const closers = sortByNeed(available.filter(e => e.can_close === true && !schedule[e.name]?.[date]))
       for (const emp of closers) {
@@ -206,11 +221,20 @@ export function runTimeSlotMode(ctx) {
         const startH = effectiveCloseH - grossH
         if (startH < storeOpenH) continue
         const window = tryShift(emp, startH, grossH)
-        if (window && scoreCoverage(window.start, window.end) > -50) { doAssign(emp, window); break }
+        if (window && scoreCoverage(window.start, window.end) > -50) {
+          doAssign(emp, window)
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
+          break
+        }
       }
     }
+    if (date === weekDates[0]) {
+      const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
+      const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}/max${s.max_count ?? 'NULL'}`).join(' ')
+      console.log(`[DBG ${date}] After Phase1+2: ${summary} | slotCov: ${cov}`)
+    }
 
-    // Phase 3: Fill coverage gaps
+    // Phase 3: 補滿覆蓋
     const unassigned = sortByNeed(available.filter(e => !schedule[e.name]?.[date]))
 
     for (const emp of unassigned) {
@@ -240,61 +264,57 @@ export function runTimeSlotMode(ctx) {
         if (allMaxMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) { schedule[emp.name][date] = '休'; continue }
         if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
 
-        const monthHoursSoFar = Object.entries(actualTimes)
-          .filter(([k]) => k.startsWith(emp.name + '_'))
-          .reduce((s, [, v]) => s + (v?.hours || 0), 0)
+        const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
         const empMonthMin = monthTargetMap[emp.name]?.min || 80
         if (monthHoursSoFar >= empMonthMin && allMinMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) {
           schedule[emp.name][date] = '休'; continue
         }
       }
 
-      const monthHrsSoFar = Object.entries(actualTimes)
-        .filter(([k]) => k.startsWith(emp.name + '_'))
-        .reduce((s, [, v]) => s + (v?.hours || 0), 0)
-      const empMonthTarget = monthTargetMap[emp.name]?.min || (pt ? 80 : 150)
+      // ★ first-fit-fills-gap：對每個 emp 掃時間軸找「能填到某個缺人 slot 且不會 over」的第一個 window
       const ftIdeal = calcFTGross(emp.name)
-      const monthHoursDeficit = empMonthTarget - monthHrsSoFar
-      const ptIdeal = monthHoursDeficit > 30 ? 8 : monthHoursDeficit > 15 ? 7 : 6
       const grossDurations = pt
-        ? [ptIdeal, ptIdeal - 1, ptIdeal - 2, ptIdeal - 3].filter(h => h >= 3 && h <= maxGrossH)
-        : (ftIdeal > 9
-            ? [ftIdeal, ftIdeal - 1, 9].filter(h => h >= 9 && h <= maxGrossH)
-            : [9].filter(h => h <= maxGrossH))
+        ? [6, 5, 4]                                  // PT 試 6/5/4h
+        : [ftIdeal, 9].filter(h => h <= maxGrossH)   // FT 用 ideal 跟 9h fallback
 
-      let bestWindow = null
-      let bestScore = -Infinity
+      const wouldOver = (window) => slotCoverage.some(s => {
+        const maxC = s.max_count || s.required_count + 2
+        if (s.covered < maxC) return false
+        const ov = overlaps(window.start, window.end, s.start_time, s.end_time)
+        if (date === weekDates[0] && ov) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} overlaps ${s.start_time}-${s.end_time} (covered=${s.covered} maxC=${maxC} max_count=${s.max_count} required=${s.required_count})`)
+        return ov
+      })
+      const fillsGap = (window) => slotCoverage.some(s =>
+        s.covered < s.required_count &&
+        overlaps(window.start, window.end, s.start_time, s.end_time)
+      )
 
-      for (const grossH of grossDurations) {
+      let chosenWindow = null
+      outer: for (const grossH of grossDurations) {
         for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
           const window = tryShift(emp, h, grossH)
           if (!window) continue
-          let score = scoreCoverage(window.start, window.end)
-          if (score <= -100) continue
-          const firstUncovered = slotCoverage.find(s => s.covered < s.required_count)
-          if (firstUncovered) {
-            const uncovStart = parseTime(firstUncovered.start_time)
-            if (Math.abs(h - uncovStart) < 1) score += 25
-          }
-          if (!hasOpener && Math.abs(h - storeOpenH) < 0.5) score += 50
-          if (!hasCloser && (h + grossH) >= effectiveCloseH - 0.5) score += 50
-          const afterHours = weekHours + window.netH
-          if (afterHours >= range.min && afterHours <= range.max) score += 15
-          else if (afterHours < range.min) score += 3
-          if (afterHours > range.max) score -= 20
-          if (!pt && afterHours < range.min) score += (window.netH - 8) * 8
-          const fatigue = fatigueMap[emp.name] || 0
-          if (fatigue > 15) score -= fatigue * 0.3
-          if (score > bestScore) { bestScore = score; bestWindow = window }
+          if (wouldOver(window)) continue
+          if (!fillsGap(window)) continue
+          chosenWindow = window
+          break outer
         }
       }
 
-      if (bestWindow && bestScore > -50) {
-        doAssign(emp, bestWindow)
+      if (chosenWindow) {
+        doAssign(emp, chosenWindow)
+        if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} ${pt?'(PT)':''} → ${chosenWindow.start}~${chosenWindow.end}`)
       } else {
-        if (!isPTEmp(emp)) { /* leave empty — FT fill handled in Step 3b of core */ }
-        else schedule[emp.name][date] = '休'
+        if (!isPTEmp(emp)) {
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} 找不到 window → 留空`)
+        }
+        else { schedule[emp.name][date] = '休'; if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) → 休`) }
       }
+    }
+    if (date === weekDates[0]) {
+      const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
+      const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}`).join(' ')
+      console.log(`[DBG ${date}] After Phase3: ${summary} | slotCov: ${cov}`)
     }
   }
 }

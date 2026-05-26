@@ -1,16 +1,24 @@
 /**
  * Weekly Programmatic Scheduler
- * Core algorithm: assigns shifts for a single week across all employees.
+ * Orchestrates a single-week schedule by:
+ *   1. Building scheduling context (Step 0 data expansion)
+ *   2. Marking rest days (Step 1) + actively distributing rest (Step 1c)
+ *   3. Dispatching to time-slot mode or shift-based mode
+ *   4. Running cross-cutting fixes (hybrid gap-fill, cross-store, opener/closer, FT empty-cell)
+ *   5. Validating + producing stats
  */
 
 import {
-  parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
-  splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
-  MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
+  parseTime, getShiftHours, isAbsence,
+  isWeekendDay, getWorkSystemConstraints,
 } from '../scheduleUtils'
-import { getFatiguePoints } from './scoring'
-import { isLegallyValid, validateResult } from './validation'
+import { validateResult } from './validation'
 import { computeStats, buildReasoning } from './stats'
+import { runTimeSlotMode, isPTEmp } from './timeSlotMode'
+import {
+  runShiftBasedAssignment, runHybridGapFill,
+  runCrossStoreBorrowing, runOpenerCloserFixes, runFillUnassignedFT,
+} from './shiftAssigner'
 
 export function runProgrammaticSchedule(data) {
   const {
@@ -41,6 +49,7 @@ export function runProgrammaticSchedule(data) {
   const wsConstraints = getWorkSystemConstraints(workSystem)
   data._wsConstraints = wsConstraints
 
+  // ── Step 0: Build lookups ──────────────────────────────────────
   const offMap = new Set()
   for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
 
@@ -81,7 +90,7 @@ export function runProgrammaticSchedule(data) {
   const monthTargetMap = {}
   const monthRestTarget = {}
   for (const emp of employees) {
-    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const isPT = isPTEmp(emp)
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
     // personal_hour_cap (個人 cycle 時數上限) 蓋過店面預設
     const monthMax = emp.personal_hour_cap != null
@@ -140,7 +149,7 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // ── Step 1: Mark rest days ──
+  // ── Step 1: Mark rest days ─────────────────────────────────────
   const restDayPlan = {}
   for (const emp of employees) restDayPlan[emp.name] = new Set()
 
@@ -185,8 +194,8 @@ export function runProgrammaticSchedule(data) {
       const removable = restingOnDay
         .filter(e => offMap.has(`${e.name}_${date}`))
         .sort((a, b) => {
-          const aIsPT = a.employment_type === '兼職' || a.employment_type === 'PT' ? 0 : 1
-          const bIsPT = b.employment_type === '兼職' || b.employment_type === 'PT' ? 0 : 1
+          const aIsPT = isPTEmp(a) ? 0 : 1
+          const bIsPT = isPTEmp(b) ? 0 : 1
           if (aIsPT !== bIsPT) return aIsPT - bIsPT
           return (b.schedule_priority || 3) - (a.schedule_priority || 3)
         })
@@ -199,7 +208,7 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
-  // ── Step 1c: 主動分配休假 ──
+  // ── Step 1c: 主動分配休假 ──────────────────────────────────────
   const getMonthRestRemaining = (empName) => {
     const isPT = monthTargetMap[empName]?.isPT
     const target = monthRestTarget[empName] || 10
@@ -226,11 +235,10 @@ export function runProgrammaticSchedule(data) {
 
   // 休假分散化 — 避免「2 FT 同日連休 2 天」整齊到不自然
   // 評分（越低越優先選為休假日）：
-  //   demand            ← 低需求日優先休（原本就有）
+  //   demand            ← 低需求日優先休
   //   peerResting × 2.5 ← 別人已休該日 → +2.5 分（壓制同日多人休）
   //   adjacent × 3      ← emp 自己前後 1 天已休 → +3 分（壓制連休）
   //   jitter × 0.5      ← 微量隨機破同分
-  // 每加一筆 rest 重新評分（peer/adj 會變）→ 用 while + re-sort
   const adjacentRestCount = (empName, date) => {
     const idx = weekDates.indexOf(date)
     let cnt = 0
@@ -271,8 +279,7 @@ export function runProgrammaticSchedule(data) {
   const maxMinWorkers = Math.max(...weekDates.map(d => minWorkersPerDay[d] || minStaff))
   if (employees.length > maxMinWorkers) {
     for (const emp of ftFirstOrder) {
-      const isPT = monthTargetMap[emp.name]?.isPT
-      if (isPT) continue
+      if (isPTEmp(emp)) continue
       const remaining = getMonthRestRemaining(emp.name)
       if (remaining <= 0) continue
       // 第二輪允許 minStaff - 1（讓 FT 月休能補到目標）
@@ -288,6 +295,7 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
+  // ── Helper closures (used by both modes via ctx) ────────────────
   const getEmpWeekHours = (empName) => {
     let h = 0
     for (const d of weekDates) {
@@ -304,713 +312,42 @@ export function runProgrammaticSchedule(data) {
     return h
   }
 
-  const isPTEmp = (emp) => emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-
-  // ── Step 2: Sort shifts by start time ──
+  // ── Step 2: Sort shifts by start time ──────────────────────────
   const sortedShifts = [...shiftDefs].sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time))
 
-  // assignments declared here (before if/else split) so both modes can push to it.
-  // Bug fix: previously only declared inside the 'else' (shift-based) branch,
-  // causing ReferenceError when useTimeSlotMode=true reaches Step 4 below.
+  // assignments declared here (shared across both modes — bug fix: was previously
+  // only declared inside the else branch, causing ReferenceError when useTimeSlotMode=true)
   const assignments = []
 
+  // ── Build shared scheduling context ────────────────────────────
+  const ctx = {
+    // Inputs
+    employees, weekDates, shiftDefs, sortedShifts, timeSlots, storeSettings,
+    staffingRules, minStaff, holidays, data,
+    // Lookups
+    offMap, prefMap, availMap, fatigueMap, staffingMap,
+    targetHoursMap, hoursRange, monthlyCtx, monthTargetMap, monthRestTarget,
+    consecWeekends, restDayPlan, wsConstraints, useTimeSlotMode,
+    // Mutable state
+    schedule, actualTimes, assignments,
+    // Helpers
+    isPTEmp, getEmpWeekHours,
+  }
+
+  // ── Step 3: Mode dispatch ──────────────────────────────────────
   if (useTimeSlotMode) {
-    // ══════════════════════════════════════════════════════════════
-    //  TIME SLOT COVERAGE MODE (時段覆蓋制)
-    // ══════════════════════════════════════════════════════════════
-    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-
-    const getSlotsForDate = (date) => {
-      const dow = new Date(date).getDay()
-      const isWE = isWeekendDay(dow)
-      return timeSlots.filter(s =>
-        s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
-      ).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
-    }
-
-    const overlaps = (wStart, wEnd, sStart, sEnd) => {
-      const ws = parseTime(wStart), we = parseTime(wEnd)
-      const ss = parseTime(sStart), se = parseTime(sEnd)
-      const weEff = we <= ws ? we + 24 : we
-      const seEff = se <= ss ? se + 24 : se
-      return ws < seEff && weEff > ss
-    }
-
-    const fmtH = (h) => `${String(Math.floor(h % 24)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`
-
-    const fmtLabel = (startTime, endTime) => {
-      const s = startTime.replace(':00', '').replace(/^0/, '')
-      const e = endTime.replace(':00', '').replace(/^0/, '')
-      return `${s}~${e}`
-    }
-
-    const getOH = (date) => {
-      const dow = new Date(date).getDay()
-      const oh = storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
-      if (!oh && date === weekDates[0]) {
-        console.warn(`[Schedule] 營業時間讀取失敗！date=${date} dow=${dow} dayName=${dayNames[dow]}`,
-          'operating_hours keys:', Object.keys(storeSettings?.operating_hours || {}),
-          'operatingHours keys:', Object.keys(storeSettings?.operatingHours || {}),
-          'raw operating_hours:', JSON.stringify(storeSettings?.operating_hours)?.slice(0, 200))
-      }
-      return oh
-    }
-
-    const sortByNeed = (list) => [...list].sort((a, b) => {
-      const aIsPT = isPTEmp(a) ? 1 : 0
-      const bIsPT = isPTEmp(b) ? 1 : 0
-      if (aIsPT !== bIsPT) return aIsPT - bIsPT
-      const aDef = targetHoursMap[a.name] - getEmpWeekHours(a.name)
-      const bDef = targetHoursMap[b.name] - getEmpWeekHours(b.name)
-      return bDef - aDef
-    })
-
-    for (const date of weekDates) {
-      const daySlots = getSlotsForDate(date)
-      if (daySlots.length === 0) continue
-
-      const oh = getOH(date)
-      const storeOpenH = parseTime(oh?.open || '11:00')
-      if (date === weekDates[0]) {
-        console.log(`[Schedule] date=${date} oh=`, JSON.stringify(oh), `storeOpenH=${storeOpenH}`)
-      }
-      const storeCloseStr = oh?.close || '00:00'
-      const storeCloseH = parseTime(storeCloseStr)
-      const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
-      const maxGrossH = effectiveCloseH - storeOpenH
-
-      const slotCoverage = daySlots.map(s => ({ ...s, covered: 0 }))
-
-      for (const emp of employees) {
-        const s = schedule[emp.name][date]
-        if (s && !isAbsence(s)) {
-          const t = actualTimes[`${emp.name}_${date}`]
-          if (t) slotCoverage.forEach(slot => { if (overlaps(t.start, t.end, slot.start_time, slot.end_time)) slot.covered++ })
-        }
-      }
-
-      let hasOpener = false
-      let hasCloser = false
-      for (const emp of employees) {
-        const t = actualTimes[`${emp.name}_${date}`]
-        if (!t) continue
-        const tStartH = parseTime(t.start)
-        if (Math.abs(tStartH - storeOpenH) < 0.5) hasOpener = true
-        const tEndH = parseTime(t.end)
-        const effEnd = tEndH <= tStartH ? tEndH + 24 : tEndH
-        if (effEnd >= effectiveCloseH - 0.5) hasCloser = true
-      }
-
-      const available = employees.filter(emp =>
-        !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
-      )
-
-      const calcFTGross = (empName) => {
-        const weekHours = getEmpWeekHours(empName)
-        const range = hoursRange[empName]
-        const hoursNeeded = range.min - weekHours
-        const todayIdx = weekDates.indexOf(date)
-        const remainingWorkDays = weekDates.filter((d, i) =>
-          i >= todayIdx && !restDayPlan[empName].has(d) && !schedule[empName][d]
-        ).length || 1
-        const idealNetPerDay = hoursNeeded / remainingWorkDays
-        const idealGross = Math.ceil(idealNetPerDay) + 1
-        return Math.min(Math.max(idealGross, 9), 11, maxGrossH)
-      }
-
-      const tryShift = (emp, startH, grossH) => {
-        const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
-        const endH = startH + grossH
-        if (startH < storeOpenH) return null
-        if (endH > effectiveCloseH + 0.5) return null
-        if (grossH > wsConstraints.dailyAbsoluteMax) return null
-        const weekHours = getEmpWeekHours(emp.name)
-        if (weekHours + netH > hoursRange[emp.name].max + 2) return null
-        if (emp.can_open === false && startH < storeOpenH + 2) return null
-        if (emp.can_close === false && endH > effectiveCloseH - 2) return null
-        const dateIdx = weekDates.indexOf(date)
-        if (dateIdx > 0) {
-          const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]
-          if (prevT) {
-            const prevEndH = parseTime(prevT.end)
-            const effPrevEnd = prevEndH < parseTime(prevT.start) ? prevEndH + 24 : prevEndH
-            if ((startH + 24) - effPrevEnd < MIN_SHIFT_INTERVAL) return null
-          }
-        }
-        // ★ 連續上班天數 hard check（PT 6 / FT 12）— 時段制原本沒檢查 ★
-        const fakeShiftDef = {
-          name: '__time_slot_window__',
-          start_time: fmtH(startH),
-          end_time: fmtH(endH),
-          break_minutes: (grossH - netH) * 60,
-        }
-        if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return null
-        return { start: fmtH(startH), end: fmtH(endH), netH, grossH, breakH: grossH - netH }
-      }
-
-      const doAssign = (emp, window) => {
-        schedule[emp.name][date] = fmtLabel(window.start, window.end)
-        actualTimes[`${emp.name}_${date}`] = { start: window.start, end: window.end, hours: window.netH }
-        slotCoverage.forEach(slot => {
-          if (overlaps(window.start, window.end, slot.start_time, slot.end_time)) slot.covered++
-        })
-        const sH = parseTime(window.start)
-        const eH = parseTime(window.end)
-        const effE = eH <= sH ? eH + 24 : eH
-        if (Math.abs(sH - storeOpenH) < 0.5) hasOpener = true
-        if (effE >= effectiveCloseH - 0.5) hasCloser = true
-      }
-
-      const scoreCoverage = (startTime, endTime) => {
-        let score = 0
-        for (const slot of slotCoverage) {
-          if (overlaps(startTime, endTime, slot.start_time, slot.end_time)) {
-            const maxC = slot.max_count || slot.required_count + 2
-            if (slot.covered >= maxC) return -999
-            else if (slot.covered < slot.required_count) { score += 40; if (slot.covered === 0) score += 30 }
-            else score += 3
-          }
-        }
-        return score
-      }
-
-      // Phase 1: 開店人員
-      if (!hasOpener) {
-        const openers = sortByNeed(available.filter(e => e.can_open === true && !schedule[e.name]?.[date]))
-        for (const emp of openers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
-          const window = tryShift(emp, storeOpenH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) {
-            doAssign(emp, window)
-            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
-            break
-          }
-        }
-      }
-
-      // Phase 2: 關店人員
-      if (!hasCloser) {
-        const closers = sortByNeed(available.filter(e => e.can_close === true && !schedule[e.name]?.[date]))
-        for (const emp of closers) {
-          const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
-          const startH = effectiveCloseH - grossH
-          if (startH < storeOpenH) continue
-          const window = tryShift(emp, startH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) {
-            doAssign(emp, window)
-            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
-            break
-          }
-        }
-      }
-      if (date === weekDates[0]) {
-        const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
-        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}/max${s.max_count ?? 'NULL'}`).join(' ')
-        console.log(`[DBG ${date}] After Phase1+2: ${summary} | slotCov: ${cov}`)
-      }
-
-      // Phase 3: 補滿覆蓋
-      const unassigned = sortByNeed(available.filter(e => !schedule[e.name]?.[date]))
-
-      for (const emp of unassigned) {
-        const pt = isPTEmp(emp)
-        const allMaxMet = slotCoverage.every(s => s.covered >= (s.max_count || s.required_count + 2))
-        const weekHours = getEmpWeekHours(emp.name)
-        const range = hoursRange[emp.name]
-        const allMinMet = slotCoverage.every(s => s.covered >= s.required_count)
-
-        if (!pt) {
-          if (weekHours >= range.max) continue
-        } else {
-          const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
-          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && countsAsMonthlyRest(s)).length
-          const monthRestUsed = prevRestUsed + thisWeekRest
-          const monthRestLimit = monthRestTarget[emp.name] || 15
-
-          const ftStillNeedRest = unassigned.some(e => {
-            if (isPTEmp(e)) return false
-            if (schedule[e.name]?.[date]) return false
-            const ftPrevRest = monthlyCtx?.restDaysUsed?.[e.name] || 0
-            const ftThisWeekRest = Object.values(schedule[e.name]).filter(s => s && countsAsMonthlyRest(s)).length
-            const ftMonthRest = ftPrevRest + ftThisWeekRest
-            return ftMonthRest < (monthRestTarget[e.name] || 10)
-          })
-
-          if (allMaxMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) { schedule[emp.name][date] = '休'; continue }
-          if (weekHours >= range.max) { schedule[emp.name][date] = '休'; continue }
-
-          const monthHoursSoFar = Object.entries(actualTimes).filter(([k]) => k.startsWith(emp.name + '_')).reduce((s, [, v]) => s + (v?.hours || 0), 0)
-          const empMonthMin = monthTargetMap[emp.name]?.min || 80
-          if (monthHoursSoFar >= empMonthMin && allMinMet && monthRestUsed < monthRestLimit && !ftStillNeedRest) {
-            schedule[emp.name][date] = '休'; continue
-          }
-        }
-
-        // ★ 新版 Phase 3：簡單規則 — 不再分數比較 bestWindow
-        // 邏輯：對每個 emp，掃時間軸找「能填到某個缺人 slot 而且不會 over」的第一個 window 就用
-        const ftIdeal = calcFTGross(emp.name)
-        const grossDurations = pt
-          ? [6, 5, 4]                                  // PT 試 6/5/4h
-          : [ftIdeal, 9].filter(h => h <= maxGrossH)   // FT 用 ideal 跟 9h fallback
-
-        const wouldOver = (window) => slotCoverage.some(s => {
-          const maxC = s.max_count || s.required_count + 2
-          if (s.covered < maxC) return false
-          const ov = overlaps(window.start, window.end, s.start_time, s.end_time)
-          if (date === weekDates[0] && ov) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} overlaps ${s.start_time}-${s.end_time} (covered=${s.covered} maxC=${maxC} max_count=${s.max_count} required=${s.required_count})`)
-          return ov
-        })
-        const fillsGap = (window) => slotCoverage.some(s =>
-          s.covered < s.required_count &&
-          overlaps(window.start, window.end, s.start_time, s.end_time)
-        )
-
-        let chosenWindow = null
-        outer: for (const grossH of grossDurations) {
-          for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
-            const window = tryShift(emp, h, grossH)
-            if (!window) continue
-            if (wouldOver(window)) continue
-            if (!fillsGap(window)) continue
-            chosenWindow = window
-            break outer
-          }
-        }
-
-        if (chosenWindow) {
-          doAssign(emp, chosenWindow)
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} ${pt?'(PT)':''} → ${chosenWindow.start}~${chosenWindow.end}`)
-        } else {
-          if (!isPTEmp(emp)) {
-            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} 找不到 window → 留空`)
-          }
-          else { schedule[emp.name][date] = '休'; if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) → 休`) }
-        }
-      }
-      if (date === weekDates[0]) {
-        const summary = employees.map(e => `${e.name}=${schedule[e.name][date] || '空'}`).join(' | ')
-        const cov = slotCoverage.map(s => `${s.start_time?.slice(0,5)}=${s.covered}/${s.required_count}`).join(' ')
-        console.log(`[DBG ${date}] After Phase3: ${summary} | slotCov: ${cov}`)
-      }
-    }
-
+    runTimeSlotMode(ctx)
   } else {
-
-  // ── Step 3: Two-pass shift assignment ──
-  const isShiftAvailable = (emp, shiftDef, date) => {
-    if (!isLegallyValid(emp, shiftDef, date, schedule, shiftDefs, weekDates, data)) return false
-    const dow = new Date(date).getDay()
-    const avail = availMap[emp.name]?.[dow]
-    if (avail) {
-      const shiftStart = parseTime(shiftDef.start_time)
-      const shiftEnd = parseTime(shiftDef.end_time)
-      const isCrossMidnight = shiftEnd < shiftStart
-      if (avail.end > avail.start) {
-        if (isCrossMidnight) { if (shiftStart < avail.start) return false }
-        else { if (shiftStart < avail.start || shiftEnd > avail.end) return false }
-      } else if (avail.end < avail.start || avail.end === 0) {
-        if (shiftStart < avail.start) return false
-        if (!isCrossMidnight && shiftEnd > 24) return false
-      }
-    }
-    return true
+    runShiftBasedAssignment(ctx)
+    runHybridGapFill(ctx)         // self-skips if useTimeSlotMode
+    runCrossStoreBorrowing(ctx)   // 班別制專屬（原行為，保持一致）
+    runOpenerCloserFixes(ctx)
   }
 
-  for (const date of weekDates) {
-    const shiftCounts = {}
-    for (const sd of sortedShifts) shiftCounts[sd.name] = 0
+  // ── Step 3b: Fill unassigned FT cells (両モード共通) ───────────
+  runFillUnassignedFT(ctx)
 
-    for (const emp of employees) {
-      const s = schedule[emp.name][date]
-      if (s && !isAbsence(s) && shiftCounts[s] !== undefined) shiftCounts[s]++
-    }
-
-    const weekHoursCache = {}
-    for (const emp of employees) weekHoursCache[emp.name] = getEmpWeekHours(emp.name)
-
-    const getMonthRestUsed = (empName) => {
-      const prev = monthlyCtx?.restDaysUsed?.[empName] || 0
-      const thisWeek = Object.values(schedule[empName]).filter(s => s && countsAsMonthlyRest(s)).length
-      return prev + thisWeek
-    }
-
-    const toAssign = employees.filter(emp => {
-      if (schedule[emp.name][date]) return false
-      if (restDayPlan[emp.name].has(date)) return false
-      if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
-        const pt = isPTEmp(emp)
-        if (!pt) return true
-        const restLimit = monthRestTarget[emp.name] || 15
-        if (getMonthRestUsed(emp.name) >= restLimit) return true
-        const ftNeedMore = employees.some(e => {
-          if (isPTEmp(e)) return false
-          if (schedule[e.name][date]) return false
-          return getMonthRestUsed(e.name) < (monthRestTarget[e.name] || 10)
-        })
-        if (ftNeedMore) return true
-        schedule[emp.name][date] = '休'
-        return false
-      }
-      return true
-    })
-
-    const dow = new Date(date).getDay()
-
-    // Pass 1: Assign preferred shifts
-    const wantMap = {}
-    const assigned = new Set()
-
-    for (const emp of toAssign) {
-      const pref = prefMap[emp.name]
-      if (!pref?.preferred.size) continue
-      for (const shiftDef of sortedShifts) {
-        if (!pref.preferred.has(shiftDef.name)) continue
-        if (pref.avoid.has(shiftDef.name)) continue
-        if (!isShiftAvailable(emp, shiftDef, date)) continue
-        if (!wantMap[shiftDef.name]) wantMap[shiftDef.name] = []
-        wantMap[shiftDef.name].push({ emp, priority: emp.schedule_priority || 3, fatigue: fatigueMap[emp.name] || 0 })
-      }
-    }
-
-    for (const shiftName of Object.keys(wantMap)) {
-      const needed = staffingMap[shiftName] || minStaff
-      const slotsLeft = needed - (shiftCounts[shiftName] || 0)
-      if (slotsLeft <= 0) continue
-      const candidates = wantMap[shiftName].sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority
-        return a.fatigue - b.fatigue
-      })
-      const shiftDef = sortedShifts.find(s => s.name === shiftName)
-      let filled = 0
-      for (const { emp } of candidates) {
-        if (filled >= slotsLeft) break
-        if (assigned.has(emp.name)) continue
-        schedule[emp.name][date] = shiftName
-        actualTimes[`${emp.name}_${date}`] = {
-          start: shiftDef?.start_time?.slice(0, 5),
-          end: shiftDef?.end_time?.slice(0, 5),
-          hours: shiftDef ? getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60 : 8,
-        }
-        shiftCounts[shiftName] = (shiftCounts[shiftName] || 0) + 1
-        assigned.add(emp.name)
-        filled++
-      }
-    }
-
-    // Pass 2: Assign remaining to neutral/understaffed shifts
-    const remaining = toAssign
-      .filter(emp => !assigned.has(emp.name))
-      .sort((a, b) => {
-        const restA = getMonthRestUsed(a.name)
-        const restB = getMonthRestUsed(b.name)
-        if (restA !== restB) return restB - restA
-        return (fatigueMap[a.name] || 0) - (fatigueMap[b.name] || 0)
-      })
-
-    for (const emp of remaining) {
-      if (schedule[emp.name][date]) continue
-      const pref = prefMap[emp.name]
-      const currentWeekHours = weekHoursCache[emp.name]
-      const targetH = targetHoursMap[emp.name]
-      const empMonthRestLimit = monthRestTarget[emp.name] || 10
-      const monthRestExhausted = getMonthRestUsed(emp.name) >= empMonthRestLimit
-
-      let bestShift = null
-      let bestScore = -Infinity
-
-      for (const shiftDef of sortedShifts) {
-        if (pref?.avoid.has(shiftDef.name)) continue
-        if (!isShiftAvailable(emp, shiftDef, date)) continue
-        let score = 0
-        const needed = staffingMap[shiftDef.name] || minStaff
-        const current = shiftCounts[shiftDef.name] || 0
-        if (current >= needed) {
-          if (monthRestExhausted) score -= 30
-          else continue
-        } else {
-          score += 40 + (needed - current) * 10
-        }
-        score -= current * 3
-        if (pref?.preferred.has(shiftDef.name)) score += 20
-        else if (pref?.neutral.has(shiftDef.name)) score += 8
-        if (monthRestExhausted) score += 60
-        const shiftHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
-        const afterHours = currentWeekHours + shiftHours
-        if (afterHours <= targetH) score += 15
-        else if (afterHours <= targetH + 4) score += 5
-        else score -= 10
-        const fatigue = fatigueMap[emp.name] || 0
-        const fatiguePoints = getFatiguePoints(shiftDef, date, holidays)
-        if (fatigue > 15) score -= fatiguePoints * 3
-        if (isWeekendDay(dow) || holidays.includes(date)) {
-          score -= fatigue * 0.5
-          const cw = consecWeekends[emp.name] || 0
-          if (cw >= 2) score -= 40
-          else if (cw >= 1) score -= 15
-        }
-        if (score > bestScore) { bestScore = score; bestShift = shiftDef }
-      }
-
-      if (bestShift) {
-        schedule[emp.name][date] = bestShift.name
-        actualTimes[`${emp.name}_${date}`] = {
-          start: bestShift.start_time?.slice(0, 5),
-          end: bestShift.end_time?.slice(0, 5),
-          hours: getShiftHours(bestShift) - (bestShift.break_minutes || 60) / 60,
-        }
-        shiftCounts[bestShift.name] = (shiftCounts[bestShift.name] || 0) + 1
-      } else if (monthRestExhausted) {
-        const fallback = sortedShifts.find(sd => !(pref?.avoid.has(sd.name)) && isShiftAvailable(emp, sd, date))
-        if (fallback) {
-          schedule[emp.name][date] = fallback.name
-          actualTimes[`${emp.name}_${date}`] = {
-            start: fallback.start_time?.slice(0, 5),
-            end: fallback.end_time?.slice(0, 5),
-            hours: getShiftHours(fallback) - (fallback.break_minutes || 60) / 60,
-          }
-          shiftCounts[fallback.name] = (shiftCounts[fallback.name] || 0) + 1
-        } else if (isPTEmp(emp)) schedule[emp.name][date] = '休'
-      } else if (isPTEmp(emp)) schedule[emp.name][date] = '休'
-    }
-  }
-
-  // ── Step 3a: Hybrid Mode — 彈性補班 ──
-  // ★ 時段制下 SKIP — Phase 1-4 + Step 3b 已處理時段需求，跑這個會：
-  //   1. 覆蓋 restDayPlan 排的「休」→ FT 月休天數短少 (H11 違規)
-  //   2. 用 minStaff（不看 max_count）→ over-staff
-  //   3. 寫 "HH:MM-HH:MM" 格式（不一致）
-  if (!useTimeSlotMode && storeSettings?.operating_hours) {
-    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-    for (const date of weekDates) {
-      const dow = new Date(date).getDay()
-      const dayKey = dayNames[dow]
-      let opOpen = 9, opClose = 22
-      if (storeSettings?.operating_hours?.[dayKey]) {
-        const oh = storeSettings.operating_hours[dayKey]
-        if (oh.open) opOpen = parseTime(oh.open)
-        if (oh.close) opClose = parseTime(oh.close)
-        if (opClose <= opOpen) opClose += 24
-      }
-      const hourlyCoverage = {}
-      for (let h = Math.floor(opOpen); h < Math.ceil(opClose); h++) hourlyCoverage[h % 24] = 0
-      for (const emp of employees) {
-        const s = schedule[emp.name][date]
-        if (!s || isAbsence(s)) continue
-        const times = actualTimes[`${emp.name}_${date}`]
-        if (!times?.start || !times?.end) continue
-        let sh = parseTime(times.start), eh = parseTime(times.end)
-        if (eh <= sh) eh += 24
-        for (let h = Math.ceil(sh); h < Math.floor(eh); h++) {
-          if (hourlyCoverage[h % 24] !== undefined) hourlyCoverage[h % 24]++
-        }
-      }
-      const gaps = Object.entries(hourlyCoverage)
-        .filter(([, count]) => count < (storeSettings?.minStaff || 1))
-        .map(([h]) => parseInt(h)).sort((a, b) => a - b)
-      if (gaps.length === 0) continue
-      const windows = []
-      let winStart = gaps[0], winEnd = gaps[0]
-      for (let i = 1; i < gaps.length; i++) {
-        if (gaps[i] === winEnd + 1) { winEnd = gaps[i] }
-        else { windows.push({ start: winStart, end: winEnd + 1 }); winStart = gaps[i]; winEnd = gaps[i] }
-      }
-      windows.push({ start: winStart, end: winEnd + 1 })
-      for (const win of windows) {
-        const shiftStart = `${String(win.start).padStart(2, '0')}:00`
-        const shiftEnd = `${String(win.end).padStart(2, '0')}:00`
-        const shiftHours = win.end - win.start
-        if (shiftHours < 3 || shiftHours > 12) continue
-        const candidates = employees.filter(emp => {
-          if (schedule[emp.name][date] && schedule[emp.name][date] !== '休') return false
-          if (offMap.has(`${emp.name}_${date}`)) return false
-          const fakeShiftDef = { name: `flex_${shiftStart}-${shiftEnd}`, start_time: shiftStart, end_time: shiftEnd }
-          if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return false
-          if (availMap[emp.name]) {
-            const dayAvail = availMap[emp.name][dow]
-            if (dayAvail && !(win.start >= dayAvail.start && win.end <= dayAvail.end)) return false
-          }
-          return true
-        })
-        if (candidates.length === 0) continue
-        let bestEmp = null, bestScore = -Infinity
-        for (const emp of candidates) {
-          let score = 0
-          const wh = getEmpWeekHours(emp.name)
-          const target = targetHoursMap[emp.name]
-          if (wh + shiftHours <= target) score += 20
-          else if (wh + shiftHours <= target + 4) score += 5
-          else score -= 15
-          score -= (fatigueMap[emp.name] || 0) * 0.5
-          const isPT = emp.employment_type === '兼職'
-          if (!isPT && shiftHours >= 6) score += 10
-          if (isPT && shiftHours <= 6) score += 10
-          if (score > bestScore) { bestScore = score; bestEmp = emp }
-        }
-        if (bestEmp) {
-          schedule[bestEmp.name][date] = `${shiftStart.slice(0, 5)}-${shiftEnd.slice(0, 5)}`
-          actualTimes[`${bestEmp.name}_${date}`] = { start: shiftStart.slice(0, 5), end: shiftEnd.slice(0, 5), hours: shiftHours }
-        }
-      }
-    }
-  }
-
-  // ── Step 3c: Cross-store borrowing ──
-  // (assignments now declared at function top, shared across both if/else branches)
-  if (data.allStoreEmployees && data.allStoreEmployees.length > 0) {
-    const localEmpNames = new Set(employees.map(e => e.name))
-    const currentStoreId = data.storeSettings?.store_id || data.storeSettings?.id || null
-    for (const date of weekDates) {
-      const understaffedShifts = []
-      for (const sd of sortedShifts) {
-        const needed = staffingRules.find(r => r.shift_name === sd.name)?.required_count || minStaff
-        const current = employees.filter(e => schedule[e.name]?.[date] === sd.name).length
-        if (current < needed) understaffedShifts.push({ shiftDef: sd, deficit: needed - current })
-      }
-      if (understaffedShifts.length === 0) continue
-      for (const { shiftDef: sd, deficit } of understaffedShifts) {
-        let filled = 0
-        const borrowable = data.allStoreEmployees.filter(emp => {
-          if (localEmpNames.has(emp.name)) return false
-          const additional = emp.additional_stores || []
-          if (!currentStoreId || !additional.includes(currentStoreId)) return false
-          if (emp._scheduledDates?.includes(date)) return false
-          return true
-        })
-        for (const emp of borrowable) {
-          if (filled >= deficit) break
-          const fakeSchedule = { [emp.name]: {} }
-          for (const d of weekDates) fakeSchedule[emp.name][d] = null
-          if (!isLegallyValid(emp, sd, date, fakeSchedule, shiftDefs, weekDates, data)) continue
-          const shiftHours = getShiftHours(sd) - (sd.break_minutes || 60) / 60
-          const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
-          if ((emp._weeklyHours || 0) + shiftHours > (isPT ? 40 : 48)) continue
-          if ((emp._monthlyHours || 0) + shiftHours > MONTHLY_OVERTIME_CAP + 160) continue
-          schedule[emp.name] = schedule[emp.name] || {}
-          schedule[emp.name][date] = sd.name
-          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: shiftHours }
-          assignments.push({ employee: emp.name, date, shift: sd.name, actual_start: sd.start_time?.slice(0, 5), actual_end: sd.end_time?.slice(0, 5), actual_hours: shiftHours, is_cross_store: true, home_store: emp.store })
-          filled++
-        }
-      }
-    }
-  }
-
-  // ── Step 3b: Post-assignment fixes ──
-  for (const date of weekDates) {
-    const dayAssignments = employees.filter(emp => { const s = schedule[emp.name][date]; return s && !isAbsence(s) })
-    for (const shiftDef of sortedShifts) {
-      const startH = parseTime(shiftDef.start_time)
-      const endH = parseTime(shiftDef.end_time)
-      const isOpening = startH <= 12
-      const isClosing = endH >= 21 || endH < startH
-      const scheduled = dayAssignments.filter(emp => schedule[emp.name][date] === shiftDef.name)
-      if (isOpening && !scheduled.some(emp => emp.can_open) && scheduled.length > 0) {
-        const restingOpener = employees.find(emp => emp.can_open && schedule[emp.name][date] === '休' && !offMap.has(`${emp.name}_${date}`) && isShiftAvailable(emp, shiftDef, date))
-        if (restingOpener) {
-          const swapOut = scheduled.find(emp => !emp.can_open)
-          if (swapOut) {
-            schedule[restingOpener.name][date] = shiftDef.name
-            schedule[swapOut.name][date] = '休'
-            actualTimes[`${restingOpener.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
-            delete actualTimes[`${swapOut.name}_${date}`]
-          }
-        }
-      }
-      if (isClosing && !scheduled.some(emp => emp.can_close) && scheduled.length > 0) {
-        const restingCloser = employees.find(emp => emp.can_close && schedule[emp.name][date] === '休' && !offMap.has(`${emp.name}_${date}`) && isShiftAvailable(emp, shiftDef, date))
-        if (restingCloser) {
-          const swapOut = scheduled.find(emp => !emp.can_close)
-          if (swapOut) {
-            schedule[restingCloser.name][date] = shiftDef.name
-            schedule[swapOut.name][date] = '休'
-            actualTimes[`${restingCloser.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
-            delete actualTimes[`${swapOut.name}_${date}`]
-          }
-        }
-      }
-    }
-  }
-  } // end else (shift-based mode)
-
-  // ── Step 3b: Fill unassigned FT cells ──
-  // 修：時段制下優先選「不會 over-staff（每個 slot 都未達 max）」的 shift
-  //     若全部 over → fallback 仍排第一個 eligible（避免 0/N 全空災難）
-  const computeDaySlotCov = (date) => {
-    if (!useTimeSlotMode) return null
-    const dow = new Date(date).getDay()
-    const isWE = isWeekendDay(dow)
-    const daySlots = timeSlots.filter(s =>
-      s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
-    )
-    const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
-    for (const e2 of employees) {
-      const s2 = schedule[e2.name][date]
-      if (!s2 || isAbsence(s2)) continue
-      const t = actualTimes[`${e2.name}_${date}`]
-      if (!t) continue
-      const ws = parseTime(t.start), we = parseTime(t.end)
-      const weEff = we <= ws ? we + 24 : we
-      for (const slot of slotCov) {
-        const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-        const seEff = se <= ss ? se + 24 : se
-        if (ws < seEff && weEff > ss) slot.covered++
-      }
-    }
-    return slotCov
-  }
-  const shiftWouldOverStaff = (sd, slotCov) => {
-    if (!slotCov) return false
-    const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
-    const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
-    for (const slot of slotCov) {
-      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-      const seEff = se <= ss ? se + 24 : se
-      if (!(sdStart < seEff && sdEndEff > ss)) continue
-      const maxC = slot.max_count || slot.required_count + 2
-      if (slot.covered >= maxC) return true
-    }
-    return false
-  }
-  for (const emp of employees) {
-    if (isPTEmp(emp)) continue
-    for (const date of weekDates) {
-      if (schedule[emp.name][date]) continue
-      if (restDayPlan[emp.name].has(date)) continue
-      const dow = new Date(date).getDay()
-      const isWeekend = isWeekendDay(dow)
-      const eligible = sortedShifts.filter(sd => {
-        if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
-        if (sd.day_type === 'weekday' && isWeekend) return false
-        if (sd.day_type === 'weekend' && !isWeekend) return false
-        if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
-        return true
-      })
-      if (eligible.length === 0) continue
-      // 先找不會 over-staff 的 safe shift
-      const slotCov = computeDaySlotCov(date)
-      const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
-      if (safe.length === 0) {
-        // 時段制下找不到 safe → 排休（FT 多休一天無妨，絕對不 over-staff）
-        // 班別制下 slotCov 是 null → safe === eligible，永遠不會跑這條路
-        if (useTimeSlotMode) {
-          schedule[emp.name][date] = '休'
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] → 休`)
-        } else {
-          const sd = eligible[0]
-          schedule[emp.name][date] = sd.name
-          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 班別制 → ${sd.name}`)
-        }
-        continue
-      }
-      const sd = safe[0]
-      schedule[emp.name][date] = sd.name
-      actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
-      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (safe[0])`)
-    }
-  }
-
-  // ── Step 4: Build assignments ──
+  // ── Step 4: Build assignments + validate ───────────────────────
   for (const emp of employees) {
     for (const date of weekDates) {
       const shift = schedule[emp.name][date] || '休'

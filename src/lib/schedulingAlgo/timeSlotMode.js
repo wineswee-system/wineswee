@@ -226,8 +226,26 @@ export function runTimeSlotMode(ctx) {
       return score
     }
 
+    // hourly-precise wouldOver — Phase 1/2/3 共用，判斷 window 加入後是否會讓
+    // 某個 slot 內某個 half-hour bucket 超過 max_count
+    const wouldOverHourly = (window) => {
+      const ws = parseTime(window.start), we = parseTime(window.end)
+      const weEff = we <= ws ? we + 24 : we
+      const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
+      for (const slot of slotCoverage) {
+        const maxC = slot.max_count || slot.required_count + 2
+        const ovStart = Math.max(winSb, slot._startBucket)
+        const ovEnd = Math.min(winEb, slot._endBucket)
+        for (let b = ovStart; b < ovEnd; b++) {
+          if (slot.coveredHourly[b - slot._startBucket] + 1 > maxC) return true
+        }
+      }
+      return false
+    }
+
     // Phase 1: 開店人員
     // PT 偏好 6h，需要時自動放寬到 7-9h（仍受 maxGrossH 跟 H 系列規則擋）
+    // 加 wouldOverHourly 跟 Phase 3 對齊 — 避免 partial bucket over-staff
     if (!hasOpener) {
       const openers = sortByNeed(available.filter(e => e.can_open === true && !schedule[e.name]?.[date]))
       const ptGrossOptions = [6, 7, 8, 9]
@@ -236,7 +254,7 @@ export function runTimeSlotMode(ctx) {
         let assigned = false
         for (const grossH of grossOptions) {
           const window = tryShift(emp, storeOpenH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) {
+          if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
             doAssign(emp, window)
             if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
             assigned = true
@@ -247,7 +265,7 @@ export function runTimeSlotMode(ctx) {
       }
     }
 
-    // Phase 2: 關店人員
+    // Phase 2: 關店人員 — 加 wouldOverHourly 避免 partial bucket over-staff
     if (!hasCloser) {
       const closers = sortByNeed(available.filter(e => e.can_close === true && !schedule[e.name]?.[date]))
       const ptGrossOptions = [6, 7, 8, 9]
@@ -258,7 +276,7 @@ export function runTimeSlotMode(ctx) {
           const startH = effectiveCloseH - grossH
           if (startH < storeOpenH) continue
           const window = tryShift(emp, startH, grossH)
-          if (window && scoreCoverage(window.start, window.end) > -50) {
+          if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
             doAssign(emp, window)
             if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
             assigned = true

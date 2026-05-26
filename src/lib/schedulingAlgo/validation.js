@@ -344,6 +344,32 @@ export function validateMonthlyResult(assignments, data) {
 
     // H11: Period total hours check (for flexible work systems)
     if (wsm.periodWeeks > 1) {
+      // ★ cycle 剛好 = 1 個 period (譬如 4 週變形 cycle 28 天 = 1 個 4 週 period)
+      //   → 整 cycle 一次算，不用 sliding window（不然 splitIntoWeeks 切 partial
+      //   weeks [3,7,7,7,4] → sliding 4-week = 24 或 25 天 → 誤觸發違規）
+      const fullPeriodDays = wsm.periodWeeks * 7
+      if (empAssignments.length === fullPeriodDays) {
+        let cycleHours = 0
+        for (const a of workEntries) {
+          const def = lookupShiftDef(a.shift)
+          cycleHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+        }
+        if (cycleHours > wsm.periodTotalHours) {
+          violations.push({
+            employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
+            message: `${emp.name}: cycle ${wsm.periodWeeks}週工時 ${cycleHours.toFixed(1)}h 超過上限 ${wsm.periodTotalHours}h`,
+            severity: 'error',
+          })
+        }
+        if (restEntries.length < wsm.periodRestDays) {
+          violations.push({
+            employee: emp.name, constraint: 'H11', law: `勞基法 §30-3（${wsm.periodWeeks}週變形）`,
+            message: `${emp.name}: cycle ${wsm.periodWeeks}週僅 ${restEntries.length} 天休假（需 ≥${wsm.periodRestDays} 天）`,
+            severity: 'error',
+          })
+        }
+        // 整 cycle 算完直接結束 H11 區塊，跳過 sliding window
+      } else {
       const weeks = splitIntoWeeks(empAssignments.map(a => a.date).sort())
       const checkPeriods = weeks.length >= wsm.periodWeeks
         ? Array.from({ length: weeks.length - wsm.periodWeeks + 1 }, (_, i) => i)
@@ -393,6 +419,7 @@ export function validateMonthlyResult(assignments, data) {
           break
         }
       }
+      }  // end of else (sliding window path)
     }
 
     // H17: Monthly rest day check
@@ -449,6 +476,8 @@ export function validateMonthlyResult(assignments, data) {
     }
 
     // S9: Consecutive weekend check
+    // ★ 對 4 週變形等 cycle 制，整 cycle 內 FT 全週上班是必然 → 容忍到 cycle 週數
+    //   譬如 4 週變形 cycle 5 weeks (partial split) → 容忍 ≥ 5 週才警告
     const weeks = splitIntoWeeks(empAssignments.map(a => a.date).sort())
     let consecWE = 0
     let maxConsecWE = 0
@@ -466,7 +495,9 @@ export function validateMonthlyResult(assignments, data) {
         consecWE = 0
       }
     }
-    if (maxConsecWE >= 3) {
+    // cycle 制下，整 cycle 內所有 weeks 都連續週末上班是正常 → 提高門檻
+    const s9Threshold = wsm.periodWeeks > 1 ? Math.max(3, weeks.length + 1) : 3
+    if (maxConsecWE >= s9Threshold) {
       violations.push({
         employee: emp.name, constraint: 'S9', law: '公平性',
         message: `${emp.name}: 連續 ${maxConsecWE} 週排假日班（建議 ≤ 2 週）`,

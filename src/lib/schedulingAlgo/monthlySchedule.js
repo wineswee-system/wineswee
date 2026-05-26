@@ -18,9 +18,13 @@ import { shiftWouldOverStaff, computeDaySlotCoverage } from './shiftAssigner'
  * 把月制目標 (FT 10 / PT 15) 按 cycle 跨的 calendar month 比例分配。
  * 例：cycle 5/13~6/9 共 28 天 → 五月 19/31 + 六月 9/30 → 月制 10 → cycle 目標 9
  * 這樣即使 cycle 跨月，每個月最後實際拿到的休假天數仍會符合月制設定。
+ *
+ * ★ 例外：cycle 完整 28 天 → 視為 4 週變形 cycle 制，使用者意圖「該 cycle 內
+ *   N 天休」，不 prorate（避免 28/31 比例砍 1 天 → H11 sliding window 觸發違規）
  */
 function proRateMonthlyTarget(cycleDates, monthlyTarget) {
   if (!cycleDates || cycleDates.length === 0) return monthlyTarget
+  if (cycleDates.length === 28) return monthlyTarget  // 4 週 cycle 制不 prorate
   const byMonth = {}
   for (const d of cycleDates) {
     const ym = String(d).slice(0, 7)

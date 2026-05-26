@@ -306,6 +306,12 @@ export function runProgrammaticSchedule(data) {
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {
     let needed = count
+    const empObj = employees.find(e => e.name === empName)
+    const empCanOpen = empObj?.can_open === true
+    const empCanClose = empObj?.can_close === true
+    // 店內 can_open / can_close 總人數 — 只有 1 人時不 enforce 保護（否則該員工永遠不能休）
+    const totalCanOpen = employees.filter(e => e.can_open === true).length
+    const totalCanClose = employees.filter(e => e.can_close === true).length
     while (needed > 0) {
       const candidates = weekDates
         .filter(d => !restDayPlan[empName].has(d) && !schedule[empName][d])
@@ -314,6 +320,23 @@ export function runProgrammaticSchedule(data) {
           const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
           const workingAfter = employees.length - restingOnDay - 1
           return workingAfter >= minStaffPerDay(c.date)
+        })
+        // ★ 保護「該日至少留 1 個 can_open 員工不休」— 不然 10:30 早班沒人 cover
+        //   只在店內 can_open 員工 ≥ 2 時 enforce（避免單一 can_open 永遠不能休）
+        .filter(c => {
+          if (!empCanOpen || totalCanOpen < 2) return true
+          const remainingCanOpen = employees.filter(e =>
+            e.can_open === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
+          ).length
+          return remainingCanOpen >= 1
+        })
+        // ★ 同樣保護 can_close — 不然關店時段沒人 cover
+        .filter(c => {
+          if (!empCanClose || totalCanClose < 2) return true
+          const remainingCanClose = employees.filter(e =>
+            e.can_close === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
+          ).length
+          return remainingCanClose >= 1
         })
         .sort((a, b) => a.score - b.score)
       if (candidates.length === 0) break

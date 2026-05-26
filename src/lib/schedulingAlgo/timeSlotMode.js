@@ -42,7 +42,7 @@ export function runTimeSlotMode(ctx) {
   const {
     employees, weekDates, timeSlots, storeSettings,
     schedule, actualTimes, restDayPlan,
-    targetHoursMap, hoursRange, monthlyCtx, monthTargetMap,
+    hoursRange, monthlyCtx, monthTargetMap,
     monthRestTarget, monthRestCap, wsConstraints, shiftDefs, data,
   } = ctx
 
@@ -73,9 +73,15 @@ export function runTimeSlotMode(ctx) {
     const aIsPT = isPTEmp(a) ? 1 : 0
     const bIsPT = isPTEmp(b) ? 1 : 0
     if (aIsPT !== bIsPT) return aIsPT - bIsPT
-    const aDef = targetHoursMap[a.name] - getEmpWeekHours(a.name)
-    const bDef = targetHoursMap[b.name] - getEmpWeekHours(b.name)
-    return bDef - aDef
+    // 用「月累積工時 vs 月 min」算缺口，累積落後的優先（避免 stable sort 因 name
+    // 順序偏袒同一個 emp、其他人 fill=0 排休 — 譬如許辰排在第 4 永遠 fill=0 那種）
+    const aMonthAcc = (monthlyCtx?.hoursAccumulated?.[a.name] || 0) + getEmpWeekHours(a.name)
+    const bMonthAcc = (monthlyCtx?.hoursAccumulated?.[b.name] || 0) + getEmpWeekHours(b.name)
+    const aMonthMin = monthTargetMap[a.name]?.min || (aIsPT ? 80 : 150)
+    const bMonthMin = monthTargetMap[b.name]?.min || (bIsPT ? 80 : 150)
+    const aDef = aMonthMin - aMonthAcc
+    const bDef = bMonthMin - bMonthAcc
+    return bDef - aDef  // 月缺口大的先排
   })
 
   const getOH = (date) => {
@@ -411,7 +417,35 @@ export function runTimeSlotMode(ctx) {
         if (!isPTEmp(emp)) {
           if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} 找不到 window → 留空`)
         }
-        else { schedule[emp.name][date] = '休'; if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) → 休`) }
+        else {
+          // ★ PT fill=0：先 check 月休是否已達 cap，達到不能再休（避免許辰那種 5/23 極端）
+          const prevRest = monthlyCtx?.restDaysUsed?.[emp.name] || 0
+          const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && countsAsMonthlyRest(s)).length
+          const totalRestSoFar = prevRest + thisWeekRest
+          const cap = monthRestCap[emp.name] || 15
+          if (totalRestSoFar >= cap) {
+            // 月休已達 cap → 強制找任意 not-over valid window 上班（即使該 emp can_open=false 等限制）
+            let forceWindow = null
+            for (const grossH of [6, 5, 7, 4, 8, 9]) {
+              if (grossH > maxGrossH) continue
+              for (let h = storeOpenH; h <= effectiveCloseH - grossH; h += 0.5) {
+                const w = tryShift(emp, h, grossH)
+                if (w && !wouldOverHourly(w)) { forceWindow = w; break }
+              }
+              if (forceWindow) break
+            }
+            if (forceWindow) {
+              doAssign(emp, forceWindow)
+              if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) cap 已達 → 強制 ${forceWindow.start}~${forceWindow.end}`)
+            } else {
+              schedule[emp.name][date] = '休'  // 真找不到才休（會超 cap 但無解）
+              if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) cap 已達但找不到 window → 仍休`)
+            }
+          } else {
+            schedule[emp.name][date] = '休'
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase3 ${emp.name} (PT) → 休`)
+          }
+        }
       }
     }
     if (date === weekDates[0]) {

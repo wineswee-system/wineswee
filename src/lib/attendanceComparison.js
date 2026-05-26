@@ -67,7 +67,7 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
 
     const { data: storeEmps } = await supabase
       .from('employees').select('id').eq('store_id', scopedStoreId)
-    const empIds = (storeEmps || []).map((e: any) => e.id)
+    const empIds = (storeEmps || []).map(e => e.id)
     if (empIds.length) schedQ = schedQ.in('employee_id', empIds)
   }
 

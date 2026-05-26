@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { GitBranch, Link, Loader } from 'lucide-react'
 import { toast } from '../../lib/toast'
+import { logger } from '../../lib/logger'
 import { supabase } from '../../lib/supabase'
 import { groupByLevel, getEdges, wouldCycle } from '../../lib/workflowDag'
 
@@ -73,13 +74,21 @@ export default function WorkflowDagView({ steps, instanceId }) {
     const { data, error } = await supabase.from('task_dependencies')
       .insert({ task_id: toId, depends_on_task_id: fromId, dep_type: type })
       .select().single()
-    if (error) { toast.error('新增依賴失敗：' + error.message); return }
+    if (error) {
+      logger.error('新增依賴失敗', { module: 'WorkflowDagView', error, data: { fromId, toId, type } })
+      toast.error('新增依賴失敗', { description: error.message })
+      return
+    }
     if (data) setDeps(prev => [...prev, data])
   }
 
   const removeDep = async (depId) => {
     const { error } = await supabase.from('task_dependencies').delete().eq('id', depId)
-    if (error) { toast.error('移除依賴失敗：' + error.message); return }
+    if (error) {
+      logger.error('移除依賴失敗', { module: 'WorkflowDagView', error, data: { depId } })
+      toast.error('移除依賴失敗', { description: error.message })
+      return
+    }
     setDeps(prev => prev.filter(d => d.id !== depId))
   }
 

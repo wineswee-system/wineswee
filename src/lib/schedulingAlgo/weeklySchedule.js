@@ -11,6 +11,7 @@
 import {
   parseTime, getShiftHours, isAbsence,
   isWeekendDay, getWorkSystemConstraints,
+  formatShiftLabel,
 } from '../scheduleUtils'
 import { validateResult } from './validation'
 import { computeStats, buildReasoning } from './stats'
@@ -150,8 +151,13 @@ export function runProgrammaticSchedule(data) {
         let h = s.actual_hours
         // shift 是 shift_definitions 內 fixed 班但 schedules 表沒填 actual_start/end
         // → 從 shift_def 補，否則 covered 算 0、整個排班 logic 崩
+        // 用 normalized name 比對，避免 ~ vs - 不匹配（譬如 s.shift='10:30~19:30'
+        // 但 shift_def.name='10:30-19:30' 仍能找到）
         if (!st || !et) {
-          const def = shiftDefs.find(d => d.name === s.shift)
+          const targetNorm = formatShiftLabel(s.shift)
+          const def = shiftDefs.find(d =>
+            d.name === s.shift || formatShiftLabel(d.name) === targetNorm
+          )
           if (def) {
             st = def.start_time
             et = def.end_time

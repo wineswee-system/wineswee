@@ -3,6 +3,7 @@ import {
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
+  formatShiftLabel,
 } from '../scheduleUtils'
 
 export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
@@ -128,8 +129,15 @@ export function validateResult(assignments, data) {
   const violations = []
   const { employees, shiftDefs, weekDates, offRequests, storeSettings, staffingRules = [] } = data
 
+  // shiftDefMap：raw name 跟 normalized name 都當 key，避免 ~ vs - 不匹配
+  // 譬如 shift_def.name='10:30-19:30' 跟 a.shift='10:30~19:30' 都能 lookup 到
   const shiftDefMap = {}
-  for (const d of shiftDefs) shiftDefMap[d.name] = d
+  for (const d of shiftDefs) {
+    shiftDefMap[d.name] = d
+    const normalized = formatShiftLabel(d.name)
+    if (normalized !== d.name && !shiftDefMap[normalized]) shiftDefMap[normalized] = d
+  }
+  const lookupShiftDef = (shiftName) => shiftDefMap[shiftName] || shiftDefMap[formatShiftLabel(shiftName)] || null
 
   const offMap = new Set()
   for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
@@ -154,7 +162,7 @@ export function validateResult(assignments, data) {
 
     // H2: Daily hours
     for (const a of workEntries) {
-      const def = shiftDefMap[a.shift]
+      const def = lookupShiftDef(a.shift)
       if (def && getShiftHours(def) > DAILY_MAX_HOURS) {
         violations.push({ employee: emp.name, constraint: 'H2', law: '勞基法 §32', message: `${emp.name} ${a.date}: ${getShiftHours(def).toFixed(1)}h 超過每日上限 ${DAILY_MAX_HOURS}h`, severity: 'error' })
       }
@@ -179,8 +187,8 @@ export function validateResult(assignments, data) {
       const todayA = empAssignments.find(a => a.date === weekDates[i])
       const tomorrowA = empAssignments.find(a => a.date === weekDates[i + 1])
       if (!todayA || isAbsence(todayA.shift) || !tomorrowA || isAbsence(tomorrowA.shift)) continue
-      const todayDef = shiftDefMap[todayA.shift]
-      const tomorrowDef = shiftDefMap[tomorrowA.shift]
+      const todayDef = lookupShiftDef(todayA.shift)
+      const tomorrowDef = lookupShiftDef(tomorrowA.shift)
       if (!todayDef || !tomorrowDef) continue
       const gap = (parseTime(tomorrowDef.start_time) + 24) - effectiveEndHour(todayDef)
       if (gap < MIN_SHIFT_INTERVAL) {
@@ -191,7 +199,7 @@ export function validateResult(assignments, data) {
     // H13: Pregnant/nursing night shifts
     if (emp.is_pregnant || emp.is_nursing) {
       for (const a of workEntries) {
-        const def = shiftDefMap[a.shift]
+        const def = lookupShiftDef(a.shift)
         if (def && isNightShift(def)) {
           violations.push({ employee: emp.name, constraint: 'H13', law: '性平法 §15', message: `${emp.name}（孕婦/哺乳）被排夜班 ${a.date}`, severity: 'error' })
         }
@@ -229,7 +237,7 @@ export function validateResult(assignments, data) {
           // Fallback：a.shift 對應到一個 shift_def 但 actual_start/end 是 null
           // （譬如 DB 殘留 entry 沒寫 actual_start）→ 用 shift_def 的時間
           if (startH == null || endH == null) {
-            const def = shiftDefMap[a.shift]
+            const def = lookupShiftDef(a.shift)
             if (def) {
               startH = parseTime(def.start_time)
               endH = parseTime(def.end_time)
@@ -292,8 +300,15 @@ export function validateMonthlyResult(assignments, data) {
   const { employees, shiftDefs, storeSettings } = data
   const wsm = getWorkSystemConstraints(storeSettings?.work_hour_system || '標準工時')
 
+  // shiftDefMap：raw name 跟 normalized name 都當 key，避免 ~ vs - 不匹配
+  // 譬如 shift_def.name='10:30-19:30' 跟 a.shift='10:30~19:30' 都能 lookup 到
   const shiftDefMap = {}
-  for (const d of shiftDefs) shiftDefMap[d.name] = d
+  for (const d of shiftDefs) {
+    shiftDefMap[d.name] = d
+    const normalized = formatShiftLabel(d.name)
+    if (normalized !== d.name && !shiftDefMap[normalized]) shiftDefMap[normalized] = d
+  }
+  const lookupShiftDef = (shiftName) => shiftDefMap[shiftName] || shiftDefMap[formatShiftLabel(shiftName)] || null
 
   for (const emp of employees) {
     // 排除邊界日（未入職 / 已離職）— 員工尚未/不再服務於公司，不算進任何月制驗證
@@ -306,7 +321,7 @@ export function validateMonthlyResult(assignments, data) {
     // H6: Monthly overtime cap
     let totalHours = 0
     for (const a of workEntries) {
-      const def = shiftDefMap[a.shift]
+      const def = lookupShiftDef(a.shift)
       totalHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
     }
     const standardHours = workEntries.length * 8
@@ -332,7 +347,7 @@ export function validateMonthlyResult(assignments, data) {
         for (const d of periodDates) {
           const a = workEntries.find(a => a.date === d)
           if (a) {
-            const def = shiftDefMap[a.shift]
+            const def = lookupShiftDef(a.shift)
             periodHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
           }
         }

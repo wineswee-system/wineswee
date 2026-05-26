@@ -210,6 +210,7 @@ export const groupNav = {
       icon: Clock,
       children: [
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
+        { icon: ClipboardCheck, label: '打卡規則設定', path: '/hr/clock-rules' },
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },

@@ -3,11 +3,11 @@ import {
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
-  formatShiftLabel, parseShiftRange,
+  formatShiftLabel, parseShiftRange, isPartTime,
 } from '../scheduleUtils'
 
 export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
-  const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+  const isPT = isPartTime(emp)
   const wsc = data._wsConstraints || getWorkSystemConstraints('標準工時')
 
   // H14: Store match
@@ -169,7 +169,7 @@ export function validateResult(assignments, data) {
     }
 
     // H3: Consecutive work days（正職 12 天 / 兼職 6 天）
-    const empIsPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const empIsPT = isPartTime(emp)
     const empMaxConsec = empIsPT ? MAX_CONSECUTIVE_WORK_DAYS : MAX_CONSECUTIVE_WORK_DAYS_FT
     let consec = 0
     for (const date of weekDates) {
@@ -424,7 +424,7 @@ export function validateMonthlyResult(assignments, data) {
 
     // H17: Monthly rest day check
     const totalDays = empAssignments.length
-    const empIsPT_H17 = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const empIsPT_H17 = isPartTime(emp)
     const ftRestMin = data.storeSettings?.ft_monthly_rest_days ?? 10
     const ptRestMax = data.storeSettings?.pt_monthly_rest_days ?? 20
     const expectedDays = Math.round(totalDays / 30 * (empIsPT_H17 ? ptRestMax : ftRestMin))
@@ -456,7 +456,7 @@ export function validateMonthlyResult(assignments, data) {
     // S5: Monthly hours check
     // 對 cycle 制（譬如 4 週變形 28 天）按比例 prorate：28/30 × 150 = 140h
     // 之前 >=28 即視為 full month → cycle 28 天誤判工時不足；改成 >=30 才算 full
-    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+    const isPT = isPartTime(emp)
     const monthlyMin = isPT ? 80 : 150
     const monthlyMax = 175
     const dayRatio = totalDays >= 30 ? 1 : totalDays / 30

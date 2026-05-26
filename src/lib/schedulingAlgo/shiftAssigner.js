@@ -6,7 +6,7 @@
 
 import {
   parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
-  isWeekendDay, MONTHLY_OVERTIME_CAP,
+  isWeekendDay, MONTHLY_OVERTIME_CAP, isPartTime,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { isLegallyValid } from './validation'
@@ -294,7 +294,7 @@ export function runHybridGapFill(ctx) {
         else if (wh + shiftHours <= target + 4) score += 5
         else score -= 15
         score -= (fatigueMap[emp.name] || 0) * 0.5
-        const isPT = emp.employment_type === '兼職'
+        const isPT = isPartTime(emp)
         if (!isPT && shiftHours >= 6) score += 10
         if (isPT && shiftHours <= 6) score += 10
         if (score > bestScore) { bestScore = score; bestEmp = emp }
@@ -346,7 +346,7 @@ export function runCrossStoreBorrowing(ctx) {
         for (const d of weekDates) fakeSchedule[emp.name][d] = null
         if (!isLegallyValid(emp, sd, date, fakeSchedule, shiftDefs, weekDates, data)) continue
         const shiftHours = getShiftHours(sd) - (sd.break_minutes || 60) / 60
-        const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
+        const isPT = isPartTime(emp)
         if ((emp._weeklyHours || 0) + shiftHours > (isPT ? 40 : 48)) continue
         if ((emp._monthlyHours || 0) + shiftHours > MONTHLY_OVERTIME_CAP + 160) continue
         schedule[emp.name] = schedule[emp.name] || {}

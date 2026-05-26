@@ -110,6 +110,18 @@ export function getDayLabel(dateStr) {
 }
 
 /**
+ * 判斷員工是否為兼職（Part-Time）— 統一認多種 employment_type 寫法
+ * 避免 DB 存 'part_time' 但 hard-code 只認 '兼職' → 演算法誤判為 FT → H3 連續上班沒擋
+ */
+export function isPartTime(emp) {
+  if (!emp) return false
+  const t = emp.employment_type
+  if (t === '兼職' || t === 'PT' || t === 'pt' || t === 'part_time' || t === 'parttime') return true
+  if (emp.position?.includes('PT')) return true
+  return false
+}
+
+/**
  * 從 shift label 直接 parse 出 start/end time（不依賴 shift_definitions）
  *   '10:30~19:30' → { start: '10:30', end: '19:30' }
  *   '1030-1930'   → { start: '10:30', end: '19:30' }

@@ -6,7 +6,7 @@
 
 import {
   getShiftHours, isAbsence, countsAsMonthlyRest,
-  splitIntoWeeks, getCycleFor,
+  splitIntoWeeks, getCycleFor, isPartTime,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult } from './validation'
@@ -19,12 +19,11 @@ import { shiftWouldOverStaff, computeDaySlotCoverage } from './shiftAssigner'
  * 例：cycle 5/13~6/9 共 28 天 → 五月 19/31 + 六月 9/30 → 月制 10 → cycle 目標 9
  * 這樣即使 cycle 跨月，每個月最後實際拿到的休假天數仍會符合月制設定。
  *
- * ★ 例外：cycle 完整 28 天 → 視為 4 週變形 cycle 制，使用者意圖「該 cycle 內
- *   N 天休」，不 prorate（避免 28/31 比例砍 1 天 → H11 sliding window 觸發違規）
+ * 注意：對 4 週 cycle 28 天，prorate 後 9 天會比月制 10 少 1 天。H11 sliding
+ * window 可能誤觸發（已在 validation.js 修：cycle 完整時用整體算，9 ≥ 8 OK）
  */
 function proRateMonthlyTarget(cycleDates, monthlyTarget) {
   if (!cycleDates || cycleDates.length === 0) return monthlyTarget
-  if (cycleDates.length === 28) return monthlyTarget  // 4 週 cycle 制不 prorate
   const byMonth = {}
   for (const d of cycleDates) {
     const ym = String(d).slice(0, 7)
@@ -185,7 +184,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const offSet = new Set(data.offRequests.map(o => `${o.employee}_${o.date}`))
 
   for (const emp of data.employees) {
-    const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
+    const isPT = isPartTime(emp)
     const restMin = ftMin                                                  // 兩種都至少 ftMin 天
     const restMax = isPT ? Math.max(ftMin, ptMax) : ftMin                  // PT cap = ptMax，FT cap = ftMin
     const empAssignments = allAssignments.filter(a => a.employee === emp.name)

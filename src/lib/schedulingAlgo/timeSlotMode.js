@@ -6,13 +6,11 @@
 
 import {
   parseTime, isAbsence, countsAsMonthlyRest,
-  isWeekendDay, MIN_SHIFT_INTERVAL,
+  isWeekendDay, MIN_SHIFT_INTERVAL, isPartTime,
 } from '../scheduleUtils'
 import { isLegallyValid } from './validation'
 
-export function isPTEmp(emp) {
-  return emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-}
+export const isPTEmp = isPartTime
 
 function fmtH(h) {
   return `${String(Math.floor(h % 24)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`

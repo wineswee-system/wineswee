@@ -96,7 +96,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
   const allAssignments = []
   const allViolations = []
-  let lastWeekContext = previousWeek || []
+  // 累積給 weekData.previousWeek — 含 caller 傳的 prev + 已跑完所有 weeks
+  // 這樣 H3 跨多週連續上班檢查能看到完整歷史
+  let accumulatedPrev = [...(previousWeek || [])]
 
   const monthFatigue = {}
   const monthHours = {}
@@ -134,7 +136,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       ...data,
       weekDates,
       monthDates: null,
-      previousWeek: lastWeekContext,
+      // ★ 用累積所有前面週的 assignments，不是只上 1 週
+      //   讓 isLegallyValid H3 跨多週連續上班 check 真正生效
+      //   譬如 FT 5/11-5/25 連 15 天 → 之前只看 Week 4 (5/18-5/24 = 7 連) → 13 < 12
+      //   → 漏擋；現在看 5/1-5/24 → 14 連 > 12 → 擋
+      previousWeek: accumulatedPrev,
       fatigueScores: mergedFatigue,
       existingSchedules: data.existingSchedules.filter(s => s.date >= weekDates[0] && s.date <= weekDates[weekDates.length - 1]),
       offRequests: data.offRequests.filter(o => o.date >= weekDates[0] && o.date <= weekDates[weekDates.length - 1]),
@@ -157,7 +163,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     }
     allAssignments.push(...result.assignments)
     allViolations.push(...result.violations)
-    lastWeekContext = result.assignments
+    accumulatedPrev = [...accumulatedPrev, ...result.assignments]  // 累積給下週 H3 check
 
     for (const a of result.assignments) {
       if (isAbsence(a.shift)) {

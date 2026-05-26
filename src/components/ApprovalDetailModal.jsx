@@ -273,8 +273,12 @@ export default function ApprovalDetailModal({
           </div>
         </div>
 
-        {/* Footer: 簽核操作列（僅 pending 且 caller 可簽核時顯示） */}
-        {actions && actions.sourceTable && actions.row && (
+        {/* Footer: 簽核操作列（僅 pending 且 caller 可簽核時顯示）
+            ★ 加 hasRealPending check — 之前只看 caller 傳了 actions 就 render，
+              導致「已核准」/「已退回」狀態還顯示核准/退回按鈕（可重複按）。
+              已核准的 chain 內所有 step 都 completed → 不該再顯示。 */}
+        {actions && actions.sourceTable && actions.row &&
+          mergedChainSteps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival) && (
           <ApprovalActionBar
             sourceTable={actions.sourceTable}
             row={actions.row}

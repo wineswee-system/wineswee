@@ -43,7 +43,7 @@ export function runTimeSlotMode(ctx) {
     employees, weekDates, timeSlots, storeSettings,
     schedule, actualTimes, restDayPlan,
     targetHoursMap, hoursRange, monthlyCtx, monthTargetMap,
-    monthRestTarget, wsConstraints, shiftDefs, data,
+    monthRestTarget, monthRestCap, wsConstraints, shiftDefs, data,
   } = ctx
 
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -263,7 +263,8 @@ export function runTimeSlotMode(ctx) {
         const prevRestUsed = monthlyCtx?.restDaysUsed?.[emp.name] || 0
         const thisWeekRest = Object.values(schedule[emp.name]).filter(s => s && countsAsMonthlyRest(s)).length
         const monthRestUsed = prevRestUsed + thisWeekRest
-        const monthRestLimit = monthRestTarget[emp.name] || 15
+        // PT 排休 cap (= ptMax)，FT 用 target (= ftMin)
+        const monthRestLimit = monthRestCap[emp.name] || 15
 
         const ftStillNeedRest = unassigned.some(e => {
           if (isPTEmp(e)) return false

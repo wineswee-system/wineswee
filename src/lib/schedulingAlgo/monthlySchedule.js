@@ -172,23 +172,35 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
   }
 
-  // ── 最終校正：月休強制精確到目標天數 ──
+  // ── 最終校正：月休天數 enforce 範圍 ──
+  // FT: 精確 = ftMin（target = cap）
+  // PT: 範圍 [ftMin, ptMax]，不能少於 FT、不能多於 ptMax
+  const ftMin = data.storeSettings?.ft_monthly_rest_days ?? 10
+  const ptMax = data.storeSettings?.pt_monthly_rest_days ?? 15
+  const timeSlotsForCheck = data.timeSlots || []
+  const offSet = new Set(data.offRequests.map(o => `${o.employee}_${o.date}`))
+
   for (const emp of data.employees) {
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
-    const target = isPT ? (data.storeSettings?.pt_monthly_rest_days ?? 20) : (data.storeSettings?.ft_monthly_rest_days ?? 10)
+    const restMin = ftMin                                                  // 兩種都至少 ftMin 天
+    const restMax = isPT ? Math.max(ftMin, ptMax) : ftMin                  // PT cap = ptMax，FT cap = ftMin
     const empAssignments = allAssignments.filter(a => a.employee === emp.name)
     const restAssignments = empAssignments.filter(a => isAbsence(a.shift))
-    const excess = restAssignments.length - target
-    if (excess > 0) {
-      const offSet = new Set(data.offRequests.map(o => `${o.employee}_${o.date}`))
-      const convertible = restAssignments.filter(a => !offSet.has(`${a.employee}_${a.date}`))
+    const workAssignments = empAssignments.filter(a => !isAbsence(a.shift))
+
+    // ── A. 超出 cap → 把多的 rest 轉成上班 ──
+    if (restAssignments.length > restMax) {
+      const excess = restAssignments.length - restMax
+      const convertible = restAssignments.filter(a =>
+        !offSet.has(`${a.employee}_${a.date}`) &&
+        a.shift !== '未入職' && a.shift !== '已離職'  // 邊界日不能轉
+      )
       const sortedByNeed = [...convertible].sort((a, b) => {
         const aW = allAssignments.filter(x => x.date === a.date && !isAbsence(x.shift)).length
         const bW = allAssignments.filter(x => x.date === b.date && !isAbsence(x.shift)).length
         return aW - bW
       })
       const toFix = Math.min(excess, sortedByNeed.length)
-      const timeSlotsForCheck = data.timeSlots || []
       for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
         const empType = isPT ? 'PT' : 'FT'
@@ -198,8 +210,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           }
           return true
         })
-        // ★ 時段制下加 slot 安全檢查：picked shift 若會讓任何 slot 超 max_count 就跳過
-        // 全部 eligible 都 over → 該天維持休（寧可月休超標 H17 warning，也不違反 max_count）
+        // 時段制下 slot 安全檢查：picked 若會讓任何 slot 超 max_count → 試下一個
         const slotCov = computeDaySlotCoverage(ra.date, timeSlotsForCheck, allAssignments)
         const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
         const picked = (slotCov ? safe[0] : (eligible[0] || data.shiftDefs[0])) || null
@@ -209,6 +220,34 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           ra.actual_end = picked.end_time?.slice(0, 5) || '20:00'
           ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
         }
+      }
+    }
+
+    // ── B. 少於 min → 把多的上班轉成休 ──
+    // 條件：不轉掉「邊界日」也不轉掉「該日剩太少人會掉到 minStaff」的日
+    if (restAssignments.length < restMin) {
+      const shortfall = restMin - restAssignments.length
+      // 不能轉的：邊界日 / 已是 absence
+      const convertible = workAssignments.filter(a =>
+        a.shift !== '未入職' && a.shift !== '已離職'
+      )
+      // 優先轉「該日工作人手多」的（減一個還夠）
+      const sortedBySurplus = [...convertible].sort((a, b) => {
+        const aW = allAssignments.filter(x => x.date === a.date && !isAbsence(x.shift)).length
+        const bW = allAssignments.filter(x => x.date === b.date && !isAbsence(x.shift)).length
+        return bW - aW  // 多的優先轉
+      })
+      const minStaff = data.storeSettings?.minStaff || 1
+      let converted = 0
+      for (const wa of sortedBySurplus) {
+        if (converted >= shortfall) break
+        const dayWorkers = allAssignments.filter(x => x.date === wa.date && !isAbsence(x.shift)).length
+        if (dayWorkers - 1 < minStaff) continue  // 轉掉會掉到 minStaff 之下
+        wa.shift = '休'
+        wa.actual_start = null
+        wa.actual_end = null
+        wa.actual_hours = null
+        converted++
       }
     }
   }

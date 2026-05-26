@@ -88,7 +88,8 @@ export function runProgrammaticSchedule(data) {
   const targetHoursMap = {}
   const hoursRange = {}
   const monthTargetMap = {}
-  const monthRestTarget = {}
+  const monthRestTarget = {}  // Step 1c 主動排到的月休天數（FT/PT 都是 ftMin）
+  const monthRestCap = {}     // 月休上限（FT=ftMin, PT=ptMax）
   for (const emp of employees) {
     const isPT = isPTEmp(emp)
     const monthMin = isPT ? MONTHLY_PT_MIN : MONTHLY_FT_MIN
@@ -97,14 +98,18 @@ export function runProgrammaticSchedule(data) {
       ? Math.min(emp.personal_hour_cap, isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX)
       : (isPT ? MONTHLY_PT_MAX : MONTHLY_FT_MAX)
     monthTargetMap[emp.name] = { min: monthMin, max: monthMax, isPT, personalCap: emp.personal_hour_cap }
+    // 月休範圍：FT 固定 ft_monthly_rest_days；PT 在 [ftMin, ptMax] 之間
+    const ftMin = storeSettings?.ft_monthly_rest_days ?? 10
+    const ptMax = storeSettings?.pt_monthly_rest_days ?? 15
     if (isPT) {
-      const ptRestLimit = storeSettings?.pt_monthly_rest_days ?? 20
-      const weeklyH = emp.weekly_target_hours || 20
-      const avgShiftH = 6
-      const workDaysPerMonth = Math.round(Math.ceil(weeklyH / avgShiftH) * 4.3)
-      monthRestTarget[emp.name] = Math.min(ptRestLimit, Math.max(8, 30 - workDaysPerMonth))
+      // PT target = ftMin（Step 1c 至少主動排到 ftMin 天，不能少於 FT）
+      // PT cap = max(ftMin, ptMax)（Phase 3 排休上限，避免 ptMax < ftMin 反轉）
+      monthRestTarget[emp.name] = ftMin
+      monthRestCap[emp.name] = Math.max(ftMin, ptMax)
     } else {
-      monthRestTarget[emp.name] = storeSettings?.ft_monthly_rest_days ?? 10
+      // FT target = cap = ftMin，月休精確命中
+      monthRestTarget[emp.name] = ftMin
+      monthRestCap[emp.name] = ftMin
     }
 
     const accumulated = monthlyCtx?.hoursAccumulated?.[emp.name] || 0
@@ -340,7 +345,7 @@ export function runProgrammaticSchedule(data) {
     staffingRules, minStaff, holidays, data,
     // Lookups
     offMap, prefMap, availMap, fatigueMap, staffingMap,
-    targetHoursMap, hoursRange, monthlyCtx, monthTargetMap, monthRestTarget,
+    targetHoursMap, hoursRange, monthlyCtx, monthTargetMap, monthRestTarget, monthRestCap,
     consecWeekends, restDayPlan, wsConstraints, useTimeSlotMode,
     // Mutable state
     schedule, actualTimes, assignments,

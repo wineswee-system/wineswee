@@ -43,7 +43,7 @@ export function runShiftBasedAssignment(ctx) {
     employees, weekDates, schedule, actualTimes,
     sortedShifts, shiftDefs, restDayPlan,
     prefMap, availMap, fatigueMap, staffingMap,
-    targetHoursMap, monthRestTarget,
+    targetHoursMap, monthRestTarget, monthRestCap,
     minStaff, monthlyCtx, isPTEmp, getEmpWeekHours,
     consecWeekends, holidays, data,
   } = ctx
@@ -72,7 +72,8 @@ export function runShiftBasedAssignment(ctx) {
       if (weekHoursCache[emp.name] >= targetHoursMap[emp.name]) {
         const pt = isPTEmp(emp)
         if (!pt) return true
-        const restLimit = monthRestTarget[emp.name] || 15
+        // PT 月休已達 cap (= ptMax) → 強制工作；否則繼續排休
+        const restLimit = monthRestCap[emp.name] || 15
         if (getMonthRestUsed(emp.name) >= restLimit) return true
         const ftNeedMore = employees.some(e => {
           if (isPTEmp(e)) return false
@@ -144,7 +145,8 @@ export function runShiftBasedAssignment(ctx) {
       const pref = prefMap[emp.name]
       const currentWeekHours = weekHoursCache[emp.name]
       const targetH = targetHoursMap[emp.name]
-      const empMonthRestLimit = monthRestTarget[emp.name] || 10
+      // 用 cap 判斷月休是否耗盡：FT cap = ftMin (10)，PT cap = ptMax (15)
+      const empMonthRestLimit = monthRestCap[emp.name] || 10
       const monthRestExhausted = getMonthRestUsed(emp.name) >= empMonthRestLimit
 
       let bestShift = null

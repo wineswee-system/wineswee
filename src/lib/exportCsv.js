@@ -24,10 +24,15 @@ export function exportToCsv(filename, rows, columns) {
   a.href = url
   a.download = filename
   document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  try {
+    a.click()
+  } finally {
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 }
 
-/** Format a date string to YYYY-MM-DD or empty string */
-export const fmtDate = (v) => v ? String(v).slice(0, 10) : ''
+// Re-export the timezone-correct date formatter from datetime.js.
+// This is the single source of truth for YYYY-MM-DD formatting —
+// avoids the UTC-slice anti-pattern for timestamps near midnight.
+export { toTWDate as fmtDate } from './datetime'

@@ -58,8 +58,10 @@ export const logConfigChange = ({ user, module, field, oldValue, newValue }) =>
 // ── Error Log ──
 
 export async function logError({ level = 'error', module, errorCode, message, stackTrace, component, url, user, userEmail, metadata = {} }) {
+  const orgId = getOrgId()
+
   const { error } = await supabase.from('error_logs').insert({
-    organization_id: getOrgId(),
+    organization_id: orgId,
     level,
     module,
     error_code: errorCode,
@@ -72,6 +74,33 @@ export async function logError({ level = 'error', module, errorCode, message, st
     metadata,
   })
   if (error) console.error('[systemLogger] logError failed:', error.message)
+
+  // ── Recurrence detection ──────────────────────────────────────────────────
+  // If a matching error (same module + error_code + org) was previously marked
+  // resolved, increment its recurrence_count so operators can see the fix
+  // didn't hold. Fire-and-forget; never blocks or throws to the caller.
+  if (errorCode && module) {
+    ;(async () => {
+      try {
+        const { data: prior } = await supabase
+          .from('error_logs')
+          .select('id, recurrence_count')
+          .eq('module', module)
+          .eq('error_code', errorCode)
+          .eq('resolved', true)
+          .order('resolved_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (prior?.id) {
+          await supabase
+            .from('error_logs')
+            .update({ recurrence_count: (prior.recurrence_count || 0) + 1 })
+            .eq('id', prior.id)
+        }
+      } catch { /* best effort — never mask the original error */ }
+    })()
+  }
 }
 
 export const logFatal = (params) => logError({ ...params, level: 'fatal' })

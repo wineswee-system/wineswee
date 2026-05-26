@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search, Download } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../../lib/exportCsv'
+import { todayTW } from '../../../lib/datetime'
 import { supabase } from '../../../lib/supabase'
 import ProjectDeployModal from './ProjectDeployModal'
 import ProjectFormModal from './ProjectFormModal'
@@ -77,8 +78,7 @@ export default function ProjectListView({
   const [editingTpl, setEditingTpl] = useState(null)
 
   const handleExport = () => {
-    const today = new Date().toISOString().slice(0, 10)
-    exportToCsv(`projects_${today}.csv`, filtered, [
+    exportToCsv(`projects_${todayTW()}.csv`, filtered, [
       { label: 'ID',     value: r => `PJ-${r.id}` },
       { label: '專案名稱', value: 'name' },
       { label: '狀態',   value: 'status' },

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../lib/exportCsv'
+import { todayTW } from '../../lib/datetime'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -53,13 +54,12 @@ export default function Tasks() {
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
   const handleExport = () => {
-    const today = new Date().toISOString().slice(0, 10)
-    exportToCsv(`tasks_${today}.csv`, filtered.map(t => tasks.find(x => x.id === t.id) || t), [
+    exportToCsv(`tasks_${todayTW()}.csv`, filtered, [
       { label: 'ID',     value: r => `TK-${r.id}` },
       { label: '任務名稱', value: 'title' },
       { label: '狀態',   value: 'status' },
       { label: '優先級', value: 'priority' },
-      { label: '類型',   value: r => normBucket(r.bucket) },
+      { label: '類型',   value: 'bucket' },
       { label: '負責人', value: 'assignee' },
       { label: '門市',   value: 'store' },
       { label: '專案',   value: 'projectName' },
@@ -226,6 +226,7 @@ export default function Tasks() {
     project_id: t.project_id || null,
     projectName: projectMap.get(t.project_id) || '',
     store: t.store || '',
+    planned_start: t.planned_start || null,
     due_date: t.due_date,
     priority: t.priority || '中',
     status: t.status,
@@ -481,6 +482,7 @@ export default function Tasks() {
           employees={employees}
           stores={stores}
           approvalChains={approvalChains}
+          categoryOptions={taskCategories.map(c => c.name)}
           currentUser={profile}
           onClose={() => setSelectedTask(null)}
           onChange={(updated) => {

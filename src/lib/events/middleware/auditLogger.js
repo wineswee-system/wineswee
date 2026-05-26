@@ -1,4 +1,7 @@
 import { supabase } from '../../supabase.js'
+import { logger } from '../../logger.js'
+
+const log = logger.forModule('events.auditLogger')
 
 /**
  * Middleware: persist every event to the business_events table.
@@ -18,7 +21,11 @@ export async function auditLoggerMiddleware(event, next) {
       timestamp: event.timestamp,
       organization_id: event.metadata?.organization_id || event.metadata?.tenant_id || null,
     }).then(({ error }) => {
-      if (error) console.warn('[EventStore] Failed to persist event:', event.id, error.message)
+      if (error) log.warn('Failed to persist event to business_events', {
+        event_id: event.id,
+        event_type: event.type,
+        error,
+      })
     })
   }
 

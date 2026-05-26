@@ -8,6 +8,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import ConfirmDialog from './components/ConfirmDialog'
 import { Toaster } from 'sonner'
 import { TOAST_POSITION } from './lib/toast'
+import { logError } from './lib/systemLogger.js'
 
 // ── Standalone pages (not part of any module) ──
 const DemoLanding = lazy(() => import('./pages/DemoLanding'))
@@ -49,7 +50,17 @@ const ROLE_ROUTES = {
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error, info) { console.error('App crash:', error, info) }
+  componentDidCatch(error, info) {
+    // Persist to error_logs table for monitoring dashboard
+    logError({
+      module: 'Runtime',
+      errorCode: 'REACT_ERROR_BOUNDARY',
+      message: error.message,
+      stackTrace: error.stack,
+      component: info.componentStack,
+    })
+    console.error('App crash:', error, info)
+  }
   render() {
     if (this.state.error) return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--accent-red)' }}>

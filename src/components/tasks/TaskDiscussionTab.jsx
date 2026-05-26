@@ -6,6 +6,7 @@ import {
 } from '../../lib/db'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
+import { safeStorageName } from '../../lib/storageSanitize'
 
 const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
 const sectionStyle = {
@@ -37,12 +38,6 @@ export default function TaskDiscussionTab({
 
   // ── Attachments ──
 
-  /** Trigger the hidden file input */
-  const handleAddAttachment = () => {
-    fileInputRef.current?.click()
-  }
-
-  /** Handle file selected from OS picker */
   const handleFileSelected = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -50,38 +45,31 @@ export default function TaskDiscussionTab({
     // Reset so the same file can be re-selected after a failure
     e.target.value = ''
 
-    const sanitizedFileName = file.name.replace(/\s+/g, '_')
+    const sanitizedFileName = safeStorageName(file.name)
     const storagePath = `${task.id}/${Date.now()}_${sanitizedFileName}`
 
     setUploading(true)
     try {
-      // 1. Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('task-attachments')
         .upload(storagePath, file, { upsert: false })
-
       if (uploadError) throw uploadError
 
-      // 2. Get the public URL
       const { data: urlData } = supabase.storage
         .from('task-attachments')
         .getPublicUrl(storagePath)
-
       const fileUrl = urlData?.publicUrl
       if (!fileUrl) throw new Error('無法取得公開網址')
 
-      // 3. Persist the attachment record
       const { data, error: dbError } = await createTaskAttachment({
         task_id: task.id,
         file_name: sanitizedFileName,
         file_url: fileUrl,
         uploaded_by: profile?.name || '使用者',
       })
-
       if (dbError) throw dbError
       if (data) setAttachments(prev => [...prev, data])
 
-      // 4. Success feedback
       toast.success('附件已上傳')
     } catch (err) {
       console.error('[TaskDiscussionTab] upload error', err)
@@ -121,12 +109,10 @@ export default function TaskDiscussionTab({
         <div style={{ ...labelStyle, marginTop: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>📎 附件 ({attachments.length})</span>
 
-          {/* Hidden real file input — triggered by handleAddAttachment */}
+          {/* Hidden file input — triggered by the Upload button below */}
           <input
             ref={fileInputRef}
             type="file"
-            multiple={false}
-            accept="*/*"
             style={{ display: 'none' }}
             onChange={handleFileSelected}
           />
@@ -134,7 +120,7 @@ export default function TaskDiscussionTab({
           <button
             className="btn btn-sm btn-secondary"
             style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
-            onClick={handleAddAttachment}
+            onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
           >
             {uploading

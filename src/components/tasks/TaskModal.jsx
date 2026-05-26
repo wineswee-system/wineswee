@@ -41,6 +41,7 @@ const CATEGORY_FALLBACK = ['一般', '緊急', '日常']
 export default function TaskModal({
   task, employees = [], sections = [], stores = [],
   approvalChains: approvalChainsProp = [],
+  categoryOptions,
   currentUser, onClose, onChange, onDelete, onDuplicate,
 }) {
   const { profile } = useAuth()
@@ -93,9 +94,13 @@ export default function TaskModal({
   useEffect(() => { setIsDirty(false) }, [task?.id])
 
   useEffect(() => {
-    getCategories('task').then(({ data }) => {
-      if (data?.length) setTaskCategories(data.map(c => c.name))
-      else setTaskCategories(CATEGORY_FALLBACK)
+    if (categoryOptions?.length) {
+      setTaskCategories(categoryOptions)
+      return
+    }
+    getCategories('task').then(({ data, error }) => {
+      if (error || !data?.length) setTaskCategories(CATEGORY_FALLBACK)
+      else setTaskCategories(data.map(c => c.name))
     }).catch(() => setTaskCategories(CATEGORY_FALLBACK))
   }, [])
 

@@ -90,11 +90,35 @@ export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, orgId, level, 
   return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
 }
 
-export const resolveErrorLog = (id, resolvedBy) =>
-  supabase.from('error_logs').update({ resolved: true, resolved_by: resolvedBy, resolved_at: new Date().toISOString() }).eq('id', id).select().single()
+/**
+ * Mark an error as resolved, recording who fixed it, when, and how.
+ * @param {number} id          - error_logs row id
+ * @param {string} resolvedBy  - display name of the resolver
+ * @param {string} [note]      - description of what was fixed
+ * @param {string} [reference] - optional commit SHA, PR URL, or ticket number
+ */
+export const resolveErrorLog = (id, resolvedBy, note, reference) =>
+  supabase.from('error_logs').update({
+    resolved:        true,
+    resolved_by:     resolvedBy,
+    resolved_at:     new Date().toISOString(),
+    resolution_note: note      || null,
+    fix_reference:   reference || null,
+  }).eq('id', id).select().single()
 
+/**
+ * Revert a resolved error back to unresolved.
+ * Intentionally keeps resolution_note + fix_reference so the previous fix
+ * attempt remains visible in the history.
+ * recurrence_count is NOT reset here — it is incremented by logError() on
+ * the next occurrence of the same error_code.
+ */
 export const unresolveErrorLog = (id) =>
-  supabase.from('error_logs').update({ resolved: false, resolved_by: null, resolved_at: null }).eq('id', id).select().single()
+  supabase.from('error_logs').update({
+    resolved:    false,
+    resolved_by: null,
+    resolved_at: null,
+  }).eq('id', id).select().single()
 
 export const deleteErrorLog = (id) =>
   supabase.from('error_logs').delete().eq('id', id)

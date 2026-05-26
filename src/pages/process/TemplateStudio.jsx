@@ -18,6 +18,18 @@ const emptyStep = () => ({
   trigger_template_id: '',
 })
 
+/** Normalise a raw step from DB / version JSONB into the local editor shape. */
+const normalizeStep = (s) => ({
+  title: s.title || '',
+  role: s.role || '',
+  priority: s.priority || '中',
+  description: s.description || '',
+  checklist_id: s.checklist_id || '',
+  approval_chain_id: s.approval_chain_id || '',
+  required_forms: s.required_forms || [],
+  trigger_template_id: s.trigger_template_id || '',
+})
+
 const emptyTpl = () => ({
   name: '', category: 'HR', description: '', approval_chain_id: '',
   steps: [emptyStep()],
@@ -56,7 +68,6 @@ export default function TemplateStudio() {
   const [versions, setVersions] = useState([])
   const [showVersions, setShowVersions] = useState(false)
   const [loadingVersions, setLoadingVersions] = useState(false)
-  const [restoringVersion, setRestoringVersion] = useState(null)
 
   // ── Load reference data + template (if editing) ──
   useEffect(() => {
@@ -102,18 +113,7 @@ export default function TemplateStudio() {
           category: data.category || 'HR',
           description: data.description || '',
           approval_chain_id: data.approval_chain_id || '',
-          steps: (data.steps?.length > 0)
-            ? data.steps.map(s => ({
-                title: s.title || '',
-                role: s.role || '',
-                priority: s.priority || '中',
-                description: s.description || '',
-                checklist_id: s.checklist_id || '',
-                approval_chain_id: s.approval_chain_id || '',
-                required_forms: s.required_forms || [],
-                trigger_template_id: s.trigger_template_id || '',
-              }))
-            : [emptyStep()],
+          steps: (data.steps?.length > 0) ? data.steps.map(normalizeStep) : [emptyStep()],
         })
       }
       setLoading(false)
@@ -121,15 +121,20 @@ export default function TemplateStudio() {
     fetchAll()
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load version history lazily ──
-  useEffect(() => {
-    if (!showVersions || !id) return
+  // ── Version history: single fetch function used by both the lazy-load effect and post-save refresh ──
+  const refreshVersions = useCallback(() => {
+    if (!id) return
     setLoadingVersions(true)
     supabase.from('sop_template_versions')
       .select('*').eq('template_id', id)
       .order('version_number', { ascending: false })
       .then(({ data }) => { setVersions(data || []); setLoadingVersions(false) })
-  }, [showVersions, id])
+  }, [id])
+
+  useEffect(() => {
+    if (!showVersions) return
+    refreshVersions()
+  }, [showVersions, refreshVersions])
 
   // ── Template state helper (marks dirty) ──
   const updateTpl = useCallback(updater => {
@@ -178,25 +183,14 @@ export default function TemplateStudio() {
   const handleRestore = async (v) => {
     const ok = await confirm({ message: `還原至版本 ${v.version_number}「${v.name}」？目前變更將被取代。` })
     if (!ok) return
-    setRestoringVersion(v.id)
     setTpl({
       name: v.name || '',
-      category: tpl.category,  // keep current category
+      category: tpl.category,         // keep current category
       description: v.description || '',
       approval_chain_id: tpl.approval_chain_id,  // keep current
-      steps: (v.steps?.length > 0) ? v.steps.map(s => ({
-        title: s.title || '',
-        role: s.role || '',
-        priority: s.priority || '中',
-        description: s.description || '',
-        checklist_id: s.checklist_id || '',
-        approval_chain_id: s.approval_chain_id || '',
-        required_forms: s.required_forms || [],
-        trigger_template_id: s.trigger_template_id || '',
-      })) : [emptyStep()],
+      steps: (v.steps?.length > 0) ? v.steps.map(normalizeStep) : [emptyStep()],
     })
     setIsDirty(true)
-    setRestoringVersion(null)
     toast.success(`已還原至版本 ${v.version_number}，請儲存以套用`)
   }
 
@@ -226,36 +220,33 @@ export default function TemplateStudio() {
       }
 
       if (id) {
-        // Snapshot current DB state into version history before updating
-        const { data: current } = await supabase.from('sop_templates').select('*').eq('id', id).maybeSingle()
-        if (current) {
-          const { count } = await supabase
-            .from('sop_template_versions')
-            .select('id', { count: 'exact', head: true })
-            .eq('template_id', id)
-          await supabase.from('sop_template_versions').insert({
-            template_id: Number(id),
-            version_number: (count || 0) + 1,
-            name: current.name,
-            description: current.description,
-            steps: current.steps,
-            changed_by: profile?.name || '系統',
-            changed_at: new Date().toISOString(),
-          })
-        }
+        // Fetch snapshot data + count existing versions in parallel (independent queries)
+        const [{ data: current }, { count }] = await Promise.all([
+          supabase.from('sop_templates').select('*').eq('id', id).maybeSingle(),
+          supabase.from('sop_template_versions').select('id', { count: 'exact', head: true }).eq('template_id', id),
+        ])
 
-        const { data, error } = await supabase
-          .from('sop_templates').update(payload).eq('id', id).select().single()
+        // Version snapshot + template update are independent — run in parallel
+        const versionInsert = current
+          ? supabase.from('sop_template_versions').insert({
+              template_id: Number(id),
+              version_number: (count || 0) + 1,
+              name: current.name,
+              description: current.description,
+              steps: current.steps,
+              changed_by: profile?.name || '系統',
+              // changed_at omitted — DB DEFAULT now() handles it
+            })
+          : Promise.resolve({ error: null })
+
+        const [, { data, error }] = await Promise.all([
+          versionInsert,
+          supabase.from('sop_templates').update(payload).eq('id', id).select().single(),
+        ])
         if (error) throw error
         toast.success(`範本「${data.name}」已更新`)
         setIsDirty(false)
-        // Refresh version list if panel is open
-        if (showVersions) {
-          supabase.from('sop_template_versions')
-            .select('*').eq('template_id', id)
-            .order('version_number', { ascending: false })
-            .then(({ data: vData }) => setVersions(vData || []))
-        }
+        if (showVersions) refreshVersions()
       } else {
         const { data, error } = await supabase
           .from('sop_templates').insert(payload).select().single()
@@ -266,8 +257,9 @@ export default function TemplateStudio() {
       }
     } catch (err) {
       toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleBack = async () => {
@@ -497,7 +489,6 @@ export default function TemplateStudio() {
                           <button
                             type="button"
                             onClick={() => handleRestore(v)}
-                            disabled={restoringVersion === v.id}
                             style={{
                               fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
                               border: '1px solid var(--accent-orange)', background: 'var(--accent-orange-dim)',

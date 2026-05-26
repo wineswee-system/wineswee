@@ -6,6 +6,8 @@ import './index.css'
 import { getEventBus, registerAllHandlers } from './lib/events/index.js'
 import { logger } from './lib/logger.js'
 import { applyFontScale, getFontScale } from './lib/fontScale.js'
+import { installGlobalErrorHandler } from './lib/systemLogger.js'
+import { dlqMonitor } from './lib/dlqMonitor.js'
 
 const log = logger.forModule('app')
 
@@ -22,6 +24,21 @@ window.addEventListener('resize', () => {
 // Initialize event bus with all domain handlers
 registerAllHandlers(getEventBus())
 log.info('Event bus initialized with all domain handlers')
+
+// ── Error Tracking Bootstrap ──
+// Capture window.onerror + unhandledrejection → persists to error_logs table
+installGlobalErrorHandler()
+log.info('Global error handler installed')
+
+// Start DLQ monitor: polls every 60s, tracks error budget, fires alert callbacks
+dlqMonitor.start()
+dlqMonitor.onAlert((alert) => {
+  log.warn(`DLQ alert [${alert.severity}]: ${alert.message}`, {
+    alert_type: alert.type,
+    severity: alert.severity,
+  })
+})
+log.info('DLQ monitor started')
 
 // Register Service Worker (production only)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

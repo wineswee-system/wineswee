@@ -200,32 +200,45 @@ export function runTimeSlotMode(ctx) {
     }
 
     // Phase 1: 開店人員
+    // PT 偏好 6h，需要時自動放寬到 7-9h（仍受 maxGrossH 跟 H 系列規則擋）
     if (!hasOpener) {
       const openers = sortByNeed(available.filter(e => e.can_open === true && !schedule[e.name]?.[date]))
+      const ptGrossOptions = [6, 7, 8, 9]
       for (const emp of openers) {
-        const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
-        const window = tryShift(emp, storeOpenH, grossH)
-        if (window && scoreCoverage(window.start, window.end) > -50) {
-          doAssign(emp, window)
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
-          break
+        const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
+        let assigned = false
+        for (const grossH of grossOptions) {
+          const window = tryShift(emp, storeOpenH, grossH)
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
+            assigned = true
+            break
+          }
         }
+        if (assigned) break
       }
     }
 
     // Phase 2: 關店人員
     if (!hasCloser) {
       const closers = sortByNeed(available.filter(e => e.can_close === true && !schedule[e.name]?.[date]))
+      const ptGrossOptions = [6, 7, 8, 9]
       for (const emp of closers) {
-        const grossH = isPTEmp(emp) ? Math.min(6, maxGrossH) : calcFTGross(emp.name)
-        const startH = effectiveCloseH - grossH
-        if (startH < storeOpenH) continue
-        const window = tryShift(emp, startH, grossH)
-        if (window && scoreCoverage(window.start, window.end) > -50) {
-          doAssign(emp, window)
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
-          break
+        const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
+        let assigned = false
+        for (const grossH of grossOptions) {
+          const startH = effectiveCloseH - grossH
+          if (startH < storeOpenH) continue
+          const window = tryShift(emp, startH, grossH)
+          if (window && scoreCoverage(window.start, window.end) > -50) {
+            doAssign(emp, window)
+            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
+            assigned = true
+            break
+          }
         }
+        if (assigned) break
       }
     }
     if (date === weekDates[0]) {
@@ -272,10 +285,11 @@ export function runTimeSlotMode(ctx) {
       }
 
       // ★ first-fit-fills-gap：對每個 emp 掃時間軸找「能填到某個缺人 slot 且不會 over」的第一個 window
+      // PT 偏好 6h 但「需要時」自動放寬到 7-9h；最後才退回 5h/4h 短班
       const ftIdeal = calcFTGross(emp.name)
       const grossDurations = pt
-        ? [6, 5, 4]                                  // PT 試 6/5/4h
-        : [ftIdeal, 9].filter(h => h <= maxGrossH)   // FT 用 ideal 跟 9h fallback
+        ? [6, 7, 8, 9, 5, 4].filter(h => h <= maxGrossH)
+        : [ftIdeal, 9].filter(h => h <= maxGrossH)
 
       const wouldOver = (window) => slotCoverage.some(s => {
         const maxC = s.max_count || s.required_count + 2

@@ -210,9 +210,12 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           }
           return true
         })
-        // 時段制下 slot 安全檢查：picked 若會讓任何 slot 超 max_count → 試下一個
+        // strict (hourly) 找 safe；找不到退到 binary — 維持 FT 月休精確 / PT cap 收斂
         const slotCov = computeDaySlotCoverage(ra.date, timeSlotsForCheck, allAssignments)
-        const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
+        let safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'hourly'))
+        if (safe.length === 0 && slotCov) {
+          safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'binary'))
+        }
         const picked = (slotCov ? safe[0] : (eligible[0] || data.shiftDefs[0])) || null
         if (picked) {
           ra.shift = picked.name

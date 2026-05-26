@@ -104,15 +104,44 @@ export function runTimeSlotMode(ctx) {
     const effectiveCloseH = storeCloseH <= storeOpenH ? storeCloseH + 24 : storeCloseH
     const maxGrossH = effectiveCloseH - storeOpenH
 
-    const slotCoverage = daySlots.map(s => ({ ...s, covered: 0 }))
+    // ── Hourly-precise slot coverage ──
+    // slot.covered = min headcount across half-hour buckets within the slot
+    // hourlyBuckets[b] = number of employees working during half-hour b (mod 48)
+    // 修真實 bug：原本用 binary overlap 算 covered → 22-01 slot 內 15-0 + 19-1
+    //  → covered=2 = required，但 00-01 實際只有 1 人 → 誤判已滿不會補位
+    const slotCoverage = daySlots.map(s => {
+      const ss = parseTime(s.start_time)
+      const se = parseTime(s.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      const sb = Math.floor(ss * 2), eb = Math.floor(seEff * 2)
+      return { ...s, covered: 0, coveredHourly: new Array(eb - sb).fill(0), _startBucket: sb, _endBucket: eb }
+    })
+    const hourlyBuckets = new Array(48).fill(0)
 
-    for (const emp of employees) {
-      const s = schedule[emp.name][date]
-      if (s && !isAbsence(s)) {
+    const refreshCoverage = () => {
+      hourlyBuckets.fill(0)
+      for (const emp of employees) {
+        const s = schedule[emp.name][date]
+        if (!s || isAbsence(s)) continue
         const t = actualTimes[`${emp.name}_${date}`]
-        if (t) slotCoverage.forEach(slot => { if (overlaps(t.start, t.end, slot.start_time, slot.end_time)) slot.covered++ })
+        if (!t?.start || !t?.end) continue
+        const startH = parseTime(t.start), endH = parseTime(t.end)
+        const effEnd = endH <= startH ? endH + 24 : endH
+        const sb = Math.floor(startH * 2), eb = Math.floor(effEnd * 2)
+        for (let b = sb; b < eb; b++) hourlyBuckets[b % 48]++
+      }
+      for (const slot of slotCoverage) {
+        let min = Infinity
+        for (let i = 0; i < slot.coveredHourly.length; i++) {
+          const b = slot._startBucket + i
+          const cnt = hourlyBuckets[b % 48]
+          slot.coveredHourly[i] = cnt
+          if (cnt < min) min = cnt
+        }
+        slot.covered = min === Infinity ? 0 : min
       }
     }
+    refreshCoverage()
 
     let hasOpener = false
     let hasCloser = false
@@ -176,9 +205,7 @@ export function runTimeSlotMode(ctx) {
     const doAssign = (emp, window) => {
       schedule[emp.name][date] = fmtLabel(window.start, window.end)
       actualTimes[`${emp.name}_${date}`] = { start: window.start, end: window.end, hours: window.netH }
-      slotCoverage.forEach(slot => {
-        if (overlaps(window.start, window.end, slot.start_time, slot.end_time)) slot.covered++
-      })
+      refreshCoverage()  // hourly buckets + slot.covered 重算
       const sH = parseTime(window.start)
       const eH = parseTime(window.end)
       const effE = eH <= sH ? eH + 24 : eH
@@ -292,17 +319,38 @@ export function runTimeSlotMode(ctx) {
         ? [6, 7, 8, 9, 5, 4].filter(h => h <= maxGrossH)
         : [ftIdeal, 9].filter(h => h <= maxGrossH)
 
-      const wouldOver = (window) => slotCoverage.some(s => {
-        const maxC = s.max_count || s.required_count + 2
-        if (s.covered < maxC) return false
-        const ov = overlaps(window.start, window.end, s.start_time, s.end_time)
-        if (date === weekDates[0] && ov) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} overlaps ${s.start_time}-${s.end_time} (covered=${s.covered} maxC=${maxC} max_count=${s.max_count} required=${s.required_count})`)
-        return ov
-      })
-      const fillsGap = (window) => slotCoverage.some(s =>
-        s.covered < s.required_count &&
-        overlaps(window.start, window.end, s.start_time, s.end_time)
-      )
+      // hourly-precise：對每個 slot 內、window 也涵蓋的 bucket 檢查 +1 是否超 max
+      const wouldOver = (window) => {
+        const ws = parseTime(window.start), we = parseTime(window.end)
+        const weEff = we <= ws ? we + 24 : we
+        const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
+        for (const slot of slotCoverage) {
+          const maxC = slot.max_count || slot.required_count + 2
+          const ovStart = Math.max(winSb, slot._startBucket)
+          const ovEnd = Math.min(winEb, slot._endBucket)
+          for (let b = ovStart; b < ovEnd; b++) {
+            if (slot.coveredHourly[b - slot._startBucket] + 1 > maxC) {
+              if (date === weekDates[0]) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} bucket=${b}(${(b/2).toFixed(1)}h) cnt=${slot.coveredHourly[b - slot._startBucket]} max=${maxC} slot=${slot.start_time}-${slot.end_time}`)
+              return true
+            }
+          }
+        }
+        return false
+      }
+      // fillsGap：window 在某個 slot 內、有 bucket 還沒到 required → 補位
+      const fillsGap = (window) => {
+        const ws = parseTime(window.start), we = parseTime(window.end)
+        const weEff = we <= ws ? we + 24 : we
+        const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
+        for (const slot of slotCoverage) {
+          const ovStart = Math.max(winSb, slot._startBucket)
+          const ovEnd = Math.min(winEb, slot._endBucket)
+          for (let b = ovStart; b < ovEnd; b++) {
+            if (slot.coveredHourly[b - slot._startBucket] < slot.required_count) return true
+          }
+        }
+        return false
+      }
 
       let chosenWindow = null
       outer: for (const grossH of grossDurations) {

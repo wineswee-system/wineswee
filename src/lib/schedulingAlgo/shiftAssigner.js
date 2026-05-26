@@ -417,29 +417,57 @@ export function runOpenerCloserFixes(ctx) {
 }
 
 /**
- * Check whether assigning `sd` (or any shift window) would push any covered
- * time slot beyond its max_count. Returns false when slotCov is null
- * (shift-based mode has no slot coverage to check).
+ * Check whether assigning `sd` would push any covered time slot beyond max_count.
+ *   mode='hourly' (default): half-hour bucket precision — strict, catches partial over
+ *   mode='binary': legacy overlap-based check using slot.covered (= hourly min)
+ *                  — looser fallback, used when strict mode leaves no safe shift
+ *                    and we'd rather accept marginal over than violate higher-priority
+ *                    constraint (e.g., FT monthly rest target = 10 must hit exactly).
+ * Returns false when slotCov is null (shift-based mode has no slot coverage).
  */
-export function shiftWouldOverStaff(sd, slotCov) {
+export function shiftWouldOverStaff(sd, slotCov, mode = 'hourly') {
   if (!slotCov) return false
   const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
   const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
+  if (mode === 'binary') {
+    for (const slot of slotCov) {
+      const maxC = slot.max_count || slot.required_count + 2
+      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      if (!(sdStart < seEff && sdEndEff > ss)) continue
+      if (slot.covered >= maxC) return true
+    }
+    return false
+  }
+  // hourly precision (default)
+  const sdStartBucket = Math.floor(sdStart * 2)
+  const sdEndBucket = Math.floor(sdEndEff * 2)
   for (const slot of slotCov) {
-    const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-    const seEff = se <= ss ? se + 24 : se
-    if (!(sdStart < seEff && sdEndEff > ss)) continue
     const maxC = slot.max_count || slot.required_count + 2
-    if (slot.covered >= maxC) return true
+    if (slot.coveredHourly && slot._startBucket != null) {
+      const ovStart = Math.max(sdStartBucket, slot._startBucket)
+      const ovEnd = Math.min(sdEndBucket, slot._endBucket)
+      for (let b = ovStart; b < ovEnd; b++) {
+        if (slot.coveredHourly[b - slot._startBucket] + 1 > maxC) return true
+      }
+    } else {
+      // hourly data missing → degrade to binary
+      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      if (!(sdStart < seEff && sdEndEff > ss)) continue
+      if (slot.covered >= maxC) return true
+    }
   }
   return false
 }
 
 /**
  * Compute current per-slot coverage for a single date from a flat assignments array.
+ * Uses half-hour buckets (48 per day) so partial-overlap is precise:
+ *   slot.covered = min hourly headcount within slot (true bottleneck)
+ *   slot.coveredHourly = per-bucket headcount array within slot
+ *   slot._startBucket / _endBucket = bucket range for hourly checks
  * Returns null when timeSlots is empty (shift-based mode).
- * Used by monthlySchedule's final-correction step which works on assignment arrays
- * rather than the weekly schedule/actualTimes lookup maps.
  */
 export function computeDaySlotCoverage(date, timeSlots, assignments) {
   if (!timeSlots || timeSlots.length === 0) return null
@@ -448,20 +476,40 @@ export function computeDaySlotCoverage(date, timeSlots, assignments) {
   const daySlots = timeSlots.filter(s =>
     s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
   )
-  const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
+  // Build half-hour buckets for the date (48 buckets, mod 48 wraps midnight)
+  const buckets = new Array(48).fill(0)
   for (const a of assignments) {
     if (a.date !== date) continue
     if (isAbsence(a.shift)) continue
     if (!a.actual_start || !a.actual_end) continue
-    const ws = parseTime(a.actual_start), we = parseTime(a.actual_end)
-    const weEff = we <= ws ? we + 24 : we
-    for (const slot of slotCov) {
-      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-      const seEff = se <= ss ? se + 24 : se
-      if (ws < seEff && weEff > ss) slot.covered++
-    }
+    const startH = parseTime(a.actual_start)
+    const endH = parseTime(a.actual_end)
+    const effEnd = endH <= startH ? endH + 24 : endH
+    const sb = Math.floor(startH * 2)
+    const eb = Math.floor(effEnd * 2)
+    for (let b = sb; b < eb; b++) buckets[b % 48]++
   }
-  return slotCov
+  return daySlots.map(s => {
+    const ss = parseTime(s.start_time)
+    const se = parseTime(s.end_time)
+    const seEff = se <= ss ? se + 24 : se
+    const sb = Math.floor(ss * 2)
+    const eb = Math.floor(seEff * 2)
+    const coveredHourly = []
+    let min = Infinity
+    for (let b = sb; b < eb; b++) {
+      const cnt = buckets[b % 48]
+      coveredHourly.push(cnt)
+      if (cnt < min) min = cnt
+    }
+    return {
+      ...s,
+      covered: min === Infinity ? 0 : min,
+      coveredHourly,
+      _startBucket: sb,
+      _endBucket: eb,
+    }
+  })
 }
 
 /**
@@ -477,6 +525,8 @@ export function runFillUnassignedFT(ctx) {
     wsConstraints, isPTEmp,
   } = ctx
 
+  // Hourly-precise slot coverage (跟 module-level computeDaySlotCoverage 同邏輯，
+  // 差別是吃 schedule/actualTimes lookup 而非 flat assignments array)
   const computeDaySlotCov = (date) => {
     if (!useTimeSlotMode) return null
     const dow = new Date(date).getDay()
@@ -484,21 +534,31 @@ export function runFillUnassignedFT(ctx) {
     const daySlots = timeSlots.filter(s =>
       s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
     )
-    const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
+    const buckets = new Array(48).fill(0)
     for (const e2 of employees) {
       const s2 = schedule[e2.name][date]
       if (!s2 || isAbsence(s2)) continue
       const t = actualTimes[`${e2.name}_${date}`]
-      if (!t) continue
-      const ws = parseTime(t.start), we = parseTime(t.end)
-      const weEff = we <= ws ? we + 24 : we
-      for (const slot of slotCov) {
-        const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-        const seEff = se <= ss ? se + 24 : se
-        if (ws < seEff && weEff > ss) slot.covered++
-      }
+      if (!t?.start || !t?.end) continue
+      const startH = parseTime(t.start), endH = parseTime(t.end)
+      const effEnd = endH <= startH ? endH + 24 : endH
+      const sb = Math.floor(startH * 2), eb = Math.floor(effEnd * 2)
+      for (let b = sb; b < eb; b++) buckets[b % 48]++
     }
-    return slotCov
+    return daySlots.map(s => {
+      const ss = parseTime(s.start_time)
+      const se = parseTime(s.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      const sb = Math.floor(ss * 2), eb = Math.floor(seEff * 2)
+      const coveredHourly = []
+      let min = Infinity
+      for (let b = sb; b < eb; b++) {
+        const cnt = buckets[b % 48]
+        coveredHourly.push(cnt)
+        if (cnt < min) min = cnt
+      }
+      return { ...s, covered: min === Infinity ? 0 : min, coveredHourly, _startBucket: sb, _endBucket: eb }
+    })
   }
 
   for (const emp of employees) {
@@ -516,13 +576,17 @@ export function runFillUnassignedFT(ctx) {
         return true
       })
       if (eligible.length === 0) continue
-      // 先找不會 over-staff 的 safe shift
+      // 先 strict (hourly) 找 safe；找不到退到 binary (slot-min) — 接受 marginal partial over
+      // 以維持 FT 月休精確（hard rule: ftMin 必須命中）
       const slotCov = computeDaySlotCov(date)
-      const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
+      let safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'hourly'))
+      if (safe.length === 0 && useTimeSlotMode) {
+        safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'binary'))
+      }
       if (safe.length === 0) {
         if (useTimeSlotMode) {
           schedule[emp.name][date] = '休'
-          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] → 休`)
+          if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] (strict+binary) → 休`)
         } else {
           const sd = eligible[0]
           schedule[emp.name][date] = sd.name

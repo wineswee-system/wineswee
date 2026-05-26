@@ -147,17 +147,7 @@ export function runTimeSlotMode(ctx) {
     }
     refreshCoverage()
 
-    let hasOpener = false
-    let hasCloser = false
-    for (const emp of employees) {
-      const t = actualTimes[`${emp.name}_${date}`]
-      if (!t) continue
-      const tStartH = parseTime(t.start)
-      if (Math.abs(tStartH - storeOpenH) < 0.5) hasOpener = true
-      const tEndH = parseTime(t.end)
-      const effEnd = tEndH <= tStartH ? tEndH + 24 : tEndH
-      if (effEnd >= effectiveCloseH - 0.5) hasCloser = true
-    }
+    // (移除舊的 hasOpener/hasCloser flags — Phase 1/2 改用 openReq/closeReq 補到 required 為止)
 
     const available = employees.filter(emp =>
       !schedule[emp.name][date] && !restDayPlan[emp.name].has(date)
@@ -210,11 +200,6 @@ export function runTimeSlotMode(ctx) {
       schedule[emp.name][date] = fmtLabel(window.start, window.end)
       actualTimes[`${emp.name}_${date}`] = { start: window.start, end: window.end, hours: window.netH }
       refreshCoverage()  // hourly buckets + slot.covered 重算
-      const sH = parseTime(window.start)
-      const eH = parseTime(window.end)
-      const effE = eH <= sH ? eH + 24 : eH
-      if (Math.abs(sH - storeOpenH) < 0.5) hasOpener = true
-      if (effE >= effectiveCloseH - 0.5) hasCloser = true
     }
 
     const scoreCoverage = (startTime, endTime) => {
@@ -247,47 +232,92 @@ export function runTimeSlotMode(ctx) {
       return false
     }
 
-    // Phase 1: 開店人員
+    // ★ 找該日「最早 slot」(store-open) 跟「最晚 slot」(store-close) 的 required_count
+    //   Phase 1/2 要補到 required 為止，不能一個就 break（早班 / 關班 req=2 case）
+    const openSlot = daySlots.find(s => parseTime(s.start_time) <= storeOpenH + 0.1)
+    const openReq = openSlot?.required_count || 1
+    const closeSlot = daySlots.slice().reverse().find(s => {
+      const se = parseTime(s.end_time)
+      const seEff = se <= parseTime(s.start_time) ? se + 24 : se
+      return seEff >= effectiveCloseH - 0.1
+    })
+    const closeReq = closeSlot?.required_count || 1
+
+    // Phase 1: 開店人員 — 補到 openReq 為止
     // PT 偏好 6h，需要時自動放寬到 7-9h（仍受 maxGrossH 跟 H 系列規則擋）
     // 加 wouldOverHourly 跟 Phase 3 對齊 — 避免 partial bucket over-staff
-    if (!hasOpener) {
-      const openers = sortByNeed(available.filter(e => e.can_open === true && !schedule[e.name]?.[date]))
+    let openerCount = 0
+    for (const emp of employees) {
+      const t = actualTimes[`${emp.name}_${date}`]
+      if (t && Math.abs(parseTime(t.start) - storeOpenH) < 0.5) openerCount++
+    }
+    if (openerCount < openReq) {
       const ptGrossOptions = [6, 7, 8, 9]
-      for (const emp of openers) {
-        const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
-        let assigned = false
-        for (const grossH of grossOptions) {
-          const window = tryShift(emp, storeOpenH, grossH)
-          if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
-            doAssign(emp, window)
-            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener: ${emp.name} → ${window.start}~${window.end}`)
-            assigned = true
-            break
+      let added = 0
+      const need = openReq - openerCount
+      while (added < need) {
+        const openers = sortByNeed(employees.filter(e =>
+          e.can_open === true && !schedule[e.name]?.[date] && !restDayPlan[e.name].has(date)
+        ))
+        let placedThisRound = false
+        for (const emp of openers) {
+          const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
+          let assigned = false
+          for (const grossH of grossOptions) {
+            const window = tryShift(emp, storeOpenH, grossH)
+            if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
+              doAssign(emp, window)
+              if (date === weekDates[0]) console.log(`[DBG ${date}] Phase1 opener#${openerCount + added + 1}: ${emp.name} → ${window.start}~${window.end}`)
+              assigned = true
+              placedThisRound = true
+              added++
+              break
+            }
           }
+          if (assigned) break
         }
-        if (assigned) break
+        if (!placedThisRound) break  // 沒人能再開店 → 退出
       }
     }
 
-    // Phase 2: 關店人員 — 加 wouldOverHourly 避免 partial bucket over-staff
-    if (!hasCloser) {
-      const closers = sortByNeed(available.filter(e => e.can_close === true && !schedule[e.name]?.[date]))
+    // Phase 2: 關店人員 — 補到 closeReq 為止，加 wouldOverHourly 避免 over-staff
+    let closerCount = 0
+    for (const emp of employees) {
+      const t = actualTimes[`${emp.name}_${date}`]
+      if (!t) continue
+      const tStartH = parseTime(t.start)
+      const tEndH = parseTime(t.end)
+      const effEnd = tEndH <= tStartH ? tEndH + 24 : tEndH
+      if (effEnd >= effectiveCloseH - 0.5) closerCount++
+    }
+    if (closerCount < closeReq) {
       const ptGrossOptions = [6, 7, 8, 9]
-      for (const emp of closers) {
-        const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
-        let assigned = false
-        for (const grossH of grossOptions) {
-          const startH = effectiveCloseH - grossH
-          if (startH < storeOpenH) continue
-          const window = tryShift(emp, startH, grossH)
-          if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
-            doAssign(emp, window)
-            if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer: ${emp.name} → ${window.start}~${window.end}`)
-            assigned = true
-            break
+      let added = 0
+      const need = closeReq - closerCount
+      while (added < need) {
+        const closers = sortByNeed(employees.filter(e =>
+          e.can_close === true && !schedule[e.name]?.[date] && !restDayPlan[e.name].has(date)
+        ))
+        let placedThisRound = false
+        for (const emp of closers) {
+          const grossOptions = isPTEmp(emp) ? ptGrossOptions.filter(h => h <= maxGrossH) : [calcFTGross(emp.name)]
+          let assigned = false
+          for (const grossH of grossOptions) {
+            const startH = effectiveCloseH - grossH
+            if (startH < storeOpenH) continue
+            const window = tryShift(emp, startH, grossH)
+            if (window && !wouldOverHourly(window) && scoreCoverage(window.start, window.end) > -50) {
+              doAssign(emp, window)
+              if (date === weekDates[0]) console.log(`[DBG ${date}] Phase2 closer#${closerCount + added + 1}: ${emp.name} → ${window.start}~${window.end}`)
+              assigned = true
+              placedThisRound = true
+              added++
+              break
+            }
           }
+          if (assigned) break
         }
-        if (assigned) break
+        if (!placedThisRound) break  // 沒人能再關店 → 退出
       }
     }
     if (date === weekDates[0]) {

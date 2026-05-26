@@ -263,6 +263,26 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           isLegallyValid(emp, sd, ra.date, schedFromAll, data.shiftDefs, weekDates7, { ...data, previousWeek: allAssignments })
         )
 
+        // ★ H3 連續上班保護 — 退讓時用，避免 fallback 到違法 (PT 6 天 / FT 12 天)
+        //   退讓到 eligible 是為了「設定異常」case（譬如 can_open=false+can_close=false 員工
+        //   + 該店沒中段班）能找到 shift，但 H3 勞基法不能放棄
+        const isH3SafeForRA = () => {
+          let consec = 1
+          // 從 ra.date 往回連續推算同 emp 工作天數
+          const raDateObj = new Date(ra.date)
+          for (let j = 1; j <= 13; j++) {  // 13 天足夠 cover FT max=12
+            const prev = new Date(raDateObj)
+            prev.setDate(raDateObj.getDate() - j)
+            const prevStr = prev.toISOString().slice(0, 10)
+            const s = schedFromAll[emp.name]?.[prevStr]
+            if (s && !isAbsence(s)) consec++
+            else break
+          }
+          const maxConsec = isPT ? 6 : 12
+          return consec <= maxConsec
+        }
+        const passH3 = isH3SafeForRA()
+
         // strict (hourly) 找 safe；找不到退到 binary
         const slotCov = computeDaySlotCoverage(ra.date, timeSlotsForCheck, allAssignments)
         let safe = legalEligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'hourly'))
@@ -270,12 +290,15 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           safe = legalEligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'binary'))
         }
         // ★ FT 偏 9h net=8h 排序，避免撿 6h 短班
-        //   優先順序: safe(legal+slot) → legalEligible(legal+no slot fit) → eligible(放棄 legal 退讓)
-        const picked = (slotCov ? [...safe].sort(sortBySdFitForFT)[0] : null)
-                    || [...legalEligible].sort(sortBySdFitForFT)[0]
-                    || [...eligible].sort(sortBySdFitForFT)[0]
-                    || data.shiftDefs[0]
-                    || null
+        //   優先順序: safe(legal+slot) → legalEligible(legal+no slot fit) → eligible(只放 H9)
+        //   但連 H3 都不過時直接 null → 保留休，寧可超 cap 也不違反勞基法
+        const picked = !passH3
+          ? null
+          : ((slotCov ? [...safe].sort(sortBySdFitForFT)[0] : null)
+            || [...legalEligible].sort(sortBySdFitForFT)[0]
+            || [...eligible].sort(sortBySdFitForFT)[0]
+            || data.shiftDefs[0]
+            || null)
         if (picked) {
           ra.shift = picked.name
           ra.actual_start = picked.start_time?.slice(0, 5) || '11:00'

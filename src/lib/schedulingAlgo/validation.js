@@ -256,6 +256,26 @@ export function validateResult(assignments, data) {
           return startH < slotEndEff && endEff > slotStart
         }).length
         if (covering < slot.required_count) {
+          // ★ Verbose DEBUG: 對每個 work entry 詳細印出 (raw / fallback / final h / cover)
+          //   定位哪一筆 cover 失效
+          const dayWork = assignments.filter(a => a.date === date && !isAbsence(a.shift))
+          console.log(`[S10 DEBUG] ${date} ${slot.start_time}-${slot.end_time}: covered=${covering}/${slot.required_count} (slotStart=${slotStart} slotEndEff=${slotEndEff})`)
+          for (const a of dayWork) {
+            let startH = a.actual_start ? parseTime(a.actual_start) : null
+            let endH = a.actual_end ? parseTime(a.actual_end) : null
+            let fb = 'raw'
+            if (startH == null || endH == null) {
+              const def = lookupShiftDef(a.shift)
+              if (def) { startH = parseTime(def.start_time); endH = parseTime(def.end_time); fb = 'shift_def' }
+            }
+            if (startH == null || endH == null) {
+              const parsed = parseShiftRange(a.shift)
+              if (parsed) { startH = parseTime(parsed.start); endH = parseTime(parsed.end); fb = 'parseShiftRange' }
+            }
+            const endEff = (startH != null && endH != null && endH <= startH) ? endH + 24 : endH
+            const covers = (startH != null && endH != null) && (startH < slotEndEff && endEff > slotStart)
+            console.log(`  ${a.employee} | shift="${a.shift}" | raw=${a.actual_start || 'NULL'}~${a.actual_end || 'NULL'} | fb=${fb} | h=${startH}~${endH}(eff=${endEff}) | cover=${covers}`)
+          }
           violations.push({
             employee: '-', constraint: 'S10', law: '營運需求',
             message: `${date} ${slot.start_time}-${slot.end_time}: ${covering}/${slot.required_count} 人（不足）`,

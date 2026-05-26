@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search } from 'lucide-react'
+import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search, Download } from 'lucide-react'
+import { exportToCsv, fmtDate } from '../../../lib/exportCsv'
 import { supabase } from '../../../lib/supabase'
 import ProjectDeployModal from './ProjectDeployModal'
 import ProjectFormModal from './ProjectFormModal'
@@ -75,6 +76,23 @@ export default function ProjectListView({
 }) {
   const [editingTpl, setEditingTpl] = useState(null)
 
+  const handleExport = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    exportToCsv(`projects_${today}.csv`, filtered, [
+      { label: 'ID',     value: r => `PJ-${r.id}` },
+      { label: '專案名稱', value: 'name' },
+      { label: '狀態',   value: 'status' },
+      { label: '優先',   value: 'priority' },
+      { label: '負責人', value: 'owner' },
+      { label: '部門',   value: 'department' },
+      { label: '門市',   value: 'store' },
+      { label: '開始日', value: r => fmtDate(r.start_date) },
+      { label: '結束日', value: r => fmtDate(r.end_date) },
+      { label: '預算',   value: r => r.budget ? String(r.budget) : '' },
+      { label: '說明',   value: 'description' },
+    ])
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -83,16 +101,22 @@ export default function ProjectListView({
             <h2><span className="header-icon">📁</span> 專案管理</h2>
             <p>Project → Workflow → Task 三層架構</p>
           </div>
-          <button className="btn btn-primary" onClick={async () => {
-            const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
-            setFreeInstances(data || [])
-            resetNewProjectState()
-            setForm(f => ({ ...f, owner: profile?.name || '' }))
-            setEditingId(null)
-            setShowModal(true)
-          }}>
-            <Plus size={14} /> 新增專案
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={handleExport} title="匯出 CSV"
+              style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Download size={14} /> 匯出
+            </button>
+            <button className="btn btn-primary" onClick={async () => {
+              const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
+              setFreeInstances(data || [])
+              resetNewProjectState()
+              setForm(f => ({ ...f, owner: profile?.name || '' }))
+              setEditingId(null)
+              setShowModal(true)
+            }}>
+              <Plus size={14} /> 新增專案
+            </button>
+          </div>
         </div>
       </div>
 

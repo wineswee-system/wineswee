@@ -3,7 +3,8 @@ import Modal, { Field } from '../../../components/Modal'
 import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
-  Users, Settings, Columns, GitBranch, MoreVertical, GripVertical
+  Users, Settings, Columns, GitBranch, MoreVertical, GripVertical,
+  TrendingDown, DollarSign, Link2, Unlink,
 } from 'lucide-react'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
@@ -13,6 +14,7 @@ import { ProjectCustomFieldsAdmin } from '../../../components/tasks/CustomFields
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import ProjectFormModal from './ProjectFormModal'
 import InputModal from '../../../components/ui/InputModal'
+import BurndownChart from '../../../components/tasks/BurndownChart'
 
 const STATUS_MAP = {
   '規劃中': { color: 'var(--accent-blue)',   bg: 'var(--accent-blue-dim)',   icon: Clock },
@@ -34,6 +36,15 @@ const TASK_STATUS_CONFIG = {
 }
 const TASK_STATUS_FALLBACK = TASK_STATUS_CONFIG['未開始']
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+
+// Expense-request status → accent color (matches Finance module canonical palette)
+const EXPENSE_STATUS_COLOR = {
+  '申請中': 'var(--accent-blue)',
+  '已核准': 'var(--accent-green)',
+  '待核銷': 'var(--accent-yellow)',
+  '已核銷': 'var(--accent-cyan)',
+  '已駁回': 'var(--accent-red)',
+}
 
 export default function ProjectDetailPanel({
   p,
@@ -114,6 +125,9 @@ export default function ProjectDetailPanel({
   onWfEdit,
   onProjectOrderChange,
   approvalChains = [],
+  allExpenses = [],
+  onLinkExpense,
+  onUnlinkExpense,
 }) {
   const [detailTab, setDetailTab] = useState('overview')
   const [selectedTask, setSelectedTask] = useState(null)
@@ -200,9 +214,11 @@ export default function ProjectDetailPanel({
       </div>
 
       {/* Detail tabs */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16, overflowX: 'auto' }}>
         {[
           { k: 'overview',  label: '總覽',     icon: FolderOpen },
+          { k: 'burndown',  label: '燃盡圖',   icon: TrendingDown },
+          { k: 'budget',    label: '預算',     icon: DollarSign },
           { k: 'members',   label: '成員',     icon: Users },
           { k: 'sections',  label: '欄位',     icon: Columns },
           { k: 'fields',    label: '自訂欄位', icon: Settings },
@@ -298,6 +314,156 @@ export default function ProjectDetailPanel({
           ))}
         </div>
       )}
+
+      {/* ── Burndown tab ── */}
+      {detailTab === 'burndown' && (() => {
+        const wfIdSet = new Set(pWorkflows.map(w => w.id))
+        const allProjectTasks = tasks.filter(t =>
+          t.project_id === p.id || wfIdSet.has(t.workflow_instance_id)
+        )
+        return (
+          <div className="card" style={{ padding: '18px 20px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <TrendingDown size={15} /> 任務燃盡圖
+            </div>
+            {(!p.start_date || !p.end_date) && (
+              <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginBottom: 10, padding: '6px 10px', background: 'var(--accent-orange-dim)', borderRadius: 6 }}>
+                ⚠️ 未設定專案開始/結束日期，圖表將以任務建立時間與今天推算範圍。建議編輯專案補齊日期以得到更準確的燃盡線。
+              </div>
+            )}
+            <BurndownChart
+              tasks={allProjectTasks}
+              startDate={p.start_date}
+              endDate={p.end_date}
+            />
+          </div>
+        )
+      })()}
+
+      {/* ── Budget tab ── */}
+      {detailTab === 'budget' && (() => {
+        const linked = allExpenses.filter(e => e.project_id === p.id)
+        const unlinked = allExpenses.filter(e => !e.project_id)
+        const actualSpent = linked.reduce((s, e) => s + Number(e.actual_amount ?? e.estimated_amount ?? 0), 0)
+        const budget = Number(p.budget || 0)
+        const pct = budget > 0 ? Math.min(100, Math.round((actualSpent / budget) * 100)) : null
+        const overBudget = budget > 0 && actualSpent > budget
+
+        return (
+          <div>
+            {/* Budget bar */}
+            <div className="card" style={{ padding: '18px 20px', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                <DollarSign size={15} /> 預算概覽
+              </div>
+              {budget > 0 ? (
+                <>
+                  <div style={{ display: 'flex', gap: 20, marginBottom: 14, flexWrap: 'wrap' }}>
+                    {[
+                      { label: '核准預算', val: fmt(budget), color: 'var(--accent-blue)' },
+                      { label: '實際支出', val: fmt(actualSpent), color: overBudget ? 'var(--accent-red)' : 'var(--accent-green)' },
+                      { label: '剩餘', val: fmt(budget - actualSpent), color: overBudget ? 'var(--accent-red)' : 'var(--text-secondary)' },
+                      { label: '費用筆數', val: linked.length, color: 'var(--accent-cyan)' },
+                    ].map(s => (
+                      <div key={s.label} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--glass-light)', textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{s.label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5 }}>
+                    使用率 {pct}%{overBudget && <span style={{ color: 'var(--accent-red)', marginLeft: 6, fontWeight: 700 }}>⚠️ 超出預算</span>}
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: 'var(--border-medium)' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 4,
+                      width: `${pct}%`,
+                      background: overBudget ? 'var(--accent-red)' : pct > 80 ? 'var(--accent-orange)' : 'var(--accent-cyan)',
+                      transition: 'width 0.4s',
+                    }} />
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
+                  未設定預算金額。可於「編輯專案」中設定。
+                </div>
+              )}
+            </div>
+
+            {/* Linked expenses */}
+            <div className="card" style={{ padding: '14px 16px', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                已連結費用申請（{linked.length}）
+              </div>
+              {linked.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚未連結任何費用申請。</div>
+              ) : linked.map(e => (
+                <div key={e.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
+                  borderBottom: '1px solid var(--border-subtle)', fontSize: 13,
+                }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 80, textAlign: 'right' }}>
+                    {fmt(e.actual_amount ?? e.estimated_amount)}
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                    color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
+                    background: 'var(--glass-light)',
+                    whiteSpace: 'nowrap',
+                  }}>{e.status}</span>
+                  <button
+                    title="取消連結"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', borderRadius: 4, color: 'var(--accent-red)', flexShrink: 0 }}
+                    onMouseEnter={e2 => e2.currentTarget.style.background = 'var(--accent-red-dim)'}
+                    onMouseLeave={e2 => e2.currentTarget.style.background = 'none'}
+                    onClick={() => onUnlinkExpense?.(e.id)}
+                  ><Unlink size={12} /></button>
+                </div>
+              ))}
+            </div>
+
+            {/* Link new expense */}
+            {unlinked.length > 0 && (
+              <div className="card" style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                  <Link2 size={14} /> 連結費用申請
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  選擇尚未連結專案的費用申請，點「連結」將其計入此專案預算。
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto' }}>
+                  {unlinked.map(e => (
+                    <div key={e.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px',
+                      borderRadius: 7, border: '1px solid var(--border-subtle)', fontSize: 13,
+                    }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
+                      <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 70, textAlign: 'right' }}>
+                        {fmt(e.estimated_amount)}
+                      </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                        color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
+                        background: 'var(--glass-light)', whiteSpace: 'nowrap',
+                      }}>{e.status}</span>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}
+                        onClick={() => onLinkExpense?.(e.id, p.id)}
+                      ><Link2 size={11} /> 連結</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {detailTab === 'overview' && <>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon } from 'lucide-react'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download } from 'lucide-react'
+import { exportToCsv, fmtDate } from '../../lib/exportCsv'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -50,6 +51,23 @@ export default function Tasks() {
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
+
+  const handleExport = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    exportToCsv(`tasks_${today}.csv`, filtered.map(t => tasks.find(x => x.id === t.id) || t), [
+      { label: 'ID',     value: r => `TK-${r.id}` },
+      { label: '任務名稱', value: 'title' },
+      { label: '狀態',   value: 'status' },
+      { label: '優先級', value: 'priority' },
+      { label: '類型',   value: r => normBucket(r.bucket) },
+      { label: '負責人', value: 'assignee' },
+      { label: '門市',   value: 'store' },
+      { label: '專案',   value: 'projectName' },
+      { label: '所屬流程', value: 'workflow' },
+      { label: '計畫開始', value: r => fmtDate(r.planned_start) },
+      { label: '截止日',  value: r => fmtDate(r.due_date) },
+    ])
+  }
 
   const refresh = () => {
     return Promise.all([
@@ -246,7 +264,12 @@ export default function Tasks() {
             <h2><span className="header-icon">📋</span> 任務管理</h2>
             <p>共 {allItems.length} 個任務，已顯示 {filtered.length} 個</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增任務</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={handleExport} title="匯出 CSV" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Download size={14} /> 匯出
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增任務</button>
+          </div>
         </div>
         <div style={{
           marginTop: 10, padding: '10px 14px', borderRadius: 8,

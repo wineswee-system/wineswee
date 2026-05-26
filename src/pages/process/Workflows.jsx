@@ -224,7 +224,7 @@ export default function Workflows() {
             })
             if (started) {
               latestTasks = latestTasks.map(t => t.id === started.id ? started : t)
-              setAllTasks(latestTasks)
+              setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
             }
           }
         }
@@ -357,13 +357,15 @@ export default function Workflows() {
       }
     }
 
-    // ── Fan-in: prerequisite deps ──────────────────────────────────────────
-    // Task B has dep (task_id=B, depends_on_task_id=completedTask, type=prerequisite)
-    // → B starts only when ALL its prerequisites are done
-    const { data: prereqDeps } = await supabase.from('task_dependencies')
-      .select('*').eq('depends_on_task_id', completedTaskId).eq('dep_type', 'prerequisite')
+    // Single query — partition by dep_type client-side to avoid two round-trips
+    const { data: allDeps } = await supabase.from('task_dependencies')
+      .select('*').eq('depends_on_task_id', completedTaskId)
+    const prereqDeps = allDeps?.filter(d => d.dep_type === 'prerequisite') ?? []
+    const triggerDeps = allDeps?.filter(d => d.dep_type === 'trigger') ?? []
 
-    for (const dep of prereqDeps || []) {
+    // ── Fan-in: prerequisite deps ──────────────────────────────────────────
+    // Task B starts only when ALL its prerequisites are done
+    for (const dep of prereqDeps) {
       const targetTask = instTasks().find(t => t.id === dep.task_id)
       if (!targetTask || targetTask.status !== '待處理') continue
 
@@ -379,12 +381,8 @@ export default function Workflows() {
     }
 
     // ── Fan-out: trigger deps ──────────────────────────────────────────────
-    // Task B has dep (task_id=B, depends_on_task_id=completedTask, type=trigger)
-    // → B starts immediately when completedTask finishes, regardless of other deps
-    const { data: triggerDeps } = await supabase.from('task_dependencies')
-      .select('*').eq('depends_on_task_id', completedTaskId).eq('dep_type', 'trigger')
-
-    for (const dep of triggerDeps || []) {
+    // Task B starts immediately when completedTask finishes, regardless of other deps
+    for (const dep of triggerDeps) {
       const targetTask = instTasks().find(t => t.id === dep.task_id)
       if (!targetTask || targetTask.status !== '待處理') continue
       await startTask(dep.task_id)

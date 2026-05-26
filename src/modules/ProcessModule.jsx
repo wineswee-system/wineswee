@@ -4,6 +4,8 @@ import Workflows from '../pages/process/Workflows'
 import Tasks from '../pages/process/Tasks'
 import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
+import TemplateLibrary from '../pages/process/TemplateLibrary'
+import TemplateStudio from '../pages/process/TemplateStudio'
 import Approvals from '../pages/process/Approvals'
 import TaskConfirmations from '../pages/process/TaskConfirmations'
 import Projects from '../pages/process/Projects'
@@ -32,7 +34,12 @@ export default function ProcessModule() {
       <Route path="workflows" element={<Workflows />} />
       <Route path="tasks" element={<Tasks />} />
       <Route path="checklists" element={<Checklists />} />
-      <Route path="sop" element={<SOPTemplates />} />
+      {/* ── SOP範本庫（重設計）── */}
+      <Route path="sop" element={<TemplateLibrary />} />
+      <Route path="sop/new" element={<TemplateStudio />} />
+      <Route path="sop/:id/edit" element={<TemplateStudio />} />
+      {/* 保留舊頁備用 */}
+      <Route path="sop/legacy" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
       <Route path="applications" element={<BusinessApplications />} />
       <Route path="store-audits" element={<StoreAudits />} />

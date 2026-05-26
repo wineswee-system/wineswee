@@ -1,54 +1,15 @@
-import { useState, useEffect } from 'react'
-import { ModalOverlay } from '../../components/Modal'
-import Modal, { Field } from '../../components/Modal'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from '../../lib/toast'
-import {
-  Plus, X, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
-  MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen, Filter, Rocket, Copy,
-  Users, Settings, Columns, GitBranch, MoreVertical, Search, GripVertical
-} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
 import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
-import TaskDetailPanel from '../../components/TaskDetailPanel'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
 import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import ProjectMembers from '../../components/tasks/ProjectMembers'
-import ChangelogPanel from '../../components/ChangelogPanel'
-import { ProjectCustomFieldsAdmin } from '../../components/tasks/CustomFieldsEditor'
-import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-import { empLabel } from '../../lib/empLabel'
-
 import { confirm } from '../../lib/confirm'
-import InputModal from '../../components/ui/InputModal'
 import ProjectDetailPanel from './components/ProjectDetailPanel'
-import ProjectDeployModal from './components/ProjectDeployModal'
-import ProjectFormModal from './components/ProjectFormModal'
 import ProjectListView from './components/ProjectListView'
-
-const STATUS_MAP = {
-  '規劃中': { color: 'var(--accent-blue)',   bg: 'var(--accent-blue-dim)',   icon: Clock },
-  '進行中': { color: 'var(--accent-cyan)',   bg: 'var(--accent-cyan-dim)',   icon: Play },
-  '已完成': { color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)',  icon: Check },
-  '暫停':   { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)', icon: Pause },
-  '已取消': { color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)',    icon: Ban },
-}
-
-const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
-const TASK_STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
-const TASK_STATUS_CONFIG = {
-  '未開始': { color: 'var(--text-muted)', bg: 'var(--glass-light)' },
-  '待簽核': { color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
-  '進行中': { color: 'var(--accent-cyan)', bg: 'var(--accent-cyan-dim)' },
-  '待確認': { color: 'var(--accent-purple)', bg: 'var(--accent-purple-dim)' },
-  '已完成': { color: 'var(--accent-green)', bg: 'var(--accent-green-dim)' },
-  '已退回': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
-  '已擱置': { color: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
-}
-const TASK_STATUS_FALLBACK = TASK_STATUS_CONFIG['未開始']
-const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '', template_id: '' }
 
@@ -181,7 +142,12 @@ export default function Projects() {
     await Promise.all(updates.map(u => supabase.from('tasks').update({ step_order: u.step_order }).eq('id', u.id)))
   }
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // Budget actuals: single handler — pass null as projectId to unlink
+  const setExpenseProject = useCallback(async (expenseId, projectId) => {
+    const { error } = await supabase.from('expense_requests').update({ project_id: projectId ?? null }).eq('id', expenseId)
+    if (error) { toast.error((projectId ? '連結' : '取消連結') + '失敗：' + error.message); return }
+    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: projectId ?? null } : e))
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -713,18 +679,6 @@ export default function Projects() {
   const completedCount = projects.filter(p => p.status === '已完成').length
   const archivedCount = projects.filter(p => ['暫停', '已取消'].includes(p.status)).length
 
-  // ── Budget actuals handlers ──
-  const handleLinkExpense = async (expenseId, projectId) => {
-    const { error } = await supabase.from('expense_requests').update({ project_id: projectId }).eq('id', expenseId)
-    if (error) { toast.error('連結失敗：' + error.message); return }
-    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: projectId } : e))
-  }
-  const handleUnlinkExpense = async (expenseId) => {
-    const { error } = await supabase.from('expense_requests').update({ project_id: null }).eq('id', expenseId)
-    if (error) { toast.error('取消連結失敗：' + error.message); return }
-    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: null } : e))
-  }
-
   // Detail view
   if (selected) {
     const p = selected
@@ -827,10 +781,9 @@ export default function Projects() {
         setPendingWfCreate={setPendingWfCreate}
         pendingTasks={pendingTasks}
         setPendingTasks={setPendingTasks}
-        expenses={expenses}
         allExpenses={expenses}
-        onLinkExpense={handleLinkExpense}
-        onUnlinkExpense={handleUnlinkExpense}
+        onLinkExpense={setExpenseProject}
+        onUnlinkExpense={(id) => setExpenseProject(id, null)}
       />
     )
   }

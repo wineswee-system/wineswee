@@ -1,5 +1,6 @@
 import { InMemoryTransport } from './transports/InMemoryTransport.js'
 import { tenantContextMiddleware } from './middleware/tenantContext.js'
+import { outboxMiddleware } from './middleware/outbox.js'
 import { sanitizerMiddleware } from './middleware/sanitizer.js'
 import { rateLimitMiddleware } from './middleware/rateLimit.js'
 import { idempotencyMiddleware } from './middleware/idempotency.js'
@@ -7,6 +8,7 @@ import { validatorMiddleware } from './middleware/validator.js'
 import { tracingMiddleware } from './middleware/tracing.js'
 import { auditLoggerMiddleware } from './middleware/auditLogger.js'
 import { deadLetterQueueMiddleware } from './middleware/deadLetterQueue.js'
+import { retryMiddleware } from './middleware/retry.js'
 
 /**
  * Core event bus with publish/subscribe, middleware chain, and pluggable transport.
@@ -64,6 +66,7 @@ export class EventBus {
         causation_id: meta.causation_id || null,
         source: meta.source || null,
         _replay: meta._replay || false,
+        _fromOutbox: meta._fromOutbox || false,  // set by outbox worker on re-publish
       },
     }
 
@@ -150,15 +153,23 @@ export function resetEventBus() {
 /**
  * Create the default bus with full middleware chain.
  *
- * Middleware execution order (8-layer enterprise pipeline):
- *   1. tenantContext    — inject tenant_id from localStorage
- *   2. sanitizer        — XSS/SQL injection protection, input validation
- *   3. rateLimit        — per-tenant event throttling (burst protection)
- *   4. idempotency      — deduplicate events (critical for Kafka at-least-once)
- *   5. validator        — validate payload against EVENT_CATALOG schema
- *   6. tracing          — OpenTelemetry-compatible distributed tracing spans
- *   7. auditLogger      — persist event to business_events table
- *   8. deadLetterQueue  — capture handler errors to DLQ table
+ * Middleware execution order (10-layer enterprise pipeline):
+ *   1.  tenantContext    — inject tenant_id from localStorage
+ *   2.  outbox           — write event to event_outbox for at-least-once durability
+ *   3.  sanitizer        — XSS/SQL injection protection, input validation
+ *   4.  rateLimit        — per-tenant event throttling (burst protection)
+ *   5.  idempotency      — deduplicate events (critical for Kafka at-least-once)
+ *   6.  validator        — validate payload against EVENT_CATALOG schema
+ *   7.  tracing          — OpenTelemetry-compatible distributed tracing spans
+ *   8.  auditLogger      — persist event to business_events table (batched, 250ms flush)
+ *   9.  deadLetterQueue  — capture handler errors to DLQ table (runs after retry exhaustion)
+ *   10. retry            — retry transport delivery with exponential backoff (LAST — calls
+ *                          transport directly; on failure DLQ above captures the final error)
+ *
+ * Retry + DLQ ordering note:
+ *   retry is placed LAST so when it exhausts all attempts and returns, control flows back up
+ *   to deadLetterQueue which then checks the final event._handlerErrors state. This means DLQ
+ *   only fires for permanently-failed events, not transient failures that retry recovers.
  *
  * Transport swap for Kafka migration:
  *   Replace `new InMemoryTransport()` with `new KafkaTransport(config)`
@@ -168,13 +179,15 @@ export function resetEventBus() {
 function createDefaultBus() {
   const transport = new InMemoryTransport()
   const bus = new EventBus(transport)
-  bus.use(tenantContextMiddleware)
-  bus.use(sanitizerMiddleware)
-  bus.use(rateLimitMiddleware)
-  bus.use(idempotencyMiddleware)
-  bus.use(validatorMiddleware)
-  bus.use(tracingMiddleware)
-  bus.use(auditLoggerMiddleware)
-  bus.use(deadLetterQueueMiddleware)
+  bus.use(tenantContextMiddleware)   //  1
+  bus.use(outboxMiddleware)          //  2 — NEW: durability guarantee
+  bus.use(sanitizerMiddleware)       //  3
+  bus.use(rateLimitMiddleware)       //  4
+  bus.use(idempotencyMiddleware)     //  5
+  bus.use(validatorMiddleware)       //  6
+  bus.use(tracingMiddleware)         //  7
+  bus.use(auditLoggerMiddleware)     //  8
+  bus.use(deadLetterQueueMiddleware) //  9
+  bus.use(retryMiddleware)           // 10 — NEW: retry AFTER DLQ wraps it
   return bus
 }

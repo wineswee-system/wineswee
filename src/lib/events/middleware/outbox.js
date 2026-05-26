@@ -19,8 +19,9 @@ const log = logger.forModule('events.outbox')
  * In InMemory mode, the outbox is flushed immediately after the middleware chain.
  */
 export async function outboxMiddleware(event, next) {
-  // Skip replay events — they've already been processed
-  if (event.metadata._replay) {
+  // Skip replay events and events re-published by the outbox worker itself
+  // (worker sets _fromOutbox: true to prevent re-writing to the outbox table)
+  if (event.metadata._replay || event.metadata._fromOutbox) {
     return next()
   }
 

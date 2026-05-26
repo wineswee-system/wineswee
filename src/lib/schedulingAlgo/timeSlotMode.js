@@ -355,63 +355,48 @@ export function runTimeSlotMode(ctx) {
         }
         return false
       }
-      // fillsGap：window 在某個 slot 內、有 bucket 還沒到 required → 補位
-      const fillsGap = (window) => {
+      // ★ Set cover greedy：列所有 valid window，選補最多 deficit bucket 的
+      // Score = 該 window 內 cov < required 的 bucket 數量（純粹數補位量，沒 weight）
+      // Tiebreaker: fill 同 → grossH 小者勝（短班優先）→ startH 大者勝（晚 start 優先）
+      // 自動行為：
+      //   - opener slot 缺人 → fill 高 → 自動排成 opener
+      //   - closer slot 缺人 → fill 高 → 自動排成 closer
+      //   - 頭重腳輕 → fill 偏 deficit 那邊 → 自動補晚班
+      //   - fill = 0 → 該 emp 沒地方補 (PT 排休、FT 留空 Step3b 補)
+      const computeFill = (window) => {
         const ws = parseTime(window.start), we = parseTime(window.end)
         const weEff = we <= ws ? we + 24 : we
         const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
+        let count = 0
         for (const slot of slotCoverage) {
           const ovStart = Math.max(winSb, slot._startBucket)
           const ovEnd = Math.min(winEb, slot._endBucket)
           for (let b = ovStart; b < ovEnd; b++) {
-            if (slot.coveredHourly[b - slot._startBucket] < slot.required_count) return true
+            if (slot.coveredHourly[b - slot._startBucket] < slot.required_count) count++
           }
         }
-        return false
+        return count
       }
 
-      // ★ 同個 grossH 內掃所有 valid window，選 score 最高的（不再 pure first-fit）
-      // score = deficit 補位數 × 5 + 結束時間靠近 storeClose 比例 × 15
-      // → 解「頭重腳輕」：同樣能 fillsGap 的 window，優先選結束時間晚的（補晚班）
-      // grossDurations 順序仍生效：找到該 grossH 至少一個 valid 就停（保留短班優先）
-      const scoreWindow = (window) => {
-        const ws = parseTime(window.start), we = parseTime(window.end)
-        const weEff = we <= ws ? we + 24 : we
-        const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
-        let score = 0
-        for (const slot of slotCoverage) {
-          const required = slot.required_count
-          const ovStart = Math.max(winSb, slot._startBucket)
-          const ovEnd = Math.min(winEb, slot._endBucket)
-          for (let b = ovStart; b < ovEnd; b++) {
-            const cnt = slot.coveredHourly[b - slot._startBucket]
-            if (cnt < required) score += (required - cnt) * 5
-          }
-        }
-        const endRatio = (weEff - storeOpenH) / (effectiveCloseH - storeOpenH || 1)
-        score += endRatio * 15
-        return score
-      }
-
-      let chosenWindow = null
-      let chosenScore = -Infinity
+      let chosen = null  // { window, fill, grossH, h }
       for (const grossH of grossDurations) {
-        let foundAny = false
-        // ★ step 0.5 (half-hour) — 不然 storeOpen 為 .5 起點的店面（譬如 10:30 開）
-        //   h++ 整數步進永遠取不到 19~1 這種 .0 結尾的 window
         for (let h = storeOpenH; h <= effectiveCloseH - grossH; h += 0.5) {
           const window = tryShift(emp, h, grossH)
           if (!window) continue
           if (wouldOver(window)) continue
-          if (!fillsGap(window)) continue
-          foundAny = true
-          const score = scoreWindow(window)
-          if (score > chosenScore) {
-            chosenScore = score
-            chosenWindow = window
+          const fill = computeFill(window)
+          if (fill <= 0) continue
+          if (!chosen ||
+              fill > chosen.fill ||
+              (fill === chosen.fill && grossH < chosen.grossH) ||
+              (fill === chosen.fill && grossH === chosen.grossH && h > chosen.h)) {
+            chosen = { window, fill, grossH, h }
           }
         }
-        if (foundAny) break  // 短班優先：該 grossH 有 valid 就停，不試更長
+      }
+      const chosenWindow = chosen?.window || null
+      if (chosen && date === weekDates[0]) {
+        console.log(`[DBG ${date}] Phase3 ${emp.name} setcover: fill=${chosen.fill} grossH=${chosen.grossH} → ${chosenWindow.start}~${chosenWindow.end}`)
       }
 
       if (chosenWindow) {

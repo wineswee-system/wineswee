@@ -374,32 +374,40 @@ export function runTimeSlotMode(ctx) {
         const weEff = we <= ws ? we + 24 : we
         const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
         let count = 0
+        let weightedScore = 0  // ★ 同 fill 數時，required_count 高的 slot 優先補
         for (const slot of slotCoverage) {
           const ovStart = Math.max(winSb, slot._startBucket)
           const ovEnd = Math.min(winEb, slot._endBucket)
           for (let b = ovStart; b < ovEnd; b++) {
-            if (slot.coveredHourly[b - slot._startBucket] < slot.required_count) count++
+            if (slot.coveredHourly[b - slot._startBucket] < slot.required_count) {
+              count++
+              weightedScore += slot.required_count  // required=2 → 加 2, required=1 → 加 1
+            }
           }
         }
-        return count
+        return { count, weightedScore }
       }
       // grossH 偏離 6h 的距離 — 越小越好（PT 標準 6h，FT 9h 也接近）
       const grossDistance = (grossH) => Math.abs(grossH - 6)
 
-      let chosen = null  // { window, fill, grossH, h, distance }
+      let chosen = null  // { window, fill, weightedScore, grossH, h, distance }
       for (const grossH of grossDurations) {
         for (let h = storeOpenH; h <= effectiveCloseH - grossH; h += 0.5) {
           const window = tryShift(emp, h, grossH)
           if (!window) continue
           if (wouldOver(window)) continue
-          const fill = computeFill(window)
+          const { count: fill, weightedScore } = computeFill(window)
           if (fill <= 0) continue
           const distance = grossDistance(grossH)
+          // tiebreaker: fill 大者 → weightedScore 大者（補 required 高的 slot）
+          //   → distance 小者 → start 早者勝（之前 h > chosen.h 反了，導致 5/13
+          //     詹怡理 fill 同時偏 15-00 而不是 11-20，11-14 缺位沒被補）
           if (!chosen ||
               fill > chosen.fill ||
-              (fill === chosen.fill && distance < chosen.distance) ||
-              (fill === chosen.fill && distance === chosen.distance && h > chosen.h)) {
-            chosen = { window, fill, grossH, h, distance }
+              (fill === chosen.fill && weightedScore > chosen.weightedScore) ||
+              (fill === chosen.fill && weightedScore === chosen.weightedScore && distance < chosen.distance) ||
+              (fill === chosen.fill && weightedScore === chosen.weightedScore && distance === chosen.distance && h < chosen.h)) {
+            chosen = { window, fill, weightedScore, grossH, h, distance }
           }
         }
       }

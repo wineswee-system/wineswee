@@ -6,10 +6,10 @@
 
 import {
   getShiftHours, isAbsence, countsAsMonthlyRest,
-  splitIntoWeeks, getCycleFor, isPartTime,
+  splitIntoWeeks, getCycleFor, isPartTime, parseTime,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
-import { validateMonthlyResult } from './validation'
+import { validateMonthlyResult, isLegallyValid } from './validation'
 import { computeStats } from './stats'
 import { runProgrammaticSchedule } from './weeklySchedule'
 import { shiftWouldOverStaff, computeDaySlotCoverage } from './shiftAssigner'
@@ -211,6 +211,41 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         const bW = allAssignments.filter(x => x.date === b.date && !isAbsence(x.shift)).length
         return aW - bW
       })
+
+      // ★ Phase A 漏洞修法：原本只取 safe[0]（按 start_time 排序第一個）、沒過
+      //   H3/H4 hard rule → FT 撿短班、違法上班一律不擋
+      // 把 allAssignments 重建成 schedule[name][date] 給 isLegallyValid 用
+      const schedFromAll = {}
+      for (const aA of allAssignments) {
+        if (!schedFromAll[aA.employee]) schedFromAll[aA.employee] = {}
+        schedFromAll[aA.employee][aA.date] = aA.shift
+      }
+      // 取「ra.date 同週的 7 天 Mon-Sun」當 weekDates 傳給 isLegallyValid
+      //   不能傳整月 dates，否則 isLegallyValid 內 weekly hours check 會用整月工時 → 全擋
+      const getWeekDates7 = (dateStr) => {
+        const d = new Date(dateStr)
+        const dow = d.getDay()
+        const mondayOffset = dow === 0 ? -6 : 1 - dow
+        const monday = new Date(d)
+        monday.setDate(d.getDate() + mondayOffset)
+        const arr = []
+        for (let i = 0; i < 7; i++) {
+          const x = new Date(monday)
+          x.setDate(monday.getDate() + i)
+          arr.push(x.toISOString().slice(0, 10))
+        }
+        return arr
+      }
+      // sortBySdFitForFT — 跟 Step3b 同邏輯，FT 偏好 net=8h（9h gross - 1h break）
+      const sortBySdFitForFT = (a, b) => {
+        const aNet = getShiftHours(a) - (a.break_minutes || 60) / 60
+        const bNet = getShiftHours(b) - (b.break_minutes || 60) / 60
+        const aDist = Math.abs(aNet - 8)
+        const bDist = Math.abs(bNet - 8)
+        if (aDist !== bDist) return aDist - bDist
+        return parseTime(a.start_time) - parseTime(b.start_time)
+      }
+
       const toFix = Math.min(excess, sortedByNeed.length)
       for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
@@ -221,35 +256,49 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           }
           return true
         })
-        // strict (hourly) 找 safe；找不到退到 binary — 維持 FT 月休精確 / PT cap 收斂
+
+        // ★ 過 isLegallyValid（H3 連續上班 / H4 跨日 11h / H13 孕婦夜班）
+        const weekDates7 = getWeekDates7(ra.date)
+        const legalEligible = eligible.filter(sd =>
+          isLegallyValid(emp, sd, ra.date, schedFromAll, data.shiftDefs, weekDates7, { ...data, previousWeek: allAssignments })
+        )
+
+        // strict (hourly) 找 safe；找不到退到 binary
         const slotCov = computeDaySlotCoverage(ra.date, timeSlotsForCheck, allAssignments)
-        let safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'hourly'))
+        let safe = legalEligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'hourly'))
         if (safe.length === 0 && slotCov) {
-          safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'binary'))
+          safe = legalEligible.filter(sd => !shiftWouldOverStaff(sd, slotCov, 'binary'))
         }
-        const picked = (slotCov ? safe[0] : (eligible[0] || data.shiftDefs[0])) || null
+        // ★ FT 偏 9h net=8h 排序，避免撿 6h 短班
+        //   優先順序: safe(legal+slot) → legalEligible(legal+no slot fit) → eligible(放棄 legal 退讓)
+        const picked = (slotCov ? [...safe].sort(sortBySdFitForFT)[0] : null)
+                    || [...legalEligible].sort(sortBySdFitForFT)[0]
+                    || [...eligible].sort(sortBySdFitForFT)[0]
+                    || data.shiftDefs[0]
+                    || null
         if (picked) {
           ra.shift = picked.name
           ra.actual_start = picked.start_time?.slice(0, 5) || '11:00'
           ra.actual_end = picked.end_time?.slice(0, 5) || '20:00'
           ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
+          // 同步 schedFromAll 給下個 iteration 的 isLegallyValid 看
+          if (!schedFromAll[emp.name]) schedFromAll[emp.name] = {}
+          schedFromAll[emp.name][ra.date] = picked.name
         } else {
-          // ★ 終極 fallback：shift_definitions 無對應 safe shift（譬如 PT 該店沒設專屬班）
-          //   → 生成 time-slot 動態 6h window，從該日 storeOpen 開始
-          //   嚴格 enforce cap（PT 月休 10 不能變 12）
+          // ★ 終極 fallback：shift_definitions 無對應 shift → 生成 6h window
           const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
           const dow = new Date(ra.date).getDay()
           const oh = data.storeSettings?.operating_hours?.[dayNames[dow]] ||
                      data.storeSettings?.operatingHours?.[dayNames[dow]]
           if (oh?.open) {
-            const startStr = oh.open.slice(0, 5)  // 'HH:MM'
+            const startStr = oh.open.slice(0, 5)
             const [sh, sm] = startStr.split(':').map(Number)
-            const endH = sh + 6  // PT 標準 6h
+            const endH = sh + 6
             const endStr = `${String(endH % 24).padStart(2, '0')}:${String(sm).padStart(2, '0')}`
             ra.shift = `${startStr}~${endStr}`
             ra.actual_start = startStr
             ra.actual_end = endStr
-            ra.actual_hours = 5  // 6h gross - 1h break
+            ra.actual_hours = 5
           }
         }
       }

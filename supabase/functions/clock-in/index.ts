@@ -82,6 +82,10 @@ serve(async (req: Request) => {
     }
 
     // ── JWT required for all non-LINE paths ─────────────────
+    // [Fix 3] Hoist jwtAuthEmp so the proxy guard can run after emp is resolved,
+    // regardless of whether employee was supplied by id (INT) or name (text).
+    let jwtAuthEmp: any = null
+
     if (!line_user_id) {
       const authHeader = req.headers.get('Authorization')
       if (!authHeader) {
@@ -96,17 +100,10 @@ serve(async (req: Request) => {
           status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      // Proxy clock-in: only admin/super_admin may clock in for another employee
-      if (employee_id) {
-        const { data: authEmp } = await supabase
-          .from('employees').select('id, role, roles(name)').eq('email', user.email).maybeSingle()
-        const authRole = (authEmp?.roles as any)?.name ?? authEmp?.role
-        if (authEmp && authEmp.id !== employee_id && !['admin', 'super_admin'].includes(authRole)) {
-          return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
-            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
-        }
-      }
+      // Fetch the requesting user's employee record — used for proxy guard below.
+      const { data: ae } = await supabase
+        .from('employees').select('id, role, roles(name)').eq('email', user.email).maybeSingle()
+      jwtAuthEmp = ae
     }
 
     // ── Resolve employee (id is INT) ─────────────────────
@@ -141,13 +138,25 @@ serve(async (req: Request) => {
       })
     }
 
+    // [Fix 3] Proxy guard — runs after emp is resolved so it covers ALL identifier
+    // forms (employee_id INT, line_user_id, or legacy text name).
+    // Only admin/super_admin may clock in on behalf of another employee.
+    if (jwtAuthEmp && jwtAuthEmp.id !== emp.id) {
+      const authRole = (jwtAuthEmp?.roles as any)?.name ?? jwtAuthEmp?.role
+      if (!['admin', 'super_admin'].includes(authRole)) {
+        return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     // ── Get location config (stores table) ──
     let location: any = null
 
     if (emp.store_id) {
       const { data: store } = await supabase
         .from('stores')
-        .select('id, name, lat, lng, clock_radius, allowed_wifi, clock_in_method, early_clock_minutes, has_office_hours, office_hours_start, late_tolerance_minutes')
+        .select('id, name, lat, lng, clock_radius, allowed_wifi, clock_in_method, early_clock_minutes, has_office_hours, office_hours_start, office_hours_end, late_tolerance_minutes')
         .eq('id', emp.store_id)
         .maybeSingle()
       location = store
@@ -237,15 +246,33 @@ serve(async (req: Request) => {
       const storeTolerance: number = location?.late_tolerance_minutes ?? 5
       const earlyWindow: number    = location?.early_clock_minutes    ?? 30
 
+      // [Fix 1] Query correct columns: `shift` (name) + `actual_start` (time override).
+      // schedules does NOT have shift_type or start_time — those live on shift_definitions.
       const { data: schedule } = await supabase
         .from('schedules')
-        .select('shift_type, start_time')
+        .select('shift, actual_start')
         .eq('employee_id', emp.id)
         .eq('date', dateStr)
         .maybeSingle()
 
-      if (schedule?.start_time) {
-        const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
+      // Resolve the effective shift start: actual_start override → shift_definitions lookup
+      let resolvedStartTime: string | null = null
+      if (schedule?.actual_start) {
+        resolvedStartTime = String(schedule.actual_start).slice(0, 5)
+      } else if (schedule?.shift) {
+        const { data: shiftDef } = await supabase
+          .from('shift_definitions')
+          .select('start_time')
+          .eq('name', schedule.shift)
+          .or(`store_id.eq.${emp.store_id ?? 0},store_id.is.null`)
+          .order('store_id', { ascending: false, nullsFirst: false })  // prefer store-specific over global
+          .limit(1)
+          .maybeSingle()
+        resolvedStartTime = shiftDef?.start_time?.slice(0, 5) ?? null
+      }
+
+      if (resolvedStartTime) {
+        const [startH, startM] = resolvedStartTime.split(':').map(Number)
         const shiftStartMinutes = startH * 60 + startM
 
         // Early check — no cross-midnight correction needed (schedule is date-scoped)
@@ -352,6 +379,8 @@ serve(async (req: Request) => {
           ? Math.round(haversineMetres(lat, lng, Number(location.lat), Number(location.lng)))
           : null,
         clock_in_method:     method,
+        clock_in_location:   location?.name || null,   // [Fix 3] persist store name for portal display
+        clock_in_ip:         resolvedIP || null,        // [Fix 3] persist resolved IP for portal display
         organization_id:     (emp as any).organization_id || null,
       }).select().single()
 
@@ -381,6 +410,27 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: '今日已打過下班卡' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
+      }
+
+      // [Fix 4] Clock-out early-leave check against office hours end (non-overtime only).
+      // Uses the same tolerance as late-arrival to keep settings symmetric.
+      if (!is_overtime && location?.has_office_hours && location?.office_hours_end) {
+        const storeTolerance: number = location?.late_tolerance_minutes ?? 5
+        const officeEndStr = String(location.office_hours_end).slice(0, 5)
+        const [oeH, oeM] = officeEndStr.split(':').map(Number)
+        const officeEndMinutes = oeH * 60 + oeM
+        // Mirror the pattern used in determineLateStatus: compute raw diff and only
+        // apply +1440 when the result is impossibly negative (office ends past midnight).
+        // The dual-pivot approach (< 9*60 on both) was broken for daytime offices —
+        // clocking out at 08:45 against a 17:00 end incorrectly skipped the block.
+        let earlyLeaveMinutes = officeEndMinutes - currentMinutes
+        if (earlyLeaveMinutes < -720) earlyLeaveMinutes += 1440   // office spans midnight
+        if (earlyLeaveMinutes > storeTolerance) {
+          return new Response(JSON.stringify({
+            error: `打卡失敗：距下班時間尚有 ${earlyLeaveMinutes} 分鐘（辦公時間至 ${officeEndStr}，容許提早 ${storeTolerance} 分鐘）`,
+            earlyLeaveMinutes,
+          }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
       }
 
       // Cross-midnight correction: 22:00 in → 06:00 out = +8h not −16h

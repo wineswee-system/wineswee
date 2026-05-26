@@ -73,7 +73,7 @@ export default function PortalHome() {
         action,
         lat: result.lat,
         lng: result.lng,
-        accuracy: result.accuracy || null,
+        accuracy: result.accuracy ?? null,   // [Fix 5] ?? not || — 0 is a valid GPS accuracy
         ip: result.ip,
         is_overtime: isOvertime,
       })

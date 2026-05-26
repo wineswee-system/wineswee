@@ -96,7 +96,8 @@ export default function Attendance() {
     setClockMsg(null)
     try {
       const emp = employees.find(e => e.name === employeeName)
-      const store = stores.find(s => s.name === emp?.store)
+      // [Fix 4] Match store by ID (INT FK), not text name — emp.store may be undefined
+      const store = stores.find(s => s.id === emp?.store_id)
 
       // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
@@ -107,12 +108,13 @@ export default function Attendance() {
 
       // Server-side validation + record write
       const data = await serverClockIn({
-        employee: employeeName,
+        employee_id: emp?.id,        // [Fix 4] pass ID so proxy guard activates server-side
+        employee:    employeeName,   // keep as legacy fallback
         action,
-        lat: result.lat,
-        lng: result.lng,
-        accuracy: result.accuracy || null,
-        ip: result.ip,
+        lat:      result.lat,
+        lng:      result.lng,
+        accuracy: result.accuracy ?? null,   // [Fix 5] ?? not || — 0 is a valid accuracy value
+        ip:       result.ip,
       })
 
       const now = new Date()

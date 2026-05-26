@@ -224,8 +224,17 @@ export function validateResult(assignments, data) {
         const slotEndEff = slotEnd <= slotStart ? slotEnd + 24 : slotEnd
         const covering = assignments.filter(a => {
           if (a.date !== date || isAbsence(a.shift)) return false
-          const startH = a.actual_start ? parseTime(a.actual_start) : null
-          const endH = a.actual_end ? parseTime(a.actual_end) : null
+          let startH = a.actual_start ? parseTime(a.actual_start) : null
+          let endH = a.actual_end ? parseTime(a.actual_end) : null
+          // Fallback：a.shift 對應到一個 shift_def 但 actual_start/end 是 null
+          // （譬如 DB 殘留 entry 沒寫 actual_start）→ 用 shift_def 的時間
+          if (startH == null || endH == null) {
+            const def = shiftDefMap[a.shift]
+            if (def) {
+              startH = parseTime(def.start_time)
+              endH = parseTime(def.end_time)
+            }
+          }
           if (startH == null || endH == null) return false
           const endEff = endH <= startH ? endH + 24 : endH
           return startH < slotEndEff && endEff > slotStart

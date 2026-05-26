@@ -561,6 +561,23 @@ export function runFillUnassignedFT(ctx) {
     })
   }
 
+  const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const storeSettings = ctx.storeSettings
+
+  // ★ FT 偏好排序：net hours 越接近 8h（= 9h gross - 1h break）越好；
+  //   tiebreaker: start_time 早者勝（保留原 sortedShifts 行為）
+  //   Why: 之前 safe[0] / eligible[0] 直接取 sortedShifts 第一個（start_time 最早），
+  //        如果該店 shift_definitions 內有 11:00-17:00 (6h) 跟 11:00-20:00 (9h) 並存，
+  //        且 start_time 相同 → safe[0] 會撿到 6h 短班 → FT 整月被排成 6h
+  const sortBySdFitForFT = (a, b) => {
+    const aNet = getShiftHours(a) - (a.break_minutes || 60) / 60
+    const bNet = getShiftHours(b) - (b.break_minutes || 60) / 60
+    const aDist = Math.abs(aNet - 8)
+    const bDist = Math.abs(bNet - 8)
+    if (aDist !== bDist) return aDist - bDist
+    return parseTime(a.start_time) - parseTime(b.start_time)
+  }
+
   for (const emp of employees) {
     if (isPTEmp(emp)) continue
     for (const date of weekDates) {
@@ -568,11 +585,31 @@ export function runFillUnassignedFT(ctx) {
       if (restDayPlan[emp.name].has(date)) continue
       const dow = new Date(date).getDay()
       const isWeekend = isWeekendDay(dow)
+
+      // ★ 算當日營業時間，給 can_open / can_close 檢查用（跟 timeSlotMode.tryShift 對齊）
+      const oh = storeSettings?.operating_hours?.[dayNames[dow]] || storeSettings?.operatingHours?.[dayNames[dow]]
+      const storeOpenH = oh?.open ? parseTime(oh.open) : null
+      const storeCloseH = oh?.close ? parseTime(oh.close) : null
+      const effectiveCloseH = (storeOpenH != null && storeCloseH != null && storeCloseH <= storeOpenH)
+        ? storeCloseH + 24 : storeCloseH
+
       const eligibleAll = sortedShifts.filter(sd => {
         if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
         if (sd.day_type === 'weekday' && isWeekend) return false
         if (sd.day_type === 'weekend' && !isWeekend) return false
         if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
+        // ★ can_open / can_close — 跟 timeSlotMode.tryShift Line 187-188 對齊
+        //   之前 Step3b 沒檢查 → 即使 emp.can_open=false 還是會被 Step3b 安排到開店班
+        if (storeOpenH != null && emp.can_open === false) {
+          const sdStartH = parseTime(sd.start_time)
+          if (sdStartH < storeOpenH + 2) return false
+        }
+        if (effectiveCloseH != null && emp.can_close === false) {
+          const sdStartH = parseTime(sd.start_time)
+          const sdEndH = parseTime(sd.end_time)
+          const effEnd = sdEndH <= sdStartH ? sdEndH + 24 : sdEndH
+          if (effEnd > effectiveCloseH - 2) return false
+        }
         return true
       })
       // ★ 過 isLegallyValid (H3 連續上班 / H4 跨日 11h / H13 孕婦夜班 等 hard rule)
@@ -598,17 +635,17 @@ export function runFillUnassignedFT(ctx) {
           schedule[emp.name][date] = '休'
           if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} safe=[] (strict+binary) → 休`)
         } else {
-          const sd = eligible[0]
+          const sd = [...eligible].sort(sortBySdFitForFT)[0]
           schedule[emp.name][date] = sd.name
           actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
           if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 班別制 → ${sd.name}`)
         }
         continue
       }
-      const sd = safe[0]
+      const sd = [...safe].sort(sortBySdFitForFT)[0]
       schedule[emp.name][date] = sd.name
       actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
-      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (safe[0])`)
+      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (net=${(getShiftHours(sd)-(sd.break_minutes||60)/60).toFixed(1)}h)`)
     }
   }
 }

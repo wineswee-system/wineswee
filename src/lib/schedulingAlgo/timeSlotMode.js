@@ -352,16 +352,46 @@ export function runTimeSlotMode(ctx) {
         return false
       }
 
+      // ★ 同個 grossH 內掃所有 valid window，選 score 最高的（不再 pure first-fit）
+      // score = deficit 補位數 × 5 + 結束時間靠近 storeClose 比例 × 15
+      // → 解「頭重腳輕」：同樣能 fillsGap 的 window，優先選結束時間晚的（補晚班）
+      // grossDurations 順序仍生效：找到該 grossH 至少一個 valid 就停（保留短班優先）
+      const scoreWindow = (window) => {
+        const ws = parseTime(window.start), we = parseTime(window.end)
+        const weEff = we <= ws ? we + 24 : we
+        const winSb = Math.floor(ws * 2), winEb = Math.floor(weEff * 2)
+        let score = 0
+        for (const slot of slotCoverage) {
+          const required = slot.required_count
+          const ovStart = Math.max(winSb, slot._startBucket)
+          const ovEnd = Math.min(winEb, slot._endBucket)
+          for (let b = ovStart; b < ovEnd; b++) {
+            const cnt = slot.coveredHourly[b - slot._startBucket]
+            if (cnt < required) score += (required - cnt) * 5
+          }
+        }
+        const endRatio = (weEff - storeOpenH) / (effectiveCloseH - storeOpenH || 1)
+        score += endRatio * 15
+        return score
+      }
+
       let chosenWindow = null
-      outer: for (const grossH of grossDurations) {
+      let chosenScore = -Infinity
+      for (const grossH of grossDurations) {
+        let foundAny = false
         for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
           const window = tryShift(emp, h, grossH)
           if (!window) continue
           if (wouldOver(window)) continue
           if (!fillsGap(window)) continue
-          chosenWindow = window
-          break outer
+          foundAny = true
+          const score = scoreWindow(window)
+          if (score > chosenScore) {
+            chosenScore = score
+            chosenWindow = window
+          }
         }
+        if (foundAny) break  // 短班優先：該 grossH 有 valid 就停，不試更長
       }
 
       if (chosenWindow) {

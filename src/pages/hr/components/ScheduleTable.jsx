@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
-import { getShiftHours } from '../../../lib/scheduleUtils'
+import { getShiftHours, formatShiftLabel } from '../../../lib/scheduleUtils'
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -203,7 +203,7 @@ export default function ScheduleTable({
                               ...(shift ? getShiftStyle(shift) : { background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px dashed var(--border-medium)' }),
                             }}
                           >
-                            {shift || '+'}
+                            {shift ? formatShiftLabel(shift) : '+'}
                           </span>
                           {shift && shift !== '休' && (() => {
                             const sched = schedules.find(x => x.employee === emp.name && x.date === date)

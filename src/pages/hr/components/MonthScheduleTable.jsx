@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { parseTime } from '../../../lib/scheduleUtils'
-import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay } from '../../../lib/scheduleUtils'
+import { getDayLabel, isAbsence, getAbsenceConfig, getAbsenceOptions, isWeekendDay, formatShiftLabel } from '../../../lib/scheduleUtils'
 
 export default function MonthScheduleTable({
   monthDates,
@@ -274,26 +274,30 @@ function EmployeeRow({
                 {shift}
               </span>
             ) : shift ? (
-              // 班別名是時段範圍（10:30-19:30）→ 上下分兩行顯示，省寬度但保留完整資訊
-              // 兩端都必須有完整時間（避免 "11~" 之類半成品被誤判）
-              /^(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})$/.test(shift) ? (
-                <span style={{
-                  display: 'inline-block', padding: '1px 2px', borderRadius: 3,
-                  fontSize: 9, fontWeight: 600, lineHeight: 1.15,
-                  ...getShiftStyle(shift),
-                }}>
-                  <div>{shift.split(/[-~]/)[0].trim()}</div>
-                  <div>{shift.split(/[-~]/)[1].trim()}</div>
-                </span>
-              ) : (
-                <span style={{
-                  display: 'inline-block', padding: '1px 3px', borderRadius: 3,
-                  fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
-                  whiteSpace: 'nowrap',
-                }}>
-                  {shift}
-                </span>
-              )
+              // 班別名 normalize 後若為時段範圍（HH:MM~HH:MM）→ 上下分兩行顯示
+              // formatShiftLabel 把 "1030-1930" / "11~20" 等都統一成 "HH:MM~HH:MM"
+              (() => {
+                const label = formatShiftLabel(shift)
+                const isTimeRange = /^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)
+                return isTimeRange ? (
+                  <span style={{
+                    display: 'inline-block', padding: '1px 2px', borderRadius: 3,
+                    fontSize: 9, fontWeight: 600, lineHeight: 1.15,
+                    ...getShiftStyle(shift),
+                  }}>
+                    <div>{label.split('~')[0]}</div>
+                    <div>{label.split('~')[1]}</div>
+                  </span>
+                ) : (
+                  <span style={{
+                    display: 'inline-block', padding: '1px 3px', borderRadius: 3,
+                    fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {label}
+                  </span>
+                )
+              })()
             ) : offReq ? (
               <span style={{ fontSize: 9, color: 'var(--accent-orange)' }}>申</span>
             ) : (

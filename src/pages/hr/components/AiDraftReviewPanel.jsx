@@ -1,5 +1,5 @@
 import { Sparkles, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
-import { isAbsence, getDayLabel } from '../../../lib/scheduleUtils'
+import { isAbsence, getDayLabel, formatShiftLabel } from '../../../lib/scheduleUtils'
 
 // ══════════════════════════════════════════════════════════════
 //  AI Draft Review Panel
@@ -113,7 +113,7 @@ export default function AiDraftReviewPanel({
                         {isRest ? (
                           <span style={{ color: 'var(--text-muted)' }}>{shift}</span>
                         ) : shift ? (
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{shift}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatShiftLabel(shift)}</span>
                         ) : '-'}
                       </td>
                     )

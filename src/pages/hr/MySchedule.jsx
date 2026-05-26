@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Calendar, Clock, ChevronLeft, ChevronRight, CalendarOff, ArrowLeftRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours } from '../../lib/scheduleUtils'
+import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours, formatShiftLabel } from '../../lib/scheduleUtils'
 import { todayTW } from '../../lib/datetime'
 
 import { toast } from '../../lib/toast'
@@ -219,7 +219,7 @@ export default function MySchedule() {
                         background: isRest ? (absConfig?.color || '#6b7280') + '20' : (def?.color || '#22d3ee') + '20',
                         color: isRest ? (absConfig?.color || '#6b7280') : (def?.color || '#22d3ee'),
                       }}>
-                        {isRest ? (absConfig?.icon || '😴') : ''} {shift}
+                        {isRest ? (absConfig?.icon || '😴') : ''} {isRest ? shift : formatShiftLabel(shift)}
                       </div>
                       {!isRest && (
                         <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>
@@ -473,7 +473,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
             {futureDates.map(d => {
               const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(d).getDay()]
               const sched = schedules.find(s => s.date === d)
-              return <option key={d} value={d}>{d.slice(5)} (週{dow}) {sched?.shift}</option>
+              return <option key={d} value={d}>{d.slice(5)} (週{dow}) {sched?.shift ? formatShiftLabel(sched.shift) : ''}</option>
             })}
           </select>
         </div>
@@ -491,7 +491,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
                 color: targetEmployee === c.name ? 'var(--accent-cyan)' : 'var(--text-primary)',
                 fontWeight: 600,
               }}>
-                {c.name}（{c.shift}）
+                {c.name}（{formatShiftLabel(c.shift)}）
               </button>
             ))}
           </div>

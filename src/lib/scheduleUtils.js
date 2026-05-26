@@ -109,6 +109,40 @@ export function getDayLabel(dateStr) {
   return labels[new Date(dateStr).getDay()]
 }
 
+/**
+ * Normalize shift display label：把所有時間範圍格式統一成 HH:MM~HH:MM
+ *   '1030-1930'   → '10:30~19:30'   (compact no-colon dash)
+ *   '10:30-19:30' → '10:30~19:30'   (colon dash)
+ *   '11~20'       → '11:00~20:00'   (compact tilde)
+ *   '19~1'        → '19:00~01:00'
+ *   '10:30~19:30' → '10:30~19:30'   (already canonical)
+ * 對 absence / shift name (譬如 '早班', '休') 原樣回傳
+ */
+export function formatShiftLabel(shift) {
+  if (!shift || typeof shift !== 'string') return shift
+  // "HHMM-HHMM" / "HHMM~HHMM" (compact no-colon)
+  const compactMatch = shift.match(/^(\d{2})(\d{2})\s*[-~]\s*(\d{2})(\d{2})$/)
+  if (compactMatch) {
+    return `${compactMatch[1]}:${compactMatch[2]}~${compactMatch[3]}:${compactMatch[4]}`
+  }
+  // "HH-HH" / "HH~HH" (compact integer-hours)
+  const intMatch = shift.match(/^(\d{1,2})\s*[-~]\s*(\d{1,2})$/)
+  if (intMatch) {
+    return `${intMatch[1].padStart(2, '0')}:00~${intMatch[2].padStart(2, '0')}:00`
+  }
+  // "HH:MM-HH:MM" / "HH:MM~HH:MM" (full colon)
+  const fullMatch = shift.match(/^(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})$/)
+  if (fullMatch) {
+    const [, s, e] = fullMatch
+    const pad = (t) => {
+      const [h, m] = t.split(':')
+      return `${h.padStart(2, '0')}:${m}`
+    }
+    return `${pad(s)}~${pad(e)}`
+  }
+  return shift
+}
+
 /** Format YYYY-MM string from year and month */
 export function formatYearMonth(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`

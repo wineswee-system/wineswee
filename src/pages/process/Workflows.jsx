@@ -1147,7 +1147,22 @@ export default function Workflows() {
   const HR_TEMPLATE_SET = new Set(HR_APPROVAL_TEMPLATE_NAMES)
   const filteredInstances = instances.filter(i => {
     if (HR_TEMPLATE_SET.has(i.template_name)) return false
-    if (search) { const s = search.toLowerCase(); if (!i.template_name?.toLowerCase().includes(s) && !`wf-${i.id}`.includes(s)) return false }
+    if (search) {
+      const s = search.toLowerCase()
+      // 流程本身：名稱、wf-ID、負責人
+      const matchesInst =
+        i.template_name?.toLowerCase().includes(s) ||
+        `wf-${i.id}`.includes(s) ||
+        i.assignee?.toLowerCase().includes(s)
+      // 流程內任何任務：任務名稱、tk-ID、任務負責人
+      const instTasks = tasks.filter(t => t.workflow_instance_id === i.id)
+      const matchesTask = instTasks.some(t =>
+        t.title?.toLowerCase().includes(s) ||
+        `tk-${t.id}`.includes(s) ||
+        t.assignee?.toLowerCase().includes(s)
+      )
+      if (!matchesInst && !matchesTask) return false
+    }
     if (filterStore && i.store !== filterStore) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true
@@ -1230,9 +1245,9 @@ export default function Workflows() {
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
         flexWrap: 'wrap', alignItems: 'center',
       }}>
-        <div className="search-bar" style={{ minWidth: 200 }}>
+        <div className="search-bar" style={{ minWidth: 260 }}>
           <Search className="search-icon" />
-          <input type="text" placeholder="搜尋流程..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
+          <input type="text" placeholder="搜尋 ID、流程/任務名稱、負責人..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>

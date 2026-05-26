@@ -1,25 +1,31 @@
 /**
  * geocoding.js — Address → GPS coordinates
  *
- * Strategy (all browser-safe, no forbidden headers):
- *   1️⃣  Photon (photon.komoot.io)  — OSM-based, no User-Agent req, handles zh-TW well
- *   2️⃣  Nominatim TW-restricted    — fallback, countrycodes=tw
- *   3️⃣  Nominatim global           — last-resort fallback
+ * Strategy (browser-safe, no forbidden headers):
+ *   1️⃣  ArcGIS World Geocoder  — handles Traditional Chinese TW addresses natively,
+ *                                 no API key required for low-volume use, score-filtered
+ *   2️⃣  Photon (komoot.io)     — OSM-based, no User-Agent req; works for romanized queries
+ *   3️⃣  Nominatim global       — last-resort fallback
  *
- * Note: browsers silently drop the `User-Agent` header (forbidden header per Fetch spec).
- * Photon avoids this by not requiring one; Nominatim requests are sent without custom UA.
+ * Why not Nominatim as primary:
+ *   browsers silently drop the `User-Agent` header (forbidden header per Fetch spec),
+ *   so requests arrive with the browser UA, violating Nominatim's usage policy → 503s.
+ *
+ * Why not Photon as primary:
+ *   - lang=zh is unsupported (400 error); lang=default returns 0 results for zh-TW input
+ *   - only useful as fallback when the address is already romanized
  */
 
-const PHOTON    = 'https://photon.komoot.io/api'
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
+const ARCGIS_URL  = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates'
+const PHOTON_URL  = 'https://photon.komoot.io/api'
+const NOMINATIM   = 'https://nominatim.openstreetmap.org/search'
 
-// ─── retry helper ────────────────────────────────────────────────────────────
+// ─── retry helper (handles transient 503s) ───────────────────────────────────
 async function fetchWithRetry(url, opts = {}, { retries = 2, baseDelay = 800 } = {}) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const res = await fetch(url, opts)
     if (res.ok) return res
     if (res.status === 503 && attempt < retries) {
-      // exponential back-off: 800ms, 1600ms
       await new Promise(r => setTimeout(r, baseDelay * 2 ** attempt))
       continue
     }
@@ -27,18 +33,43 @@ async function fetchWithRetry(url, opts = {}, { retries = 2, baseDelay = 800 } =
   }
 }
 
-// ─── provider: Photon (photon.komoot.io) ─────────────────────────────────────
+// ─── provider 1: ArcGIS World Geocoder ───────────────────────────────────────
+// Best for Traditional Chinese Taiwan addresses — returns score 100 for exact matches.
+async function arcgis(address) {
+  const params = new URLSearchParams({
+    SingleLine: address,
+    f: 'json',
+    maxLocations: '1',
+    countryCode: 'TWN',
+    outFields: 'Addr_type',
+  })
+  const res = await fetchWithRetry(
+    `${ARCGIS_URL}?${params}`,
+    { signal: AbortSignal.timeout(8000) }
+  )
+  const data = await res.json()
+  const cand = data?.candidates?.[0]
+  // Reject low-confidence matches (street-centroid or worse)
+  if (!cand || cand.score < 60) return null
+  return {
+    lat: cand.location.y,
+    lng: cand.location.x,
+    displayName: cand.address,
+  }
+}
+
+// ─── provider 2: Photon (photon.komoot.io) ────────────────────────────────────
+// Works for romanized queries; lang=zh is unsupported (400), use 'en'.
 async function photon(address) {
   const params = new URLSearchParams({
     q: address,
     limit: '1',
-    lang: 'zh',
-    // bias toward Taiwan
-    lat: '23.97',
+    lang: 'en',          // zh is not supported by Photon
+    lat: '23.97',        // bias toward Taiwan centre
     lon: '120.97',
   })
   const res = await fetchWithRetry(
-    `${PHOTON}?${params}`,
+    `${PHOTON_URL}?${params}`,
     { signal: AbortSignal.timeout(8000) }
   )
   const data = await res.json()
@@ -50,8 +81,9 @@ async function photon(address) {
   return { lat, lng: lon, displayName }
 }
 
-// ─── provider: Nominatim ─────────────────────────────────────────────────────
-async function nominatim(address, countryCode = 'tw') {
+// ─── provider 3: Nominatim ────────────────────────────────────────────────────
+// Note: User-Agent header is silently dropped by browsers (forbidden header per Fetch spec).
+async function nominatim(address, countryCode = '') {
   const params = new URLSearchParams({
     q: address,
     format: 'json',
@@ -59,8 +91,6 @@ async function nominatim(address, countryCode = 'tw') {
     'accept-language': 'zh-TW,en',
     ...(countryCode ? { countrycodes: countryCode } : {}),
   })
-  // Note: User-Agent is a forbidden header in browsers and is silently dropped.
-  // Nominatim receives the browser's default UA instead of our custom string.
   const res = await fetchWithRetry(
     `${NOMINATIM}?${params}`,
     { signal: AbortSignal.timeout(8000) }
@@ -79,24 +109,24 @@ async function nominatim(address, countryCode = 'tw') {
 
 /**
  * Convert an address string to { lat, lng, displayName }.
- * Tries Photon → Nominatim TW → Nominatim global, with retry on 503.
+ * Tries ArcGIS → Photon → Nominatim, with retry on 503.
  * Throws if no result found.
  */
 export async function geocodeAddress(address) {
   if (!address?.trim()) throw new Error('請先填寫地址')
   const q = address.trim()
 
-  // 1️⃣ Photon — browser-safe, no User-Agent requirement
+  // 1️⃣ ArcGIS — best for Traditional Chinese Taiwan addresses
+  const arcgisResult = await arcgis(q).catch(() => null)
+  if (arcgisResult) return arcgisResult
+
+  // 2️⃣ Photon — fallback for romanized/mixed queries
   const photonResult = await photon(q).catch(() => null)
   if (photonResult) return photonResult
 
-  // 2️⃣ Nominatim Taiwan-restricted
-  const twResult = await nominatim(q, 'tw').catch(() => null)
-  if (twResult) return twResult
-
-  // 3️⃣ Nominatim global fallback
-  const globalResult = await nominatim(q, '').catch(() => null)
-  if (globalResult) return globalResult
+  // 3️⃣ Nominatim global — last resort
+  const nomResult = await nominatim(q, '').catch(() => null)
+  if (nomResult) return nomResult
 
   throw new Error('找不到此地址的座標，請確認地址格式或手動輸入')
 }

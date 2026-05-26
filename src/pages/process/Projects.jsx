@@ -71,7 +71,7 @@ export default function Projects() {
   const [showModal, setShowModal] = useState(false)
   const [showDeployModal, setShowDeployModal] = useState(false)
   const [deployTpl, setDeployTpl] = useState(null)
-  const [deployForm, setDeployForm] = useState({ name: '', store: '', owner: '' })
+  const [deployForm, setDeployForm] = useState({ name: '', store: '', owner: '', start_date: '', end_date: '', workflows: [] })
   const [deploying, setDeploying] = useState(false)
   const [tplSaving, setTplSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -542,8 +542,9 @@ export default function Projects() {
     setDeploying(true)
     try {
       const tpl = deployTpl
-      const today = new Date().toISOString().slice(0, 10)
-      const endDate = tpl.estimated_days ? new Date(Date.now() + tpl.estimated_days * 86400000).toISOString().slice(0, 10) : null
+      const today = deployForm.start_date || new Date().toISOString().slice(0, 10)
+      const endDate = deployForm.end_date ||
+        (tpl.estimated_days ? new Date(Date.now() + tpl.estimated_days * 86400000).toISOString().slice(0, 10) : null)
 
       // 1. Create project
       const { data: project } = await supabase.from('projects').insert({
@@ -562,15 +563,27 @@ export default function Projects() {
 
       if (!project) throw new Error('建立專案失敗')
 
-      // 2. Create workflows + tasks
-      const tplWorkflows = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
-      for (let i = 0; i < tplWorkflows.length; i++) {
-        const wf = tplWorkflows[i]
+      // 2. Create workflows + tasks — prefer per-workflow overrides from deployForm
+      const deployWfs = deployForm.workflows?.length
+        ? deployForm.workflows
+        : (Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')).map(w => ({
+            name: w.name, owner: '', store: '', due_date: '',
+            tasks: (w.tasks || []).map(t => ({ ...t, assignee: '', due_date: '' })),
+          }))
+
+      for (let i = 0; i < deployWfs.length; i++) {
+        const wf = deployWfs[i]
+        // Fallback chain: wf-override → project-level → profile
+        const wfOwner   = wf.owner   || deployForm.owner   || profile?.name || ''
+        const wfStore   = wf.store   || deployForm.store   || null
+        const wfDueDate = wf.due_date || endDate || null
+
         const { data: instance } = await supabase.from('workflow_instances').insert({
           template_name: wf.name,
           status: '進行中',
-          started_by: deployForm.owner || profile?.name || '',
-          store: deployForm.store || null,
+          started_by: wfOwner,
+          store: wfStore,
+          due_date: wfDueDate,
           project_id: project.id,
           organization_id: orgId,  // ★ 補 org_id，否則 org-scoped 查詢會漏
           sort_order: i + 1,
@@ -584,13 +597,16 @@ export default function Projects() {
             project_id: project.id,
             organization_id: orgId,  // ★ 補 org_id
             // step 1 直接開工 進行中、step 2+ 待處理（等 trg_task_advance_next_step 推進）
-            status: j === 0 ? '進行中' : '待處理',
-            started_at: j === 0 ? new Date().toISOString() : null,
+            // trigger:'manual' 的任務維持 待處理，需人工啟動
+            status: j === 0 && t.trigger !== 'manual' ? '進行中' : '待處理',
+            started_at: j === 0 && t.trigger !== 'manual' ? new Date().toISOString() : null,
             role: t.role || null,
             step_order: j + 1,
             priority: t.priority || '中',
-            due_date: endDate,
-            store: deployForm.store || null,
+            // Fallback chain: task-override → wf-override → project-level
+            assignee: t.assignee || wfOwner || null,
+            due_date: t.due_date || wfDueDate,
+            store: wfStore,
             bucket: 'Project',
             category: wf.name || null,
           }))
@@ -613,8 +629,35 @@ export default function Projects() {
   }
 
   const openDeploy = (tpl) => {
+    const tplWorkflows = Array.isArray(tpl.workflows)
+      ? tpl.workflows
+      : JSON.parse(tpl.workflows || '[]')
+    const today = new Date().toISOString().slice(0, 10)
+    const endDate = tpl.estimated_days
+      ? new Date(Date.now() + tpl.estimated_days * 86400000).toISOString().slice(0, 10)
+      : ''
     setDeployTpl(tpl)
-    setDeployForm({ name: tpl.name, store: '', owner: profile?.name || '' })
+    setDeployForm({
+      name: tpl.name,
+      store: '',
+      owner: profile?.name || '',
+      start_date: today,
+      end_date: endDate,
+      workflows: tplWorkflows.map(w => ({
+        name:     w.name || '',
+        owner:    '',
+        store:    '',
+        due_date: '',
+        tasks: (w.tasks || []).map(t => ({
+          title:    t.title    || '',
+          role:     t.role     || '',
+          priority: t.priority || '中',
+          trigger:  t.trigger  || 'auto',
+          assignee: '',
+          due_date: '',
+        })),
+      })),
+    })
     setShowDeployModal(true)
   }
 

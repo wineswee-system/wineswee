@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import { Plus, Trash2, Workflow, CheckSquare, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Workflow, CheckSquare, GripVertical, GitBranch, ArrowDown } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 
 const CATEGORIES = ['展店', 'HR', '營運', '採購', '倉管', '財務', '行銷', '客服']
 const PRIORITY_OPTIONS = ['高', '中', '低']
 
-const emptyTask = () => ({ title: '', role: '', priority: '中' })
-const emptyWorkflow = () => ({ name: '', tasks: [emptyTask()] })
+const TASK_TRIGGERS = [
+  { value: 'auto',   label: '前一任務完成後自動' },
+  { value: 'manual', label: '手動啟動' },
+]
+const WF_TRIGGERS = [
+  { value: 'manual',              label: '手動啟動' },
+  { value: 'on_prev_wf_complete', label: '前一流程全部完成後' },
+]
+
+const emptyTask = () => ({ title: '', role: '', priority: '中', trigger: 'auto', delay_days: '' })
+const emptyWorkflow = () => ({ name: '', trigger: 'manual', delay_days: '', tasks: [emptyTask()] })
 
 /** 深複製一份 template 供編輯用 */
 function cloneTpl(tpl) {
@@ -21,11 +30,15 @@ function cloneTpl(tpl) {
     estimated_budget: tpl.estimated_budget ?? '',
     default_priority: tpl.default_priority || '中',
     workflows: workflows.map(w => ({
-      name: w.name || '',
+      name:       w.name       || '',
+      trigger:    w.trigger    || 'manual',
+      delay_days: w.delay_days ?? '',
       tasks: (w.tasks || []).map(t => ({
-        title:    t.title    || '',
-        role:     t.role     || '',
-        priority: t.priority || '中',
+        title:      t.title      || '',
+        role:       t.role       || '',
+        priority:   t.priority   || '中',
+        trigger:    t.trigger    || 'auto',
+        delay_days: t.delay_days ?? '',
       })),
     })),
   }
@@ -37,17 +50,17 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   // ── workflow helpers ──
-  const addWorkflow   = ()        => setForm(f => ({ ...f, workflows: [...f.workflows, emptyWorkflow()] }))
-  const removeWorkflow = (wi)     => setForm(f => ({ ...f, workflows: f.workflows.filter((_, i) => i !== wi) }))
+  const addWorkflow    = ()          => setForm(f => ({ ...f, workflows: [...f.workflows, emptyWorkflow()] }))
+  const removeWorkflow = (wi)        => setForm(f => ({ ...f, workflows: f.workflows.filter((_, i) => i !== wi) }))
   const setWf          = (wi, k, v) => setForm(f => ({
     ...f, workflows: f.workflows.map((w, i) => i === wi ? { ...w, [k]: v } : w),
   }))
 
   // ── task helpers ──
-  const addTask    = (wi)        => setForm(f => ({
+  const addTask    = (wi)           => setForm(f => ({
     ...f, workflows: f.workflows.map((w, i) => i === wi ? { ...w, tasks: [...w.tasks, emptyTask()] } : w),
   }))
-  const removeTask = (wi, ti)    => setForm(f => ({
+  const removeTask = (wi, ti)       => setForm(f => ({
     ...f, workflows: f.workflows.map((w, i) => i === wi
       ? { ...w, tasks: w.tasks.filter((_, j) => j !== ti) } : w),
   }))
@@ -64,7 +77,16 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
       estimated_budget: form.estimated_budget !== '' ? Number(form.estimated_budget) : null,
       workflows: form.workflows
         .filter(w => w.name.trim())
-        .map(w => ({ ...w, tasks: w.tasks.filter(t => t.title.trim()) })),
+        .map(w => ({
+          ...w,
+          delay_days: w.delay_days !== '' ? Number(w.delay_days) : null,
+          tasks: w.tasks
+            .filter(t => t.title.trim())
+            .map(t => ({
+              ...t,
+              delay_days: t.delay_days !== '' ? Number(t.delay_days) : null,
+            })),
+        })),
     })
   }
 
@@ -74,7 +96,7 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
 
   return (
     <Modal
-      title={`✏️ 編輯專案模板`}
+      title="✏️ 編輯專案模板"
       onClose={onClose}
       onSubmit={handleSubmit}
       submitLabel={saving ? '儲存中...' : '儲存變更'}
@@ -149,66 +171,134 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
         )}
 
         {form.workflows.map((wf, wi) => (
-          <div key={wi} style={{
-            marginBottom: 12, padding: 12, borderRadius: 10,
-            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-          }}>
-            {/* workflow header row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <GripVertical size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <input className="form-input" style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
-                value={wf.name}
-                onChange={e => setWf(wi, 'name', e.target.value)}
-                placeholder={`流程 ${wi + 1} 名稱 *`} />
-              <button type="button" onClick={() => removeWorkflow(wi)} title="刪除此流程"
-                style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                <Trash2 size={14} />
-              </button>
-            </div>
+          <div key={wi} style={{ marginBottom: 12 }}>
 
-            {/* task rows */}
-            <div style={{ paddingLeft: 20 }}>
-              {wf.tasks.map((task, ti) => (
-                <div key={ti} style={{
-                  display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr auto',
-                  gap: 6, marginBottom: 6, alignItems: 'center',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
-                    <input className="form-input" style={{ width: '100%', fontSize: 12 }}
-                      value={task.title}
-                      onChange={e => setTask(wi, ti, 'title', e.target.value)}
-                      placeholder={`任務 ${ti + 1}`} />
-                  </div>
-                  <input className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={task.role}
-                    onChange={e => setTask(wi, ti, 'role', e.target.value)}
-                    placeholder="角色（選填）" />
-                  <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={task.priority}
-                    onChange={e => setTask(wi, ti, 'priority', e.target.value)}>
-                    {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                  <button type="button" onClick={() => removeTask(wi, ti)}
-                    disabled={wf.tasks.length === 1}
-                    style={{
-                      background: 'none', border: 'none', padding: 4,
-                      cursor: wf.tasks.length === 1 ? 'not-allowed' : 'pointer',
-                      color: wf.tasks.length === 1 ? 'var(--text-muted)' : 'var(--accent-red)',
+            {/* ── inter-workflow trigger connector (wi > 0) ── */}
+            {wi > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
+                color: 'var(--text-muted)', padding: '4px 8px 8px 8px',
+              }}>
+                <GitBranch size={11} style={{ color: 'var(--accent-purple)', flexShrink: 0 }} />
+                <span>此流程觸發：</span>
+                <select className="form-input" style={{ fontSize: 11, padding: '2px 6px' }}
+                  value={wf.trigger || 'manual'}
+                  onChange={e => setWf(wi, 'trigger', e.target.value)}>
+                  {WF_TRIGGERS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+                {wf.trigger === 'on_prev_wf_complete' && (
+                  <>
+                    <span>延遲</span>
+                    <input type="number" className="form-input" min="0"
+                      style={{ width: 54, fontSize: 11, padding: '2px 6px' }}
+                      value={wf.delay_days}
+                      onChange={e => setWf(wi, 'delay_days', e.target.value)}
+                      placeholder="0" />
+                    <span>天</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div style={{
+              padding: 12, borderRadius: 10,
+              background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+            }}>
+              {/* workflow header row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <GripVertical size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <input className="form-input" style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
+                  value={wf.name}
+                  onChange={e => setWf(wi, 'name', e.target.value)}
+                  placeholder={`流程 ${wi + 1} 名稱 *`} />
+                <button type="button" onClick={() => removeWorkflow(wi)} title="刪除此流程"
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+
+              {/* task rows */}
+              <div style={{ paddingLeft: 20 }}>
+                {wf.tasks.map((task, ti) => (
+                  <div key={ti} style={{ marginBottom: 8 }}>
+                    <div style={{
+                      padding: '8px 10px', borderRadius: 8,
+                      background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
                     }}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-              <button type="button" onClick={() => addTask(wi)}
-                style={{
-                  marginTop: 4, padding: '4px 10px', borderRadius: 6, fontSize: 11,
-                  cursor: 'pointer', border: '1px dashed var(--border-medium)',
-                  background: 'none', color: 'var(--text-muted)',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}>
-                <Plus size={10} /> 新增任務
-              </button>
+                      {/* main task row */}
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr auto',
+                        gap: 6, alignItems: 'center',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                          <input className="form-input" style={{ width: '100%', fontSize: 12 }}
+                            value={task.title}
+                            onChange={e => setTask(wi, ti, 'title', e.target.value)}
+                            placeholder={`任務 ${ti + 1}`} />
+                        </div>
+                        <input className="form-input" style={{ width: '100%', fontSize: 12 }}
+                          value={task.role}
+                          onChange={e => setTask(wi, ti, 'role', e.target.value)}
+                          placeholder="角色（選填）" />
+                        <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+                          value={task.priority}
+                          onChange={e => setTask(wi, ti, 'priority', e.target.value)}>
+                          {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                        </select>
+                        <button type="button" onClick={() => removeTask(wi, ti)}
+                          disabled={wf.tasks.length === 1}
+                          style={{
+                            background: 'none', border: 'none', padding: 4,
+                            cursor: wf.tasks.length === 1 ? 'not-allowed' : 'pointer',
+                            color: wf.tasks.length === 1 ? 'var(--text-muted)' : 'var(--accent-red)',
+                          }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+
+                      {/* trigger row — only for tasks after the first */}
+                      {ti > 0 && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8, marginTop: 6,
+                          fontSize: 11, color: 'var(--text-muted)', paddingLeft: 17,
+                        }}>
+                          <ArrowDown size={10} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                          <span>觸發：</span>
+                          <select className="form-input" style={{ fontSize: 11, padding: '2px 6px' }}
+                            value={task.trigger || 'auto'}
+                            onChange={e => setTask(wi, ti, 'trigger', e.target.value)}>
+                            {TASK_TRIGGERS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                          {(task.trigger || 'auto') !== 'manual' && (
+                            <>
+                              <span>延遲</span>
+                              <input type="number" className="form-input" min="0"
+                                style={{ width: 54, fontSize: 11, padding: '2px 6px' }}
+                                value={task.delay_days}
+                                onChange={e => setTask(wi, ti, 'delay_days', e.target.value)}
+                                placeholder="0" />
+                              <span>天</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <button type="button" onClick={() => addTask(wi)}
+                  style={{
+                    marginTop: 4, padding: '4px 10px', borderRadius: 6, fontSize: 11,
+                    cursor: 'pointer', border: '1px dashed var(--border-medium)',
+                    background: 'none', color: 'var(--text-muted)',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                  <Plus size={10} /> 新增任務
+                </button>
+              </div>
             </div>
           </div>
         ))}

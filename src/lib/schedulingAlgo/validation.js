@@ -251,32 +251,36 @@ export function validateResult(assignments, data) {
         const slotStart = parseTime(slot.start_time)
         const slotEnd = parseTime(slot.end_time)
         const slotEndEff = slotEnd <= slotStart ? slotEnd + 24 : slotEnd
+        // [DBG S10] 收集每個 entry 的判斷結果，警告時印出來
+        const _dbg = []
         const covering = assignments.filter(a => {
           if (a.date !== date || isAbsence(a.shift)) return false
           let startH = a.actual_start ? parseTime(a.actual_start) : null
           let endH = a.actual_end ? parseTime(a.actual_end) : null
+          let src = 'actual'
           // Fallback：a.shift 對應到一個 shift_def 但 actual_start/end 是 null
-          // （譬如 DB 殘留 entry 沒寫 actual_start）→ 用 shift_def 的時間
           if (startH == null || endH == null) {
             const def = lookupShiftDef(a.shift)
-            if (def) {
-              startH = parseTime(def.start_time)
-              endH = parseTime(def.end_time)
-            }
+            if (def) { startH = parseTime(def.start_time); endH = parseTime(def.end_time); src = 'shiftDef' }
           }
           // 終極 fallback：shift 本身是時段範圍 label → 直接 parse
           if (startH == null || endH == null) {
             const parsed = parseShiftRange(a.shift)
-            if (parsed) {
-              startH = parseTime(parsed.start)
-              endH = parseTime(parsed.end)
-            }
+            if (parsed) { startH = parseTime(parsed.start); endH = parseTime(parsed.end); src = 'parseRange' }
           }
-          if (startH == null || endH == null) return false
+          if (startH == null || endH == null) {
+            _dbg.push({ emp: a.employee, shift: a.shift, actual_start: a.actual_start, actual_end: a.actual_end, result: 'NULL_TIMES' })
+            return false
+          }
           const endEff = endH <= startH ? endH + 24 : endH
-          return startH < slotEndEff && endEff > slotStart
+          const cover = startH < slotEndEff && endEff > slotStart
+          _dbg.push({ emp: a.employee, shift: a.shift, src, startH, endH: endEff, cover })
+          return cover
         }).length
         if (covering < slot.required_count) {
+          if (typeof console !== 'undefined' && console.log) {
+            console.log(`[DBG S10] ${date} ${slot.start_time}-${slot.end_time} cov=${covering}/${slot.required_count}`, _dbg)
+          }
           violations.push({
             employee: '-', constraint: 'S10', law: '營運需求',
             message: `${date} ${slot.start_time}-${slot.end_time}: ${covering}/${slot.required_count} 人（不足）`,

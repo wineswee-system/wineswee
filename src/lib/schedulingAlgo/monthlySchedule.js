@@ -12,6 +12,7 @@ import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult } from './validation'
 import { computeStats } from './stats'
 import { runProgrammaticSchedule } from './weeklySchedule'
+import { shiftWouldOverStaff, computeDaySlotCoverage } from './shiftAssigner'
 
 /**
  * 把月制目標 (FT 10 / PT 15) 按 cycle 跨的 calendar month 比例分配。
@@ -187,6 +188,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         return aW - bW
       })
       const toFix = Math.min(excess, sortedByNeed.length)
+      const timeSlotsForCheck = data.timeSlots || []
       for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
         const empType = isPT ? 'PT' : 'FT'
@@ -196,7 +198,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           }
           return true
         })
-        const picked = eligible[0] || data.shiftDefs[0]
+        // ★ 時段制下加 slot 安全檢查：picked shift 若會讓任何 slot 超 max_count 就跳過
+        // 全部 eligible 都 over → 該天維持休（寧可月休超標 H17 warning，也不違反 max_count）
+        const slotCov = computeDaySlotCoverage(ra.date, timeSlotsForCheck, allAssignments)
+        const safe = eligible.filter(sd => !shiftWouldOverStaff(sd, slotCov))
+        const picked = (slotCov ? safe[0] : (eligible[0] || data.shiftDefs[0])) || null
         if (picked) {
           ra.shift = picked.name
           ra.actual_start = picked.start_time?.slice(0, 5) || '11:00'

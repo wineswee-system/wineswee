@@ -415,6 +415,54 @@ export function runOpenerCloserFixes(ctx) {
 }
 
 /**
+ * Check whether assigning `sd` (or any shift window) would push any covered
+ * time slot beyond its max_count. Returns false when slotCov is null
+ * (shift-based mode has no slot coverage to check).
+ */
+export function shiftWouldOverStaff(sd, slotCov) {
+  if (!slotCov) return false
+  const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
+  const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
+  for (const slot of slotCov) {
+    const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+    const seEff = se <= ss ? se + 24 : se
+    if (!(sdStart < seEff && sdEndEff > ss)) continue
+    const maxC = slot.max_count || slot.required_count + 2
+    if (slot.covered >= maxC) return true
+  }
+  return false
+}
+
+/**
+ * Compute current per-slot coverage for a single date from a flat assignments array.
+ * Returns null when timeSlots is empty (shift-based mode).
+ * Used by monthlySchedule's final-correction step which works on assignment arrays
+ * rather than the weekly schedule/actualTimes lookup maps.
+ */
+export function computeDaySlotCoverage(date, timeSlots, assignments) {
+  if (!timeSlots || timeSlots.length === 0) return null
+  const dow = new Date(date).getDay()
+  const isWE = isWeekendDay(dow)
+  const daySlots = timeSlots.filter(s =>
+    s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
+  )
+  const slotCov = daySlots.map(s => ({ ...s, covered: 0 }))
+  for (const a of assignments) {
+    if (a.date !== date) continue
+    if (isAbsence(a.shift)) continue
+    if (!a.actual_start || !a.actual_end) continue
+    const ws = parseTime(a.actual_start), we = parseTime(a.actual_end)
+    const weEff = we <= ws ? we + 24 : we
+    for (const slot of slotCov) {
+      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
+      const seEff = se <= ss ? se + 24 : se
+      if (ws < seEff && weEff > ss) slot.covered++
+    }
+  }
+  return slotCov
+}
+
+/**
  * Fill unassigned FT cells with a "safe" shift (one that doesn't over-staff any time slot).
  * 時段制下優先選不會 over-staff 的 shift；若全 over → 排休（不 over-staff 優先）。
  * 班別制下 slotCov 是 null → safe === eligible，永遠取第一個 eligible shift。
@@ -449,20 +497,6 @@ export function runFillUnassignedFT(ctx) {
       }
     }
     return slotCov
-  }
-
-  const shiftWouldOverStaff = (sd, slotCov) => {
-    if (!slotCov) return false
-    const sdStart = parseTime(sd.start_time), sdEnd = parseTime(sd.end_time)
-    const sdEndEff = sdEnd <= sdStart ? sdEnd + 24 : sdEnd
-    for (const slot of slotCov) {
-      const ss = parseTime(slot.start_time), se = parseTime(slot.end_time)
-      const seEff = se <= ss ? se + 24 : se
-      if (!(sdStart < seEff && sdEndEff > ss)) continue
-      const maxC = slot.max_count || slot.required_count + 2
-      if (slot.covered >= maxC) return true
-    }
-    return false
   }
 
   for (const emp of employees) {

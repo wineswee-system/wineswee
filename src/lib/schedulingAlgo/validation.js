@@ -71,7 +71,13 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
     }
   }
   const maxConsec = isPT ? MAX_CONSECUTIVE_WORK_DAYS : MAX_CONSECUTIVE_WORK_DAYS_FT
-  if (consec > maxConsec) return false
+  if (consec > maxConsec) {
+    // [DBG H3] 臨時 log — 印出哪個 emp 哪天 H3 擋住，方便驗證演算法跑時真的呼叫到
+    if (typeof console !== 'undefined' && console.log) {
+      console.log(`[DBG H3] BLOCKED ${emp.name} ${date}: consec=${consec} > max=${maxConsec} (${isPT ? 'PT' : 'FT'})`)
+    }
+    return false
+  }
 
   // H4: Cross-day shift gap ≥ 11h
   if (dateIdx > 0) {
@@ -169,9 +175,24 @@ export function validateResult(assignments, data) {
     }
 
     // H3: Consecutive work days（正職 12 天 / 兼職 6 天）
+    // ★ 從 previousWeek 末尾往回算連續上班，避免跨週連續沒抓到
+    //   (PT 5/16-5/23 連 8 天，Week 4 5/18 開始 consec reset → 漏擋)
     const empIsPT = isPartTime(emp)
     const empMaxConsec = empIsPT ? MAX_CONSECUTIVE_WORK_DAYS : MAX_CONSECUTIVE_WORK_DAYS_FT
     let consec = 0
+    if (data.previousWeek) {
+      const prevSorted = (data.previousWeek || [])
+        .filter(a => a.employee === emp.name)
+        .sort((a, b) => b.date.localeCompare(a.date))
+      const weekStartDate = new Date(weekDates[0])
+      for (const a of prevSorted) {
+        const prevDate = new Date(a.date)
+        const daysBefore = Math.round((weekStartDate - prevDate) / 86400000)
+        if (daysBefore !== consec + 1) break  // 不連續就停
+        if (isAbsence(a.shift)) break
+        consec++
+      }
+    }
     for (const date of weekDates) {
       const a = empAssignments.find(a => a.date === date)
       if (a && !isAbsence(a.shift)) {

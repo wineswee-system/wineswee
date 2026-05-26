@@ -11,7 +11,7 @@
 import {
   parseTime, getShiftHours, isAbsence,
   isWeekendDay, getWorkSystemConstraints,
-  formatShiftLabel,
+  formatShiftLabel, parseShiftRange,
 } from '../scheduleUtils'
 import { validateResult } from './validation'
 import { computeStats, buildReasoning } from './stats'
@@ -150,9 +150,7 @@ export function runProgrammaticSchedule(data) {
         let et = s.actual_end
         let h = s.actual_hours
         // shift 是 shift_definitions 內 fixed 班但 schedules 表沒填 actual_start/end
-        // → 從 shift_def 補，否則 covered 算 0、整個排班 logic 崩
-        // 用 normalized name 比對，避免 ~ vs - 不匹配（譬如 s.shift='10:30~19:30'
-        // 但 shift_def.name='10:30-19:30' 仍能找到）
+        // → 從 shift_def 補（normalized name 比對，避免 ~ vs - 不匹配）
         if (!st || !et) {
           const targetNorm = formatShiftLabel(s.shift)
           const def = shiftDefs.find(d =>
@@ -162,6 +160,21 @@ export function runProgrammaticSchedule(data) {
             st = def.start_time
             et = def.end_time
             if (!h) h = getShiftHours(def) - (def.break_minutes || 60) / 60
+          }
+        }
+        // 終極 fallback：shift 本身就是時段範圍 label（時段制動態 window，
+        // 譬如 '10:30~19:30' 不對應任何 shift_def）→ 直接 parse
+        if (!st || !et) {
+          const parsed = parseShiftRange(s.shift)
+          if (parsed) {
+            st = parsed.start
+            et = parsed.end
+            if (!h) {
+              const sH = parseTime(st), eH = parseTime(et)
+              const eEff = eH <= sH ? eH + 24 : eH
+              const grossH = eEff - sH
+              h = grossH >= 6 ? grossH - 1 : grossH  // 6h+ 扣 1h 休息
+            }
           }
         }
         if (st && et) {

@@ -3,7 +3,7 @@ import {
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
-  formatShiftLabel,
+  formatShiftLabel, parseShiftRange,
 } from '../scheduleUtils'
 
 export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, weekDates, data) {
@@ -241,6 +241,14 @@ export function validateResult(assignments, data) {
             if (def) {
               startH = parseTime(def.start_time)
               endH = parseTime(def.end_time)
+            }
+          }
+          // 終極 fallback：shift 本身是時段範圍 label → 直接 parse
+          if (startH == null || endH == null) {
+            const parsed = parseShiftRange(a.shift)
+            if (parsed) {
+              startH = parseTime(parsed.start)
+              endH = parseTime(parsed.end)
             }
           }
           if (startH == null || endH == null) return false

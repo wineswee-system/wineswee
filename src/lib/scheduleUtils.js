@@ -110,6 +110,23 @@ export function getDayLabel(dateStr) {
 }
 
 /**
+ * 從 shift label 直接 parse 出 start/end time（不依賴 shift_definitions）
+ *   '10:30~19:30' → { start: '10:30', end: '19:30' }
+ *   '1030-1930'   → { start: '10:30', end: '19:30' }
+ *   '11~20'       → { start: '11:00', end: '20:00' }
+ *   '19~1'        → { start: '19:00', end: '01:00' }
+ *   '早班' / '休' → null（不是時段範圍）
+ */
+export function parseShiftRange(shift) {
+  if (!shift || typeof shift !== 'string') return null
+  // 先 normalize 成 HH:MM~HH:MM，再 split
+  const normalized = formatShiftLabel(shift)
+  const m = normalized.match(/^(\d{1,2}:\d{2})~(\d{1,2}:\d{2})$/)
+  if (!m) return null
+  return { start: m[1], end: m[2] }
+}
+
+/**
  * Normalize shift display label：把所有時間範圍格式統一成 HH:MM~HH:MM
  *   '1030-1930'   → '10:30~19:30'   (compact no-colon dash)
  *   '10:30-19:30' → '10:30~19:30'   (colon dash)

@@ -150,7 +150,7 @@ serve(async (req: Request) => {
     if (emp.store_id) {
       // stores 就是 location — 沒有獨立 locations 表
       const { data: store } = await supabase
-        .from('stores').select('id, name, lat, lng, clock_radius, allowed_wifi').eq('id', emp.store_id).maybeSingle()
+        .from('stores').select('id, name, lat, lng, clock_radius, allowed_wifi, has_office_hours, office_hours_start, late_tolerance_minutes').eq('id', emp.store_id).maybeSingle()
       empStoreName = store?.name ?? null
       location = store
     }
@@ -246,9 +246,14 @@ serve(async (req: Request) => {
         return { status: '正常', isLate: false, lateMinutes: 0 }
       }
 
-      // Fallback: default 09:00 threshold
-      const lateMinutes = (hours24 * 60 + minutes) - (9 * 60)
-      if (lateMinutes > 5) {
+      // Fallback: use store's office hours start if configured, else 09:00
+      const officeStart: string | null = (location?.has_office_hours && location?.office_hours_start)
+        ? String(location.office_hours_start).slice(0, 5)   // "09:00"
+        : null
+      const storeTolerance: number = location?.late_tolerance_minutes ?? 5
+      const [fbH, fbM] = officeStart ? officeStart.split(':').map(Number) : [9, 0]
+      const lateMinutes = (hours24 * 60 + minutes) - (fbH * 60 + fbM)
+      if (lateMinutes > storeTolerance) {
         return { status: '遲到', isLate: true, lateMinutes }
       }
       return { status: '正常', isLate: false, lateMinutes: 0 }

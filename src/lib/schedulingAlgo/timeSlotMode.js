@@ -397,7 +397,9 @@ export function runTimeSlotMode(ctx) {
       let chosenScore = -Infinity
       for (const grossH of grossDurations) {
         let foundAny = false
-        for (let h = storeOpenH; h <= effectiveCloseH - grossH; h++) {
+        // ★ step 0.5 (half-hour) — 不然 storeOpen 為 .5 起點的店面（譬如 10:30 開）
+        //   h++ 整數步進永遠取不到 19~1 這種 .0 結尾的 window
+        for (let h = storeOpenH; h <= effectiveCloseH - grossH; h += 0.5) {
           const window = tryShift(emp, h, grossH)
           if (!window) continue
           if (wouldOver(window)) continue

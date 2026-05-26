@@ -73,6 +73,7 @@ export default function Projects() {
   const [deployTpl, setDeployTpl] = useState(null)
   const [deployForm, setDeployForm] = useState({ name: '', store: '', owner: '' })
   const [deploying, setDeploying] = useState(false)
+  const [tplSaving, setTplSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -617,6 +618,31 @@ export default function Projects() {
     setShowDeployModal(true)
   }
 
+  const handleEditTemplate = async (id, payload) => {
+    setTplSaving(true)
+    const { data, error } = await supabase
+      .from('project_templates')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) {
+      toast.error('儲存失敗：' + error.message)
+    } else if (data) {
+      setTemplates(prev => prev.map(t => t.id === id ? data : t))
+      toast.success('模板已更新')
+    }
+    setTplSaving(false)
+  }
+
+  const handleDeleteTemplate = async (tpl) => {
+    if (!(await confirm({ message: `確定刪除模板「${tpl.name}」？已部署的專案不受影響。`, confirmLabel: '確認刪除', danger: true }))) return
+    const { error } = await supabase.from('project_templates').delete().eq('id', tpl.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    setTemplates(prev => prev.filter(t => t.id !== tpl.id))
+    toast.success('模板已刪除')
+  }
+
   if (loading) return <LoadingSpinner />
 
   const activeStatuses = tab === 'active' ? ['規劃中', '進行中'] : tab === 'completed' ? ['已完成'] : ['暫停', '已取消']
@@ -788,6 +814,9 @@ export default function Projects() {
       deploying={deploying}
       handleDeploy={handleDeploy}
       openDeploy={openDeploy}
+      onEditTemplate={handleEditTemplate}
+      onDeleteTemplate={handleDeleteTemplate}
+      tplSaving={tplSaving}
     />
   )
 }

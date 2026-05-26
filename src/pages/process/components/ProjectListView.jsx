@@ -161,9 +161,25 @@ export default function ProjectListView({
                       </div>
                     </div>
                   </div>
-                  <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openDeploy(tpl)}>
-                    <Rocket size={14} /> 部署
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button className="btn btn-secondary"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+                      title="編輯模板"
+                      onClick={() => setEditingTpl(tpl)}>
+                      <Edit3 size={13} /> 編輯
+                    </button>
+                    <button className="btn btn-secondary"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent-red)' }}
+                      title="刪除模板"
+                      onClick={() => onDeleteTemplate(tpl)}>
+                      <Trash2 size={13} />
+                    </button>
+                    <button className="btn btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => openDeploy(tpl)}>
+                      <Rocket size={14} /> 部署
+                    </button>
+                  </div>
                 </div>
                 {tpl.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>{tpl.description}</div>}
                 {/* Workflow preview */}
@@ -183,6 +199,19 @@ export default function ProjectListView({
             )
           })}
         </div>
+      )}
+
+      {/* Template Edit Modal */}
+      {editingTpl && (
+        <ProjectTemplateModal
+          tpl={editingTpl}
+          saving={tplSaving}
+          onClose={() => setEditingTpl(null)}
+          onSubmit={async (payload) => {
+            await onEditTemplate(editingTpl.id, payload)
+            setEditingTpl(null)
+          }}
+        />
       )}
 
       {/* Deploy Modal */}

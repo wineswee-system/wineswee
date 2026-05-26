@@ -60,10 +60,15 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
     }
   }
 
-  // [Fix 6] Scope attendance_records by store_id for multi-tenant safety
-  // (schedules scoping relies on RLS since schedules lacks a direct store_id column)
+  // [Fix 2+3] Scope both tables consistently when a store is given.
+  // attendance_records has store_id; schedules does not — scope via employee IDs.
   if (scopedStoreId) {
     attQ = attQ.eq('store_id', scopedStoreId)
+
+    const { data: storeEmps } = await supabase
+      .from('employees').select('id').eq('store_id', scopedStoreId)
+    const empIds = (storeEmps || []).map((e: any) => e.id)
+    if (empIds.length) schedQ = schedQ.in('employee_id', empIds)
   }
 
   // Scope shift_definitions to this store (fallback to global if store_id null)
@@ -149,34 +154,8 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
   return results
 }
 
-/**
- * Get summary stats for attendance comparison.
- * [Fix 8] byEmployee now uses is_late / is_early_leave flags so an employee
- * who is both late AND leaves early is counted in both tallies.
- */
-export function summarizeComparison(results) {
-  const total      = results.length
-  const normal     = results.filter(r => r.status === 'normal').length
-  const late       = results.filter(r => r.status === 'late').length
-  const earlyLeave = results.filter(r => r.status === 'early_leave').length
-  const noShow     = results.filter(r => r.status === 'no_show').length
-
-  const byEmployee = {}
-  for (const r of results) {
-    // [Fix 8] Key by employee_id when available for duplicate-name safety
-    const key = r.employee_id ?? r.employee
-    if (!byEmployee[key]) {
-      byEmployee[key] = {
-        employee: r.employee,
-        employee_id: r.employee_id,
-        late: 0, earlyLeave: 0, noShow: 0, totalLateMinutes: 0,
-      }
-    }
-    // Use boolean flags so late+early_leave is captured in both tallies
-    if (r.is_late)        { byEmployee[key].late++;       byEmployee[key].totalLateMinutes += r.late_minutes }
-    if (r.is_early_leave)   byEmployee[key].earlyLeave++
-    if (r.status === 'no_show') byEmployee[key].noShow++
-  }
-
-  return { total, normal, late, earlyLeave, noShow, byEmployee }
-}
+// summarizeComparison removed — no live callers found (Attendance.jsx filters inline).
+// If a summary is needed in future, compute from the result array directly:
+//   const late = results.filter(r => r.is_late).length
+//   const earlyLeave = results.filter(r => r.is_early_leave).length
+//   const noShow = results.filter(r => r.status === 'no_show').length

@@ -265,10 +265,11 @@ serve(async (req: Request) => {
         const [startH, startM] = (schedule.start_time as string).split(':').map(Number)
         const shiftStartMinutes = startH * 60 + startM
 
-        // [Fix 5] Early clock-in check (with cross-midnight correction for night shifts)
-        let minsUntilShift = shiftStartMinutes - currentMinutes
-        if (minsUntilShift > 720)  minsUntilShift -= 1440  // shift is yesterday
-        if (minsUntilShift < -720) minsUntilShift += 1440  // shift is tomorrow
+        // [Fix 5] Early clock-in check.
+        // No cross-midnight correction: schedule lookup is date-scoped, so a 22:00 shift
+        // only appears in the query for its own calendar day — the after-midnight case
+        // never reaches here (dateStr would be the next day, returning no schedule row).
+        const minsUntilShift = shiftStartMinutes - currentMinutes
         if (minsUntilShift > earlyWindow) {
           return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift }
         }
@@ -326,6 +327,7 @@ serve(async (req: Request) => {
       // catches any concurrent duplicate that slips past the existingRecord check above.
       const { data, error } = await supabase.from('attendance_records').insert({
         employee_id: emp.id,
+        store_id: (emp as any).store_id || null,    // [Fix 2] required for store-scoped comparison reports
         date: dateStr,
         clock_in: timeStr,
         status,

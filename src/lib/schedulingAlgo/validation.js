@@ -454,10 +454,12 @@ export function validateMonthlyResult(assignments, data) {
     }
 
     // S5: Monthly hours check
+    // 對 cycle 制（譬如 4 週變形 28 天）按比例 prorate：28/30 × 150 = 140h
+    // 之前 >=28 即視為 full month → cycle 28 天誤判工時不足；改成 >=30 才算 full
     const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'
     const monthlyMin = isPT ? 80 : 150
     const monthlyMax = 175
-    const dayRatio = totalDays >= 28 ? 1 : totalDays / 30
+    const dayRatio = totalDays >= 30 ? 1 : totalDays / 30
     const proRatedMin = Math.round(monthlyMin * dayRatio)
     const proRatedMax = Math.round(monthlyMax * dayRatio)
     if (totalHours > proRatedMax) {

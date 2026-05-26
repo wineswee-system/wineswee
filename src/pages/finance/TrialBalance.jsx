@@ -4,7 +4,7 @@ import { getTrialBalance } from '../../lib/accounting'
 import { exportTrialBalancePdf } from '../../lib/exportPdf'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function TrialBalance() {
   const [trialData, setTrialData] = useState([])

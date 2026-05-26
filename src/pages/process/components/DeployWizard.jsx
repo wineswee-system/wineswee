@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   X, ChevronRight, ChevronLeft, Rocket,
   Calendar, Settings, AlertTriangle, User, CheckCircle2, Bell,
@@ -290,6 +291,7 @@ const STEP_LABELS = ['目標', '人員分配', '排程設定']
  */
 export default function DeployWizard({ template, stores, employees, departments, onClose, onSuccess }) {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const currentUser = profile?.name || '管理員'
   const tplSteps = template?.steps || []
   const targetType = detectTargetType(template?.name)
@@ -363,7 +365,7 @@ export default function DeployWizard({ template, stores, employees, departments,
           role: step.role || null,
           assignee: form.assignees?.[i] || '',
           priority: batchDef.priority || '中',
-          status: i === 0 ? '進行中' : '未開始',
+          status: i === 0 ? '進行中' : '待處理',
           due_date: dueDate,
           due_time: batchDef.due_time || '17:00',
           reminder_preset: batchDef.reminder_preset || '1hr',
@@ -396,7 +398,7 @@ export default function DeployWizard({ template, stores, employees, departments,
         }).catch(() => null)
       }
 
-      const result = { location: loc, taskCount: insertedTasks.length }
+      const result = { location: loc, taskCount: insertedTasks.length, instanceId: instance.id }
       setDeployed(result)
       onSuccess?.(result)
     } catch (err) {
@@ -503,7 +505,9 @@ export default function DeployWizard({ template, stores, employees, departments,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           {deployed ? (
-            <button className="btn btn-primary" onClick={onClose} style={{ marginLeft: 'auto' }}>
+            <button className="btn btn-primary"
+              onClick={() => { onClose(); navigate(`/process/workflows?instance=${deployed.instanceId}`) }}
+              style={{ marginLeft: 'auto' }}>
               查看流程進度 →
             </button>
           ) : (

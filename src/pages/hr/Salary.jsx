@@ -13,7 +13,7 @@ import BatchPayrollModal from './components/BatchPayrollModal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const CHINESE_MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月']
 
@@ -427,8 +427,8 @@ export default function Salary() {
 
       // bonus policies
       const storeNames = [...new Set(scopedEmployees.map(e => e.store).filter(Boolean))]
-      const storeIdMap = {}
-      for (const name of storeNames) storeIdMap[name] = await getStoreIdByName(name)
+      const storeIdEntries = await Promise.all(storeNames.map(async name => [name, await getStoreIdByName(name)]))
+      const storeIdMap = Object.fromEntries(storeIdEntries)
 
       const bonusMap = {}
       await Promise.all(scopedEmployees.map(async (emp) => {
@@ -703,13 +703,10 @@ export default function Salary() {
         deductions_total:     p.totalDeductions       || 0,
         net_salary:           p.netSalary             || 0,
       }))
-      // 批次薪資：逐筆走 secure_upsert_salary_v2（支援拆分津貼）
-      const results = []
-      for (const p of payloads) {
-        const { data: row } = await supabase.rpc('secure_upsert_salary_v2', { p_data: p })
-        if (row) results.push(row)
-      }
-      const data = results
+      // 批次薪資：並行走 secure_upsert_salary_v2（支援拆分津貼）
+      const data = (await Promise.all(
+        payloads.map(p => supabase.rpc('secure_upsert_salary_v2', { p_data: p }).then(({ data: row }) => row))
+      )).filter(Boolean)
       if (data) {
         setRecords(prev => {
           const existing = new Map(prev.map(r => [`${r.employee}-${r.month}`, r]))
@@ -734,22 +731,29 @@ export default function Salary() {
     </div>
   )
 
-  const getEmpDept = (name) => employees.find(e => e.name === name)?.dept || ''
-  const getEmpStore = (name) => employees.find(e => e.name === name)?.store || ''
+  // O(1) name-keyed employee lookup (built once per employees change, not on every render)
+  const empNameMap = useMemo(() => {
+    const m = {}
+    employees.forEach(e => { m[e.name] = e })
+    return m
+  }, [employees])
 
-  const filtered = records.filter(r =>
+  const getEmpDept = (name) => empNameMap[name]?.dept || ''
+  const getEmpStore = (name) => empNameMap[name]?.store || ''
+
+  const filtered = useMemo(() => records.filter(r =>
     (!month || !r.month || r.month === month) &&
-    (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
-    (storeFilter === '' || getEmpStore(r.employee) === storeFilter)
-  )
+    (deptFilter === '' || (empNameMap[r.employee]?.dept || '') === deptFilter) &&
+    (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
+  ), [records, month, deptFilter, storeFilter, empNameMap])
 
-  // Stats
-  const totalGross = filtered.reduce((s, r) => {
-    return s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0)
-  }, 0)
-  const totalDeductionsSum = filtered.reduce((s, r) => s + (r.deductions || 0), 0)
-  const totalNet = filtered.reduce((s, r) => s + (r.net_salary || 0), 0)
-  const employeeCount = filtered.length
+  // Stats — derived from filtered; recomputed only when filtered changes
+  const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
+    totalGross:        filtered.reduce((s, r) => s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0), 0),
+    totalDeductionsSum: filtered.reduce((s, r) => s + (r.deductions || 0), 0),
+    totalNet:          filtered.reduce((s, r) => s + (r.net_salary || 0), 0),
+    employeeCount:     filtered.length,
+  }), [filtered])
 
   const getBonusDetail = (name) => bonusRecords.filter(b => b.employee_name === name && b.period === month)
 

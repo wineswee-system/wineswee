@@ -1,9 +1,8 @@
 import { Search, XCircle, ChevronDown, ChevronRight, Plus, Save, Loader, FileText } from 'lucide-react'
 import { calculateInvoiceTax } from '../../../lib/einvoice'
-import { formatCurrency as fmtCurrency } from '../../../lib/currency'
+import { formatCurrency as fmtCurrency, fmtNT as fmt } from '../../../lib/currency'
 import InvoiceLineEditor from './InvoiceLineEditor'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
 const fmtCur = (n, cur) => cur && cur !== 'NTD' ? fmtCurrency(n, cur) : fmt(n)
 
 function calcItemAmount(item) {

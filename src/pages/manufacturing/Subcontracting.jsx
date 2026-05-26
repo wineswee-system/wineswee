@@ -6,7 +6,7 @@ import { getSubcontracts, createSubcontract, updateSubcontract, deleteSubcontrac
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 const STATUSES = ['已發出', '加工中', '已收回', '已結案']
 
 const emptyForm = {

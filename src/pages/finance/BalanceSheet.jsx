@@ -3,7 +3,7 @@ import { CheckCircle, AlertTriangle, Filter, Printer } from 'lucide-react'
 import { getBalanceSheetData } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function BalanceSheet() {
   const [bsData, setBsData] = useState(null)

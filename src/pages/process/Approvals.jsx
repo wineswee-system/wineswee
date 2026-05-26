@@ -236,10 +236,13 @@ export default function Approvals() {
   }
 
   // ── Approve / Reject ───────────────────────────────────
+  // Re-fetch live steps from DB before cascade decisions to avoid stale local-state corrupting
+  // the sequence: if the page was open for a while, local form.steps may not match the DB.
   const handleApproveStep = async (formId, stepId, action, comment) => {
     setActionLoading(true)
     try {
       const newStatus = action === 'approve' ? '已核准' : '已退回'
+
       await updateApprovalFormStep(stepId, {
         status: newStatus,
         approver: currentUser,
@@ -247,23 +250,30 @@ export default function Approvals() {
         acted_at: new Date().toISOString(),
       })
 
-      const form = forms.find(f => f.id === formId)
-      const updatedSteps = (form?.steps || []).map(s =>
+      // Re-fetch fresh state from DB before cascade; if the page has been open for a while
+      // other steps may have changed, and form.steps in local state would be stale.
+      const [{ data: freshForm }, { data: freshSteps }] = await Promise.all([
+        supabase.from('approval_forms').select('mode, ref_task_id').eq('id', formId).single(),
+        supabase.from('approval_form_steps').select('*').eq('form_id', formId).order('step_order'),
+      ])
+      if (!freshForm) throw new Error('找不到簽核單')
+
+      // Merge the just-written status so the cascade logic sees the current step as already acted on
+      const updatedSteps = (freshSteps || []).map(s =>
         s.id === stepId ? { ...s, status: newStatus } : s
       )
-
       if (action === 'reject') {
         await updateApprovalForm(formId, { status: '已退回', completed_at: new Date().toISOString() })
-        if (form?.ref_task_id) {
-          await supabase.from('tasks').update({ status: '進行中', completed_at: null }).eq('id', form.ref_task_id)
+        if (freshForm.ref_task_id) {
+          await supabase.from('tasks').update({ status: '進行中', completed_at: null }).eq('id', freshForm.ref_task_id)
         }
       } else {
-        const mode = form?.mode || 'sequential'
+        const mode = freshForm.mode || 'sequential'
         if (mode === 'parallel') {
           if (updatedSteps.every(s => s.status === '已核准')) {
             await updateApprovalForm(formId, { status: '已通過', completed_at: new Date().toISOString() })
-            if (form?.ref_task_id) {
-              await supabase.from('tasks').update({ status: '已完成', completed_at: new Date().toISOString() }).eq('id', form.ref_task_id)
+            if (freshForm.ref_task_id) {
+              await supabase.from('tasks').update({ status: '已完成', completed_at: new Date().toISOString() }).eq('id', freshForm.ref_task_id)
             }
           }
         } else {
@@ -278,11 +288,11 @@ export default function Approvals() {
               status: allApproved ? '已通過' : '已退回',
               completed_at: new Date().toISOString(),
             })
-            if (form?.ref_task_id) {
+            if (freshForm.ref_task_id) {
               if (allApproved) {
-                await supabase.from('tasks').update({ status: '已完成', completed_at: new Date().toISOString() }).eq('id', form.ref_task_id)
+                await supabase.from('tasks').update({ status: '已完成', completed_at: new Date().toISOString() }).eq('id', freshForm.ref_task_id)
               } else {
-                await supabase.from('tasks').update({ status: '進行中', completed_at: null }).eq('id', form.ref_task_id)
+                await supabase.from('tasks').update({ status: '進行中', completed_at: null }).eq('id', freshForm.ref_task_id)
               }
             }
           }
@@ -291,7 +301,18 @@ export default function Approvals() {
 
       setActionStepId(null)
       setActionComment('')
-      await loadData()
+      // Surgical refresh: re-fetch only the one form that changed instead of the full list
+      // (loadData() calls setLoading(true), which flashes the entire page to a spinner).
+      const [{ data: rfForm }, { data: rfSteps }] = await Promise.all([
+        supabase.from('approval_forms').select('*').eq('id', formId).single(),
+        supabase.from('approval_form_steps').select('*').eq('form_id', formId).order('step_order'),
+      ])
+      if (rfForm) {
+        setForms(prev => prev.map(f => f.id === formId
+          ? { ...rfForm, steps: (rfSteps || []).sort((a, b) => (a.step_order || 0) - (b.step_order || 0)) }
+          : f
+        ))
+      }
     } catch (err) {
       toast.error('操作失敗：' + (err.message || '未知'))
     } finally {

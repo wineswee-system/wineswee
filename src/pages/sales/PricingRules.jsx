@@ -7,7 +7,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const emptyListForm = { name: '', currency: 'NTD', valid_from: '', valid_to: '', status: '啟用', is_default: false }
 const emptyRuleForm = { sku_id: '', min_qty: '1', unit_price: '', discount_percent: '0', priority: '0' }

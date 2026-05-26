@@ -8,7 +8,7 @@ import { empLabel } from '../../lib/empLabel'
 import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 // 內建常見津貼項目，廠商可一鍵加入；也支援完全自訂
 const PRESET_ALLOWANCES = [

@@ -8,14 +8,14 @@ import {
 } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 import { calculateInvoiceTax, validateTaxId, generateInvoiceNumber, generateMIGXml, generateTurnkeyBatch, validateInvoiceNumber } from '../../lib/einvoice'
-import { getCurrencies, getDbExchangeRate, formatCurrency as fmtCurrency, DEFAULT_RATES } from '../../lib/currency'
+import { getCurrencies, getDbExchangeRate, formatCurrency as fmtCurrency, DEFAULT_RATES, fmtNT as fmt } from '../../lib/currency'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import InvoiceTable from './components/InvoiceTable'
 import InvoiceFormModal from './components/InvoiceFormModal'
 import { getEventBus } from '../../lib/events/index.js'
 
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+
 
 const emptyLineItem = () => ({ product: '', sku_id: '', qty: 1, unit_price: 0, tax_type: '應稅' })
 

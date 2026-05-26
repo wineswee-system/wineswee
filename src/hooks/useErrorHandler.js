@@ -5,7 +5,7 @@
  * properly attributed logs without repeating boilerplate.
  *
  * Usage:
- *   const handleError = useErrorHandler('sales')
+ *   const { handleError, warn, safeRun } = useErrorHandler('sales')
  *
  *   try {
  *     await saveOrder(payload)
@@ -14,8 +14,8 @@
  *     toast.error('儲存失敗，請稍後再試')
  *   }
  *
- * Or as a safe wrapper (never throws):
- *   const { data, error } = await handleError.safeRun(
+ *   // Or as a safe wrapper (never throws):
+ *   const { data, error } = await safeRun(
  *     () => supabase.from('orders').insert(payload),
  *     { component: 'SalesOrders', errorCode: 'ORDER_INSERT_FAILED' }
  *   )
@@ -23,43 +23,28 @@
  */
 
 import { useCallback } from 'react'
-import { reportError, reportWarn, safeRun } from '../lib/errorReporter.js'
+import { reportError, reportWarn, safeRun as _safeRun } from '../lib/errorReporter.js'
 
 /**
  * @param {string} module - The domain module name (e.g. 'hr', 'sales', 'finance')
- * @returns {Function} handleError — with .warn() and .safeRun() attached
+ * @returns {{ handleError: Function, warn: Function, safeRun: Function }}
  */
 export function useErrorHandler(module) {
-  /**
-   * Report an error — fire-and-forget from the caller's perspective.
-   * Logs immediately to console; persists to DB asynchronously.
-   */
+  // Non-blocking: don't await in event handlers / UI callbacks
   const handleError = useCallback(
-    (error, context = {}) => {
-      // Non-blocking: don't await in event handlers / UI callbacks
-      reportError(error, { module, ...context })
-    },
+    (error, context = {}) => { reportError(error, { module, ...context }) },
     [module],
   )
 
-  /**
-   * Report a non-fatal warning.
-   */
-  handleError.warn = useCallback(
-    (message, context = {}) => {
-      reportWarn(message, { module, ...context })
-    },
+  const warn = useCallback(
+    (message, context = {}) => { reportWarn(message, { module, ...context }) },
     [module],
   )
 
-  /**
-   * Wrap an async fn — catches, reports, and returns { data, error }.
-   * Use when you need the return value of the risky call.
-   */
-  handleError.safeRun = useCallback(
-    (fn, context = {}) => safeRun(fn, { module, ...context }),
+  const safeRun = useCallback(
+    (fn, context = {}) => _safeRun(fn, { module, ...context }),
     [module],
   )
 
-  return handleError
+  return { handleError, warn, safeRun }
 }

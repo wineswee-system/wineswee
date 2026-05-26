@@ -9,7 +9,7 @@ import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const STATUS_STYLE = {
   '進行中': { bg: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' },

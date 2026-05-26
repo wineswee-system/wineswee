@@ -174,3 +174,15 @@ export function formatCurrency(amount, currencyCode = 'NTD') {
   const decimals = config.decimals
   return `${config.symbol} ${Number(amount || 0).toLocaleString('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
 }
+
+/**
+ * NT-dollar shorthand formatter — the single source of truth for the
+ * ubiquitous `NT$ 1,234` display pattern used across every module.
+ *
+ * Treats null/undefined/NaN as zero (same behaviour as all former local copies).
+ * Import with alias: `import { fmtNT as fmt } from '../../lib/currency'`
+ *
+ * @param {number|null|undefined} n
+ * @returns {string}  e.g. "NT$ 1,234"
+ */
+export const fmtNT = (n) => `NT$ ${(n || 0).toLocaleString()}`

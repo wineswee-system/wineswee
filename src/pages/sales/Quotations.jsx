@@ -10,7 +10,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useTenant } from '../../contexts/TenantContext'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 const STATUS_BADGE = { '草稿': 'badge-warning', '已送出': 'badge-info', '已成交': 'badge-success', '已失效': 'badge-danger' }
 
 const emptyLineItem = () => ({ product: '', sku_id: '', qty: 1, unit_price: 0, discount: 0, tax_rate: 5 })

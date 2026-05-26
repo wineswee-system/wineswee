@@ -9,7 +9,7 @@ import { useTenant } from '../../contexts/TenantContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const CATEGORIES = ['土地', '建築物', '機器設備', '運輸設備', '辦公設備', '其他']
 const METHODS = [

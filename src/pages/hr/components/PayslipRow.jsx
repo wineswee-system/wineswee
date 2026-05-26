@@ -1,6 +1,6 @@
 import { memo } from 'react'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 const DetailRow = memo(function DetailRow({ label, value, bold }) {
   return (

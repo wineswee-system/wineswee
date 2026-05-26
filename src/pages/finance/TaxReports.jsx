@@ -5,7 +5,7 @@ import { generate401Report, generate403Report, calculateBusinessTax, formatTaxPe
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useTenant } from '../../contexts/TenantContext'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function TaxReports() {
   const { tenant } = useTenant()

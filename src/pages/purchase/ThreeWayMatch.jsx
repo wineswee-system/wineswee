@@ -3,7 +3,7 @@ import { Search, CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronRight,
 import { getMatchingSummary, performThreeWayMatchById } from '../../lib/threeWayMatch'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 function getMonthRange() {
   const now = new Date()

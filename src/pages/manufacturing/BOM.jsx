@@ -4,6 +4,7 @@ import { getBOMs, createBOM, getSKUs, getBOMLines, createBOMLine, deleteBOMLine 
 import { explodeBOM, explodeBOMFromDB } from '../../lib/mrpEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function BOM() {
   const [boms, setBoms] = useState([])
@@ -224,7 +225,7 @@ export default function BOM() {
     (b.components || []).some(c => c.parent_bom_id)
   ).length
 
-  const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+  
 
   const toggleExpand = async (id) => {
     if (expandedId === id) {

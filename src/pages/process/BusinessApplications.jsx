@@ -52,7 +52,7 @@ export default function BusinessApplications() {
             desc: t.description || '自訂表單',
             color: c.color,
             dim: c.dim,
-            action: `/process/forms/submissions?template=${t.id}`,
+            action: `/process/forms/custom/${t.id}`,
             tag: '自訂',
           }
           if (t.scope === 'business_expense') exp.push(card)
@@ -74,7 +74,7 @@ export default function BusinessApplications() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><ClipboardList size={20} style={{ display: 'inline', marginRight: 6 }} />表單設定</h2>
+            <h2><ClipboardList size={20} style={{ display: 'inline', marginRight: 6 }} />業務申請中心</h2>
             <p>費用 / 非費用類表單入口（被任務綁定時也從這些表單填寫）</p>
           </div>
         </div>

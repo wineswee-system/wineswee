@@ -5,7 +5,7 @@ import { generate401Report, generate403Report, generateMediaFile } from '../../l
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 const toROCYear = (y) => y - 1911
 
 const BIMONTH_PERIODS = [

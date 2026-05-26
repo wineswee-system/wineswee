@@ -121,12 +121,14 @@ export default function SOPTemplates() {
       let tpls = t.data || []
       // If no templates in DB, seed defaults
       if (tpls.length === 0) {
+        const orgId = profile?.organization_id || null
         for (const tpl of DEFAULT_TEMPLATES) {
           const { data } = await supabase.from('sop_templates').insert({
             name: tpl.name,
             category: tpl.category,
             description: tpl.description,
             steps: tpl.steps,
+            organization_id: orgId,
           }).select().single()
           if (data) tpls.push(data)
         }
@@ -175,7 +177,7 @@ export default function SOPTemplates() {
           role: step.role || null,
           assignee,
           priority: step.priority || '中',
-          status: '未開始',
+          status: '待處理',
           due_date: '',
         })
         if (error) throw error

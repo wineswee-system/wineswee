@@ -1,7 +1,7 @@
 import Modal, { Field } from '../../../components/Modal'
 import InvoiceLineEditor from './InvoiceLineEditor'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 const CARRIER_TYPES = ['手機條碼', '自然人憑證', '無']
 
 export default function InvoiceFormModal({

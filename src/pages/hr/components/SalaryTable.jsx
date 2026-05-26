@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension } from '../../../lib/payroll'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 // ── Deduction breakdown row items ──
 // brackets: { labor, health } from insuranceBrackets.loadInsuranceBrackets()，可為 null

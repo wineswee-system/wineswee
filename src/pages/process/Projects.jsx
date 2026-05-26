@@ -163,16 +163,24 @@ export default function Projects() {
         .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
         .order('created_at', { ascending: false }),
     ])
-    // Load tasks that either carry project_id directly OR belong to a project's workflow instance
+    // Load tasks that either carry project_id directly OR belong to a project's workflow instance.
+    // Two separate queries avoids URL-length overflow: the old .or() with wIds.join(',') breaks
+    // when there are 200+ workflow instances (each UUID is 36 chars → 7KB+ query string).
     const wIds = (wRes.data || []).map(w => w.id)
-    const tRes = wIds.length > 0
-      ? await supabase.from('tasks').select('*')
-          .or(`project_id.not.is.null,workflow_instance_id.in.(${wIds.join(',')})`)
-          .order('step_order')
-      : await supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order')
+    const [directRes, wfTaskRes] = await Promise.all([
+      supabase.from('tasks').select('*').not('project_id', 'is', null).order('step_order'),
+      wIds.length > 0
+        ? supabase.from('tasks').select('*').in('workflow_instance_id', wIds).order('step_order')
+        : Promise.resolve({ data: [] }),
+    ])
+    // Deduplicate: a task may have both project_id and workflow_instance_id set
+    const taskMap = new Map()
+    for (const t of [...(directRes.data || []), ...(wfTaskRes.data || [])]) {
+      if (!taskMap.has(t.id)) taskMap.set(t.id, t)
+    }
     setProjects(pRes.data || [])
     setWorkflows(wRes.data || [])
-    setTasks(tRes.data || [])
+    setTasks([...taskMap.values()].sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0)))
     setEmployees((eRes.data || []).filter(e => e.status === '在職'))
     setStores(sRes.data || [])
     setComments(cRes.data || [])

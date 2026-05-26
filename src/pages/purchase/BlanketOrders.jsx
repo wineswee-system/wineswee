@@ -6,7 +6,7 @@ import { getBlanketOrders, createBlanketOrder, updateBlanketOrder, deleteBlanket
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 const STATUSES = ['有效', '已完成', '已取消']
 
 const emptyForm = {

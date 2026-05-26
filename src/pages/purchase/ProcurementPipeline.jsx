@@ -45,7 +45,7 @@ function staleDays(item) {
   return Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24))
 }
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function ProcurementPipeline() {
   const [items, setItems] = useState([])

@@ -8,7 +8,7 @@ import { useTenant } from '../../contexts/TenantContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function Commission() {
   const { tenant } = useTenant()

@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, Filter, Calendar } from 'lucide-react'
 import { getIncomeStatement } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 function getMonthRange() {
   const now = new Date()

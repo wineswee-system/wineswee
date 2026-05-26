@@ -90,13 +90,6 @@ export const getErrorLogs = ({ limit = 200, offset = 0, tenantId, orgId, level, 
   return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
 }
 
-/**
- * Mark an error as resolved, recording who fixed it, when, and how.
- * @param {number} id          - error_logs row id
- * @param {string} resolvedBy  - display name of the resolver
- * @param {string} [note]      - description of what was fixed
- * @param {string} [reference] - optional commit SHA, PR URL, or ticket number
- */
 export const resolveErrorLog = (id, resolvedBy, note, reference) =>
   supabase.from('error_logs').update({
     resolved:        true,

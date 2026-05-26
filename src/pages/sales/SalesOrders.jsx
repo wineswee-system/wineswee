@@ -11,7 +11,7 @@ import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 import { useTenant } from '../../contexts/TenantContext'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 const PAYMENT_BADGE = { '已付款': 'badge-success', '未付款': 'badge-danger', '部分付款': 'badge-warning' }
 const SHIPPING_BADGE = { '已出貨': 'badge-success', '待出貨': 'badge-warning', '已取消': 'badge-danger' }
 

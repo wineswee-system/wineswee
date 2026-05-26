@@ -10,7 +10,7 @@ import { performThreeWayMatch, calculatePriceVariance, performThreeWayMatchById 
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function GoodsReceipts() {
   const { tenant } = useTenant()

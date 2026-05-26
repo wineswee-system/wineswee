@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
-import { formatCurrency } from './currency'
+import { formatCurrency, fmtNT as fmt } from './currency'
 
 import { toast } from './toast'
 // Common PDF setup with Chinese-friendly font
@@ -145,7 +145,7 @@ export function exportTaxReportPdf(reportData) {
     `Period: ${period} (${startDate} ~ ${endDate}) | Generated: ${new Date().toLocaleString('zh-TW')}`
   )
 
-  const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+  
 
   // Section 1 - Sales / Output
   autoTable(doc, {

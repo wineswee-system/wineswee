@@ -4,7 +4,7 @@ import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon } 
 import { detectPayrollAnomalies, isConfigured as aiReady } from '../../../lib/ai/hrAI'
 
 import { toast } from '../../../lib/toast'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 const STATUS_ICON = {
   clean: { icon: CheckCircle, color: 'var(--accent-green)', label: '正常' },

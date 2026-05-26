@@ -5,6 +5,7 @@ import { runMRP, generatePurchaseSuggestions, runMRPFromDB } from '../../lib/mrp
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function MRP() {
   const [results, setResults] = useState([])
@@ -158,7 +159,7 @@ export default function MRP() {
 
   const toggleExpand = (id) => setExpandedId(prev => prev === id ? null : id)
 
-  const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+  
 
   const mainTabStyle = (tab) => ({
     padding: '12px 24px',

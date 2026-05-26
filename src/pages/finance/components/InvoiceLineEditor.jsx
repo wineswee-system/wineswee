@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { calculateInvoiceTax } from '../../../lib/einvoice'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 const TAX_TYPES = ['應稅', '零稅率', '免稅']
 
 function calcItemAmount(item) {

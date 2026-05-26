@@ -10,7 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 
 import { toast } from '../../lib/toast'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const emptyLine = { account_code: '', account_name: '', description: '', debit: '', credit: '' }
 

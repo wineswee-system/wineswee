@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useErrorHandler } from '../../hooks/useErrorHandler'
 import { supabase } from '../../lib/supabase'
 import { serverClockIn } from '../../lib/db'
 import { validateClockIn } from '../../lib/clockInValidator'
-import { todayTW } from '../../lib/datetime'
+import { todayTW, nowTimeTW } from '../../lib/datetime'
 
 const ALL_QUICK_ACTIONS = [
   { icon: Calendar, label: '請假', desc: '假單申請', path: '/hr/leave', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
@@ -19,6 +20,7 @@ const roleAtLeast = (userRole, minRole) => ROLE_ORDER.indexOf(userRole) >= ROLE_
 
 export default function PortalHome() {
   const { profile, profileReady } = useAuth()
+  const { handleError } = useErrorHandler('portal')
   const [todayAttendance, setTodayAttendance] = useState(null)
   const [pendingTasks, setPendingTasks] = useState(0)
   const [recentLeaves, setRecentLeaves] = useState([])
@@ -73,24 +75,23 @@ export default function PortalHome() {
         action,
         lat: result.lat,
         lng: result.lng,
-        accuracy: result.accuracy ?? null,   // [Fix 5] ?? not || — 0 is a valid GPS accuracy
+        accuracy: result.accuracy ?? null,   // ?? not || — 0 is a valid GPS accuracy
         ip: result.ip,
         is_overtime: isOvertime,
       })
 
       setTodayAttendance(data.record)
       setIsOvertime(false)   // reset after successful clock
-      const now = new Date()
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const timeStr = nowTimeTW()
+      const extra = isOvertime ? '，加班申請已送出待審核' : ''
 
       if (action === 'clock_in') {
-        const extra = isOvertime ? '，加班申請已送出待審核' : ''
         setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}${extra}` })
       } else {
-        const extra = isOvertime ? '，加班申請已送出待審核' : ''
         setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}${extra}` })
       }
     } catch (err) {
+      handleError(err, { component: 'PortalHome', errorCode: 'CLOCK_FAILED' })
       setClockMsg({ type: 'error', text: err.message })
     }
     setClockingIn(false)
@@ -105,6 +106,14 @@ export default function PortalHome() {
   const clockAction = todayAttendance
     ? todayAttendance.clock_out ? null : '下班打卡'
     : '上班打卡'
+
+  // Button style vars — extracted so the JSX isn't a 3-level ternary inline
+  const btnBackground = (isOvertime || clockAction === '下班打卡')
+    ? 'var(--accent-orange)'
+    : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))'
+  const btnShadow = isOvertime
+    ? '0 4px 14px rgba(249,115,22,0.35)'
+    : '0 4px 14px rgba(34,211,238,0.3)'
 
   return (
     <div className="fade-in">
@@ -156,17 +165,11 @@ export default function PortalHome() {
               disabled={clockingIn}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
-                background: isOvertime
-                  ? 'linear-gradient(135deg, #f97316, #ea580c)'
-                  : clockAction === '下班打卡'
-                    ? 'linear-gradient(135deg, var(--accent-orange), #f59e0b)'
-                    : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
+                background: btnBackground,
                 color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
                 opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
-                boxShadow: isOvertime
-                  ? '0 4px 14px rgba(249,115,22,0.35)'
-                  : '0 4px 14px rgba(34,211,238,0.3)',
+                boxShadow: btnShadow,
               }}
             >
               {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}

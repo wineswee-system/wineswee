@@ -27,7 +27,7 @@ export default function TaskConfirmations() {
     setLoading(true)
     // task_confirmations 用 approver（員工姓名 TEXT）標記簽核者
     let q = supabase.from('task_confirmations')
-      .select('*, task:tasks(id, title, description, organization_id, assignee_name)')
+      .select('*, task:tasks(id, title, description, organization_id, assignee)')
       .eq('approver', profile.name)
       .order('id', { ascending: false })
     const { data } = await q
@@ -108,7 +108,7 @@ export default function TaskConfirmations() {
                   <tr key={r.id} onClick={() => setDetailRow(r)} style={{ cursor: 'pointer' }} title="點擊查看明細">
                     <td>
                       <b>{r.task?.title || `任務 #${r.task_id}`}</b>
-                      {r.task?.assignee_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>負責人：{r.task.assignee_name}</div>}
+                      {r.task?.assignee && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>負責人：{r.task.assignee}</div>}
                     </td>
                     <td>第 {(r.step_order ?? 0) + 1} 關</td>
                     <td>
@@ -138,7 +138,7 @@ export default function TaskConfirmations() {
           docNo={detailRow.id}
           status={STATUS_BADGE[detailRow.status]?.label || detailRow.status}
           applicant={{
-            name: detailRow.task?.assignee_name || '—',
+            name: detailRow.task?.assignee || '—',
             status: '在職',
           }}
           fields={[

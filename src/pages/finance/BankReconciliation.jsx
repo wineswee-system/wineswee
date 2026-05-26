@@ -9,7 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 import { toast } from '../../lib/toast'
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 // Similarity score between two strings (simple token overlap)
 function stringSimilarity(a, b) {

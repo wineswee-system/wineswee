@@ -21,7 +21,7 @@ const INSTANCE_STATUS_BADGE = {
   '已取消': 'badge-warning',
 }
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 export default function ProcurementWorkflow() {
   const [workflows, setWorkflows] = useState([])

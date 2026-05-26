@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getErrorLogs, resolveErrorLog, unresolveErrorLog, getTenants } from '../../lib/db'
+import { timeAgo as _timeAgo } from '../../lib/auditLogUtils'
 
 const MODULES = ['Auth', 'HR', 'Finance', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Manufacturing', 'Analytics', 'Process', 'Integration', 'AI', 'System', 'Runtime']
 
@@ -16,17 +17,8 @@ const levelStyle = {
 
 const PAGE_SIZE = 50
 
-function timeAgo(ts) {
-  if (!ts) return '-'
-  const d = new Date(ts)
-  const now = new Date()
-  const diff = (now - d) / 1000
-  if (diff < 60) return '剛剛'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小時前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+// Null-safe wrapper: show '-' for missing timestamps instead of the empty string auditLogUtils returns
+const timeAgo = (ts) => _timeAgo(ts) || '-'
 
 export default function ErrorLogs() {
   const { isSuperAdmin, profile } = useAuth()
@@ -39,7 +31,6 @@ export default function ErrorLogs() {
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({ tenantId: '', level: '', module: '', resolved: '', from: '', to: '' })
   const [expandedRow, setExpandedRow] = useState(null)
-  // Resolve modal state
   const [resolveModal, setResolveModal] = useState(null)  // { id, errorCode, message } | null
   const [resolveNote, setResolveNote] = useState('')
   const [resolveRef, setResolveRef] = useState('')
@@ -65,32 +56,42 @@ export default function ErrorLogs() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Clicking "resolve" on an unresolved error opens the modal
   const openResolveModal = (log) => {
     setResolveModal({ id: log.id, errorCode: log.error_code, message: log.message })
     setResolveNote('')
     setResolveRef('')
   }
 
-  // Submit the resolve modal
   const handleConfirmResolve = async () => {
     if (!resolveModal) return
     setResolving(true)
-    await resolveErrorLog(
-      resolveModal.id,
-      profile?.name || 'super_admin',
-      resolveNote.trim() || null,
-      resolveRef.trim()  || null,
-    )
+    const resolvedBy = profile?.name || 'super_admin'
+    const note = resolveNote.trim() || null
+    const ref  = resolveRef.trim()  || null
+    const targetId = resolveModal.id  // capture before closing modal
+    await resolveErrorLog(targetId, resolvedBy, note, ref)
+    const resolvedAt = new Date().toISOString()
+    setLogs(prev => prev.map(l => l.id !== targetId ? l : {
+      ...l,
+      resolved:        true,
+      resolved_by:     resolvedBy,
+      resolved_at:     resolvedAt,
+      resolution_note: note,
+      fix_reference:   ref,
+    }))
     setResolving(false)
     setResolveModal(null)
-    fetchData()
   }
 
-  // One-click unresolve (no note needed — history is preserved)
+  // resolution_note + fix_reference are intentionally kept on unresolve so fix history is visible
   const handleUnresolve = async (id) => {
     await unresolveErrorLog(id)
-    fetchData()
+    setLogs(prev => prev.map(l => l.id !== id ? l : {
+      ...l,
+      resolved:    false,
+      resolved_by: null,
+      resolved_at: null,
+    }))
   }
 
   const filtered = logs.filter(l => {

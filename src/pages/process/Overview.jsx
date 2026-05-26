@@ -76,6 +76,10 @@ export default function ProcessOverview() {
     onDelete: (row) => setInstances((p) => p.filter((i) => i.id !== row.id)),
   })
 
+  // ── Reject modal state ──
+  const [rejectPending, setRejectPending] = useState(null) // { stepId, onDone? }
+  const [rejectReason, setRejectReason] = useState('')
+
   const reload = () => {
     setLoading(true)
     Promise.all([
@@ -88,6 +92,7 @@ export default function ProcessOverview() {
       setSteps(st.data || [])
       setTasks(t.data || [])
       setChecklists(c.data || [])
+      // employees are stable session-wide; loaded once on mount, not on every approval action
     }).finally(() => setLoading(false))
   }
 
@@ -98,13 +103,26 @@ export default function ProcessOverview() {
     setActionLoading(false)
   }
 
-  const handleReject = async (stepId) => {
-    const reason = prompt('請輸入退回原因：')
-    if (!reason?.trim()) return
+  // Opens the reject reason modal; onDone is called after the reject succeeds.
+  const handleReject = (stepId, onDone) => {
+    setRejectReason('')
+    setRejectPending({ stepId, onDone })
+  }
+
+  const doReject = async () => {
+    if (!rejectReason.trim()) return
     setActionLoading(true)
-    await advanceWorkflow(stepId, '主管', '退回', reason.trim())
-    reload()
-    setActionLoading(false)
+    try {
+      await advanceWorkflow(rejectPending.stepId, '主管', '退回', rejectReason.trim())
+      reload()
+      rejectPending.onDone?.()
+      setRejectPending(null)
+      setRejectReason('')
+    } catch (err) {
+      toast.error('退回失敗：' + (err?.message || '未知錯誤'))
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   if (loading) return <LoadingSpinner />
@@ -322,10 +340,47 @@ export default function ProcessOverview() {
           employees={employees}
           onClose={() => setSelectedTask(null)}
           onApprove={async (id) => { await handleApprove(id); setSelectedTask(null) }}
-          onReject={async (id) => { await handleReject(id); setSelectedTask(null) }}
+          onReject={(id) => handleReject(id, () => setSelectedTask(null))}
           onSaved={() => { setSelectedTask(null); reload() }}
           actionLoading={actionLoading}
         />
+      )}
+
+      {/* ── Reject reason modal (replaces window.prompt) ── */}
+      {rejectPending && createPortal(
+        <div
+          onClick={() => { if (!actionLoading) { setRejectPending(null); setRejectReason('') } }}
+          style={{ position: 'fixed', inset: 0, zIndex: 20000, background: 'var(--bg-modal-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 14, padding: 28, width: 440, maxWidth: '94vw' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 700 }}>退回流程</h3>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>退回原因 *</label>
+            <textarea
+              className="form-input"
+              autoFocus
+              rows={4}
+              style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+              placeholder="請說明退回原因..."
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) doReject() }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-secondary" disabled={actionLoading}
+                onClick={() => { setRejectPending(null); setRejectReason('') }}>取消</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                disabled={actionLoading || !rejectReason.trim()}
+                onClick={doReject}
+              >
+                <X size={13} /> {actionLoading ? '處理中...' : '確認退回'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

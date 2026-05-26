@@ -7,6 +7,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const ADMIN_ROLES = ['admin', 'super_admin'] as const
+
 // ── Helpers ──────────────────────────────────────────────
 
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -82,8 +84,6 @@ serve(async (req: Request) => {
     }
 
     // ── JWT required for all non-LINE paths ─────────────────
-    // [Fix 3] Hoist jwtAuthEmp so the proxy guard can run after emp is resolved,
-    // regardless of whether employee was supplied by id (INT) or name (text).
     let jwtAuthEmp: any = null
 
     if (!line_user_id) {
@@ -138,12 +138,11 @@ serve(async (req: Request) => {
       })
     }
 
-    // [Fix 3] Proxy guard — runs after emp is resolved so it covers ALL identifier
-    // forms (employee_id INT, line_user_id, or legacy text name).
+    // Proxy guard — covers all identifier forms (employee_id INT, line_user_id, name).
     // Only admin/super_admin may clock in on behalf of another employee.
     if (jwtAuthEmp && jwtAuthEmp.id !== emp.id) {
       const authRole = (jwtAuthEmp?.roles as any)?.name ?? jwtAuthEmp?.role
-      if (!['admin', 'super_admin'].includes(authRole)) {
+      if (!ADMIN_ROLES.includes(authRole)) {
         return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -246,8 +245,8 @@ serve(async (req: Request) => {
       const storeTolerance: number = location?.late_tolerance_minutes ?? 5
       const earlyWindow: number    = location?.early_clock_minutes    ?? 30
 
-      // [Fix 1] Query correct columns: `shift` (name) + `actual_start` (time override).
-      // schedules does NOT have shift_type or start_time — those live on shift_definitions.
+      // `shift` = shift name, `actual_start` = per-day override.
+      // shift_type / start_time do NOT exist on schedules — they live on shift_definitions.
       const { data: schedule } = await supabase
         .from('schedules')
         .select('shift, actual_start')
@@ -379,8 +378,8 @@ serve(async (req: Request) => {
           ? Math.round(haversineMetres(lat, lng, Number(location.lat), Number(location.lng)))
           : null,
         clock_in_method:     method,
-        clock_in_location:   location?.name || null,   // [Fix 3] persist store name for portal display
-        clock_in_ip:         resolvedIP || null,        // [Fix 3] persist resolved IP for portal display
+        clock_in_location:   location?.name || null,
+        clock_in_ip:         resolvedIP || null,
         organization_id:     (emp as any).organization_id || null,
       }).select().single()
 
@@ -412,8 +411,7 @@ serve(async (req: Request) => {
         })
       }
 
-      // [Fix 4] Clock-out early-leave check against office hours end (non-overtime only).
-      // Uses the same tolerance as late-arrival to keep settings symmetric.
+      // Early-leave check against office hours end (symmetric with late-arrival tolerance).
       if (!is_overtime && location?.has_office_hours && location?.office_hours_end) {
         const storeTolerance: number = location?.late_tolerance_minutes ?? 5
         const officeEndStr = String(location.office_hours_end).slice(0, 5)

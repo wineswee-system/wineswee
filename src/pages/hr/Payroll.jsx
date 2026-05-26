@@ -8,11 +8,12 @@ import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { exportToCsv } from '../../lib/exportCsv'
 import ImportModal from './components/ImportModal'
 import YearEndBonusModal from './components/YearEndBonusModal'
 import PayslipRow from './components/PayslipRow'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const STATUS_STYLES = {
   draft: { label: '草稿', bg: 'rgba(255,180,0,0.15)', color: 'var(--accent-yellow, #f0b429)' },
@@ -102,7 +103,7 @@ export default function Payroll() {
       if (result?.payroll_run_id) {
         await supabase.rpc('apply_fw_deductions', { p_payroll_run_id: result.payroll_run_id })
       }
-      toast.error(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
+      toast.success(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
       const { data: freshRuns } = await getPayrollRuns()
       setRuns(freshRuns || [])
       setShowCreateModal(false)
@@ -122,7 +123,7 @@ export default function Payroll() {
         body: { payroll_run_id: selectedRunId },
       })
       if (error) throw error
-      toast.error(data?.message || '薪資單已發送')
+      toast.success(data?.message || '薪資單已發送')
       const bus = getEventBus()
       const sentRun = runs.find(r => r.id === selectedRunId)
       await bus.publish('hr.payslip.sent', {
@@ -193,19 +194,16 @@ export default function Payroll() {
         .order('employee_name')
       if (error) throw error
       if (!data?.length) return toast.error('查無此期勞退提繳資料')
-      const headers = '員工編號,姓名,身份證,提繳基礎,雇主提繳(6%),員工自提,自提率,合計'
-      const rows = data.map(r => [
-        r.employee_id, r.employee_name, r.id_number || '',
-        r.capped_pension_base, r.employer_contribution,
-        r.employee_contribution, `${r.employee_rate_pct || 0}%`,
-        r.total_contribution,
-      ].join(','))
-      const csv = '﻿' + headers + '\n' + rows.join('\n')
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `勞退提繳清冊_${selectedRun.pay_period}.csv`
-      a.click()
+      exportToCsv(`勞退提繳清冊_${selectedRun.pay_period}.csv`, data, [
+        { label: '員工編號',      value: 'employee_id' },
+        { label: '姓名',         value: 'employee_name' },
+        { label: '身份證',        value: r => r.id_number || '' },
+        { label: '提繳基礎',      value: 'capped_pension_base' },
+        { label: '雇主提繳(6%)', value: 'employer_contribution' },
+        { label: '員工自提',      value: 'employee_contribution' },
+        { label: '自提率',        value: r => `${r.employee_rate_pct || 0}%` },
+        { label: '合計',         value: 'total_contribution' },
+      ])
     } catch (err) {
       toast.error('匯出失敗：' + err.message)
     }
@@ -222,19 +220,18 @@ export default function Payroll() {
         .order('category')
       if (error) throw error
       if (!data?.length) return toast.error('該期無補充保費紀錄（沒有員工觸發 2.11% 扣繳）')
-      const headers = '員工編號,姓名,身份證,所得類別,所得金額,免扣額,應扣額,費率,補充保費,已申報'
-      const rows = data.map(r => [
-        r.employee_id, r.employee_name, r.id_number || '',
-        r.category, r.gross_income, r.exempt_amount, r.taxable_amount,
-        `${(r.premium_rate * 100).toFixed(2)}%`, r.premium,
-        r.filed ? '是' : '否',
-      ].join(','))
-      const csv = '﻿' + headers + '\n' + rows.join('\n')
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `二代健保補充保費_${selectedRun.pay_period}.csv`
-      a.click()
+      exportToCsv(`二代健保補充保費_${selectedRun.pay_period}.csv`, data, [
+        { label: '員工編號', value: 'employee_id' },
+        { label: '姓名',    value: 'employee_name' },
+        { label: '身份證',  value: r => r.id_number || '' },
+        { label: '所得類別', value: 'category' },
+        { label: '所得金額', value: 'gross_income' },
+        { label: '免扣額',  value: 'exempt_amount' },
+        { label: '應扣額',  value: 'taxable_amount' },
+        { label: '費率',   value: r => `${(r.premium_rate * 100).toFixed(2)}%` },
+        { label: '補充保費', value: 'premium' },
+        { label: '已申報',  value: r => r.filed ? '是' : '否' },
+      ])
     } catch (err) {
       toast.error('匯出失敗：' + err.message)
     }
@@ -255,22 +252,21 @@ export default function Payroll() {
       ;(bankData || []).forEach(e => { bankMap[e.id] = e })
       const rows = records.map(rec => {
         const b = bankMap[rec.employee_id] || {}
-        return [
-          b.employee_number || '',
-          b.name || empMap[rec.employee_id]?.name || '',
-          b.bank_code || '',
-          b.bank_account || '',
-          rec.net_salary || 0,
-        ].join(',')
+        return {
+          employee_number: b.employee_number || '',
+          name:            b.name || empMap[rec.employee_id]?.name || '',
+          bank_code:       b.bank_code || '',
+          bank_account:    b.bank_account || '',
+          net_salary:      rec.net_salary || 0,
+        }
       })
-      const csv = '員工編號,姓名,銀行代碼,帳號,轉帳金額\n' + rows.join('\n')
-      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `bankTransfer_${selectedRun?.pay_period || ''}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
+      exportToCsv(`bankTransfer_${selectedRun?.pay_period || ''}.csv`, rows, [
+        { label: '員工編號', value: 'employee_number' },
+        { label: '姓名',    value: 'name' },
+        { label: '銀行代碼', value: 'bank_code' },
+        { label: '帳號',    value: 'bank_account' },
+        { label: '轉帳金額', value: 'net_salary' },
+      ])
     } catch (err) {
       console.error('Bank export failed:', err)
       toast.error('匯出失敗：' + (err.message || '未知錯誤'))

@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { ModalOverlay } from '../../../components/Modal'
 import { X } from 'lucide-react'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 export default function DripCampaignAnalytics({ campaign, metrics, onClose }) {
   return (

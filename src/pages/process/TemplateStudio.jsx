@@ -73,17 +73,14 @@ export default function TemplateStudio() {
   useEffect(() => {
     const fetchAll = async () => {
       const [clRes, acRes, tplsRes, catsRes] = await Promise.allSettled([
-        supabase.from('task_checklists').select('id, name, task_checklist_items(count)').order('name'),
+        supabase.from('checklists').select('id, name, items').order('name'),
         supabase.from('approval_chains').select('id, name, approval_chain_steps(count)').order('name'),
         supabase.from('sop_templates').select('id, name').order('name'),
         supabase.from('workflow_categories').select('id, name').order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {
-        setChecklists(clRes.value.data.map(c => ({
-          ...c,
-          items: c.task_checklist_items?.[0]?.count ?? 0,
-        })))
+        setChecklists(clRes.value.data)
       }
       if (acRes.status === 'fulfilled' && acRes.value.data) {
         setApprovalChains(acRes.value.data.map(c => ({

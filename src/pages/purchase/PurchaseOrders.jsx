@@ -5,12 +5,12 @@ import { useTenant } from '../../contexts/TenantContext'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { performThreeWayMatch, calculatePriceVariance } from '../../lib/threeWayMatch'
-import { getCurrencies, getDbExchangeRate, formatCurrency, DEFAULT_RATES } from '../../lib/currency'
+import { getCurrencies, getDbExchangeRate, formatCurrency, DEFAULT_RATES, fmtNT as fmt } from '../../lib/currency'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 const PAYMENT_TERMS = ['COD', 'NET15', 'NET30', 'NET45', 'NET60']
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+
 const fmtCur = (n, cur) => cur && cur !== 'NTD' ? formatCurrency(n, cur) : fmt(n)
 
 const emptyLineItem = () => ({ product: '', qty: '', unit_price: '', total: 0 })

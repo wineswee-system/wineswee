@@ -6,7 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import AttachmentsPanel from './components/AttachmentsPanel'
 import { useTenant } from '../../contexts/TenantContext'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const TOUCHPOINT_ICONS = {
   call: { icon: Phone, label: '電話', color: 'var(--accent-green)' },

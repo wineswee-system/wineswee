@@ -5,7 +5,7 @@ import { generate401FromDB, taxReportToCSV } from '../../lib/taxReport'
 import { exportTaxReportPdf } from '../../lib/exportPdf'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../lib/currency'
 
 const PERIOD_OPTIONS = [
   { value: 1, label: '第1期 (1-2月)' },

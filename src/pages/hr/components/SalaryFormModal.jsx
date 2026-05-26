@@ -3,7 +3,7 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { empLabel } from '../../../lib/empLabel'
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 // 跟 SalaryStructures 一致的 12 個常見津貼快選
 const PRESET_ALLOWANCES = [

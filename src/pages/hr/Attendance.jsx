@@ -3,13 +3,15 @@ import { Search, Download, MapPin, Wifi, Clock, CalendarCheck } from 'lucide-rea
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
-import { todayTW, monthStartTW } from '../../lib/datetime'
+import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
+import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
 export default function Attendance() {
   const { profile, role } = useAuth()
+  const { handleError } = useErrorHandler('hr')
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const isManager = userRole === 'manager'
@@ -48,7 +50,7 @@ export default function Attendance() {
       setDepartments(d.data || [])
       setStores(s.data || [])
     }).catch(err => {
-      console.error('Failed to load data:', err)
+      handleError(err, { component: 'Attendance', errorCode: 'ATTENDANCE_LOAD_FAILED' })
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => {
       setLoading(false)
@@ -96,8 +98,7 @@ export default function Attendance() {
     setClockMsg(null)
     try {
       const emp = employees.find(e => e.name === employeeName)
-      // [Fix 4] Match store by ID (INT FK), not text name — emp.store may be undefined
-      const store = stores.find(s => s.id === emp?.store_id)
+      const store = stores.find(s => s.id === emp?.store_id)  // match by INT FK, not name
 
       // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
@@ -108,17 +109,16 @@ export default function Attendance() {
 
       // Server-side validation + record write
       const data = await serverClockIn({
-        employee_id: emp?.id,        // [Fix 4] pass ID so proxy guard activates server-side
-        employee:    employeeName,   // keep as legacy fallback
+        employee_id: emp?.id,
+        employee:    employeeName,   // legacy fallback — server accepts either
         action,
         lat:      result.lat,
         lng:      result.lng,
-        accuracy: result.accuracy ?? null,   // [Fix 5] ?? not || — 0 is a valid accuracy value
+        accuracy: result.accuracy ?? null,   // ?? not || — 0 is a valid GPS accuracy value
         ip:       result.ip,
       })
 
-      const now = new Date()
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const timeStr = nowTimeTW()
 
       if (action === 'clock_out') {
         setRecords(prev => prev.map(r => r.id === data.record.id ? data.record : r))
@@ -128,6 +128,7 @@ export default function Attendance() {
         setClockMsg({ type: 'success', text: `${employeeName} 上班打卡成功 (${timeStr}) — ${data.locationName || data.method}` })
       }
     } catch (err) {
+      handleError(err, { component: 'Attendance', errorCode: 'CLOCK_IN_FAILED' })
       setClockMsg({ type: 'error', text: err.message })
     }
     setClockingIn(false)

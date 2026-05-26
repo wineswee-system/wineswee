@@ -75,10 +75,6 @@ export async function logError({ level = 'error', module, errorCode, message, st
   })
   if (error) console.error('[systemLogger] logError failed:', error.message)
 
-  // ── Recurrence detection ──────────────────────────────────────────────────
-  // If a matching error (same module + error_code + org) was previously marked
-  // resolved, increment its recurrence_count so operators can see the fix
-  // didn't hold. Fire-and-forget; never blocks or throws to the caller.
   if (errorCode && module) {
     ;(async () => {
       try {

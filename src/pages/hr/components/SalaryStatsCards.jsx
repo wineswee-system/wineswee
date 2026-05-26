@@ -3,7 +3,7 @@
  * Props: totalGross, totalDeductionsSum, totalNet, employeeCount
  */
 
-const fmt = (n) => `NT$ ${(n || 0).toLocaleString()}`
+import { fmtNT as fmt } from '../../../lib/currency'
 
 export default function SalaryStatsCards({ totalGross, totalDeductionsSum, totalNet, employeeCount }) {
   return (

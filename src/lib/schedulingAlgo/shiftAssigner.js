@@ -521,8 +521,8 @@ export function computeDaySlotCoverage(date, timeSlots, assignments) {
 export function runFillUnassignedFT(ctx) {
   const {
     employees, weekDates, schedule, actualTimes,
-    sortedShifts, restDayPlan, timeSlots, useTimeSlotMode,
-    wsConstraints, isPTEmp,
+    sortedShifts, shiftDefs, restDayPlan, timeSlots, useTimeSlotMode,
+    wsConstraints, isPTEmp, data,
   } = ctx
 
   // Hourly-precise slot coverage (跟 module-level computeDaySlotCoverage 同邏輯，
@@ -568,14 +568,24 @@ export function runFillUnassignedFT(ctx) {
       if (restDayPlan[emp.name].has(date)) continue
       const dow = new Date(date).getDay()
       const isWeekend = isWeekendDay(dow)
-      const eligible = sortedShifts.filter(sd => {
+      const eligibleAll = sortedShifts.filter(sd => {
         if (sd.employee_type && sd.employee_type !== 'all' && sd.employee_type !== 'full_time') return false
         if (sd.day_type === 'weekday' && isWeekend) return false
         if (sd.day_type === 'weekend' && !isWeekend) return false
         if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
         return true
       })
-      if (eligible.length === 0) continue
+      // ★ 過 isLegallyValid (H3 連續上班 / H4 跨日 11h / H13 孕婦夜班 等 hard rule)
+      //   之前 Step3b 沒過 → FT 連續上班可達 19 天嚴重違反 H3 (上限 12)
+      const eligible = eligibleAll.filter(sd =>
+        isLegallyValid(emp, sd, date, schedule, shiftDefs, weekDates, data)
+      )
+      if (eligible.length === 0) {
+        // 全 eligible 都違反 hard rule → 排休（H3 已達上限就強制休一天）
+        if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 全 eligible 違反 hard rule → 休`)
+        schedule[emp.name][date] = '休'
+        continue
+      }
       // 先 strict (hourly) 找 safe；找不到退到 binary (slot-min) — 接受 marginal partial over
       // 以維持 FT 月休精確（hard rule: ftMin 必須命中）
       const slotCov = computeDaySlotCov(date)

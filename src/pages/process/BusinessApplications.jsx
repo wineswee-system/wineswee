@@ -52,7 +52,10 @@ export default function BusinessApplications() {
             desc: t.description || '自訂表單',
             color: c.color,
             dim: c.dim,
-            action: `/process/forms/custom/${t.id}`,
+            // 對齊 HRForms：跳 FormSubmissions list 統計頁（?template=ID）
+            // 而非直接填寫頁 /process/forms/custom/${t.id}
+            // → 用戶看到統計卡 + table + 簽核鏈，跟「人力需求」一致
+            action: `/hr/forms/submissions?template=${t.id}`,
             tag: '自訂',
           }
           if (t.scope === 'business_expense') exp.push(card)

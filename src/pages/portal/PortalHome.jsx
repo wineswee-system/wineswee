@@ -94,10 +94,10 @@ export default function PortalHome() {
       setClockMode('normal')   // reset after successful clock
       setSelectedSwapId(null)
       const timeStr = nowTimeTW()
-      const extra = submittedMode === 'overtime'   ? '，加班申請已送出待審核'
-        :          submittedMode === 'leave'      ? '，已標記為請假出勤'
+      const extra = submittedMode === 'overtime'   ? '，記得另外送出加班申請單'
+        :          submittedMode === 'leave'      ? '，記得另外送出請假申請單'
         :          submittedMode === 'shift_swap' ? '，已對應換班紀錄'
-        :          submittedMode === 'outing'     ? '，已標記為外出'
+        :          submittedMode === 'outing'     ? '，記得另外送出公出申請單'
         : ''
 
       if (action === 'clock_in') {
@@ -241,17 +241,17 @@ export default function PortalHome() {
               )}
               {clockMode === 'overtime' && (
                 <span style={{ color: 'var(--accent-orange)' }}>
-                  ⚡ 加班模式：不受時段限制，系統自動建立加班申請待審核。
+                  ⚡ 加班模式：不受時段限制。打卡成功後請記得另外送出加班申請單。
                 </span>
               )}
               {clockMode === 'leave' && (
                 <span style={{ color: 'var(--accent-blue)' }}>
-                  🌴 請假模式：遲到/早退不計罰，必須在班別時段內。系統自動建立請假單，HR 補件。
+                  🌴 請假模式：遲到/早退不計罰，必須在班別時段內。打卡成功後請記得另外送出請假申請單。
                 </span>
               )}
               {clockMode === 'outing' && (
                 <span style={{ color: 'var(--accent-green)' }}>
-                  ✈️ 外出模式：免位置驗證、免時段檢查，系統自動建立公出單待審核。
+                  ✈️ 外出模式：免位置驗證、免時段檢查。打卡成功後請記得另外送出公出申請單。
                 </span>
               )}
               {clockMode === 'shift_swap' && (

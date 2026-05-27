@@ -174,6 +174,25 @@ export default function ExpenseRequests() {
 
   // Upload files to Supabase Storage
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
+    // ★ 上限：每個 request 每個 stage 最多 3 個附件（對齊 UI 3 個 slot）
+    //   之前沒 check 已有數量 → 編輯重送會累積（#128 案例累積到 6 個）
+    const MAX_ATTACHMENTS_PER_STAGE = 3
+    const { count: existing } = await supabase
+      .from('expense_request_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('request_id', requestId)
+      .eq('stage', stage)
+    const existingCount = existing || 0
+    const remaining = Math.max(0, MAX_ATTACHMENTS_PER_STAGE - existingCount)
+    if (remaining === 0) {
+      toast.error(`已達附件上限 ${MAX_ATTACHMENTS_PER_STAGE} 個，請先刪除舊附件`)
+      return []
+    }
+    if (fileList.length > remaining) {
+      toast.error(`已有 ${existingCount} 個附件，最多再傳 ${remaining} 個（其餘 ${fileList.length - remaining} 個忽略）`)
+      fileList = fileList.slice(0, remaining)
+    }
+
     const results = []
     for (const file of fileList) {
       if (!ALLOWED_TYPES.includes(file.type)) { toast.error(`「${file.name}」不支援此檔案類型`); continue }

@@ -469,12 +469,14 @@ $$;
 
 
 -- ── 4. form_submission_chain_approve — form_submissions 加 deleted_at ────────
+-- ⚠️ DEFAULT 子句必須帶上（遠端原本就有），否則 CREATE OR REPLACE 會被 PG 拒絕
+--    (SQLSTATE 42P13: cannot remove parameter defaults from existing function)
 CREATE OR REPLACE FUNCTION public.form_submission_chain_approve(
   p_id integer,
   p_approver_id integer,
   p_action text,
-  p_reason text,
-  p_reject_attachments jsonb
+  p_reason text DEFAULT NULL,
+  p_reject_attachments jsonb DEFAULT '[]'::jsonb
 ) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_sub         form_submissions;

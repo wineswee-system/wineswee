@@ -33,6 +33,20 @@ DROP TRIGGER IF EXISTS trg_log_approval_step_history ON public.leave_of_absence_
 DROP TRIGGER IF EXISTS trg_log_approval_step_history ON public.personnel_transfer_requests;
 DROP TRIGGER IF EXISTS trg_log_approval_step_history ON public.resignation_requests;
 
+-- ── 1b. Drop 新 trigger（若已存在）以便重建 ──────────────────────────────────
+-- 老闆 2026-05-27 已在 Studio 套用相同 trigger，但沒回填 migration → 此處需先 drop
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.leave_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.overtime_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.business_trips;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.clock_corrections;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.expenses;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.expense_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.form_submissions;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.leave_of_absence_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.personnel_transfer_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.resignation_requests;
+DROP TRIGGER IF EXISTS trg_ash_record_chain_step ON public.headcount_requests;
+
 
 -- ── 2. CREATE 新 trigger 把 _trg_ash_record_chain_step 掛到 10 個表 ─────────
 CREATE TRIGGER trg_ash_record_chain_step

@@ -1,10 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
-const SITE_URL = Deno.env.get('SITE_URL') || 'https://sme-ops-system.vercel.app'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': SITE_URL,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// 允許主系統 + LIFF 兩個 origin（都部署在 Vercel）
+const ALLOWED_ORIGINS = [
+  Deno.env.get('SITE_URL')         || 'https://sme-ops-system.vercel.app',
+  Deno.env.get('LIFF_ORIGIN')      || 'https://sme-ops-liff.vercel.app',
+]
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || ''
+  return {
+    'Access-Control-Allow-Origin':  ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 const ADMIN_ROLES = ['admin', 'super_admin'] as const
@@ -57,13 +64,13 @@ function ipMatchesCIDR(ip: string, cidr: string): boolean {
   return ip === trimmed
 }
 
-const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
-  status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-})
-
 // ── Edge Function ────────────────────────────────────────
 
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req)
+  const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {

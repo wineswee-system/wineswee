@@ -23,15 +23,17 @@
 
 BEGIN;
 
--- ── 1. 拔掉 shift_swap FK 強制約束 ──────────────────────────
+-- ── 1. 拔掉所有模式 ↔ FK 強制約束（全部 DROP IF EXISTS，冪等） ───────
 
--- 上班端（完全移除 chk_att_mode_fk_in；overtime/leave/outing 已在 20260529010000 放寬）
-ALTER TABLE public.attendance_records
-  DROP CONSTRAINT IF EXISTS chk_att_mode_fk_in;
+-- 舊版個別 constraint（各版本 migration 留下的不同名稱）
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_mode_outing_fk;
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_mode_overtime_fk;
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_mode_leave_fk;
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_mode_shift_swap_fk;
 
--- 下班端
-ALTER TABLE public.attendance_records
-  DROP CONSTRAINT IF EXISTS chk_att_mode_fk_out;
+-- 20260529010000 加回去的合併 constraint
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_att_mode_fk_in;
+ALTER TABLE public.attendance_records DROP CONSTRAINT IF EXISTS chk_att_mode_fk_out;
 
 
 -- ── 2. 更新 _apply_correction_to_attendance ──────────────────

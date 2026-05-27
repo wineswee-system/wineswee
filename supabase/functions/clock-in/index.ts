@@ -20,7 +20,7 @@ const ADMIN_ROLES = ['admin', 'super_admin'] as const
 //   normal     — 一般打卡，全規則
 //   overtime   — 加班；bypass 時段，attach 或自建 overtime_requests
 //   leave      — 因請假晚到/早退；免遲到罰、須在班別內，attach 或自建 leave_requests
-//   shift_swap — 換班；bypass 時段，須有「已核准」shift_swap（不能臨建）
+//   shift_swap — 換班；bypass 時段；可帶 shift_swap_id 連結換班單（選填，緊急換班可不帶）
 //   outing     — 外出/公出；bypass 時段 + 位置驗證，attach 或自建 business_trips
 const VALID_MODES = ['normal', 'overtime', 'leave', 'shift_swap', 'outing'] as const
 type ClockMode = typeof VALID_MODES[number]
@@ -341,9 +341,11 @@ serve(async (req: Request) => {
         }
 
       } else if (clockMode === 'shift_swap') {
-        if (!swapId) return jsonResp({ error: '換班打卡須帶 shift_swap_id（未通過兩段確認的換班不能用此模式）' }, 400)
-        const err = await validateShiftSwap(swapId)
-        if (err) return jsonResp({ error: err }, 400)
+        // 緊急換班可能無正式換班單；swapId 選填，有帶才驗證
+        if (swapId) {
+          const err = await validateShiftSwap(swapId)
+          if (err) return jsonResp({ error: err }, 400)
+        }
         clockStatus = '正常'  // bypass time check entirely
 
       } else if (clockMode === 'outing') {
@@ -434,8 +436,8 @@ serve(async (req: Request) => {
 
       // Mode-specific guards
       if (clockMode === 'shift_swap') {
-        if (!swapId) return jsonResp({ error: '換班打卡須帶 shift_swap_id' }, 400)
-        if (!existingRecord.shift_swap_id) {
+        // swapId 選填；緊急換班可不帶換班單；若有帶且尚未連結才驗證
+        if (swapId && !existingRecord.shift_swap_id) {
           const err = await validateShiftSwap(swapId)
           if (err) return jsonResp({ error: err }, 400)
         }
@@ -520,11 +522,12 @@ serve(async (req: Request) => {
       return jsonResp({ error: 'action 必須是 clock_in 或 clock_out' }, 400)
     }
 
-    // 非 normal / shift_swap 模式：提醒員工另外送出申請單
+    // 非 normal 模式：提醒員工另外送出申請單
     const REMINDER: Record<string, string> = {
-      overtime: '記得另外送出加班申請單，HR 核准後才計加班費',
-      leave:    '記得另外送出請假申請單，HR 核准後才計假別扣款',
-      outing:   '記得另外送出公出申請單',
+      overtime:   '記得另外送出加班申請單，HR 核准後才計加班費',
+      leave:      '記得另外送出請假申請單，HR 核准後才計假別扣款',
+      outing:     '記得另外送出公出申請單',
+      shift_swap: '換班打卡已完成，若尚未有正式換班單請記得補送申請',
     }
     return jsonResp({
       success: true,

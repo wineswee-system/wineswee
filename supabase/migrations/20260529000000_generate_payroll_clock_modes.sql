@@ -14,10 +14,12 @@
 --
 -- ★ 變動 2 — shift_swap 換班日落在休息日 → 自動算假日 OT
 --   換班（shift_swap）的本質是「原本放假那天去上班」。
---   若 attendance_records.shift_swap_id IS NOT NULL
+--   若 attendance_records.clock_in_mode = 'shift_swap'
 --   且當日是週末（DOW=0/6）或國定假日，
 --   則該天的 total_hours 納入 v_ot_hours_hd（假日加班費計算）。
 --   若同日已有 overtime_request（人工申報），則跳過避免重複。
+--   注意：改用 clock_in_mode 而非 shift_swap_id IS NOT NULL，
+--         讓緊急換班（無 FK）也能正確計算假日 OT。
 --
 -- ★ 無變動（已正確）
 --   overtime 模式：edge function 自動建 overtime_requests → 照舊從 OT requests 撈
@@ -200,7 +202,7 @@ BEGIN
         AND (ot_type IS NULL OR ot_type = 'pay');
 
       -- ★ 變動 2：shift_swap 換班落在休息日 → 補進假日 OT 時數
-      -- 條件：attendance_records.shift_swap_id IS NOT NULL
+      -- 條件：attendance_records.clock_in_mode = 'shift_swap'（緊急換班無 FK 也納入）
       --        + 當日為週末（DOW=0/6）或國定假日（holidays.is_workday=false）
       --        + 同日無已核准 overtime_request（避免重複計算）
       SELECT COALESCE(SUM(ar.total_hours), 0)
@@ -208,7 +210,7 @@ BEGIN
         FROM attendance_records ar
        WHERE ar.employee_id = rec.employee_id
          AND ar.date >= v_month_start AND ar.date <= v_month_end
-         AND ar.shift_swap_id IS NOT NULL
+         AND ar.clock_in_mode = 'shift_swap'
          AND (
            EXTRACT(DOW FROM ar.date) IN (0, 6)
            OR EXISTS (

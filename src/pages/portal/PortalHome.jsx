@@ -94,11 +94,8 @@ export default function PortalHome() {
       setClockMode('normal')   // reset after successful clock
       setSelectedSwapId(null)
       const timeStr = nowTimeTW()
-      const extra = submittedMode === 'overtime'   ? '，記得另外送出加班申請單'
-        :          submittedMode === 'leave'      ? '，記得另外送出請假申請單'
-        :          submittedMode === 'shift_swap' ? '，已對應換班紀錄'
-        :          submittedMode === 'outing'     ? '，記得另外送出公出申請單'
-        : ''
+      // 使用後端 reminder 訊息（所有非 normal 模式都有）
+      const extra = data.reminder ? `，${data.reminder}` : ''
 
       if (action === 'clock_in') {
         setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}${extra}` })
@@ -135,7 +132,7 @@ export default function PortalHome() {
     ? (clockAction === '下班打卡' ? 'var(--accent-orange)' : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))')
     : modeMeta.color
   const btnShadow = '0 4px 14px rgba(0,0,0,0.25)'
-  const swapBlocked = clockMode === 'shift_swap' && !selectedSwapId
+  // shift_swap 換班打卡不再需要換班單（緊急換班亦可使用此模式）
 
   return (
     <div className="fade-in">
@@ -184,13 +181,13 @@ export default function PortalHome() {
           {clockAction && (
             <button
               onClick={handleClock}
-              disabled={clockingIn || swapBlocked}
+              disabled={clockingIn}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
                 background: btnBackground,
-                color: '#fff', fontSize: 15, fontWeight: 700, cursor: (clockingIn || swapBlocked) ? 'not-allowed' : 'pointer',
+                color: '#fff', fontSize: 15, fontWeight: 700, cursor: clockingIn ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
-                opacity: (clockingIn || swapBlocked) ? 0.6 : 1, transition: 'all 0.2s',
+                opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
                 boxShadow: btnShadow,
               }}
             >
@@ -257,11 +254,11 @@ export default function PortalHome() {
               {clockMode === 'shift_swap' && (
                 <div>
                   <div style={{ color: 'var(--accent-purple)', marginBottom: 8 }}>
-                    🔄 換班模式：對應一張已核准的換班單；今日找到 {approvedSwaps.length} 張可用：
+                    🔄 換班模式：bypass 時段限制。若有已核准換班單可選填連結，緊急換班可直接打卡。
                   </div>
                   {approvedSwaps.length === 0 ? (
-                    <div style={{ color: 'var(--accent-red)', fontSize: 11 }}>
-                      ⚠ 今日無已核准的換班單，無法使用此模式（請先到「換班申請」走完兩段確認流程）
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                      今日無已核准換班單（緊急換班可直接打卡，之後補送換班申請）
                     </div>
                   ) : (
                     <select
@@ -273,7 +270,7 @@ export default function PortalHome() {
                         color: 'var(--text-primary)', fontSize: 12,
                       }}
                     >
-                      <option value="">— 選擇換班單 —</option>
+                      <option value="">— 不連結換班單（緊急換班）—</option>
                       {approvedSwaps.map(s => (
                         <option key={s.id} value={s.id}>
                           #{s.id} {s.requester_id === profile.id ? `我${s.requester_shift} ↔ 對方${s.target_shift}` : `對方${s.requester_shift} ↔ 我${s.target_shift}`}

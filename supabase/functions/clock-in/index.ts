@@ -324,26 +324,13 @@ serve(async (req: Request) => {
       // ── Mode dispatch ──────────────────────────────────
       if (clockMode === 'overtime') {
         clockStatus = '加班'
+        // 若員工已有加班單可帶入連結，否則打卡僅標記模式，由員工自行送出加班申請
         if (overtimeId) {
           const { data: ot } = await supabase
             .from('overtime_requests').select('id, employee_id, date').eq('id', overtimeId).maybeSingle()
           if (!ot || ot.employee_id !== emp.id || ot.date !== dateStr) {
             return jsonResp({ error: '指定的加班單無效或日期不符' }, 400)
           }
-        } else {
-          const { data: otReq, error: otErr } = await supabase
-            .from('overtime_requests').insert({
-              employee_id:     emp.id,
-              employee:        emp.name,
-              date:            dateStr,
-              hours:           0,
-              reason:          `打卡申請加班（上班 ${timeStr}，時數待確認）`,
-              status:          '待審核',
-              organization_id: (emp as any).organization_id || null,
-              source:          'clock_in',
-            }).select('id').single()
-          if (otErr) throw otErr
-          overtimeId = otReq.id
         }
 
       } else if (clockMode === 'shift_swap') {
@@ -354,21 +341,10 @@ serve(async (req: Request) => {
 
       } else if (clockMode === 'outing') {
         clockStatus = '外出'
+        // 若員工已有公出單可帶入連結，否則打卡僅標記模式，由員工自行送出公出申請
         if (tripId) {
           const err = await validateBusinessTrip(tripId)
           if (err) return jsonResp({ error: err }, 400)
-        } else {
-          const { data: trip, error: tripErr } = await supabase
-            .from('business_trips').insert({
-              employee:        emp.name,
-              destination:     null,
-              start_date:      dateStr,
-              end_date:        dateStr,
-              purpose:         `打卡申請外出（上班 ${timeStr}）`,
-              status:          '待審核',
-            }).select('id').single()
-          if (tripErr) throw tripErr
-          tripId = trip.id
         }
 
       } else if (clockMode === 'leave') {
@@ -387,25 +363,10 @@ serve(async (req: Request) => {
         }
         // Waive late penalty
         clockStatus = result.isLate ? '請假' : result.status
-
+        // 若員工已有請假單可帶入連結，否則打卡僅標記模式，由員工自行送出請假申請
         if (leaveId) {
           const err = await validateLeaveRequest(leaveId)
           if (err) return jsonResp({ error: err }, 400)
-        } else {
-          const { data: lv, error: lvErr } = await supabase
-            .from('leave_requests').insert({
-              employee_id:     emp.id,
-              employee:        emp.name,
-              type:            '事假',
-              start_date:      dateStr,
-              end_date:        dateStr,
-              days:            1,
-              reason:          `打卡申請請假調整（上班 ${timeStr}，請至 HR 補件）`,
-              status:          '待審核',
-              organization_id: (emp as any).organization_id || null,
-            }).select('id').single()
-          if (lvErr) throw lvErr
-          leaveId = lv.id
         }
 
       } else {
@@ -452,12 +413,6 @@ serve(async (req: Request) => {
       if (error) throw error
       record = data
 
-      // Back-link the auto-created overtime request to this attendance row
-      if (clockMode === 'overtime' && !attachOvertimeId && overtimeId && record?.id) {
-        await supabase.from('overtime_requests')
-          .update({ attendance_record_id: record.id }).eq('id', overtimeId)
-      }
-
     // ──────────────────────────────────────────────────────
     //   CLOCK-OUT
     // ──────────────────────────────────────────────────────
@@ -489,26 +444,10 @@ serve(async (req: Request) => {
             return jsonResp({ error: `打卡失敗：打卡時間（${timeStr}）早於辦公開始時間（${officeStartStr}）` }, 403)
           }
         }
-        if (leaveId) {
-          if (!existingRecord.leave_request_id) {
-            const err = await validateLeaveRequest(leaveId)
-            if (err) return jsonResp({ error: err }, 400)
-          }
-        } else {
-          const { data: lv, error: lvErr } = await supabase
-            .from('leave_requests').insert({
-              employee_id:     emp.id,
-              employee:        emp.name,
-              type:            '事假',
-              start_date:      dateStr,
-              end_date:        dateStr,
-              days:            1,
-              reason:          `打卡申請請假調整（下班 ${timeStr}，請至 HR 補件）`,
-              status:          '待審核',
-              organization_id: (emp as any).organization_id || null,
-            }).select('id').single()
-          if (lvErr) throw lvErr
-          leaveId = lv.id
+        // 若員工已有請假單可帶入連結，否則打卡僅標記模式
+        if (leaveId && !existingRecord.leave_request_id) {
+          const err = await validateLeaveRequest(leaveId)
+          if (err) return jsonResp({ error: err }, 400)
         }
       }
 
@@ -543,42 +482,18 @@ serve(async (req: Request) => {
       // Mode-driven status / FK propagation
       if (clockMode === 'overtime') {
         updatePayload.status = '加班'
-        const actualHours = parseFloat((workedMinutes / 60).toFixed(1))
+        // 若有連結的加班單，回填實際時數
         if (overtimeId) {
+          const actualHours = parseFloat((workedMinutes / 60).toFixed(1))
           await supabase.from('overtime_requests').update({
             hours:  actualHours,
             reason: `加班打卡（上班 ${existingRecord.clock_in} — 下班 ${timeStr}，時數 ${actualHours}h）`,
           }).eq('id', overtimeId)
-        } else {
-          const { data: otReq } = await supabase
-            .from('overtime_requests').insert({
-              employee_id:          emp.id,
-              employee:             emp.name,
-              date:                 dateStr,
-              hours:                actualHours,
-              reason:               `打卡申請加班（下班 ${timeStr}，時數 ${actualHours}h）`,
-              status:               '待審核',
-              organization_id:      (emp as any).organization_id || null,
-              source:               'clock_out',
-              attendance_record_id: existingRecord.id,
-            }).select('id').single()
-          if (otReq?.id) overtimeId = otReq.id
         }
+        // 無連結：打卡僅標記 status='加班'，由員工自行送出加班申請
       } else if (clockMode === 'outing') {
         updatePayload.status = '外出'
-        if (!tripId) {
-          const { data: trip, error: tripErr } = await supabase
-            .from('business_trips').insert({
-              employee:    emp.name,
-              destination: null,
-              start_date:  dateStr,
-              end_date:    dateStr,
-              purpose:     `打卡申請外出（下班 ${timeStr}）`,
-              status:      '待審核',
-            }).select('id').single()
-          if (tripErr) throw tripErr
-          tripId = trip.id
-        }
+        // 無連結：打卡僅標記 status='外出'，由員工自行送出公出申請
       } else if (clockMode === 'leave') {
         // Don't override status if clock_in already wrote '請假' / time-check result
       }
@@ -598,6 +513,12 @@ serve(async (req: Request) => {
       return jsonResp({ error: 'action 必須是 clock_in 或 clock_out' }, 400)
     }
 
+    // 非 normal / shift_swap 模式：提醒員工另外送出申請單
+    const REMINDER: Record<string, string> = {
+      overtime: '記得另外送出加班申請單，HR 核准後才計加班費',
+      leave:    '記得另外送出請假申請單，HR 核准後才計假別扣款',
+      outing:   '記得另外送出公出申請單',
+    }
     return jsonResp({
       success: true,
       record,
@@ -605,6 +526,7 @@ serve(async (req: Request) => {
       locationName: location?.name || '未知',
       ip: resolvedIP,
       clock_mode: clockMode,
+      reminder: REMINDER[clockMode] ?? null,
     })
 
   } catch (err) {

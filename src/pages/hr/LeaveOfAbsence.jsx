@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
-import { Plus, ArrowRight, Settings, Search, X as XIcon } from 'lucide-react'
+import { Plus, ArrowRight, Settings, Search, X as XIcon, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -14,6 +14,7 @@ import {
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { printLoaSignOff } from '../../lib/signOffAdapters'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
@@ -39,6 +40,7 @@ export default function LeaveOfAbsence() {
   const [list, setList] = useState([])
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
+  const [organization, setOrganization] = useState(null)
   const [chainSteps, setChainSteps] = useState({})
   const [activeChain, setActiveChain] = useState(null)
   const [errors, setErrors] = useState({})
@@ -72,6 +74,28 @@ export default function LeaveOfAbsence() {
     })
   }
 
+  // 下載簽呈
+  const printWithChain = async (row) => {
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const builtSteps = await buildAndResolveChain(row)
+      const approverMap = {}
+      builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+      printLoaSignOff(row, {
+        companyName: organization?.name,
+        logoUrl: organization?.logo_url,
+        chainSteps: builtSteps,
+        approverMap,
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
+  }
+
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -92,14 +116,16 @@ export default function LeaveOfAbsence() {
       .order('id', { ascending: false })
     if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
-    const [{ data: r }, { data: e }, chain] = await Promise.all([
+    const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       findActiveChainByCategory('留停', orgId),
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])
     setEmployees(e || [])
     setActiveChain(chain)
+    setOrganization(orgRes?.data || null)
 
     const uniqChainIds = [...new Set((r || []).map(x => x.approval_chain_id).filter(Boolean))]
     if (chain?.id) uniqChainIds.push(chain.id)
@@ -354,6 +380,10 @@ export default function LeaveOfAbsence() {
                               setShowForm(true)
                             }}>✏️ {(['已駁回','已退回'].includes(r.status)) ? '編輯重送' : '編輯'}</button>
                         )}
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
+                          onClick={(e) => { e.stopPropagation(); printWithChain(r) }}>
+                          <Printer size={11} />
+                        </button>
                         {canDeleteAll && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
                             刪除

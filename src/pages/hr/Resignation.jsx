@@ -88,6 +88,7 @@ export default function Resignation() {
         logoUrl: organization?.logo_url,
         chainSteps: builtSteps,
         approverMap,
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
         _win: win,
       })
     } catch (e) {
@@ -117,7 +118,7 @@ export default function Resignation() {
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       findActiveChainByCategory('離職', orgId),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])

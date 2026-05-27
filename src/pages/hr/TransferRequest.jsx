@@ -89,6 +89,7 @@ export default function TransferRequest() {
         logoUrl: organization?.logo_url,
         chainSteps: builtSteps,
         approverMap,
+        signatures: Object.fromEntries(employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])),
         _win: win,
       })
     } catch (e) {
@@ -147,7 +148,7 @@ export default function TransferRequest() {
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role,dept,store,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role,dept,store,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').order('name'),
       supabase.from('stores').select('id,name').eq('is_active', true).order('name'),
       findActiveChainByCategory('異動', orgId),

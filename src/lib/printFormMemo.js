@@ -24,6 +24,7 @@ export function printFormMemo({
   logoUrl = '',
   chainSteps = [],
   approverMap = {},
+  signatures = {},
 }) {
   const fields = template?.fields || []
 
@@ -73,6 +74,7 @@ export function printFormMemo({
     rejectReason: submission?.reject_reason || '',
     chainSteps,
     approverMap,
+    signatures,
     finalApprover: submission?.approver
       ? {
           name: submission.approver.name || submission.approver_name || '',

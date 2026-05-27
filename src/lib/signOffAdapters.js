@@ -308,6 +308,103 @@ export function printHireApprovalSignOff(ol, opts = {}) {
 
 // ─── 7. 人事異動 personnel_transfer_requests ───
 // row 預期已 join employee:employees(...) + approver + departments / stores 對照
+// ─── 9. 留停申請 leave_of_absence_requests ───
+export function printLoaSignOff(row, opts = {}) {
+  if (!row) return
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: '留職停薪申請',
+    docNo: row.id,
+    applicant: {
+      name: row.employee?.name || '',
+      name_en: row.employee?.name_en,
+      dept: opts.dept || row.employee?.position || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `${row.reason_type || '留停'}（${fmtDate(row.start_date)} ~ ${fmtDate(row.planned_end_date)}）`,
+    sections: [
+      {
+        title: '說明',
+        rows: [
+          ['留停類型', row.reason_type || ''],
+          ['開始日期', fmtDate(row.start_date)],
+          ['預計結束', fmtDate(row.planned_end_date)],
+          ['原因說明', row.reason_detail || ''],
+        ],
+      },
+      ...(row.handover_notes ? [{ title: '交接事項', text: row.handover_notes }] : []),
+    ],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
+// ─── 10. 自訂表單 form_submissions ───
+// row: form_submission row（data 用前先 _resolve_form_submission_data 解 picker）
+// opts: { template: {name, fields}, applicantName, applicantDept, ... }
+export function printFormSubmissionSignOff(row, opts = {}) {
+  if (!row || !opts.template) return
+  const base = baseOpts(opts)
+  const tpl = opts.template
+  const data = row.data_resolved || row.data || {}
+
+  const fmtVal = (val, type) => {
+    if (val == null || val === '') return ''
+    if (Array.isArray(val)) return val.join(', ')
+    if (type === 'date') return fmtDate(val)
+    if (typeof val === 'object') return JSON.stringify(val)
+    return String(val)
+  }
+  const rows = (tpl.fields || [])
+    .filter(f => f.type !== 'file')
+    .map(f => [f.label || f.key, fmtVal(data[f.key], f.type)])
+
+  // file 欄位 → attachments
+  const fieldAtts = []
+  for (const f of (tpl.fields || []).filter(f => f.type === 'file')) {
+    const v = data[f.key]
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string') fieldAtts.push({ url: item, name: item.split('/').pop() || '附件' })
+        else if (item?.url) fieldAtts.push(item)
+      }
+    } else if (typeof v === 'string' && v) {
+      fieldAtts.push({ url: v, name: v.split('/').pop() || '附件' })
+    }
+  }
+  const attachments = [...base.attachments, ...fieldAtts]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: tpl.name || '自訂表單',
+    docNo: row.id,
+    applicant: { name: opts.applicantName || '', dept: opts.applicantDept || '' },
+    date: fmtDate(row.created_at),
+    subject: tpl.name || '',
+    sections: [{ title: '申請內容', rows }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    simpleSign: ['呈文者', '直屬主管', '主管核章'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
 export function printTransferSignOff(row, opts = {}) {
   if (!row) return
   // 兼容兩種 row shape：(a) 已 join old_dept/new_dept/old_store/new_store 物件

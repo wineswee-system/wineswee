@@ -214,6 +214,28 @@ export default function Salary() {
   // Real-time deduction preview
   const deductions = useMemo(() => computeDeductions(form, brackets), [form, brackets])
 
+  // ★ 這三個 useMemo 必須在早返（loading/error）之前，否則 hooks 順序不一致 → React #310
+  // O(1) name-keyed employee lookup
+  const empNameMap = useMemo(() => {
+    const m = {}
+    employees.forEach(e => { m[e.name] = e })
+    return m
+  }, [employees])
+
+  const filtered = useMemo(() => records.filter(r =>
+    (!month || !r.month || r.month === month) &&
+    (deptFilter === '' || (empNameMap[r.employee]?.dept || '') === deptFilter) &&
+    (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
+  ), [records, month, deptFilter, storeFilter, empNameMap])
+
+  // Stats — derived from filtered; recomputed only when filtered changes
+  const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
+    totalGross:        filtered.reduce((s, r) => s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0), 0),
+    totalDeductionsSum: filtered.reduce((s, r) => s + (r.deductions || 0), 0),
+    totalNet:          filtered.reduce((s, r) => s + (r.net_salary || 0), 0),
+    employeeCount:     filtered.length,
+  }), [filtered])
+
   // ── Create / Edit submit ──
   const handleSubmit = async () => {
     if (!form.employee) return
@@ -731,29 +753,8 @@ export default function Salary() {
     </div>
   )
 
-  // O(1) name-keyed employee lookup (built once per employees change, not on every render)
-  const empNameMap = useMemo(() => {
-    const m = {}
-    employees.forEach(e => { m[e.name] = e })
-    return m
-  }, [employees])
-
   const getEmpDept = (name) => empNameMap[name]?.dept || ''
   const getEmpStore = (name) => empNameMap[name]?.store || ''
-
-  const filtered = useMemo(() => records.filter(r =>
-    (!month || !r.month || r.month === month) &&
-    (deptFilter === '' || (empNameMap[r.employee]?.dept || '') === deptFilter) &&
-    (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
-  ), [records, month, deptFilter, storeFilter, empNameMap])
-
-  // Stats — derived from filtered; recomputed only when filtered changes
-  const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
-    totalGross:        filtered.reduce((s, r) => s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0), 0),
-    totalDeductionsSum: filtered.reduce((s, r) => s + (r.deductions || 0), 0),
-    totalNet:          filtered.reduce((s, r) => s + (r.net_salary || 0), 0),
-    employeeCount:     filtered.length,
-  }), [filtered])
 
   const getBonusDetail = (name) => bonusRecords.filter(b => b.employee_name === name && b.period === month)
 

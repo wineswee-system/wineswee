@@ -9,6 +9,32 @@ import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
+// 4 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode
+const MODE_TAG = {
+  overtime:   { label: '加班', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
+  leave:      { label: '請假', color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)' },
+  shift_swap: { label: '換班', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
+  outing:     { label: '外出', color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
+}
+function ClockModeTags({ inMode, outMode }) {
+  const tagStyle = (m) => ({
+    padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+    background: MODE_TAG[m].dim, color: MODE_TAG[m].color, whiteSpace: 'nowrap',
+  })
+  const showIn  = inMode  && inMode  !== 'normal' && MODE_TAG[inMode]
+  const showOut = outMode && outMode !== 'normal' && MODE_TAG[outMode]
+  if (!showIn && !showOut) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>
+  if (showIn && showOut && inMode === outMode) {
+    return <span style={tagStyle(inMode)}>{MODE_TAG[inMode].label}</span>
+  }
+  return (
+    <span style={{ display: 'inline-flex', gap: 3, flexWrap: 'wrap' }}>
+      {showIn  && <span style={tagStyle(inMode)}>上{MODE_TAG[inMode].label}</span>}
+      {showOut && <span style={tagStyle(outMode)}>下{MODE_TAG[outMode].label}</span>}
+    </span>
+  )
+}
+
 export default function Attendance() {
   const { profile, role } = useAuth()
   const { handleError } = useErrorHandler('hr')
@@ -240,8 +266,8 @@ export default function Attendance() {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無出勤紀錄</div>
           )}
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', 'IP 位址', '狀態', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', 'IP 位址', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -254,7 +280,7 @@ export default function Attendance() {
                 const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && isToday && !r.clock_in
                 return (
-                  <VirtualRow key={r.id} style={{ ...style, display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
+                  <VirtualRow key={r.id} style={{ ...style, display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
@@ -268,8 +294,11 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px' }}>
                       {isNotClocked
                         ? <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
-                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
                       }
+                    </div>
+                    <div style={{ padding: '4px 8px' }}>
+                      {!isNotClocked && <ClockModeTags inMode={r.clock_in_mode} outMode={r.clock_out_mode} />}
                     </div>
                     <div style={{ padding: '4px 8px' }}>
                       {(isNotClocked || canClockIn || canClockOut) && (

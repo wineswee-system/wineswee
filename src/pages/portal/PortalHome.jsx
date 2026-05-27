@@ -27,8 +27,9 @@ export default function PortalHome() {
   const [store, setStore] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
-  const [isOvertime, setIsOvertime] = useState(false)
-  const [isLeaveAdj, setIsLeaveAdj] = useState(false)
+  const [clockMode, setClockMode] = useState('normal')      // normal | overtime | leave | shift_swap | outing
+  const [approvedSwaps, setApprovedSwaps] = useState([])    // 已核准且 swap_date=今日 的換班單（換班模式必選）
+  const [selectedSwapId, setSelectedSwapId] = useState(null)
 
   const today = todayTW()
   const hour = new Date().getHours()
@@ -49,6 +50,12 @@ export default function PortalHome() {
     supabase.from('leave_requests').select('*')
       .eq('employee_id', profile.id).order('id', { ascending: false }).limit(5)
       .then(({ data }) => setRecentLeaves(data || []))
+
+    // 抓今天可用的「已核准」換班單 — 換班模式打卡必須對應一張
+    supabase.from('shift_swaps').select('id, swap_date, requester_shift, target_shift, requester_id, target_id')
+      .eq('status', '已核准').eq('swap_date', today)
+      .or(`requester_id.eq.${profile.id},target_id.eq.${profile.id}`)
+      .then(({ data }) => setApprovedSwaps(data || []))
 
     // Load employee's store for clock-in validation
     supabase.from('employees').select('store_id').eq('id', profile.id).maybeSingle()
@@ -78,16 +85,19 @@ export default function PortalHome() {
         lng: result.lng,
         accuracy: result.accuracy ?? null,   // ?? not || — 0 is a valid GPS accuracy
         ip: result.ip,
-        is_overtime: isOvertime,
-        is_leave_adjustment: isLeaveAdj,
+        clock_mode: clockMode,
+        shift_swap_id: clockMode === 'shift_swap' ? selectedSwapId : null,
       })
 
       setTodayAttendance(data.record)
-      setIsOvertime(false)   // reset after successful clock
-      setIsLeaveAdj(false)
+      const submittedMode = clockMode
+      setClockMode('normal')   // reset after successful clock
+      setSelectedSwapId(null)
       const timeStr = nowTimeTW()
-      const extra = isOvertime ? '，加班申請已送出待審核'
-        : isLeaveAdj  ? '，已標記為請假出勤'
+      const extra = submittedMode === 'overtime'   ? '，加班申請已送出待審核'
+        :          submittedMode === 'leave'      ? '，已標記為請假出勤'
+        :          submittedMode === 'shift_swap' ? '，已對應換班紀錄'
+        :          submittedMode === 'outing'     ? '，已標記為外出'
         : ''
 
       if (action === 'clock_in') {
@@ -112,13 +122,20 @@ export default function PortalHome() {
     ? todayAttendance.clock_out ? null : '下班打卡'
     : '上班打卡'
 
-  // Button style vars — extracted so the JSX isn't a 3-level ternary inline
-  const btnBackground = (isOvertime || clockAction === '下班打卡')
-    ? 'var(--accent-orange)'
-    : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))'
-  const btnShadow = isOvertime
-    ? '0 4px 14px rgba(249,115,22,0.35)'
-    : '0 4px 14px rgba(34,211,238,0.3)'
+  // Mode-driven button colour
+  const MODE_META = {
+    normal:     { label: '一般',  color: 'var(--accent-cyan)',   dim: 'var(--accent-cyan-dim)',   icon: '🕒' },
+    overtime:   { label: '加班',  color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', icon: '⚡' },
+    leave:      { label: '請假',  color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)',   icon: '🌴' },
+    shift_swap: { label: '換班',  color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', icon: '🔄' },
+    outing:     { label: '外出',  color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)',  icon: '✈️' },
+  }
+  const modeMeta = MODE_META[clockMode] || MODE_META.normal
+  const btnBackground = clockMode === 'normal'
+    ? (clockAction === '下班打卡' ? 'var(--accent-orange)' : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))')
+    : modeMeta.color
+  const btnShadow = '0 4px 14px rgba(0,0,0,0.25)'
+  const swapBlocked = clockMode === 'shift_swap' && !selectedSwapId
 
   return (
     <div className="fade-in">
@@ -167,84 +184,107 @@ export default function PortalHome() {
           {clockAction && (
             <button
               onClick={handleClock}
-              disabled={clockingIn}
+              disabled={clockingIn || swapBlocked}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
                 background: btnBackground,
-                color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                color: '#fff', fontSize: 15, fontWeight: 700, cursor: (clockingIn || swapBlocked) ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
-                opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
+                opacity: (clockingIn || swapBlocked) ? 0.6 : 1, transition: 'all 0.2s',
                 boxShadow: btnShadow,
               }}
             >
               {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}
-              {clockingIn ? '定位中...' : isOvertime ? `加班${clockAction}` : isLeaveAdj ? `請假${clockAction}` : clockAction}
+              {clockingIn ? '定位中...' : clockMode === 'normal' ? clockAction : `${modeMeta.label}${clockAction}`}
             </button>
           )}
         </div>
 
-        {/* ── Overtime checkbox ── */}
+        {/* ── 4 模式打卡選擇 ── */}
         {clockAction && (
-          <label
-            style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isLeaveAdj ? 'not-allowed' : 'pointer',
-              padding: '8px 12px', borderRadius: 10, marginBottom: 8,
-              background: isOvertime ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)',
-              border: `1px solid ${isOvertime ? 'var(--accent-orange)' : 'transparent'}`,
-              transition: 'all 0.2s', userSelect: 'none',
-              opacity: isLeaveAdj ? 0.4 : 1,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isOvertime}
-              disabled={isLeaveAdj}
-              onChange={e => { setIsOvertime(e.target.checked); if (e.target.checked) setIsLeaveAdj(false) }}
-              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-orange)', cursor: isLeaveAdj ? 'not-allowed' : 'pointer', flexShrink: 0 }}
-            />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: isOvertime ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>
-                加班打卡
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
-                {isOvertime
-                  ? '✔ 不受時段限制，系統將自動送出加班申請（待主管審核）'
-                  : '勾選後可在排班時段外打卡，並自動建立加班申請'}
-              </div>
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 10 }}>
+              {Object.entries(MODE_META).map(([key, m]) => {
+                const active = clockMode === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setClockMode(key); if (key !== 'shift_swap') setSelectedSwapId(null) }}
+                    style={{
+                      padding: '10px 6px', borderRadius: 10, cursor: 'pointer',
+                      background: active ? m.dim : 'var(--bg-secondary)',
+                      border: `1px solid ${active ? m.color : 'transparent'}`,
+                      color: active ? m.color : 'var(--text-secondary)',
+                      fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{m.icon}</span>
+                    {m.label}
+                  </button>
+                )
+              })}
             </div>
-          </label>
-        )}
 
-        {/* ── Leave-adjustment checkbox ── */}
-        {clockAction && (
-          <label
-            style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isOvertime ? 'not-allowed' : 'pointer',
-              padding: '8px 12px', borderRadius: 10, marginBottom: 12,
-              background: isLeaveAdj ? 'var(--accent-blue-dim)' : 'var(--bg-secondary)',
-              border: `1px solid ${isLeaveAdj ? 'var(--accent-blue)' : 'transparent'}`,
-              transition: 'all 0.2s', userSelect: 'none',
-              opacity: isOvertime ? 0.4 : 1,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isLeaveAdj}
-              disabled={isOvertime}
-              onChange={e => { setIsLeaveAdj(e.target.checked); if (e.target.checked) setIsOvertime(false) }}
-              style={{ width: 16, height: 16, marginTop: 1, accentColor: 'var(--accent-blue)', cursor: isOvertime ? 'not-allowed' : 'pointer', flexShrink: 0 }}
-            />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: isLeaveAdj ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
-                延遲／提早打卡（因請假）
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
-                {isLeaveAdj
-                  ? '✔ 遲到上班或提早下班不計罰，標記為請假出勤（須在班別時段內）'
-                  : '今日有請假？勾選後遲到／早退不計入遲到紀錄'}
-              </div>
+            {/* ── 模式說明 + 換班單選擇器 ── */}
+            <div style={{
+              padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+              background: modeMeta.dim,
+              border: `1px solid ${modeMeta.color}`,
+              fontSize: 12, lineHeight: 1.5,
+            }}>
+              {clockMode === 'normal' && (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  依排班/辦公時間打卡，超出容許範圍會記遲到/早退。
+                </span>
+              )}
+              {clockMode === 'overtime' && (
+                <span style={{ color: 'var(--accent-orange)' }}>
+                  ⚡ 加班模式：不受時段限制，系統自動建立加班申請待審核。
+                </span>
+              )}
+              {clockMode === 'leave' && (
+                <span style={{ color: 'var(--accent-blue)' }}>
+                  🌴 請假模式：遲到/早退不計罰，必須在班別時段內。系統自動建立請假單，HR 補件。
+                </span>
+              )}
+              {clockMode === 'outing' && (
+                <span style={{ color: 'var(--accent-green)' }}>
+                  ✈️ 外出模式：免位置驗證、免時段檢查，系統自動建立公出單待審核。
+                </span>
+              )}
+              {clockMode === 'shift_swap' && (
+                <div>
+                  <div style={{ color: 'var(--accent-purple)', marginBottom: 8 }}>
+                    🔄 換班模式：對應一張已核准的換班單；今日找到 {approvedSwaps.length} 張可用：
+                  </div>
+                  {approvedSwaps.length === 0 ? (
+                    <div style={{ color: 'var(--accent-red)', fontSize: 11 }}>
+                      ⚠ 今日無已核准的換班單，無法使用此模式（請先到「換班申請」走完兩段確認流程）
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedSwapId || ''}
+                      onChange={e => setSelectedSwapId(e.target.value ? parseInt(e.target.value) : null)}
+                      style={{
+                        width: '100%', padding: '6px 10px', borderRadius: 6,
+                        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-primary)', fontSize: 12,
+                      }}
+                    >
+                      <option value="">— 選擇換班單 —</option>
+                      {approvedSwaps.map(s => (
+                        <option key={s.id} value={s.id}>
+                          #{s.id} {s.requester_id === profile.id ? `我${s.requester_shift} ↔ 對方${s.target_shift}` : `對方${s.requester_shift} ↔ 我${s.target_shift}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
-          </label>
+          </>
         )}
 
         {/* Clock message */}

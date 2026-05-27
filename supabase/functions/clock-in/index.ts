@@ -9,6 +9,15 @@ const corsHeaders = {
 
 const ADMIN_ROLES = ['admin', 'super_admin'] as const
 
+// ── Mode catalog ─────────────────────────────────────────
+//   normal     — 一般打卡，全規則
+//   overtime   — 加班；bypass 時段，attach 或自建 overtime_requests
+//   leave      — 因請假晚到/早退；免遲到罰、須在班別內，attach 或自建 leave_requests
+//   shift_swap — 換班；bypass 時段，須有「已核准」shift_swap（不能臨建）
+//   outing     — 外出/公出；bypass 時段 + 位置驗證，attach 或自建 business_trips
+const VALID_MODES = ['normal', 'overtime', 'leave', 'shift_swap', 'outing'] as const
+type ClockMode = typeof VALID_MODES[number]
+
 // ── Helpers ──────────────────────────────────────────────
 
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -48,12 +57,14 @@ function ipMatchesCIDR(ip: string, cidr: string): boolean {
   return ip === trimmed
 }
 
+const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+})
+
 // ── Edge Function ────────────────────────────────────────
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     const supabase = createClient(
@@ -63,113 +74,81 @@ serve(async (req: Request) => {
 
     const body = await req.json()
     const {
-      employee_id,     // employee id (INT) — primary lookup
-      line_user_id,    // LINE user ID — lookup via line_users table
-      employee,        // employee name (string) — legacy fallback
+      employee_id, line_user_id, employee,
       action,
       lat, lng, accuracy,
       ip: clientIP,
-      is_overtime         = false,  // 加班模式：bypass tolerance windows, auto-create overtime_requests
-      is_leave_adjustment = false,  // 請假模式：waive late/early-leave penalty, must stay within shift window
+      // 4-mode tag — replaces old is_overtime / is_leave_adjustment booleans
+      clock_mode: rawMode = 'normal',
+      // Optional attach to existing request rows
+      overtime_request_id: attachOvertimeId = null,
+      leave_request_id:    attachLeaveId    = null,
+      shift_swap_id:       attachSwapId     = null,
+      business_trip_id:    attachTripId     = null,
     } = body
 
-    if (!action) {
-      return new Response(JSON.stringify({ error: '缺少必要參數 (action)' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    if (!action) return jsonResp({ error: '缺少必要參數 (action)' }, 400)
     if (!employee_id && !line_user_id && !employee) {
-      return new Response(JSON.stringify({ error: '缺少必要參數 (employee_id, line_user_id, 或 employee)' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResp({ error: '缺少必要參數 (employee_id, line_user_id, 或 employee)' }, 400)
     }
+
+    const clockMode = (VALID_MODES.includes(rawMode) ? rawMode : 'normal') as ClockMode
 
     // ── JWT required for all non-LINE paths ─────────────────
     let jwtAuthEmp: any = null
-
     if (!line_user_id) {
       const authHeader = req.headers.get('Authorization')
-      if (!authHeader) {
-        return new Response(JSON.stringify({ error: '未授權：請提供 Authorization header' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
+      if (!authHeader) return jsonResp({ error: '未授權：請提供 Authorization header' }, 401)
       const token = authHeader.replace('Bearer ', '')
       const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-      if (authError || !user) {
-        return new Response(JSON.stringify({ error: '憑證無效' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-      // Fetch the requesting user's employee record — used for proxy guard below.
+      if (authError || !user) return jsonResp({ error: '憑證無效' }, 401)
       const { data: ae } = await supabase
         .from('employees').select('id, role, roles(name)').eq('email', user.email).maybeSingle()
       jwtAuthEmp = ae
     }
 
-    // ── Resolve employee (id is INT) ─────────────────────
+    // ── Resolve employee ─────────────────────────────────
     let emp: any = null
-
     if (employee_id) {
-      const { data } = await supabase
-        .from('employees').select('*').eq('id', employee_id).maybeSingle()
+      const { data } = await supabase.from('employees').select('*').eq('id', employee_id).maybeSingle()
       emp = data
     } else if (line_user_id) {
       const { data: ela } = await supabase
         .from('employee_line_accounts')
-        .select('employee_id')
-        .eq('line_user_id', line_user_id)
-        .eq('is_verified', true)
-        .limit(1)
-        .maybeSingle()
+        .select('employee_id').eq('line_user_id', line_user_id).eq('is_verified', true)
+        .limit(1).maybeSingle()
       if (ela?.employee_id) {
-        const { data } = await supabase
-          .from('employees').select('*').eq('id', ela.employee_id).maybeSingle()
+        const { data } = await supabase.from('employees').select('*').eq('id', ela.employee_id).maybeSingle()
         emp = data
       }
     } else if (employee) {
-      const { data } = await supabase
-        .from('employees').select('*').eq('name', employee).maybeSingle()
+      const { data } = await supabase.from('employees').select('*').eq('name', employee).maybeSingle()
       emp = data
     }
+    if (!emp) return jsonResp({ error: '找不到員工資料' }, 404)
 
-    if (!emp) {
-      return new Response(JSON.stringify({ error: '找不到員工資料' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Proxy guard — covers all identifier forms (employee_id INT, line_user_id, name).
-    // Only admin/super_admin may clock in on behalf of another employee.
+    // Proxy guard — only admin/super_admin may clock in for someone else.
     if (jwtAuthEmp && jwtAuthEmp.id !== emp.id) {
       const authRole = (jwtAuthEmp?.roles as any)?.name ?? jwtAuthEmp?.role
-      if (!ADMIN_ROLES.includes(authRole)) {
-        return new Response(JSON.stringify({ error: '無權代替他人打卡' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
+      if (!ADMIN_ROLES.includes(authRole)) return jsonResp({ error: '無權代替他人打卡' }, 403)
     }
 
-    // ── Get location config (stores table) ──
+    // ── Store / location config ──────────────────────────
     let location: any = null
-
     if (emp.store_id) {
       const { data: store } = await supabase
         .from('stores')
         .select('id, name, lat, lng, clock_radius, allowed_wifi, clock_in_method, early_clock_minutes, has_office_hours, office_hours_start, office_hours_end, late_tolerance_minutes')
-        .eq('id', emp.store_id)
-        .maybeSingle()
+        .eq('id', emp.store_id).maybeSingle()
       location = store
     }
 
-    // Resolve IP
     const serverIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('cf-connecting-ip')
-      || clientIP
+      || req.headers.get('cf-connecting-ip') || clientIP
     const resolvedIP = serverIP || clientIP || null
 
-    // ── GPS / WiFi Validation ────────────────────────────
-    // GPS/WiFi always enforced — overtime only bypasses TIME windows, not location.
+    // ── GPS / WiFi validation (bypassed only for outing mode) ───
+    const skipLocation = clockMode === 'outing'
     const hasGPSConfig = !!(location?.lat != null && location?.lng != null)
     const hasWifiConfig = !!(location?.allowed_wifi && location.allowed_wifi.length > 0)
     const GPS_ACCURACY_THRESHOLD = 200
@@ -177,10 +156,10 @@ serve(async (req: Request) => {
 
     let gpsPass = false
     let wifiPass = false
-    let method = 'none'
+    let method: string = skipLocation ? 'bypass' : 'none'
     const reasons: string[] = []
 
-    if (location && (hasGPSConfig || hasWifiConfig)) {
+    if (!skipLocation && location && (hasGPSConfig || hasWifiConfig)) {
       if (hasGPSConfig) {
         if (lat != null && lng != null && accuracy != null && accuracy <= GPS_ACCURACY_THRESHOLD) {
           const dist = haversineMetres(lat, lng, Number(location.lat), Number(location.lng))
@@ -193,7 +172,6 @@ serve(async (req: Request) => {
           reasons.push('未提供 GPS 資料')
         }
       }
-
       if (hasWifiConfig) {
         if (resolvedIP) {
           wifiPass = location.allowed_wifi.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
@@ -202,26 +180,19 @@ serve(async (req: Request) => {
           reasons.push('無法取得網路 IP')
         }
       }
-
       if (requireGPSOnly && !gpsPass) {
-        return new Response(JSON.stringify({
+        return jsonResp({
           error: '打卡失敗：此據點要求 GPS 驗證',
-          reasons: ['此據點設定僅允許 GPS 打卡，WiFi 驗證不適用', ...reasons],
-          ip: resolvedIP,
-        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          reasons: ['此據點設定僅允許 GPS 打卡，WiFi 驗證不適用', ...reasons], ip: resolvedIP,
+        }, 403)
       }
-
       if (!gpsPass && !wifiPass) {
-        return new Response(JSON.stringify({
-          error: '打卡失敗：位置驗證未通過',
-          reasons,
-          ip: resolvedIP,
-        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        return jsonResp({ error: '打卡失敗：位置驗證未通過', reasons, ip: resolvedIP }, 403)
       }
       method = gpsPass ? 'gps' : 'wifi'
     }
 
-    // ── Taiwan time ─────────────────────────────────────
+    // ── Taiwan time ──────────────────────────────────────
     const now = new Date()
     const taiwanNow = new Date(now.getTime() + 8 * 60 * 60 * 1000)
     const dateStr = taiwanNow.toISOString().slice(0, 10)
@@ -230,53 +201,44 @@ serve(async (req: Request) => {
     const timeStr = `${String(hours24).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
     const currentMinutes = hours24 * 60 + minutes
 
-    // Existing record (duplicate guard + clock_out reference)
     const { data: existingRecord } = await supabase
       .from('attendance_records').select('*')
       .eq('employee_id', emp.id).eq('date', dateStr).maybeSingle()
 
-    // ── Late / early-clock check (skipped in overtime mode) ───────────────────
+    // ── Shift / office-hours resolver ────────────────────
     const determineLateStatus = async (): Promise<{
       status: string
       isLate: boolean
       lateMinutes: number
       tooEarly: boolean
       tooEarlyMinutes: number
-      resolvedEndMinutes: number | null  // shift/office-hours end in minutes-since-midnight (for leave-adj check)
+      resolvedEndMinutes: number | null
     }> => {
       const storeTolerance: number = location?.late_tolerance_minutes ?? 5
       const earlyWindow: number    = location?.early_clock_minutes    ?? 30
 
-      // `shift` = shift name, `actual_start` = per-day override.
-      // shift_type / start_time do NOT exist on schedules — they live on shift_definitions.
       const { data: schedule } = await supabase
         .from('schedules')
         .select('shift, actual_start')
-        .eq('employee_id', emp.id)
-        .eq('date', dateStr)
-        .maybeSingle()
+        .eq('employee_id', emp.id).eq('date', dateStr).maybeSingle()
 
-      // Resolve the effective shift start: actual_start override → shift_definitions lookup
       let resolvedStartTime: string | null = null
-      let resolvedEndTime:   string | null = null   // end_time from shift_definitions
+      let resolvedEndTime:   string | null = null
 
       if (schedule?.actual_start) {
         resolvedStartTime = String(schedule.actual_start).slice(0, 5)
-        // no per-day end override — fall through to shift_def or office hours below
       } else if (schedule?.shift) {
         const { data: shiftDef } = await supabase
           .from('shift_definitions')
           .select('start_time, end_time')
           .eq('name', schedule.shift)
           .or(`store_id.eq.${emp.store_id ?? 0},store_id.is.null`)
-          .order('store_id', { ascending: false, nullsFirst: false })  // prefer store-specific over global
-          .limit(1)
-          .maybeSingle()
+          .order('store_id', { ascending: false, nullsFirst: false })
+          .limit(1).maybeSingle()
         resolvedStartTime = shiftDef?.start_time?.slice(0, 5) ?? null
         resolvedEndTime   = shiftDef?.end_time?.slice(0, 5)   ?? null
       }
 
-      // Resolve shift end: shift_definitions.end_time → office_hours_end → null
       const officeEndStr: string | null = (location?.has_office_hours && location?.office_hours_end)
         ? String(location.office_hours_end).slice(0, 5) : null
       const effectiveEndStr = resolvedEndTime ?? officeEndStr
@@ -289,34 +251,26 @@ serve(async (req: Request) => {
       if (resolvedStartTime) {
         const [startH, startM] = resolvedStartTime.split(':').map(Number)
         const shiftStartMinutes = startH * 60 + startM
-
-        // Early check — no cross-midnight correction needed (schedule is date-scoped)
         const minsUntilShift = shiftStartMinutes - currentMinutes
         if (minsUntilShift > earlyWindow) {
           return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift, resolvedEndMinutes }
         }
-
-        // Late check
         let lateMinutes = currentMinutes - shiftStartMinutes
-        if (lateMinutes < -720) lateMinutes += 1440  // cross-midnight night shift
+        if (lateMinutes < -720) lateMinutes += 1440
         if (lateMinutes > storeTolerance) {
           return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
         }
         return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
       }
 
-      // Fallback: store office hours start, else 09:00
       const officeStart: string | null = (location?.has_office_hours && location?.office_hours_start)
-        ? String(location.office_hours_start).slice(0, 5)
-        : null
+        ? String(location.office_hours_start).slice(0, 5) : null
       const [fbH, fbM] = officeStart ? officeStart.split(':').map(Number) : [9, 0]
       const shiftStartMinutes = fbH * 60 + fbM
-
       const minsUntilShift = shiftStartMinutes - currentMinutes
       if (minsUntilShift > earlyWindow) {
         return { status: '提早打卡', isLate: false, lateMinutes: 0, tooEarly: true, tooEarlyMinutes: minsUntilShift, resolvedEndMinutes }
       }
-
       const lateMinutes = currentMinutes - shiftStartMinutes
       if (lateMinutes > storeTolerance) {
         return { status: '遲到', isLate: true, lateMinutes, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
@@ -324,75 +278,148 @@ serve(async (req: Request) => {
       return { status: '正常', isLate: false, lateMinutes: 0, tooEarly: false, tooEarlyMinutes: 0, resolvedEndMinutes }
     }
 
-    // ── clock_in ─────────────────────────────────────────
+    // ── Attach validators (for modes that accept existing request rows) ─
+    const validateShiftSwap = async (swapId: number): Promise<string | null> => {
+      const { data: swap } = await supabase
+        .from('shift_swaps').select('id, requester_id, target_id, swap_date, status').eq('id', swapId).maybeSingle()
+      if (!swap) return '找不到指定的換班單'
+      if (swap.status !== '已核准')       return `換班單尚未核准（目前狀態：${swap.status}）`
+      if (swap.swap_date !== dateStr)     return `換班單日期（${swap.swap_date}）與今日不符`
+      if (swap.requester_id !== emp.id && swap.target_id !== emp.id) return '此換班單與你無關'
+      return null
+    }
+    const validateLeaveRequest = async (lvId: number): Promise<string | null> => {
+      const { data: lv } = await supabase
+        .from('leave_requests').select('id, employee_id, start_date, end_date, status').eq('id', lvId).maybeSingle()
+      if (!lv) return '找不到指定的請假單'
+      if (lv.employee_id !== emp.id) return '此請假單與你無關'
+      if (lv.start_date > dateStr || lv.end_date < dateStr) return `請假單期間（${lv.start_date} ~ ${lv.end_date}）不涵蓋今日`
+      return null
+    }
+    const validateBusinessTrip = async (tripId: number): Promise<string | null> => {
+      const { data: trip } = await supabase
+        .from('business_trips').select('id, employee, start_date, end_date').eq('id', tripId).maybeSingle()
+      if (!trip) return '找不到指定的公出單'
+      if (trip.employee !== emp.name) return '此公出單與你無關'
+      if (trip.start_date && trip.start_date > dateStr) return `公出單尚未開始（${trip.start_date}）`
+      if (trip.end_date   && trip.end_date   < dateStr) return `公出單已結束（${trip.end_date}）`
+      return null
+    }
+
+    // ──────────────────────────────────────────────────────
+    //   CLOCK-IN
+    // ──────────────────────────────────────────────────────
     let record: any
     if (action === 'clock_in') {
-      if (existingRecord?.clock_in) {
-        return new Response(JSON.stringify({ error: '今日已打過上班卡' }), {
-          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
+      if (existingRecord?.clock_in) return jsonResp({ error: '今日已打過上班卡' }, 409)
 
-      let clockStatus = '正常'
-      let isLate = false
-      let lateMinutes = 0
-      let overtimeRequestId: number | null = null
+      let clockStatus  = '正常'
+      let isLate       = false
+      let lateMinutes  = 0
+      let overtimeId   = attachOvertimeId
+      let leaveId      = attachLeaveId
+      let swapId       = attachSwapId
+      let tripId       = attachTripId
 
-      if (is_overtime) {
-        // ── Overtime mode: skip all time-window checks ──────────────────────
-        // Auto-create a pending overtime_requests row; hours filled at clock_out.
+      // ── Mode dispatch ──────────────────────────────────
+      if (clockMode === 'overtime') {
         clockStatus = '加班'
+        if (overtimeId) {
+          const { data: ot } = await supabase
+            .from('overtime_requests').select('id, employee_id, date').eq('id', overtimeId).maybeSingle()
+          if (!ot || ot.employee_id !== emp.id || ot.date !== dateStr) {
+            return jsonResp({ error: '指定的加班單無效或日期不符' }, 400)
+          }
+        } else {
+          const { data: otReq, error: otErr } = await supabase
+            .from('overtime_requests').insert({
+              employee_id:     emp.id,
+              employee:        emp.name,
+              date:            dateStr,
+              hours:           0,
+              reason:          `打卡申請加班（上班 ${timeStr}，時數待確認）`,
+              status:          '待審核',
+              organization_id: (emp as any).organization_id || null,
+              source:          'clock_in',
+            }).select('id').single()
+          if (otErr) throw otErr
+          overtimeId = otReq.id
+        }
 
-        const { data: otReq, error: otErr } = await supabase
-          .from('overtime_requests')
-          .insert({
-            employee_id:     emp.id,
-            employee:        emp.name,
-            date:            dateStr,
-            hours:           0,          // placeholder — updated at clock_out
-            reason:          `打卡申請加班（上班 ${timeStr}，時數待確認）`,
-            status:          '待審核',
-            organization_id: (emp as any).organization_id || null,
-            source:          'clock_in',
-          })
-          .select('id')
-          .single()
+      } else if (clockMode === 'shift_swap') {
+        if (!swapId) return jsonResp({ error: '換班打卡須帶 shift_swap_id（未通過兩段確認的換班不能用此模式）' }, 400)
+        const err = await validateShiftSwap(swapId)
+        if (err) return jsonResp({ error: err }, 400)
+        clockStatus = '正常'  // bypass time check entirely
 
-        if (otErr) throw otErr
-        overtimeRequestId = otReq.id
+      } else if (clockMode === 'outing') {
+        clockStatus = '外出'
+        if (tripId) {
+          const err = await validateBusinessTrip(tripId)
+          if (err) return jsonResp({ error: err }, 400)
+        } else {
+          const { data: trip, error: tripErr } = await supabase
+            .from('business_trips').insert({
+              employee:        emp.name,
+              destination:     null,
+              start_date:      dateStr,
+              end_date:        dateStr,
+              purpose:         `打卡申請外出（上班 ${timeStr}）`,
+              status:          '待審核',
+            }).select('id').single()
+          if (tripErr) throw tripErr
+          tripId = trip.id
+        }
 
-      } else {
-        // ── Normal / leave-adjustment mode: enforce time windows ───────────
+      } else if (clockMode === 'leave') {
         const result = await determineLateStatus()
-
-        // tooEarly always blocks — leave adj does not grant early-arrival privilege
         if (result.tooEarly) {
-          return new Response(JSON.stringify({
+          return jsonResp({
             error: `打卡失敗：距上班時間尚有 ${result.tooEarlyMinutes} 分鐘，超出提前打卡容許範圍（${location?.early_clock_minutes ?? 30} 分鐘）`,
             tooEarlyMinutes: result.tooEarlyMinutes,
-          }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          }, 403)
+        }
+        if (result.resolvedEndMinutes !== null && currentMinutes > result.resolvedEndMinutes) {
+          const endLabel = `${String(Math.floor(result.resolvedEndMinutes / 60)).padStart(2, '0')}:${String(result.resolvedEndMinutes % 60).padStart(2, '0')}`
+          return jsonResp({
+            error: `打卡失敗：打卡時間（${timeStr}）已超出班別結束時間（${endLabel}），請改用加班模式`,
+          }, 403)
+        }
+        // Waive late penalty
+        clockStatus = result.isLate ? '請假' : result.status
+
+        if (leaveId) {
+          const err = await validateLeaveRequest(leaveId)
+          if (err) return jsonResp({ error: err }, 400)
+        } else {
+          const { data: lv, error: lvErr } = await supabase
+            .from('leave_requests').insert({
+              employee_id:     emp.id,
+              employee:        emp.name,
+              type:            '事假',
+              start_date:      dateStr,
+              end_date:        dateStr,
+              days:            1,
+              reason:          `打卡申請請假調整（上班 ${timeStr}，請至 HR 補件）`,
+              status:          '待審核',
+              organization_id: (emp as any).organization_id || null,
+            }).select('id').single()
+          if (lvErr) throw lvErr
+          leaveId = lv.id
         }
 
-        if (is_leave_adjustment) {
-          // ── Leave-adjustment mode ─────────────────────────────────────────
-          // Must still be within the shift / office-hours window.
-          // Clocking in after shift end means the employee is working overtime —
-          // they should use the overtime checkbox instead.
-          if (result.resolvedEndMinutes !== null && currentMinutes > result.resolvedEndMinutes) {
-            const endLabel = `${String(Math.floor(result.resolvedEndMinutes / 60)).padStart(2, '0')}:${String(result.resolvedEndMinutes % 60).padStart(2, '0')}`
-            return new Response(JSON.stringify({
-              error: `打卡失敗：打卡時間（${timeStr}）已超出班別結束時間（${endLabel}），請改勾選「加班打卡」`,
-            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-          }
-          // Waive the late penalty — record as '請假' instead of '遲到'
-          clockStatus = result.isLate ? '請假' : result.status
-          // isLate and lateMinutes remain at defaults (false / 0)
-        } else {
-          // ── Normal mode ───────────────────────────────────────────────────
-          clockStatus  = result.status
-          isLate       = result.isLate
-          lateMinutes  = result.lateMinutes
+      } else {
+        // ── normal ──
+        const result = await determineLateStatus()
+        if (result.tooEarly) {
+          return jsonResp({
+            error: `打卡失敗：距上班時間尚有 ${result.tooEarlyMinutes} 分鐘，超出提前打卡容許範圍（${location?.early_clock_minutes ?? 30} 分鐘）`,
+            tooEarlyMinutes: result.tooEarlyMinutes,
+          }, 403)
         }
+        clockStatus  = result.status
+        isLate       = result.isLate
+        lateMinutes  = result.lateMinutes
       }
 
       const { data, error } = await supabase.from('attendance_records').insert({
@@ -404,9 +431,12 @@ serve(async (req: Request) => {
         total_hours:         0,
         is_late:             isLate,
         late_minutes:        lateMinutes,
-        is_overtime:          is_overtime,
-        overtime_request_id:  overtimeRequestId,
-        is_leave_adjustment:  is_leave_adjustment,
+        clock_in_mode:       clockMode,
+        clock_out_mode:      'normal',
+        overtime_request_id: overtimeId,
+        leave_request_id:    leaveId,
+        shift_swap_id:       swapId,
+        business_trip_id:    tripId,
         clock_in_lat:        lat || null,
         clock_in_lng:        lng || null,
         clock_in_distance_m: method === 'gps' && lat && lng && location?.lat != null
@@ -418,71 +448,87 @@ serve(async (req: Request) => {
         organization_id:     (emp as any).organization_id || null,
       }).select().single()
 
-      if (error?.code === '23505') {
-        return new Response(JSON.stringify({ error: '今日已打過上班卡' }), {
-          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
+      if (error?.code === '23505') return jsonResp({ error: '今日已打過上班卡' }, 409)
       if (error) throw error
       record = data
 
-      // Back-link: stamp attendance_record_id onto the overtime request
-      if (overtimeRequestId && record?.id) {
+      // Back-link the auto-created overtime request to this attendance row
+      if (clockMode === 'overtime' && !attachOvertimeId && overtimeId && record?.id) {
         await supabase.from('overtime_requests')
-          .update({ attendance_record_id: record.id })
-          .eq('id', overtimeRequestId)
+          .update({ attendance_record_id: record.id }).eq('id', overtimeId)
       }
 
-    // ── clock_out ────────────────────────────────────────
+    // ──────────────────────────────────────────────────────
+    //   CLOCK-OUT
+    // ──────────────────────────────────────────────────────
     } else if (action === 'clock_out') {
-      if (!existingRecord?.clock_in) {
-        return new Response(JSON.stringify({ error: '尚未打上班卡' }), {
-          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-      if (existingRecord.clock_out) {
-        return new Response(JSON.stringify({ error: '今日已打過下班卡' }), {
-          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+      if (!existingRecord?.clock_in) return jsonResp({ error: '尚未打上班卡' }, 409)
+      if (existingRecord.clock_out)  return jsonResp({ error: '今日已打過下班卡' }, 409)
+
+      let overtimeId = existingRecord.overtime_request_id || attachOvertimeId
+      let leaveId    = existingRecord.leave_request_id    || attachLeaveId
+      let swapId     = existingRecord.shift_swap_id       || attachSwapId
+      let tripId     = existingRecord.business_trip_id    || attachTripId
+
+      // Mode-specific guards
+      if (clockMode === 'shift_swap') {
+        if (!swapId) return jsonResp({ error: '換班打卡須帶 shift_swap_id' }, 400)
+        if (!existingRecord.shift_swap_id) {
+          const err = await validateShiftSwap(swapId)
+          if (err) return jsonResp({ error: err }, 400)
+        }
       }
 
-      // ── Leave-adjustment clock-out: validate still inside shift / office window ──
-      // Clocking out before the shift even starts makes no sense (haven't started work).
-      if (is_leave_adjustment) {
+      if (clockMode === 'leave') {
+        // clock_out for leave: must be >= shift/office start (didn't pre-clock out)
         const officeStartStr = (location?.has_office_hours && location?.office_hours_start)
           ? String(location.office_hours_start).slice(0, 5) : null
         if (officeStartStr) {
           const [osH, osM] = officeStartStr.split(':').map(Number)
           if (currentMinutes < osH * 60 + osM) {
-            return new Response(JSON.stringify({
-              error: `打卡失敗：打卡時間（${timeStr}）早於辦公開始時間（${officeStartStr}），尚未開始上班`,
-            }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+            return jsonResp({ error: `打卡失敗：打卡時間（${timeStr}）早於辦公開始時間（${officeStartStr}）` }, 403)
           }
+        }
+        if (leaveId) {
+          if (!existingRecord.leave_request_id) {
+            const err = await validateLeaveRequest(leaveId)
+            if (err) return jsonResp({ error: err }, 400)
+          }
+        } else {
+          const { data: lv, error: lvErr } = await supabase
+            .from('leave_requests').insert({
+              employee_id:     emp.id,
+              employee:        emp.name,
+              type:            '事假',
+              start_date:      dateStr,
+              end_date:        dateStr,
+              days:            1,
+              reason:          `打卡申請請假調整（下班 ${timeStr}，請至 HR 補件）`,
+              status:          '待審核',
+              organization_id: (emp as any).organization_id || null,
+            }).select('id').single()
+          if (lvErr) throw lvErr
+          leaveId = lv.id
         }
       }
 
-      // Early-leave check against office hours end (symmetric with late-arrival tolerance).
-      // Skipped when is_overtime OR is_leave_adjustment (employee leaving early due to approved leave).
-      if (!is_overtime && !is_leave_adjustment && location?.has_office_hours && location?.office_hours_end) {
+      // Normal mode: 早退 check (skipped for overtime / leave / shift_swap / outing)
+      if (clockMode === 'normal' && location?.has_office_hours && location?.office_hours_end) {
         const storeTolerance: number = location?.late_tolerance_minutes ?? 5
         const officeEndStr = String(location.office_hours_end).slice(0, 5)
         const [oeH, oeM] = officeEndStr.split(':').map(Number)
         const officeEndMinutes = oeH * 60 + oeM
-        // Mirror the pattern used in determineLateStatus: compute raw diff and only
-        // apply +1440 when the result is impossibly negative (office ends past midnight).
-        // The dual-pivot approach (< 9*60 on both) was broken for daytime offices —
-        // clocking out at 08:45 against a 17:00 end incorrectly skipped the block.
         let earlyLeaveMinutes = officeEndMinutes - currentMinutes
-        if (earlyLeaveMinutes < -720) earlyLeaveMinutes += 1440   // office spans midnight
+        if (earlyLeaveMinutes < -720) earlyLeaveMinutes += 1440
         if (earlyLeaveMinutes > storeTolerance) {
-          return new Response(JSON.stringify({
+          return jsonResp({
             error: `打卡失敗：距下班時間尚有 ${earlyLeaveMinutes} 分鐘（辦公時間至 ${officeEndStr}，容許提早 ${storeTolerance} 分鐘）`,
             earlyLeaveMinutes,
-          }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          }, 403)
         }
       }
 
-      // Cross-midnight correction: 22:00 in → 06:00 out = +8h not −16h
+      // Worked time (cross-midnight aware)
       const [inH, inM] = (existingRecord.clock_in as string).split(':').map(Number)
       let workedMinutes = currentMinutes - (inH * 60 + inM)
       if (workedMinutes < 0) workedMinutes += 1440
@@ -491,32 +537,21 @@ serve(async (req: Request) => {
         clock_out:       timeStr,
         clock_out_time:  now.toISOString(),
         total_hours:     parseFloat((workedMinutes / 60).toFixed(2)),
+        clock_out_mode:  clockMode,
       }
 
-      if (is_leave_adjustment) {
-        // Stamp flag so HR can see the early-leave was leave-justified (even if clock_in was normal)
-        updatePayload.is_leave_adjustment = true
-      }
-
-      if (is_overtime) {
-        // Mark attendance as overtime regardless of whether clock_in was also overtime
-        updatePayload.is_overtime = true
-
+      // Mode-driven status / FK propagation
+      if (clockMode === 'overtime') {
+        updatePayload.status = '加班'
         const actualHours = parseFloat((workedMinutes / 60).toFixed(1))
-
-        if (existingRecord.overtime_request_id) {
-          // Clock_in was already overtime — update the existing request with real hours
-          await supabase.from('overtime_requests')
-            .update({
-              hours:  actualHours,
-              reason: `加班打卡（上班 ${existingRecord.clock_in} — 下班 ${timeStr}，時數 ${actualHours}h）`,
-            })
-            .eq('id', existingRecord.overtime_request_id)
+        if (overtimeId) {
+          await supabase.from('overtime_requests').update({
+            hours:  actualHours,
+            reason: `加班打卡（上班 ${existingRecord.clock_in} — 下班 ${timeStr}，時數 ${actualHours}h）`,
+          }).eq('id', overtimeId)
         } else {
-          // Clock_out overtime only — create a new overtime request now
           const { data: otReq } = await supabase
-            .from('overtime_requests')
-            .insert({
+            .from('overtime_requests').insert({
               employee_id:          emp.id,
               employee:             emp.name,
               date:                 dateStr,
@@ -526,44 +561,53 @@ serve(async (req: Request) => {
               organization_id:      (emp as any).organization_id || null,
               source:               'clock_out',
               attendance_record_id: existingRecord.id,
-            })
-            .select('id')
-            .single()
-
-          if (otReq?.id) {
-            updatePayload.overtime_request_id = otReq.id
-          }
+            }).select('id').single()
+          if (otReq?.id) overtimeId = otReq.id
         }
+      } else if (clockMode === 'outing') {
+        updatePayload.status = '外出'
+        if (!tripId) {
+          const { data: trip, error: tripErr } = await supabase
+            .from('business_trips').insert({
+              employee:    emp.name,
+              destination: null,
+              start_date:  dateStr,
+              end_date:    dateStr,
+              purpose:     `打卡申請外出（下班 ${timeStr}）`,
+              status:      '待審核',
+            }).select('id').single()
+          if (tripErr) throw tripErr
+          tripId = trip.id
+        }
+      } else if (clockMode === 'leave') {
+        // Don't override status if clock_in already wrote '請假' / time-check result
       }
 
+      // Persist FKs (don't overwrite existing with null)
+      if (overtimeId) updatePayload.overtime_request_id = overtimeId
+      if (leaveId)    updatePayload.leave_request_id    = leaveId
+      if (swapId)     updatePayload.shift_swap_id       = swapId
+      if (tripId)     updatePayload.business_trip_id    = tripId
+
       const { data, error } = await supabase.from('attendance_records')
-        .update(updatePayload)
-        .eq('id', existingRecord.id)
-        .select().single()
+        .update(updatePayload).eq('id', existingRecord.id).select().single()
       if (error) throw error
       record = data
 
     } else {
-      return new Response(JSON.stringify({ error: 'action 必須是 clock_in 或 clock_out' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResp({ error: 'action 必須是 clock_in 或 clock_out' }, 400)
     }
 
-    return new Response(JSON.stringify({
+    return jsonResp({
       success: true,
       record,
       method,
       locationName: location?.name || '未知',
       ip: resolvedIP,
-      is_overtime,
-      is_leave_adjustment,
-    }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      clock_mode: clockMode,
     })
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message || '伺服器錯誤' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResp({ error: (err as Error).message || '伺服器錯誤' }, 500)
   }
 })

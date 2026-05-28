@@ -103,9 +103,11 @@ export function runProgrammaticSchedule(data) {
     const ftMin = storeSettings?.ft_monthly_rest_days ?? 10
     const ptMax = storeSettings?.pt_monthly_rest_days ?? 15
     if (isPT) {
-      // PT target = ftMin（Step 1c 至少主動排到 ftMin 天，不能少於 FT）
-      // PT cap = max(ftMin, ptMax)（Phase 3 排休上限，避免 ptMax < ftMin 反轉）
-      monthRestTarget[emp.name] = ftMin
+      // PT target = ptMax（Step 1c 主動排到 ptMax 天，避免 PT 工作密度過高破 H3）
+      // 原本是 ftMin → 等於 PT 只主動排 ~9 天休、剩下靠 Phase 3 補。staffing 緊時
+      // Phase 3 補不到 → PT 工作 19/28 天 → 必破七休一。
+      // PT cap = max(ftMin, ptMax)（保 cap ≥ target）
+      monthRestTarget[emp.name] = Math.max(ftMin, ptMax)
       monthRestCap[emp.name] = Math.max(ftMin, ptMax)
     } else {
       // FT target = cap = ftMin，月休精確命中

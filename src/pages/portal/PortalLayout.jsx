@@ -7,11 +7,11 @@ export default function PortalLayout() {
   const { profile, signOut } = useAuth()
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Top bar */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', height: 56,
+        padding: '0 24px', height: 56, flexShrink: 0,
         background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border-subtle)',
         backdropFilter: 'blur(16px)',
       }}>
@@ -56,9 +56,11 @@ export default function PortalLayout() {
         </div>
       </nav>
 
-      {/* Content */}
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
-        <Outlet />
+      {/* Content — flex:1 + overflow-y:auto 撐起內部捲動（body overflow:hidden 全域擋住的修正） */}
+      <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+          <Outlet />
+        </div>
       </main>
     </div>
   )

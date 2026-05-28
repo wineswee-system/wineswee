@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import TeamDashboard from './dashboard/TeamDashboard'
 import StaffDashboard from './dashboard/components/StaffDashboard'
@@ -602,6 +602,7 @@ export default function Dashboard() {
 
 function DashboardTabs({ overview }) {
   const { totalPending, loading: pendingLoading } = usePendingApprovals()
+  const navigate = useNavigate()
   // 預設：有待簽 → 直接顯示我的待簽；沒有 → 總覽
   // 載入完才做決定，避免閃爍
   const [tab, setTab] = useState('overview')
@@ -619,6 +620,7 @@ function DashboardTabs({ overview }) {
         borderBottom: '1px solid var(--border-subtle)',
         background: 'var(--bg-card)',
         position: 'sticky', top: 0, zIndex: 10,
+        alignItems: 'center',
       }}>
         <DashboardTabButton
           active={tab === 'overview'} onClick={() => setTab('overview')}
@@ -631,6 +633,21 @@ function DashboardTabs({ overview }) {
           label="我的待簽"
           badge={totalPending}
         />
+        {/* 打卡快速入口 — 跳到 /portal 用完整 GPS / 模式 picker */}
+        <button
+          onClick={() => navigate('/portal')}
+          style={{
+            marginLeft: 'auto', marginBottom: 8,
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 14px', borderRadius: 8,
+            background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
+            color: '#fff', border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 700,
+            boxShadow: '0 2px 8px rgba(34,211,238,0.25)',
+          }}
+        >
+          <Clock size={14} /> 打卡
+        </button>
       </div>
 
       <div style={{ padding: tab === 'approvals' ? 24 : '20px 0 0 0' }}>

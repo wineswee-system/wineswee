@@ -97,8 +97,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
 
   const allAssignments = []
   const allViolations = []
-  // 累積給 weekData.previousWeek — 含 caller 傳的 prev + 已跑完所有 weeks
-  // 這樣 H3 跨多週連續上班檢查能看到完整歷史
+  // 累積給 weekData.previousWeek — 含 caller 傳的 prev (上 cycle 末 7 天，給 H3 跨 cycle check 用)
+  // + 本 cycle 內已跑完的 weeks，讓 isLegallyValid 看到完整歷史。
+  // 跨 cycle 只看兩件事：H3 連續上班 ≤6 天 + 月休 cap (priorRestByMonth)
   let accumulatedPrev = [...(previousWeek || [])]
 
   const monthFatigue = {}

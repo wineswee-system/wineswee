@@ -505,23 +505,35 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           isLegallyValid(emp, sd, ra.date, schedFromAll, data.shiftDefs, weekDates7, { ...data, previousWeek: allAssignments })
         )
 
-        // ★ H3 連續上班保護 — 退讓時用，避免 fallback 到違法 (PT 6 天 / FT 12 天)
+        // ★ H3 連續上班保護 — 退讓時用，避免 fallback 到違法 (統一 6 天)
         //   退讓到 eligible 是為了「設定異常」case（譬如 can_open=false+can_close=false 員工
         //   + 該店沒中段班）能找到 shift，但 H3 勞基法不能放棄
         const isH3SafeForRA = () => {
           let consec = 1
           // 從 ra.date 往回連續推算同 emp 工作天數
+          // ★ Critical fix: 也要看 previousWeek (跨 cycle history)，
+          //   不然月初 / cycle 邊界的轉換會漏算上 cycle 連續工作天
           const raDateObj = new Date(ra.date)
-          for (let j = 1; j <= 13; j++) {  // 13 天足夠 cover FT max=12
+          for (let j = 1; j <= 13; j++) {  // 13 天足夠 cover FT 6 天 + 一點 buffer
             const prev = new Date(raDateObj)
             prev.setDate(raDateObj.getDate() - j)
             const prevStr = prev.toISOString().slice(0, 10)
             const s = schedFromAll[emp.name]?.[prevStr]
-            if (s && !isAbsence(s)) consec++
-            else break
+            if (s) {
+              if (isAbsence(s)) break
+              consec++
+              continue
+            }
+            // schedFromAll 沒有 → 看 previousWeek
+            const prevA = (data.previousWeek || []).find(p => p.employee === emp.name && p.date === prevStr)
+            if (prevA && prevA.shift) {
+              if (isAbsence(prevA.shift)) break
+              consec++
+              continue
+            }
+            break
           }
           // 公司鐵則：FT 也跟 PT 一樣統一七休一 (≤6 天)
-          // 原本硬編 12 天是舊「四週變形」但書，已撤回（commit d1cc41d 之後統一 6 天）
           return consec <= MAX_CONSECUTIVE_WORK_DAYS
         }
         const passH3 = isH3SafeForRA()

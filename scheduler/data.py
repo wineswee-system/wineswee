@@ -2,7 +2,6 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import Optional
 
 try:
     from supabase import create_client, Client
@@ -86,7 +85,7 @@ def gather_input(
     } for s in (slots_res.data or [])]
 
     # ── 3. store_settings ──
-    settings_res = sb.table("store_settings").select("*").eq("store_id", store_id).maybeSingle().execute()
+    settings_res = sb.table("store_settings").select("*").eq("store_id", store_id).maybe_single().execute()
     ss = settings_res.data or {}
     store_settings = {
         "operating_hours": ss.get("operating_hours") or {},

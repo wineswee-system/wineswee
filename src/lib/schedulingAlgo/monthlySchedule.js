@@ -342,6 +342,13 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           // 做 swap：restDay 拿 workDay 的 shift，workDay 變成 '休'
           const restA = allAssignments[restEntry.idx]
           const workA = allAssignments[workEntry.idx]
+          // ★ OH 檢查：workA 的 shift 時間（可能是假日 19:00-01:00）必須符合
+          //   restA.date 那一天的營業時間（平日 close=00:00 就不能裝 01:00）
+          //   不檢查就會出現「演算法把假日班搬到平日」的 OH 違規
+          if (workA.actual_start && workA.actual_end) {
+            const fakeDef = { start_time: workA.actual_start, end_time: workA.actual_end }
+            if (!isShiftWithinOH(fakeDef, restA.date, data.storeSettings)) continue
+          }
           allAssignments[restEntry.idx] = {
             ...restA,
             shift: workA.shift,
@@ -451,6 +458,12 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       for (const restEntry of earlyRestEntries) {
         if (usedRestIdx.has(restEntry.idx)) continue
         const restA = allAssignments[restEntry.idx]
+        // ★ OH 檢查：endA 的時間（可能是假日 19:00-01:00）必須符合 restA.date OH
+        //   不檢查就會把假日班搬到平日造成 OH 違規
+        if (endA.actual_start && endA.actual_end) {
+          const fakeDef = { start_time: endA.actual_start, end_time: endA.actual_end }
+          if (!isShiftWithinOH(fakeDef, restA.date, data.storeSettings)) continue
+        }
         // 模擬 swap 後：restA.date 變成 endA 的 shift，endA.date 變成休
         // 檢查 swap 後是否會違 H3（restA.date 變上班會不會破連續 ≤6）
         const trialAssignments = allAssignments.map((a, i) => {

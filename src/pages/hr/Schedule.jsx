@@ -710,7 +710,7 @@ export default function Schedule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           store_id: selectedStoreObj.id,
-          organization_id: profile?.organization_id,
+          organization_id: authProfile?.organization_id || tenantId,
           cycle_dates: dates,
           timeout_seconds: 25,
         }),

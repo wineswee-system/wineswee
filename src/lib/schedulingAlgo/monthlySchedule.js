@@ -47,6 +47,54 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     return runProgrammaticSchedule(data)
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // ★ 跨 cycle 累積診斷 — 印出 cycle 之間會傳遞的所有 state
+  //   讓使用者跑 cycle 3 時可看到累積成什麼樣，找「越排越亂」根因
+  // ══════════════════════════════════════════════════════════════════════
+  console.group(`[ACCUM DIAGNOSTIC] cycle 開始: ${monthDates[0]} ~ ${monthDates[monthDates.length-1]}`)
+  // 1. previousWeek - 上 cycle 末 7 天
+  const prevByEmp = {}
+  for (const p of (previousWeek || [])) {
+    if (!prevByEmp[p.employee]) prevByEmp[p.employee] = []
+    prevByEmp[p.employee].push({ date: p.date, shift: p.shift })
+  }
+  console.log('1. previousWeek (上 cycle 末 7-14 天):', Object.keys(prevByEmp).length, '位員工有資料')
+  for (const [emp, days] of Object.entries(prevByEmp)) {
+    days.sort((a, b) => a.date.localeCompare(b.date))
+    // 算末端連續工作天
+    let endStreak = 0
+    for (let i = days.length - 1; i >= 0; i--) {
+      const s = days[i].shift
+      if (s && !isAbsence(s)) endStreak++
+      else break
+    }
+    if (endStreak > 0) {
+      console.log(`  ${emp}: 末端連續工作 ${endStreak} 天 (${days.slice(-endStreak).map(d => d.date).join(', ')})`)
+    }
+  }
+
+  // 2. priorRestByMonth - 跨月休累計
+  const prior = data.priorRestByMonth || {}
+  console.log('2. priorRestByMonth (cycle 跨到月份的、cycle 外已休天數):', Object.keys(prior).length, '位員工有資料')
+  for (const [emp, byMonth] of Object.entries(prior)) {
+    const entries = Object.entries(byMonth).map(([m, c]) => `${m}=${c}`).join(', ')
+    console.log(`  ${emp}: ${entries}`)
+  }
+
+  // 3. fatigueScores - 跨月疲勞累計
+  const fatigue = data.fatigueScores || []
+  console.log('3. fatigueScores (本月已累積疲勞分):', fatigue.length, '筆')
+  for (const f of fatigue.slice(0, 10)) {
+    console.log(`  ${f.employee}: total=${f.total_score || 0}`)
+  }
+
+  // 4. existingSchedules - 本 cycle 範圍內已鎖定 (re-run 時才有)
+  const locked = (data.existingSchedules || []).filter(s => s.shift && !isAbsence(s.shift))
+  console.log(`4. existingSchedules (本 cycle 內已鎖定): ${locked.length} 筆 (re-run 才會有)`)
+
+  console.groupEnd()
+  // ══════════════════════════════════════════════════════════════════════
+
   // ── 月制目標 → cycle 比例分配 ──
   // 設定的 ft/pt_monthly_rest_days 是「每月」目標；cycle 若跨月就要按比例算
   const ftMonthlyTarget = data.storeSettings?.ft_monthly_rest_days ?? 10

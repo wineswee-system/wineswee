@@ -103,10 +103,14 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const monthFatigue = {}
   const monthHours = {}
   const monthRestDays = {}
+  // ★ 跨月累計：cycle 內已分配的休假按 calendar month 分桶
+  //   給 weekly scheduler 算「本月實際總休 = prior + cycle 已用 + 待分配」用
+  const cycleRestByMonth = {}  // { empName: { 'YYYY-MM': count } }
   for (const emp of data.employees) {
     monthFatigue[emp.name] = 0
     monthHours[emp.name] = 0
     monthRestDays[emp.name] = 0
+    cycleRestByMonth[emp.name] = {}
   }
 
   for (let i = 0; i < weeks.length; i++) {
@@ -153,6 +157,11 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           : (weeks.length - i - 1),
         // Step 1c 按 dayProportion 分攤排休用 — 避免短週 Week 1 (3 天) 被分到整週都休
         cycleDays: monthDates.length,
+        // ★ 跨月累計：scoring 函式判斷「這天排休會不會讓 calendar month 超標」
+        priorRestByMonth: data.priorRestByMonth || {},
+        cycleRestByMonth,  // mutated by reference — pass-by-ref 給 monthly loop 累計
+        monthlyRestTargetFT: ftMonthlyTarget,  // 原本的月目標（cycle prorate 之前的值）
+        monthlyRestTargetPT: ptMonthlyTarget,
       },
     }
 
@@ -173,6 +182,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         // 員工請的假 (特休/病/產等) 不算 → 不影響月休天數
         if (countsAsMonthlyRest(a.shift)) {
           monthRestDays[a.employee] = (monthRestDays[a.employee] || 0) + 1
+          // ★ 累計到 calendar month bucket（給後續週 scoring 判斷跨月超標用）
+          const monthKey = a.date.slice(0, 7)
+          if (!cycleRestByMonth[a.employee]) cycleRestByMonth[a.employee] = {}
+          cycleRestByMonth[a.employee][monthKey] = (cycleRestByMonth[a.employee][monthKey] || 0) + 1
         }
       } else {
         monthHours[a.employee] = (monthHours[a.employee] || 0) + (a.actual_hours || 8)
@@ -181,6 +194,35 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       }
     }
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
+  }
+
+  // ── 跨月校正 (B)：偵測 cycle + prior 加總 > monthly target 的情況 ──
+  // H soft penalty 已在 weekly scheduler 內降低超標機率，這裡是最後一道防線。
+  // 自動 swap 風險高（可能違 H3/H4），改成偵測 + warning，讓 UI 顯示給管理者手動調整。
+  const priorRestByMonthForCheck = data.priorRestByMonth || {}
+  for (const emp of data.employees) {
+    const isPT = isPartTime(emp)
+    const monthTarget = isPT ? ptMonthlyTarget : ftMonthlyTarget
+    // 該員工跨月的所有 month key（含 cycle 內 + prior 都看）
+    const allMonthKeys = new Set([
+      ...Object.keys(cycleRestByMonth[emp.name] || {}),
+      ...Object.keys(priorRestByMonthForCheck[emp.name] || {}),
+    ])
+    for (const monthKey of allMonthKeys) {
+      const cycleRest = cycleRestByMonth[emp.name]?.[monthKey] || 0
+      const priorRest = priorRestByMonthForCheck[emp.name]?.[monthKey] || 0
+      const total = cycleRest + priorRest
+      if (total > monthTarget) {
+        allViolations.push({
+          employee: emp.name,
+          constraint: 'CROSS_MONTH_REST_OVERSHOOT',
+          severity: 'warning',
+          date: monthKey + '-01',
+          message: `${emp.name} ${monthKey} 月實際排休 ${total} 天（上 cycle ${priorRest} + 本 cycle ${cycleRest}），超出 ${isPT ? 'PT' : 'FT'} 目標 ${monthTarget} 天 — 請手動調整將月底的休假改回上班`,
+        })
+        console.warn(`[Monthly] 跨月超標：${emp.name} ${monthKey} = ${total}/${monthTarget} (prior=${priorRest}, cycle=${cycleRest})`)
+      }
+    }
   }
 
   // ── 最終校正：月休天數 enforce 範圍 ──

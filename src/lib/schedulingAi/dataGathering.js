@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '../supabase'
-import { getCrossStoreEligible } from '../scheduleUtils'
+import { getCrossStoreEligible, countsAsMonthlyRest } from '../scheduleUtils'
 
 /**
  * Gather all data needed for AI scheduling.
@@ -74,6 +74,31 @@ export async function gatherSchedulingData({
         })()
       : Promise.resolve({ data: [] }),
   ])
+
+  // ── 跨 cycle 月休累計：抓「本 cycle 跨到的所有 calendar month」在 cycle 範圍外的休假 ──
+  // 用於：cycle B (5/29-6/25) 排班時知道 cycle A (5/1-5/28) 已給某員 X 天 5 月休，
+  //       避免 cycle B 在 5/29-31 再排休造成 5 月總休 > 月目標。
+  const cycleStartDate = new Date(dateStart)
+  const cycleEndDate = new Date(dateEnd)
+  const monthRangeStart = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth(), 1)
+    .toISOString().slice(0, 10)
+  const monthRangeEnd = new Date(cycleEndDate.getFullYear(), cycleEndDate.getMonth() + 1, 0)
+    .toISOString().slice(0, 10)
+
+  const { data: monthRangeSchedules } = await supabase
+    .from('schedules')
+    .select('employee, date, shift, absence_type')
+    .gte('date', monthRangeStart).lte('date', monthRangeEnd)
+
+  const priorRestByMonth = {}
+  for (const s of (monthRangeSchedules || [])) {
+    // 排除本 cycle 範圍（會用 existingSchedules 算 in-cycle rest）
+    if (s.date >= dateStart && s.date <= dateEnd) continue
+    if (!s.shift || !countsAsMonthlyRest(s.shift)) continue
+    const monthKey = s.date.slice(0, 7)
+    if (!priorRestByMonth[s.employee]) priorRestByMonth[s.employee] = {}
+    priorRestByMonth[s.employee][monthKey] = (priorRestByMonth[s.employee][monthKey] || 0) + 1
+  }
 
   const storeSettings = {
     minStaff: minStaff || 3,
@@ -151,5 +176,6 @@ export async function gatherSchedulingData({
     crossStoreEligible,
     locations,
     tenantId,
+    priorRestByMonth,  // ★ 跨 cycle 月休累計（cycle 外、同 calendar month 的休假）
   }
 }

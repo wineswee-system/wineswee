@@ -306,7 +306,23 @@ export function runProgrammaticSchedule(data) {
     const demand = minWorkersPerDay[date] || minStaff
     const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
     const adj = adjacentRestCount(empName, date)
-    return demand + peerResting * 2.5 + adj * 3 + Math.random() * 0.5
+    // ★ 跨月超標軟懲罰：避免 cycle B (5/29-6/25) 在 5/29-31 排休讓 5 月總休 >10
+    //   total = prior cycle 5 月已休 + 本 cycle 5 月已分配 + 本週 5 月已分配 + 假設此日也休
+    //   若 total > 該員工 monthly target → 加重懲罰（每超 1 天 +100，遠大於其他項權重）
+    let crossMonthPenalty = 0
+    if (monthlyCtx?.priorRestByMonth || monthlyCtx?.cycleRestByMonth) {
+      const monthKey = date.slice(0, 7)
+      const prior = monthlyCtx.priorRestByMonth?.[empName]?.[monthKey] || 0
+      const cycleSoFar = monthlyCtx.cycleRestByMonth?.[empName]?.[monthKey] || 0
+      const thisWeekInMonth = weekDates.filter(d => d.slice(0, 7) === monthKey && restDayPlan[empName].has(d)).length
+      const isPT = monthTargetMap[empName]?.isPT
+      const target = isPT
+        ? (monthlyCtx.monthlyRestTargetPT ?? 15)
+        : (monthlyCtx.monthlyRestTargetFT ?? 10)
+      const totalIfAdd = prior + cycleSoFar + thisWeekInMonth + 1
+      crossMonthPenalty = Math.max(0, totalIfAdd - target) * 100
+    }
+    return demand + peerResting * 2.5 + adj * 3 + crossMonthPenalty + Math.random() * 0.5
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {
     let needed = count

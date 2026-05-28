@@ -690,6 +690,8 @@ export default function Schedule() {
     if (filtered.length === 0) { toast.error('沒有員工可排班'); return }
     const selectedStoreObj = locations.find(l => l.name === storeFilter)
     if (!selectedStoreObj) { toast.error('找不到門市資料'); return }
+    const isMonthly = viewMode === 'month'
+    const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
     const rangeLabel = isCycle
       ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
       : isMonthly ? `${selectedMonth} 月排班`

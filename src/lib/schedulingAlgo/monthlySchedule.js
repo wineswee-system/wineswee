@@ -524,12 +524,27 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         // ★ FT 偏 9h net=8h 排序，避免撿 6h 短班
         //   優先順序: safe(legal+slot) → legalEligible(legal+no slot fit) → eligible(只放 H9)
         //   但連 H3 都不過時直接 null → 保留休，寧可超 cap 也不違反勞基法
+        // ★ 在挑 shift 前先過濾掉「不在營業時間內」的 shift（避免 10:00 開 / 01:00 關 這種）
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+        const dow = new Date(ra.date).getDay()
+        const oh = data.storeSettings?.operating_hours?.[dayNames[dow]] ||
+                   data.storeSettings?.operatingHours?.[dayNames[dow]]
+        const ohOpen = oh?.open ? parseTime(oh.open) : null
+        const ohClose = oh?.close ? parseTime(oh.close) : null
+        const ohCloseEff = (ohOpen != null && ohClose != null && ohClose <= ohOpen) ? ohClose + 24 : ohClose
+        const inOH = (sd) => {
+          if (ohOpen == null || ohCloseEff == null) return true  // 沒設營業時間 → 不擋
+          const sh = parseTime(sd.start_time)
+          const eh = parseTime(sd.end_time)
+          const ehEff = eh <= sh ? eh + 24 : eh
+          return sh >= ohOpen - 0.01 && ehEff <= ohCloseEff + 0.01
+        }
         const picked = !passH3
           ? null
-          : ((slotCov ? [...safe].sort(sortBySdFitForFT)[0] : null)
-            || [...legalEligible].sort(sortBySdFitForFT)[0]
-            || [...eligible].sort(sortBySdFitForFT)[0]
-            || data.shiftDefs[0]
+          : ((slotCov ? [...safe].filter(inOH).sort(sortBySdFitForFT)[0] : null)
+            || [...legalEligible].filter(inOH).sort(sortBySdFitForFT)[0]
+            || [...eligible].filter(inOH).sort(sortBySdFitForFT)[0]
+            || data.shiftDefs.filter(inOH)[0]
             || null)
         if (picked) {
           ra.shift = picked.name

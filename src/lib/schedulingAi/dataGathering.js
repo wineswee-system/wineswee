@@ -122,6 +122,44 @@ export async function gatherSchedulingData({
     ? getCrossStoreEligible(employees, storeFilter, locations)
     : []
 
+  // ── ★ 源頭過濾：把不在營業時間的 shift_definitions 直接拿掉 ──
+  // 避免下游所有 fallback path 都要記得檢查營業時間。
+  // 取 operating_hours 跨日 union（最早 open / 最晚 close）當合法範圍。
+  const parseHM = (t) => {
+    if (!t) return null
+    const [h, m] = t.split(':').map(Number)
+    return h + (m || 0) / 60
+  }
+  const ohRange = (() => {
+    const oh = storeSettingsData?.operating_hours || {}
+    let earliestOpen = null, latestCloseEff = null
+    for (const k of Object.keys(oh)) {
+      const d = oh[k]
+      const op = parseHM(d?.open)
+      const cl = parseHM(d?.close)
+      if (op == null || cl == null) continue
+      const clEff = cl <= op ? cl + 24 : cl
+      if (earliestOpen == null || op < earliestOpen) earliestOpen = op
+      if (latestCloseEff == null || clEff > latestCloseEff) latestCloseEff = clEff
+    }
+    return earliestOpen != null && latestCloseEff != null
+      ? { open: earliestOpen, closeEff: latestCloseEff }
+      : null
+  })()
+  const filteredShiftDefs = ohRange
+    ? shiftDefs.filter(s => {
+        const sh = parseHM(s.start_time)
+        const eh = parseHM(s.end_time)
+        if (sh == null || eh == null) return true  // 沒設時間 → 不擋
+        const ehEff = eh <= sh ? eh + 24 : eh
+        const inRange = sh >= ohRange.open - 0.01 && ehEff <= ohRange.closeEff + 0.01
+        if (!inRange) {
+          console.warn(`[gatherSchedulingData] 過濾掉非營業時間 shift: ${s.name} ${s.start_time}-${s.end_time} (營業 ${ohRange.open}-${ohRange.closeEff})`)
+        }
+        return inRange
+      })
+    : shiftDefs
+
   return {
     employees: employees.map(e => ({
       id: e.id,
@@ -142,7 +180,7 @@ export async function gatherSchedulingData({
       join_date: e.join_date || null,       // 入職前的日子不排班
       resign_date: e.resign_date || null,   // 離職後的日子不排班
     })),
-    shiftDefs,
+    shiftDefs: filteredShiftDefs,
     weekDates: weekDates || dates,
     monthDates: monthDates || null,
     existingSchedules: existingSchedules || [],

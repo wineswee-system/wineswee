@@ -15,3 +15,10 @@ src/graphify-out/
 .tmp_*.txt
 .tmp_*.csv
 .tmp_*.sql
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/

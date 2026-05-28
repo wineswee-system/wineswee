@@ -349,12 +349,20 @@ export function runProgrammaticSchedule(data) {
         .filter(c => {
           const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
           const workingAfter = employees.length - restingOnDay - 1
-          return workingAfter >= minStaffPerDay(c.date)
+          const minNeeded = minStaffPerDay(c.date)
+          // ★ H3 救援：若不休此日會違 H3 (連續 ≥6 天)，允許 understaff 1 人換不違法
+          //   違法是 hard rule，比 staffing 優先 — 連續 7 天上班是勞基法 §36 紅線
+          const consecBack = consecutiveWorkBackward(empName, c.date)
+          if (consecBack >= 6) return workingAfter >= Math.max(1, minNeeded - 1)
+          return workingAfter >= minNeeded
         })
         // ★ 保護「該日至少留 1 個 can_open 員工不休」— 不然 10:30 早班沒人 cover
         //   只在店內 can_open 員工 ≥ 2 時 enforce（避免單一 can_open 永遠不能休）
+        //   H3 救援時 (連續 ≥6 天) 例外放行 — 違法優先於開店保護
         .filter(c => {
           if (!empCanOpen || totalCanOpen < 2) return true
+          const consecBack = consecutiveWorkBackward(empName, c.date)
+          if (consecBack >= 6) return true
           const remainingCanOpen = employees.filter(e =>
             e.can_open === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
           ).length
@@ -363,6 +371,8 @@ export function runProgrammaticSchedule(data) {
         // ★ 同樣保護 can_close — 不然關店時段沒人 cover
         .filter(c => {
           if (!empCanClose || totalCanClose < 2) return true
+          const consecBack = consecutiveWorkBackward(empName, c.date)
+          if (consecBack >= 6) return true
           const remainingCanClose = employees.filter(e =>
             e.can_close === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
           ).length

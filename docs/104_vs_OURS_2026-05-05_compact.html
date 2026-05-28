@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>104 vs 自有系統 對照（精簡版）</title>
+<style>
+  @page { size: A4 portrait; margin: 1.5cm; }
+  body { font-family: "Microsoft JhengHei", sans-serif; max-width: 17cm; margin: 0 auto; padding: 0; color: #222; font-size: 10pt; }
+  h1 { font-size: 14pt; color: #0b5cad; border-bottom: 2px solid #0b5cad; padding-bottom: 4px; margin: 0 0 6px 0; }
+  h2 { font-size: 11pt; color: #0b5cad; margin: 14px 0 4px 0; padding-left: 6px; border-left: 4px solid #0b5cad; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 10px; table-layout: fixed; }
+  col.c1 { width: 38%; }
+  col.c2 { width: 31%; }
+  col.c3 { width: 31%; }
+  th, td { border: 1px solid #888; padding: 3px 5px; text-align: left; vertical-align: top; word-wrap: break-word; font-size: 9pt; line-height: 1.3; }
+  th { background: #0b5cad; color: white; font-weight: 600; font-size: 9pt; }
+  tr:nth-child(even) td { background: #f4f8fc; }
+  .ours { background: #d4edda !important; color: #155724; font-weight: 600; }
+  .their { background: #ffe5cc !important; color: #b34700; font-weight: 600; }
+  .meta { color: #777; font-size: 8pt; margin: 0 0 8px 0; }
+  .legend { font-size: 8pt; color: #555; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<h1>104 企業大師 vs 自有系統 功能對照</h1>
+<p class="meta">資料來源：104 官方 FAQ + 自有系統 DB schema 與程式碼。生成 2026-05-05。</p>
+
+
+<h2>A. 員工資料卡欄位</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>欄位</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>員工編號 / 姓名 / 生日 / 身份證 / 國籍</td><td>有</td><td>有</td></tr>
+<tr><td>E-mail / 公司 / 部門 / 到職日 / 在職狀態</td><td>有</td><td>有</td></tr>
+<tr><td>員工類型（全 / 兼職）</td><td>有</td><td>有</td></tr>
+<tr><td>英文名 / 性別 / 電話 / 地址</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>所屬門市 / 副職 / 第三職 / 職等</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>離職日 / 離職原因 / 試用期到期</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>主管 / 報告對象 / 是否主管 / 兼任高管</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>能開店 / 能關店 / 排班優先級</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>每週目標時數 / 個人 cycle 上限 / 可支援店</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>緊急聯絡人 / 銀行帳號 / 工作許可</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>基本薪資 / 薪資類型 / 各種津貼</td><td>有（薪資模組）</td><td>有</td></tr>
+<tr><td>勞健保級距 / 起訖日 / 退休金率</td><td>無</td><td class="ours">有</td></tr>
+<tr><td><b>合計欄位數</b></td><td><b>11</b></td><td class="ours"><b>84</b></td></tr>
+</tbody>
+</table>
+
+
+<h2>B. 員工自助維護</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>動作</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>員工自己改基本資料</td><td class="their">有</td><td>無</td></tr>
+</tbody>
+</table>
+
+
+<h2>C. 電子表單</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>表單</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>請假 / 加班 / 忘刷 / 出差</td><td>有</td><td>有</td></tr>
+<tr><td>出差費用 / 補休 / 換班 / 跨店支援</td><td>有</td><td>有</td></tr>
+<tr><td>預先加班單 / 銷假單 / 時數申請單</td><td class="their">有</td><td>無</td></tr>
+<tr><td>人事異動 / 薪資異動 / 離職 / 留停</td><td class="their">有</td><td>無</td></tr>
+<tr><td>在職證明 / 勞健保證明</td><td class="their">有</td><td>無</td></tr>
+<tr><td>自訂表單建立</td><td class="their">有（18 範本）</td><td>無</td></tr>
+<tr><td>費用申請依金額自動分流</td><td>需自訂</td><td class="ours">有（小/中/大）</td></tr>
+<tr><td>找代班（同事接手）</td><td>無</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>D. 出勤打卡</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>電腦 / 手機 / GPS / Wi-Fi 打卡</td><td>有</td><td>有</td></tr>
+<tr><td>遲到 / 早退 / 未打卡 提醒</td><td>有</td><td>有</td></tr>
+<tr><td>多套工時設定（按部門）</td><td>有</td><td>有</td></tr>
+<tr><td>藍芽 / 人臉辨識打卡</td><td class="their">有</td><td>無</td></tr>
+<tr><td>門禁系統匯入</td><td class="their">有</td><td>無</td></tr>
+<tr><td>多套特休規則（按職級 / 部門）</td><td class="their">有</td><td>無</td></tr>
+<tr><td>上下班推播 / 打卡超時對話框</td><td class="their">有</td><td>無</td></tr>
+<tr><td>跨店打卡 / 半徑可調 / 提早 N 分</td><td>無</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>E. 排班</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>標準 / 2 / 4 / 8 週變形工時</td><td>有</td><td>有</td></tr>
+<tr><td>班別建立 / 排班標籤</td><td>有</td><td>有</td></tr>
+<tr><td>Excel 班表匯入</td><td>有</td><td>部分</td></tr>
+<tr><td><b>自動排班</b></td><td><b>無（官方明文）</b></td><td class="ours"><b>有（程式 + AI）</b></td></tr>
+<tr><td>員工偏好（偏好 / 中性 / 迴避）</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>員工可上班時段（每週幾）</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>個人 cycle 時數上限</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>跨店借調自動</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>11 條法定驗證（連續 6 天等）</td><td>部分</td><td class="ours">完整 L1~L8</td></tr>
+<tr><td>開店 / 關店人員自動換班</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>月視圖 / Cycle 視圖切換</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>Cycle 進度卡（時數使用率）</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>排休方式選擇</td><td class="their">4 種</td><td>2 種</td></tr>
+<tr><td>欠班處理（不處理/扣款/補班）</td><td class="their">有</td><td>無明確機制</td></tr>
+</tbody>
+</table>
+
+
+<h2>F. 薪資結算</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>自動月結算 / 加班費階梯計算</td><td>有</td><td>有</td></tr>
+<tr><td>特休結算 / 勞健保 / 退休金 / 所得稅</td><td>有</td><td>有</td></tr>
+<tr><td>電子薪資袋 / 員工自助查詢</td><td>有</td><td>有</td></tr>
+<tr><td>客製津貼 / 欠班扣款</td><td>有</td><td>有</td></tr>
+<tr><td>法令自動更新</td><td class="their">有</td><td>無（手動）</td></tr>
+<tr><td>薪資單 LINE 推送</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>半薪假（病/生理）/ 全薪假 / 無薪假</td><td>未明說</td><td class="ours">有（13 假別）</td></tr>
+<tr><td>全勤獎金（請假歸零）</td><td>未明說</td><td class="ours">有</td></tr>
+<tr><td>法令扣款（強制執行月分期）</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>遲到扣薪</td><td>未明說</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>G. 招募 / 報到</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>招募職缺管理 / 敘薪 / 任用 / 報到</td><td>有</td><td>部分</td></tr>
+<tr><td>104 徵才資料整合 / 履歷一鍵匯入</td><td class="their">有</td><td>無</td></tr>
+</tbody>
+</table>
+
+
+<h2>H. 學習 / 績效</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>企業學習平台 / 課程 / 學習進度</td><td class="their">有</td><td>無</td></tr>
+<tr><td>績效考核 / 員工敬業度調查</td><td>無</td><td class="ours">有</td></tr>
+<tr><td>流失預測（AI） / 薪酬基準比對</td><td>無</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>I. 其他 / 進階</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>功能</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>AI 小夥伴 / 自主勞檢 / 一休一例</td><td>有</td><td>有</td></tr>
+<tr><td>API 串接 / 多公司多店 / 組織圖 / 儀表板</td><td>有</td><td>有</td></tr>
+<tr><td>智能溫測考勤 / ERP / CRM 串接</td><td class="their">有</td><td>無</td></tr>
+<tr><td>原生 App（iOS + Android）</td><td class="their">有</td><td>LIFF + Web</td></tr>
+<tr><td>簽核 LINE 卡片 / 投保級距監控</td><td>無</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>J. 報表</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>報表</th><th>104</th><th>自有</th></tr></thead>
+<tbody>
+<tr><td>人事 / 出勤 / 薪資 / 加班 / 排班 / 特休</td><td>有</td><td>有</td></tr>
+<tr><td>法定合規檢核</td><td>有</td><td>有</td></tr>
+<tr><td>Cycle 時數使用率 / 流失風險</td><td>無</td><td class="ours">有</td></tr>
+</tbody>
+</table>
+
+
+<h2>K. 總結</h2>
+<table>
+<colgroup><col class="c1"><col class="c2"><col class="c3"></colgroup>
+<thead><tr><th>模組</th><th>領先方</th><th>差距</th></tr></thead>
+<tbody>
+<tr><td>員工資料欄位</td><td class="ours">自有</td><td>大（11 vs 84）</td></tr>
+<tr><td>員工自助維護</td><td class="their">104</td><td>中</td></tr>
+<tr><td>電子表單種類</td><td class="their">104</td><td>中</td></tr>
+<tr><td>自訂表單能力</td><td class="their">104</td><td>大</td></tr>
+<tr><td>出勤打卡</td><td class="their">104</td><td>小</td></tr>
+<tr><td>排班</td><td class="ours">自有</td><td>大（104 沒自動排班）</td></tr>
+<tr><td>薪資結算</td><td class="ours">自有</td><td>小（半薪 + cycle）</td></tr>
+<tr><td>招募</td><td class="their">104</td><td>大（自家平台）</td></tr>
+<tr><td>學習 / LMS</td><td class="their">104</td><td>大</td></tr>
+<tr><td>績效 / AI 分析</td><td class="ours">自有</td><td>中</td></tr>
+<tr><td>行動體驗</td><td class="their">104</td><td>小</td></tr>
+</tbody>
+</table>
+
+<p class="legend">綠底 = 自有系統領先。橘底 = 104 領先。無底色 = 雙方都有 / 持平。</p>
+
+</body>
+</html>

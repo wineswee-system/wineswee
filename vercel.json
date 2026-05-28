@@ -1,7 +1,7 @@
 {
   "rewrites": [
     { "source": "/employee-portal", "destination": "/employee-portal/index.html" },
-    { "source": "/((?!employee-portal/).*)", "destination": "/index.html" }
+    { "source": "/((?!employee-portal/|api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

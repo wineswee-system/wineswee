@@ -690,6 +690,10 @@ export default function Schedule() {
     if (filtered.length === 0) { toast.error('沒有員工可排班'); return }
     const selectedStoreObj = locations.find(l => l.name === storeFilter)
     if (!selectedStoreObj) { toast.error('找不到門市資料'); return }
+    const rangeLabel = isCycle
+      ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
+      : isMonthly ? `${selectedMonth} 月排班`
+      : `${weekStart} ~ ${weekEnd}`
     if (!(await confirm({ message: `用 Python 演算法為 ${filtered.length} 位員工排班（${rangeLabel}）\n\nv2 純手寫 backtracking solver，hard rule 嚴格保證 H3/H4 不違法。產出為草稿。` }))) return
 
     setAutoScheduling(true)

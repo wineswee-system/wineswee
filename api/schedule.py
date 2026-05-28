@@ -4,7 +4,8 @@ Body (JSON):
   {
     "store_id": 31,
     "organization_id": 1,
-    "cycle_dates": ["2026-05-29", ..., "2026-06-25"]
+    "cycle_dates": ["2026-05-29", ..., "2026-06-25"],
+    "timeout_seconds": 25
   }
 
 Response:
@@ -15,64 +16,71 @@ Response:
     "violations": [...],
     "stats": {...}
   }
+
+注：Vercel Python runtime 使用 BaseHTTPRequestHandler subclass named `handler`
+參考：https://vercel.com/docs/functions/runtimes/python
 """
 
 import json
 import sys
+import traceback
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler
 
-# Vercel runtime 把 /api/*.py 跟 /scheduler/ 平行放，import 路徑要加 ..
+# Vercel 把 /api/*.py 跟 /scheduler/ 平行放，import 路徑要加 ..
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scheduler.solver import solve_schedule
-from scheduler.data import gather_input
+from scheduler.solver import solve_schedule  # noqa: E402
+from scheduler.data import gather_input      # noqa: E402
 
 
-def handler(request):
-    """Vercel Python serverless function handler."""
-    if request.method == "OPTIONS":
-        return _cors_response("", 204)
-    if request.method != "POST":
-        return _cors_response(json.dumps({"error": "Method not allowed"}), 405)
+class handler(BaseHTTPRequestHandler):
+    def _send(self, status: int, body: dict | str):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+        if isinstance(body, dict):
+            body = json.dumps(body, ensure_ascii=False)
+        self.wfile.write(body.encode("utf-8"))
 
-    try:
-        body = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _cors_response(json.dumps({"error": "Invalid JSON"}), 400)
+    def do_OPTIONS(self):
+        self._send(204, "")
 
-    store_id = body.get("store_id")
-    organization_id = body.get("organization_id")
-    cycle_dates = body.get("cycle_dates")
+    def do_POST(self):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            body = json.loads(raw or "{}")
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send(400, {"error": f"Invalid JSON: {e}"})
+            return
 
-    if not store_id or not cycle_dates or not isinstance(cycle_dates, list):
-        return _cors_response(
-            json.dumps({"error": "Required: store_id, cycle_dates (array)"}),
-            400,
-        )
+        store_id = body.get("store_id")
+        organization_id = body.get("organization_id")
+        cycle_dates = body.get("cycle_dates")
 
-    timeout = float(body.get("timeout_seconds", 25.0))  # Vercel hobby max 60s，留 buffer
+        if not store_id or not cycle_dates or not isinstance(cycle_dates, list):
+            self._send(400, {"error": "Required: store_id, cycle_dates (array)"})
+            return
 
-    try:
-        input_dict = gather_input(store_id, organization_id, cycle_dates)
-        result = solve_schedule(input_dict, time_limit_seconds=timeout)
-        return _cors_response(json.dumps(result, ensure_ascii=False), 200)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return _cors_response(
-            json.dumps({"error": str(e), "type": type(e).__name__}),
-            500,
-        )
+        timeout = float(body.get("timeout_seconds", 25.0))
 
+        try:
+            input_dict = gather_input(store_id, organization_id, cycle_dates)
+            result = solve_schedule(input_dict, time_limit_seconds=timeout)
+            self._send(200, result)
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(f"[/api/schedule] ERROR: {e}\n{tb}", file=sys.stderr)
+            self._send(500, {
+                "error": str(e),
+                "type": type(e).__name__,
+                "traceback": tb.splitlines()[-10:],  # 最後 10 行
+            })
 
-def _cors_response(body: str, status: int):
-    return {
-        "statusCode": status,
-        "headers": {
-            "Content-Type": "application/json; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        },
-        "body": body,
-    }
+    def do_GET(self):
+        """Health check"""
+        self._send(200, {"status": "ok", "service": "scheduler-v2"})

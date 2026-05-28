@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader } from 'lucide-react'
+import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import { supabase } from '../../lib/supabase'
 import { serverClockIn } from '../../lib/db'
-import { validateClockIn } from '../../lib/clockInValidator'
+import { validateClockIn, haversineMetres, ipMatchesCIDR, getPublicIP, GPS_ACCURACY_THRESHOLD } from '../../lib/clockInValidator'
 import { todayTW, nowTimeTW } from '../../lib/datetime'
 
 const ALL_QUICK_ACTIONS = [
@@ -30,10 +30,66 @@ export default function PortalHome() {
   const [clockMode, setClockMode] = useState('normal')      // normal | overtime | leave | shift_swap | outing
   const [approvedSwaps, setApprovedSwaps] = useState([])    // 已核准且 swap_date=今日 的換班單（換班模式必選）
   const [selectedSwapId, setSelectedSwapId] = useState(null)
+  // ★ Live GPS / IP / WiFi 即時狀態（對齊 LIFF Clock.jsx 視覺 feedback）
+  const [now, setNow] = useState(new Date())
+  const [gpsLocation, setGpsLocation] = useState(null)      // { lat, lng }
+  const [gpsAccuracy, setGpsAccuracy] = useState(null)
+  const [gpsError, setGpsError] = useState('')
+  const [gpsWeak, setGpsWeak] = useState(false)
+  const [distance, setDistance] = useState(null)            // metres to store
+  const [clientIp, setClientIp] = useState(null)
+  const [wifiMatch, setWifiMatch] = useState(null)          // null=checking, true/false
 
   const today = todayTW()
   const hour = new Date().getHours()
   const greeting = hour < 12 ? '早安' : hour < 18 ? '午安' : '晚安'
+
+  // 即時時鐘（每秒走）
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // mount 時 poll 一次 GPS + IP
+  useEffect(() => {
+    if (!profileReady || !profile?.id) return
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords
+          setGpsLocation({ lat: latitude, lng: longitude })
+          setGpsAccuracy(Math.round(accuracy))
+          if (accuracy > GPS_ACCURACY_THRESHOLD) {
+            setGpsWeak(true)
+            setGpsError(`GPS 精確度不足（${Math.round(accuracy)}m），定位結果僅供參考`)
+          } else {
+            setGpsWeak(false)
+            setGpsError('')
+          }
+        },
+        (err) => setGpsError(err.code === 1 ? '請開啟定位權限' : '無法取得定位'),
+        { enableHighAccuracy: true, timeout: 15000 }
+      )
+    } else {
+      setGpsError('此裝置不支援 GPS')
+    }
+
+    getPublicIP().then(ip => setClientIp(ip))
+  }, [profileReady, profile?.id])
+
+  // 計算距離（GPS + store 都備齊時）
+  useEffect(() => {
+    if (gpsLocation && store?.lat && store?.lng) {
+      setDistance(Math.round(haversineMetres(gpsLocation.lat, gpsLocation.lng, store.lat, store.lng)))
+    }
+  }, [gpsLocation, store])
+
+  // 檢查 WiFi IP 是否在白名單
+  useEffect(() => {
+    if (!clientIp || !store?.allowed_wifi?.length) { setWifiMatch(null); return }
+    setWifiMatch(store.allowed_wifi.some(rule => ipMatchesCIDR(clientIp, rule)))
+  }, [clientIp, store])
 
   useEffect(() => {
     // ★ 等 profile 完全載入完（含 organization_id）才查；避免「name 有但 id 還沒」的競態
@@ -90,17 +146,19 @@ export default function PortalHome() {
       })
 
       setTodayAttendance(data.record)
-      const submittedMode = clockMode
       setClockMode('normal')   // reset after successful clock
       setSelectedSwapId(null)
       const timeStr = nowTimeTW()
-      // 使用後端 reminder 訊息（所有非 normal 模式都有）
-      const extra = data.reminder ? `，${data.reminder}` : ''
-
-      if (action === 'clock_in') {
-        setClockMsg({ type: 'success', text: `上班打卡成功 ${timeStr} — ${data.locationName || ''}${extra}` })
+      const base = action === 'clock_in'
+        ? `上班打卡成功 ${timeStr} — ${data.locationName || ''}`
+        : `下班打卡成功 ${timeStr}`
+      setClockMsg({ type: 'success', text: base })
+      // 後端 reminder 訊息（overtime / leave / outing 提醒另送申請單）— 1.5s 後切換顯示，停留 8s
+      if (data.reminder) {
+        setTimeout(() => setClockMsg({ type: 'warning', text: `⚠️ ${data.reminder}` }), 1500)
+        setTimeout(() => setClockMsg(null), 9500)
       } else {
-        setClockMsg({ type: 'success', text: `下班打卡成功 ${timeStr}${extra}` })
+        setTimeout(() => setClockMsg(null), 5000)
       }
     } catch (err) {
       handleError(err, { component: 'PortalHome', errorCode: 'CLOCK_FAILED' })
@@ -134,6 +192,14 @@ export default function PortalHome() {
   const btnShadow = '0 4px 14px rgba(0,0,0,0.25)'
   // shift_swap 換班打卡不再需要換班單（緊急換班亦可使用此模式）
 
+  // ★ Live GPS / WiFi 驗證狀態（給 UI feedback；實際送出仍由 validateClockIn 把關）
+  const radius = store?.clock_radius || 150
+  const isInRange = distance !== null && distance <= radius && !gpsWeak
+  const hasWifiRule = !!store?.allowed_wifi?.length
+  const gpsOk = (isInRange || !store?.lat) && !gpsWeak
+  const wifiOk = !hasWifiRule || wifiMatch === true
+  const canClockByLocation = gpsLocation && (gpsOk || wifiOk)
+
   return (
     <div className="fade-in">
       {/* Welcome */}
@@ -141,13 +207,23 @@ export default function PortalHome() {
         background: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(59,130,246,0.08), rgba(167,139,250,0.08))',
         border: '1px solid rgba(34,211,238,0.15)',
         borderRadius: 20, padding: '28px 32px', marginBottom: 24,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap',
       }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: 'var(--text-primary)' }}>
-          {greeting}，{profile?.name}
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-          {profile?.dept}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: 'var(--text-primary)' }}>
+            {greeting}，{profile?.name}
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+            {profile?.dept}{profile?.position ? ` · ${profile.position}` : ''} — {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          </p>
+        </div>
+        {/* 即時時鐘 — 對齊 LIFF Clock.jsx */}
+        <div style={{
+          fontSize: 32, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+          color: 'var(--accent-cyan)', letterSpacing: 1,
+        }}>
+          {now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+        </div>
       </div>
 
       {/* Clock-in Card */}
@@ -177,6 +253,30 @@ export default function PortalHome() {
                 )}
               </div>
             )}
+            {/* 模式 tag — 非 normal 才顯示（對齊 LIFF） */}
+            {((todayAttendance?.clock_in_mode && todayAttendance.clock_in_mode !== 'normal')
+              || (todayAttendance?.clock_out_mode && todayAttendance.clock_out_mode !== 'normal')) && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {todayAttendance.clock_in_mode && todayAttendance.clock_in_mode !== 'normal' && MODE_META[todayAttendance.clock_in_mode] && (
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    background: MODE_META[todayAttendance.clock_in_mode].dim,
+                    color: MODE_META[todayAttendance.clock_in_mode].color,
+                  }}>
+                    {MODE_META[todayAttendance.clock_in_mode].icon} 上{MODE_META[todayAttendance.clock_in_mode].label}
+                  </span>
+                )}
+                {todayAttendance.clock_out_mode && todayAttendance.clock_out_mode !== 'normal' && MODE_META[todayAttendance.clock_out_mode] && (
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    background: MODE_META[todayAttendance.clock_out_mode].dim,
+                    color: MODE_META[todayAttendance.clock_out_mode].color,
+                  }}>
+                    {MODE_META[todayAttendance.clock_out_mode].icon} 下{MODE_META[todayAttendance.clock_out_mode].label}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           {clockAction && (
             <button
@@ -196,6 +296,67 @@ export default function PortalHome() {
             </button>
           )}
         </div>
+
+        {/* ── GPS / WiFi 狀態卡（對齊 LIFF）── */}
+        {clockAction && (
+          <div style={{
+            padding: '10px 14px', borderRadius: 10, marginBottom: 10,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <MapPin size={13} style={{ color: 'var(--accent-cyan)' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>定位狀態</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+                門市：{store?.name || '—'} · 範圍 {radius}m
+              </span>
+            </div>
+
+            {gpsError ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: gpsWeak ? 'var(--accent-orange)' : 'var(--accent-red)' }}>
+                {gpsWeak ? <AlertTriangle size={14} /> : <XCircle size={14} />}
+                <span>{gpsError}</span>
+              </div>
+            ) : !gpsLocation ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>📍 定位中...</div>
+            ) : distance !== null && store?.lat ? (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', borderRadius: 8,
+                background: isInRange ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)',
+              }}>
+                {isInRange
+                  ? <CheckCircle size={16} style={{ color: 'var(--accent-green)', flexShrink: 0 }} />
+                  : <AlertTriangle size={16} style={{ color: 'var(--accent-red)', flexShrink: 0 }} />}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: isInRange ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                    {isInRange ? '在打卡範圍內' : '不在打卡範圍內'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    距離 {distance >= 1000 ? `${(distance / 1000).toFixed(1)}km` : `${distance}m`} · GPS 精度 {gpsAccuracy}m
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>📍 GPS OK（門市未設座標，跳過範圍檢查）</div>
+            )}
+
+            {hasWifiRule && (
+              <div style={{
+                marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                color: wifiMatch === true ? 'var(--accent-green)' : wifiMatch === false ? 'var(--accent-orange)' : 'var(--text-muted)',
+              }}>
+                <Wifi size={13} />
+                {wifiMatch === null ? '檢查 IP 中...' : wifiMatch ? `WiFi 已連門市網路（${clientIp}）` : `IP（${clientIp}）不在白名單`}
+              </div>
+            )}
+
+            {!canClockByLocation && gpsLocation && !gpsError && (
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent-orange)' }}>
+                ⚠️ GPS 或 WiFi 至少一項要通過才能打卡
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── 4 模式打卡選擇 ── */}
         {clockAction && (

@@ -6,10 +6,10 @@
  */
 
 // GPS accuracy threshold in metres — positions less accurate than this are discarded
-const GPS_ACCURACY_THRESHOLD = 200
+export const GPS_ACCURACY_THRESHOLD = 200
 
 // Haversine distance in metres
-function haversineMetres(lat1, lng1, lat2, lng2) {
+export function haversineMetres(lat1, lng1, lat2, lng2) {
   const R = 6371000
   const toRad = (d) => (d * Math.PI) / 180
   const dLat = toRad(lat2 - lat1)
@@ -39,7 +39,7 @@ function getGeoPosition() {
 }
 
 // Get public IP with retry (up to 2 attempts, fallback to backup API)
-async function getPublicIP() {
+export async function getPublicIP() {
   const apis = [
     'https://api.ipify.org?format=json',
     'https://api.seeip.org/jsonip',
@@ -58,7 +58,7 @@ async function getPublicIP() {
 }
 
 // Check if an IP matches a CIDR or exact IP entry
-function ipMatchesCIDR(ip, cidr) {
+export function ipMatchesCIDR(ip, cidr) {
   const trimmed = cidr.trim()
   if (!trimmed) return false
   const ipToNum = (s) => {

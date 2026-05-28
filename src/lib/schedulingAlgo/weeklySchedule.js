@@ -330,26 +330,14 @@ export function runProgrammaticSchedule(data) {
     const demand = minWorkersPerDay[date] || minStaff
     const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
     const adj = adjacentRestCount(empName, date)
-    // ★ 跨月超標軟懲罰（penalty=10 — 輕引導，H3 跟其他項都能 override）
-    let crossMonthPenalty = 0
-    if (monthlyCtx?.priorRestByMonth || monthlyCtx?.cycleRestByMonth) {
-      const monthKey = date.slice(0, 7)
-      const prior = monthlyCtx.priorRestByMonth?.[empName]?.[monthKey] || 0
-      const cycleSoFar = monthlyCtx.cycleRestByMonth?.[empName]?.[monthKey] || 0
-      const thisWeekInMonth = weekDates.filter(d => d.slice(0, 7) === monthKey && restDayPlan[empName].has(d)).length
-      const isPT = monthTargetMap[empName]?.isPT
-      const target = isPT
-        ? (monthlyCtx.monthlyRestTargetPT ?? 15)
-        : (monthlyCtx.monthlyRestTargetFT ?? 10)
-      const totalIfAdd = prior + cycleSoFar + thisWeekInMonth + 1
-      crossMonthPenalty = Math.max(0, totalIfAdd - target) * 10
-    }
     // ★ H3 救援 bonus：往回看連續 ≥6 天 → 此日強烈鼓勵排休
-    //   只算 backward (forward 算不準會 over-fire)，bonus 絕對值遠高於 month penalty
+    //   只算 backward (forward 算不準會 over-fire)；只跟 H3 法規綁，不影響其他評分
     let h3Bonus = 0
     const consecBack = consecutiveWorkBackward(empName, date)
-    if (consecBack >= 6) h3Bonus = -100 * (consecBack - 5)  // 連 6 天 -100，連 7 天 -200 ...
-    return demand + peerResting * 2.5 + adj * 3 + crossMonthPenalty + h3Bonus + Math.random() * 0.5
+    if (consecBack >= 6) h3Bonus = -100 * (consecBack - 5)
+    // ※ 已移除跨月超標 penalty — 它會隨著 priorRestByMonth 累積而越來越偏，
+    //   導致後 cycle 排班大亂。改用單純 post-correction (B) 在 cycle 結束後自動 swap。
+    return demand + peerResting * 2.5 + adj * 3 + h3Bonus + Math.random() * 0.5
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {
     let needed = count

@@ -382,8 +382,12 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   // staffing 反而擋掉、結果違 H3。前面 cycle 全綠、第 3 cycle 開始爆
   // 就是這個累積效應。
   //
-  // 強制每個員工 cycle 結束時 backward streak ≤5，靠 swap 後段工作日 ↔ 後段休假日。
-  const MAX_END_STREAK = 5
+  // 強制每個員工 cycle 結束時 backward streak ≤3，給下個 cycle 開頭有 3 天緩衝。
+  // 原本 ≤5 不夠：cycle N+1 day 1 work → streak 6，day 2 work → 7 違法。
+  // 改 ≤3 後：cycle N+1 day 1-3 work → streak 4-6 OK，day 4 才需要休。
+  // (診斷 log 顯示 PT 在 cycle 1 用滿 14 天 = 月 cap 15 的 93%，cycle N+1 May
+  //  剩餘 budget 只有 1 天 → 連續工作集中爆發。aggressive 末端 swap 強制平均化。)
+  const MAX_END_STREAK = 3
   const cycleEndDate = monthDates[monthDates.length - 1]
 
   // helper：算 emp 從 fromDate 往回的連續工作天（不假設 fromDate 是上班）

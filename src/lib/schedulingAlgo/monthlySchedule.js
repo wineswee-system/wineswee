@@ -205,11 +205,20 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   const priorRestByMonthForCheck = data.priorRestByMonth || {}
 
   // helper：算 假設 dateStr 變成工作日後，所在的連續工作天數
+  // 包含 data.previousWeek (跨 cycle history) — 不然跨月 swap 在 cycle 邊界會漏算
   const consecutiveWorkAtIfWork = (empName, dateStr, currentAssignments) => {
     const isWorkDay = {}
+    // 1. 累計本 cycle 內所有 assignments
     for (const a of currentAssignments) {
       if (a.employee !== empName) continue
       isWorkDay[a.date] = a.shift && !isAbsence(a.shift)
+    }
+    // 2. 累計 previousWeek (上 cycle 末 7-14 天) — Critical fix: 不然 swap 月初的工作日時
+    //    backward streak 會漏算上 cycle 連續工作天，誤判 swap 安全
+    for (const p of (data.previousWeek || [])) {
+      if (p.employee !== empName) continue
+      if (isWorkDay[p.date] !== undefined) continue  // 本 cycle 已有 → 不覆蓋
+      isWorkDay[p.date] = p.shift && !isAbsence(p.shift)
     }
     isWorkDay[dateStr] = true  // 假設此日改成上班
     let count = 1
@@ -511,8 +520,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
             if (s && !isAbsence(s)) consec++
             else break
           }
-          const maxConsec = isPT ? 6 : 12
-          return consec <= maxConsec
+          // 公司鐵則：FT 也跟 PT 一樣統一七休一 (≤6 天)
+          // 原本硬編 12 天是舊「四週變形」但書，已撤回（commit d1cc41d 之後統一 6 天）
+          return consec <= MAX_CONSECUTIVE_WORK_DAYS
         }
         const passH3 = isH3SafeForRA()
 

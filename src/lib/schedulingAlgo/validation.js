@@ -51,8 +51,10 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
   const dateIdx = weekDates.indexOf(date)
   let consec = 1
   let reachedStart = true  // 是否往回走到當週起點都沒遇到 rest
+  // schedule[emp.name] 在某些 fallback path 可能未初始化，先 default 成空 object 防 NPE
+  const empSchedule = schedule[emp.name] || {}
   for (let i = dateIdx - 1; i >= 0; i--) {
-    const s = schedule[emp.name][weekDates[i]]
+    const s = empSchedule[weekDates[i]]
     if (s && !isAbsence(s)) consec++
     else { reachedStart = false; break }
   }
@@ -81,7 +83,7 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
 
   // H4: Cross-day shift gap ≥ 11h
   if (dateIdx > 0) {
-    const prevShift = schedule[emp.name][weekDates[dateIdx - 1]]
+    const prevShift = empSchedule[weekDates[dateIdx - 1]]
     if (prevShift && !isAbsence(prevShift)) {
       const prevDef = allShiftDefs.find(d => d.name === prevShift)
       if (prevDef) {
@@ -103,7 +105,7 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
   }
 
   if (dateIdx < weekDates.length - 1) {
-    const nextShift = schedule[emp.name][weekDates[dateIdx + 1]]
+    const nextShift = empSchedule[weekDates[dateIdx + 1]]
     if (nextShift && !isAbsence(nextShift)) {
       const nextDef = allShiftDefs.find(d => d.name === nextShift)
       if (nextDef) {

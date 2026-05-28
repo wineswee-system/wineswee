@@ -285,7 +285,29 @@ export function runProgrammaticSchedule(data) {
     return Math.max(0, weeklyTarget - thisWeekUsed)
   }
 
+  // 員工處理順序：「rest deficit 高的先排」
+  // 原本固定 FT 先 PT 後 → 前幾週 FT 把好日子拿光、PT 累積 deficit
+  //                       → 後幾週 PT 想補休但 staffing 擋掉 → 末段連續工作 7+ 天 → 違 H3
+  // 改成 deficit 排序：本週開始時，誰累積最落後就先給機會
+  // (FT vs PT 不再硬性優先；deficit 自然會平均拉回兩邊)
   const ftFirstOrder = [...employees].sort((a, b) => {
+    const aTarget = monthRestTarget[a.name] || 10
+    const bTarget = monthRestTarget[b.name] || 10
+    const aUsed = monthlyCtx?.restDaysUsed?.[a.name] || 0
+    const bUsed = monthlyCtx?.restDaysUsed?.[b.name] || 0
+    // 進度比例：應該已用 vs 實際已用，差越大越落後
+    // 用本週開始時的「應該進度」算（總 cycle 內已過幾週 / 總週數）
+    const cycleDays = monthlyCtx?.cycleDays || 28
+    const weeksRemaining = monthlyCtx?.weeksRemaining ?? 0
+    const totalWeeks = Math.ceil(cycleDays / 7)
+    const weeksDone = Math.max(0, totalWeeks - weeksRemaining - 1)
+    const expectedRatio = totalWeeks > 0 ? weeksDone / totalWeeks : 0
+    const aExpected = aTarget * expectedRatio
+    const bExpected = bTarget * expectedRatio
+    const aDeficit = aExpected - aUsed
+    const bDeficit = bExpected - bUsed
+    if (Math.abs(aDeficit - bDeficit) > 0.1) return bDeficit - aDeficit  // deficit 大的先
+    // tie-break：仍然 FT 先（保 backward compat）
     const aIsPT = monthTargetMap[a.name]?.isPT ? 1 : 0
     const bIsPT = monthTargetMap[b.name]?.isPT ? 1 : 0
     return aIsPT - bIsPT

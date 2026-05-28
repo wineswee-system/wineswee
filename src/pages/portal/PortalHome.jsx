@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Clock, Calendar, DollarSign, GitBranch, MapPin, Wifi, Loader, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { Clock, MapPin, Wifi, Loader, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import { supabase } from '../../lib/supabase'
@@ -8,22 +7,11 @@ import { serverClockIn } from '../../lib/db'
 import { validateClockIn, haversineMetres, ipMatchesCIDR, getPublicIP, GPS_ACCURACY_THRESHOLD } from '../../lib/clockInValidator'
 import { todayTW, nowTimeTW } from '../../lib/datetime'
 
-const ALL_QUICK_ACTIONS = [
-  { icon: Calendar, label: '請假', desc: '假單申請', path: '/hr/leave', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)' },
-  { icon: DollarSign, label: '薪資', desc: '查看薪資單', path: '/hr/salary', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', minRole: 'office_staff' },
-  { icon: GitBranch, label: '流程', desc: '任務回報', path: '/process/tasks', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
-  { icon: Calendar, label: '出勤', desc: '出勤紀錄', path: '/hr/attendance', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
-]
-
-const ROLE_ORDER = ['store_staff', 'office_staff', 'manager', 'admin', 'super_admin']
-const roleAtLeast = (userRole, minRole) => ROLE_ORDER.indexOf(userRole) >= ROLE_ORDER.indexOf(minRole)
-
 export default function PortalHome() {
   const { profile, profileReady } = useAuth()
   const { handleError } = useErrorHandler('portal')
   const [todayAttendance, setTodayAttendance] = useState(null)
-  const [pendingTasks, setPendingTasks] = useState(0)
-  const [recentLeaves, setRecentLeaves] = useState([])
+  const [recentAttendance, setRecentAttendance] = useState([])  // 最近 7 天打卡紀錄
   const [store, setStore] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
@@ -99,13 +87,15 @@ export default function PortalHome() {
       .eq('employee_id', profile.id).eq('date', today).maybeSingle()
       .then(({ data }) => setTodayAttendance(data))
 
-    supabase.from('tasks').select('id', { count: 'exact', head: true })
-      .eq('assignee_id', profile.id).in('status', ['未開始', '進行中'])
-      .then(({ count }) => setPendingTasks(count || 0))
-
-    supabase.from('leave_requests').select('*')
-      .eq('employee_id', profile.id).order('id', { ascending: false }).limit(5)
-      .then(({ data }) => setRecentLeaves(data || []))
+    // 最近 7 天打卡紀錄（含今天）
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10)
+    supabase.from('attendance_records').select('date, clock_in, clock_out, hours, status, clock_in_mode, clock_out_mode, clock_in_location')
+      .eq('employee_id', profile.id)
+      .gte('date', sevenDaysAgoStr)
+      .lte('date', today)
+      .order('date', { ascending: false })
+      .then(({ data }) => setRecentAttendance(data || []))
 
     // 抓今天可用的「已核准」換班單 — 換班模式打卡必須對應一張
     supabase.from('shift_swaps').select('id, swap_date, requester_shift, target_shift, requester_id, target_id')
@@ -463,85 +453,77 @@ export default function PortalHome() {
         )}
       </div>
 
-      {/* Status Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-          borderRadius: 14, padding: '18px 20px',
-        }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>待辦任務</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: pendingTasks > 0 ? 'var(--accent-orange)' : 'var(--accent-green)' }}>
-            {pendingTasks}
+      {/* 近期打卡紀錄 — 對齊 LIFF Clock，只放自己的紀錄 */}
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+        borderRadius: 14, padding: '20px 24px',
+      }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14 }}>
+          近期打卡紀錄（最近 7 天）
+        </h3>
+        {recentAttendance.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
+            尚無打卡紀錄
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>項未完成</div>
-        </div>
-
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-          borderRadius: 14, padding: '18px 20px',
-        }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>請假紀錄</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent-blue)' }}>
-            {recentLeaves.filter(l => l.status === '已核准').length}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>筆已核准</div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>快速操作</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {ALL_QUICK_ACTIONS.filter(a => !a.minRole || roleAtLeast(profile?.role, a.minRole)).map(a => {
-            const Icon = a.icon
-            return (
-              <Link key={a.path} to={a.path} style={{
-                textDecoration: 'none',
-                background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                borderRadius: 14, padding: '20px 16px', textAlign: 'center',
-                transition: 'all 0.2s', cursor: 'pointer',
-              }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12, margin: '0 auto 10px',
-                  background: a.dim, color: a.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Icon size={20} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{a.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.desc}</div>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Recent Leaves */}
-      {recentLeaves.length > 0 && (
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-          borderRadius: 14, padding: '20px 24px',
-        }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>近期請假</h3>
-          {recentLeaves.map(l => (
-            <div key={l.id} style={{
+        ) : recentAttendance.map(r => {
+          const inMode = MODE_META[r.clock_in_mode]
+          const outMode = MODE_META[r.clock_out_mode]
+          const showInTag = r.clock_in_mode && r.clock_in_mode !== 'normal' && inMode
+          const showOutTag = r.clock_out_mode && r.clock_out_mode !== 'normal' && outMode && r.clock_out_mode !== r.clock_in_mode
+          const statusColor =
+            r.status === '正常'   ? 'var(--accent-green)'
+          : r.status === '遲到'   ? 'var(--accent-orange)'
+          : r.status === '加班'   ? 'var(--accent-purple)'
+          : r.status === '請假'   ? 'var(--accent-blue)'
+          : r.status === '外出'   ? 'var(--accent-green)'
+          : r.status === '補登'   ? 'var(--accent-cyan)'
+          : 'var(--text-muted)'
+          const statusDim =
+            r.status === '正常'   ? 'var(--accent-green-dim)'
+          : r.status === '遲到'   ? 'var(--accent-orange-dim)'
+          : r.status === '加班'   ? 'var(--accent-purple-dim)'
+          : r.status === '請假'   ? 'var(--accent-blue-dim)'
+          : r.status === '外出'   ? 'var(--accent-green-dim)'
+          : r.status === '補登'   ? 'var(--accent-cyan-dim)'
+          : 'var(--bg-secondary)'
+          return (
+            <div key={r.date} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 0', borderBottom: '1px solid var(--border-subtle)',
+              padding: '12px 0', borderBottom: '1px solid var(--border-subtle)', gap: 12,
             }}>
-              <div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{l.type || '假'}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{l.start_date}</span>
-                {l.days && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>({l.days}天)</span>}
+              <div style={{ minWidth: 80 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {r.date?.slice(5) /* MM-DD */}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {new Date(r.date).toLocaleDateString('zh-TW', { weekday: 'short' })}
+                </div>
+              </div>
+              <div style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>上 <strong style={{ color: r.clock_in ? 'var(--accent-green)' : 'var(--text-muted)' }}>{r.clock_in || '--:--'}</strong></span>
+                <span>下 <strong style={{ color: r.clock_out ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{r.clock_out || '--:--'}</strong></span>
+                {r.hours != null && <span style={{ color: 'var(--text-muted)' }}>{r.hours}h</span>}
+                {showInTag && (
+                  <span style={{
+                    padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700,
+                    background: inMode.dim, color: inMode.color,
+                  }}>{inMode.icon} 上{inMode.label}</span>
+                )}
+                {showOutTag && (
+                  <span style={{
+                    padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700,
+                    background: outMode.dim, color: outMode.color,
+                  }}>{outMode.icon} 下{outMode.label}</span>
+                )}
               </div>
               <span style={{
-                padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                background: l.status === '已核准' ? 'var(--accent-green-dim)' : l.status === '待審核' ? 'var(--accent-orange-dim)' : 'var(--accent-red-dim)',
-                color: l.status === '已核准' ? 'var(--accent-green)' : l.status === '待審核' ? 'var(--accent-orange)' : 'var(--accent-red)',
-              }}>{l.status}</span>
+                padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: statusDim, color: statusColor, flexShrink: 0,
+              }}>{r.status || '—'}</span>
             </div>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
   )
 }

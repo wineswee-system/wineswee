@@ -25,6 +25,7 @@ export function printFormMemo({
   chainSteps = [],
   approverMap = {},
   signatures = {},
+  _win,
 }) {
   const fields = template?.fields || []
 
@@ -83,6 +84,7 @@ export function printFormMemo({
         }
       : undefined,
     attachments,
+    _win,
   })
 }
 

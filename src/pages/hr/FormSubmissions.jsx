@@ -93,11 +93,13 @@ export default function FormSubmissions() {
     const orgId = profile?.organization_id
     const [listRes, orgRes] = await Promise.all([
       q,
-      orgId ? supabase.from('organizations').select('logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     const rows = listRes.data || []
     setList(rows)
     setLogoUrl(orgRes?.data?.logo_url || '')
+    // 優先用 DB 的 organization.name 當公司名，沒設才 fallback localStorage
+    if (orgRes?.data?.name) setCompanyName(orgRes.data.name)
 
     // task #3：先抓 list 內出現的所有 chain_ids 對應的 steps 一次 → render 時 lookup
     const chainIds = [...new Set(rows.map(r => r.template?.approval_chain_id).filter(Boolean))]
@@ -221,13 +223,19 @@ export default function FormSubmissions() {
   }
 
   // 列印簽呈：抓 chain steps + 簽核人姓名 → 開新視窗
+  // ★ 必須在 click handler 第一行 sync 開好 window，否則 iOS Safari 會擋（async 後失去 user gesture）
   const handlePrint = async (sub) => {
-    if (!companyName || companyName === '本公司') {
-      if (!(await confirm({ message: '尚未設定公司名稱，要先設定嗎？' }))) return
-      setShowCompanyModal(true)
-      return
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      await doPrint(sub, win)
+    } catch (e) {
+      try { win.close() } catch (_) {}
+      toast.error('列印失敗：' + (e?.message || e))
     }
+  }
 
+  const doPrint = async (sub, win) => {
     // 申請人 step 0（PDF 簽核欄第一格）
     const applicantStep = {
       label: '申請人',
@@ -298,6 +306,7 @@ export default function FormSubmissions() {
       chainSteps: [applicantStep, ...restSteps],
       approverMap: {},
       signatures,
+      _win: win,
     })
   }
 

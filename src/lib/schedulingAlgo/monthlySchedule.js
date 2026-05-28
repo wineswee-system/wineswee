@@ -316,6 +316,105 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 末端正規化：cycle 最後一天的 backward streak ≤5 → 不傳爛 pattern 到下個 cycle
+  // ══════════════════════════════════════════════════════════════════════
+  // 解的就是「越排越亂」根因：cycle N 末端如果某員工連續工作 6+ 天，
+  // cycle N+1 一開頭 backward 就帶著長 streak，hard rule 越早 trigger 但
+  // staffing 反而擋掉、結果違 H3。前面 cycle 全綠、第 3 cycle 開始爆
+  // 就是這個累積效應。
+  //
+  // 強制每個員工 cycle 結束時 backward streak ≤5，靠 swap 後段工作日 ↔ 後段休假日。
+  const MAX_END_STREAK = 5
+  const cycleEndDate = monthDates[monthDates.length - 1]
+
+  // helper：算 emp 從 fromDate 往回的連續工作天（不假設 fromDate 是上班）
+  const backwardWorkStreakFrom = (empName, fromDate, currentAssignments) => {
+    const aMap = {}
+    for (const a of currentAssignments) {
+      if (a.employee === empName) aMap[a.date] = a.shift
+    }
+    let count = 0
+    const d = new Date(fromDate)
+    while (true) {
+      const ds = d.toISOString().slice(0, 10)
+      const s = aMap[ds]
+      if (!s || isAbsence(s)) break
+      count++
+      d.setDate(d.getDate() - 1)
+    }
+    return count
+  }
+
+  for (const emp of data.employees) {
+    const endStreak = backwardWorkStreakFrom(emp.name, cycleEndDate, allAssignments)
+    if (endStreak <= MAX_END_STREAK) continue
+
+    const excess = endStreak - MAX_END_STREAK  // 要從末端 swap 出幾天
+    // 候選：末端連續工作日（從 cycleEndDate 往回 endStreak 天）— 排越後面越優先 swap
+    const endWorkDays = []
+    {
+      const d = new Date(cycleEndDate)
+      for (let i = 0; i < endStreak; i++) {
+        endWorkDays.push(d.toISOString().slice(0, 10))
+        d.setDate(d.getDate() - 1)
+      }
+    }
+    // 找早段（cycle 前 2/3）的休假可以 swap 過來
+    const earlyCutoff = monthDates[Math.floor(monthDates.length * 2 / 3) - 1]
+    const earlyRestEntries = allAssignments
+      .map((a, idx) => ({ a, idx }))
+      .filter(({ a }) =>
+        a.employee === emp.name &&
+        a.date <= earlyCutoff &&
+        isAbsence(a.shift) && countsAsMonthlyRest(a.shift) &&
+        !data.offRequests.find(o => o.employee === a.employee && o.date === a.date) &&
+        a.shift !== '未入職' && a.shift !== '已離職'
+      )
+      // 越早的越優先 swap 過來（給末端更多喘息）
+      .sort((x, y) => x.a.date.localeCompare(y.a.date))
+
+    let swapped = 0
+    const usedRestIdx = new Set()
+    for (const endDate of endWorkDays) {
+      if (swapped >= excess) break
+      // 找這個末端 endDate 的 assignment
+      const endIdx = allAssignments.findIndex(a => a.employee === emp.name && a.date === endDate)
+      if (endIdx === -1) continue
+      const endA = allAssignments[endIdx]
+      if (isAbsence(endA.shift)) continue
+      if (data.offRequests.find(o => o.employee === emp.name && o.date === endDate)) continue
+
+      // 跟某個早段休假交換
+      for (const restEntry of earlyRestEntries) {
+        if (usedRestIdx.has(restEntry.idx)) continue
+        const restA = allAssignments[restEntry.idx]
+        // 模擬 swap 後：restA.date 變成 endA 的 shift，endA.date 變成休
+        // 檢查 swap 後是否會違 H3（restA.date 變上班會不會破連續 ≤6）
+        const trialAssignments = allAssignments.map((a, i) => {
+          if (i === endIdx) return { ...a, shift: '休', actual_start: null, actual_end: null, actual_hours: 0 }
+          if (i === restEntry.idx) return { ...a, shift: endA.shift, actual_start: endA.actual_start, actual_end: endA.actual_end, actual_hours: endA.actual_hours }
+          return a
+        })
+        const newConsec = consecutiveWorkAtIfWork(emp.name, restA.date, trialAssignments)
+        if (newConsec > MAX_CONSECUTIVE_WORK_DAYS) continue
+        // 通過 → 套用
+        allAssignments[endIdx] = trialAssignments[endIdx]
+        allAssignments[restEntry.idx] = trialAssignments[restEntry.idx]
+        usedRestIdx.add(restEntry.idx)
+        swapped++
+        console.log(`[Monthly] cycle-end swap: ${emp.name} ${endDate}(${endA.shift}→休) ↔ ${restA.date}(休→${endA.shift})  末端 streak ${endStreak}→${endStreak - swapped}`)
+        break
+      }
+    }
+
+    if (swapped > 0) {
+      console.log(`[Monthly] ${emp.name} 末端正規化：swap ${swapped} 天，cycle 末端 streak ${endStreak}→${endStreak - swapped}`)
+    } else if (endStreak > MAX_END_STREAK) {
+      console.warn(`[Monthly] ${emp.name} 末端 streak=${endStreak} 找不到合法 swap，下個 cycle 可能出 H3`)
+    }
+  }
+
   // ── 最終校正：月休天數 enforce 範圍 ──
   // FT: 精確 = ftMin（target = cap）
   // PT: 範圍 [ftMin, ptMax]，不能少於 FT、不能多於 ptMax

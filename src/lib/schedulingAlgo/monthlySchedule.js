@@ -7,6 +7,7 @@
 import {
   getShiftHours, isAbsence, countsAsMonthlyRest,
   splitIntoWeeks, getCycleFor, isPartTime, parseTime,
+  MAX_CONSECUTIVE_WORK_DAYS,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult, isLegallyValid } from './validation'
@@ -196,14 +197,44 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
   }
 
-  // ── 跨月校正 (B)：偵測 cycle + prior 加總 > monthly target 的情況 ──
-  // H soft penalty 已在 weekly scheduler 內降低超標機率，這裡是最後一道防線。
-  // 自動 swap 風險高（可能違 H3/H4），改成偵測 + warning，讓 UI 顯示給管理者手動調整。
+  // ── 跨月校正 (B)：偵測 cycle + prior 加總 > monthly target，自動 swap ──
+  // H soft penalty 在 weekly scheduler 內已降低機率，B 是最後一道防線。
+  // 演算法：把超標月內、本 cycle 的休假，跟非超標月、本 cycle 的工作日做 swap
+  //         需通過 H3 (連續工作 ≤6 天) 才接受 swap，找不到合法 swap 才報 warning
   const priorRestByMonthForCheck = data.priorRestByMonth || {}
+
+  // helper：算 假設 dateStr 變成工作日後，所在的連續工作天數
+  const consecutiveWorkAtIfWork = (empName, dateStr, currentAssignments) => {
+    const isWorkDay = {}
+    for (const a of currentAssignments) {
+      if (a.employee !== empName) continue
+      isWorkDay[a.date] = a.shift && !isAbsence(a.shift)
+    }
+    isWorkDay[dateStr] = true  // 假設此日改成上班
+    let count = 1
+    const d = new Date(dateStr)
+    // 往前
+    let prev = new Date(d)
+    while (true) {
+      prev.setDate(prev.getDate() - 1)
+      const ds = prev.toISOString().slice(0, 10)
+      if (isWorkDay[ds]) count++
+      else break
+    }
+    // 往後
+    let next = new Date(d)
+    while (true) {
+      next.setDate(next.getDate() + 1)
+      const ds = next.toISOString().slice(0, 10)
+      if (isWorkDay[ds]) count++
+      else break
+    }
+    return count
+  }
+
   for (const emp of data.employees) {
     const isPT = isPartTime(emp)
     const monthTarget = isPT ? ptMonthlyTarget : ftMonthlyTarget
-    // 該員工跨月的所有 month key（含 cycle 內 + prior 都看）
     const allMonthKeys = new Set([
       ...Object.keys(cycleRestByMonth[emp.name] || {}),
       ...Object.keys(priorRestByMonthForCheck[emp.name] || {}),
@@ -212,15 +243,75 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       const cycleRest = cycleRestByMonth[emp.name]?.[monthKey] || 0
       const priorRest = priorRestByMonthForCheck[emp.name]?.[monthKey] || 0
       const total = cycleRest + priorRest
-      if (total > monthTarget) {
+      if (total <= monthTarget) continue
+      let excess = total - monthTarget
+
+      // 超標月內、本 cycle 內的休假（自己請的假 / 邊界日不動）
+      const overshootRestIndices = allAssignments
+        .map((a, idx) => ({ a, idx }))
+        .filter(({ a }) =>
+          a.employee === emp.name &&
+          a.date.slice(0, 7) === monthKey &&
+          isAbsence(a.shift) && countsAsMonthlyRest(a.shift) &&
+          !data.offRequests.find(o => o.employee === a.employee && o.date === a.date) &&
+          a.shift !== '未入職' && a.shift !== '已離職'
+        )
+        // 月底先 swap（最容易破壞月份累計，且離 cycle 邊界近）
+        .sort((x, y) => y.a.date.localeCompare(x.a.date))
+
+      // 非超標月、本 cycle 內的工作日（可被換成休假）
+      const otherMonthWorkIndices = allAssignments
+        .map((a, idx) => ({ a, idx }))
+        .filter(({ a }) =>
+          a.employee === emp.name &&
+          a.date.slice(0, 7) !== monthKey &&
+          !isAbsence(a.shift)
+        )
+        // 跟超標月相對的另一邊月底先換（最自然，靠近月份交界）
+        .sort((x, y) => x.a.date.localeCompare(y.a.date))
+
+      let swapped = 0
+      const usedWorkIdx = new Set()
+      outer:
+      for (const restEntry of overshootRestIndices) {
+        if (swapped >= excess) break
+        // restEntry.date 即將變成上班 — 先檢查 H3
+        const consec = consecutiveWorkAtIfWork(emp.name, restEntry.a.date, allAssignments)
+        if (consec > MAX_CONSECUTIVE_WORK_DAYS) continue  // 換了會違 H3
+        // 找一個工作日跟它互換
+        for (const workEntry of otherMonthWorkIndices) {
+          if (usedWorkIdx.has(workEntry.idx)) continue
+          // 做 swap：restDay 拿 workDay 的 shift，workDay 變成 '休'
+          const restA = allAssignments[restEntry.idx]
+          const workA = allAssignments[workEntry.idx]
+          allAssignments[restEntry.idx] = {
+            ...restA,
+            shift: workA.shift,
+            actual_start: workA.actual_start,
+            actual_end: workA.actual_end,
+            actual_hours: workA.actual_hours,
+          }
+          allAssignments[workEntry.idx] = {
+            ...workA, shift: '休',
+            actual_start: null, actual_end: null, actual_hours: 0,
+          }
+          usedWorkIdx.add(workEntry.idx)
+          swapped++
+          console.log(`[Monthly] cross-month swap: ${emp.name} ${restA.date}(休→${workA.shift}) ↔ ${workA.date}(${workA.shift}→休)`)
+          continue outer
+        }
+      }
+
+      if (swapped < excess) {
         allViolations.push({
           employee: emp.name,
           constraint: 'CROSS_MONTH_REST_OVERSHOOT',
           severity: 'warning',
           date: monthKey + '-01',
-          message: `${emp.name} ${monthKey} 月實際排休 ${total} 天（上 cycle ${priorRest} + 本 cycle ${cycleRest}），超出 ${isPT ? 'PT' : 'FT'} 目標 ${monthTarget} 天 — 請手動調整將月底的休假改回上班`,
+          message: `${emp.name} ${monthKey} 月實際排休 ${total} 天（上 cycle ${priorRest} + 本 cycle ${cycleRest}），超出 ${isPT ? 'PT' : 'FT'} 目標 ${monthTarget} 天，自動校正了 ${swapped} 天，剩 ${excess - swapped} 天找不到合法 swap（會違 H3），請手動調整`,
         })
-        console.warn(`[Monthly] 跨月超標：${emp.name} ${monthKey} = ${total}/${monthTarget} (prior=${priorRest}, cycle=${cycleRest})`)
+      } else if (swapped > 0) {
+        console.log(`[Monthly] ${emp.name} ${monthKey} 跨月校正：自動 swap ${swapped} 天，從 ${total} → ${total - swapped} (target ${monthTarget})`)
       }
     }
   }

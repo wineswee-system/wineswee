@@ -85,8 +85,10 @@ def gather_input(
     } for s in (slots_res.data or [])]
 
     # ── 3. store_settings ──
-    settings_res = sb.table("store_settings").select("*").eq("store_id", store_id).maybe_single().execute()
-    ss = settings_res.data or {}
+    # .maybe_single() 在 supabase-py 部分版本回 None 而非 Response，用 limit(1) 比較穩
+    settings_res = sb.table("store_settings").select("*").eq("store_id", store_id).limit(1).execute()
+    rows = (settings_res.data if settings_res else None) or []
+    ss = rows[0] if rows else {}
     store_settings = {
         "operating_hours": ss.get("operating_hours") or {},
         "ft_monthly_rest_days": ss.get("ft_monthly_rest_days") or 10,

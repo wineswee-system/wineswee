@@ -9,12 +9,14 @@ import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
-// 4 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode
+// 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode（2026-05-28 簡化 5 → 2）
+//   normal 不顯示、outing 顯示「外出」
+//   舊資料 overtime/leave/shift_swap 已 backfill 為 normal；映射保留為防快取舊 row
 const MODE_TAG = {
+  outing:     { label: '外出', color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
   overtime:   { label: '加班', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
   leave:      { label: '請假', color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)' },
   shift_swap: { label: '換班', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)' },
-  outing:     { label: '外出', color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
 }
 function ClockModeTags({ inMode, outMode }) {
   const tagStyle = (m) => ({

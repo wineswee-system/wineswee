@@ -15,9 +15,7 @@ export default function PortalHome() {
   const [store, setStore] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
-  const [clockMode, setClockMode] = useState('normal')      // normal | overtime | leave | shift_swap | outing
-  const [approvedSwaps, setApprovedSwaps] = useState([])    // 已核准且 swap_date=今日 的換班單（換班模式必選）
-  const [selectedSwapId, setSelectedSwapId] = useState(null)
+  const [clockMode, setClockMode] = useState('normal')      // normal | outing (2026-05-28 簡化 5 → 2)
   // ★ Live GPS / IP / WiFi 即時狀態（對齊 LIFF Clock.jsx 視覺 feedback）
   const [now, setNow] = useState(new Date())
   const [gpsLocation, setGpsLocation] = useState(null)      // { lat, lng }
@@ -97,12 +95,6 @@ export default function PortalHome() {
       .order('date', { ascending: false })
       .then(({ data }) => setRecentAttendance(data || []))
 
-    // 抓今天可用的「已核准」換班單 — 換班模式打卡必須對應一張
-    supabase.from('shift_swaps').select('id, swap_date, requester_shift, target_shift, requester_id, target_id')
-      .eq('status', '已核准').eq('swap_date', today)
-      .or(`requester_id.eq.${profile.id},target_id.eq.${profile.id}`)
-      .then(({ data }) => setApprovedSwaps(data || []))
-
     // Load employee's store for clock-in validation
     supabase.from('employees').select('store_id').eq('id', profile.id).maybeSingle()
       .then(({ data }) => {
@@ -132,18 +124,16 @@ export default function PortalHome() {
         accuracy: result.accuracy ?? null,   // ?? not || — 0 is a valid GPS accuracy
         ip: result.ip,
         clock_mode: clockMode,
-        shift_swap_id: clockMode === 'shift_swap' ? selectedSwapId : null,
       })
 
       setTodayAttendance(data.record)
       setClockMode('normal')   // reset after successful clock
-      setSelectedSwapId(null)
       const timeStr = nowTimeTW()
       const base = action === 'clock_in'
         ? `上班打卡成功 ${timeStr} — ${data.locationName || ''}`
         : `下班打卡成功 ${timeStr}`
       setClockMsg({ type: 'success', text: base })
-      // 後端 reminder 訊息（overtime / leave / outing 提醒另送申請單）— 1.5s 後切換顯示，停留 8s
+      // 後端 reminder 訊息（outing 模式提醒）— 1.5s 後切換顯示，停留 8s
       if (data.reminder) {
         setTimeout(() => setClockMsg({ type: 'warning', text: `⚠️ ${data.reminder}` }), 1500)
         setTimeout(() => setClockMsg(null), 9500)
@@ -167,20 +157,16 @@ export default function PortalHome() {
     ? todayAttendance.clock_out ? null : '下班打卡'
     : '上班打卡'
 
-  // Mode-driven button colour
+  // Mode-driven button colour（2026-05-28 簡化：2 模式）
   const MODE_META = {
-    normal:     { label: '一般',  color: 'var(--accent-cyan)',   dim: 'var(--accent-cyan-dim)',   icon: '🕒' },
-    overtime:   { label: '加班',  color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', icon: '⚡' },
-    leave:      { label: '請假',  color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)',   icon: '🌴' },
-    shift_swap: { label: '換班',  color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', icon: '🔄' },
-    outing:     { label: '外出',  color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)',  icon: '✈️' },
+    normal: { label: '一般', color: 'var(--accent-cyan)',  dim: 'var(--accent-cyan-dim)',  icon: '🕒' },
+    outing: { label: '外出', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', icon: '✈️' },
   }
   const modeMeta = MODE_META[clockMode] || MODE_META.normal
   const btnBackground = clockMode === 'normal'
     ? (clockAction === '下班打卡' ? 'var(--accent-orange)' : 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))')
     : modeMeta.color
   const btnShadow = '0 4px 14px rgba(0,0,0,0.25)'
-  // shift_swap 換班打卡不再需要換班單（緊急換班亦可使用此模式）
 
   // ★ Live GPS / WiFi 驗證狀態（給 UI feedback；實際送出仍由 validateClockIn 把關）
   const radius = store?.clock_radius || 150
@@ -348,17 +334,17 @@ export default function PortalHome() {
           </div>
         )}
 
-        {/* ── 4 模式打卡選擇 ── */}
+        {/* ── 2 模式打卡選擇（2026-05-28 簡化）── */}
         {clockAction && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginBottom: 10 }}>
               {Object.entries(MODE_META).map(([key, m]) => {
                 const active = clockMode === key
                 return (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setClockMode(key); if (key !== 'shift_swap') setSelectedSwapId(null) }}
+                    onClick={() => setClockMode(key)}
                     style={{
                       padding: '10px 6px', borderRadius: 10, cursor: 'pointer',
                       background: active ? m.dim : 'var(--bg-secondary)',
@@ -375,7 +361,7 @@ export default function PortalHome() {
               })}
             </div>
 
-            {/* ── 模式說明 + 換班單選擇器 ── */}
+            {/* ── 模式說明 ── */}
             <div style={{
               padding: '10px 14px', borderRadius: 10, marginBottom: 12,
               background: modeMeta.dim,
@@ -384,52 +370,13 @@ export default function PortalHome() {
             }}>
               {clockMode === 'normal' && (
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  依排班/辦公時間打卡，超出容許範圍會記遲到/早退。
-                </span>
-              )}
-              {clockMode === 'overtime' && (
-                <span style={{ color: 'var(--accent-orange)' }}>
-                  ⚡ 加班模式：不受時段限制。打卡成功後請記得另外送出加班申請單。
-                </span>
-              )}
-              {clockMode === 'leave' && (
-                <span style={{ color: 'var(--accent-blue)' }}>
-                  🌴 請假模式：遲到/早退不計罰，必須在班別時段內。打卡成功後請記得另外送出請假申請單。
+                  🕒 一般打卡：須在店內網路或 GPS 範圍內。
                 </span>
               )}
               {clockMode === 'outing' && (
                 <span style={{ color: 'var(--accent-green)' }}>
-                  ✈️ 外出模式：免位置驗證、免時段檢查。打卡成功後請記得另外送出公出申請單。
+                  ✈️ 外出打卡：免位置驗證，紀錄標籤為「外出」。
                 </span>
-              )}
-              {clockMode === 'shift_swap' && (
-                <div>
-                  <div style={{ color: 'var(--accent-purple)', marginBottom: 8 }}>
-                    🔄 換班模式：bypass 時段限制。若有已核准換班單可選填連結，緊急換班可直接打卡。
-                  </div>
-                  {approvedSwaps.length === 0 ? (
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-                      今日無已核准換班單（緊急換班可直接打卡，之後補送換班申請）
-                    </div>
-                  ) : (
-                    <select
-                      value={selectedSwapId || ''}
-                      onChange={e => setSelectedSwapId(e.target.value ? parseInt(e.target.value) : null)}
-                      style={{
-                        width: '100%', padding: '6px 10px', borderRadius: 6,
-                        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                        color: 'var(--text-primary)', fontSize: 12,
-                      }}
-                    >
-                      <option value="">— 不連結換班單（緊急換班）—</option>
-                      {approvedSwaps.map(s => (
-                        <option key={s.id} value={s.id}>
-                          #{s.id} {s.requester_id === profile.id ? `我${s.requester_shift} ↔ 對方${s.target_shift}` : `對方${s.requester_shift} ↔ 我${s.target_shift}`}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
               )}
             </div>
           </>

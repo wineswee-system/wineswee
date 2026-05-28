@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
 import { formatCurrency, fmtNT as fmt } from './currency'
+import { isWeekendDay } from './scheduleUtils'
 
 import { toast } from './toast'
 // Common PDF setup with Chinese-friendly font
@@ -443,7 +444,8 @@ export function exportScheduleCalendarPdf({ storeName, yearMonth, monthDates, sc
     const isOtherMonth = day < monthStart || day > monthEnd
     const isHol = holidaySet?.has?.(dateStr)
     const dow = day.getDay()
-    const isWeekend = dow === 0 || dow === 6
+    // ★ 公司設定假日 = Fri+Sat (WEEKEND_DAYS=[5,6])，不是 Sun+Sat
+    const isWeekend = isWeekendDay(dow)
 
     const dayEntries = (byDate[dateStr] || []).filter(e => !isAbsenceShift(e.shift))
 

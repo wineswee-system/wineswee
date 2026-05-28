@@ -7,7 +7,7 @@
 import {
   getShiftHours, isAbsence, countsAsMonthlyRest,
   splitIntoWeeks, getCycleFor, isPartTime, parseTime,
-  MAX_CONSECUTIVE_WORK_DAYS, isShiftWithinOH, getOperatingHoursForDate,
+  MAX_CONSECUTIVE_WORK_DAYS, isShiftWithinOH, getOperatingHoursForDate, isWeekendDay,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult, isLegallyValid } from './validation'
@@ -684,7 +684,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   if (timeSlotsForS10.length > 0) {
     for (const date of monthDates) {
       const dow = new Date(date).getDay()
-      const isWE = dow === 0 || dow === 6
+      // ★ 用 isWeekendDay (= WEEKEND_DAYS [5,6] = Fri+Sat)，不要 hardcode Sun+Sat
+      //   否則 S10 警告會把週日當假日、週五當平日，跟生成端的 timeSlotMode/weeklySchedule 不一致
+      const isWE = isWeekendDay(dow)
       const daySlots = timeSlotsForS10.filter(s =>
         s.day_type === 'all' || (s.day_type === 'weekend' && isWE) || (s.day_type === 'weekday' && !isWE)
       )

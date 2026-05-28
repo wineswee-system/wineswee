@@ -468,6 +468,10 @@ export default function Expenses() {
               { label: '用途', value: detailRow.description, multiline: true },
               ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
             ]}
+            attachments={(detailRow.attachments || []).map(url => ({
+              url,
+              name: decodeURIComponent(url.split('?')[0].split('/').pop() || '附件'),
+            }))}
             createdAt={detailRow.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
             requestType="expense"

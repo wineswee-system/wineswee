@@ -18,6 +18,7 @@ import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { useChainGuard } from '../../lib/useChainGuard'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -38,6 +39,7 @@ export default function Overtime() {
   const { profile, role, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
+  const chainGuard = useChainGuard({ formType: 'overtime', organizationId: profile?.organization_id })
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const [records, setRecords] = useState([])
@@ -343,12 +345,17 @@ export default function Overtime() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => {
-              setEditingId(null)
-              setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
-              setErrors({})
-              setShowModal(true)
-            }}><Plus size={14} /> 新增加班</button>
+            <button
+              className="btn btn-primary"
+              disabled={chainGuard.blocked}
+              title={chainGuard.blocked ? chainGuard.reason : undefined}
+              onClick={() => {
+                if (chainGuard.blocked) { toast.error(chainGuard.reason); return }
+                setEditingId(null)
+                setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
+                setErrors({})
+                setShowModal(true)
+              }}><Plus size={14} /> 新增加班</button>
           </div>
         </div>
       </div>

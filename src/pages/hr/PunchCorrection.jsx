@@ -17,6 +17,7 @@ import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { useChainGuard } from '../../lib/useChainGuard'
 
 import { toast } from '../../lib/toast'
 // LIFF 既有 row 可能有中文 type，Web 這邊統一解到 clock_in / clock_out 顯示
@@ -30,6 +31,7 @@ export default function PunchCorrection() {
   const { profile, role, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
+  const chainGuard = useChainGuard({ formType: 'correction', organizationId: profile?.organization_id })
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const userRole = role?.name || profile?.role || 'store_staff'
@@ -322,12 +324,17 @@ export default function PunchCorrection() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => {
-              setEditingId(null)
-              setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
-              setErrors({})
-              setShowModal(true)
-            }}><Plus size={14} /> 新增補登</button>
+            <button
+              className="btn btn-primary"
+              disabled={chainGuard.blocked}
+              title={chainGuard.blocked ? chainGuard.reason : undefined}
+              onClick={() => {
+                if (chainGuard.blocked) { toast.error(chainGuard.reason); return }
+                setEditingId(null)
+                setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
+                setErrors({})
+                setShowModal(true)
+              }}><Plus size={14} /> 新增補登</button>
           </div>
         </div>
       </div>

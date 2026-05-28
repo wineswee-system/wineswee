@@ -24,6 +24,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildWorkflowChainSteps, buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { useChainGuard } from '../../lib/useChainGuard'
 import { countWorkDays, snapToStep, diffHours, findDateOverlap } from '../../lib/leaveDaysCalc'
 import LeaveFormModal from './components/LeaveFormModal'
 import LeavePolicyModal from './components/LeavePolicyModal'
@@ -32,6 +33,7 @@ export default function Leave() {
   const { profile, role, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
+  const chainGuard = useChainGuard({ formType: 'leave', organizationId: profile?.organization_id })
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const [leaves, setLeaves] = useState([])
@@ -451,12 +453,17 @@ export default function Leave() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => {
-              setEditingId(null)
-              setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
-              setErrors({})
-              setShowModal(true)
-            }}><Plus size={14} /> 新增假單</button>
+            <button
+              className="btn btn-primary"
+              disabled={chainGuard.blocked}
+              title={chainGuard.blocked ? chainGuard.reason : undefined}
+              onClick={() => {
+                if (chainGuard.blocked) { toast.error(chainGuard.reason); return }
+                setEditingId(null)
+                setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
+                setErrors({})
+                setShowModal(true)
+              }}><Plus size={14} /> 新增假單</button>
           </div>
         </div>
       </div>

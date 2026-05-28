@@ -140,35 +140,77 @@ export async function buildChainBasedSteps({
     return [applicantStep, { label: '主管核示', name: '', status: 'current' }]
   }
 
-  // 用 RPC 拿 chain step 清單 + 動態解出來的 approver 名字（fixed_emp / applicant_dept_manager / specific_store_manager 等 9 種都解）
+  // 讀 chain steps：優先用快照（送出當下鎖定），確保 chain 改動不影響在飛單
   const applicantEmpId = row.employee_id || row.employee_emp_id || null
+
+  // ── 判斷 sourceTable → request_type 對應表 ──
+  const REQUEST_TYPE_MAP = {
+    expense_requests: 'expense_request',
+    leave_requests: 'leave_request',
+    overtime_requests: 'overtime_request',
+    business_trips: 'trip',
+    clock_corrections: 'correction',
+    resignation_requests: 'resignation',
+    leave_of_absence_requests: 'loa',
+    personnel_transfer_requests: 'transfer',
+    headcount_requests: 'headcount',
+    form_submissions: 'form_submission',
+  }
+  const requestType = sourceTable ? REQUEST_TYPE_MAP[sourceTable] : null
+
   let chainSteps = []
-  try {
-    const { data } = await supabase.rpc('get_chain_step_display_names', {
-      p_chain_id: row.approval_chain_id,
-      p_applicant_emp_id: applicantEmpId,
-    })
-    chainSteps = Array.isArray(data) ? data : []
-  } catch (e) {
-    console.warn('[buildChainBasedSteps] get_chain_step_display_names failed, fallback:', e)
-    // fallback：只抓 chain step template，不解動態名字
-    const { data } = await supabase
-      .from('approval_chain_steps')
-      .select('id, step_order, label, role_name, target_emp_id, target_type')
-      .eq('chain_id', row.approval_chain_id)
-      .order('step_order')
-    chainSteps = (data || []).map(s => ({
-      step_order: s.step_order, label: s.label, role_name: s.role_name,
-      target_type: s.target_type, target_emp_id: s.target_emp_id,
-      names: s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || ''),
-    }))
+  let usedSnapshot = false
+
+  // ── Step 1：有 request_id 就先嘗試快照 RPC ──
+  if (requestType && row?.id) {
+    try {
+      const { data: snapData } = await supabase.rpc('get_request_chain_display_names', {
+        p_request_type: requestType,
+        p_request_id: row.id,
+        p_applicant_emp_id: applicantEmpId,
+      })
+      if (Array.isArray(snapData) && snapData.length > 0) {
+        chainSteps = snapData
+        usedSnapshot = true
+      }
+    } catch (e) {
+      console.warn('[buildChainBasedSteps] get_request_chain_display_names failed:', e)
+    }
   }
 
-  // current_step 慣例：0 = 還沒進任何關，1 = 在第一關，N+1 = 全部完成
+  // ── Step 2：沒快照（舊單）→ live chain RPC（原邏輯）──
+  if (!usedSnapshot) {
+    try {
+      const { data } = await supabase.rpc('get_chain_step_display_names', {
+        p_chain_id: row.approval_chain_id,
+        p_applicant_emp_id: applicantEmpId,
+      })
+      chainSteps = Array.isArray(data) ? data : []
+    } catch (e) {
+      console.warn('[buildChainBasedSteps] get_chain_step_display_names failed, fallback:', e)
+      // fallback：只抓 chain step template，不解動態名字
+      const { data } = await supabase
+        .from('approval_chain_steps')
+        .select('id, step_order, label, role_name, target_emp_id, target_type')
+        .eq('chain_id', row.approval_chain_id)
+        .order('step_order')
+      chainSteps = (data || []).map(s => ({
+        step_order: s.step_order, label: s.label, role_name: s.role_name,
+        target_type: s.target_type, target_emp_id: s.target_emp_id,
+        names: s.target_emp_id ? (approverMap[s.target_emp_id] || '') : (s.role_name || ''),
+      }))
+    }
+  }
+
+  // current_step 慣例：0 = 還沒進任何關，N+1 = 全部完成
   const totalSteps = chainSteps?.length || 0
   let cur = row.current_step || 0
   if (cur < 0 || cur > totalSteps + 1) {
-    console.warn('[buildChainBasedSteps] current_step out of range:', cur, 'total:', totalSteps)
+    console.warn(
+      '[buildChainBasedSteps] current_step out of range:', cur, '/ total:', totalSteps,
+      usedSnapshot ? '(snapshot)' : '(live chain — chain 可能已被修改)',
+      'row.id:', row?.id,
+    )
     cur = Math.max(0, Math.min(cur, totalSteps + 1))
   }
   const steps = chainSteps.map((s) => {

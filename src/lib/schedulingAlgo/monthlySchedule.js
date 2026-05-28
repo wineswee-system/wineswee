@@ -348,7 +348,19 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           if (workA.actual_start && workA.actual_end) {
             const fakeDef = { start_time: workA.actual_start, end_time: workA.actual_end }
             if (!isShiftWithinOH(fakeDef, restA.date, data.storeSettings)) continue
+            // ★ max 檢查：把 workA 的 shift 加到 restA.date 不可超該日時段 max
+            //   原本 11-15 已 2 人 max=2，再加 11~20 → 3 人超 max → bug
+            const slotCovTarget = computeDaySlotCoverage(restA.date, data.timeSlots || [], allAssignments)
+            if (slotCovTarget && shiftWouldOverStaff(fakeDef, slotCovTarget, 'hourly')) continue
           }
+          // ★ required 檢查：workA 變休後 workA.date 不可掉到 required 之下
+          const trialAfterSwap = allAssignments.map((a, i) => {
+            if (i === workEntry.idx) return { ...a, shift: '休', actual_start: null, actual_end: null, actual_hours: 0 }
+            if (i === restEntry.idx) return { ...a, shift: workA.shift, actual_start: workA.actual_start, actual_end: workA.actual_end, actual_hours: workA.actual_hours }
+            return a
+          })
+          const slotCovWorkDay = computeDaySlotCoverage(workA.date, data.timeSlots || [], trialAfterSwap)
+          if (slotCovWorkDay && slotCovWorkDay.some(s => s.covered < s.required_count)) continue
           allAssignments[restEntry.idx] = {
             ...restA,
             shift: workA.shift,
@@ -463,6 +475,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         if (endA.actual_start && endA.actual_end) {
           const fakeDef = { start_time: endA.actual_start, end_time: endA.actual_end }
           if (!isShiftWithinOH(fakeDef, restA.date, data.storeSettings)) continue
+          // ★ max 檢查：把 endA 的 shift 加到 restA.date 不可超該日時段 max
+          const slotCovTarget = computeDaySlotCoverage(restA.date, data.timeSlots || [], allAssignments)
+          if (slotCovTarget && shiftWouldOverStaff(fakeDef, slotCovTarget, 'hourly')) continue
         }
         // 模擬 swap 後：restA.date 變成 endA 的 shift，endA.date 變成休
         // 檢查 swap 後是否會違 H3（restA.date 變上班會不會破連續 ≤6）
@@ -473,6 +488,10 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         })
         const newConsec = consecutiveWorkAtIfWork(emp.name, restA.date, trialAssignments)
         if (newConsec > MAX_CONSECUTIVE_WORK_DAYS) continue
+        // ★ required 檢查：endA 變休後，endDate 該日各時段不可掉到 required 之下
+        //   (修 7/22 7/23 整天 1 人的問題 — cycle-end swap 太貪把 required 砍光)
+        const slotCovAfter = computeDaySlotCoverage(endDate, data.timeSlots || [], trialAssignments)
+        if (slotCovAfter && slotCovAfter.some(s => s.covered < s.required_count)) continue
         // 通過 → 套用
         allAssignments[endIdx] = trialAssignments[endIdx]
         allAssignments[restEntry.idx] = trialAssignments[restEntry.idx]

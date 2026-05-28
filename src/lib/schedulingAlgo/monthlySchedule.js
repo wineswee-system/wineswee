@@ -566,20 +566,30 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           if (!schedFromAll[emp.name]) schedFromAll[emp.name] = {}
           schedFromAll[emp.name][ra.date] = picked.name
         } else {
-          // ★ 終極 fallback：shift_definitions 無對應 shift → 生成 6h window
+          // ★ 終極 fallback：shift_definitions 無對應 shift → 生成最多 6h window
+          // 從 oh.open 起算 6h，但若超過 oh.close 就 clamp 到 oh.close (避免排出超過營業時間)
           const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
           const dow = new Date(ra.date).getDay()
           const oh = data.storeSettings?.operating_hours?.[dayNames[dow]] ||
                      data.storeSettings?.operatingHours?.[dayNames[dow]]
-          if (oh?.open) {
-            const startStr = oh.open.slice(0, 5)
-            const [sh, sm] = startStr.split(':').map(Number)
-            const endH = sh + 6
-            const endStr = `${String(endH % 24).padStart(2, '0')}:${String(sm).padStart(2, '0')}`
-            ra.shift = `${startStr}~${endStr}`
-            ra.actual_start = startStr
-            ra.actual_end = endStr
-            ra.actual_hours = 5
+          if (oh?.open && oh?.close) {
+            const ohOpenH = parseTime(oh.open)
+            const ohCloseH = parseTime(oh.close)
+            const ohCloseEff = ohCloseH <= ohOpenH ? ohCloseH + 24 : ohCloseH
+            const maxEnd = ohCloseEff
+            const desiredEnd = ohOpenH + 6
+            const actualEnd = Math.min(desiredEnd, maxEnd)
+            const grossH = actualEnd - ohOpenH
+            if (grossH >= 4) {  // 至少 4h 才有意義，否則跳過 fallback
+              const startStr = oh.open.slice(0, 5)
+              const eh = actualEnd % 24
+              const ehM = Math.round((eh - Math.floor(eh)) * 60)
+              const endStr = `${String(Math.floor(eh)).padStart(2, '0')}:${String(ehM).padStart(2, '0')}`
+              ra.shift = `${startStr}~${endStr}`
+              ra.actual_start = startStr
+              ra.actual_end = endStr
+              ra.actual_hours = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+            }
           }
         }
       }

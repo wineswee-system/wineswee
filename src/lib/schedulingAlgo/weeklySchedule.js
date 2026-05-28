@@ -302,17 +302,15 @@ export function runProgrammaticSchedule(data) {
     if (idx < weekDates.length - 1 && restDayPlan[empName].has(weekDates[idx + 1])) cnt++
     return cnt
   }
-  // 算「不休此日 (上班)，往回看到第一個非工作日為止的連續工作天」— 只往回算
-  // 不算 forward 避免「未排日 = 視為上班」over-count 誤觸發 bonus
+  // 算「不休此日，往回看連續工作多少天」— 只算 backward (forward 算不準會 over-fire)
   const consecutiveWorkBackward = (empName, date) => {
     if (restDayPlan[empName]?.has(date)) return 0
-    let count = 1  // 假設 date 上班
+    let count = 1
     const d = new Date(date)
     let prev = new Date(d)
     for (let i = 0; i < 20; i++) {
       prev.setDate(prev.getDate() - 1)
       const ds = prev.toISOString().slice(0, 10)
-      // 已排休 / accumulatedPrev 內標記非工作 → break
       if (restDayPlan[empName]?.has(ds)) break
       if (schedule[empName]?.[ds] && !isAbsence(schedule[empName][ds])) { count++; continue }
       const prevA = (data.previousWeek || []).find(p => p.employee === empName && p.date === ds)
@@ -320,7 +318,6 @@ export function runProgrammaticSchedule(data) {
         if (isAbsence(prevA.shift)) break
         count++; continue
       }
-      // 完全沒紀錄 → 假設不上班（cycle 邊界外）→ break
       break
     }
     return count
@@ -330,13 +327,11 @@ export function runProgrammaticSchedule(data) {
     const demand = minWorkersPerDay[date] || minStaff
     const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
     const adj = adjacentRestCount(empName, date)
-    // ★ H3 救援 bonus：往回看連續 ≥6 天 → 此日強烈鼓勵排休
-    //   只算 backward (forward 算不準會 over-fire)；只跟 H3 法規綁，不影響其他評分
+    // ★ H3 救援 bonus：往回看連續 ≥6 天 → 強烈鼓勵此日排休（避免 7+ 天連續）
+    //   只算 backward — 純法規 guard，不會隨資料累積偏差
     let h3Bonus = 0
     const consecBack = consecutiveWorkBackward(empName, date)
     if (consecBack >= 6) h3Bonus = -100 * (consecBack - 5)
-    // ※ 已移除跨月超標 penalty — 它會隨著 priorRestByMonth 累積而越來越偏，
-    //   導致後 cycle 排班大亂。改用單純 post-correction (B) 在 cycle 結束後自動 swap。
     return demand + peerResting * 2.5 + adj * 3 + h3Bonus + Math.random() * 0.5
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {

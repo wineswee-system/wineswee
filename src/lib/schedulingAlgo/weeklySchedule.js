@@ -302,8 +302,14 @@ export function runProgrammaticSchedule(data) {
     if (idx < weekDates.length - 1 && restDayPlan[empName].has(weekDates[idx + 1])) cnt++
     return cnt
   }
-  // 算「不休此日，往回看連續工作多少天」— 只算 backward (forward 算不準會 over-fire)
-  const consecutiveWorkBackward = (empName, date) => {
+  // ══════════════════════════════════════════════════════════════════════
+  // Layer 1 (Hard Rules): 法規必守 — 直接強制，不打分、不被 staffing 擋
+  //   - H3 (連續上班 ≤6 天 / §36 七休一)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 連續工作天數 (optimistic) — 只算已確認的工作（schedule + previousWeek）
+  // 不假設「未排日 = 上班」避免 over-fire；只抓真正會違法的 case (主要是 cycle 邊界)
+  const consecutiveWorkConfirmed = (empName, date) => {
     if (restDayPlan[empName]?.has(date)) return 0
     let count = 1
     const d = new Date(date)
@@ -312,34 +318,51 @@ export function runProgrammaticSchedule(data) {
       prev.setDate(prev.getDate() - 1)
       const ds = prev.toISOString().slice(0, 10)
       if (restDayPlan[empName]?.has(ds)) break
-      if (schedule[empName]?.[ds] && !isAbsence(schedule[empName][ds])) { count++; continue }
+      if (schedule[empName]?.[ds]) {
+        if (isAbsence(schedule[empName][ds])) break
+        count++; continue
+      }
       const prevA = (data.previousWeek || []).find(p => p.employee === empName && p.date === ds)
       if (prevA && prevA.shift) {
         if (isAbsence(prevA.shift)) break
         count++; continue
       }
-      break
+      break  // 無紀錄 → 不算 (cycle 邊界外或當週未排)
     }
     return count
   }
 
+  // Hard enforcement：對每位員工，迭代週內每天 — 若此日上班會破 H3 → 強制休
+  // 不打分、不被 staffing/can_open/can_close 擋 — 七休一是勞基法 §36 紅線
+  // 用 confirmed (不悲觀) 避免 over-trigger；主要 catch cycle 邊界的長 streak case
+  const enforceH3Hard = (empName) => {
+    for (const date of weekDates) {
+      if (restDayPlan[empName].has(date) || schedule[empName][date]) continue
+      const consec = consecutiveWorkConfirmed(empName, date)
+      if (consec > 6) {  // 7+ = 違法
+        restDayPlan[empName].add(date)
+        console.log(`[H3 Hard] ${empName} ${date} 強制休 (連續 ${consec} 天)`)
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Layer 2 (Soft Scoring): 軟偏好 — 在 hard rule 之後，挑剩餘休假日
+  //   - demand (低需求日優先)
+  //   - peerResting (避免同日多人休)
+  //   - adjacent (避免連休)
+  // ══════════════════════════════════════════════════════════════════════
   const restSpreadScore = (empName, date) => {
     const demand = minWorkersPerDay[date] || minStaff
     const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
     const adj = adjacentRestCount(empName, date)
-    // ★ H3 救援 bonus：往回看連續 ≥6 天 → 強烈鼓勵此日排休（避免 7+ 天連續）
-    //   只算 backward — 純法規 guard，不會隨資料累積偏差
-    let h3Bonus = 0
-    const consecBack = consecutiveWorkBackward(empName, date)
-    if (consecBack >= 6) h3Bonus = -100 * (consecBack - 5)
-    return demand + peerResting * 2.5 + adj * 3 + h3Bonus + Math.random() * 0.5
+    return demand + peerResting * 2.5 + adj * 3 + Math.random() * 0.5
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {
     let needed = count
     const empObj = employees.find(e => e.name === empName)
     const empCanOpen = empObj?.can_open === true
     const empCanClose = empObj?.can_close === true
-    // 店內 can_open / can_close 總人數 — 只有 1 人時不 enforce 保護（否則該員工永遠不能休）
     const totalCanOpen = employees.filter(e => e.can_open === true).length
     const totalCanClose = employees.filter(e => e.can_close === true).length
     while (needed > 0) {
@@ -349,30 +372,17 @@ export function runProgrammaticSchedule(data) {
         .filter(c => {
           const restingOnDay = employees.filter(e => restDayPlan[e.name].has(c.date)).length
           const workingAfter = employees.length - restingOnDay - 1
-          const minNeeded = minStaffPerDay(c.date)
-          // ★ H3 救援：若不休此日會違 H3 (連續 ≥6 天)，允許 understaff 1 人換不違法
-          //   違法是 hard rule，比 staffing 優先 — 連續 7 天上班是勞基法 §36 紅線
-          const consecBack = consecutiveWorkBackward(empName, c.date)
-          if (consecBack >= 6) return workingAfter >= Math.max(1, minNeeded - 1)
-          return workingAfter >= minNeeded
+          return workingAfter >= minStaffPerDay(c.date)
         })
-        // ★ 保護「該日至少留 1 個 can_open 員工不休」— 不然 10:30 早班沒人 cover
-        //   只在店內 can_open 員工 ≥ 2 時 enforce（避免單一 can_open 永遠不能休）
-        //   H3 救援時 (連續 ≥6 天) 例外放行 — 違法優先於開店保護
         .filter(c => {
           if (!empCanOpen || totalCanOpen < 2) return true
-          const consecBack = consecutiveWorkBackward(empName, c.date)
-          if (consecBack >= 6) return true
           const remainingCanOpen = employees.filter(e =>
             e.can_open === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
           ).length
           return remainingCanOpen >= 1
         })
-        // ★ 同樣保護 can_close — 不然關店時段沒人 cover
         .filter(c => {
           if (!empCanClose || totalCanClose < 2) return true
-          const consecBack = consecutiveWorkBackward(empName, c.date)
-          if (consecBack >= 6) return true
           const remainingCanClose = employees.filter(e =>
             e.can_close === true && e.name !== empName && !restDayPlan[e.name].has(c.date)
           ).length
@@ -385,6 +395,11 @@ export function runProgrammaticSchedule(data) {
     }
   }
 
+  // ── 執行順序：1. 先 hard enforcement 把違法日強制休 ──
+  for (const emp of ftFirstOrder) {
+    enforceH3Hard(emp.name)
+  }
+  // ── 2. 再用 soft scoring 把剩餘休假配額補到 monthly target ──
   for (const emp of ftFirstOrder) {
     const remaining = getMonthRestRemaining(emp.name)
     if (remaining <= 0) continue

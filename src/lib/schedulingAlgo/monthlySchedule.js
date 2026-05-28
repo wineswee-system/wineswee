@@ -648,8 +648,58 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     }
   }
 
+  // ── ★ 末端營業時間校正：每個 assignment 必須在「該日」的 operating_hours 內 ──
+  // 處理 source filter 用「跨日 union」太寬鬆漏網的 case
+  // 例：mon open=10:30 / sat open=10:00 → union=10:00 → 10:00 shift 過 source filter
+  //     但分到 Monday 還是違反 Mon 的 10:30 → 這裡 clamp 或拒收
+  const dayNamesArr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  const ohOfDate = (dateStr) => {
+    const dow = new Date(dateStr).getDay()
+    return data.storeSettings?.operating_hours?.[dayNamesArr[dow]] ||
+           data.storeSettings?.operatingHours?.[dayNamesArr[dow]]
+  }
+  const ohViolations = []
+  for (const a of allAssignments) {
+    if (!a.actual_start || !a.actual_end || isAbsence(a.shift)) continue
+    const oh = ohOfDate(a.date)
+    if (!oh?.open || !oh?.close) continue
+    const ohOpen = parseTime(oh.open)
+    const ohClose = parseTime(oh.close)
+    const ohCloseEff = ohClose <= ohOpen ? ohClose + 24 : ohClose
+    const sh = parseTime(a.actual_start)
+    const eh = parseTime(a.actual_end)
+    const ehEff = eh <= sh ? eh + 24 : eh
+    let clamped = false
+    if (sh < ohOpen - 0.01) {
+      a.actual_start = oh.open.slice(0, 5)
+      clamped = true
+    }
+    if (ehEff > ohCloseEff + 0.01) {
+      a.actual_end = oh.close.slice(0, 5)
+      clamped = true
+    }
+    if (clamped) {
+      // 重算 hours
+      const newSh = parseTime(a.actual_start)
+      const newEh = parseTime(a.actual_end)
+      const newEhEff = newEh <= newSh ? newEh + 24 : newEh
+      const grossH = newEhEff - newSh
+      a.actual_hours = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+      // 同步 shift 名稱
+      if (a.shift && a.shift.includes('~')) a.shift = `${a.actual_start}~${a.actual_end}`
+      ohViolations.push({
+        employee: a.employee,
+        constraint: 'OH_CLAMPED',
+        date: a.date,
+        message: `${a.employee} ${a.date} 班表超出營業時間，已自動 clamp 到 ${a.actual_start}-${a.actual_end}（營業 ${oh.open}-${oh.close}）`,
+        severity: 'warning',
+      })
+      console.warn(`[OH Clamp] ${a.employee} ${a.date}: ${sh}-${eh} → ${a.actual_start}-${a.actual_end}`)
+    }
+  }
+
   const monthlyViolations = validateMonthlyResult(allAssignments, data)
-  const combinedViolations = [...filteredAllViolations, ...freshS10, ...monthlyViolations]
+  const combinedViolations = [...filteredAllViolations, ...freshS10, ...monthlyViolations, ...ohViolations]
   const stats = computeStats(
     allAssignments, data.employees, data.shiftDefs,
     monthDates, data.holidays || [],

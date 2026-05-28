@@ -7,7 +7,7 @@
 import {
   getShiftHours, isAbsence, countsAsMonthlyRest,
   splitIntoWeeks, getCycleFor, isPartTime, parseTime,
-  MAX_CONSECUTIVE_WORK_DAYS,
+  MAX_CONSECUTIVE_WORK_DAYS, isShiftWithinOH, getOperatingHoursForDate,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult, isLegallyValid } from './validation'
@@ -599,21 +599,8 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         // ★ FT 偏 9h net=8h 排序，避免撿 6h 短班
         //   優先順序: safe(legal+slot) → legalEligible(legal+no slot fit) → eligible(只放 H9)
         //   但連 H3 都不過時直接 null → 保留休，寧可超 cap 也不違反勞基法
-        // ★ 在挑 shift 前先過濾掉「不在營業時間內」的 shift（避免 10:00 開 / 01:00 關 這種）
-        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-        const dow = new Date(ra.date).getDay()
-        const oh = data.storeSettings?.operating_hours?.[dayNames[dow]] ||
-                   data.storeSettings?.operatingHours?.[dayNames[dow]]
-        const ohOpen = oh?.open ? parseTime(oh.open) : null
-        const ohClose = oh?.close ? parseTime(oh.close) : null
-        const ohCloseEff = (ohOpen != null && ohClose != null && ohClose <= ohOpen) ? ohClose + 24 : ohClose
-        const inOH = (sd) => {
-          if (ohOpen == null || ohCloseEff == null) return true  // 沒設營業時間 → 不擋
-          const sh = parseTime(sd.start_time)
-          const eh = parseTime(sd.end_time)
-          const ehEff = eh <= sh ? eh + 24 : eh
-          return sh >= ohOpen - 0.01 && ehEff <= ohCloseEff + 0.01
-        }
+        // ★ 寫死不得超過營業時間：每一層 fallback 都用 isShiftWithinOH per-day 過濾
+        const inOH = (sd) => isShiftWithinOH(sd, ra.date, data.storeSettings)
         const picked = !passH3
           ? null
           : ((slotCov ? [...safe].filter(inOH).sort(sortBySdFitForFT)[0] : null)
@@ -732,54 +719,26 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     }
   }
 
-  // ── ★ 末端營業時間校正：每個 assignment 必須在「該日」的 operating_hours 內 ──
-  // 處理 source filter 用「跨日 union」太寬鬆漏網的 case
-  // 例：mon open=10:30 / sat open=10:00 → union=10:00 → 10:00 shift 過 source filter
-  //     但分到 Monday 還是違反 Mon 的 10:30 → 這裡 clamp 或拒收
-  const dayNamesArr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-  const ohOfDate = (dateStr) => {
-    const dow = new Date(dateStr).getDay()
-    return data.storeSettings?.operating_hours?.[dayNamesArr[dow]] ||
-           data.storeSettings?.operatingHours?.[dayNamesArr[dow]]
-  }
+  // ── ★ 末端營業時間防呆斷言（不再 clamp）──
+  // 政策：所有 generation path 都已寫死不得超過 OH（tryShift / isShiftAvailable /
+  //      runFillUnassignedFT 各層 inOH 過濾）。若這裡還抓到違規，代表某條路徑漏網，
+  //      應該回去修「源頭」而非用 clamp 把時數改怪（之前 16:00-01:00 → 16:00-00:00
+  //      會少 1h 變奇怪數字）。這裡只記錯誤，不動 actual_start/end。
   const ohViolations = []
   for (const a of allAssignments) {
     if (!a.actual_start || !a.actual_end || isAbsence(a.shift)) continue
-    const oh = ohOfDate(a.date)
+    const oh = getOperatingHoursForDate(data.storeSettings, a.date)
     if (!oh?.open || !oh?.close) continue
-    const ohOpen = parseTime(oh.open)
-    const ohClose = parseTime(oh.close)
-    const ohCloseEff = ohClose <= ohOpen ? ohClose + 24 : ohClose
-    const sh = parseTime(a.actual_start)
-    const eh = parseTime(a.actual_end)
-    const ehEff = eh <= sh ? eh + 24 : eh
-    let clamped = false
-    if (sh < ohOpen - 0.01) {
-      a.actual_start = oh.open.slice(0, 5)
-      clamped = true
-    }
-    if (ehEff > ohCloseEff + 0.01) {
-      a.actual_end = oh.close.slice(0, 5)
-      clamped = true
-    }
-    if (clamped) {
-      // 重算 hours
-      const newSh = parseTime(a.actual_start)
-      const newEh = parseTime(a.actual_end)
-      const newEhEff = newEh <= newSh ? newEh + 24 : newEh
-      const grossH = newEhEff - newSh
-      a.actual_hours = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
-      // 同步 shift 名稱
-      if (a.shift && a.shift.includes('~')) a.shift = `${a.actual_start}~${a.actual_end}`
-      ohViolations.push({
-        employee: a.employee,
-        constraint: 'OH_CLAMPED',
-        date: a.date,
-        message: `${a.employee} ${a.date} 班表超出營業時間，已自動 clamp 到 ${a.actual_start}-${a.actual_end}（營業 ${oh.open}-${oh.close}）`,
-        severity: 'warning',
-      })
-      console.warn(`[OH Clamp] ${a.employee} ${a.date}: ${sh}-${eh} → ${a.actual_start}-${a.actual_end}`)
-    }
+    const fakeDef = { start_time: a.actual_start, end_time: a.actual_end }
+    if (isShiftWithinOH(fakeDef, a.date, data.storeSettings)) continue
+    ohViolations.push({
+      employee: a.employee,
+      constraint: 'OH_VIOLATION',
+      date: a.date,
+      message: `${a.employee} ${a.date} 班表 ${a.actual_start}-${a.actual_end} 超出營業時間 ${oh.open}-${oh.close}（generation path bug — 不該發生）`,
+      severity: 'error',
+    })
+    console.error(`[OH Violation] generation path leak: ${a.employee} ${a.date}: ${a.actual_start}-${a.actual_end} 不在 ${oh.open}-${oh.close} 內`)
   }
 
   const monthlyViolations = validateMonthlyResult(allAssignments, data)

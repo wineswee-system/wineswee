@@ -6,7 +6,7 @@
 
 import {
   parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
-  isWeekendDay, MONTHLY_OVERTIME_CAP, isPartTime,
+  isWeekendDay, MONTHLY_OVERTIME_CAP, isPartTime, isShiftWithinOH,
 } from '../scheduleUtils'
 import { getFatiguePoints } from './scoring'
 import { isLegallyValid } from './validation'
@@ -17,6 +17,9 @@ import { isLegallyValid } from './validation'
  */
 export function isShiftAvailable(emp, shiftDef, date, schedule, shiftDefs, weekDates, data, availMap) {
   if (!isLegallyValid(emp, shiftDef, date, schedule, shiftDefs, weekDates, data)) return false
+  // ★ 寫死不得超過營業時間 — Pass 1/2 / cross-store borrowing / opener-closer swap 共用入口。
+  //   source filter 用「跨日 union」會放掉某些日子超 OH 的 shift，這裡擋掉每日違規。
+  if (!isShiftWithinOH(shiftDef, date, data?.storeSettings)) return false
   const dow = new Date(date).getDay()
   const avail = availMap[emp.name]?.[dow]
   if (avail) {
@@ -244,8 +247,10 @@ export function runHybridGapFill(ctx) {
       if (oh.close) opClose = parseTime(oh.close)
       if (opClose <= opOpen) opClose += 24
     }
+    // ★ 寫死不得超過營業時間：用 floor(opOpen) / floor(opClose)，避免 ceil 把上限拉到 OH 外
+    //   例：opClose=22.5 → 原本 ceil=23 → 22-23h 也算覆蓋目標 → gap 補到 23:00 → 超 OH
     const hourlyCoverage = {}
-    for (let h = Math.floor(opOpen); h < Math.ceil(opClose); h++) hourlyCoverage[h % 24] = 0
+    for (let h = Math.floor(opOpen); h < Math.floor(opClose); h++) hourlyCoverage[h % 24] = 0
     for (const emp of employees) {
       const s = schedule[emp.name][date]
       if (!s || isAbsence(s)) continue
@@ -278,6 +283,8 @@ export function runHybridGapFill(ctx) {
         if (offMap.has(`${emp.name}_${date}`)) return false
         const fakeShiftDef = { name: `flex_${shiftStart}-${shiftEnd}`, start_time: shiftStart, end_time: shiftEnd }
         if (!isLegallyValid(emp, fakeShiftDef, date, schedule, shiftDefs, weekDates, data)) return false
+        // ★ 寫死不得超過營業時間（gap 視窗也要過）
+        if (!isShiftWithinOH(fakeShiftDef, date, storeSettings)) return false
         if (availMap[emp.name]) {
           const dayAvail = availMap[emp.name][dow]
           if (dayAvail && !(win.start >= dayAvail.start && win.end <= dayAvail.end)) return false
@@ -345,6 +352,8 @@ export function runCrossStoreBorrowing(ctx) {
         const fakeSchedule = { [emp.name]: {} }
         for (const d of weekDates) fakeSchedule[emp.name][d] = null
         if (!isLegallyValid(emp, sd, date, fakeSchedule, shiftDefs, weekDates, data)) continue
+        // ★ 跨店借調也必須符合「該日」目標店 OH（防止源頭 shiftDef 跨日 union 漏網）
+        if (!isShiftWithinOH(sd, date, data?.storeSettings)) continue
         const shiftHours = getShiftHours(sd) - (sd.break_minutes || 60) / 60
         const isPT = isPartTime(emp)
         if ((emp._weeklyHours || 0) + shiftHours > (isPT ? 40 : 48)) continue
@@ -598,6 +607,9 @@ export function runFillUnassignedFT(ctx) {
         if (sd.day_type === 'weekday' && isWeekend) return false
         if (sd.day_type === 'weekend' && !isWeekend) return false
         if (getShiftHours(sd) > wsConstraints.dailyAbsoluteMax) return false
+        // ★ 寫死不得超過營業時間 — Step3b 也用 isShiftWithinOH 做 per-day 檢查，
+        //   避免 cross-day union source filter 漏掉某日違規 shift
+        if (!isShiftWithinOH(sd, date, storeSettings)) return false
         // ★ can_open / can_close — 跟 timeSlotMode.tryShift Line 187-188 對齊
         //   之前 Step3b 沒檢查 → 即使 emp.can_open=false 還是會被 Step3b 安排到開店班
         if (storeOpenH != null && emp.can_open === false) {

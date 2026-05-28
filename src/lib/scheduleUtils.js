@@ -49,6 +49,59 @@ export function shiftGapHours(prevDef, currDef) {
   return (currStart + 24) - prevEnd
 }
 
+const DAY_NAMES_SUN_FIRST = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+/**
+ * Get operating_hours for a specific date.
+ * Reads storeSettings.operating_hours or .operatingHours (camelCase fallback).
+ * Returns { open, close } strings or null if not set.
+ */
+export function getOperatingHoursForDate(storeSettings, dateStr) {
+  if (!storeSettings || !dateStr) return null
+  const dow = new Date(dateStr).getDay()
+  const key = DAY_NAMES_SUN_FIRST[dow]
+  return storeSettings.operating_hours?.[key] || storeSettings.operatingHours?.[key] || null
+}
+
+/**
+ * Source-of-truth per-day operating-hours window check.
+ * A shift fits if its start/end interval (handling midnight crossing) lies
+ * entirely within [open, close]. Used to GUARD shift generation/selection so
+ * shifts never get assigned outside that day's OH. NEVER returns true with a
+ * tolerance > 0.01h (rounding only) — the user's rule is "hardcoded, no overflow".
+ *
+ * @param {{start_time:string,end_time:string}} shiftDef
+ * @param {string} dateStr  YYYY-MM-DD
+ * @param {object} storeSettings
+ * @returns {boolean} true if OH not set (no constraint) or shift fits within OH
+ */
+export function isShiftWithinOH(shiftDef, dateStr, storeSettings) {
+  const oh = getOperatingHoursForDate(storeSettings, dateStr)
+  if (!oh?.open || !oh?.close) return true
+  if (!shiftDef?.start_time || !shiftDef?.end_time) return true
+  const ohOpen = parseTime(oh.open)
+  const ohClose = parseTime(oh.close)
+  const ohCloseEff = ohClose <= ohOpen ? ohClose + 24 : ohClose
+  const sh = parseTime(shiftDef.start_time)
+  const eh = parseTime(shiftDef.end_time)
+  const ehEff = eh <= sh ? eh + 24 : eh
+  return sh >= ohOpen - 0.01 && ehEff <= ohCloseEff + 0.01
+}
+
+/**
+ * Per-day window check by raw start/end hour numbers (decimal hours).
+ * Same rule as isShiftWithinOH but for ad-hoc generated windows (set-cover loop, fallback).
+ */
+export function isWindowWithinOH(startH, grossH, dateStr, storeSettings) {
+  const oh = getOperatingHoursForDate(storeSettings, dateStr)
+  if (!oh?.open || !oh?.close) return true
+  const ohOpen = parseTime(oh.open)
+  const ohClose = parseTime(oh.close)
+  const ohCloseEff = ohClose <= ohOpen ? ohClose + 24 : ohClose
+  const endH = startH + grossH
+  return startH >= ohOpen - 0.01 && endH <= ohCloseEff + 0.01
+}
+
 // ══════════════════════════════════════════════════════════════
 //  Date Helpers
 // ══════════════════════════════════════════════════════════════

@@ -169,8 +169,10 @@ export function runTimeSlotMode(ctx) {
     const tryShift = (emp, startH, grossH) => {
       const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
       const endH = startH + grossH
-      if (startH < storeOpenH) return null
-      if (endH > effectiveCloseH + 0.5) return null
+      // ★ 寫死不得超過營業時間：startH/endH 必須完全落在 [storeOpenH, effectiveCloseH] 內。
+      //   只留 0.01h 浮點 rounding tolerance；不再給 0.5h 寬限（會超 30 分）。
+      if (startH < storeOpenH - 0.01) return null
+      if (endH > effectiveCloseH + 0.01) return null
       if (grossH > wsConstraints.dailyAbsoluteMax) return null
       const weekHours = getEmpWeekHours(emp.name)
       if (weekHours + netH > hoursRange[emp.name].max + 2) return null

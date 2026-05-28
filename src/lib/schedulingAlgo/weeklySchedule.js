@@ -302,13 +302,49 @@ export function runProgrammaticSchedule(data) {
     if (idx < weekDates.length - 1 && restDayPlan[empName].has(weekDates[idx + 1])) cnt++
     return cnt
   }
+  // 算「若不休此日 (繼續上班)，員工的最長連續工作天數會是幾」— 含 accumulatedPrev (跨週)
+  const consecutiveWorkIfNotRest = (empName, date) => {
+    const isWork = (d) => {
+      // 已排休 → 非工作日
+      if (restDayPlan[empName]?.has(d)) return false
+      // 已有 work assignment → 工作日
+      if (schedule[empName]?.[d] && !isAbsence(schedule[empName][d])) return true
+      // accumulatedPrev (跨週 history) → 看是否上班
+      const prev = (data.previousWeek || []).find(p => p.employee === empName && p.date === d)
+      if (prev && prev.shift && !isAbsence(prev.shift)) return true
+      // 未來、未排 → 視為工作日（pickRestDays 還沒決定）
+      // 但只考慮在 weekDates 範圍內：未來週的天不算
+      const isInWeek = weekDates.includes(d)
+      const isInPast = (data.previousWeek || []).some(p => p.date === d)
+      if (isInWeek) return true  // 未在 restDayPlan → 預設會被排上班
+      if (isInPast) return false  // prev 內沒有 → 那天該員工沒上班（休或未排）
+      return false
+    }
+    if (restDayPlan[empName]?.has(date)) return 0  // 自己已休
+    let count = 1  // 假設此日上班
+    // 往前數
+    const d = new Date(date)
+    let prev = new Date(d)
+    for (let i = 0; i < 20; i++) {  // 上限 20 天足夠
+      prev.setDate(prev.getDate() - 1)
+      if (isWork(prev.toISOString().slice(0, 10))) count++
+      else break
+    }
+    // 往後數
+    let next = new Date(d)
+    for (let i = 0; i < 20; i++) {
+      next.setDate(next.getDate() + 1)
+      if (isWork(next.toISOString().slice(0, 10))) count++
+      else break
+    }
+    return count
+  }
+
   const restSpreadScore = (empName, date) => {
     const demand = minWorkersPerDay[date] || minStaff
     const peerResting = employees.filter(e => restDayPlan[e.name].has(date)).length
     const adj = adjacentRestCount(empName, date)
-    // ★ 跨月超標軟懲罰：避免 cycle B (5/29-6/25) 在 5/29-31 排休讓 5 月總休 >10
-    //   total = prior cycle 5 月已休 + 本 cycle 5 月已分配 + 本週 5 月已分配 + 假設此日也休
-    //   若 total > 該員工 monthly target → 加重懲罰（每超 1 天 +100，遠大於其他項權重）
+    // ★ 跨月超標軟懲罰（penalty=25 — 強但不絕對，H3 能 override）
     let crossMonthPenalty = 0
     if (monthlyCtx?.priorRestByMonth || monthlyCtx?.cycleRestByMonth) {
       const monthKey = date.slice(0, 7)
@@ -320,9 +356,14 @@ export function runProgrammaticSchedule(data) {
         ? (monthlyCtx.monthlyRestTargetPT ?? 15)
         : (monthlyCtx.monthlyRestTargetFT ?? 10)
       const totalIfAdd = prior + cycleSoFar + thisWeekInMonth + 1
-      crossMonthPenalty = Math.max(0, totalIfAdd - target) * 100
+      crossMonthPenalty = Math.max(0, totalIfAdd - target) * 25
     }
-    return demand + peerResting * 2.5 + adj * 3 + crossMonthPenalty + Math.random() * 0.5
+    // ★ H3 救援 bonus：若不休此日會違 H3（連續 >6 天），給強烈負分鼓勵休
+    //   weight 高過 crossMonthPenalty 確保「不違法」 > 「不超月休」
+    let h3Bonus = 0
+    const consecIfNotRest = consecutiveWorkIfNotRest(empName, date)
+    if (consecIfNotRest > 6) h3Bonus = -50 * (consecIfNotRest - 6)  // 連 7 天 -50，連 8 天 -100 ...
+    return demand + peerResting * 2.5 + adj * 3 + crossMonthPenalty + h3Bonus + Math.random() * 0.5
   }
   const pickRestDays = (empName, count, minStaffPerDay) => {
     let needed = count

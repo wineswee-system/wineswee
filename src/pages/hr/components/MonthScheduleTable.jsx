@@ -237,7 +237,7 @@ function EmployeeRow({
   const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT' || emp.position?.includes('PT')
 
   return (
-    <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+    <tr style={{ height: 42, borderBottom: '1px solid var(--border-light)' }}>
       <td style={{
         position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)',
         padding: '4px 8px', borderRight: '1px solid var(--border-light)',

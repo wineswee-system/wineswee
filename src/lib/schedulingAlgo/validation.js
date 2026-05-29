@@ -449,6 +449,27 @@ export function validateMonthlyResult(assignments, data) {
       }  // end of else (sliding window path)
     }
 
+    // H18: §36 週休 floor — 每週至少 weeklyRestMin 天休（標準工時 2、變形工時 1）
+    //   不管哪種工時系統都要查，§36 是強制法條
+    //   只查「完整 7 天週」，partial week (cycle 邊界 < 7 天) 跳過 (避免邊角誤觸發)
+    {
+      const weeksForRestCheck = splitIntoWeeks(empAssignments.map(a => a.date).sort())
+      for (const wk of weeksForRestCheck) {
+        if (wk.length < 7) continue  // partial week → skip
+        const restInWeek = wk.filter(d => {
+          const a = empAssignments.find(a => a.date === d)
+          return a && isAbsence(a.shift)
+        }).length
+        if (restInWeek < wsm.weeklyRestMin) {
+          violations.push({
+            employee: emp.name, constraint: 'H18', law: '勞基法 §36',
+            message: `${emp.name}: ${wk[0]}~${wk[wk.length - 1]} 週僅 ${restInWeek} 天休假（需 ≥${wsm.weeklyRestMin} 天）`,
+            severity: 'error',
+          })
+        }
+      }
+    }
+
     // H17: Monthly rest day check
     const totalDays = empAssignments.length
     const empIsPT_H17 = isPartTime(emp)

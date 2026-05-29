@@ -1,27 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../../../lib/supabase'
-import { parseTime, getShiftHours, isWeekendDay, isAbsence, getWorkSystemConstraints, getCycleFor, listCyclesInRange } from '../../../lib/scheduleUtils'
+import { parseTime, getShiftHours, isWeekendDay, isAbsence, getCycleFor } from '../../../lib/scheduleUtils'
 
-export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs, storeSettings, holidays = [] }) {
-  const [fatigueScores, setFatigueScores] = useState({})
+export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs, storeSettings }) {
   const rate = storeSettings?.default_hourly_rate || 196
   const budget = storeSettings?.weekly_budget || 0
 
   const shiftDefMap = {}
   for (const d of (shiftDefs || [])) shiftDefMap[d.name] = d
-
-  // 用 month string 當 dep 而非 weekDates array reference，避免每 render 重 fetch
-  const monthKey = weekDates?.[0]?.slice(0, 7) || ''
-  useEffect(() => {
-    if (!monthKey) return
-    supabase.from('fatigue_scores').select('employee, total_score')
-      .eq('month', monthKey)
-      .then(({ data }) => {
-        const map = {}
-        for (const f of (data || [])) map[f.employee] = f.total_score || 0
-        setFatigueScores(map)
-      })
-  }, [monthKey])
 
   // Calculate per-employee stats
   const empStats = filtered.map(e => {
@@ -32,7 +16,6 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
     let totalHours = 0
     let weekendShifts = 0
     let eveningShifts = 0
-    let weekFatigue = 0
 
     for (const s of work) {
       // Use actual_hours if available, otherwise calculate from shift def
@@ -50,40 +33,25 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
       if (isWeekendDay(dow)) weekendShifts++
       const def = shiftDefMap[s.shift]
       if (def && parseTime(def.start_time) >= 15) eveningShifts++
-
-      // Calculate fatigue for this week
-      const isHoliday = holidays.includes(s.date)
-      const isWeekend = isWeekendDay(dow)
-      const isMorning = def ? parseTime(def.start_time) < 15 : true
-      if (isHoliday) weekFatigue += 4
-      else if (isWeekend && !isMorning) weekFatigue += 3
-      else if (isWeekend && isMorning) weekFatigue += 2
-      else if (!isMorning) weekFatigue += 2
-      else weekFatigue += 1
     }
 
     const isPT = e.employment_type === '兼職' || e.employment_type === 'PT'
     const target = e.weekly_target_hours || (isPT ? 20 : 40)
     const cost = Math.round(totalHours * rate)
     const hoursRatio = target > 0 ? Math.round(totalHours / target * 100) : 0
-    const historicalFatigue = fatigueScores[e.name] || 0
 
     return {
       name: e.name, dept: e.dept, isPT,
       workDays: work.length, restDays: rest.length,
       totalHours: Math.round(totalHours * 10) / 10,
       target, hoursRatio, cost,
-      weekendShifts, eveningShifts, weekFatigue,
-      historicalFatigue,
+      weekendShifts, eveningShifts,
     }
   })
 
   const totalHours = empStats.reduce((s, e) => s + e.totalHours, 0)
   const totalCost = empStats.reduce((s, e) => s + e.cost, 0)
   const avgHours = empStats.length ? (totalHours / empStats.length).toFixed(1) : 0
-  const maxFatigue = Math.max(...empStats.map(e => e.weekFatigue), 0)
-  const minFatigue = Math.min(...empStats.map(e => e.weekFatigue), 999)
-  const fatigueDiff = maxFatigue - minFatigue
 
   return (
     <div>
@@ -290,13 +258,10 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
         </div>
       </div>
 
-      {/* Fairness Dashboard */}
+      {/* 班別分布 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title"><span className="card-title-icon">⚖️</span> 公平性儀表板</div>
-          <span style={{ fontSize: 12, color: fatigueDiff > 5 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 600 }}>
-            辛苦度差距：{fatigueDiff} {fatigueDiff > 5 ? '⚠ 偏高' : '✓ 正常'}
-          </span>
+          <div className="card-title"><span className="card-title-icon">⚖️</span> 班別分布</div>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table" style={{ fontSize: 13 }}>
@@ -305,73 +270,40 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                 <th>員工</th>
                 <th style={{ textAlign: 'center' }}>假日班</th>
                 <th style={{ textAlign: 'center' }}>晚班</th>
-                <th style={{ textAlign: 'center' }}>本週辛苦度</th>
-                <th style={{ textAlign: 'center' }}>月累計辛苦度</th>
-                <th style={{ width: 150 }}>辛苦度分布</th>
                 <th style={{ textAlign: 'center' }}>休息天</th>
               </tr>
             </thead>
             <tbody>
-              {empStats.sort((a, b) => b.weekFatigue - a.weekFatigue).map(e => {
-                const barWidth = maxFatigue > 0 ? (e.weekFatigue / maxFatigue) * 100 : 0
-                const isHigh = e.weekFatigue >= maxFatigue && maxFatigue > 0
-                const isLow = e.weekFatigue <= minFatigue && empStats.length > 1
-                return (
-                  <tr key={e.name}>
-                    <td style={{ fontWeight: 600 }}>{e.name}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block', minWidth: 24, padding: '2px 6px', borderRadius: 6,
-                        background: e.weekendShifts > 0 ? 'rgba(239,68,68,0.1)' : 'var(--glass-light)',
-                        color: e.weekendShifts > 0 ? 'var(--accent-red)' : 'var(--text-muted)',
-                        fontWeight: 700, fontSize: 13,
-                      }}>
-                        {e.weekendShifts}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block', minWidth: 24, padding: '2px 6px', borderRadius: 6,
-                        background: e.eveningShifts > 0 ? 'rgba(139,92,246,0.1)' : 'var(--glass-light)',
-                        color: e.eveningShifts > 0 ? '#8b5cf6' : 'var(--text-muted)',
-                        fontWeight: 700, fontSize: 13,
-                      }}>
-                        {e.eveningShifts}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '3px 10px', borderRadius: 8,
-                        background: isHigh ? 'rgba(239,68,68,0.12)' : isLow ? 'rgba(52,211,153,0.12)' : 'var(--glass-light)',
-                        color: isHigh ? 'var(--accent-red)' : isLow ? 'var(--accent-green)' : 'var(--text-primary)',
-                        fontWeight: 700, fontSize: 14,
-                      }}>
-                        {e.weekFatigue}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-                      {e.historicalFatigue > 0 ? e.historicalFatigue : '—'}
-                    </td>
-                    <td>
-                      <div style={{ height: 10, borderRadius: 5, background: 'var(--border-medium)', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', width: `${barWidth}%`, borderRadius: 5,
-                          background: isHigh ? 'var(--accent-red)' : isLow ? 'var(--accent-green)' : 'var(--accent-cyan)',
-                          transition: 'width 0.3s',
-                        }} />
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'center', fontWeight: 600, color: e.restDays < 2 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-                      {e.restDays}
-                    </td>
-                  </tr>
-                )
-              })}
+              {empStats.sort((a, b) => b.weekendShifts - a.weekendShifts).map(e => (
+                <tr key={e.name}>
+                  <td style={{ fontWeight: 600 }}>{e.name}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-block', minWidth: 24, padding: '2px 6px', borderRadius: 6,
+                      background: e.weekendShifts > 0 ? 'rgba(239,68,68,0.1)' : 'var(--glass-light)',
+                      color: e.weekendShifts > 0 ? 'var(--accent-red)' : 'var(--text-muted)',
+                      fontWeight: 700, fontSize: 13,
+                    }}>
+                      {e.weekendShifts}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-block', minWidth: 24, padding: '2px 6px', borderRadius: 6,
+                      background: e.eveningShifts > 0 ? 'rgba(139,92,246,0.1)' : 'var(--glass-light)',
+                      color: e.eveningShifts > 0 ? '#8b5cf6' : 'var(--text-muted)',
+                      fontWeight: 700, fontSize: 13,
+                    }}>
+                      {e.eveningShifts}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'center', fontWeight: 600, color: e.restDays < 2 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                    {e.restDays}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        </div>
-        <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
-          辛苦度計分：平日早班 +1、平日晚班 +2、假日早班 +2、假日晚班 +3、國定假日 +4
         </div>
       </div>
     </div>

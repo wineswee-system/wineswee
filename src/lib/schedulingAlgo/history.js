@@ -61,28 +61,11 @@ export function analyzeHistoricalPatterns(pastSchedules, employees) {
     }
     const weekendRate = Math.round((weekendsWorked / totalWeeks) * 100)
 
-    const weeklyFatigue = weeks.map(week => {
-      let fatigue = 0
-      for (const date of week) {
-        const entry = workEntries.find(e => e.date === date)
-        if (!entry) continue
-        const dow = new Date(date).getDay()
-        const isWE = isWeekendDay(dow)
-        fatigue += isWE ? 3 : 1
-        fatigue += (entry.actual_hours || 0) > 8 ? 2 : 0
-      }
-      return fatigue
-    })
-    const avgFatigue = weeklyFatigue.length > 0
-      ? Math.round((weeklyFatigue.reduce((s, f) => s + f, 0) / weeklyFatigue.length) * 10) / 10
-      : 0
-
     employeeInsights[emp.name] = {
       avgWeeklyHours,
       preferredDays,
       preferredShifts,
       weekendRate,
-      avgFatigue,
     }
   }
 

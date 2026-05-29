@@ -8,7 +8,6 @@ import {
   parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
   isWeekendDay, MONTHLY_OVERTIME_CAP, isPartTime, isShiftWithinOH,
 } from '../scheduleUtils'
-import { getFatiguePoints } from './scoring'
 import { isLegallyValid } from './validation'
 
 /**
@@ -45,7 +44,7 @@ export function runShiftBasedAssignment(ctx) {
   const {
     employees, weekDates, schedule, actualTimes,
     sortedShifts, shiftDefs, restDayPlan,
-    prefMap, availMap, fatigueMap, staffingMap,
+    prefMap, availMap, staffingMap,
     targetHoursMap, monthRestTarget, monthRestCap,
     minStaff, monthlyCtx, isPTEmp, getEmpWeekHours,
     consecWeekends, holidays, data,
@@ -104,7 +103,7 @@ export function runShiftBasedAssignment(ctx) {
         if (pref.avoid.has(shiftDef.name)) continue
         if (!isShiftAvailable(emp, shiftDef, date, schedule, shiftDefs, weekDates, data, availMap)) continue
         if (!wantMap[shiftDef.name]) wantMap[shiftDef.name] = []
-        wantMap[shiftDef.name].push({ emp, priority: emp.schedule_priority || 3, fatigue: fatigueMap[emp.name] || 0 })
+        wantMap[shiftDef.name].push({ emp, priority: emp.schedule_priority || 3 })
       }
     }
 
@@ -112,10 +111,7 @@ export function runShiftBasedAssignment(ctx) {
       const needed = staffingMap[shiftName] || minStaff
       const slotsLeft = needed - (shiftCounts[shiftName] || 0)
       if (slotsLeft <= 0) continue
-      const candidates = wantMap[shiftName].sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority
-        return a.fatigue - b.fatigue
-      })
+      const candidates = wantMap[shiftName].sort((a, b) => a.priority - b.priority)
       const shiftDef = sortedShifts.find(s => s.name === shiftName)
       let filled = 0
       for (const { emp } of candidates) {
@@ -134,14 +130,10 @@ export function runShiftBasedAssignment(ctx) {
     }
 
     // Pass 2: Assign remaining to neutral/understaffed shifts
+    //   排序：月休用多的先（讓月休少的人有機會多排到）
     const remaining = toAssign
       .filter(emp => !assigned.has(emp.name))
-      .sort((a, b) => {
-        const restA = getMonthRestUsed(a.name)
-        const restB = getMonthRestUsed(b.name)
-        if (restA !== restB) return restB - restA
-        return (fatigueMap[a.name] || 0) - (fatigueMap[b.name] || 0)
-      })
+      .sort((a, b) => getMonthRestUsed(b.name) - getMonthRestUsed(a.name))
 
     for (const emp of remaining) {
       if (schedule[emp.name][date]) continue
@@ -176,11 +168,7 @@ export function runShiftBasedAssignment(ctx) {
         if (afterHours <= targetH) score += 15
         else if (afterHours <= targetH + 4) score += 5
         else score -= 10
-        const fatigue = fatigueMap[emp.name] || 0
-        const fatiguePoints = getFatiguePoints(shiftDef, date, holidays)
-        if (fatigue > 15) score -= fatiguePoints * 3
         if (isWeekendDay(dow) || holidays.includes(date)) {
-          score -= fatigue * 0.5
           const cw = consecWeekends[emp.name] || 0
           if (cw >= 2) score -= 40
           else if (cw >= 1) score -= 15
@@ -227,7 +215,7 @@ export function runShiftBasedAssignment(ctx) {
 export function runHybridGapFill(ctx) {
   const {
     employees, weekDates, schedule, actualTimes,
-    shiftDefs, offMap, availMap, fatigueMap,
+    shiftDefs, offMap, availMap,
     targetHoursMap, getEmpWeekHours, useTimeSlotMode, data,
   } = ctx
 
@@ -300,7 +288,6 @@ export function runHybridGapFill(ctx) {
         if (wh + shiftHours <= target) score += 20
         else if (wh + shiftHours <= target + 4) score += 5
         else score -= 15
-        score -= (fatigueMap[emp.name] || 0) * 0.5
         const isPT = isPartTime(emp)
         if (!isPT && shiftHours >= 6) score += 10
         if (isPT && shiftHours <= 6) score += 10

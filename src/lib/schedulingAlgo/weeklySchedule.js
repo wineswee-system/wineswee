@@ -24,7 +24,7 @@ import {
 export function runProgrammaticSchedule(data) {
   const {
     employees, shiftDefs, weekDates, existingSchedules, offRequests,
-    preferences, storeSettings, holidays = [], fatigueScores = [],
+    preferences, storeSettings, holidays = [],
     availability = [],
   } = data
 
@@ -71,9 +71,6 @@ export function runProgrammaticSchedule(data) {
       end: parseTime(a.end_time),
     }
   }
-
-  const fatigueMap = {}
-  for (const f of fatigueScores) fatigueMap[f.employee] = f.total_score || 0
 
   const staffingMap = {}
   for (const s of staffingRules) {
@@ -479,7 +476,7 @@ export function runProgrammaticSchedule(data) {
     employees, weekDates, shiftDefs, sortedShifts, timeSlots, storeSettings,
     staffingRules, minStaff, holidays, data,
     // Lookups
-    offMap, prefMap, availMap, fatigueMap, staffingMap,
+    offMap, prefMap, availMap, staffingMap,
     targetHoursMap, hoursRange, monthlyCtx, monthTargetMap, monthRestTarget, monthRestCap,
     consecWeekends, restDayPlan, wsConstraints, useTimeSlotMode,
     // Mutable state

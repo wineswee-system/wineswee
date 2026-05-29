@@ -9,7 +9,6 @@ import {
   splitIntoWeeks, getCycleFor, isPartTime, parseTime,
   MAX_CONSECUTIVE_WORK_DAYS, isShiftWithinOH, getOperatingHoursForDate, isWeekendDay,
 } from '../scheduleUtils'
-import { getFatiguePoints } from './scoring'
 import { validateMonthlyResult, isLegallyValid } from './validation'
 import { computeStats } from './stats'
 import { runProgrammaticSchedule } from './weeklySchedule'
@@ -81,16 +80,9 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     console.log(`  ${emp}: ${entries}`)
   }
 
-  // 3. fatigueScores - 跨月疲勞累計
-  const fatigue = data.fatigueScores || []
-  console.log('3. fatigueScores (本月已累積疲勞分):', fatigue.length, '筆')
-  for (const f of fatigue.slice(0, 10)) {
-    console.log(`  ${f.employee}: total=${f.total_score || 0}`)
-  }
-
-  // 4. existingSchedules - 本 cycle 範圍內已鎖定 (re-run 時才有)
+  // 3. existingSchedules - 本 cycle 範圍內已鎖定 (re-run 時才有)
   const locked = (data.existingSchedules || []).filter(s => s.shift && !isAbsence(s.shift))
-  console.log(`4. existingSchedules (本 cycle 內已鎖定): ${locked.length} 筆 (re-run 才會有)`)
+  console.log(`3. existingSchedules (本 cycle 內已鎖定): ${locked.length} 筆 (re-run 才會有)`)
 
   console.groupEnd()
   // ══════════════════════════════════════════════════════════════════════
@@ -150,14 +142,12 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
   // 跨 cycle 只看兩件事：H3 連續上班 ≤6 天 + 月休 cap (priorRestByMonth)
   let accumulatedPrev = [...(previousWeek || [])]
 
-  const monthFatigue = {}
   const monthHours = {}
   const monthRestDays = {}
   // ★ 跨月累計：cycle 內已分配的休假按 calendar month 分桶
   //   給 weekly scheduler 算「本月實際總休 = prior + cycle 已用 + 待分配」用
   const cycleRestByMonth = {}  // { empName: { 'YYYY-MM': count } }
   for (const emp of data.employees) {
-    monthFatigue[emp.name] = 0
     monthHours[emp.name] = 0
     monthRestDays[emp.name] = 0
     cycleRestByMonth[emp.name] = {}
@@ -176,16 +166,6 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       }
     }
 
-    const mergedFatigue = (data.fatigueScores || []).map(f => ({
-      ...f,
-      total_score: (f.total_score || 0) + (monthFatigue[f.employee] || 0),
-    }))
-    for (const emp of data.employees) {
-      if (!mergedFatigue.find(f => f.employee === emp.name)) {
-        mergedFatigue.push({ employee: emp.name, total_score: monthFatigue[emp.name] || 0 })
-      }
-    }
-
     const weekData = {
       ...data,
       weekDates,
@@ -195,7 +175,6 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       //   譬如 FT 5/11-5/25 連 15 天 → 之前只看 Week 4 (5/18-5/24 = 7 連) → 13 < 12
       //   → 漏擋；現在看 5/1-5/24 → 14 連 > 12 → 擋
       previousWeek: accumulatedPrev,
-      fatigueScores: mergedFatigue,
       existingSchedules: data.existingSchedules.filter(s => s.date >= weekDates[0] && s.date <= weekDates[weekDates.length - 1]),
       offRequests: data.offRequests.filter(o => o.date >= weekDates[0] && o.date <= weekDates[weekDates.length - 1]),
       monthlyContext: {
@@ -239,8 +218,6 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         }
       } else {
         monthHours[a.employee] = (monthHours[a.employee] || 0) + (a.actual_hours || 8)
-        const def = data.shiftDefs.find(d => d.name === a.shift)
-        if (def) monthFatigue[a.employee] = (monthFatigue[a.employee] || 0) + getFatiguePoints(def, a.date, data.holidays)
       }
     }
     console.log(`[Monthly] Week ${i + 1} done. Hours:`, Object.entries(monthHours).map(([n, h]) => `${n}:${h.toFixed(0)}h`).join(', '))
@@ -792,6 +769,6 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
     errors: combinedViolations.filter(v => v.severity === 'error'),
     warnings: combinedViolations.filter(v => v.severity === 'warning'),
     stats,
-    meta: { model: 'programmatic-v2', mode: 'monthly-humanized', employeeCount: data.employees.length, totalAssignments: allAssignments.length, weeksProcessed: weeks.length, monthFatigue },
+    meta: { model: 'programmatic-v2', mode: 'monthly-humanized', employeeCount: data.employees.length, totalAssignments: allAssignments.length, weeksProcessed: weeks.length },
   }
 }

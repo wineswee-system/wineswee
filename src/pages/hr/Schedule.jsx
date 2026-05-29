@@ -21,7 +21,6 @@ import ScheduleCalendarEvents from './components/ScheduleCalendarEvents'
 import AiDraftReviewPanel from './components/AiDraftReviewPanel'
 import { notifySchedulePublished, notifyCoverInvitationFromWeb } from '../../lib/lineNotify'
 import { exportScheduleCalendarPdf } from '../../lib/exportPdf'
-import { persistFatigueScores } from '../../lib/fatigueEngine'
 import { validateShiftChange } from '../../lib/scheduleValidator'
 
 import { toast } from '../../lib/toast'
@@ -559,13 +558,7 @@ export default function Schedule() {
       if (result?.ok) notified++
     }
 
-    // Auto-persist fatigue scores for the month
     const month = dates[0]?.slice(0, 7)
-    if (month) {
-      persistFatigueScores(month).then(r => {
-        if (r.success) console.log(`[Fatigue] 已結算 ${month} 辛苦度：${r.count} 人`)
-      })
-    }
 
     // Update publish status
     const store = locations.find(l => l.name === storeFilter)

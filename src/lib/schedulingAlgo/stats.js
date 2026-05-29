@@ -1,7 +1,6 @@
 import { getShiftHours, isAbsence, parseTime, isWeekendDay } from '../scheduleUtils'
-import { getFatiguePoints } from './scoring'
 
-export function computeStats(assignments, employees, shiftDefs, dates, holidays, targetHoursMap) {
+export function computeStats(assignments, employees, shiftDefs, _dates, _holidays, targetHoursMap) {
   const shiftDefMap = {}
   for (const d of shiftDefs) shiftDefMap[d.name] = d
 
@@ -12,7 +11,6 @@ export function computeStats(assignments, employees, shiftDefs, dates, holidays,
     const rest = empA.filter(a => isAbsence(a.shift))
 
     let totalHours = 0
-    let fatigue = 0
     let weekendShifts = 0
     let eveningShifts = 0
 
@@ -20,7 +18,6 @@ export function computeStats(assignments, employees, shiftDefs, dates, holidays,
       const def = shiftDefMap[a.shift]
       if (def) {
         totalHours += getShiftHours(def) - (def.break_minutes || 60) / 60
-        fatigue += getFatiguePoints(def, a.date, holidays)
         const dow = new Date(a.date).getDay()
         if (isWeekendDay(dow)) weekendShifts++
         if (parseTime(def.start_time) >= 15) eveningShifts++
@@ -36,7 +33,6 @@ export function computeStats(assignments, employees, shiftDefs, dates, holidays,
       restDays: rest.length,
       weekendShifts,
       eveningShifts,
-      fatigueScore: fatigue,
     }
   }
 
@@ -48,11 +44,6 @@ export function buildReasoning(employees, dates, stats) {
 
   if (stats?.byEmployee) {
     const entries = Object.entries(stats.byEmployee)
-    const avgFatigue = entries.reduce((sum, [, s]) => sum + s.fatigueScore, 0) / entries.length
-    const minF = Math.min(...entries.map(([, s]) => s.fatigueScore))
-    const maxF = Math.max(...entries.map(([, s]) => s.fatigueScore))
-    lines.push(`辛苦度分布：平均 ${avgFatigue.toFixed(1)}、最低 ${minF}、最高 ${maxF}`)
-
     const overTarget = entries.filter(([, s]) => s.hoursRatio > 110).length
     const underTarget = entries.filter(([, s]) => s.hoursRatio < 80).length
     if (overTarget > 0) lines.push(`${overTarget} 人超過目標工時 110%`)

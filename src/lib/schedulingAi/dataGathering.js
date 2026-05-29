@@ -29,7 +29,7 @@ export async function gatherSchedulingData({
   const prevStart = new Date(new Date(dateStart).getTime() - 7 * 86400000).toISOString().slice(0, 10)
   const prevEnd = new Date(new Date(dateStart).getTime() - 1 * 86400000).toISOString().slice(0, 10)
 
-  // Current month for fatigue lookup
+  // Current month — for store_time_slots year_month lookup
   const currentMonth = dateStart.slice(0, 7)
 
   // Parallel data fetches
@@ -41,7 +41,6 @@ export async function gatherSchedulingData({
     { data: storeSettingsData },
     { data: staffingData },
     { data: availabilityData },
-    { data: fatigueData },
     { data: holidayData },
     { data: timeSlotsData },
   ] = await Promise.all([
@@ -63,7 +62,6 @@ export async function gatherSchedulingData({
           .eq('store_id', locations.find(l => l.name === storeFilter)?.id)
       : Promise.resolve({ data: [] }),
     supabase.from('employee_availability').select('employee, day_of_week, start_time, end_time'),
-    supabase.from('fatigue_scores').select('employee, total_score, month').eq('month', currentMonth),
     supabase.from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd),
     storeFilter
       ? (async () => {
@@ -198,10 +196,6 @@ export async function gatherSchedulingData({
       day_of_week: a.day_of_week,
       start_time: a.start_time,
       end_time: a.end_time,
-    })),
-    fatigueScores: (fatigueData || []).map(f => ({
-      employee: f.employee,
-      total_score: f.total_score || 0,
     })),
     holidays: (holidayData || []).map(h => h.date),
     timeSlots: (timeSlotsData || []).map(s => ({

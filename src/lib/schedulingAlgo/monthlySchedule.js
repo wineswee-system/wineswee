@@ -552,10 +552,12 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       const toFix = Math.min(excess, sortedByNeed.length)
       for (let i = 0; i < toFix; i++) {
         const ra = sortedByNeed[i]
-        const empType = isPT ? 'PT' : 'FT'
+        // ★ employee_type enum 跟 validation.js 對齊：DB 實際是 'pt' / 'full_time' / 'all'
+        //   之前 Phase A 用 '正職' 字串 → 對 'full_time' 推導反向，FT 被擋、PT 反而能排 FT 班
         const eligible = data.shiftDefs.filter(sd => {
           if (sd.employee_type && sd.employee_type !== 'all') {
-            if ((sd.employee_type === '正職' ? 'FT' : 'PT') !== empType) return false
+            if (isPT && sd.employee_type !== 'pt') return false
+            if (!isPT && sd.employee_type === 'pt') return false
           }
           return true
         })
@@ -675,6 +677,15 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
         if (converted >= shortfall) break
         const dayWorkers = allAssignments.filter(x => x.date === wa.date && !isAbsence(x.shift)).length
         if (dayWorkers - 1 < minStaff) continue  // 轉掉會掉到 minStaff 之下
+        // ★ per-slot required floor：模擬 wa 變休後該日各 slot 仍 ≥ required
+        //   修「B 校正只看全日 minStaff、不查 store_time_slots required」漏網
+        const trialAssignments = allAssignments.map(a =>
+          a === wa
+            ? { ...a, shift: '休', actual_start: null, actual_end: null, actual_hours: 0 }
+            : a
+        )
+        const slotCovAfter = computeDaySlotCoverage(wa.date, data.timeSlots || [], trialAssignments)
+        if (slotCovAfter && slotCovAfter.some(s => s.covered < s.required_count)) continue
         wa.shift = '休'
         wa.actual_start = null
         wa.actual_end = null

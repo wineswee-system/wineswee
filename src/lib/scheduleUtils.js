@@ -374,11 +374,6 @@ export const MAX_CONSECUTIVE_WORK_DAYS_FT = 6
 /** Min rest days per week (勞基法 §36 一例一休) */
 export const MIN_WEEKLY_REST_DAYS = 2
 
-/** 4-week flexible work system constants (勞基法 §30-3) */
-export const FLEX_4W_TOTAL_HOURS = 160
-export const FLEX_4W_REST_DAYS = 8
-export const FLEX_4W_PERIOD_WEEKS = 4
-
 /**
  * Get scheduling constraints based on work hour system
  * @param {string} system - '標準工時' | '2週變形' | '4週變形' | '8週變形'

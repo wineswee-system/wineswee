@@ -169,9 +169,9 @@ export function runShiftBasedAssignment(ctx) {
         else if (afterHours <= targetH + 4) score += 5
         else score -= 10
         if (isWeekendDay(dow) || holidays.includes(date)) {
-          const cw = consecWeekends[emp.name] || 0
-          if (cw >= 2) score -= 40
-          else if (cw >= 1) score -= 15
+          // consecWeekends 目前最高只到 1（單 cycle 邊界 flag），>= 2 永遠不會 true
+          // → 只保留 cw === 1 的 -15 罰；若之後要真累計，要先改 weeklySchedule consecWeekends 邏輯
+          if ((consecWeekends[emp.name] || 0) >= 1) score -= 15
         }
         if (score > bestScore) { bestScore = score; bestShift = shiftDef }
       }

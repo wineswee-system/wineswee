@@ -374,6 +374,8 @@ export function runTimeSlotMode(ctx) {
         : [ftIdeal, 9].filter(h => h <= maxGrossH)
 
       // hourly-precise：對每個 slot 內、window 也涵蓋的 bucket 檢查 +1 是否超 max
+      // （之前每個 candidate window 都 print 一行 → log 爆量，現在拿掉 per-window log；
+      //   若需要 debug 看 chosen=null 那段 summary 已足夠）
       const wouldOver = (window) => {
         const ws = parseTime(window.start), we = parseTime(window.end)
         const weEff = we <= ws ? we + 24 : we
@@ -383,10 +385,7 @@ export function runTimeSlotMode(ctx) {
           const ovStart = Math.max(winSb, slot._startBucket)
           const ovEnd = Math.min(winEb, slot._endBucket)
           for (let b = ovStart; b < ovEnd; b++) {
-            if (slot.coveredHourly[b - slot._startBucket] + 1 > maxC) {
-              if (date === weekDates[0]) console.log(`[DBG ${date}] wouldOver YES: window ${window.start}~${window.end} bucket=${b}(${(b/2).toFixed(1)}h) cnt=${slot.coveredHourly[b - slot._startBucket]} max=${maxC} slot=${slot.start_time}-${slot.end_time}`)
-              return true
-            }
+            if (slot.coveredHourly[b - slot._startBucket] + 1 > maxC) return true
           }
         }
         return false

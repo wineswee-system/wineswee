@@ -243,8 +243,11 @@ export function runProgrammaticSchedule(data) {
     const needed = minWorkersPerDay[date] || minStaff
     const working = employees.length - restingOnDay.length
     if (working < needed && restingOnDay.length > 0) {
+      // ★ Bug 修正：原本 filter 是 `offMap.has(...)` 把「員工請假」當 removable
+      //   → 員工請的假被強制變上班 → 違反 H1 + 法律風險
+      //   正解：「**沒有** off_request 的人」才能被抽掉（algorithm 自動安排的休可以被退回上班）
       const removable = restingOnDay
-        .filter(e => offMap.has(`${e.name}_${date}`))
+        .filter(e => !offMap.has(`${e.name}_${date}`))
         .sort((a, b) => {
           const aIsPT = isPTEmp(a) ? 0 : 1
           const bIsPT = isPTEmp(b) ? 0 : 1

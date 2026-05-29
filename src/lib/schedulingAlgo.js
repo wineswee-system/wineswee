@@ -2,5 +2,4 @@
 // so existing `import { ... } from '../lib/schedulingAlgo'` callers need no changes.
 export * from './schedulingAlgo/validation'
 export * from './schedulingAlgo/stats'
-export * from './schedulingAlgo/history'
 export * from './schedulingAlgo/core'

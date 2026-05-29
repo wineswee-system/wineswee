@@ -116,7 +116,7 @@ export default function MonthScheduleTable({
                       textAlign: 'center', padding: '4px 1px',
                       width: 42, minWidth: 42, maxWidth: 42,
                       borderBottom: '2px solid var(--border-medium)',
-                      borderLeft: '1px solid var(--border-light)',
+                      borderLeft: '1px solid var(--border-medium)',
                       background: isHoliday ? 'rgba(239,68,68,0.08)' : isWeekend ? 'rgba(99,102,241,0.05)' : undefined,
                     }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-primary)' }}>
@@ -260,7 +260,7 @@ function EmployeeRow({
           <td key={date} style={{
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
-            border: '1px solid var(--border-light)',
+            border: '1px solid var(--border-medium)',
             background: isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
           }}

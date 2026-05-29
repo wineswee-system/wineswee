@@ -1,19 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { ModalOverlay } from '../../components/Modal'
-import { Plus, X, Check, Upload, FileText, Image, Send, Settings, Search } from 'lucide-react'
+import { Plus, X, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getAccounts, getEmployees } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
-import { createApprovalWorkflow, advanceWorkflow } from '../../lib/workflowIntegration'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { validateRequired, clearError } from '../../lib/formValidation'
+import { validateRequired } from '../../lib/formValidation'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import AsyncButton from '../../components/AsyncButton'
-import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-import { empLabel } from '../../lib/empLabel'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { safeStorageName } from '../../lib/storageSanitize'
 
@@ -79,51 +75,8 @@ export default function ExpenseRequests() {
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
   const [lineItems, setLineItems] = useState([emptyItem()])
-  // 加簽（P3a）：pending extras 索引 by source_id → 用來判斷當前狀態 + 撤銷
+  // 加簽（P3a）：pending extras 索引 by source_id → 用來判斷當前狀態
   const [pendingExtras, setPendingExtras] = useState({})
-  // 加簽 modal 狀態
-  const [showExtraModal, setShowExtraModal] = useState(null) // null or { row }
-  const [extraForm, setExtraForm] = useState({ assignee_id: null, reason: '' })
-  const fileRef = useRef(null)
-  const settleFileRef = useRef(null)
-  const csvRef = useRef(null)
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const updateItem = (i, k, v) => setLineItems(items => {
-    const n = [...items]
-    n[i] = { ...n[i], [k]: v }
-    if (k === 'qty' || k === 'unit_price') n[i].subtotal = (Number(n[i].qty) || 0) * (Number(n[i].unit_price) || 0)
-    return n
-  })
-  const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
-
-  const handleCsvImport = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target.result
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-      // skip header row if first cell matches known header
-      const start = /^(品名|name)/i.test(lines[0]) ? 1 : 0
-      const parsed = lines.slice(start).map(line => {
-        const cols = line.split(',')
-        const name = (cols[0] || '').trim()
-        const qty = Number((cols[1] || '').trim()) || 0
-        const unit_price = Number((cols[2] || '').trim()) || 0
-        return { name, qty, unit_price, subtotal: qty * unit_price }
-      }).filter(li => li.name)
-      if (parsed.length === 0) { toast.error('CSV 沒有有效資料'); return }
-      setLineItems(prev => {
-        const cleaned = prev.filter(li => li.name || li.qty || li.unit_price)
-        return [...cleaned, ...parsed]
-      })
-      toast.success(`已匯入 ${parsed.length} 筆品項`)
-    }
-    reader.readAsText(file, 'UTF-8')
-  }
-
   const load = async () => {
     setLoading(true)
     const orgId = profile?.organization_id
@@ -362,22 +315,6 @@ export default function ExpenseRequests() {
     load()
   }
 
-  // ★ 直接用 expense_request.workflow_instance_id FK（剛加的 schema），精準對應
-  //   舊資料 (workflow_instance_id 為 NULL) fallback 到「最近一筆同人進行中」模糊匹配
-  const resolveLinkedInstanceId = async (req) => {
-    if (req.workflow_instance_id) return req.workflow_instance_id
-    if (!profile?.organization_id) return null
-    const { data } = await supabase.from('workflow_instances')
-      .select('id, started_at')
-      .eq('organization_id', profile.organization_id)
-      .eq('template_name', '費用申請簽核')
-      .eq('started_by', req.employee)
-      .eq('status', '進行中')
-      .order('started_at', { ascending: false })
-      .limit(1)
-    return data?.[0]?.id || null
-  }
-
   // ★ 走 chain step-by-step 推進（呼 expense_request_step_advance RPC）
   // RPC 會驗證 caller 是否對應目前 chain step，通過才推進；最後一關才標 '已核准'
   // 沒綁 chain → RPC 自動 fallback 到舊單關行為
@@ -403,73 +340,6 @@ export default function ExpenseRequests() {
     } else {
       toast.success(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
     }
-    load()
-  }
-
-  const handleReject = async (req) => {
-    const reason = prompt('駁回原因：')
-    if (!reason || !reason.trim()) return
-    const { data, error } = await supabase.rpc('expense_request_step_advance', {
-      p_id: req.id, p_action: 'reject', p_reason: reason.trim(),
-    })
-    if (error) { setError(error.message); return }
-    if (!data?.ok) {
-      toast.error(`退回失敗：${data?.error || 'unknown'}`)
-      return
-    }
-    load()
-  }
-
-  // 加簽（P3a）— 開 modal
-  const openExtraModal = (req) => {
-    setShowExtraModal({ row: req })
-    setExtraForm({ assignee_id: null, reason: '' })
-  }
-
-  // 加簽 — 送出
-  const handleSubmitExtra = async () => {
-    if (!showExtraModal?.row) return
-    if (!extraForm.assignee_id) { toast.error('請選擇加簽人'); return }
-    const req = showExtraModal.row
-    const { data, error } = await supabase.rpc('request_extra_signer', {
-      p_source_table: 'expense_requests',
-      p_source_id: req.id,
-      p_insert_before_step: req.current_step ?? 0,
-      p_assignee_id: extraForm.assignee_id,
-      p_requested_by_id: profile?.id,
-      p_reason: extraForm.reason?.trim() || null,
-    })
-    if (error) {
-      // 解 friendly message — Postgres error 碼跟訊息直出
-      const msg = error.message?.includes('不能對自己加簽') ? '不能對自己加簽'
-                : error.message?.includes('已有 pending 加簽') ? '此步驟已有加簽進行中'
-                : error.message?.includes('不支援此單據類型') ? '此單據類型不支援加簽'
-                : `加簽失敗：${error.message}`
-      toast.error(msg)
-      return
-    }
-    toast.success(`已送出加簽請求給 ${employees.find(e => e.id === extraForm.assignee_id)?.name || '加簽人'}`)
-    setShowExtraModal(null)
-    load()
-  }
-
-  // 加簽 — 撤銷
-  const handleCancelExtra = async (extraId) => {
-    if (!extraId) return
-    const ok = await confirm('確定要撤銷加簽？加簽人會收到通知')
-    if (!ok) return
-    const { error } = await supabase.rpc('cancel_extra_signer', {
-      p_extra_step_id: extraId,
-      p_canceller_id: profile?.id,
-    })
-    if (error) {
-      const msg = error.message?.includes('只有發起人') ? '只有加簽發起人可以撤銷'
-                : error.message?.includes('狀態非 pending') ? '此加簽已被處理或撤銷'
-                : `撤銷失敗：${error.message}`
-      toast.error(msg)
-      return
-    }
-    toast.success('已撤銷加簽')
     load()
   }
 
@@ -636,41 +506,6 @@ export default function ExpenseRequests() {
     }
     toast.success(data.fully_settled ? '核銷完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
     load()
-  }
-
-  // 核銷簽核：駁回
-  const handleRejectSettle = async (req) => {
-    const reason = window.prompt('退回原因？')
-    if (!reason || !reason.trim()) return
-    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
-      p_id: req.id,
-      p_action: 'reject',
-      p_reason: reason.trim(),
-    })
-    if (error) { toast.error(error.message); return }
-    if (!data?.ok) { toast.error(data?.error || '駁回失敗'); return }
-    toast.success('已退回')
-    load()
-  }
-
-  // View attachment
-  const viewFile = (att) => {
-    const { data } = supabase.storage.from('attachments').getPublicUrl(att.storage_path)
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank')
-  }
-
-  const deleteFile = async (att) => {
-    if (!isAdmin && att.uploaded_by !== profile?.name) {
-      toast.error('僅能刪除自己上傳的檔案')
-      return
-    }
-    if (!(await confirm({ message: `刪除 ${att.file_name}？` }))) return
-    await supabase.storage.from('attachments').remove([att.storage_path])
-    await supabase.from('expense_request_attachments').delete().eq('id', att.id)
-    setAttachments(prev => ({
-      ...prev,
-      [att.request_id]: (prev[att.request_id] || []).filter(a => a.id !== att.id),
-    }))
   }
 
   const handleDelete = async (row) => {

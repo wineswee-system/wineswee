@@ -32,6 +32,10 @@ const STATUS_COLORS = {
   '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
 }
 
+// 核銷相關 status 顯示時加 (驗收) 後綴 — 業務面對齊「核銷=驗收」
+const displayStatus = (s) =>
+  (s === '待核銷' || s === '已核銷' || s === '核銷已退回') ? `${s}(驗收)` : s
+
 const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
 const fmtCur = (n, cur) => {
   if (n == null) return '-'
@@ -720,7 +724,7 @@ export default function ExpenseRequests() {
                   <Settings size={14} /> 申請簽核
                 </button>
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">
-                  <Settings size={14} /> 核銷簽核
+                  <Settings size={14} /> 核銷簽核(驗收)
                 </button>
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
                   <Settings size={14} /> 非費用簽核
@@ -753,7 +757,7 @@ export default function ExpenseRequests() {
         {['申請中', '已核准', '未送核銷', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
           <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: tab === s ? `2px solid ${STATUS_COLORS[s].color}` : undefined }}
             onClick={() => setTab(tab === s ? 'all' : s)}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{displayStatus(s)}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: STATUS_COLORS[s].color }}>{counts[s] || 0}</div>
           </div>
         ))}
@@ -824,7 +828,7 @@ export default function ExpenseRequests() {
                       </span>
                     )}
                   </td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{r.status}</span></td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{displayStatus(r.status)}</span></td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>

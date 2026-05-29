@@ -176,8 +176,9 @@ export function runTimeSlotMode(ctx) {
       if (grossH > wsConstraints.dailyAbsoluteMax) return null
       const weekHours = getEmpWeekHours(emp.name)
       if (weekHours + netH > hoursRange[emp.name].max + 2) return null
-      if (emp.can_open === false && startH < storeOpenH + 2) return null
-      if (emp.can_close === false && endH > effectiveCloseH - 2) return null
+      // UI 是 checkbox（勾=可、沒勾=不可）→ null 視同沒勾 = 不可
+      if (emp.can_open !== true && startH < storeOpenH + 2) return null
+      if (emp.can_close !== true && endH > effectiveCloseH - 2) return null
       const dateIdx = weekDates.indexOf(date)
       if (dateIdx > 0) {
         const prevT = actualTimes[`${emp.name}_${weekDates[dateIdx - 1]}`]

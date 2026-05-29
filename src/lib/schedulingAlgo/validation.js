@@ -33,11 +33,12 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
     if (shiftDef.day_type === 'weekend' && !isWE) return false
   }
 
-  // H9: can_open / can_close — only block if EXPLICITLY set to false (not null/undefined)
+  // H9: can_open / can_close — UI 是 checkbox（勾=可、沒勾=不可）
+  //   null/undefined 視同沒勾 = 不可 → 用 `!== true` 統一擋
   const startH = parseTime(shiftDef.start_time)
   const endH = parseTime(shiftDef.end_time)
-  if (startH <= 9 && emp.can_open === false) return false
-  if ((endH >= 21 || endH < startH) && emp.can_close === false) return false
+  if (startH <= 9 && emp.can_open !== true) return false
+  if ((endH >= 21 || endH < startH) && emp.can_close !== true) return false
 
   // H13: Pregnant/nursing → no night shifts
   if ((emp.is_pregnant || emp.is_nursing) && isNightShift(shiftDef)) return false

@@ -597,13 +597,13 @@ export function runFillUnassignedFT(ctx) {
         // ★ 寫死不得超過營業時間 — Step3b 也用 isShiftWithinOH 做 per-day 檢查，
         //   避免 cross-day union source filter 漏掉某日違規 shift
         if (!isShiftWithinOH(sd, date, storeSettings)) return false
-        // ★ can_open / can_close — 跟 timeSlotMode.tryShift Line 187-188 對齊
-        //   之前 Step3b 沒檢查 → 即使 emp.can_open=false 還是會被 Step3b 安排到開店班
-        if (storeOpenH != null && emp.can_open === false) {
+        // ★ can_open / can_close — 跟 timeSlotMode.tryShift 對齊
+        //   UI 是 checkbox：勾=可、沒勾=不可。null 視同沒勾 → 用 `!== true`
+        if (storeOpenH != null && emp.can_open !== true) {
           const sdStartH = parseTime(sd.start_time)
           if (sdStartH < storeOpenH + 2) return false
         }
-        if (effectiveCloseH != null && emp.can_close === false) {
+        if (effectiveCloseH != null && emp.can_close !== true) {
           const sdStartH = parseTime(sd.start_time)
           const sdEndH = parseTime(sd.end_time)
           const effEnd = sdEndH <= sdStartH ? sdEndH + 24 : sdEndH

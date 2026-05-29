@@ -34,7 +34,7 @@ const STATUS_COLORS = {
 
 // 核銷相關 status 顯示時加 (驗收) 後綴 — 業務面對齊「核銷=驗收」
 const displayStatus = (s) =>
-  (s === '待核銷' || s === '已核銷' || s === '核銷已退回') ? `${s}(驗收)` : s
+  (s === '未送核銷' || s === '待核銷' || s === '已核銷' || s === '核銷已退回') ? `${s}(驗收)` : s
 
 const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
 const fmtCur = (n, cur) => {

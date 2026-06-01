@@ -437,12 +437,35 @@ export default function ExpenseRequests() {
     if (inSettleStage) {
       if (req.settle_chain_id) {
         // 有核銷鏈 → 抓真正的步驟並顯示進度
-        // 用 get_chain_step_display_names 解析動態 target（applicant_supervisor 等）
-        const { data: resolvedSettleSteps } = await supabase.rpc('get_chain_step_display_names', {
-          p_chain_id: req.settle_chain_id,
-          p_applicant_emp_id: req.employee_id,
-        })
-        const rawSettleSteps = Array.isArray(resolvedSettleSteps) ? resolvedSettleSteps : []
+        // 優先讀快照（凍結的 chain），fallback live chain
+        let rawSettleSteps = []
+        const { data: snapRows } = await supabase
+          .from('request_chain_snapshots')
+          .select('step_order, label, role_name, target_type, target_emp_id')
+          .eq('request_type', 'expense_settle')
+          .eq('request_id', req.id)
+          .order('step_order')
+
+        if (snapRows?.length > 0) {
+          // 快照已有解析好的 target_emp_id，查名字即可
+          const snapEmpIds = [...new Set(snapRows.map(s => s.target_emp_id).filter(Boolean))]
+          let snapEmpMap = {}
+          if (snapEmpIds.length > 0) {
+            const { data: snapEmps } = await supabase.from('employees').select('id, name').in('id', snapEmpIds)
+            snapEmpMap = Object.fromEntries((snapEmps || []).map(e => [e.id, e.name]))
+          }
+          rawSettleSteps = snapRows.map(s => ({
+            ...s,
+            names: s.target_emp_id ? (snapEmpMap[s.target_emp_id] || '') : (s.role_name || s.label || ''),
+          }))
+        } else {
+          // fallback：live chain + get_chain_step_display_names
+          const { data: resolvedSettleSteps } = await supabase.rpc('get_chain_step_display_names', {
+            p_chain_id: req.settle_chain_id,
+            p_applicant_emp_id: req.employee_id,
+          })
+          rawSettleSteps = Array.isArray(resolvedSettleSteps) ? resolvedSettleSteps : []
+        }
 
         const curStep = req.settle_current_step ?? 0
         const totalSteps = rawSettleSteps.length

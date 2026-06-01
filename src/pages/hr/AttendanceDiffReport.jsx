@@ -293,37 +293,37 @@ export default function AttendanceDiffReport() {
             ) : detailDiffs.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無差異</div>
             ) : (
-              <table className="data-table" style={{ width: '100%', fontSize: 13 }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>類型</th>
-                    <th>排班</th>
-                    <th>實際</th>
-                    <th>說明</th>
+                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-medium)' }}>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>日期</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>類型</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>排班</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>實際</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>說明</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailDiffs.map((d, i) => {
                     const color = TYPE_COLOR[d.diff_type] || { bg: '#eee', fg: '#666' }
                     return (
-                      <tr key={i}>
-                        <td>{d.diff_date}</td>
-                        <td>
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '8px 10px' }}>{d.diff_date}</td>
+                        <td style={{ padding: '8px 10px' }}>
                           <span style={{
                             padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                             background: color.bg, color: color.fg,
                           }}>{TYPE_LABEL[d.diff_type] || d.diff_type}</span>
                         </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-secondary)', fontSize: 12 }}>
                           {d.expected_shift || '—'}
                           {d.expected_hours > 0 && ` (${d.expected_hours}h)`}
                         </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-secondary)', fontSize: 12 }}>
                           {d.actual_clock_in ? `${d.actual_clock_in.slice(0,5)}-${d.actual_clock_out?.slice(0,5) || '?'}` : '未打卡'}
                           {d.actual_hours > 0 && ` (${d.actual_hours}h)`}
                         </td>
-                        <td style={{ fontSize: 12 }}>{d.message}</td>
+                        <td style={{ padding: '8px 10px', fontSize: 12 }}>{d.message}</td>
                       </tr>
                     )
                   })}

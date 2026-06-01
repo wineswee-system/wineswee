@@ -98,6 +98,9 @@ export default function PunchCorrection() {
       approverName: row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'correction',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
     if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)

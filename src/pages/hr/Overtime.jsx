@@ -268,6 +268,9 @@ export default function Overtime() {
       approverName: row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'overtime_request',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
     if (detailRowIdRef.current !== row.id) return  // race guard
     setDetailChainSteps(steps)

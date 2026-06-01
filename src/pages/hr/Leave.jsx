@@ -379,6 +379,9 @@ export default function Leave() {
         approverName: row.approver,
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
+        requestType: 'leave_request',
+        requestId: row.id,
+        currentStep: row.current_step,
       })
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
@@ -413,6 +416,9 @@ export default function Leave() {
       approverName: row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'leave_request',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
     if (detailRowIdRef.current !== row.id) return  // race guard
     setDetailChainSteps(steps)

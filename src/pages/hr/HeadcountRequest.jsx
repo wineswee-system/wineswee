@@ -133,6 +133,9 @@ export default function HeadcountRequest() {
       approverName: row.approver?.name || row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'headcount',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
   }
 

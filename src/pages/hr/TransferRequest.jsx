@@ -74,6 +74,9 @@ export default function TransferRequest() {
       approverName: row.approver?.name || row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'transfer',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
   }
 

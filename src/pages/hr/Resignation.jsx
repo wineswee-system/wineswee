@@ -73,6 +73,9 @@ export default function Resignation() {
       approverName: row.approver?.name || row.approver,
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
+      requestType: 'resignation',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
   }
 

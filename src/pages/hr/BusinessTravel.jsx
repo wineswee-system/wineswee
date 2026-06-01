@@ -180,6 +180,9 @@ export default function BusinessTravel() {
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
       fallbackTail: ['人資/財務'],
+      requestType: 'trip',
+      requestId: row.id,
+      currentStep: row.current_step,
     })
     if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)

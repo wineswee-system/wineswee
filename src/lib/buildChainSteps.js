@@ -359,12 +359,16 @@ async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {
  * @param {string} [opts.approvedAt]
  * @param {string} [opts.rejectReason]
  * @param {Array<string>} [opts.fallbackTail]  沒設 chain 時的 fallback 尾巴關卡
+ * @param {string} [opts.requestType]   ★ snapshot 用：'leave_request' / 'overtime_request' / 'trip' / ...
+ * @param {number} [opts.requestId]     ★ snapshot 用：對應 row 的 id
+ * @param {number} [opts.currentStep]   ★ snapshot 用：對應 row.current_step（沒給就用 single-stage 推算）
  * @returns {Promise<Array>}
  */
 export async function buildFormChainSteps({
   formType, organizationId, applicantName, applicantId, applicantCreatedAt, recordStatus,
   approverName, approvedAt, rejectReason,
   fallbackTail = ['人資核章'],
+  requestType = null, requestId = null, currentStep = null,
 }) {
   const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
   const applicantStep = {
@@ -372,7 +376,51 @@ export async function buildFormChainSteps({
     status: 'completed', completedAt: applicantCreatedAt, isApplicant: true,
   }
 
-  // 找 form_chain_configs
+  const isApproved = recordStatus === '已核准' || recordStatus === '已核銷'
+  const isRejected = recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回'
+
+  // ── 0. snapshot 優先（送出當下鎖定流程，chain 改動不影響在飛單）──
+  if (requestType && requestId) {
+    try {
+      const { data: snapData } = await supabase.rpc('get_request_chain_display_names', {
+        p_request_type: requestType,
+        p_request_id: requestId,
+        p_applicant_emp_id: applicantId || null,
+      })
+      if (Array.isArray(snapData) && snapData.length > 0) {
+        const cur = currentStep ?? 0
+        const finalSteps = snapData.map((s, i) => {
+          const idx = s.step_order
+          let status
+          if (isApproved) {
+            status = 'completed'
+          } else if (isRejected) {
+            // 有 current_step → 精準算駁回關；沒有 → 預設第 1 關
+            const rejectedAt = currentStep != null ? cur : 0
+            status = idx === rejectedAt ? 'rejected' : (idx < rejectedAt ? 'completed' : 'pending')
+          } else if (currentStep != null) {
+            status = idx < cur ? 'completed' : (idx === cur ? 'current' : 'pending')
+          } else {
+            status = idx === 0 ? 'current' : 'pending'
+          }
+          return {
+            label: s.label || s.role_name || `第${idx + 1}關`,
+            name: s.names || '',
+            target_emp_id: s.target_emp_id || null,
+            role_name: s.role_name || null,
+            status,
+            completedAt: status === 'completed' && idx === snapData.length - 1 ? approvedAt : undefined,
+            rejectReason: status === 'rejected' ? rejectReason : '',
+          }
+        })
+        return [applicantStep, ...finalSteps]
+      }
+    } catch (e) {
+      console.warn('[buildFormChainSteps] snapshot RPC failed, fallback to live:', e)
+    }
+  }
+
+  // ── 1. 沒快照（舊單 / 沒傳 requestType）→ 走 form_chain_configs + live chain ──
   const { data: cfg } = await supabase
     .from('form_chain_configs')
     .select('chain_id, is_active')
@@ -383,9 +431,9 @@ export async function buildFormChainSteps({
   if (!cfg?.chain_id || !cfg?.is_active) {
     // 沒設定 → 退回到舊 fallback：申請人 + 直屬主管 + 人資核章
     let supervisorStep
-    if (recordStatus === '已核准' || recordStatus === '已核銷') {
+    if (isApproved) {
       supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'completed', completedAt: approvedAt }
-    } else if (recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回') {
+    } else if (isRejected) {
       supervisorStep = { label: '直屬主管', name: cleanApprover, status: 'rejected', rejectReason }
     } else {
       supervisorStep = { label: '直屬主管', name: '', status: 'current' }
@@ -420,18 +468,21 @@ export async function buildFormChainSteps({
     return { step: s, names: names || (s.target_type?.startsWith('applicant_') ? '⚠️ 動態解不出（檢查組織圖）' : '') }
   }))
 
-  // Status 推算（單關 status 模式）：
-  //   申請中  → 第 1 關 current，其他 pending
-  //   已核准  → 全部 completed
-  //   已駁回  → 第 1 關 rejected，其他 pending（暫時假設駁回在第 1 關，未來 form 加 current_step 才能精準）
-  const isApproved = recordStatus === '已核准' || recordStatus === '已核銷'
-  const isRejected = recordStatus === '已駁回' || recordStatus === '已拒絕' || recordStatus === '已退回'
-
+  // Status 推算：有 currentStep 就用，否則 single-stage 模式
+  const cur = currentStep ?? 0
   const finalSteps = resolved.map(({ step, names }, i) => {
+    const idx = step.step_order
     let status
-    if (isApproved) status = 'completed'
-    else if (isRejected) status = i === 0 ? 'rejected' : 'pending'
-    else status = i === 0 ? 'current' : 'pending'
+    if (isApproved) {
+      status = 'completed'
+    } else if (isRejected) {
+      const rejectedAt = currentStep != null ? cur : 0
+      status = idx === rejectedAt ? 'rejected' : (idx < rejectedAt ? 'completed' : 'pending')
+    } else if (currentStep != null) {
+      status = idx < cur ? 'completed' : (idx === cur ? 'current' : 'pending')
+    } else {
+      status = idx === 0 ? 'current' : 'pending'
+    }
     return {
       label: step.label || step.role_name || `第${i + 1}關`,
       name: names,

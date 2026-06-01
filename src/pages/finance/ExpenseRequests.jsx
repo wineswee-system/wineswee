@@ -470,10 +470,20 @@ export default function ExpenseRequests() {
         const curStep = req.settle_current_step ?? 0
         const totalSteps = rawSettleSteps.length
 
+        // 核銷鏈時間軸（同主審批鏈）
+        const settleTlByStep = {}
+        try {
+          const { data: settleTl } = await supabase.rpc('get_approval_timeline', {
+            p_request_type: 'expense_settle',
+            p_request_id: req.id,
+          })
+          ;(settleTl || []).forEach(t => { settleTlByStep[t.step_order] = t })
+        } catch (_) {}
+
         const settleSteps = rawSettleSteps.map(s => {
           const empName = s.names || ''
           const isLastStep = s.step_order === totalSteps - 1
-          let stepStatus, stepName, completedAt
+          let stepStatus, stepName, completedAt, durationText
           if (isSettled) {
             stepStatus = 'completed'
             stepName = isLastStep ? (req.settled_by || empName) : empName
@@ -488,11 +498,17 @@ export default function ExpenseRequests() {
             stepStatus = 'pending'
             stepName = empName
           }
+          const tl = settleTlByStep[s.step_order]
+          if (tl?.exited_at && (stepStatus === 'completed')) {
+            completedAt = completedAt || tl.exited_at
+            durationText = tl.duration_text
+          }
           return {
             label: s.label || s.role_name || `核銷第 ${s.step_order + 1} 關`,
             name: stepName,
             status: stepStatus,
             completedAt,
+            durationText,
             archival: false,
           }
         })
@@ -994,17 +1010,15 @@ export default function ExpenseRequests() {
                   onChanged: refreshDetail,
                 }
               }
-              // 待核銷：走 liff_approve_request type=expense_settle（不支援加簽）
+              // 待核銷：走 expense_settle_step_advance（支援加簽）
               if (showDetail.status === '待核銷' && canApprove('expense_settles', showDetail.id)) {
                 return {
-                  sourceTable: 'expense_requests',
-                  row: showDetail,
+                  sourceTable: 'expense_settles',
+                  row: { ...showDetail, current_step: showDetail.settle_current_step ?? 0 },
                   onApprove: async (r) => handleConfirmSettle(r),
                   onReject: async (_r, reason) => {
-                    // handleRejectSettle 內部會 prompt — 但我們已經有 reason，要繞過
-                    const { data, error } = await supabase.rpc('liff_approve_request', {
-                      p_line_user_id: null, p_type: 'expense_settle', p_id: showDetail.id,
-                      p_action: 'reject', p_reason: reason,
+                    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
+                      p_id: showDetail.id, p_action: 'reject', p_reason: reason,
                     })
                     if (error) { toast.error('退回失敗：' + error.message); return }
                     if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
@@ -1012,7 +1026,6 @@ export default function ExpenseRequests() {
                   onChanged: refreshDetail,
                   approveLabel: '核准核銷',
                   rejectLabel: '核銷退回',
-                  hideExtra: true,
                 }
               }
               return null

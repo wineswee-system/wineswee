@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Save } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { supabase } from '../lib/supabase'
@@ -10,6 +10,7 @@ import ProfileTabContent from './employee/ProfileTabContent'
 import HrTabContent from './employee/HrTabContent'
 import ScheduleTabContent from './employee/ScheduleTabContent'
 import HistoryTabContent from './employee/HistoryTabContent'
+import OffboardingModal from './OffboardingModal'
 import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
 
@@ -94,6 +95,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [newLineChannel, setNewLineChannel] = useState('')
   const [unboundLineUsers, setUnboundLineUsers] = useState([])
   const [manualLineInput, setManualLineInput] = useState(false)
+
+  // Offboarding modal
+  const [offboarding, setOffboarding] = useState(null)  // { pendingStatus, pendingResignDate, dataToSave }
+  const pendingSaveRef = useRef(null)
 
   // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
@@ -191,6 +196,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       const s = (stores || []).find(x => x.name === form.store)
       dataToSave.store_id = s ? s.id : null
     }
+
+    // Intercept resign / 留職停薪 status change → show offboarding modal
+    const RESIGN_STATUSES = ['離職', '留職停薪']
+    if (
+      RESIGN_STATUSES.includes(form.status) &&
+      form.status !== employee.status
+    ) {
+      pendingSaveRef.current = { dataToSave, storeChanged }
+      setOffboarding({
+        pendingStatus:     form.status,
+        pendingResignDate: form.resign_date || null,
+      })
+      setSaving(false)
+      return
+    }
+
     const { data, error } = await updateEmployee(employee.id, dataToSave)
     if (error) { toast.error('儲存失敗，請稍後再試'); setSaving(false); return }
     if (data) {
@@ -202,6 +223,35 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       }
     }
     setSaving(false)
+  }
+
+  const handleOffboardingSuccess = async (rpcResult) => {
+    // resign_employee already updated status + resign_date; save remaining form fields
+    const { dataToSave, storeChanged } = pendingSaveRef.current || {}
+    pendingSaveRef.current = null
+    setOffboarding(null)
+
+    const summary = [
+      rpcResult.chain_steps_count > 0 && `${rpcResult.chain_steps_count} 個簽核關卡`,
+      rpcResult.snapshots_count   > 0 && `${rpcResult.snapshots_count} 筆申請快照`,
+      rpcResult.stores_count      > 0 && `${rpcResult.stores_count} 個門市主管`,
+      rpcResult.depts_count       > 0 && `${rpcResult.depts_count} 個部門主管`,
+    ].filter(Boolean).join('、')
+
+    toast.success(summary ? `交接完成：${summary}已轉移` : `已設為${offboarding?.pendingStatus || '離職'}`)
+
+    // Save any remaining form fields (resign_reason etc.) that the RPC didn't handle
+    if (dataToSave) {
+      const { data, error } = await updateEmployee(employee.id, dataToSave)
+      if (error) toast.error('其他欄位儲存失敗，請重新儲存')
+      if (data) {
+        onUpdate(data); setIsDirty(false)
+        if (storeChanged) {
+          const today = new Date().toISOString().slice(0, 10)
+          await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
+        }
+      }
+    }
   }
 
   const handleClose = async () => {
@@ -535,6 +585,21 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         onConfirm={inputModal.onConfirm || (() => {})}
         onCancel={closeInput}
       />
+
+      {offboarding && (
+        <OffboardingModal
+          employee={employee}
+          pendingStatus={offboarding.pendingStatus}
+          pendingResignDate={offboarding.pendingResignDate}
+          allEmployees={allEmployees}
+          currentUserEmpId={profile?.id || null}
+          onSuccess={handleOffboardingSuccess}
+          onCancel={() => {
+            setOffboarding(null)
+            pendingSaveRef.current = null
+          }}
+        />
+      )}
     </div>
   )
 }

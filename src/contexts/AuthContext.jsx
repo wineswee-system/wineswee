@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
       setOrganization(orgResult.data || null)
       setRole(roleResult.data || null)
       // 用 effective_permissions RPC 抓含個人 override 的最終清單
-      setPermissions((permsResult.data || []).map(p => p.code).filter(Boolean))
+      setPermissions((permsResult.data || []).filter(p => p.effective).map(p => p.code).filter(Boolean))
     } catch (err) {
       console.error('Failed to load employee profile:', err?.message ?? 'unknown error')
       setProfile(null)

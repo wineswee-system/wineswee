@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -247,12 +248,12 @@ export default function AttendanceDiffReport() {
         </table>
       </div>
 
-      {/* 詳情 modal — header sticky + body 內部 scroll */}
-      {detailEmp && (
+      {/* 詳情 modal — 用 createPortal 渲染到 body，避免 layout wrapper transform 影響 fixed */}
+      {detailEmp && createPortal(
         <div
           onClick={() => setDetailEmp(null)}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999,
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px 20px',
             overflow: 'hidden',
           }}
@@ -293,46 +294,53 @@ export default function AttendanceDiffReport() {
             ) : detailDiffs.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無差異</div>
             ) : (
-              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-medium)' }}>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>日期</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>類型</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>排班</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>實際</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>說明</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailDiffs.map((d, i) => {
-                    const color = TYPE_COLOR[d.diff_type] || { bg: '#eee', fg: '#666' }
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                        <td style={{ padding: '8px 10px' }}>{d.diff_date}</td>
-                        <td style={{ padding: '8px 10px' }}>
-                          <span style={{
-                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                            background: color.bg, color: color.fg,
-                          }}>{TYPE_LABEL[d.diff_type] || d.diff_type}</span>
-                        </td>
-                        <td style={{ padding: '8px 10px', color: 'var(--text-secondary)', fontSize: 12 }}>
-                          {d.expected_shift || '—'}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {detailDiffs.map((d, i) => {
+                  const color = TYPE_COLOR[d.diff_type] || { bg: '#eee', fg: '#666' }
+                  return (
+                    <div key={i} style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-subtle)',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {d.diff_date}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6, fontWeight: 400 }}>
+                            ({new Date(d.diff_date).toLocaleDateString('zh-TW', { weekday: 'short' })})
+                          </span>
+                        </div>
+                        <span style={{
+                          padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                          background: color.bg, color: color.fg,
+                        }}>{TYPE_LABEL[d.diff_type] || d.diff_type}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>排班</span>
+                          {d.expected_shift || '無班'}
                           {d.expected_hours > 0 && ` (${d.expected_hours}h)`}
-                        </td>
-                        <td style={{ padding: '8px 10px', color: 'var(--text-secondary)', fontSize: 12 }}>
-                          {d.actual_clock_in ? `${d.actual_clock_in.slice(0,5)}-${d.actual_clock_out?.slice(0,5) || '?'}` : '未打卡'}
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>實際</span>
+                          {d.actual_clock_in
+                            ? `${d.actual_clock_in.slice(0,5)} - ${d.actual_clock_out?.slice(0,5) || '?'}`
+                            : '未打卡'}
                           {d.actual_hours > 0 && ` (${d.actual_hours}h)`}
-                        </td>
-                        <td style={{ padding: '8px 10px', fontSize: 12 }}>{d.message}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                        {d.message}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

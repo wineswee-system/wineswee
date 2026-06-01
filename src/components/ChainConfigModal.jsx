@@ -447,7 +447,11 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       }
 
       // ── 砍舊 steps + 寫新 ──
-      await supabase.from('approval_chain_steps').delete().eq('chain_id', cid)
+      // ⚠️ DELETE 要 check error：DB 端 _guard_chain_steps_in_flight 會擋有在飛單的 chain，
+      // 沒檢查的話舊 steps 沒砍掉，下面 INSERT 會撞 duplicate key (chain_id, step_order)
+      // 把使用者搞到一頭霧水
+      const { error: delErr } = await supabase.from('approval_chain_steps').delete().eq('chain_id', cid)
+      if (delErr) throw delErr
       const stepRows = steps.map((s, i) => ({
         chain_id: cid,
         step_order: i,

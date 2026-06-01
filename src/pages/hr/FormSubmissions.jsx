@@ -56,7 +56,7 @@ export default function FormSubmissions() {
   const [companyName, setCompanyName] = useState(loadCompanyName)
   const [logoUrl, setLogoUrl] = useState('')
   // task #3：每張單對應 chain 的所有 steps，給「第 X/Y 關 — label」用
-  const [chainStepsMap, setChainStepsMap] = useState({})  // { chainId: { totalSteps, steps: [orderedByStepOrder] } }
+  const [chainStepsMap, setChainStepsMap] = useState({})  // { submissionId: { totalSteps, steps: [orderedByStepOrder] } } — 走 snapshot
   // task #1：picker 類型把 ID 顯示成人名/部門名/門市名
   const [empMap, setEmpMap] = useState({})
   const [deptMap, setDeptMap] = useState({})
@@ -101,24 +101,43 @@ export default function FormSubmissions() {
     // 優先用 DB 的 organization.name 當公司名，沒設才 fallback localStorage
     if (orgRes?.data?.name) setCompanyName(orgRes.data.name)
 
-    // task #3：先抓 list 內出現的所有 chain_ids 對應的 steps 一次 → render 時 lookup
-    const chainIds = [...new Set(rows.map(r => r.template?.approval_chain_id).filter(Boolean))]
-    if (chainIds.length) {
-      const { data: stepsData } = await supabase
-        .from('approval_chain_steps')
-        .select('chain_id, step_order, label, role_name')
-        .in('chain_id', chainIds)
-        .order('step_order', { ascending: true })
-      const m = {}
-      for (const step of (stepsData || [])) {
-        if (!m[step.chain_id]) m[step.chain_id] = { totalSteps: 0, steps: [] }
-        m[step.chain_id].steps[step.step_order] = step
-        m[step.chain_id].totalSteps = Math.max(m[step.chain_id].totalSteps, step.step_order + 1)
+    // 列表「第 X/N 關 · 標籤」顯示 — 走 snapshot batch RPC（key 是 submission_id）
+    // 改 chain 不影響在飛單：每張單在送出當下已被快照鎖住自己的流程
+    const subIds = rows.map(r => r.id)
+    const m = {}
+    if (subIds.length) {
+      const { data: snapData } = await supabase.rpc('get_form_submission_chain_steps_batch', {
+        p_submission_ids: subIds,
+      })
+      for (const row of (snapData || [])) {
+        const entry = { totalSteps: row.total_steps || 0, steps: [] }
+        for (const s of (row.steps || [])) entry.steps[s.step_order] = s
+        m[row.submission_id] = entry
       }
-      setChainStepsMap(m)
-    } else {
-      setChainStepsMap({})
+      // 沒快照的舊單（理論上 backfill 已補齊，這是保險）→ fallback 讀 live chain
+      const missingIds = subIds.filter(id => !m[id])
+      if (missingIds.length) {
+        const missingRows = rows.filter(r => missingIds.includes(r.id) && r.template?.approval_chain_id)
+        const fallbackChainIds = [...new Set(missingRows.map(r => r.template.approval_chain_id))]
+        if (fallbackChainIds.length) {
+          const { data: liveSteps } = await supabase
+            .from('approval_chain_steps')
+            .select('chain_id, step_order, label, role_name')
+            .in('chain_id', fallbackChainIds)
+            .order('step_order', { ascending: true })
+          const liveByChain = {}
+          for (const step of (liveSteps || [])) {
+            if (!liveByChain[step.chain_id]) liveByChain[step.chain_id] = { totalSteps: 0, steps: [] }
+            liveByChain[step.chain_id].steps[step.step_order] = step
+            liveByChain[step.chain_id].totalSteps = Math.max(liveByChain[step.chain_id].totalSteps, step.step_order + 1)
+          }
+          for (const r of missingRows) {
+            m[r.id] = liveByChain[r.template.approval_chain_id] || { totalSteps: 0, steps: [] }
+          }
+        }
+      }
     }
+    setChainStepsMap(m)
 
     // task #1：偵測 list 內有沒有 picker 欄位 → 才打 DB 拿 employees/depts/stores
     const allFields = rows.flatMap(r => r.template?.fields || [])
@@ -339,12 +358,14 @@ export default function FormSubmissions() {
 
     if (chainId) {
       // 用 RPC 解出每關實際簽核人（cover 動態 target：applicant_dept_manager / specific_* 等 9 種）
+      // ★ 優先讀 snapshot（送出當下鎖定）→ 沒快照才 fallback live chain（舊單相容）
       const applicantEmpId = sub.applicant_id || sub.applicant?.id || null
-      const [{ data: chainStepsData }, { data: ashRows }] = await Promise.all([
-        supabase.rpc('get_chain_step_display_names', {
-          p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
+      const [{ data: snapData }, { data: ashRows }] = await Promise.all([
+        supabase.rpc('get_request_chain_display_names', {
+          p_request_type: 'form_submission',
+          p_request_id: sub.id,
+          p_applicant_emp_id: applicantEmpId,
         }),
-        // approval_step_history 提供每關 exited_at / approver_name
         supabase.from('approval_step_history')
           .select('step_order, exited_at, action, approver_name')
           .eq('request_type', 'form_submission')
@@ -352,6 +373,13 @@ export default function FormSubmissions() {
           .not('exited_at', 'is', null)
           .order('step_order', { ascending: true }),
       ])
+      let chainStepsData = Array.isArray(snapData) && snapData.length > 0 ? snapData : null
+      if (!chainStepsData) {
+        const { data: liveData } = await supabase.rpc('get_chain_step_display_names', {
+          p_chain_id: chainId, p_applicant_emp_id: applicantEmpId,
+        })
+        chainStepsData = Array.isArray(liveData) ? liveData : []
+      }
       const ashByStep = {}
       for (const r of (ashRows || [])) {
         ashByStep[r.step_order] = r  // 同 step 多筆會被最後一筆蓋掉，正常情況每 step 只有 1 筆 exited
@@ -505,8 +533,8 @@ export default function FormSubmissions() {
                     <td style={{ fontSize: 12 }}>{s.created_at?.slice(0, 10)}</td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{s.status}</span>
-                      {s.status === '申請中' && s.template?.approval_chain_id && chainStepsMap[s.template.approval_chain_id] && (() => {
-                        const cs = chainStepsMap[s.template.approval_chain_id]
+                      {s.status === '申請中' && chainStepsMap[s.id] && (() => {
+                        const cs = chainStepsMap[s.id]
                         const cur = s.current_step ?? 0
                         const stepInfo = cs.steps[cur]
                         if (!stepInfo) return null

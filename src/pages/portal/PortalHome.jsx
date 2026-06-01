@@ -16,6 +16,7 @@ export default function PortalHome() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
   const [clockMode, setClockMode] = useState('normal')      // normal | outing (2026-05-28 簡化 5 → 2)
+  const [confirmOut, setConfirmOut] = useState(false)       // 下班打卡 confirm modal
   // ★ Live GPS / IP / WiFi 即時狀態（對齊 LIFF Clock.jsx 視覺 feedback）
   const [now, setNow] = useState(new Date())
   const [gpsLocation, setGpsLocation] = useState(null)      // { lat, lng }
@@ -105,15 +106,20 @@ export default function PortalHome() {
       })
   }, [profileReady, profile?.id, today])
 
-  const handleClock = async () => {
+  const handleClock = async (confirmed = false) => {
     if (!profile?.name) return
+    const action = (todayAttendance?.clock_in && !todayAttendance?.clock_out) ? 'clock_out' : 'clock_in'
+    // ★ 下班打卡 — 加 confirm 防誤觸
+    if (action === 'clock_out' && !confirmed) {
+      setConfirmOut(true)
+      return
+    }
+    setConfirmOut(false)
     setClockingIn(true)
     setClockMsg(null)
     try {
       // Client-side validation first (blocks if location check fails)
       const result = await validateClockIn(store)
-
-      const action = (todayAttendance?.clock_in && !todayAttendance?.clock_out) ? 'clock_out' : 'clock_in'
 
       // Server-side validation + record write
       const data = await serverClockIn({
@@ -256,7 +262,7 @@ export default function PortalHome() {
           </div>
           {clockAction && (
             <button
-              onClick={handleClock}
+              onClick={() => handleClock()}
               disabled={clockingIn}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
@@ -471,6 +477,61 @@ export default function PortalHome() {
           )
         })}
       </div>
+
+      {/* 下班打卡 確認 modal — 防誤觸 */}
+      {confirmOut && (
+        <div
+          onClick={() => setConfirmOut(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 400,
+              background: 'var(--bg-card)', borderRadius: 16, padding: '28px 24px',
+              textAlign: 'center', border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div style={{ fontSize: 44, marginBottom: 10 }}>👋</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>
+              確認下班打卡？
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              已上班 {todayAttendance?.clock_in || '--:--'} → 現在 {nowTimeTW()}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginBottom: 22 }}>
+              ⚠️ 下班打卡後無法再修改，請確認真的要下班了再按
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setConfirmOut(false)}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10,
+                  background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-subtle)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleClock(true)}
+                disabled={clockingIn}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10,
+                  background: 'var(--accent-orange)', color: '#fff', border: 'none',
+                  fontSize: 14, fontWeight: 700, cursor: clockingIn ? 'not-allowed' : 'pointer',
+                  opacity: clockingIn ? 0.6 : 1,
+                }}
+              >
+                {clockingIn ? '處理中...' : '確認下班'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

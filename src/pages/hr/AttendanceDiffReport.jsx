@@ -247,33 +247,47 @@ export default function AttendanceDiffReport() {
         </table>
       </div>
 
-      {/* 詳情 modal */}
+      {/* 詳情 modal — header sticky + body 內部 scroll */}
       {detailEmp && (
         <div
           onClick={() => setDetailEmp(null)}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px 20px',
+            overflow: 'hidden',
           }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: '100%', maxWidth: 700, maxHeight: '80vh', overflowY: 'auto',
-              background: 'var(--bg-card)', borderRadius: 16, padding: '20px 24px',
+              width: '100%', maxWidth: 700, maxHeight: '90vh',
+              background: 'var(--bg-card)', borderRadius: 16,
               border: '1px solid var(--border-subtle)',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            {/* Header — 固定不 scroll */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)',
+              flexShrink: 0, background: 'var(--bg-card)',
+            }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{detailEmp.employee_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{ym} · {detailEmp.store_name || '—'}</div>
               </div>
-              <button onClick={() => setDetailEmp(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={20} />
+              <button onClick={() => setDetailEmp(null)} style={{
+                background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                cursor: 'pointer', color: 'var(--text-muted)',
+                width: 32, height: 32, borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <X size={18} />
               </button>
             </div>
 
+            {/* Body — 可 scroll */}
+            <div style={{ overflowY: 'auto', padding: '16px 24px', flex: 1 }}>
             {detailLoading ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</div>
             ) : detailDiffs.length === 0 ? (
@@ -316,6 +330,7 @@ export default function AttendanceDiffReport() {
                 </tbody>
               </table>
             )}
+            </div>
           </div>
         </div>
       )}

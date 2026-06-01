@@ -433,17 +433,63 @@ export default function ExpenseRequests() {
       console.warn('[get_approval_timeline] failed:', e)
     }
 
-    // 「財務核章」只在實際進入核銷階段（待核銷/已核銷）才顯示。
-    // 沒設核銷需求 / chain 是最終決定的流程，不顯示這關。
     let finalSteps = baseSteps
     if (inSettleStage) {
-      finalSteps = [...baseSteps, {
-        label: '財務核章',
-        name: isSettled ? (req.settled_by || '') : '',
-        status: isSettled ? 'completed' : 'current',
-        completedAt: isSettled ? req.settled_at : undefined,
-        archival: false,
-      }]
+      if (req.settle_chain_id) {
+        // 有核銷鏈 → 抓真正的步驟並顯示進度
+        const { data: rawSettleSteps } = await supabase
+          .from('approval_chain_steps')
+          .select('*')
+          .eq('chain_id', req.settle_chain_id)
+          .order('step_order')
+
+        const settleEmpIds = [...new Set((rawSettleSteps || []).map(s => s.target_emp_id).filter(Boolean))]
+        let settleEmpMap = {}
+        if (settleEmpIds.length > 0) {
+          const { data: settleEmps } = await supabase.from('employees').select('id, name').in('id', settleEmpIds)
+          settleEmpMap = Object.fromEntries((settleEmps || []).map(e => [e.id, e.name]))
+        }
+
+        const curStep = req.settle_current_step ?? 0
+        const totalSteps = (rawSettleSteps || []).length
+
+        const settleSteps = (rawSettleSteps || []).map(s => {
+          const empName = s.target_emp_id ? (settleEmpMap[s.target_emp_id] || '') : ''
+          const isLastStep = s.step_order === totalSteps - 1
+          let stepStatus, stepName, completedAt
+          if (isSettled) {
+            stepStatus = 'completed'
+            stepName = isLastStep ? (req.settled_by || empName) : empName
+            completedAt = isLastStep ? req.settled_at : undefined
+          } else if (s.step_order < curStep) {
+            stepStatus = 'completed'
+            stepName = empName
+          } else if (s.step_order === curStep) {
+            stepStatus = 'current'
+            stepName = empName
+          } else {
+            stepStatus = 'pending'
+            stepName = empName
+          }
+          return {
+            label: s.label || s.role_name || `核銷第 ${s.step_order + 1} 關`,
+            name: stepName,
+            status: stepStatus,
+            completedAt,
+            archival: false,
+          }
+        })
+        finalSteps = [...baseSteps, ...settleSteps]
+      } else {
+        // 無核銷鏈設定 → fallback 單關佔位
+        finalSteps = [...baseSteps, {
+          label: '財務核章',
+          name: isSettled ? (req.settled_by || '') : '',
+          status: isSettled ? 'completed' : 'current',
+          completedAt: isSettled ? req.settled_at : undefined,
+          archival: false,
+        }]
+      }
     }
 
     if (detailRowIdRef.current !== req.id) return

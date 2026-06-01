@@ -579,6 +579,7 @@ export default function ExpenseRequests() {
         NOT_PENDING_SETTLE: `狀態不是待核銷（${data?.current_status}）`,
         NOT_AUTHORIZED_FOR_STEP: '此關不是你負責',
         STEP_NOT_FOUND: 'chain step 設定異常',
+        PENDING_EXTRA_STEP: '此關有加簽待處理，請等加簽完成後再核准',
       }
       toast.error(map[data?.error] || data?.error || '核銷失敗')
       return

@@ -8,7 +8,7 @@ import { COLOR_DANGER, COLOR_NEUTRAL, COLOR_SUCCESS } from './colors.ts';
 
 // ── Type guard / table mapping ───────────────────────────────────────────────
 
-const TABLE_MAP: Record<ApprovalRequestType, string> = {
+const TABLE_MAP: Partial<Record<ApprovalRequestType, string>> = {
   leave:           "leave_requests",
   overtime:        "overtime_requests",
   trip:            "business_trips",
@@ -17,6 +17,7 @@ const TABLE_MAP: Record<ApprovalRequestType, string> = {
   correction:      "clock_corrections",
   cover:           "shift_cover_requests",
   off_request:     "off_requests",
+  form_submission: "form_submissions",
 };
 
 // ── Date / time helpers ──────────────────────────────────────────────────────

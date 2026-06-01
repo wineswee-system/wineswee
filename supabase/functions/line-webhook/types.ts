@@ -15,7 +15,8 @@ export type ApprovalRequestType =
   | "expense_settle"
   | "correction"
   | "cover"
-  | "off_request";
+  | "off_request"
+  | "form_submission";
 
 // ── Pending Action types ────────────────────────────────────────────────────
 

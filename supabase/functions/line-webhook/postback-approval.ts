@@ -20,7 +20,7 @@ function txt(s: string) { return { type: "text", text: s }; }
 function parseRequestType(s: string | undefined): ApprovalRequestType | null {
   const valid: ApprovalRequestType[] = [
     "leave", "overtime", "trip", "expense", "expense_request", "expense_settle",
-    "correction", "cover", "off_request",
+    "correction", "cover", "off_request", "form_submission",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
 }
@@ -145,6 +145,7 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     expense_settle: "expense_requests",
     correction: "clock_corrections", cover: "shift_cover_requests",
     off_request: "off_requests",
+    form_submission: "form_submissions",
   };
   const { data: rec } = await ctx.db.from(tableMap[rt]).select("status, employee").eq("id", id).maybeSingle();
   if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];

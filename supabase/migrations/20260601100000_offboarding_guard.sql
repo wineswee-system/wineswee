@@ -60,7 +60,7 @@ BEGIN
   INTO v_steps
   FROM public.approval_chain_steps cs
   JOIN public.approval_chains ac ON ac.id = cs.chain_id
-  WHERE cs.target_type = 'employee' AND cs.target_emp_id = p_emp_id;
+  WHERE cs.target_type = 'fixed_emp' AND cs.target_emp_id = p_emp_id;
 
   -- Snapshots (in-flight requests) pointing to this person in the last 90 days
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -187,7 +187,7 @@ BEGIN
   IF p_chain_delegate_id IS NOT NULL THEN
     SELECT COALESCE(ARRAY_AGG(id), ARRAY[]::INT[]) INTO v_step_ids
     FROM public.approval_chain_steps
-    WHERE target_type = 'employee' AND target_emp_id = p_emp_id;
+    WHERE target_type = 'fixed_emp' AND target_emp_id = p_emp_id;
 
     IF COALESCE(array_length(v_step_ids, 1), 0) > 0 THEN
       UPDATE public.approval_chain_steps
@@ -304,7 +304,7 @@ BEGIN
 
     SELECT COUNT(*) INTO v_chain_count
     FROM public.approval_chain_steps
-    WHERE target_type = 'employee' AND target_emp_id = NEW.id;
+    WHERE target_type = 'fixed_emp' AND target_emp_id = NEW.id;
 
     IF v_chain_count > 0 THEN
       INSERT INTO public.audit_logs (action, target, target_table, target_id, old_value, new_value)

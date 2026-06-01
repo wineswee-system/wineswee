@@ -437,24 +437,18 @@ export default function ExpenseRequests() {
     if (inSettleStage) {
       if (req.settle_chain_id) {
         // 有核銷鏈 → 抓真正的步驟並顯示進度
-        const { data: rawSettleSteps } = await supabase
-          .from('approval_chain_steps')
-          .select('*')
-          .eq('chain_id', req.settle_chain_id)
-          .order('step_order')
-
-        const settleEmpIds = [...new Set((rawSettleSteps || []).map(s => s.target_emp_id).filter(Boolean))]
-        let settleEmpMap = {}
-        if (settleEmpIds.length > 0) {
-          const { data: settleEmps } = await supabase.from('employees').select('id, name').in('id', settleEmpIds)
-          settleEmpMap = Object.fromEntries((settleEmps || []).map(e => [e.id, e.name]))
-        }
+        // 用 get_chain_step_display_names 解析動態 target（applicant_supervisor 等）
+        const { data: resolvedSettleSteps } = await supabase.rpc('get_chain_step_display_names', {
+          p_chain_id: req.settle_chain_id,
+          p_applicant_emp_id: req.employee_id,
+        })
+        const rawSettleSteps = Array.isArray(resolvedSettleSteps) ? resolvedSettleSteps : []
 
         const curStep = req.settle_current_step ?? 0
-        const totalSteps = (rawSettleSteps || []).length
+        const totalSteps = rawSettleSteps.length
 
-        const settleSteps = (rawSettleSteps || []).map(s => {
-          const empName = s.target_emp_id ? (settleEmpMap[s.target_emp_id] || '') : ''
+        const settleSteps = rawSettleSteps.map(s => {
+          const empName = s.names || ''
           const isLastStep = s.step_order === totalSteps - 1
           let stepStatus, stepName, completedAt
           if (isSettled) {

@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import HRReport from '../pages/hr/HRReport'
 import Attendance from '../pages/hr/Attendance'
+import AttendanceDiffReport from '../pages/hr/AttendanceDiffReport'
 import PunchCorrection from '../pages/hr/PunchCorrection'
 import Leave from '../pages/hr/Leave'
 import Overtime from '../pages/hr/Overtime'
@@ -59,6 +60,7 @@ export default memo(function HRModule() {
     <Routes>
       <Route path="report" element={<HRReport />} />
       <Route path="attendance" element={<Attendance />} />
+      <Route path="attendance-diff-report" element={<AttendanceDiffReport />} />
       <Route path="punch-correction" element={<PunchCorrection />} />
       <Route path="leave" element={<Leave />} />
       <Route path="overtime" element={<Overtime />} />

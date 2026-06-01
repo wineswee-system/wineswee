@@ -211,6 +211,7 @@ export const groupNav = {
       children: [
         { icon: Clock, label: '打卡追蹤', path: '/hr/attendance' },
         { icon: ClipboardCheck, label: '打卡規則設定', path: '/hr/clock-rules' },
+        { icon: ClipboardCheck, label: '月結核對報表', path: '/hr/attendance-diff-report', title: '比對排班 vs 打卡，找出待員工申請的差異（補卡/請假/加班）' },
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },

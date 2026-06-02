@@ -373,7 +373,8 @@ export default function HRImport() {
         // RPC 批次：繞過 chain / LINE 通知 trigger
         for (let i = 0; i < valid.length; i += CHUNK) {
           const chunk = valid.slice(i, i + CHUNK).map(r => r.payload)
-          const { data, error } = await supabase.rpc('bulk_import_leave', { p_records: chunk })
+          const { data, error } = await supabase.rpc('bulk_import_leave',
+            { p_records: chunk, p_overwrite: dupMode === 'overwrite' })
           if (error) { toast.error('批次失敗：' + error.message); errored += chunk.length }
           else { inserted += data.inserted; skipped += data.skipped }
         }
@@ -382,7 +383,8 @@ export default function HRImport() {
         // RPC 批次：繞過 chain / LINE 通知 trigger
         for (let i = 0; i < valid.length; i += CHUNK) {
           const chunk = valid.slice(i, i + CHUNK).map(r => r.payload)
-          const { data, error } = await supabase.rpc('bulk_import_overtime', { p_records: chunk })
+          const { data, error } = await supabase.rpc('bulk_import_overtime',
+            { p_records: chunk, p_overwrite: dupMode === 'overwrite' })
           if (error) { toast.error('批次失敗：' + error.message); errored += chunk.length }
           else { inserted += data.inserted; skipped += data.skipped }
         }

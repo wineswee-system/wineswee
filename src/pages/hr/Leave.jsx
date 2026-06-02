@@ -17,7 +17,6 @@ import ExtraSignerControls from '../../components/ExtraSignerControls'
 import { empLabel } from '../../lib/empLabel'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
@@ -461,7 +460,7 @@ export default function Leave() {
     (search === '' || l.employee.includes(search) || String(l.id).includes(search))
   ), [leaves, deptFilter, search, getEmpDept])
 
-  const { virtualItems, containerRef, containerStyle } = useVirtualList({ items: filtered, itemHeight: 52, overscan: 8 })
+  // 請假單最多數百筆，不需要 virtual scroll，直接 map 避免渲染問題
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -548,14 +547,14 @@ export default function Leave() {
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
-          {/* Virtual scroll body */}
-          <div ref={containerRef} style={{ height: 'calc(100vh - 420px)', minHeight: 300, overflowY: 'auto', overflowX: 'hidden' }}>
-            <div style={containerStyle}>
-              {virtualItems.map(({ item: l, style }) => (
-                <VirtualRow key={l.id}
+          {/* List body */}
+          <div style={{ overflowX: 'hidden' }}>
+            <div>
+              {filtered.map((l) => (
+                <div key={l.id}
                   onClick={() => openDetail(l)}
                   title="點擊查看簽核明細"
-                  style={{ ...style, display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                  style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                   <div style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{l.id}</div>
                   <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
@@ -629,7 +628,7 @@ export default function Leave() {
                       )}
                     </div>
                   </div>
-                </VirtualRow>
+                </div>
               ))}
             </div>
           </div>

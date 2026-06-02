@@ -11,7 +11,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findActiveChainByCategory, loadChainSteps,
+  findFormChainByApplicantType, loadChainSteps,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import { printResignationSignOff } from '../../lib/signOffAdapters'
@@ -122,7 +122,7 @@ export default function Resignation() {
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
-      findActiveChainByCategory('離職', orgId),
+      findFormChainByApplicantType('resignation', orgId, isAdmin),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])

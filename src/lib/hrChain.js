@@ -28,6 +28,26 @@ const CATEGORY_MAP = {
 }
 
 /**
+ * 依 form_chain_configs 找適合申請人角色的 active chain
+ * 先試 specific type（manager/staff），找不到再 fallback 'all'
+ * 回傳 { id, name } 或 null
+ */
+export async function findFormChainByApplicantType(formType, organizationId, isManager) {
+  const { data: rows } = await supabase
+    .from('form_chain_configs')
+    .select('chain_id, applicant_type, approval_chains(id, name)')
+    .eq('form_type', formType)
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+
+  const byType = (rows || []).reduce((acc, r) => { acc[r.applicant_type] = r; return acc }, {})
+  const specificType = isManager ? 'manager' : 'staff'
+  const best = byType[specificType] || byType['all'] || null
+  if (!best?.chain_id) return null
+  return { id: best.chain_id, name: best.approval_chains?.name || null }
+}
+
+/**
  * 找 category 對應的 active chain（取第一條）
  * 沒找到回 null（caller 應走後備邏輯）
  */

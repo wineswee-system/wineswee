@@ -362,6 +362,7 @@ async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {
  * @param {string} [opts.requestType]   ★ snapshot 用：'leave_request' / 'overtime_request' / 'trip' / ...
  * @param {number} [opts.requestId]     ★ snapshot 用：對應 row 的 id
  * @param {number} [opts.currentStep]   ★ snapshot 用：對應 row.current_step（沒給就用 single-stage 推算）
+ * @param {boolean} [opts.applicantIsManager]  申請人是否為主管角色（live fallback 用）
  * @returns {Promise<Array>}
  */
 export async function buildFormChainSteps({
@@ -369,6 +370,7 @@ export async function buildFormChainSteps({
   approverName, approvedAt, rejectReason,
   fallbackTail = ['人資核章'],
   requestType = null, requestId = null, currentStep = null,
+  applicantIsManager = false,
 }) {
   const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
   const applicantStep = {
@@ -421,12 +423,17 @@ export async function buildFormChainSteps({
   }
 
   // ── 1. 沒快照（舊單 / 沒傳 requestType）→ 走 form_chain_configs + live chain ──
-  const { data: cfg } = await supabase
+  // 先試 specific type（manager/staff），再 fallback 'all'
+  const specificType = applicantIsManager ? 'manager' : 'staff'
+  const { data: cfgRows } = await supabase
     .from('form_chain_configs')
-    .select('chain_id, is_active')
+    .select('chain_id, is_active, applicant_type')
     .eq('form_type', formType)
     .eq('organization_id', organizationId)
-    .maybeSingle()
+    .eq('is_active', true)
+
+  const cfgByType = (cfgRows || []).reduce((acc, r) => { acc[r.applicant_type] = r; return acc }, {})
+  const cfg = cfgByType[specificType] || cfgByType['all'] || null
 
   if (!cfg?.chain_id || !cfg?.is_active) {
     // 沒設定 → 退回到舊 fallback：申請人 + 直屬主管 + 人資核章
@@ -470,7 +477,7 @@ export async function buildFormChainSteps({
 
   // Status 推算：有 currentStep 就用，否則 single-stage 模式
   const cur = currentStep ?? 0
-  const finalSteps = resolved.map(({ step, names }, i) => {
+  const finalSteps = resolved.map(({ step, names }) => {
     const idx = step.step_order
     let status
     if (isApproved) {

@@ -26,13 +26,14 @@ const FORM_TYPE_LABEL = {
  * 靜態 chain guard — 查一次就好，不依賴金額
  *
  * @param {Object} opts
- * @param {string} opts.formType        'leave' | 'overtime' | 'trip' | 'correction' | 'form_submission'
+ * @param {string} opts.formType          'leave' | 'overtime' | 'trip' | 'correction' | 'form_submission'
  * @param {number} [opts.organizationId]  非 form_submission 時必填
  * @param {number} [opts.templateId]      form_submission 時必填
+ * @param {boolean} [opts.isManager]      申請人是否為主管角色（決定優先查哪種 applicant_type）
  * @param {boolean} [opts.enabled=true]   false → 跳過檢查（給條件性 mount 用）
  * @returns {{ ready: boolean, blocked: boolean, reason: string, chainId: number|null }}
  */
-export function useChainGuard({ formType, organizationId, templateId, enabled = true }) {
+export function useChainGuard({ formType, organizationId, templateId, isManager = false, enabled = true }) {
   const [state, setState] = useState({ ready: false, blocked: false, reason: '', chainId: null })
 
   useEffect(() => {
@@ -67,24 +68,32 @@ export function useChainGuard({ formType, organizationId, templateId, enabled = 
         setState({ ready: false, blocked: false, reason: '', chainId: null })
         return
       }
-      const { data } = await supabase.from('form_chain_configs')
-        .select('chain_id, is_active')
+
+      // 先試 specific type（manager/staff），再 fallback 'all'
+      const specificType = isManager ? 'manager' : 'staff'
+      const { data: rows } = await supabase.from('form_chain_configs')
+        .select('chain_id, is_active, applicant_type')
         .eq('form_type', formType)
         .eq('organization_id', organizationId)
-        .maybeSingle()
+        .eq('is_active', true)
+
       if (cancelled) return
-      if (!data?.chain_id || !data?.is_active) {
+
+      const byType = (rows || []).reduce((acc, r) => { acc[r.applicant_type] = r; return acc }, {})
+      const best = byType[specificType] || byType['all']
+
+      if (!best?.chain_id) {
         setState({
           ready: true, blocked: true, chainId: null,
           reason: `${FORM_TYPE_LABEL[formType] || formType}簽核鏈尚未設定，請聯絡管理員至「簽核設定」設定`,
         })
       } else {
-        setState({ ready: true, blocked: false, reason: '', chainId: data.chain_id })
+        setState({ ready: true, blocked: false, reason: '', chainId: best.chain_id })
       }
     }
     check()
     return () => { cancelled = true }
-  }, [formType, organizationId, templateId, enabled])
+  }, [formType, organizationId, templateId, isManager, enabled])
 
   return state
 }

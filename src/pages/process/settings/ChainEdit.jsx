@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -13,6 +14,16 @@ export default function ChainEdit() {
   const formType = params.get('formType') || ''
   const formLabel = params.get('label') || '簽核流程'
   const mode = params.get('mode') || 'single'
+
+  // 只有 single 模式才顯示申請人類型分頁
+  const showTypeTabs = mode === 'single'
+  const [activeType, setActiveType] = useState('all')
+
+  const TABS = [
+    { key: 'all',     label: '全員通用',  desc: '主管與員工共用同一條簽核鏈' },
+    { key: 'manager', label: '部門主管',  desc: '角色為 manager/admin/super_admin 時套用' },
+    { key: 'staff',   label: '一般員工',  desc: '其他角色（store_staff 等）套用' },
+  ]
 
   if (!(isAdmin || isSuperAdmin)) {
     return (
@@ -42,13 +53,45 @@ export default function ChainEdit() {
           <ArrowLeft size={14} /> 返回
         </button>
       </div>
+
+      {showTypeTabs && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+            可依申請人角色設定不同簽核鏈。送出時系統優先套用「部門主管」或「一般員工」的鏈；找不到時 fallback 至「全員通用」。
+          </div>
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 0 }}>
+            {TABS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setActiveType(t.key)}
+                style={{
+                  padding: '8px 18px', border: 'none', cursor: 'pointer',
+                  background: 'transparent', borderRadius: '6px 6px 0 0',
+                  fontSize: 14, fontWeight: activeType === t.key ? 700 : 400,
+                  color: activeType === t.key ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  borderBottom: activeType === t.key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                  transition: 'color .15s',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 4px 0' }}>
+            {TABS.find(t => t.key === activeType)?.desc}
+          </div>
+        </div>
+      )}
+
       <ChainConfigModal
+        key={activeType}
         open
-        onClose={() => navigate(-1)}
+        onClose={() => {}}
         formType={formType}
         formLabel={formLabel}
         organizationId={profile?.organization_id}
         mode={mode}
+        applicantType={activeType}
         embedded
       />
     </div>

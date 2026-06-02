@@ -62,7 +62,7 @@ const blankStep = (idx) => ({
   target_section_id: null,
 })
 
-export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false }) {
+export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false, applicantType = 'all' }) {
   // ── view state（amount_grouped / library 才會切 list ↔ editor） ──
   const hasListView = mode === 'amount_grouped' || mode === 'library'
   const [view, setView] = useState(hasListView ? 'list' : 'editor')
@@ -144,13 +144,14 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   // ── 載入 single 模式：form_chain_configs → chain ──
   const loadSingle = useCallback(async () => {
     const { data: cfg } = await supabase.from('form_chain_configs')
-      .select('chain_id').eq('form_type', formType).eq('organization_id', organizationId).maybeSingle()
+      .select('chain_id').eq('form_type', formType).eq('organization_id', organizationId)
+      .eq('applicant_type', applicantType).maybeSingle()
     if (cfg?.chain_id) {
       await loadEditor(cfg.chain_id)
     } else {
       resetEditorBlank()
     }
-  }, [formType, organizationId])
+  }, [formType, organizationId, applicantType])
 
   // ── 載入 editor（指定 chain id 或新建） ──
   const loadEditor = async (cid) => {
@@ -473,10 +474,11 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         const { error: cfgErr } = await supabase.from('form_chain_configs').upsert({
           form_type: formType,
           organization_id: organizationId,
+          applicant_type: applicantType,
           chain_id: cid,
           is_active: true,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'form_type,organization_id' })
+        }, { onConflict: 'form_type,organization_id,applicant_type' })
         if (cfgErr) throw cfgErr
 
         // 自訂表單 (form_type = 'custom:<id>') 額外把 chain_id 寫回 form_templates

@@ -246,11 +246,23 @@ serve(async (req: Request) => {
     //   CLOCK-OUT
     // ──────────────────────────────────────────────────────
     } else if (action === 'clock_out') {
-      if (!existingRecord?.clock_in) return jsonResp({ error: '尚未打上班卡' }, 409)
-      if (existingRecord.clock_out)  return jsonResp({ error: '今日已打過下班卡' }, 409)
+      let clockOutRecord = existingRecord
+
+      // 跨日打下班：今天沒有 clock_in → 往前查昨天有無未打下班的紀錄
+      if (!existingRecord?.clock_in) {
+        const yesterdayStr = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000)
+          .toISOString().slice(0, 10)
+        const { data: yRec } = await supabase
+          .from('attendance_records').select('*')
+          .eq('employee_id', emp.id).eq('date', yesterdayStr).maybeSingle()
+        if (yRec?.clock_in && !yRec.clock_out) clockOutRecord = yRec
+      }
+
+      if (!clockOutRecord?.clock_in) return jsonResp({ error: '尚未打上班卡' }, 409)
+      if (clockOutRecord.clock_out)  return jsonResp({ error: '今日已打過下班卡' }, 409)
 
       // 工時計算（跨午夜處理）
-      const [inH, inM] = (existingRecord.clock_in as string).split(':').map(Number)
+      const [inH, inM] = (clockOutRecord.clock_in as string).split(':').map(Number)
       let workedMinutes = currentMinutes - (inH * 60 + inM)
       if (workedMinutes < 0) workedMinutes += 1440
 
@@ -264,7 +276,7 @@ serve(async (req: Request) => {
       }
 
       const { data, error } = await supabase.from('attendance_records')
-        .update(updatePayload).eq('id', existingRecord.id).select().single()
+        .update(updatePayload).eq('id', clockOutRecord.id).select().single()
       if (error) throw error
       record = data
 

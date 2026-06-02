@@ -233,7 +233,9 @@ export default function HRImport() {
           })
 
           const errors = []
-          const emp = empLookup(mapped.employee)
+          // 名字查不到時再試 104 的員工編號欄（rawRow['員工編號']）
+          let emp = empLookup(mapped.employee)
+          if (!emp && rawRow['員工編號']) emp = empLookup(String(rawRow['員工編號']).trim())
           if (!mapped.employee) errors.push('缺員工欄位')
           else if (!emp)        errors.push(`找不到員工「${mapped.employee}」`)
 

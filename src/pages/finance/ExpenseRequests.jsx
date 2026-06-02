@@ -510,9 +510,23 @@ export default function ExpenseRequests() {
             completedAt,
             durationText,
             archival: false,
+            isSettle: true,
           }
         })
-        finalSteps = [...baseSteps, ...settleSteps]
+        const settleApplicantStep = {
+          label: '申請人（送核銷）',
+          name: req.employee,
+          status: 'completed',
+          completedAt: settleTlByStep[0]?.entered_at || null,
+          isSettle: true,
+          isApplicant: true,
+        }
+        finalSteps = [
+          ...baseSteps,
+          { kind: 'settle_divider' },
+          settleApplicantStep,
+          ...settleSteps,
+        ]
       } else {
         // 無核銷鏈設定 → fallback 單關佔位
         finalSteps = [...baseSteps, {
@@ -521,6 +535,7 @@ export default function ExpenseRequests() {
           status: isSettled ? 'completed' : 'current',
           completedAt: isSettled ? req.settled_at : undefined,
           archival: false,
+          isSettle: true,
         }]
       }
     }

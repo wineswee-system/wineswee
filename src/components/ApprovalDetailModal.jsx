@@ -91,6 +91,7 @@ export default function ApprovalDetailModal({
     return chainSteps.map(s => {
       if (s.isApplicant) return s
       if (s.kind === 'extra') return s
+      if (s.kind === 'settle_divider') return s
       const t = timeline.find(x => x.step_order === chainStepIdx)
       chainStepIdx += 1
       if (!t) return s
@@ -326,9 +327,36 @@ function ChainTimeline({ steps }) {
         width: 3, background: 'var(--border-medium)',
       }} />
 
-      {steps.map((step, i) => (
-        <TimelineDot key={i} step={step} index={i} isLast={i === steps.length - 1} />
-      ))}
+      {steps.map((step, i) => {
+        if (step.kind === 'settle_divider') {
+          return (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              margin: '6px 0 18px',
+              position: 'relative',
+            }}>
+              <div style={{
+                position: 'absolute', left: -25, top: '50%', transform: 'translateY(-50%)',
+                width: 22, height: 22, borderRadius: '50%',
+                background: '#f97316',
+                border: '4px solid var(--bg-secondary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+              </div>
+              <div style={{
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.05em',
+                color: '#f97316',
+                padding: '3px 10px',
+                background: 'rgba(249,115,22,0.10)',
+                borderRadius: 20,
+                border: '1px solid rgba(249,115,22,0.25)',
+              }}>核銷流程</div>
+            </div>
+          )
+        }
+        return <TimelineDot key={i} step={step} index={i} isLast={i === steps.length - 1} />
+      })}
 
       {/* 終點 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6, position: 'relative' }}>
@@ -345,16 +373,18 @@ function ChainTimeline({ steps }) {
 }
 
 function TimelineDot({ step, index, isLast }) {
-  // current 改成「藍色空心圈」跟 completed 的「藍色實心」做區分，讓現在輪到誰簽一目了然
+  // current 改成「空心圈」跟 completed 的「實心」做區分，讓現在輪到誰簽一目了然
+  // 核銷鏈（isSettle）用橘色，審批鏈用 cyan
+  const accentColor = step.isSettle ? '#f97316' : '#0ea5e9'
   const dotStyle = {
-    completed: { fill: '#0ea5e9', border: '#0ea5e9' },         // 實心 cyan
-    current:   { fill: 'transparent', border: '#0ea5e9' },     // ★ 空心 cyan（藍）
+    completed: { fill: accentColor, border: accentColor },
+    current:   { fill: 'transparent', border: accentColor },
     pending:   { fill: 'transparent', border: 'var(--border-medium)' },
     rejected:  { fill: '#ef4444', border: '#ef4444' },
   }[step.status] || { fill: 'transparent', border: 'var(--border-medium)' }
   const labelColors = {
-    completed: '#0ea5e9',
-    current: '#0ea5e9',
+    completed: accentColor,
+    current: accentColor,
     pending: 'var(--text-muted)',
     rejected: '#ef4444',
   }

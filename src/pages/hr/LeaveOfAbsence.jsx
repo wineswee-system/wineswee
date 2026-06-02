@@ -10,8 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findFormChainByApplicantType, loadChainSteps,
-  resolveFirstApprovers, approveChainStep, notifyApprovers,
+  findFormChainByApplicantType, loadChainSteps, approveChainStep,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printLoaSignOff } from '../../lib/signOffAdapters'
@@ -171,7 +170,6 @@ export default function LeaveOfAbsence() {
       reason_detail: form.reason_detail || null,
       organization_id: profile?.organization_id || 1,
       status: '申請中',
-      approval_chain_id: activeChain?.id || null,
       current_step: 0,
     }
 
@@ -188,29 +186,8 @@ export default function LeaveOfAbsence() {
       return
     }
 
-    const { data: inserted, error } = await supabase.from('leave_of_absence_requests').insert(payload).select().single()
+    const { error } = await supabase.from('leave_of_absence_requests').insert(payload)
     if (error) return toast.error('送出失敗：' + error.message)
-
-    if (activeChain?.id && inserted) {
-      const approvers = await resolveFirstApprovers('loa', inserted.id)
-      if (approvers.length > 0) {
-        const empName = employees.find(e => e.id === Number(empId))?.name || ''
-        await notifyApprovers({
-          approvers,
-          title: `留職停薪申請待簽核 — ${empName}`,
-          message: `期間：${form.start_date} ~ ${form.planned_end_date}・原因：${form.reason_type}`,
-          type: 'form_submission',
-          actionUrl: '/hr/forms/loa',
-          organizationId: profile?.organization_id,
-        })
-      } else {
-        toast.warning('已送出，但找不到對應的第一關簽核人', { description: '請確認簽核鏈設定' })
-      }
-    } else if (!activeChain) {
-      toast.warning('已送出（目前無「留停」簽核鏈，admin 可直接核准）', {
-        description: '建議到「簽核鏈設定」建立 category=留停 的鏈',
-      })
-    }
 
     setShowForm(false)
     setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '產假', reason_detail: '' })

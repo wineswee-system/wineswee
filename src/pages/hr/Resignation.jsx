@@ -11,8 +11,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findFormChainByApplicantType, loadChainSteps,
-  resolveFirstApprovers, approveChainStep, notifyApprovers,
+  findFormChainByApplicantType, loadChainSteps, approveChainStep,
 } from '../../lib/hrChain'
 import { printResignationSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
@@ -172,7 +171,6 @@ export default function Resignation() {
       handover_notes: form.handover_notes || null,
       organization_id: profile?.organization_id || 1,
       status: '申請中',
-      approval_chain_id: activeChain?.id || null,
       current_step: 0,
     }
 
@@ -190,32 +188,8 @@ export default function Resignation() {
       return
     }
 
-    const { data: inserted, error } = await supabase.from('resignation_requests').insert(payload).select().single()
+    const { error } = await supabase.from('resignation_requests').insert(payload)
     if (error) return toast.error('送出失敗：' + error.message)
-
-    // 推第一審
-    if (activeChain?.id && inserted) {
-      const approvers = await resolveFirstApprovers('resignation', inserted.id)
-      if (approvers.length > 0) {
-        const empName = employees.find(e => e.id === Number(empId))?.name || ''
-        await notifyApprovers({
-          approvers,
-          title: `離職申請待簽核 — ${empName}`,
-          message: `預計離職日：${form.planned_resign_date}・原因：${form.reason}`,
-          type: 'form_submission',
-          actionUrl: '/hr/forms/resignation',
-          organizationId: profile?.organization_id,
-        })
-      } else {
-        toast.warning('已送出，但找不到對應的第一關簽核人', {
-          description: '請確認簽核鏈設定',
-        })
-      }
-    } else if (!activeChain) {
-      toast.warning('已送出（目前無「離職」簽核鏈，admin 可直接核准）', {
-        description: '建議到「簽核鏈設定」建立 category=離職 的鏈',
-      })
-    }
 
     setShowForm(false)
     setForm({ employee_id: profile?.id || '', planned_resign_date: '', reason: '個人因素', reason_detail: '', handover_notes: '' })

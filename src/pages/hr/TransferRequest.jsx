@@ -11,8 +11,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findFormChainByApplicantType, loadChainSteps,
-  resolveFirstApprovers, approveChainStep, notifyApprovers,
+  findFormChainByApplicantType, loadChainSteps, approveChainStep,
 } from '../../lib/hrChain'
 import { printTransferSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
@@ -215,7 +214,6 @@ export default function TransferRequest() {
       new_base_salary: form.new_base_salary ? Number(form.new_base_salary) : null,
       reason: form.reason || null,
       status: '申請中',
-      approval_chain_id: activeChain?.id || null,
       current_step: 0,
     }
 
@@ -233,27 +231,8 @@ export default function TransferRequest() {
       return
     }
 
-    const { data: inserted, error } = await supabase.from('personnel_transfer_requests').insert(payload).select().single()
+    const { error } = await supabase.from('personnel_transfer_requests').insert(payload)
     if (error) return toast.error('送出失敗：' + error.message)
-
-    if (activeChain?.id && inserted) {
-      const approvers = await resolveFirstApprovers('transfer', inserted.id)
-      if (approvers.length > 0) {
-        const empName = employees.find(e => e.id === Number(empId))?.name || ''
-        await notifyApprovers({
-          approvers,
-          title: `人事異動申請待簽核 — ${empName}`,
-          message: `${form.transfer_type}・生效日 ${form.effective_date}`,
-          type: 'form_submission',
-          actionUrl: '/hr/forms/transfer',
-          organizationId: profile?.organization_id,
-        })
-      }
-    } else if (!activeChain) {
-      toast.warning('已送出（目前無「異動」簽核鏈，admin 可直接核准）', {
-        description: '建議到「簽核鏈設定」建立 category=異動 的鏈',
-      })
-    }
 
     setShowForm(false)
     setForm(emptyForm())

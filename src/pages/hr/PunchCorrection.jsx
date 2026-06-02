@@ -323,7 +323,7 @@ export default function PunchCorrection() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(role?.name === 'super_admin' || role?.name === 'admin') && (
-              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=punch&label=補打卡')} title="設定補打卡簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=correction&label=補打卡')} title="設定補打卡簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}

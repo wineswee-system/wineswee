@@ -65,7 +65,11 @@ export default function Attendance() {
       getDepartments(orgId),
       getStores(),
     ]).then(([r, e, d, s]) => {
-      let recs = r.data || []
+      let recs = (r.data || []).map(r => ({
+        ...r,
+        // Edge Function 寫 total_hours；舊資料寫 hours；統一用 hours
+        hours: r.total_hours > 0 ? r.total_hours : (r.hours ?? 0),
+      }))
       // store_staff: 只顯示自己的紀錄
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
       // manager: 只顯示自己門市

@@ -22,7 +22,8 @@ const LEAVE_TYPE_MAP = {
   '心理健康假': 'mental_health',
   '產檢假': 'prenatal',
   '育嬰假': 'parental',
-  '哺乳假': 'nursing',
+  '哺乳假': 'nursing', '護理假': 'nursing',
+  '補休假': 'comp', '補休': 'comp',
 }
 
 // ── 模組定義 ─────────────────────────────────────────────
@@ -123,12 +124,15 @@ function normalizeTime(s) {
   return `${m[1].padStart(2, '0')}:${m[2]}:00`
 }
 
-// 104「XXXX年結算特休」等動態名稱統一對應 annual
+// 104 假別名稱統一對應（含「特休假2025結算」、「舊系統結算特休」等動態名稱）
 function resolveLeaveType(raw) {
   if (!raw) return ''
   const s = raw.trim()
   if (LEAVE_TYPE_MAP[s]) return LEAVE_TYPE_MAP[s]
-  if (/\d{4}年.+特休/.test(s)) return 'annual'
+  // 含「特休」關鍵字 → annual（特休假2025結算 / 2025年結算特休 / 舊系統結算特休）
+  if (s.includes('特休')) return 'annual'
+  // 含「補休」關鍵字 → comp（補休假 / 舊人資系統補休結算）
+  if (s.includes('補休')) return 'comp'
   return s
 }
 
@@ -204,7 +208,17 @@ export default function HRImport() {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const { rows: rawRows } = parseCSV(e.target.result)
+        // 104 匯出前幾行是 metadata（資料類型/日期/條件/筆數 + 空白）
+        // 找到真正的欄位標題行（含「員工編號」或「員工姓名」或同時含「姓名」+「部門」）
+        let csvText = e.target.result
+        const lines = csvText.split(/\r?\n/)
+        const headerIdx = lines.findIndex(line =>
+          line.includes('員工編號') || line.includes('員工編碼') ||
+          (line.includes('姓名') && line.includes('部門'))
+        )
+        if (headerIdx > 0) csvText = lines.slice(headerIdx).join('\n')
+
+        const { rows: rawRows } = parseCSV(csvText)
         // 104 打卡格式偵測：每筆打卡一行含「上/下班」欄 → 先合併
         const rows = (mod === 'attendance' && rawRows.length > 0 && '上/下班' in rawRows[0])
           ? transform104Attendance(rawRows)

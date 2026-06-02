@@ -532,7 +532,7 @@ export default function ExpenseRequests() {
           else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送核銷`
         }
         const settleApplicantStep = {
-          label: '申請人（送核銷）',
+          label: '申請人（送核銷/驗收）',
           name: req.employee,
           status: 'completed',
           completedAt: settleStartAt,

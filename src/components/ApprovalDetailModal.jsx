@@ -351,7 +351,7 @@ function ChainTimeline({ steps }) {
                 background: 'rgba(249,115,22,0.10)',
                 borderRadius: 20,
                 border: '1px solid rgba(249,115,22,0.25)',
-              }}>核銷流程</div>
+              }}>核銷(驗收)流程</div>
             </div>
           )
         }

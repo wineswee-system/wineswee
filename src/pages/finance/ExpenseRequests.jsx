@@ -800,15 +800,15 @@ export default function ExpenseRequests() {
                       })()}
                       {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
-                          <Send size={12} /> 核銷
+                          <Send size={12} /> 核銷(驗收)
                         </button>
                       )}
                       {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
-                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細核銷</span>
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細核銷(驗收)</span>
                       )}
                       {r.status === '核銷已退回' && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
-                          ✏️ 重新核銷
+                          ✏️ 重新核銷(驗收)
                         </button>
                       )}
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (

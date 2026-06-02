@@ -27,6 +27,7 @@ export default function MonthScheduleTable({
   setDeptFilter,
   departments,
   storeSettings,
+  pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
 }) {
   // Group employees by store when no store filter.
   // 沒分配門市的員工（store = null/空）集中到「未分配門市」群組，避免被吃掉看不到。
@@ -163,6 +164,7 @@ export default function MonthScheduleTable({
                       getStoreShifts={getStoreShifts}
                       storeFilter={store}
                       holidaySet={holidaySet}
+                      pendingLeaveMap={pendingLeaveMap}
                     />
                   )
                 })
@@ -186,6 +188,7 @@ export default function MonthScheduleTable({
                     storeFilter={storeFilter}
                     holidaySet={holidaySet}
                     storeSettings={storeSettings}
+                    pendingLeaveMap={pendingLeaveMap}
                   />
                 ))
               )}
@@ -225,6 +228,7 @@ function EmployeeRow({
   emp, monthDates, getShift, getShiftStyle, getOffRequest,
   editCell, setEditCell, handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
+  pendingLeaveMap = {},
 }) {
   let workDays = 0
   let restDays = 0
@@ -255,6 +259,7 @@ function EmployeeRow({
         const isEditing = editCell?.empName === emp.name && editCell?.date === date
         const isRest = isAbsence(shift)
         const absenceCfg = isRest ? getAbsenceConfig(shift) : null
+        const hasPendingLeave = pendingLeaveMap[emp.name]?.has(date)
 
         return (
           <td key={date} style={{
@@ -306,6 +311,15 @@ function EmployeeRow({
               <span style={{ fontSize: 9, color: 'var(--accent-orange)' }}>申</span>
             ) : (
               <span style={{ fontSize: 9, color: 'var(--border-medium)' }}>·</span>
+            )}
+
+            {/* 待審核請假 — 橘點提示 */}
+            {hasPendingLeave && (
+              <span style={{
+                position: 'absolute', top: 1, right: 2,
+                fontSize: 7, lineHeight: 1, pointerEvents: 'none',
+                color: 'var(--accent-orange)',
+              }} title="有待審核請假">●</span>
             )}
 
             {/* Fixed Editor Popup */}

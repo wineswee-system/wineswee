@@ -190,6 +190,29 @@ export default function Leave() {
       return
     }
 
+    // 班表衝突檢查：若當天已排 休/補休，除病假/工傷假外一律擋住
+    // 理由：休假是公司已排好的，改班表需走調班流程，不能被請假單靜默覆蓋
+    if (form.unit === 'day') {
+      const BYPASS_TYPES = ['sick', 'occupational']  // 病假/工傷假例外，可覆蓋休假
+      if (!BYPASS_TYPES.includes(form.type)) {
+        const empRow2 = employees.find(e => e.name === form.employee)
+        if (empRow2?.id) {
+          const { data: restConflicts } = await supabase
+            .from('schedules')
+            .select('date, shift')
+            .eq('employee_id', empRow2.id)
+            .gte('date', form.start_date)
+            .lte('date', form.end_date || form.start_date)
+            .in('shift', ['休', '補休'])
+          if (restConflicts?.length > 0) {
+            const dates = restConflicts.map(s => s.date).join('、')
+            toast.error(`以下日期班表已排${restConflicts[0].shift}，無法申請此假別：${dates}。如需請假，請先調整班表。`)
+            return
+          }
+        }
+      }
+    }
+
     // Validate
     const usedThisYear = leaves
       .filter(l => l.employee === form.employee && (l.type === form.type || l.type === selectedPolicy?.shortName) && l.status !== '已拒絕')

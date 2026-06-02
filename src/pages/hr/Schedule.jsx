@@ -62,6 +62,7 @@ export default function Schedule() {
   const [storeFilter, setStoreFilter] = useState('')
   const [editCell, setEditCell] = useState(null)
   const [offRequests, setOffRequests] = useState([])
+  const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
   const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color }]
   const [shiftDefs, setShiftDefs] = useState([])
@@ -185,9 +186,15 @@ export default function Schedule() {
     Promise.all([
       supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd),
       supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd),
-    ]).then(([s, o]) => {
+      supabase.from('leave_requests').select('employee, start_date, end_date')
+        .in('status', ['待審核', '審核中'])
+        .lte('start_date', activeEnd)
+        .gte('end_date', activeStart)
+        .eq('unit', 'day'),
+    ]).then(([s, o, pl]) => {
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
+      setPendingLeaves(pl.data || [])
     }).catch(err => {
       console.error('Failed to load schedule data:', err)
     })
@@ -279,6 +286,22 @@ export default function Schedule() {
   }
 
   const getOffRequest = (empName, date) => offRequests.find(o => o.employee === empName && o.date === date)
+
+  // empName → Set<dateStr>，供 MonthScheduleTable 標橘點
+  const pendingLeaveMap = (() => {
+    const map = {}
+    for (const lr of pendingLeaves) {
+      if (!lr.employee || !lr.start_date || !lr.end_date) continue
+      if (!map[lr.employee]) map[lr.employee] = new Set()
+      let d = new Date(lr.start_date + 'T00:00:00Z')
+      const end = new Date(lr.end_date + 'T00:00:00Z')
+      while (d <= end) {
+        map[lr.employee].add(d.toISOString().slice(0, 10))
+        d.setUTCDate(d.getUTCDate() + 1)
+      }
+    }
+    return map
+  })()
 
   // Get available shifts for a specific store (store-specific + global fallback)
   const getStoreShifts = (storeName, empType = 'all') => {
@@ -1137,6 +1160,7 @@ export default function Schedule() {
           setDeptFilter={setDeptFilter}
           departments={departments}
           storeSettings={storeSettings}
+          pendingLeaveMap={pendingLeaveMap}
         />
       )}
 

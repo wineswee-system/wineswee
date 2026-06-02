@@ -252,10 +252,14 @@ export const ABSENCE_TYPES = {
   FUNERAL:     '喪',
   OFFICIAL:    '公',
   MENSTRUAL:   '生',
-  WORK_INJURY: '工傷',
-  PATERNITY:   '陪產',
-  NOT_HIRED:   '未入職',
-  RESIGNED:    '已離職',
+  WORK_INJURY:   '工傷',
+  PATERNITY:     '陪產',
+  FAMILY_CARE:   '家',
+  MENTAL_HEALTH: '心',
+  PRENATAL:      '產檢',
+  PARENTAL:      '育嬰',
+  NOT_HIRED:     '未入職',
+  RESIGNED:      '已離職',
 }
 
 export const ABSENCE_CONFIG = {
@@ -276,6 +280,10 @@ export const ABSENCE_CONFIG = {
   '生':   { label: '生理假',   color: '#f43f5e', icon: '🌸', countsAsRest: false, payRate: 0.5 }, // 性平法：每月 1 天，超過併入病假
   '工傷': { label: '公傷病假', color: '#dc2626', icon: '🚑', countsAsRest: false, payRate: 1.0 }, // 勞基法 §59：原領工資補償
   '陪產': { label: '陪產假',   color: '#0891b2', icon: '👨‍👶', countsAsRest: false, payRate: 1.0 }, // 性平法：5 天全薪
+  '家':   { label: '家庭照顧假', color: '#7c3aed', icon: '🏠', countsAsRest: false, payRate: 0   }, // 性平法：每年 7 天，無薪
+  '心':   { label: '心理健康假', color: '#059669', icon: '💚', countsAsRest: false, payRate: 1.0 }, // 企業自訂
+  '產檢': { label: '產檢假',   color: '#db2777', icon: '🤰', countsAsRest: false, payRate: 1.0 }, // 性平法：5 次全薪
+  '育嬰': { label: '育嬰假',   color: '#ea580c', icon: '👶', countsAsRest: false, payRate: 0   }, // 性平法：無薪育嬰留職停薪
   // 邊界日 — 演算法用，員工尚未/不再服務於公司，countsAsRest=false 避免吃月休配額
   '未入職': { label: '未入職',  color: '#cbd5e1', icon: '·',  countsAsRest: false, payRate: 0   },
   '已離職': { label: '已離職',  color: '#cbd5e1', icon: '·',  countsAsRest: false, payRate: 0   },

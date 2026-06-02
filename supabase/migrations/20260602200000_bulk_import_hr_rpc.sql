@@ -25,7 +25,7 @@ DECLARE
   v_date     date;
   v_exist_id bigint;
 BEGIN
-  SET LOCAL session_replication_role = replica;
+  -- status='已核准' 時通知 trigger 內建跳過，不需 session_replication_role
 
   FOR v_rec IN SELECT * FROM jsonb_array_elements(p_records) LOOP
     v_emp_id := (v_rec->>'employee_id')::int;
@@ -88,7 +88,7 @@ DECLARE
   v_rec      jsonb;
   v_emp_id   int;
 BEGIN
-  SET LOCAL session_replication_role = replica;
+  -- status='已核准' 時通知 trigger 內建跳過，不需 session_replication_role
 
   FOR v_rec IN SELECT * FROM jsonb_array_elements(p_records) LOOP
     v_emp_id := (v_rec->>'employee_id')::int;
@@ -141,7 +141,7 @@ DECLARE
   v_rec      jsonb;
   v_emp_id   int;
 BEGIN
-  SET LOCAL session_replication_role = replica;
+  -- status='已核准' 時通知 trigger 內建跳過，不需 session_replication_role
 
   FOR v_rec IN SELECT * FROM jsonb_array_elements(p_records) LOOP
     v_emp_id := (v_rec->>'employee_id')::int;

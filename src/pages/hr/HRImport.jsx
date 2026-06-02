@@ -279,19 +279,27 @@ export default function HRImport() {
             if (!endDate)   errors.push('結束日期格式錯誤')
             const type = resolveLeaveType(mapped.type || '')
             if (!type) errors.push('缺假別')
-            let days
+            let days, leaveUnit = 'day'
             if (mapped.days) {
-              days = Number(mapped.days)
+              days = Math.round(Number(mapped.days))
             } else if (mapped.hours) {
-              // 104 格式：時數換算（8h = 1d，4h = 0.5d）
+              // 104 格式：8h 的倍數存天數；非整數天數用 unit='hour' 存原始小時（int 欄位不接受小數）
               const hrs = Number(mapped.hours)
-              days = hrs > 0 ? parseFloat((hrs / 8).toFixed(2)) : null
+              if (hrs > 0) {
+                if (hrs % 8 === 0) {
+                  days = hrs / 8
+                  leaveUnit = 'day'
+                } else {
+                  days = Math.round(hrs)
+                  leaveUnit = 'hour'
+                }
+              }
             } else if (startDate && endDate) {
               days = Math.floor((new Date(endDate) - new Date(startDate)) / 86400000) + 1
             }
             if (!days || days <= 0) errors.push('天數無效')
             payload = { ...payload, type, start_date: startDate, end_date: endDate,
-              days, unit: 'day', reason: mapped.reason || '', status: '已核准',
+              days, unit: leaveUnit, reason: mapped.reason || '', status: '已核准',
               approver: profile?.name || '' }
 
           } else if (mod === 'overtime') {

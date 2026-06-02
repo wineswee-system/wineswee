@@ -13,7 +13,7 @@ import {
   UserCheck, Shield, Send, Search, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
-  Globe, Trash2,
+  Globe, Trash2, Upload,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -217,6 +217,7 @@ export const groupNav = {
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
         { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
+        { icon: Upload, label: '資料匯入', path: '/hr/import' },
       ]
     },
     {

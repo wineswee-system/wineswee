@@ -54,6 +54,7 @@ import RecentlyDeleted from '../pages/hr/RecentlyDeleted'
 import ContractEmployees from '../pages/hr/ContractEmployees'
 import ForeignWorkers from '../pages/hr/ForeignWorkers'
 import ClockRules from '../pages/hr/ClockRules'
+import HRImport from '../pages/hr/HRImport'
 
 export default memo(function HRModule() {
   return (
@@ -112,6 +113,7 @@ export default memo(function HRModule() {
       <Route path="contract-employees" element={<ContractEmployees />} />
       <Route path="foreign-workers" element={<ForeignWorkers />} />
       <Route path="clock-rules" element={<ClockRules />} />
+      <Route path="import" element={<HRImport />} />
     </Routes>
   )
 })

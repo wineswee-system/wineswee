@@ -34,16 +34,12 @@ const CATEGORY_MAP = {
  * 回傳 { id, name } 或 null
  */
 export async function findFormChainByApplicantType(formType, organizationId, employeeId) {
-  // 查組織圖：此員工是否為部門主管或門市店長
+  // 查組織圖：此員工是否為部門主管（只看 departments；門市店長算一般員工）
   let isManager = false
   if (employeeId) {
-    const [deptRes, storeRes] = await Promise.all([
-      supabase.from('departments').select('id', { count: 'exact', head: true })
-        .eq('manager_id', employeeId).eq('organization_id', organizationId),
-      supabase.from('stores').select('id', { count: 'exact', head: true })
-        .eq('manager_id', employeeId).eq('organization_id', organizationId),
-    ])
-    isManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+    const { count } = await supabase.from('departments').select('id', { count: 'exact', head: true })
+      .eq('manager_id', employeeId).eq('organization_id', organizationId)
+    isManager = (count || 0) > 0
   }
 
   const { data: rows } = await supabase

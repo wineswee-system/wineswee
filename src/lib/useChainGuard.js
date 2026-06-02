@@ -72,13 +72,9 @@ export function useChainGuard({ formType, organizationId, templateId, employeeId
       // 查組織圖：此員工是否為部門/門市主管
       let isManager = false
       if (employeeId) {
-        const [deptRes, storeRes] = await Promise.all([
-          supabase.from('departments').select('id', { count: 'exact', head: true })
-            .eq('manager_id', employeeId).eq('organization_id', organizationId),
-          supabase.from('stores').select('id', { count: 'exact', head: true })
-            .eq('manager_id', employeeId).eq('organization_id', organizationId),
-        ])
-        isManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+        const { count } = await supabase.from('departments').select('id', { count: 'exact', head: true })
+          .eq('manager_id', employeeId).eq('organization_id', organizationId)
+        isManager = (count || 0) > 0
       }
 
       const specificType = isManager ? 'manager' : 'staff'

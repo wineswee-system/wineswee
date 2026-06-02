@@ -21,7 +21,7 @@ export default function ChainEdit() {
 
   const TABS = [
     { key: 'all',     label: '全員通用', desc: '未設定主管／員工專屬鏈時的 fallback' },
-    { key: 'manager', label: '部門主管', desc: '申請人為某部門或門市的主管（departments / stores manager_id）時套用' },
+    { key: 'manager', label: '部門主管', desc: '申請人為某部門的主管（departments.manager_id）時套用，門市店長算一般員工' },
     { key: 'staff',   label: '一般員工', desc: '不是任何部門或門市主管的員工套用' },
   ]
 

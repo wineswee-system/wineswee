@@ -179,8 +179,11 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   }
 
   const resetEditorBlank = () => {
+    const typeSuffix = (mode === 'single' && applicantType && applicantType !== 'all')
+      ? (applicantType === 'manager' ? '（主管）' : '（員工）')
+      : ''
     setChainId(null)
-    setChainName(mode === 'library' ? '' : `${formLabel}簽核鏈`)
+    setChainName(mode === 'library' ? '' : `${formLabel}簽核鏈${typeSuffix}`)
     setChainDescription('')
     setLibraryCategory('')
     setMinAmount('')

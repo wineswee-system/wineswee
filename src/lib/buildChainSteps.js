@@ -421,16 +421,12 @@ export async function buildFormChainSteps({
   }
 
   // ── 1. 沒快照（舊單 / 沒傳 requestType）→ 走 form_chain_configs + live chain ──
-  // 查組織圖判斷申請人是否為部門/門市主管
+  // 查組織圖判斷申請人是否為部門主管（只看 departments；門市店長算一般員工）
   let applicantIsManager = false
   if (applicantId && organizationId) {
-    const [deptRes, storeRes] = await Promise.all([
-      supabase.from('departments').select('id', { count: 'exact', head: true })
-        .eq('manager_id', applicantId).eq('organization_id', organizationId),
-      supabase.from('stores').select('id', { count: 'exact', head: true })
-        .eq('manager_id', applicantId).eq('organization_id', organizationId),
-    ])
-    applicantIsManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+    const { count } = await supabase.from('departments').select('id', { count: 'exact', head: true })
+      .eq('manager_id', applicantId).eq('organization_id', organizationId)
+    applicantIsManager = (count || 0) > 0
   }
 
   const specificType = applicantIsManager ? 'manager' : 'staff'

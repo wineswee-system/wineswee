@@ -139,7 +139,7 @@ export default function ExpenseDetailModal({
         logoUrl: organization?.logo_url,
         attachments: pdfAtts,
         signatures,
-        chainSteps: detailChainSteps.filter(s => s.kind !== 'settle_divider'),
+        chainSteps: detailChainSteps.filter(s => s.kind !== 'settle_divider' && !(s.isSettle && s.isApplicant)),
         approverMap,
         _win: win,
       })

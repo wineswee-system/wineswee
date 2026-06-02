@@ -189,7 +189,7 @@ export default function HRImport() {
 
   useEffect(() => {
     if (!orgId) return
-    supabase.from('employees').select('id, name, employee_no')
+    supabase.from('employees').select('id, name, employee_number')
       .eq('organization_id', orgId)
       .then(({ data, error }) => {
         if (error) console.error('[HRImport] employees query error:', error)
@@ -201,7 +201,7 @@ export default function HRImport() {
   function empLookup(nameOrNo) {
     if (!nameOrNo) return null
     const q = String(nameOrNo).trim()
-    return employees.find(e => e.name === q || e.employee_no === q) || null
+    return employees.find(e => e.name === q || e.employee_number === q) || null
   }
 
   // ── 解析 CSV → preview ──────────────────────────────

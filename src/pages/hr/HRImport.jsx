@@ -8,6 +8,7 @@ import { toast } from '../../lib/toast'
 // ── 假別中文 → code ──────────────────────────────────────
 const LEAVE_TYPE_MAP = {
   '特休': 'annual', '年假': 'annual', '特休假': 'annual',
+  '特別休假': 'annual', '年休假': 'annual', '年資特休': 'annual',
   '病假': 'sick',
   '事假': 'personal',
   '公假': 'official',
@@ -41,7 +42,7 @@ const HR_MODULES = {
       '日期': 'date',
       '上班時間': 'clock_in', '打卡時間': 'clock_in', '上班打卡': 'clock_in',
       '下班時間': 'clock_out', '下班打卡': 'clock_out',
-      '狀態': 'status',
+      '狀態': 'status', '打卡狀態': 'status',
     },
   },
   schedules: {
@@ -73,10 +74,14 @@ const HR_MODULES = {
     fieldMap: {
       '員工': 'employee', '員工姓名': 'employee', '姓名': 'employee',
       '假別': 'type', '假種': 'type', '假種類': 'type',
+      '假勤項目': 'type', '假種名稱': 'type',
       '開始日期': 'start_date', '起始日期': 'start_date', '請假日期': 'start_date',
+      '假勤開始日期': 'start_date',
       '結束日期': 'end_date', '截止日期': 'end_date',
+      '假勤結束日期': 'end_date',
       '天數': 'days',
-      '原因': 'reason', '備註': 'reason',
+      '請假時數': 'hours',
+      '原因': 'reason', '備註': 'reason', '請假原因': 'reason',
     },
   },
   overtime: {
@@ -91,12 +96,12 @@ const HR_MODULES = {
     required: ['員工', '日期', '加班時數'],
     fieldMap: {
       '員工': 'employee', '員工姓名': 'employee', '姓名': 'employee',
-      '日期': 'date',
+      '日期': 'date', '加班歸屬日': 'date',
       '加班時數': 'hours', '加班小時': 'hours', '時數': 'hours',
       '類型': 'category', '加班類型': 'category',
-      '開始時間': 'start_time', '加班開始': 'start_time',
-      '結束時間': 'end_time', '加班結束': 'end_time',
-      '原因': 'reason', '備註': 'reason',
+      '開始時間': 'start_time', '加班開始': 'start_time', '加班開始時間': 'start_time',
+      '結束時間': 'end_time', '加班結束': 'end_time', '加班結束時間': 'end_time',
+      '原因': 'reason', '備註': 'reason', '加班原因': 'reason',
     },
   },
 }
@@ -116,6 +121,40 @@ function normalizeTime(s) {
   const m = clean.match(/^(\d{1,2}):(\d{2})/)
   if (!m) return null
   return `${m[1].padStart(2, '0')}:${m[2]}:00`
+}
+
+// 104「XXXX年結算特休」等動態名稱統一對應 annual
+function resolveLeaveType(raw) {
+  if (!raw) return ''
+  const s = raw.trim()
+  if (LEAVE_TYPE_MAP[s]) return LEAVE_TYPE_MAP[s]
+  if (/\d{4}年.+特休/.test(s)) return 'annual'
+  return s
+}
+
+// 104 打卡紀錄：每筆一行（上班/下班各一行）→ 合併成一行
+function transform104Attendance(rows) {
+  const map = new Map()
+  for (const r of rows) {
+    const rawName = r['姓名'] || r['員工姓名'] || r['員工'] || ''
+    // "0001 林襄" → "林襄"
+    const nameM = String(rawName).trim().match(/^\S*\d+\s+(.+)$/)
+    const name = nameM ? nameM[1].trim() : String(rawName).trim()
+
+    const date = r['日期'] || ''
+    const direction = r['上/下班'] || ''
+    const rawTs = r['打卡日期時間'] || r['打卡時間'] || r['時間'] || ''
+    const timeM = String(rawTs).match(/(\d{1,2}:\d{2})/)
+    const time = timeM ? timeM[1] : ''
+
+    const key = `${name}__${date}`
+    if (!map.has(key)) map.set(key, { '員工姓名': name, '日期': date })
+    const entry = map.get(key)
+    if (direction === '上班') entry['上班時間'] = time
+    if (direction === '下班') entry['下班時間'] = time
+    if (r['狀態'] && !entry['狀態']) entry['狀態'] = r['狀態']
+  }
+  return [...map.values()]
 }
 
 // ── 產生 CSV 範本 blob ────────────────────────────────────
@@ -165,7 +204,11 @@ export default function HRImport() {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const { rows } = parseCSV(e.target.result)
+        const { rows: rawRows } = parseCSV(e.target.result)
+        // 104 打卡格式偵測：每筆打卡一行含「上/下班」欄 → 先合併
+        const rows = (mod === 'attendance' && rawRows.length > 0 && '上/下班' in rawRows[0])
+          ? transform104Attendance(rawRows)
+          : rawRows
         const m = HR_MODULES[mod]
         const parsed = rows.map((rawRow, idx) => {
           // 欄位對應（以 fieldMap 正向 + 原始欄名 fallback）
@@ -214,14 +257,18 @@ export default function HRImport() {
             const endDate   = normalizeDate(mapped.end_date)
             if (!startDate) errors.push('開始日期格式錯誤')
             if (!endDate)   errors.push('結束日期格式錯誤')
-            const rawType = mapped.type || ''
-            const type = LEAVE_TYPE_MAP[rawType] || rawType
+            const type = resolveLeaveType(mapped.type || '')
             if (!type) errors.push('缺假別')
-            const days = mapped.days ? Number(mapped.days) : (
-              startDate && endDate
-                ? Math.floor((new Date(endDate) - new Date(startDate)) / 86400000) + 1
-                : null
-            )
+            let days
+            if (mapped.days) {
+              days = Number(mapped.days)
+            } else if (mapped.hours) {
+              // 104 格式：時數換算（8h = 1d，4h = 0.5d）
+              const hrs = Number(mapped.hours)
+              days = hrs > 0 ? parseFloat((hrs / 8).toFixed(2)) : null
+            } else if (startDate && endDate) {
+              days = Math.floor((new Date(endDate) - new Date(startDate)) / 86400000) + 1
+            }
             if (!days || days <= 0) errors.push('天數無效')
             payload = { ...payload, type, start_date: startDate, end_date: endDate,
               days, unit: 'day', reason: mapped.reason || '', status: '已核准',

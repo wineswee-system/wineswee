@@ -431,6 +431,16 @@ function TimelineDot({ step, index, isLast }) {
           ⏱ 停留 {step.durationText}
         </div>
       )}
+      {step.noteText && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-muted)', marginTop: 4,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 4,
+          background: 'rgba(249,115,22,0.08)',
+        }}>
+          📋 {step.noteText}
+        </div>
+      )}
       {step.status === 'rejected' && step.rejectReason && (
         <div style={{
           fontSize: 13, color: '#9c1f1f', marginTop: 6,

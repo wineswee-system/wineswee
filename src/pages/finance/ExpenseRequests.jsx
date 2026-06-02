@@ -513,11 +513,20 @@ export default function ExpenseRequests() {
             isSettle: true,
           }
         })
+        const settleStartAt = settleTlByStep[0]?.entered_at || null
+        let settleIntervalText = null
+        if (settleStartAt && req.approved_at) {
+          const diffSec = Math.floor((new Date(settleStartAt) - new Date(req.approved_at)) / 1000)
+          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送核銷`
+          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送核銷`
+          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送核銷`
+        }
         const settleApplicantStep = {
           label: '申請人（送核銷）',
           name: req.employee,
           status: 'completed',
-          completedAt: settleTlByStep[0]?.entered_at || null,
+          completedAt: settleStartAt,
+          noteText: settleIntervalText,
           isSettle: true,
           isApplicant: true,
         }

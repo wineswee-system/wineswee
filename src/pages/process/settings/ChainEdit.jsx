@@ -20,9 +20,9 @@ export default function ChainEdit() {
   const [activeType, setActiveType] = useState('all')
 
   const TABS = [
-    { key: 'all',     label: '全員通用',  desc: '主管與員工共用同一條簽核鏈' },
-    { key: 'manager', label: '部門主管',  desc: '角色為 manager/admin/super_admin 時套用' },
-    { key: 'staff',   label: '一般員工',  desc: '其他角色（store_staff 等）套用' },
+    { key: 'all',     label: '全員通用', desc: '未設定主管／員工專屬鏈時的 fallback' },
+    { key: 'manager', label: '部門主管', desc: '申請人為某部門或門市的主管（departments / stores manager_id）時套用' },
+    { key: 'staff',   label: '一般員工', desc: '不是任何部門或門市主管的員工套用' },
   ]
 
   if (!(isAdmin || isSuperAdmin)) {

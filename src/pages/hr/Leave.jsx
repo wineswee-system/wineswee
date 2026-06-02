@@ -549,7 +549,7 @@ export default function Leave() {
             ))}
           </div>
           {/* Virtual scroll body */}
-          <div ref={containerRef} style={{ height: 480, overflowY: 'auto', overflowX: 'hidden' }}>
+          <div ref={containerRef} style={{ height: 'calc(100vh - 420px)', minHeight: 300, overflowY: 'auto', overflowX: 'hidden' }}>
             <div style={containerStyle}>
               {virtualItems.map(({ item: l, style }) => (
                 <VirtualRow key={l.id}

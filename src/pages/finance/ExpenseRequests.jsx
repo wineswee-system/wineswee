@@ -472,12 +472,22 @@ export default function ExpenseRequests() {
 
         // 核銷鏈時間軸（同主審批鏈）
         const settleTlByStep = {}
+        let settleSnapshotCreatedAt = null
         try {
-          const { data: settleTl } = await supabase.rpc('get_approval_timeline', {
-            p_request_type: 'expense_settle',
-            p_request_id: req.id,
-          })
+          const [{ data: settleTl }, { data: snapshotRow }] = await Promise.all([
+            supabase.rpc('get_approval_timeline', {
+              p_request_type: 'expense_settle',
+              p_request_id: req.id,
+            }),
+            supabase.from('request_chain_snapshots')
+              .select('created_at')
+              .eq('request_type', 'expense_settle')
+              .eq('request_id', req.id)
+              .limit(1)
+              .maybeSingle(),
+          ])
           ;(settleTl || []).forEach(t => { settleTlByStep[t.step_order] = t })
+          settleSnapshotCreatedAt = snapshotRow?.created_at || null
         } catch (_) {}
 
         const settleSteps = rawSettleSteps.map(s => {
@@ -513,7 +523,7 @@ export default function ExpenseRequests() {
             isSettle: true,
           }
         })
-        const settleStartAt = settleTlByStep[0]?.entered_at || null
+        const settleStartAt = settleSnapshotCreatedAt || settleTlByStep[0]?.entered_at || null
         let settleIntervalText = null
         if (settleStartAt && req.approved_at) {
           const diffSec = Math.floor((new Date(settleStartAt) - new Date(req.approved_at)) / 1000)

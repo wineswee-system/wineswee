@@ -191,7 +191,11 @@ export default function HRImport() {
     if (!orgId) return
     supabase.from('employees').select('id, name, employee_no')
       .eq('organization_id', orgId)
-      .then(({ data }) => setEmployees(data || []))
+      .then(({ data, error }) => {
+        if (error) console.error('[HRImport] employees query error:', error)
+        console.log('[HRImport] loaded employees:', data?.length, 'orgId:', orgId)
+        setEmployees(data || [])
+      })
   }, [orgId])
 
   function empLookup(nameOrNo) {
@@ -419,6 +423,9 @@ export default function HRImport() {
           onClick={() => downloadTemplate(mod)}>
           <Download size={14} /> 下載範本
         </button>
+        <span style={{ fontSize: 12, color: employees.length > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+          已載入 {employees.length} 位員工
+        </span>
 
         <label style={{
           display: 'flex', alignItems: 'center', gap: 8,

@@ -279,13 +279,15 @@ export default function HRImport() {
             if (!endDate)   errors.push('結束日期格式錯誤')
             const type = resolveLeaveType(mapped.type || '')
             if (!type) errors.push('缺假別')
-            let days, leaveUnit = 'day'
+            let days, leaveUnit = 'day', leaveHours = null
             if (mapped.days) {
               days = Math.round(Number(mapped.days))
             } else if (mapped.hours) {
-              // 104 格式：8h 的倍數存天數；非整數天數用 unit='hour' 存原始小時（int 欄位不接受小數）
+              // 104 格式：8h 的倍數存天數；非整數天數用 unit='hour' 存原始小時
+              // 同時把小時數存進 hours 欄位，讓薪資計算 (Salary.jsx) 的 l.hours 可直接用
               const hrs = Number(mapped.hours)
               if (hrs > 0) {
+                leaveHours = hrs
                 if (hrs % 8 === 0) {
                   days = hrs / 8
                   leaveUnit = 'day'
@@ -299,7 +301,9 @@ export default function HRImport() {
             }
             if (!days || days <= 0) errors.push('天數無效')
             payload = { ...payload, type, start_date: startDate, end_date: endDate,
-              days, unit: leaveUnit, reason: mapped.reason || '', status: '已核准',
+              days, unit: leaveUnit,
+              ...(leaveHours !== null ? { hours: leaveHours } : {}),
+              reason: mapped.reason || '', status: '已核准',
               approver: profile?.name || '' }
 
           } else if (mod === 'overtime') {

@@ -28,11 +28,24 @@ const CATEGORY_MAP = {
 }
 
 /**
- * 依 form_chain_configs 找適合申請人角色的 active chain
- * 先試 specific type（manager/staff），找不到再 fallback 'all'
+ * 依 form_chain_configs + 組織圖 找適合申請人的 active chain
+ * 先查申請人是否為部門/門市主管（departments.manager_id / stores.manager_id），
+ * 再試 specific type，fallback 'all'
  * 回傳 { id, name } 或 null
  */
-export async function findFormChainByApplicantType(formType, organizationId, isManager) {
+export async function findFormChainByApplicantType(formType, organizationId, employeeId) {
+  // 查組織圖：此員工是否為部門主管或門市店長
+  let isManager = false
+  if (employeeId) {
+    const [deptRes, storeRes] = await Promise.all([
+      supabase.from('departments').select('id', { count: 'exact', head: true })
+        .eq('manager_id', employeeId).eq('organization_id', organizationId),
+      supabase.from('stores').select('id', { count: 'exact', head: true })
+        .eq('manager_id', employeeId).eq('organization_id', organizationId),
+    ])
+    isManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+  }
+
   const { data: rows } = await supabase
     .from('form_chain_configs')
     .select('chain_id, applicant_type, approval_chains(id, name)')

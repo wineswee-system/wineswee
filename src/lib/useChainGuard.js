@@ -29,11 +29,11 @@ const FORM_TYPE_LABEL = {
  * @param {string} opts.formType          'leave' | 'overtime' | 'trip' | 'correction' | 'form_submission'
  * @param {number} [opts.organizationId]  非 form_submission 時必填
  * @param {number} [opts.templateId]      form_submission 時必填
- * @param {boolean} [opts.isManager]      申請人是否為主管角色（決定優先查哪種 applicant_type）
+ * @param {number} [opts.employeeId]      申請人 employee_id（查組織圖判斷是否為部門/門市主管）
  * @param {boolean} [opts.enabled=true]   false → 跳過檢查（給條件性 mount 用）
  * @returns {{ ready: boolean, blocked: boolean, reason: string, chainId: number|null }}
  */
-export function useChainGuard({ formType, organizationId, templateId, isManager = false, enabled = true }) {
+export function useChainGuard({ formType, organizationId, templateId, employeeId = null, enabled = true }) {
   const [state, setState] = useState({ ready: false, blocked: false, reason: '', chainId: null })
 
   useEffect(() => {
@@ -69,7 +69,18 @@ export function useChainGuard({ formType, organizationId, templateId, isManager 
         return
       }
 
-      // 先試 specific type（manager/staff），再 fallback 'all'
+      // 查組織圖：此員工是否為部門/門市主管
+      let isManager = false
+      if (employeeId) {
+        const [deptRes, storeRes] = await Promise.all([
+          supabase.from('departments').select('id', { count: 'exact', head: true })
+            .eq('manager_id', employeeId).eq('organization_id', organizationId),
+          supabase.from('stores').select('id', { count: 'exact', head: true })
+            .eq('manager_id', employeeId).eq('organization_id', organizationId),
+        ])
+        isManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+      }
+
       const specificType = isManager ? 'manager' : 'staff'
       const { data: rows } = await supabase.from('form_chain_configs')
         .select('chain_id, is_active, applicant_type')
@@ -93,7 +104,7 @@ export function useChainGuard({ formType, organizationId, templateId, isManager 
     }
     check()
     return () => { cancelled = true }
-  }, [formType, organizationId, templateId, isManager, enabled])
+  }, [formType, organizationId, templateId, employeeId, enabled])
 
   return state
 }

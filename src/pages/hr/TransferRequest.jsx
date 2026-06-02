@@ -154,7 +154,7 @@ export default function TransferRequest() {
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role,dept,store,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').order('name'),
       supabase.from('stores').select('id,name').eq('is_active', true).order('name'),
-      findFormChainByApplicantType('transfer', orgId, isAdmin),
+      findFormChainByApplicantType('transfer', orgId, profile?.id),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])

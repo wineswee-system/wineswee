@@ -362,7 +362,6 @@ async function mergeExtraSteps(baseSteps, sourceTable, sourceId, approverMap = {
  * @param {string} [opts.requestType]   ★ snapshot 用：'leave_request' / 'overtime_request' / 'trip' / ...
  * @param {number} [opts.requestId]     ★ snapshot 用：對應 row 的 id
  * @param {number} [opts.currentStep]   ★ snapshot 用：對應 row.current_step（沒給就用 single-stage 推算）
- * @param {boolean} [opts.applicantIsManager]  申請人是否為主管角色（live fallback 用）
  * @returns {Promise<Array>}
  */
 export async function buildFormChainSteps({
@@ -370,7 +369,6 @@ export async function buildFormChainSteps({
   approverName, approvedAt, rejectReason,
   fallbackTail = ['人資核章'],
   requestType = null, requestId = null, currentStep = null,
-  applicantIsManager = false,
 }) {
   const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
   const applicantStep = {
@@ -423,7 +421,18 @@ export async function buildFormChainSteps({
   }
 
   // ── 1. 沒快照（舊單 / 沒傳 requestType）→ 走 form_chain_configs + live chain ──
-  // 先試 specific type（manager/staff），再 fallback 'all'
+  // 查組織圖判斷申請人是否為部門/門市主管
+  let applicantIsManager = false
+  if (applicantId && organizationId) {
+    const [deptRes, storeRes] = await Promise.all([
+      supabase.from('departments').select('id', { count: 'exact', head: true })
+        .eq('manager_id', applicantId).eq('organization_id', organizationId),
+      supabase.from('stores').select('id', { count: 'exact', head: true })
+        .eq('manager_id', applicantId).eq('organization_id', organizationId),
+    ])
+    applicantIsManager = (deptRes.count || 0) + (storeRes.count || 0) > 0
+  }
+
   const specificType = applicantIsManager ? 'manager' : 'staff'
   const { data: cfgRows } = await supabase
     .from('form_chain_configs')

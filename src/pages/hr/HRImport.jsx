@@ -305,7 +305,7 @@ export default function HRImport() {
 
     const m = HR_MODULES[mod]
     let inserted = 0, skipped = 0, errored = 0
-    const CHUNK = 200
+    const CHUNK = 500  // RPC 批次大小
 
     try {
       if (mod === 'schedules') {
@@ -328,59 +328,31 @@ export default function HRImport() {
         }
 
       } else if (mod === 'attendance') {
-        for (const row of valid) {
-          const { data: exists } = await supabase
-            .from('attendance_records').select('id')
-            .eq('employee_id', row.payload.employee_id)
-            .eq('date', row.payload.date)
-            .maybeSingle()
-          if (exists) {
-            if (dupMode === 'overwrite') {
-              const { error } = await supabase.from('attendance_records')
-                .update(row.payload).eq('id', exists.id)
-              if (error) errored++; else inserted++
-            } else {
-              skipped++
-            }
-          } else {
-            const { error } = await supabase.from('attendance_records').insert(row.payload)
-            if (error) errored++; else inserted++
-          }
+        // RPC 批次：繞過 trigger，支援覆蓋模式
+        for (let i = 0; i < valid.length; i += CHUNK) {
+          const chunk = valid.slice(i, i + CHUNK).map(r => r.payload)
+          const { data, error } = await supabase.rpc('bulk_import_attendance',
+            { p_records: chunk, p_overwrite: dupMode === 'overwrite' })
+          if (error) { toast.error('批次失敗：' + error.message); errored += chunk.length }
+          else { inserted += data.inserted; skipped += data.skipped }
         }
 
       } else if (mod === 'leave') {
-        for (const row of valid) {
-          const { data: exists } = await supabase
-            .from('leave_requests').select('id')
-            .eq('employee_id', row.payload.employee_id)
-            .eq('type', row.payload.type)
-            .eq('start_date', row.payload.start_date)
-            .eq('end_date', row.payload.end_date)
-            .maybeSingle()
-          if (exists) { skipped++; continue }
-          const { error } = await supabase.from('leave_requests').insert(row.payload)
-          if (error) errored++; else inserted++
+        // RPC 批次：繞過 chain / LINE 通知 trigger
+        for (let i = 0; i < valid.length; i += CHUNK) {
+          const chunk = valid.slice(i, i + CHUNK).map(r => r.payload)
+          const { data, error } = await supabase.rpc('bulk_import_leave', { p_records: chunk })
+          if (error) { toast.error('批次失敗：' + error.message); errored += chunk.length }
+          else { inserted += data.inserted; skipped += data.skipped }
         }
 
       } else if (mod === 'overtime') {
-        for (const row of valid) {
-          const { data: exists } = await supabase
-            .from('overtime_requests').select('id')
-            .eq('employee_id', row.payload.employee_id)
-            .eq('date', row.payload.date)
-            .maybeSingle()
-          if (exists) {
-            if (dupMode === 'overwrite') {
-              const { error } = await supabase.from('overtime_requests')
-                .update(row.payload).eq('id', exists.id)
-              if (error) errored++; else inserted++
-            } else {
-              skipped++
-            }
-          } else {
-            const { error } = await supabase.from('overtime_requests').insert(row.payload)
-            if (error) errored++; else inserted++
-          }
+        // RPC 批次：繞過 chain / LINE 通知 trigger
+        for (let i = 0; i < valid.length; i += CHUNK) {
+          const chunk = valid.slice(i, i + CHUNK).map(r => r.payload)
+          const { data, error } = await supabase.rpc('bulk_import_overtime', { p_records: chunk })
+          if (error) { toast.error('批次失敗：' + error.message); errored += chunk.length }
+          else { inserted += data.inserted; skipped += data.skipped }
         }
       }
     } catch (err) {

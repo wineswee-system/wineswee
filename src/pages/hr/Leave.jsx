@@ -558,7 +558,7 @@ export default function Leave() {
                   <div style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{l.id}</div>
                   <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
-                  <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{l.type}</span></div>
+                  <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{getLeaveTypeInfo(l.type)?.shortName || l.type}</span></div>
                   <div style={{ padding: '4px 8px', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {l.start_date}{l.start_time ? ` ${l.start_time}` : ''}
                     {l.end_date !== l.start_date ? ` ~ ${l.end_date}` : ''}

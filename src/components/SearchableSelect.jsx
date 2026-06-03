@@ -323,9 +323,13 @@ export function empOptions(employees = [], opts = {}) {
     const storeName = e.store || e.stores?.name
     const deptName  = e.dept  || e.departments?.name
     const group = storeName ? `🏪 ${storeName}` : (deptName ? `🏢 ${deptName}` : '未分類')
+    const sublabel = e.status === '離職'
+      ? `已離職${e.resign_date ? ' ' + e.resign_date : ''}`
+      : undefined
     return {
       value: keyBy === 'name' ? e.name : e.id,
       label: parts.join(' '),
+      sublabel,
       group,
     }
   })

@@ -7,7 +7,6 @@ import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useVirtualList, VirtualRow } from '../../lib/useVirtualList.jsx'
 
 // 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode（2026-05-28 簡化 5 → 2）
 //   normal 不顯示、outing 顯示「外出」
@@ -120,7 +119,7 @@ export default function Attendance() {
     return [...recordRows, ...notClockedRows]
   }, [filtered, records, employees, storeFilter, deptFilter, search, today])
 
-  const { virtualItems, containerRef, containerStyle } = useVirtualList({ items: allRows, itemHeight: 48, overscan: 8 })
+  // 出勤紀錄最多數百筆，不需要 virtual scroll，直接 map 避免渲染問題
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -277,16 +276,16 @@ export default function Attendance() {
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
-          {/* Virtual scroll body */}
-          <div ref={containerRef} style={{ height: 480, overflowY: 'auto', overflowX: 'hidden' }}>
-            <div style={containerStyle}>
-              {virtualItems.map(({ item: r, style }) => {
+          {/* List body */}
+          <div style={{ overflowX: 'hidden' }}>
+            <div>
+              {allRows.map((r) => {
                 const isToday = r.date === today
                 const isNotClocked = r._rowType === 'notClocked'
                 const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && isToday && !r.clock_in
                 return (
-                  <VirtualRow key={r.id} style={{ ...style, display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
@@ -313,7 +312,7 @@ export default function Attendance() {
                         </button>
                       )}
                     </div>
-                  </VirtualRow>
+                  </div>
                 )
               })}
             </div>

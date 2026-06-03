@@ -140,7 +140,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').eq('organization_id', orgId).order('id'),
       supabase.from('bonus_records').select('*').eq('organization_id', orgId),
-      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10)})`).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, b, e, d, st]) => {
@@ -564,63 +564,83 @@ export default function Salary() {
         // Attendance bonus: zero if late or absent
         const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
 
-        // 投保金額（base + role 經常性津貼）：
-        //   月薪人員 → 直接傳 baseForInsure（不預先 cap）
-        //     勞保自己會在 calculateLaborInsurance 內部 cap 在法定 45,800
-        //     健保自己會在 calculateHealthInsurance 內部 cap 在法定 313,000
-        //     → 高薪員工健保不會被勞保上限拖低
-        //   PT      → 走 PT 最低（payroll.js 內 fixed 11,100）
-        // salary_structures.base_insured 若有值則覆寫（admin 可手動調，會同樣套用兩種上限）
+        // ── 月薪底薪 / 固定津貼比例（月中入職 / 當月離職）──
+        // 與 DB generate_payroll 一致：用工作日（排週末 + 國定假日）
+        // PT 已由實際打卡時數反映，不另算比例
+        const [_yr, _mo] = month.split('-').map(Number)
+        const _mStart = new Date(_yr, _mo - 1, 1)
+        const _mEnd   = new Date(_yr, _mo, 0)
+        const _countWD = (from, to) => {
+          let n = 0; const d = new Date(from)
+          while (d <= to) {
+            const dow = d.getDay()
+            const ds  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+            if (dow !== 0 && dow !== 6 && !holidayDates.has(ds)) n++
+            d.setDate(d.getDate() + 1)
+          }
+          return n
+        }
+        const _totalWD = _countWD(_mStart, _mEnd) || 1
+        let salaryProrateRatio = 1
+        let salaryActualWD     = _totalWD
+        if (!isHourly) {
+          const _toD = s => { const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1],+m[2]-1,+m[3]) : null }
+          const _joinD   = _toD(emp.join_date)
+          const _resignD = _toD(emp.resign_date)
+          const _effStart = _joinD   && _joinD   > _mStart ? _joinD   : _mStart
+          const _effEnd   = _resignD && _resignD < _mEnd   ? _resignD : _mEnd
+          if (_effStart > _mStart || _effEnd < _mEnd) {
+            salaryActualWD     = _countWD(_effStart, _effEnd) || 1
+            salaryProrateRatio = salaryActualWD / _totalWD
+          }
+        }
+        const _p = salaryProrateRatio  // shorthand
+        const effBase      = !isHourly ? Math.round(baseSalary          * _p) : baseSalary
+        const effRole      = !isHourly ? Math.round(roleAllowance       * _p) : roleAllowance
+        const effMeal      = !isHourly ? Math.round(mealAllowance       * _p) : mealAllowance
+        const effTransp    = !isHourly ? Math.round(transportAllow      * _p) : transportAllow
+        const effAttBonus  = !isHourly ? Math.round(attendanceBonus     * _p) : attendanceBonus
+        const effNight     = !isHourly ? Math.round(nightAllowance      * _p) : nightAllowance
+        const effCross     = !isHourly ? Math.round(crossStoreAllowance * _p) : crossStoreAllowance
+        const effOtherC    = !isHourly ? Math.round(otherCustomTotal    * _p) : otherCustomTotal
+
+        // 投保金額用「原始全月本薪+津貼」（投保級距不受在職天數影響）
         const insuredSalary = ss.base_insured != null && Number(ss.base_insured) > 0
           ? Number(ss.base_insured)
           : (isHourly ? 0 : baseForInsure)
 
-        const fullMonthResult = calculateNetSalary(baseSalary, {
+        const fullMonthResult = calculateNetSalary(effBase, {
           insuredSalary,
           isPartTime: isHourly,
           dependents,
           voluntaryPensionRate: voluntaryRate,
           brackets: batchBrackets,
-          // 「應發」放進 overtimePay 參數（calculateNetSalary 內 totalGross = base + overtimePay + bonus）
-          // 這裡用解析後的津貼（避免結構化+custom 重複算）
-          overtimePay: overtimePay + roleAllowance + nightAllowance + crossStoreAllowance + mealAllowance + transportAllow + attendanceBonus + otherCustomTotal,
+          overtimePay: overtimePay + effRole + effNight + effCross + effMeal + effTransp + effAttBonus + effOtherC,
           bonus: policyBonus,
-          // 扣項：出勤扣 + 法扣
           otherDeductions: absenceDeduction + lateDeduction + legalDeductionTotal,
-          withholdTax: false,  // 所得稅由個人 5 月申報，公司不代扣
+          withholdTax: false,
         })
 
-        // ─── 在職不滿月 proration（業務鐵則 v3 #5B）───
-        // 新進當月：join_date → 月底；離職當月：月初 → resign_date
-        // 業務鐵則：
-        //   勞保 → 按天 (在保天數/當月天數)
-        //   勞退 → 按天 (同勞保)
-        //   健保 → 全月不打折（廠商實務：當月加保扣整月健保費）
-        //   本薪/津貼/加班費 → 不 prorate
-        //     （PT 已由 att.hours 反映；月薪員工的津貼是契約給定）
+        // ── 在職不滿月：勞保/勞退按曆日比例，健保全月不打折 ──
         const { inServiceDays, monthDays } = calculateInServiceDays(emp.join_date, emp.resign_date, month)
         const prorationRatio = monthDays > 0 ? inServiceDays / monthDays : 1
         const isPartialMonth = prorationRatio < 1 && prorationRatio > 0
 
         let result = fullMonthResult
         if (isPartialMonth) {
-          // 勞保 + 勞退 按天，健保不動
           const proratedLabor   = Math.round(fullMonthResult.laborInsurance * prorationRatio)
-          const proratedPension = Math.round(fullMonthResult.pension * prorationRatio)
-          const proratedLaborE  = Math.round(fullMonthResult.laborEmployer * prorationRatio)
-          const proratedPensionE= Math.round(fullMonthResult.pensionEmployer * prorationRatio)
-          // 重算 totalDeductions / netSalary（健保不變，所以只算勞保 + 勞退的 delta）
-          const insuranceDelta =
+          const proratedPension = Math.round(fullMonthResult.pension        * prorationRatio)
+          const proratedLaborE  = Math.round(fullMonthResult.laborEmployer  * prorationRatio)
+          const proratedPensionE= Math.round(fullMonthResult.pensionEmployer* prorationRatio)
+          const insuranceDelta  =
             (fullMonthResult.laborInsurance + fullMonthResult.pension)
             - (proratedLabor + proratedPension)
           const newTotalDeductions = fullMonthResult.totalDeductions - insuranceDelta
           result = {
             ...fullMonthResult,
             laborInsurance:    proratedLabor,
-            // healthInsurance:   不動（全月）
             pension:           proratedPension,
             laborEmployer:     proratedLaborE,
-            // healthEmployer:    不動（全月）
             pensionEmployer:   proratedPensionE,
             totalDeductions:   newTotalDeductions,
             netSalary:         fullMonthResult.gross - newTotalDeductions,
@@ -636,17 +656,17 @@ export default function Salary() {
           position:         emp.position || '',
           store:            emp.store || '',
 
-          // ── 加項 ──
-          base_salary:      baseSalary,
-          role_allowance:   roleAllowance,
-          meal_allowance:   mealAllowance,
-          transport_allowance: transportAllow,
-          night_allowance:    Number(nightAllowance) || 0,
-          cross_store_allowance: Number(crossStoreAllowance) || 0,
-          other_custom_total: Math.max(0, otherCustomTotal),
-          attendance_bonus: attendanceBonus,
+          // ── 加項（月薪已按工作日比例縮放）──
+          base_salary:      effBase,
+          role_allowance:   effRole,
+          meal_allowance:   effMeal,
+          transport_allowance: effTransp,
+          night_allowance:    Number(effNight) || 0,
+          cross_store_allowance: Number(effCross) || 0,
+          other_custom_total: Math.max(0, effOtherC),
+          attendance_bonus: effAttBonus,
           custom_allowances: customAllowances,
-          custom_allowances_total: customTotal,
+          custom_allowances_total: !isHourly ? Math.round(customTotal * _p) : customTotal,
           regular_overtime_pay: regularOvertimePay,  // 平日+休息日加班
           extra_overtime_pay:   extraOvertimePay,    // 國定/例假加班 + 國定打卡加給
           overtimePay,                                // = regular + extra
@@ -679,13 +699,16 @@ export default function Salary() {
           health_ins_dependents: dependents,
           pension_self_pct: ss.voluntary_pension_rate || 0,
 
-          // ── 在職天數（給 UI 顯示「在保 24/30」標示用）──
-          in_service_days: inServiceDays,
-          month_days:      monthDays,
-          proration_ratio: prorationRatio,
-          is_partial_month: isPartialMonth,
-          join_date:       emp.join_date || null,
-          resign_date:     emp.resign_date || null,
+          // ── 在職天數（保費曆日比例）+ 薪資工作日比例 ──
+          in_service_days:       inServiceDays,
+          month_days:            monthDays,
+          proration_ratio:       prorationRatio,        // 曆日比例（用於保費）
+          is_partial_month:      isPartialMonth,
+          salary_prorate_ratio:  salaryProrateRatio,    // 工作日比例（用於底薪/津貼）
+          salary_actual_wd:      salaryActualWD,        // 本月實際工作日數
+          salary_total_wd:       _totalWD,              // 當月總工作日數
+          join_date:             emp.join_date  || null,
+          resign_date:           emp.resign_date|| null,
 
           // ── calculateNetSalary 回傳：gross / 投保 / 員工自付 / 雇主負擔 / netSalary 等 ──
           ...result,

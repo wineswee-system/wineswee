@@ -188,12 +188,17 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                       <td style={{ position: 'sticky', left: 0, background: rowBg || 'var(--bg-secondary)', fontWeight: 600 }}>
                         {hasAnomaly && <AlertTriangle size={10} style={{ color: 'var(--accent-orange)', marginRight: 3 }} />}
                         {p.employee}
-                        {p.is_partial_month && (
+                        {(p.salary_prorate_ratio != null && p.salary_prorate_ratio < 0.9999) && (
                           <span
-                            title={`在保 ${p.in_service_days}/${p.month_days} 天 · 入職 ${p.join_date || '-'}${p.resign_date ? ` · 離職 ${p.resign_date}` : ''}`}
-                            style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 4, fontSize: 9, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 600 }}
+                            title={[
+                              `薪資比例：${p.salary_actual_wd}/${p.salary_total_wd} 工作日（${(p.salary_prorate_ratio * 100).toFixed(1)}%）`,
+                              p.is_partial_month ? `在保比例：${p.in_service_days}/${p.month_days} 曆日` : null,
+                              p.join_date   ? `入職 ${p.join_date}`   : null,
+                              p.resign_date ? `離職 ${p.resign_date}` : null,
+                            ].filter(Boolean).join(' · ')}
+                            style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 4, fontSize: 9, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', fontWeight: 600 }}
                           >
-                            {p.in_service_days}/{p.month_days}
+                            {p.salary_actual_wd}/{p.salary_total_wd}日
                           </span>
                         )}
                       </td>

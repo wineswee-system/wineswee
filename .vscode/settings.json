@@ -2,5 +2,7 @@
   "files.exclude": {
     "**/.git": true,
     "**/node_modules": true
-  }
+  },
+  "workbench.editor.customLabels.enabled": true,
+  "workbench.editor.enablePreviewFromCodeNavigation": true
 }

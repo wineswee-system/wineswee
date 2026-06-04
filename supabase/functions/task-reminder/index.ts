@@ -474,6 +474,7 @@ serve(async (req: Request) => {
           instance_template_name: string | null;
           line_user_id: string | null;
           channel_code: string | null;
+          attachments: Array<{ file_name?: string; storage_path?: string; file_url?: string }> | null;
         }>) {
           // task 不見了或沒人 → 標記已處理免得重抓
           if (!p.task_id || !p.task_assignee_id) {
@@ -534,6 +535,31 @@ serve(async (req: Request) => {
                     { type: "text", text: p.task_notes.trim(), size: "sm", color: LC.dark, wrap: true },
                   ] : []),
                   ...(p.task_store ? [{ type: "text", text: `門市：${p.task_store}`, size: "sm", color: LC.muted, margin: "sm" }] : []),
+                  ...(() => {
+                    const atts = Array.isArray(p.attachments) ? p.attachments.filter(a => a.file_name) : [];
+                    if (atts.length === 0) return [];
+                    const iconFor = (name: string) => {
+                      const ext = name.split(".").pop()?.toLowerCase() ?? "";
+                      if (["png","jpg","jpeg","gif","webp","svg"].includes(ext)) return "🖼️";
+                      if (ext === "pdf") return "📕";
+                      if (["xlsx","xls","csv"].includes(ext)) return "📊";
+                      if (["docx","doc"].includes(ext)) return "📝";
+                      if (["zip","rar","7z"].includes(ext)) return "🗜️";
+                      return "📄";
+                    };
+                    return [
+                      { type: "separator", margin: "sm" },
+                      { type: "text", text: `📎 附件（${atts.length}）`, size: "sm", color: LC.dark, weight: "bold", margin: "sm" },
+                      ...atts.slice(0, 5).map(a => ({
+                        type: "box", layout: "horizontal", spacing: "sm",
+                        contents: [
+                          { type: "text", text: iconFor(a.file_name!), size: "sm", flex: 0 },
+                          { type: "text", text: a.file_name!, size: "sm", color: LC.dark, wrap: true, flex: 1 },
+                        ],
+                      })),
+                      ...(atts.length > 5 ? [{ type: "text", text: `...共 ${atts.length} 個附件`, size: "xs", color: LC.soft, margin: "xs" }] : []),
+                    ];
+                  })(),
                 ],
               },
               footer: actionFooter(p.task_id, taskLiffId),

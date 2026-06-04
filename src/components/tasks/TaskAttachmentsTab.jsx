@@ -80,7 +80,7 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
       padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
       marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
     }}>
-      <a href={supabase.storage.from('task-attachments').getPublicUrl(a.storage_path).data?.publicUrl} target="_blank" rel="noreferrer noopener"
+      <a href={a.storage_path ? supabase.storage.from('task-attachments').getPublicUrl(a.storage_path).data?.publicUrl : a.file_url} target="_blank" rel="noreferrer noopener"
         style={{ color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
         <span style={{ flexShrink: 0 }}>{fileIcon(a.file_name)}</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>

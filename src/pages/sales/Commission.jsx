@@ -1,18 +1,17 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, DollarSign, Calculator } from 'lucide-react'
 import { getCommissionRules, createCommissionRule, updateCommissionRule, deleteCommissionRule, getCommissionRecords, createCommissionRecord, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { fmtNT as fmt } from '../../lib/currency'
 
 export default function Commission() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [rules, setRules] = useState([])
   const [records, setRecords] = useState([])
   const [orders, setOrders] = useState([])

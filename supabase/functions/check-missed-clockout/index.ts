@@ -34,22 +34,32 @@ serve(async (req) => {
     yesterday.setDate(yesterday.getDate() - 1)
     const dateStr = yesterday.toISOString().slice(0, 10)
 
-    // Allow overriding the date via request body (for manual testing)
+    // Allow overriding the date and org via request body (for manual testing)
     let targetDate = dateStr
+    let orgId: number | null = null
     if (req.method === 'POST') {
       try {
         const body = await req.json()
         if (body.date) targetDate = body.date
+        if (body.organization_id) orgId = Number(body.organization_id)
       } catch { /* ignore parse errors */ }
     }
 
+    // Resolve org scope — default to the single org in DB (single-tenant safe)
+    if (!orgId) {
+      const { data: orgRow } = await supabase.from('organizations').select('id').limit(1).maybeSingle()
+      orgId = orgRow?.id ?? null
+    }
+
     // 1. Find attendance records with clock_in but no clock_out
-    const { data: missed, error: missedErr } = await supabase
+    let missedQuery = supabase
       .from('attendance_records')
       .select('id, employee_id, date, clock_in, employees(id, name)')
       .eq('date', targetDate)
       .not('clock_in', 'is', null)
       .is('clock_out', null)
+    if (orgId) missedQuery = missedQuery.eq('organization_id', orgId)
+    const { data: missed, error: missedErr } = await missedQuery
 
     if (missedErr) {
       throw new Error(`Query error: ${missedErr.message}`)
@@ -71,11 +81,13 @@ serve(async (req) => {
     const scheduleMap: Record<string, ScheduleRec> = {}
 
     if (employeeNames.length > 0) {
-      const { data: scheduleRows } = await supabase
+      let schedQuery = supabase
         .from('schedules')
         .select('employee, shift, source_store')
         .in('employee', employeeNames)
         .eq('date', targetDate)
+      if (orgId) schedQuery = schedQuery.eq('organization_id', orgId)
+      const { data: scheduleRows } = await schedQuery
 
       if (scheduleRows) {
         for (const s of scheduleRows as ScheduleRec[]) {

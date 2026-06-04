@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Sparkles, Shield, Save, Code } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
 import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor } from '../../lib/scheduleUtils'
-import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -44,8 +43,6 @@ function buildShiftTypes(dbShifts) {
 }
 
 export default function Schedule() {
-  const { tenant } = useTenant()
-  const tenantId = tenant?.id || null
 
   const { role: authRole, profile: authProfile } = useAuth()
   const userRole = authRole?.name || 'store_staff'
@@ -413,7 +410,7 @@ export default function Schedule() {
 
   const handleAssignCover = async (coverEmpName, date, shift) => {
     if (!(await confirm({ message: `強制指派 ${coverEmpName} 代班 ${shift}？\n\n（被指派者沒有同意機會。建議優先用「發出代班邀請」讓員工自願接班）` }))) return
-    const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift }, { onConflict: 'employee,date' }).select().single()
+    const { data } = await supabase.from('schedules').upsert({ employee: coverEmpName, date, shift, organization_id: authProfile?.organization_id }, { onConflict: 'employee,date' }).select().single()
     if (data) {
       setSchedules(prev => {
         const idx = prev.findIndex(s => s.employee === coverEmpName && s.date === date)
@@ -446,7 +443,7 @@ export default function Schedule() {
     const invitedIds = eligibleCandidates.map(c => employees.find(e => e.name === c.name)?.id).filter(Boolean)
 
     const { data, error } = await supabase.from('shift_cover_requests').insert({
-      organization_id: tenantId,
+      organization_id: authProfile?.organization_id,
       store: absentSched?.store || absentEmp.store,
       store_id: storeRow?.id || null,
       requester_id: authProfile?.id || null,
@@ -502,7 +499,7 @@ export default function Schedule() {
         weekDates: isMulti ? null : weekDates,
         monthDates: multiDates,
         employees: filtered, shiftDefs: aiStoreShifts,
-        storeFilter, locations, minStaff, minStaffWeekend, tenantId,
+        storeFilter, locations, minStaff, minStaffWeekend, authProfile?.organization_id,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests
@@ -558,6 +555,7 @@ export default function Schedule() {
       actual_hours: a.actual_hours || null,
       source_store: a.store || null,
       month_group: monthGroup,
+      organization_id: authProfile?.organization_id,
     }))
 
     const { data } = await supabase.from('schedules')
@@ -679,7 +677,7 @@ export default function Schedule() {
         weekDates: isMulti ? null : weekDates,
         monthDates: multiDates,
         employees: filtered, shiftDefs: storeShifts,
-        storeFilter, locations, minStaff, minStaffWeekend, tenantId,
+        storeFilter, locations, minStaff, minStaffWeekend, authProfile?.organization_id,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests
@@ -726,7 +724,7 @@ export default function Schedule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           store_id: selectedStoreObj.id,
-          organization_id: authProfile?.organization_id || tenantId,
+          organization_id: authProfile?.organization_id,
           cycle_dates: dates,
           timeout_seconds: 25,
         }),
@@ -891,7 +889,7 @@ export default function Schedule() {
                 const dow = new Date(date).getDay()
                 for (const emp of empNames) {
                   const src = byEmpDow[`${emp}_${dow}`]
-                  if (src) newSchedules.push({ employee: emp, date, shift: src.shift, actual_start: src.actual_start, actual_end: src.actual_end })
+                  if (src) newSchedules.push({ employee: emp, date, shift: src.shift, actual_start: src.actual_start, actual_end: src.actual_end, organization_id: authProfile?.organization_id })
                 }
               }
               if (newSchedules.length > 0) {

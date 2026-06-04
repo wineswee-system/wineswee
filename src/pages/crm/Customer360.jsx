@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Search, X, User, DollarSign, ShoppingCart, Award, Clock, Phone, Mail, Video, MapPin, MessageCircle, Share2, Headphones, CheckSquare, UserPlus, FileText, Send, Paperclip, Plus } from 'lucide-react'
 import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions, getPOSTransactions, getCRMActivities, getCRMNotes, createCRMActivity } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AttachmentsPanel from './components/AttachmentsPanel'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 
@@ -72,8 +72,7 @@ function buildUnifiedTimeline({ activities = [], notes = [], messages = [], orde
 const SALES_REPS = ['王經理', '李業務', '陳主任', '張專員', '林業務']
 
 export default function Customer360() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')

@@ -319,7 +319,7 @@ export default function Leave() {
             const d = new Date(leave.start_date)
             d.setDate(d.getDate() + i)
             await supabase.from('schedules').upsert(
-              { employee: leave.employee, date: d.toISOString().slice(0, 10), shift: '休' },
+              { employee: leave.employee, date: d.toISOString().slice(0, 10), shift: '休', organization_id: profile?.organization_id || null },
               { onConflict: 'employee,date' }
             )
           }
@@ -351,7 +351,7 @@ export default function Leave() {
           const d = new Date(data.start_date)
           d.setDate(d.getDate() + i)
           await supabase.from('schedules').upsert(
-            { employee: data.employee, date: d.toISOString().slice(0, 10), shift: '休' },
+            { employee: data.employee, date: d.toISOString().slice(0, 10), shift: '休', organization_id: profile?.organization_id || null },
             { onConflict: 'employee,date' }
           )
         }

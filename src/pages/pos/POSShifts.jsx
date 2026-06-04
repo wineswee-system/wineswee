@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Plus, Search, ChevronDown, ChevronUp, DollarSign, CreditCard, Banknote, XCircle, CheckCircle, Printer } from 'lucide-react'
 import { getPOSShifts, createPOSShift, getPOSTransactions } from '../../lib/db'
 import { printShiftReport } from '../../lib/receiptPrinter'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 const STATUS_BADGE = { '營業中': 'badge-success', '已結班': 'badge-info' }
@@ -12,8 +12,7 @@ const STATUS_BADGE = { '營業中': 'badge-success', '已結班': 'badge-info' }
 const PAYMENT_TYPES = ['現金', '信用卡', 'LINE Pay', '綠界金流', '銀行轉帳']
 
 export default function POSShifts() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

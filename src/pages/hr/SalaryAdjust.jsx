@@ -19,7 +19,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Calculator, Sparkles, Lock, Trash2, ArrowLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, CheckCircle, Plus, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTenant } from '../../contexts/TenantContext'
 import { toast } from '../../lib/toast'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { applyAdjustmentsToBatchItem, deriveHourlyRate, estimateAdjustmentImpact } from '../../lib/payrollAdjustments'
@@ -46,12 +45,11 @@ const SOURCE_LABEL = {
 
 export default function SalaryAdjust() {
   const { profile, profileReady } = useAuth()
-  const { tenant } = useTenant()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const month = searchParams.get('month') || currentMonth()
-  const orgId = tenant?.organization_id || profile?.organization_id || 1
+  const orgId = profile?.organization_id ?? null
 
   // ── State ─────────────────────────────────────────────────────────
   const [loading, setLoading]               = useState(true)

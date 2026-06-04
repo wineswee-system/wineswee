@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { FileText, Download, Filter } from 'lucide-react'
 import { getInvoices } from '../../lib/db'
 import { generate401Report, generate403Report, calculateBusinessTax, formatTaxPeriod } from '../../lib/taxReport'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 
 export default function TaxReports() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

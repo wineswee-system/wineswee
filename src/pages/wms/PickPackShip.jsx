@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, X, CheckCircle, Package, Truck, ClipboardList } from 'lucide-react'
 import { getPickLists, createPickList, updatePickList, getPackLists, createPackList, updatePackList, getSalesOrders, getWarehouses } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 const PICK_STATUSES = ['待揀貨', '揀貨中', '已完成']
 const PACK_STATUSES = ['待包裝', '包裝中', '已完成']
 
 export default function PickPackShip() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [pickLists, setPickLists] = useState([])
   const [packLists, setPackLists] = useState([])
   const [salesOrders, setSalesOrders] = useState([])

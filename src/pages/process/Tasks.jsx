@@ -239,7 +239,7 @@ export default function Tasks() {
       if (data.assignee) {
         notifyTaskAssignee(data.assignee, data.title, '', data.id, {
           dueDate: data.due_date, description: data.description,
-          notes: data.notes, store: data.store,
+          notes: data.notes, store: data.store, priority: data.priority,
         }).catch(() => {})
       }
       setTasks(prev => [data, ...prev])

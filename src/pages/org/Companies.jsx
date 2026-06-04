@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { getCompanies, createCompany, updateCompany, deleteCompany, getStores, getEmployees } from '../../lib/db'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 export default function Companies() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id ?? null
+  const orgId = useOrgId()
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])

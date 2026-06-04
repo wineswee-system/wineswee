@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Search, Landmark, Zap, CheckCircle, Link2, FileText, X, ArrowRight } from 'lucide-react'
 import { getBankTransactions, getJournalEntries, createJournalEntry } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 
@@ -31,8 +31,7 @@ function daysBetween(d1, d2) {
 }
 
 export default function BankReconciliation() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [transactions, setTransactions] = useState([])
   const [journalEntries, setJournalEntries] = useState([])
   const [loading, setLoading] = useState(true)

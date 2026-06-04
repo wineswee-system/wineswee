@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, BarChart3 } from 'lucide-react'
 import { getAccounts, getAccountsReceivable, getAccountsPayable } from '../../lib/db'
 import { calculateProfitability } from '../../lib/automation'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 export default function Overview() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [accounts, setAccounts] = useState([])
   const [ar, setAr] = useState([])
   const [ap, setAp] = useState([])

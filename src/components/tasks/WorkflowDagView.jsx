@@ -72,7 +72,7 @@ export default function WorkflowDagView({ steps, instanceId }) {
     // Guard: prevent exact duplicate (same nodes AND same dep_type)
     if (deps.some(d => d.task_id === toId && d.depends_on_task_id === fromId && d.dep_type === type)) return
     const { data, error } = await supabase.from('task_dependencies')
-      .insert({ task_id: toId, depends_on_task_id: fromId, dep_type: type })
+      .insert({ task_id: toId, depends_on_task_id: fromId, dep_type: type, organization_id: steps[0]?.organization_id || null })
       .select().single()
     if (error) {
       logger.error('新增依賴失敗', { module: 'WorkflowDagView', error, data: { fromId, toId, type } })

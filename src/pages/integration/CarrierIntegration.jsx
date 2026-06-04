@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Edit3, X, Truck, CheckCircle, XCircle, Plus } from 'lucide-react'
 import { getCarrierConfigs, createCarrierConfig, updateCarrierConfig, getShipments, updateShipment } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 const CARRIERS = ['黑貓宅急便', '新竹物流', '中華郵政', '順豐速運', '7-11 交貨便', '全家店到店']
 
 export default function CarrierIntegration() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [configs, setConfigs] = useState([])
   const [shipments, setShipments] = useState([])
   const [loading, setLoading] = useState(true)

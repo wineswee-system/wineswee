@@ -1,16 +1,15 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { getPromotions, createPromotion } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 const TYPE_OPTIONS = ['滿額折扣', '滿額贈品', '階梯折扣', 'VIP專屬價', '組合優惠']
 const STATUS_BADGE = { '進行中': 'badge-success', '即將開始': 'badge-info', '已結束': 'badge-danger' }
 
 export default function Promotions() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

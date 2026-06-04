@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Tag, ChevronDown, ChevronRight } from 'lucide-react'
 import { getPriceLists, createPriceList, updatePriceList, deletePriceList, getPriceRules, createPriceRule, deletePriceRule, getSKUs } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 import { fmtNT as fmt } from '../../lib/currency'
@@ -13,8 +13,7 @@ const emptyListForm = { name: '', currency: 'NTD', valid_from: '', valid_to: '',
 const emptyRuleForm = { sku_id: '', min_qty: '1', unit_price: '', discount_percent: '0', priority: '0' }
 
 export default function PricingRules() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [priceLists, setPriceLists] = useState([])
   const [loading, setLoading] = useState(true)
   const [showListModal, setShowListModal] = useState(false)

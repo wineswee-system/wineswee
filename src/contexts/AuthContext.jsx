@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { setTenantOrgId } from '../lib/events/middleware/tenantContext'
 
 const AuthContext = createContext(null)
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children }) {
         emp = empByEmail
       }
       setProfile(emp || null)
+      setTenantOrgId(emp?.organization_id ?? null)
       if (!emp) return
 
       // Fetch org, role, and permissions in parallel (independent queries)
@@ -142,6 +144,7 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
     setUser(null); setProfile(null); setOrganization(null); setRole(null); setPermissions([])
     profileLoaded.current = false
+    setTenantOrgId(null)
   }, [])
 
   const hasPermission = useCallback((code) => {
@@ -165,3 +168,4 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext)
+export const useOrgId = () => useContext(AuthContext)?.profile?.organization_id ?? null

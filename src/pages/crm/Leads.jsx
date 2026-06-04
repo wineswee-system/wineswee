@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, UserPlus, XCircle, ArrowRight, GripVertical, Search, Filter } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { getCRMLeads, createCRMLead, updateCRMLead, deleteCRMLead } from '../../lib/db'
 import { calculateLeadScore } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -25,6 +26,7 @@ const STAGE_COLORS = {
 const emptyForm = { name: '', company: '', phone: '', email: '', source: '官網', assigned_to: '', notes: '', tags: '' }
 
 export default function Leads() {
+  const { profile } = useAuth()
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -119,6 +121,7 @@ export default function Leads() {
         source: convertLead.source || '線索轉換',
         status: '活躍',
         assigned_to: convertLead.assigned_to,
+        organization_id: profile?.organization_id || null,
       }).select().single()
       if (custErr) throw custErr
 
@@ -132,6 +135,7 @@ export default function Leads() {
           amount: 0,
           pipeline_id: 'default',
           assignee: convertLead.assigned_to,
+          organization_id: profile?.organization_id || null,
         }).select().single()
         if (dealErr) throw dealErr
         dealId = deal.id

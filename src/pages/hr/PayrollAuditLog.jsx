@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Filter, AlertTriangle, RotateCcw, ArrowLeft, History } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTenant } from '../../contexts/TenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { fmtNT as fmt } from '../../lib/currency'
 import { estimateAdjustmentImpact } from '../../lib/payrollAdjustments'
@@ -51,11 +50,10 @@ function formatJsonValue(v) {
 }
 
 export default function PayrollAuditLog() {
-  const { profileReady } = useAuth()
-  const { tenant } = useTenant()
+  const { profile, profileReady } = useAuth()
   const navigate = useNavigate()
 
-  const orgId = tenant?.organization_id || 1
+  const orgId = profile?.organization_id ?? null
 
   // Filters
   const [month, setMonth]                 = useState(currentMonth())

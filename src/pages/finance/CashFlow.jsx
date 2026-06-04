@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ArrowDownRight, ArrowUpRight, RefreshCw, Download } from 'lucide-react'
 import { getJournalEntries, getAllJournalLines, getAccounts } from '../../lib/db'
 import { getAccountType } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 const fmtSigned = (n) => n >= 0 ? fmt(n) : `(${fmt(Math.abs(n))})`
@@ -101,8 +101,7 @@ function generateCashFlowStatement(accounts, journalLines, entryMap) {
 }
 
 export default function CashFlow() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [cashFlow, setCashFlow] = useState(null)

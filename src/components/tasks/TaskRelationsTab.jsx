@@ -119,6 +119,7 @@ export default function TaskRelationsTab({
           bucket: 'Workflow',
           category: 'Workflow',
           priority: s.priority || '中',
+          organization_id: task.organization_id || null,
         }))
         const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
         if (createdTasks?.[0]?.assignee) {

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Search, CheckCircle, XCircle, AlertTriangle, ArrowRightLeft } from 'lucide-react'
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders, getAccountsPayable } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { performThreeWayMatch, calculatePriceVariance, performThreeWayMatchById } from '../../lib/threeWayMatch'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -13,8 +13,7 @@ import Modal, { Field } from '../../components/Modal'
 import { fmtNT as fmt } from '../../lib/currency'
 
 export default function GoodsReceipts() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

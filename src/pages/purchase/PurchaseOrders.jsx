@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { Plus, Search, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, ArrowRightLeft, CheckCircle, XCircle } from 'lucide-react'
 import { getPurchaseOrders, createPurchaseOrder, getGoodsReceipts, getAccountsPayable } from '../../lib/db'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { performThreeWayMatch, calculatePriceVariance } from '../../lib/threeWayMatch'
@@ -16,8 +16,7 @@ const fmtCur = (n, cur) => cur && cur !== 'NTD' ? formatCurrency(n, cur) : fmt(n
 const emptyLineItem = () => ({ product: '', qty: '', unit_price: '', total: 0 })
 
 export default function PurchaseOrders() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

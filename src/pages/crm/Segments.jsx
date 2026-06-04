@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Users, Filter, Play, Zap, Sparkles, Loader, Send } from 'lucide-react'
 import { getCustomerSegments, createCustomerSegment, updateCustomerSegment, deleteCustomerSegment, getMembers } from '../../lib/db'
 import { PRESET_SEGMENTS, filterUnsubscribed } from '../../lib/crmEngine'
 import { supabase } from '../../lib/supabase'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import { nlToSegmentRules, isConfigured as isAIConfigured } from '../../lib/ai/crmAI'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -57,8 +57,7 @@ function evaluateRule(member, rule) {
 }
 
 function SendCampaignModal({ segment, onClose }) {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [channel, setChannel] = useState('email')
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
@@ -190,8 +189,7 @@ function SendCampaignModal({ segment, onClose }) {
 }
 
 export default function Segments() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [segments, setSegments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

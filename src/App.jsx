@@ -1,5 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { TenantProvider } from './contexts/TenantContext'
 import Sidebar from './components/Sidebar'
@@ -187,6 +189,7 @@ function ThemedToaster() {
 
 export default function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <ErrorBoundary>
     <AuthProvider>
       <TenantProvider>
@@ -207,5 +210,6 @@ export default function App() {
       </TenantProvider>
     </AuthProvider>
     </ErrorBoundary>
+    </QueryClientProvider>
   )
 }

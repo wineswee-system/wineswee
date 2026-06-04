@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Shield, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { getApprovalRules, createApprovalRule, updateApprovalRule, deleteApprovalRule, getApprovalRequests, updateApprovalRequest } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -72,8 +72,7 @@ const emptyForm = {
 }
 
 export default function ApprovalRules() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id ?? null
+  const orgId = useOrgId()
   const [rules, setRules] = useState([])
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)

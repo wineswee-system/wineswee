@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { Plus, Search, ArrowRightCircle, Trash2, ChevronDown, ChevronRight, Save, Loader } from 'lucide-react'
 import {
   getQuotations, createQuotation, updateQuotation, createSalesOrder,
@@ -8,7 +8,7 @@ import {
 import { calculateInvoiceTax } from '../../lib/einvoice'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 const STATUS_BADGE = { '草稿': 'badge-warning', '已送出': 'badge-info', '已成交': 'badge-success', '已失效': 'badge-danger' }
@@ -47,8 +47,7 @@ function dbLineToLocal(line) {
 }
 
 export default function Quotations() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

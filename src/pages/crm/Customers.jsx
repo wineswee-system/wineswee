@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Search, ChevronDown, ChevronRight, Phone, Mail, Upload, Download, Building2, Users, AlertTriangle, Merge, Clock, Star } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import {
   findDuplicates,
@@ -27,6 +28,7 @@ const TABS = ['客戶列表', '公司帳戶', '查重合併', '匯入匯出']
 const PAGE_SIZE = 10
 
 export default function Customers() {
+  const { profile } = useAuth()
   const [customers, setCustomers] = useState([])
   const [contacts, setContacts] = useState({})
   const [outboundOrders, setOutboundOrders] = useState([])
@@ -107,6 +109,7 @@ export default function Customers() {
       ...customerData,
       credit_limit: Number(customerData.credit_limit) || 0,
       location_id: customerData.location_id || null,
+      organization_id: profile?.organization_id || null,
     }).select().single()
     if (data) {
       // If a company was selected, create the link
@@ -205,6 +208,7 @@ export default function Customers() {
         }
       })
       if (!obj.status) obj.status = '活躍'
+      obj.organization_id = profile?.organization_id || null
       return obj
     }).filter(obj => obj.name)
 

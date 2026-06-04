@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, BarChart3, PieChart } from 'lucide-react'
 import { getCostCenters, createCostCenter, updateCostCenter, deleteCostCenter, getAllJournalLines, getJournalEntries, getAccounts } from '../../lib/db'
 import { generateTrialBalanceByCostCenter } from '../../lib/accounting'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 import { fmtNT as fmt } from '../../lib/currency'
@@ -13,8 +13,7 @@ import { fmtNT as fmt } from '../../lib/currency'
 const emptyForm = { code: '', name: '', department: '', manager: '', is_active: true }
 
 export default function CostCenters() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [centers, setCenters] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../../lib/supabase'
 import { getQuotations, getSalesOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { DollarSign, TrendingUp, FileText, ShoppingCart, Truck, RotateCcw, Clock, BarChart3, Package } from 'lucide-react'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
@@ -81,8 +81,7 @@ function generateDemoData() {
 }
 
 export default function SalesOverview() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [quotations, setQuotations] = useState([])
   const [orders, setOrders] = useState([])
   const [shipments, setShipments] = useState([])

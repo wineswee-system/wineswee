@@ -15,6 +15,9 @@ const LC = {
   soft:     '#8c8c8c',
 }
 
+const PRIO_COLOR = { '高': '#dc2626', '中': '#f59e0b', '低': '#10b981', default: '#6b7280' }
+const PRIO_BG    = { '高': '#FEF2F2', '中': '#FEF3C7', '低': '#D1FAE5', default: '#F3F4F6' }
+
 /**
  * Resolve a LINE user ID for an employee via employee_line_accounts.
  * @param {string|number} employeeNameOrId
@@ -241,7 +244,18 @@ function _buildTypedBody(taskTitle, taskId, assigneeName, department, store, due
 
   const contents = [
     ...(shortId ? [{ type: 'text', text: shortId, size: 'xxs', color: '#CCCCCC' }] : []),
-    { type: 'text', text: taskTitle, weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'box', layout: 'horizontal', spacing: 'sm', alignItems: 'center',
+      contents: [
+        { type: 'text', text: taskTitle, weight: 'bold', size: 'sm', wrap: true, flex: 1, color: '#111827' },
+        ...(extras.priority ? [{
+          type: 'box', layout: 'vertical', flex: 0,
+          backgroundColor: PRIO_BG[extras.priority] || PRIO_BG.default,
+          cornerRadius: '10px', paddingTop: '2px', paddingBottom: '2px', paddingStart: '8px', paddingEnd: '8px',
+          contents: [{ type: 'text', text: extras.priority, size: 'xxs', color: PRIO_COLOR[extras.priority] || PRIO_COLOR.default, weight: 'bold' }],
+        }] : []),
+      ],
+    },
     {
       type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
       color: isOverdue ? LC.danger : LC.muted,

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { Plus, Trash2, Edit3, X, Search, ChevronRight, Filter } from 'lucide-react'
 import { getAccounts, createAccount, updateAccount, deleteAccount } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 const TYPES = [
@@ -22,8 +22,7 @@ const typeDim = (type) => TYPES.find(t => t.value === type)?.dim || 'var(--bg-te
 const emptyForm = { code: '', name: '', type: '費用', parent_code: '', description: '', balance: 0 }
 
 export default function ChartOfAccounts() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

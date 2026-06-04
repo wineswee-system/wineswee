@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, ArrowUpCircle } from 'lucide-react'
@@ -6,7 +6,7 @@ import { getMembers, createMember, updateMember, createPointTransaction, getAllP
 import { supabase } from '../../lib/supabase'
 import { earnPoints, redeemPoints, refundPoints, generateReferralCode } from '../../lib/crmEngine'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 import MemberListTab from './components/MemberListTab'
 import TierRulesTab from './components/TierRulesTab'
 import ReferralTab from './components/ReferralTab'
@@ -25,8 +25,7 @@ const TABS = [
 ]
 
 export default function Members() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

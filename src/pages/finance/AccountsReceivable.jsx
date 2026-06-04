@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Plus, FileText, AlertTriangle } from 'lucide-react'
 import { getAccountsReceivable, createAccountReceivable } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 const emptyForm = {
   invoice_number: '', customer: '', order_ref: '',
@@ -11,8 +11,7 @@ const emptyForm = {
 }
 
 export default function AccountsReceivable() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

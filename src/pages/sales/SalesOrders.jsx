@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, memo } from 'react'
+﻿import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { Plus, Search, Trash2, ChevronDown, ChevronRight, Save, Loader } from 'lucide-react'
 import {
   getSalesOrders, createSalesOrder, createShipment, updateSalesOrder,
@@ -9,7 +9,7 @@ import { calculateInvoiceTax } from '../../lib/einvoice'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 const PAYMENT_BADGE = { '已付款': 'badge-success', '未付款': 'badge-danger', '部分付款': 'badge-warning' }
@@ -54,8 +54,7 @@ function dbLineToLocal(line) {
 }
 
 export default function SalesOrders() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

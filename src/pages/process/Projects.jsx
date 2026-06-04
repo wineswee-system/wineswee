@@ -469,7 +469,7 @@ export default function Projects() {
     }
     if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
       dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-      approvalRequired: data.status === '待簽核',
+      approvalRequired: data.status === '待簽核', priority: data.priority,
     }).catch(() => {})
     return true
   }

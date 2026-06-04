@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { getReturns, createReturn } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { useTenant } from '../../contexts/TenantContext'
+import { useOrgId } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 const STATUS_BADGE = { '待處理': 'badge-warning', '處理中': 'badge-info', '已完成': 'badge-success', '已拒絕': 'badge-danger' }
 
 export default function Returns() {
-  const { tenant } = useTenant()
-  const orgId = tenant?.organization_id
+  const orgId = useOrgId()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

@@ -21,12 +21,13 @@ import { getActiveEmployees, getEmployees } from '../db/employees'
 import { getCompanies } from '../db/org'
 
 // ── Query keys ────────────────────────────────────────────────────────────────
-// Centralised so invalidation targets are always in sync with fetch keys.
+// All org-scoped keys share the ['org', orgId] prefix so invalidateAllOrgQueries
+// can use React Query's native prefix matching instead of Array.includes().
 
 export const QUERY_KEYS = {
-  activeEmployees: (orgId) => ['activeEmployees', orgId],
-  employees:       (orgId) => ['employees', orgId],
-  companies:       (orgId) => ['companies', orgId],
+  activeEmployees: (orgId) => ['org', orgId, 'activeEmployees'],
+  employees:       (orgId) => ['org', orgId, 'employees'],
+  companies:       (orgId) => ['org', orgId, 'companies'],
 }
 
 // ── Pre-built hooks ───────────────────────────────────────────────────────────
@@ -35,7 +36,10 @@ export const QUERY_KEYS = {
 export function useActiveEmployees(orgId) {
   return useQuery({
     queryKey: QUERY_KEYS.activeEmployees(orgId),
-    queryFn:  () => getActiveEmployees(undefined, orgId).then(r => r.data ?? []),
+    queryFn:  () => getActiveEmployees(undefined, orgId).then(r => {
+      if (r.error) throw r.error
+      return r.data ?? []
+    }),
     enabled:  !!orgId,
   })
 }
@@ -44,7 +48,10 @@ export function useActiveEmployees(orgId) {
 export function useEmployees(orgId) {
   return useQuery({
     queryKey: QUERY_KEYS.employees(orgId),
-    queryFn:  () => getEmployees(orgId).then(r => r.data ?? []),
+    queryFn:  () => getEmployees(orgId).then(r => {
+      if (r.error) throw r.error
+      return r.data ?? []
+    }),
     enabled:  !!orgId,
   })
 }
@@ -53,7 +60,10 @@ export function useEmployees(orgId) {
 export function useCompanies(orgId) {
   return useQuery({
     queryKey: QUERY_KEYS.companies(orgId),
-    queryFn:  () => getCompanies(orgId).then(r => r.data ?? []),
+    queryFn:  () => getCompanies(orgId).then(r => {
+      if (r.error) throw r.error
+      return r.data ?? []
+    }),
     enabled:  !!orgId,
   })
 }
@@ -93,5 +103,5 @@ export function invalidateCompanies(orgId) {
 
 /** Invalidate every cached query scoped to this org (use after bulk operations). */
 export function invalidateAllOrgQueries(orgId) {
-  queryClient.invalidateQueries({ predicate: q => q.queryKey.includes(orgId) })
+  queryClient.invalidateQueries({ queryKey: ['org', orgId] })
 }

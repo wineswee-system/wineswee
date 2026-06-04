@@ -56,6 +56,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Failed to load employee profile:', err?.message ?? 'unknown error')
       setProfile(null)
+      setTenantOrgId(null)
       // Allow retry on next auth event
       profileLoaded.current = false
     } finally {
@@ -92,6 +93,7 @@ export function AuthProvider({ children }) {
         setProfile(null); setOrganization(null); setRole(null); setPermissions([])
         profileLoaded.current = false
         setProfileReady(true)
+        setTenantOrgId(null)
       }
     })
     return () => subscription.unsubscribe()

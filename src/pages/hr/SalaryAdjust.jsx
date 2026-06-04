@@ -122,9 +122,9 @@ export default function SalaryAdjust() {
   }, [orgId, month])
 
   useEffect(() => {
-    if (!profileReady) return
+    if (!profileReady || !orgId) return
     loadAll()
-  }, [profileReady, loadAll])
+  }, [profileReady, orgId, loadAll])
 
   const loadSourceData = useCallback(async (employeeId) => {
     if (sourceData[employeeId]) return

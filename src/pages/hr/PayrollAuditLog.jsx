@@ -107,9 +107,9 @@ export default function PayrollAuditLog() {
   }, [month, orgId, creatorFilter, empFilter, sourceFilter, includeSuperseded])
 
   useEffect(() => {
-    if (!profileReady) return
+    if (!profileReady || !orgId) return
     load()
-  }, [profileReady, load])
+  }, [profileReady, orgId, load])
 
   // ── 影響金額估算 + 異常標記 ──────────────────────────────────────
   const enrichedLogs = useMemo(() => {

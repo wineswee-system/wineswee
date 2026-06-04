@@ -20,6 +20,7 @@ const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
 const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
 const Login = lazy(() => import('./pages/Login'))
+const OvertimeExceptionImport = lazy(() => import('./pages/hr/OvertimeExceptionImport'))
 
 // ── Module-level lazy loading ──
 const HRModule = lazy(() => import('./modules/HRModule'))
@@ -105,6 +106,7 @@ function AdminApp() {
           <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/otx" element={<OvertimeExceptionImport />} />
             <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
             <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
             <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.view') ? <FinanceModule /> : blocked} />

@@ -57,7 +57,6 @@ import ContractEmployees from '../pages/hr/ContractEmployees'
 import ForeignWorkers from '../pages/hr/ForeignWorkers'
 import ClockRules from '../pages/hr/ClockRules'
 import HRImport from '../pages/hr/HRImport'
-import OvertimeExceptionImport from '../pages/hr/OvertimeExceptionImport'
 
 export default memo(function HRModule() {
   return (
@@ -119,7 +118,6 @@ export default memo(function HRModule() {
       <Route path="foreign-workers" element={<ForeignWorkers />} />
       <Route path="clock-rules" element={<ClockRules />} />
       <Route path="import" element={<HRImport />} />
-      <Route path="otx" element={<OvertimeExceptionImport />} />
     </Routes>
   )
 })

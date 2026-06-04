@@ -51,11 +51,13 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
       const fileUrl = urlData?.publicUrl
       if (!fileUrl) throw new Error('無法取得公開網址')
 
+      // 詳情頁上傳一律當「回報附件」— 發起附件只在 TaskNew 預選階段建立
       const { data, error: dbError } = await createTaskAttachment({
         task_id: task.id,
         file_name: sanitizedFileName,
         file_url: fileUrl,
         uploaded_by: profile?.name || '使用者',
+        kind: 'reporter',
       })
       if (dbError) throw dbError
       if (data) setAttachments(prev => [...prev, data])
@@ -73,54 +75,72 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
     setAttachments(prev => prev.filter(x => x.id !== id))
   }
 
-  return (
-    <div style={sectionStyle}>
-      <div style={{ ...labelStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span>📎 附件 ({attachments.length})</span>
-        <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelected} />
-        <button
-          className="btn btn-sm btn-secondary"
-          style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading
-            ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> 上傳中...</>
-            : <><Upload size={11} /> 上傳附件</>}
+  const initiatorList = attachments.filter(a => (a.kind || 'reporter') === 'initiator')
+  const reporterList  = attachments.filter(a => (a.kind || 'reporter') === 'reporter')
+
+  const renderRow = (a) => (
+    <div key={a.id} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
+      marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
+    }}>
+      <a href={a.file_url} target="_blank" rel="noreferrer noopener"
+        style={{ color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+        <span style={{ flexShrink: 0 }}>{fileIcon(a.file_name)}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>
+      </a>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
+        {a.uploaded_by && (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.uploaded_by}</span>
+        )}
+        <button onClick={() => handleDelete(a.id)} style={{
+          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0,
+        }}>
+          <X size={13} />
         </button>
       </div>
+    </div>
+  )
 
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-        支援所有檔案類型（不含執行檔），單檔上限 10 MB
+  return (
+    <div style={sectionStyle}>
+      {/* ── 發起附件（read-only 但可下載）── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ ...labelStyle, marginBottom: 6 }}>
+          📎 發起附件 ({initiatorList.length})
+        </div>
+        {initiatorList.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>
+            發起人未附檔
+          </div>
+        ) : initiatorList.map(renderRow)}
       </div>
 
-      {attachments.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
-          尚無附件
+      {/* ── 回報附件 ── */}
+      <div>
+        <div style={{ ...labelStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span>📎 回報附件 ({reporterList.length})</span>
+          <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelected} />
+          <button
+            className="btn btn-sm btn-secondary"
+            style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading
+              ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> 上傳中...</>
+              : <><Upload size={11} /> 上傳附件</>}
+          </button>
         </div>
-      ) : attachments.map(a => (
-        <div key={a.id} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
-          marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
-        }}>
-          <a href={a.file_url} target="_blank" rel="noreferrer noopener"
-            style={{ color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-            <span style={{ flexShrink: 0 }}>{fileIcon(a.file_name)}</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>
-          </a>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
-            {a.uploaded_by && (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.uploaded_by}</span>
-            )}
-            <button onClick={() => handleDelete(a.id)} style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0,
-            }}>
-              <X size={13} />
-            </button>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+          支援所有檔案類型（不含執行檔），單檔上限 10 MB
+        </div>
+        {reporterList.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+            尚無回報附件
           </div>
-        </div>
-      ))}
+        ) : reporterList.map(renderRow)}
+      </div>
     </div>
   )
 }

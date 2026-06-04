@@ -226,6 +226,7 @@ export default function Tasks() {
                   file_name: sanitizedFileName,
                   file_url: urlData.publicUrl,
                   uploaded_by: profile?.name || '使用者',
+                  kind: 'initiator',
                 })
               }
             }

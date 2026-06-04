@@ -47,15 +47,11 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
         .upload(storagePath, file, { upsert: false })
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(storagePath)
-      const fileUrl = urlData?.publicUrl
-      if (!fileUrl) throw new Error('無法取得公開網址')
-
       // 詳情頁上傳一律當「回報附件」— 發起附件只在 TaskNew 預選階段建立
       const { data, error: dbError } = await createTaskAttachment({
         task_id: task.id,
         file_name: sanitizedFileName,
-        file_url: fileUrl,
+        storage_path: storagePath,
         uploaded_by: profile?.name || '使用者',
         kind: 'reporter',
       })
@@ -84,7 +80,7 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
       padding: '6px 10px', background: 'var(--glass-light)', borderRadius: 8,
       marginBottom: 4, border: '1px solid var(--border-subtle)', fontSize: 12,
     }}>
-      <a href={a.file_url} target="_blank" rel="noreferrer noopener"
+      <a href={supabase.storage.from('task-attachments').getPublicUrl(a.storage_path).data?.publicUrl} target="_blank" rel="noreferrer noopener"
         style={{ color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
         <span style={{ flexShrink: 0 }}>{fileIcon(a.file_name)}</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>

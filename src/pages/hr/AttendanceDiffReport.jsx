@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X, Save } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -44,6 +44,7 @@ export default function AttendanceDiffReport() {
   const [detailDiffs, setDetailDiffs] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [triggering, setTriggering] = useState(false)
+  const [committing, setCommitting] = useState(false)
 
   const ym = formatYM(year, month)
 
@@ -97,6 +98,33 @@ export default function AttendanceDiffReport() {
     else setMonth(month + 1)
   }
 
+  const handleCommitWriteback = async () => {
+    if (!isAdmin) return
+    if (!confirm(
+      `要把 ${ym} 的「排班 vs 打卡」差異結算寫回 attendance_records 嗎？\n\n` +
+      `會把該月所有 attendance_records 的 late_minutes/is_late 先重置 0/false，` +
+      `再依排班比對寫回 LATE。寫回後批次計薪會讀到正確的遲到分鐘數。\n\n` +
+      `請確保員工該補的請假/補卡/加班申請都已簽完才做這步。`
+    )) return
+    setCommitting(true)
+    try {
+      const { data, error } = await supabase.rpc('commit_attendance_diff_writeback', {
+        p_year_month: ym,
+        p_store_id: storeId === '' ? null : Number(storeId),
+      })
+      if (error) throw error
+      const r = Array.isArray(data) ? data[0] : data
+      toast.success(
+        `結算寫回完成：${r?.employees_processed || 0} 人處理、` +
+        `${r?.records_reset || 0} 筆重置、${r?.late_records_written || 0} 筆遲到寫回`
+      )
+      load()
+    } catch (e) {
+      toast.error('結算寫回失敗：' + (e.message || '未知'))
+    }
+    setCommitting(false)
+  }
+
   const handleSendNotifications = async () => {
     if (!isAdmin) return
     if (!confirm(`要對 ${ym} 所有「未通知」員工發送 LINE 提醒嗎？`)) return
@@ -135,6 +163,17 @@ export default function AttendanceDiffReport() {
             {isAdmin && (
               <button className="btn btn-primary" onClick={handleSendNotifications} disabled={triggering || stats.pending === 0}>
                 <Send size={14} /> {triggering ? '送出中...' : `發 LINE 給 ${stats.pending} 人`}
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                className="btn btn-secondary"
+                onClick={handleCommitWriteback}
+                disabled={committing}
+                title="把排班 vs 打卡差異結算寫回 attendance_records，供批次計薪讀"
+                style={{ background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid var(--accent-purple)' }}
+              >
+                <Save size={14} /> {committing ? '寫回中...' : '結算寫回'}
               </button>
             )}
           </div>

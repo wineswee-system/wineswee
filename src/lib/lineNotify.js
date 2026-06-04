@@ -413,7 +413,7 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
   if (attachments === null && taskId) {
     const { data } = await supabase
       .from('task_attachments')
-      .select('file_name, file_url')
+      .select('file_name, storage_path')
       .eq('task_id', taskId)
       .order('id')
     attachments = data || []

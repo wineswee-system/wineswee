@@ -12,6 +12,7 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 const DEFAULT_TEMPLATES = [
   {
+    type: 'workflow',
     name: '新人到職 SOP',
     category: 'HR',
     description: '新進員工到職標準流程，從報到到獨立上線（8 步）',
@@ -27,6 +28,7 @@ const DEFAULT_TEMPLATES = [
     ],
   },
   {
+    type: 'workflow',
     name: '每月盤點 SOP',
     category: '倉管',
     description: '每月庫存盤點標準流程（8 步），確保帳實相符',
@@ -42,6 +44,7 @@ const DEFAULT_TEMPLATES = [
     ],
   },
   {
+    type: 'workflow',
     name: '客訴處理 SOP',
     category: '營運',
     description: '顧客投訴處理標準流程（7 步），確保客訴有效解決',
@@ -56,6 +59,7 @@ const DEFAULT_TEMPLATES = [
     ],
   },
   {
+    type: 'workflow',
     name: '採購申請 SOP',
     category: '採購',
     description: '酒類商品與門市物料採購標準流程（8 步），從需求到驗收',
@@ -71,6 +75,7 @@ const DEFAULT_TEMPLATES = [
     ],
   },
   {
+    type: 'project',
     name: '新店開幕 SOP',
     category: '展店',
     description: '開設新門市完整標準作業流程（15 步），涵蓋選址到開幕',
@@ -110,7 +115,7 @@ export default function SOPTemplates() {
   const [deploying, setDeploying] = useState(false)
   const [deployResult, setDeployResult] = useState(null)
   const [deployForm, setDeployForm] = useState({ location: '', assignees: {} })
-  const [newTemplate, setNewTemplate] = useState({ name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }] })
+  const [newTemplate, setNewTemplate] = useState({ type: 'workflow', name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }] })
 
   useEffect(() => {
     Promise.all([
@@ -222,7 +227,7 @@ export default function SOPTemplates() {
 
   // ── Create / Edit Template ──
   const resetNewTemplate = () => setNewTemplate({
-    name: '', category: '展店', description: '',
+    type: 'workflow', name: '', category: '展店', description: '',
     steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }],
   })
   const closeCreateModal = () => {
@@ -238,6 +243,7 @@ export default function SOPTemplates() {
   const openEdit = (tpl) => {
     setEditingTplId(tpl.id)
     setNewTemplate({
+      type: tpl.type || 'workflow',
       name: tpl.name || '',
       category: tpl.category || '展店',
       description: tpl.description || '',
@@ -258,6 +264,7 @@ export default function SOPTemplates() {
     try {
       const validSteps = newTemplate.steps.filter(s => s.title)
       const payload = {
+        type: newTemplate.type || 'workflow',
         name: newTemplate.name,
         category: newTemplate.category,
         description: newTemplate.description,
@@ -454,6 +461,23 @@ export default function SOPTemplates() {
       {/* Create / Edit Template Modal */}
       {showCreateModal && (
         <Modal title={editingTplId ? '編輯 SOP 範本' : '新增 SOP 範本'} onClose={closeCreateModal} onSubmit={handleCreateTemplate} submitText={editingTplId ? '儲存變更' : '建立範本'}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {[{ value: 'workflow', label: '📋 流程範本' }, { value: 'project', label: '🗂 專案範本' }].map(opt => {
+              const active = newTemplate.type === opt.value
+              return (
+                <button key={opt.value} type="button"
+                  onClick={() => setNewTemplate(t => ({ ...t, type: opt.value }))}
+                  style={{
+                    flex: 1, padding: '7px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer',
+                    border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                    background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+                    color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  }}
+                >{opt.label}</button>
+              )
+            })}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <Field label="範本名稱" required>
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：新店開幕 SOP"

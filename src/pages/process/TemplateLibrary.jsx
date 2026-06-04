@@ -34,7 +34,9 @@ export default function TemplateLibrary() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
 
+  const [activeType, setActiveType] = useState('workflow')
   const [activeCategory, setActiveCategory] = useState(ALL_LABEL)
+  const switchType = (t) => { setActiveType(t); setActiveCategory(ALL_LABEL) }
   const [query, setQuery] = useState('')
   const [deployTarget, setDeployTarget] = useState(null) // template being deployed in wizard
 
@@ -69,13 +71,18 @@ export default function TemplateLibrary() {
   }, [])
 
   // ── Derived ──
+  const byType = useMemo(
+    () => templates.filter(t => (t.type || 'workflow') === activeType),
+    [templates, activeType],
+  )
+
   const categories = useMemo(
-    () => [...new Set(templates.map(t => t.category).filter(Boolean))].sort(),
-    [templates],
+    () => [...new Set(byType.map(t => t.category).filter(Boolean))].sort(),
+    [byType],
   )
 
   const filtered = useMemo(() => {
-    let list = templates
+    let list = byType
     if (activeCategory !== ALL_LABEL) list = list.filter(t => t.category === activeCategory)
     if (query.trim()) {
       const q = query.trim().toLowerCase()
@@ -86,7 +93,7 @@ export default function TemplateLibrary() {
       )
     }
     return list
-  }, [templates, activeCategory, query])
+  }, [byType, activeCategory, query])
 
   // ── Delete ──
   const handleDelete = async (tpl) => {
@@ -105,6 +112,8 @@ export default function TemplateLibrary() {
 
   const totalSteps = templates.reduce((s, t) => s + (t.steps?.length || 0), 0)
   const totalDeployed = Object.values(usageCounts).reduce((s, n) => s + n, 0)
+  const workflowCount = templates.filter(t => (t.type || 'workflow') === 'workflow').length
+  const projectCount = templates.filter(t => t.type === 'project').length
 
   return (
     <div className="fade-in">
@@ -123,19 +132,46 @@ export default function TemplateLibrary() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">範本數</div>
-          <div className="stat-card-value">{templates.length}</div>
+          <div className="stat-card-label">流程範本</div>
+          <div className="stat-card-value">{workflowCount}</div>
+        </div>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
+          <div className="stat-card-label">專案範本</div>
+          <div className="stat-card-value">{projectCount}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">總步驟數</div>
           <div className="stat-card-value">{totalSteps}</div>
         </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
           <div className="stat-card-label">已部署次數</div>
           <div className="stat-card-value">{totalDeployed}</div>
         </div>
+      </div>
+
+      {/* ── Type switcher ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {[
+          { value: 'workflow', label: '📋 流程範本', count: templates.filter(t => (t.type || 'workflow') === 'workflow').length },
+          { value: 'project', label: '🗂 專案範本', count: templates.filter(t => t.type === 'project').length },
+        ].map(opt => {
+          const active = activeType === opt.value
+          return (
+            <button key={opt.value} onClick={() => switchType(opt.value)} style={{
+              padding: '8px 22px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+              cursor: 'pointer',
+              border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+              background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+              color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              transition: 'all 0.15s',
+            }}>
+              {opt.label}
+              <span style={{ marginLeft: 6, opacity: 0.65, fontWeight: 400 }}>{opt.count}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Search + category tabs ── */}
@@ -160,7 +196,7 @@ export default function TemplateLibrary() {
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flex: 1, paddingBottom: 2 }}>
           {[ALL_LABEL, ...categories].map(cat => {
             const isActive = activeCategory === cat
-            const count = cat === ALL_LABEL ? templates.length : templates.filter(t => t.category === cat).length
+            const count = cat === ALL_LABEL ? byType.length : byType.filter(t => t.category === cat).length
             return (
               <button
                 key={cat}

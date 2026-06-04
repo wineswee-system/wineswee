@@ -203,10 +203,18 @@ serve(async (req: Request) => {
     const sb = createClient(supabaseUrl, serviceKey);
 
     let mode = "all";
+    let orgId: number | null = null;
     try {
       const body = await req.json();
       if (body?.mode) mode = body.mode;
+      if (body?.organization_id) orgId = Number(body.organization_id);
     } catch { /* empty body is fine */ }
+
+    // Resolve org scope — default to single org in DB (single-tenant safe)
+    if (!orgId) {
+      const { data: orgRow } = await sb.from("organizations").select("id").limit(1).maybeSingle();
+      orgId = orgRow?.id ?? null;
+    }
 
     const now = new Date().toISOString();
     const today = todayTaipei();
@@ -229,11 +237,13 @@ serve(async (req: Request) => {
     // ── 1. Reminder: tasks with reminder_at <= now, not yet sent ──
     // tasks 表沒有 reminder_sent 欄位 → 用 metadata.reminder_sent JSONB 標記
     if (mode === "all" || mode === "reminders") {
-      const { data: rawReminderTasks } = await sb.from("tasks")
+      let reminderQ = sb.from("tasks")
         .select("id, title, due_date, assignee, assignee_id, reminder_at, status, metadata, description, notes, store")
         .lte("reminder_at", now)
         .not("status", "in", '("已完成","已取消")')
         .limit(200);
+      if (orgId) reminderQ = reminderQ.eq("organization_id", orgId);
+      const { data: rawReminderTasks } = await reminderQ;
 
       const reminderTasks = (rawReminderTasks || []).filter(
         (t: any) => !(t.metadata && t.metadata.reminder_sent)
@@ -257,11 +267,13 @@ serve(async (req: Request) => {
 
     // ── 2. Overdue: tasks past due_date ──
     if (mode === "all" || mode === "overdue") {
-      const { data: overdueTasks } = await sb.from("tasks")
+      let overdueQ = sb.from("tasks")
         .select("id, title, due_date, assignee, assignee_id, metadata, status, description, notes, store")
         .lt("due_date", now)
         .not("status", "in", '("已完成","已取消")')
         .limit(50);
+      if (orgId) overdueQ = overdueQ.eq("organization_id", orgId);
+      const { data: overdueTasks } = await overdueQ;
 
       for (const task of (overdueTasks || [])) {
         const meta = (task.metadata || {}) as Record<string, unknown>;
@@ -288,12 +300,14 @@ serve(async (req: Request) => {
       tomorrowDate.setDate(tomorrowDate.getDate() + 1);
       const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
 
-      const { data: dueSoonTasks } = await sb.from("tasks")
+      let dueSoonQ = sb.from("tasks")
         .select("id, title, due_date, assignee, assignee_id, metadata, status, description, notes, store")
         .gte("due_date", todayStr)
         .lt("due_date", `${tomorrowStr}T23:59:59`)
         .not("status", "in", '("已完成","已取消")')
         .limit(50);
+      if (orgId) dueSoonQ = dueSoonQ.eq("organization_id", orgId);
+      const { data: dueSoonTasks } = await dueSoonQ;
 
       for (const task of (dueSoonTasks || [])) {
         if (!task.assignee_id || !lineToken || !task.due_date) continue;

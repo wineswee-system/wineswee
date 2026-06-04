@@ -84,6 +84,7 @@ serve(async (req: Request) => {
       lat, lng, accuracy,
       ip: clientIP,
       clock_mode: rawMode = 'normal',
+      organization_id: bodyOrgId,
     } = body
 
     if (!action) return jsonResp({ error: '缺少必要參數 (action)' }, 400)
@@ -121,7 +122,9 @@ serve(async (req: Request) => {
         emp = data
       }
     } else if (employee) {
-      const { data } = await supabase.from('employees').select('*').eq('name', employee).maybeSingle()
+      let nameQ = supabase.from('employees').select('*').eq('name', employee)
+      if (bodyOrgId) nameQ = nameQ.eq('organization_id', Number(bodyOrgId))
+      const { data } = await nameQ.maybeSingle()
       emp = data
     }
     if (!emp) return jsonResp({ error: '找不到員工資料' }, 404)

@@ -34,12 +34,20 @@ serve(async (req) => {
 
     let targetYM = defaultYM
     let forceEmpIds: number[] | null = null
+    let orgId: number | null = null
     if (req.method === 'POST') {
       try {
         const body = await req.json()
         if (body.year_month) targetYM = body.year_month
         if (Array.isArray(body.employee_ids)) forceEmpIds = body.employee_ids
+        if (body.organization_id) orgId = Number(body.organization_id)
       } catch { /* ignore */ }
+    }
+
+    // Resolve org scope — default to single org in DB (single-tenant safe)
+    if (!orgId) {
+      const { data: orgRow } = await supabase.from('organizations').select('id').limit(1).maybeSingle()
+      orgId = orgRow?.id ?? null
     }
 
     // 1. 抓所有在職員工
@@ -47,7 +55,11 @@ serve(async (req) => {
       .from('employees')
       .select('id, name, store_id, organization_id')
       .eq('status', '在職')
-    if (forceEmpIds) empQuery = empQuery.in('id', forceEmpIds)
+    if (forceEmpIds) {
+      empQuery = empQuery.in('id', forceEmpIds)
+    } else if (orgId) {
+      empQuery = empQuery.eq('organization_id', orgId)
+    }
     const { data: employees, error: empErr } = await empQuery
     if (empErr) throw new Error(`抓員工失敗: ${empErr.message}`)
 

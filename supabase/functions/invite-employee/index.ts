@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     const { data: caller } = await supabase
-      .from('employees').select('role, roles(name)').eq('email', user.email).maybeSingle()
+      .from('employees').select('role, roles(name), organization_id').eq('email', user.email).maybeSingle()
     const callerRole = (caller?.roles as any)?.name ?? caller?.role
     if (!caller || !['admin', 'super_admin'].includes(callerRole)) {
       return new Response(JSON.stringify({ error: '權限不足：僅管理員可邀請員工' }), {
@@ -48,6 +48,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    const callerOrgId: number | null = (caller as any).organization_id ?? null
 
     const { email, name, redirectTo } = await req.json()
 
@@ -82,9 +84,9 @@ serve(async (req) => {
       })
     }
 
-    // Create new auth user + send invite
+    // Create new auth user + send invite (carry org context into auth metadata)
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: { full_name: name || '' },
+      data: { full_name: name || '', organization_id: callerOrgId },
       redirectTo: siteUrl,
     })
 

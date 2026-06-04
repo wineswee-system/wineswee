@@ -203,12 +203,19 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json()
-    const { payroll_run_id, pay_period } = body
+    const { payroll_run_id, pay_period, organization_id: bodyOrgId } = body
 
     if (!payroll_run_id && !pay_period) {
       return new Response(JSON.stringify({ error: '請提供 payroll_run_id 或 pay_period' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // Resolve org scope — caller may pass organization_id; fallback to single org
+    let orgId: number | null = bodyOrgId ? Number(bodyOrgId) : null
+    if (!orgId) {
+      const { data: orgRow } = await supabase.from('organizations').select('id').limit(1).maybeSingle()
+      orgId = orgRow?.id ?? null
     }
 
     // Fetch payroll records (join employee name separately to avoid FK issues)
@@ -221,6 +228,7 @@ serve(async (req: Request) => {
     } else {
       query = query.eq('pay_period', pay_period)
     }
+    if (orgId) query = query.eq('organization_id', orgId)
 
     const { data: records, error: fetchErr } = await query
     if (fetchErr) throw new Error(`查詢薪資記錄失敗: ${fetchErr.message}`)

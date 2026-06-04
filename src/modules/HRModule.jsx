@@ -119,7 +119,7 @@ export default memo(function HRModule() {
       <Route path="foreign-workers" element={<ForeignWorkers />} />
       <Route path="clock-rules" element={<ClockRules />} />
       <Route path="import" element={<HRImport />} />
-      <Route path="overtime-exception-import" element={<OvertimeExceptionImport />} />
+      <Route path="otx" element={<OvertimeExceptionImport />} />
     </Routes>
   )
 })

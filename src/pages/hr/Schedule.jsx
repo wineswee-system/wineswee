@@ -499,7 +499,7 @@ export default function Schedule() {
         weekDates: isMulti ? null : weekDates,
         monthDates: multiDates,
         employees: filtered, shiftDefs: aiStoreShifts,
-        storeFilter, locations, minStaff, minStaffWeekend, authProfile?.organization_id,
+        storeFilter, locations, minStaff, minStaffWeekend, organization_id: authProfile?.organization_id,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests
@@ -677,7 +677,7 @@ export default function Schedule() {
         weekDates: isMulti ? null : weekDates,
         monthDates: multiDates,
         employees: filtered, shiftDefs: storeShifts,
-        storeFilter, locations, minStaff, minStaffWeekend, authProfile?.organization_id,
+        storeFilter, locations, minStaff, minStaffWeekend, organization_id: authProfile?.organization_id,
       })
 
       // 自動讀取現有班表的休假，合併為 offRequests

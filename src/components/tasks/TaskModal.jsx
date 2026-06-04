@@ -27,6 +27,7 @@ import TaskWatchers from './TaskWatchers'
 import TaskRelationsTab from './TaskRelationsTab'
 import TaskApprovalTab from './TaskApprovalTab'
 import TaskDiscussionTab from './TaskDiscussionTab'
+import TaskAttachmentsTab from './TaskAttachmentsTab'
 import TaskActivity from './TaskActivity'
 import { TaskCustomFieldsView } from './CustomFieldsEditor'
 
@@ -353,8 +354,9 @@ export default function TaskModal({
           {[
             { id: 'basic',      label: '基本' },
             { id: 'relations',  label: '關聯' },
-            { id: 'approval',   label: '簽核' },
-            { id: 'discussion', label: `討論 (${comments.length})` },
+            { id: 'approval',     label: '簽核' },
+            { id: 'attachments',  label: `附件 (${attachments.length})` },
+            { id: 'discussion',   label: `討論 (${comments.length})` },
             { id: 'activity',   label: '活動' },
           ].map(t => {
             const active = activeTab === t.id
@@ -537,6 +539,14 @@ export default function TaskModal({
                 </div>
               )}
 
+              {/* 附件（快速存取） */}
+              <TaskAttachmentsTab
+                task={task}
+                profile={user}
+                attachments={attachments}
+                setAttachments={setAttachments}
+              />
+
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
                 ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}
               </div>
@@ -597,6 +607,16 @@ export default function TaskModal({
             />
           )}
 
+          {/* ═══ 附件 Tab ═══ */}
+          {activeTab === 'attachments' && (
+            <TaskAttachmentsTab
+              task={task}
+              profile={user}
+              attachments={attachments}
+              setAttachments={setAttachments}
+            />
+          )}
+
           {/* ═══ 討論 Tab ═══ */}
           {activeTab === 'discussion' && (
             <TaskDiscussionTab
@@ -606,8 +626,6 @@ export default function TaskModal({
               setAttachments={setAttachments}
               comments={comments}
               setComments={setComments}
-              openInput={openInput}
-              closeInput={closeInput}
             />
           )}
 

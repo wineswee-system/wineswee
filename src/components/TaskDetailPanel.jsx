@@ -23,6 +23,7 @@ import { fmtDateTimeTW } from '../lib/datetime'
 import TaskRelationsTab from './tasks/TaskRelationsTab'
 import TaskApprovalTab from './tasks/TaskApprovalTab'
 import TaskDiscussionTab from './tasks/TaskDiscussionTab'
+import TaskAttachmentsTab from './tasks/TaskAttachmentsTab'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
@@ -340,8 +341,9 @@ export default function TaskDetailPanel({
           {[
             { id: 'basic',      label: '基本' },
             { id: 'relations',  label: '關聯' },
-            { id: 'approval',   label: '簽核' },
-            { id: 'discussion', label: '討論' },
+            { id: 'approval',     label: '簽核' },
+            { id: 'attachments',  label: `附件 (${attachments.length})` },
+            { id: 'discussion',   label: '討論' },
             { id: 'changelog',  label: '變更日誌' },
           ].map(t => {
             const active = activeTab === t.id
@@ -554,6 +556,16 @@ export default function TaskDetailPanel({
             />
           )}
 
+          {/* ═══ 附件 Tab ═══ */}
+          {activeTab === 'attachments' && (
+            <TaskAttachmentsTab
+              task={task}
+              profile={profile}
+              attachments={attachments}
+              setAttachments={setAttachments}
+            />
+          )}
+
           {/* ═══ Discussion Tab ═══ */}
           {activeTab === 'discussion' && (
             <TaskDiscussionTab
@@ -563,8 +575,6 @@ export default function TaskDetailPanel({
               setAttachments={setAttachments}
               comments={comments}
               setComments={setComments}
-              openInput={openInput}
-              closeInput={closeInput}
             />
           )}
 

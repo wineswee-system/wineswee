@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download, Upload, Loader2 } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../lib/exportCsv'
 import { todayTW } from '../../lib/datetime'
-import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains } from '../../lib/db'
+import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains, createTaskAttachment } from '../../lib/db'
+import { safeStorageName } from '../../lib/storageSanitize'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -50,6 +51,9 @@ export default function Tasks() {
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const newTaskFileRef = useRef(null)
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -203,6 +207,34 @@ export default function Tasks() {
           p_form_type: f.form_type,
           p_form_template_id: f.form_template_id || null,
         })
+      }
+      // 上傳附件
+      if (pendingFiles.length > 0) {
+        setUploadingFiles(true)
+        for (const file of pendingFiles) {
+          try {
+            const sanitizedFileName = safeStorageName(file.name)
+            const storagePath = `${data.id}/${Date.now()}_${sanitizedFileName}`
+            const { error: uploadError } = await supabase.storage
+              .from('task-attachments')
+              .upload(storagePath, file, { upsert: false })
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(storagePath)
+              if (urlData?.publicUrl) {
+                await createTaskAttachment({
+                  task_id: data.id,
+                  file_name: sanitizedFileName,
+                  file_url: urlData.publicUrl,
+                  uploaded_by: profile?.name || '使用者',
+                })
+              }
+            }
+          } catch {
+            // non-blocking — task already created
+          }
+        }
+        setUploadingFiles(false)
+        setPendingFiles([])
       }
       setTasks(prev => [data, ...prev])
       setShowModal(false)
@@ -542,7 +574,7 @@ export default function Tasks() {
       )}
 
       {showModal && (
-        <Modal title="新增任務" onClose={() => { setShowModal(false); setFormErrors({}) }} onSubmit={handleSubmit}>
+        <Modal title="新增任務" onClose={() => { setShowModal(false); setFormErrors({}); setPendingFiles([]) }} onSubmit={handleSubmit}>
           <Field label="任務名稱" required error={!!formErrors.title} errorMsg={formErrors.title}>
             <input className="form-input" type="text" style={{ width: '100%' }} placeholder="任務名稱" value={form.title}
               onChange={e => { set('title', e.target.value); if (formErrors.title) setFormErrors(f => ({ ...f, title: undefined })) }} />
@@ -679,6 +711,60 @@ export default function Tasks() {
               value={form.required_forms || []}
               onChange={v => set('required_forms', v)}
             />
+          </div>
+
+          {/* 附件（選填） */}
+          <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📎 附件（選填）</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              任務建立後自動上傳，單檔上限 10 MB，不支援執行檔
+            </div>
+            <input
+              ref={newTaskFileRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                const ext = file.name.split('.').pop()?.toLowerCase()
+                const BLOCKED = ['exe', 'bat', 'sh', 'cmd', 'ps1', 'scr', 'vbs', 'msi', 'com']
+                if (BLOCKED.includes(ext)) { toast.error('不允許上傳可執行檔案'); return }
+                if (file.size > 10 * 1024 * 1024) { toast.error('檔案超過 10 MB 限制'); return }
+                setPendingFiles(prev => [...prev, file])
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => newTaskFileRef.current?.click()}
+              disabled={uploadingFiles}
+            >
+              {uploadingFiles
+                ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> 上傳中...</>
+                : <><Upload size={11} /> 選擇檔案</>}
+            </button>
+            {pendingFiles.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {pendingFiles.map((f, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                    background: 'var(--glass-light)', border: '1px solid var(--border-subtle)',
+                  }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>📄 {f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                    >
+                      <XIcon size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <Field label="說明（選填）">

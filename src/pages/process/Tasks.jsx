@@ -219,16 +219,13 @@ export default function Tasks() {
               .from('task-attachments')
               .upload(storagePath, file, { upsert: false })
             if (!uploadError) {
-              const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(storagePath)
-              if (urlData?.publicUrl) {
-                await createTaskAttachment({
-                  task_id: data.id,
-                  file_name: sanitizedFileName,
-                  file_url: urlData.publicUrl,
-                  uploaded_by: profile?.name || '使用者',
-                  kind: 'initiator',
-                })
-              }
+              await createTaskAttachment({
+                task_id: data.id,
+                file_name: sanitizedFileName,
+                storage_path: storagePath,
+                uploaded_by: profile?.name || '使用者',
+                kind: 'initiator',
+              })
             }
           } catch {
             // non-blocking — task already created

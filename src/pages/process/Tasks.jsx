@@ -5,6 +5,7 @@ import { todayTW } from '../../lib/datetime'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains, createTaskAttachment } from '../../lib/db'
 import { safeStorageName } from '../../lib/storageSanitize'
 import { supabase } from '../../lib/supabase'
+import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -233,6 +234,13 @@ export default function Tasks() {
         }
         setUploadingFiles(false)
         setPendingFiles([])
+      }
+      // Send LINE notification after attachments are saved (DB trigger skips INSERT)
+      if (data.assignee) {
+        notifyTaskAssignee(data.assignee, data.title, '', data.id, {
+          dueDate: data.due_date, description: data.description,
+          notes: data.notes, store: data.store,
+        }).catch(() => {})
       }
       setTasks(prev => [data, ...prev])
       setShowModal(false)

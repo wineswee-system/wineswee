@@ -185,12 +185,12 @@ WITH csv_data(employee_number, salary_type_zh, effective_from,
     ('P20260042', '時薪', DATE '2026-06-01', 0, 0, 0, 0, 0, 0, 220)
 )
 INSERT INTO public.salary_structures (
-  employee_id, salary_type, base_salary, meal_allowance, role_allowance,
+  employee_id, organization_id, salary_type, base_salary, meal_allowance, role_allowance,
   attendance_bonus, night_shift_allowance, cross_store_allowance,
   hourly_rate, effective_from
 )
 SELECT
-  e.id,
+  e.id, e.organization_id,
   CASE WHEN d.salary_type_zh = '時薪' THEN 'hourly' ELSE 'monthly' END,
   d.base_salary, d.meal_allowance, d.role_allowance,
   d.attendance_bonus, d.night_shift_allowance, d.cross_store_allowance,
@@ -198,6 +198,7 @@ SELECT
 FROM csv_data d
 JOIN public.employees e ON e.employee_number = d.employee_number
 ON CONFLICT (employee_id) DO UPDATE SET
+  organization_id        = EXCLUDED.organization_id,
   salary_type            = EXCLUDED.salary_type,
   base_salary            = EXCLUDED.base_salary,
   meal_allowance         = EXCLUDED.meal_allowance,
@@ -208,6 +209,13 @@ ON CONFLICT (employee_id) DO UPDATE SET
   hourly_rate            = EXCLUDED.hourly_rate,
   effective_from         = EXCLUDED.effective_from,
   updated_at             = now();
+
+-- ── 補既有資料 organization_id（這次 import 之前可能有 row 沒設）──
+UPDATE public.salary_structures ss
+   SET organization_id = e.organization_id
+  FROM public.employees e
+ WHERE ss.employee_id = e.id
+   AND ss.organization_id IS DISTINCT FROM e.organization_id;
 
 COMMIT;
 

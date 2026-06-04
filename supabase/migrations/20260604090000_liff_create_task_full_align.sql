@@ -20,14 +20,8 @@ ALTER TABLE public.tasks
 
 CREATE INDEX IF NOT EXISTS idx_tasks_created_by_emp_id ON public.tasks (created_by_emp_id);
 
--- 既有 row 從 TEXT created_by 反推（精確 match name）
-UPDATE public.tasks t
-   SET created_by_emp_id = e.id
-  FROM public.employees e
- WHERE t.created_by IS NOT NULL
-   AND t.created_by_emp_id IS NULL
-   AND e.name = t.created_by
-   AND (t.organization_id IS NULL OR e.organization_id = t.organization_id);
+-- 既有 row 沒有 creator 資訊可反推（tasks 表沒 TEXT created_by 欄）→ NULL；
+-- 之後新建任務都會由 liff_create_task 自動帶 emp.id。
 
 COMMENT ON COLUMN public.tasks.created_by_emp_id IS
   '任務發起人（員工 id）— 給 initiator 附件權限 / 通知 / 稽核用';
@@ -102,7 +96,7 @@ BEGIN
     assignee, assignee_id, store, store_id,
     role, workflow, bucket, category,
     organization_id,
-    created_by, created_by_emp_id,
+    created_by_emp_id,
     approval_chain_id, confirmation_mode
   )
   VALUES (
@@ -120,7 +114,7 @@ BEGIN
     COALESCE(p_payload->>'bucket', '一般工作'),
     COALESCE(p_payload->>'category', 'General'),
     emp.organization_id,
-    emp.name, emp.id,
+    emp.id,
     v_chain_id, v_confirm_mode
   )
   RETURNING id INTO new_id;
@@ -258,9 +252,6 @@ COMMIT;
 
 NOTIFY pgrst, 'reload schema';
 
-DO $$
-DECLARE v_backfilled INT;
-BEGIN
-  SELECT COUNT(*) INTO v_backfilled FROM public.tasks WHERE created_by_emp_id IS NOT NULL;
-  RAISE NOTICE 'tasks.created_by_emp_id 已加 + backfill % 筆；liff_create_task 全面對齊；4 支 lookup RPC 已建立', v_backfilled;
+DO $$ BEGIN
+  RAISE NOTICE 'tasks.created_by_emp_id 已加（既有 row 為 NULL）；liff_create_task 全面對齊；4 支 lookup RPC 已建立';
 END $$;

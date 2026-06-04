@@ -139,6 +139,12 @@ export default function Overtime() {
       if (!validateRequired(form, ['employee', 'date', 'store', 'start_time', 'end_time', 'reason'], setErrors)) return
       if (!form.hours || form.hours <= 0) { toast.error('加班時數計算為 0，請檢查起訖時間'); return }
 
+      // ── 勞基法 §32 前端預檢（DB trigger 也會擋；前端只是給即時 feedback）──
+      if (Number(form.hours) > 4) {
+        toast.error(`⛔ 單筆加班不能超過 4 小時（勞基法 §32 日總工時 12 上限）。本次 ${form.hours} 小時，請拆分或走特例匯入。`)
+        return
+      }
+
       // ── 編輯重送路徑 ──
       if (editingId) {
         const { error: updErr } = await supabase.from('overtime_requests')

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon } from 'lucide-react'
+import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon, Pencil } from 'lucide-react'
 import { detectPayrollAnomalies, isConfigured as aiReady } from '../../../lib/ai/hrAI'
 
 import { toast } from '../../../lib/toast'
@@ -18,7 +18,7 @@ const SEVERITY_STYLE = {
   low: { color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.12)' },
 }
 
-export default function BatchPayrollModal({ month, batchPreview, batchSaving, onClose, onSave }) {
+export default function BatchPayrollModal({ month, batchPreview, batchSaving, onClose, onSave, onSaveAsDraft }) {
   const [anomalyReport, setAnomalyReport] = useState(null)
   const [aiChecking, setAiChecking] = useState(false)
 
@@ -291,6 +291,15 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
               </button>
             )}
             <button className="btn btn-secondary" onClick={onClose}>取消</button>
+            {onSaveAsDraft && (
+              <button className="btn btn-secondary"
+                onClick={onSaveAsDraft}
+                disabled={batchSaving}
+                title="儲存為 draft 狀態，跳到逐筆調整頁繼續編輯"
+                style={{ borderColor: 'var(--accent-cyan)', color: 'var(--accent-cyan)' }}>
+                <Pencil size={14} /> {batchSaving ? '儲存中...' : '存為草稿 → 逐筆調整'}
+              </button>
+            )}
             <button className="btn btn-primary" onClick={onSave} disabled={batchSaving}>
               {batchSaving ? '儲存中...' : (<><Play size={14} /> 確認儲存 {batchPreview.length} 筆</>)}
             </button>

@@ -27,6 +27,7 @@ export const FEATURES = [
   { module: '薪酬與福利', label: '全公司薪資', view: 'salary.view_all',      edit: null },
   { module: '薪酬與福利', label: '薪資結構',   view: null,                   edit: 'salary.edit' },
   { module: '薪酬與福利', label: '批次計薪',   view: null,                   edit: 'salary.compute' },
+  { module: '薪酬與福利', label: '逐筆調整薪資', view: null,                 edit: 'salary.adjust' },
   { module: '薪酬與福利', label: '薪資發放',   view: null,                   edit: 'salary.pay' },
   { module: '薪酬與福利', label: '資遣',       view: 'severance.view',       edit: 'severance.execute' },
   { module: '薪酬與福利', label: '法扣',       view: 'legal_deduction.view', edit: 'legal_deduction.edit' },

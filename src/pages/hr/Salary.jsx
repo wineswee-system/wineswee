@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Download, Plus, Calculator } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Download, Plus, Calculator, Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -95,6 +96,7 @@ const emptyForm = {
 
 export default function Salary() {
   // Role-based access
+  const navigate = useNavigate()
   const { profile, role } = useAuth()
   const orgId = profile?.organization_id
   const userRole = role?.name || profile?.role || 'store_staff'
@@ -723,7 +725,7 @@ export default function Salary() {
     }
   }
 
-  const handleBatchSave = async () => {
+  const handleBatchSaveCore = async (status) => {
     setBatchSaving(true)
     try {
       const payloads = batchPreview.map(p => ({
@@ -748,9 +750,13 @@ export default function Salary() {
         deductions_total:     p.totalDeductions       || 0,
         net_salary:           p.netSalary             || 0,
       }))
-      // 批次薪資：並行走 secure_upsert_salary_v2（支援拆分津貼）
+      // status='draft' → 走 _with_status wrapper；其他 → 既有 v2 行為
+      const isDraft = status === 'draft'
       const data = (await Promise.all(
-        payloads.map(p => supabase.rpc('secure_upsert_salary_v2', { p_data: p }).then(({ data: row }) => row))
+        payloads.map(p => isDraft
+          ? supabase.rpc('secure_upsert_salary_v2_with_status', { p_data: p, p_status: 'draft' }).then(({ data: row }) => row)
+          : supabase.rpc('secure_upsert_salary_v2',             { p_data: p })                    .then(({ data: row }) => row)
+        )
       )).filter(Boolean)
       if (data) {
         setRecords(prev => {
@@ -761,12 +767,20 @@ export default function Salary() {
       }
       setShowBatchModal(false)
       setBatchPreview([])
+      if (isDraft) {
+        toast.success(`已存為草稿，跳到逐筆調整 →`)
+        navigate(`/hr/salary-adjust?month=${month}`)
+      }
     } catch (err) {
       console.error('Batch save failed:', err)
+      toast.error((status === 'draft' ? '儲存草稿失敗：' : '儲存失敗：') + (err.message || ''))
     } finally {
       setBatchSaving(false)
     }
   }
+
+  const handleBatchSave        = () => handleBatchSaveCore('finalized')
+  const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
 
   if (loading) return <LoadingSpinner />
   if (error) return (
@@ -797,6 +811,12 @@ export default function Salary() {
               </button>
               <button className="btn btn-secondary" onClick={handleBatchPayroll}>
                 <Calculator size={14} /> 批次計薪
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate(`/hr/salary-adjust?month=${month}`)}>
+                <Pencil size={14} /> 逐筆調整
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate('/hr/salary-audit-log')}>
+                🔍 稽核
               </button>
               <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
                 <Download size={14} /> 匯出 PDF
@@ -897,6 +917,7 @@ export default function Salary() {
           month={month}
           batchPreview={batchPreview}
           batchSaving={batchSaving}
+          onSaveAsDraft={handleBatchSaveAsDraft}
           onClose={() => setShowBatchModal(false)}
           onSave={handleBatchSave}
         />

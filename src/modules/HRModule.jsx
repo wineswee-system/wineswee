@@ -7,6 +7,8 @@ import PunchCorrection from '../pages/hr/PunchCorrection'
 import Leave from '../pages/hr/Leave'
 import Overtime from '../pages/hr/Overtime'
 import Salary from '../pages/hr/Salary'
+import SalaryAdjust from '../pages/hr/SalaryAdjust'
+import PayrollAuditLog from '../pages/hr/PayrollAuditLog'
 import Schedule from '../pages/hr/Schedule'
 import Holidays from '../pages/hr/Holidays'
 import ScheduleRules from '../pages/hr/ScheduleRules'
@@ -66,6 +68,8 @@ export default memo(function HRModule() {
       <Route path="leave" element={<Leave />} />
       <Route path="overtime" element={<Overtime />} />
       <Route path="salary" element={<Salary />} />
+      <Route path="salary-adjust" element={<SalaryAdjust />} />
+      <Route path="salary-audit-log" element={<PayrollAuditLog />} />
       <Route path="schedule" element={<Schedule />} />
       <Route path="holidays" element={<Holidays />} />
       <Route path="schedule-rules" element={<ScheduleRules />} />

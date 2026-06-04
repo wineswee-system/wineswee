@@ -871,9 +871,9 @@ input, select, textarea {
   min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   overflow-y: auto;
-  /* 保底：當頁內表格沒包 .data-table-wrapper、且自己 min-width 撐爆時，
-     由 main-content 接手橫向滾動，使用者至少看得到完整資料 */
-  overflow-x: auto;
+  /* overflow-x: hidden 確保橫向不會破版；橫向滾軸由內層 .data-table-wrapper
+     / div.data-table 自己處理，貼著表格底部，使用者一眼可見 */
+  overflow-x: hidden;
   transition: margin-left var(--transition-normal);
 }
 
@@ -1103,14 +1103,17 @@ input, select, textarea {
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
-   讓 div 自己當 overflow 容器 */
+   讓 div 自己當 overflow 容器，滾軸貼表格底部 */
 div.data-table {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-}
-div.data-table > table {
-  min-width: 720px;
   width: 100%;
+}
+/* 讓內層 table 跟著內容自然撐寬，超過 div 寬度時 div 才會出橫向滾軸；
+   min-width: 100% 確保即便內容很少也撐滿容器 */
+div.data-table > table {
+  min-width: 100%;
+  width: max-content;
 }
 
 .data-table thead th {

@@ -30,6 +30,7 @@ END $$;
 DO $$
 DECLARE
   org_id INT := (SELECT id FROM organizations LIMIT 1);
+  n      BIGINT;
 BEGIN
 
   -- ── Core workflow / task hierarchy ──────────────────────────
@@ -37,92 +38,108 @@ BEGIN
   UPDATE workflow_instances
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'workflow_instances: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'workflow_instances: % rows updated', n;
 
   UPDATE tasks
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'tasks: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'tasks: % rows updated', n;
 
   UPDATE task_dependencies
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'task_dependencies: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'task_dependencies: % rows updated', n;
 
   UPDATE task_activity
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'task_activity: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'task_activity: % rows updated', n;
 
   UPDATE task_comments
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'task_comments: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'task_comments: % rows updated', n;
 
   UPDATE task_attachments
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'task_attachments: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'task_attachments: % rows updated', n;
 
   UPDATE checklists
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'checklists: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'checklists: % rows updated', n;
 
   -- ── Projects ────────────────────────────────────────────────
 
   UPDATE project_members
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'project_members: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'project_members: % rows updated', n;
 
   -- ── SOP / templates ─────────────────────────────────────────
 
   UPDATE sop_templates
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'sop_templates: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'sop_templates: % rows updated', n;
 
   -- ── Approval chain ──────────────────────────────────────────
 
   UPDATE approval_forms
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'approval_forms: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'approval_forms: % rows updated', n;
 
   UPDATE approval_form_steps
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'approval_form_steps: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'approval_form_steps: % rows updated', n;
 
   UPDATE approval_step_history
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'approval_step_history: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'approval_step_history: % rows updated', n;
 
   -- ── HR / scheduling ─────────────────────────────────────────
 
   UPDATE schedules
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'schedules: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'schedules: % rows updated', n;
 
   UPDATE shift_definitions
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'shift_definitions: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'shift_definitions: % rows updated', n;
 
   UPDATE leave_balances
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'leave_balances: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'leave_balances: % rows updated', n;
 
   -- ── Finance ─────────────────────────────────────────────────
 
   UPDATE expenses
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'expenses: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'expenses: % rows updated', n;
 
   -- Prefer inheriting org from the parent expense_request row
   UPDATE expense_request_attachments a
@@ -131,19 +148,22 @@ BEGIN
            org_id
          )
   WHERE  a.organization_id IS NULL;
-  RAISE NOTICE 'expense_request_attachments: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'expense_request_attachments: % rows updated', n;
 
   -- ── CRM / inventory ─────────────────────────────────────────
 
   UPDATE customers
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'customers: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'customers: % rows updated', n;
 
   UPDATE skus
   SET    organization_id = org_id
   WHERE  organization_id IS NULL;
-  RAISE NOTICE 'skus: % rows updated', ROW_COUNT;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RAISE NOTICE 'skus: % rows updated', n;
 
 END $$;
 

@@ -343,20 +343,20 @@ input, select, textarea {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.22);
   border-radius: 100px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
+  background: rgba(148, 163, 184, 0.4);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
 }
 
 /* ========= LAYOUT ========= */

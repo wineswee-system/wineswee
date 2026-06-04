@@ -1,4 +1,64 @@
 import { supabase } from '../supabase'
+import { workflow, step, fanOut, fanIn, registerStep } from '../workflow/index.js'
+
+// ── Monthly Close Workflow ──
+// Usage: await workflow.start('monthly-close', { month: '2026-05' })
+//
+// DAG:
+//   ledger.lock
+//     ↓ fan-out (3 parallel branches)
+//       branch 0: payroll.calculate → payroll.post
+//       branch 1: tax.calculate
+//       branch 2: inventory.snapshot
+//     ↓ fan-in (all must succeed)
+//   profitability.calculate
+//   report.generate
+
+registerStep('ledger.lock', async (ctx) => {
+  await supabase.from('accounting_periods')
+    .update({ status: 'locked' })
+    .eq('month', ctx.month)
+  return { locked: ctx.month }
+})
+
+registerStep('payroll.calculate', async (ctx) => {
+  const { calculateAnnualLeaveSettlement } = await import('./hr.js')
+  const settlements = await calculateAnnualLeaveSettlement()
+  return { settlements }
+})
+
+registerStep('payroll.post', async (ctx) => {
+  return { posted: true }
+})
+
+registerStep('tax.calculate', async (ctx) => {
+  return { taxMonth: ctx.month }
+})
+
+registerStep('inventory.snapshot', async (ctx) => {
+  const { data } = await supabase.from('inventory').select('id, quantity, unit_cost')
+  return { items: data?.length ?? 0 }
+})
+
+registerStep('profitability.calculate', async (ctx) => {
+  return await calculateProfitability(ctx.month)
+})
+
+registerStep('report.generate', async (ctx) => {
+  return { report: 'monthly-close', month: ctx.month, generatedAt: new Date().toISOString() }
+})
+
+workflow.define('monthly-close', [
+  step('ledger.lock'),
+  fanOut([
+    [step('payroll.calculate'), step('payroll.post')],
+    [step('tax.calculate')],
+    [step('inventory.snapshot')],
+  ]),
+  fanIn({ strategy: 'all', onFail: 'abort' }),
+  step('profitability.calculate'),
+  step('report.generate'),
+])
 
 // ── Helpers ──
 

@@ -222,6 +222,16 @@ function _buildTypedHeader(type, instanceName, isOverdue) {
   return { type: 'box', layout: 'vertical', backgroundColor: s.bg, paddingAll: '14px', contents: rows }
 }
 
+const ATTACH_ICON = (name) => {
+  const ext = name?.split('.').pop()?.toLowerCase()
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return '🖼️'
+  if (ext === 'pdf') return '📕'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return '📊'
+  if (['docx', 'doc'].includes(ext)) return '📝'
+  if (['zip', 'rar', '7z'].includes(ext)) return '🗜️'
+  return '📄'
+}
+
 function _buildTypedBody(taskTitle, taskId, assigneeName, department, store, dueDate, description, notes, isOverdue, extras = {}) {
   const shortId = taskId ? `#${String(taskId).slice(0, 6)}` : null
   const dueLabel = dueDate
@@ -260,6 +270,24 @@ function _buildTypedBody(taskTitle, taskId, assigneeName, department, store, due
     contents.push({ type: 'separator', margin: 'sm' })
     contents.push({ type: 'text', text: '📌 備註', size: 'sm', color: LC.soft, margin: 'sm' })
     contents.push({ type: 'text', text: String(notes).trim(), size: 'sm', color: LC.dark, wrap: true })
+  }
+
+  const attachments = Array.isArray(extras.attachments) ? extras.attachments : []
+  if (attachments.length > 0) {
+    contents.push({ type: 'separator', margin: 'sm' })
+    contents.push({ type: 'text', text: `📎 附件（${attachments.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' })
+    for (const a of attachments.slice(0, 5)) {
+      contents.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: ATTACH_ICON(a.file_name), size: 'sm', flex: 0 },
+          { type: 'text', text: a.file_name || '附件', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      })
+    }
+    if (attachments.length > 5) {
+      contents.push({ type: 'text', text: `...共 ${attachments.length} 個附件`, size: 'xs', color: LC.soft, margin: 'xs' })
+    }
   }
 
   const formBindings = Array.isArray(extras.formBindings) ? extras.formBindings : []
@@ -379,6 +407,18 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
 
   const { dueDate, description, notes, store, approvalRequired, formBindings } = extras
   const department = extras.department || await resolveEmployeeDept(assigneeName)
+
+  // Fetch attachments from DB if not provided and taskId is available
+  let attachments = Array.isArray(extras.attachments) ? extras.attachments : null
+  if (attachments === null && taskId) {
+    const { data } = await supabase
+      .from('task_attachments')
+      .select('file_name, file_url')
+      .eq('task_id', taskId)
+      .order('id')
+    attachments = data || []
+  }
+  attachments = attachments || []
   const isOverdue = !!(dueDate && new Date(dueDate) < new Date())
   const liffUrl = getLiffTaskUrl(taskId, account.liffId)
   const approvalUrl = approvalRequired ? buildLiffTaskUrl(taskId, account.liffId, 'request_approval') : null
@@ -391,7 +431,7 @@ export async function notifyTaskAssignee(assigneeName, taskTitle, instanceName, 
     header: _buildTypedHeader(type, instanceName, isOverdue),
     body: {
       type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-      contents: _buildTypedBody(taskTitle, taskId, assigneeName, department, store, dueDate, description, notes, isOverdue, extras),
+      contents: _buildTypedBody(taskTitle, taskId, assigneeName, department, store, dueDate, description, notes, isOverdue, { ...extras, attachments }),
     },
     footer: _buildTypedFooter(liffUrl, taskId, approvalRequired, approvalUrl, formBindings),
   }

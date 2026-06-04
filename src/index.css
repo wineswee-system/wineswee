@@ -333,20 +333,30 @@ input, select, textarea {
   outline: none;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — 拉粗 + 拉深，讓不同螢幕大小下 overflow 滾動明顯可見
+   (原本 6px / 0.15 透明度太細太淡，使用者反映「沒滾輪」) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.15);
+  background: rgba(148, 163, 184, 0.35);
   border-radius: 100px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.6);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
 
 /* ========= LAYOUT ========= */
@@ -861,6 +871,9 @@ input, select, textarea {
   min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   overflow-y: auto;
+  /* 保底：當頁內表格沒包 .data-table-wrapper、且自己 min-width 撐爆時，
+     由 main-content 接手橫向滾動，使用者至少看得到完整資料 */
+  overflow-x: auto;
   transition: margin-left var(--transition-normal);
 }
 
@@ -1073,12 +1086,31 @@ input, select, textarea {
 .data-table-wrapper {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+/* 有正確包 wrapper 的 table 才強制 min-width，讓 wrapper 接手橫向滾動。
+   避免誤傷 <div className="data-table"> 這種把 class 套在 div 上的舊用法 */
+.data-table-wrapper > table,
+.data-table-wrapper .data-table {
+  min-width: 720px;
+}
+
+/* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
+   讓 div 自己當 overflow 容器 */
+div.data-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+div.data-table > table {
+  min-width: 720px;
+  width: 100%;
 }
 
 .data-table thead th {

@@ -124,7 +124,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_availability').select('*').eq('employee', employee.name).order('day_of_week'),
       supabase.from('tasks').select('*').eq('assignee_id', employee.id).in('status', ['未開始', '進行中', '待簽核']).order('created_at', { ascending: false }),
       supabase.from('employee_assignments').select('*, departments(name), stores(name), updated_by_emp:updated_by(name)').eq('employee_id', employee.id).order('start_date', { ascending: false }),
-    ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn]) => {
+      // ★ salary_structures 是薪資真理源（單一表）— 員工檔案頁的薪資 tab 用這個覆蓋舊版 employees 欄位
+      supabase.from('salary_structures').select('*').eq('employee_id', employee.id).maybeSingle(),
+    ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn, ss]) => {
       setSkills(sk.data || [])
       setDependents(dep.data || [])
       setTransfers(tr.data || [])
@@ -134,6 +136,22 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       setAvailability(av.data || [])
       setOnboardingTasks(ob.data || [])
       setAssignments(asgn.data || [])
+      // ★ 用 salary_structures 覆蓋 form 內薪資欄位（若存在）
+      if (ss?.data) {
+        setForm(f => ({
+          ...f,
+          salary_type:         ss.data.salary_type         ?? f.salary_type,
+          base_salary:         ss.data.base_salary         ?? f.base_salary,
+          meal_allowance:      ss.data.meal_allowance      ?? f.meal_allowance,
+          transport_allowance: ss.data.transport_allowance ?? f.transport_allowance,
+          // 新版才有的欄位也帶進來（HrTabContent 沒顯示也不會壞，但 Salary 等其他元件可能讀）
+          role_allowance:        ss.data.role_allowance        ?? 0,
+          attendance_bonus:      ss.data.attendance_bonus      ?? 0,
+          night_shift_allowance: ss.data.night_shift_allowance ?? 0,
+          cross_store_allowance: ss.data.cross_store_allowance ?? 0,
+          hourly_rate:           ss.data.hourly_rate           ?? 0,
+        }))
+      }
     }).catch(() => {})
 
     supabase.from('workflow_instances')

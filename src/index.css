@@ -886,6 +886,9 @@ input, select, textarea {
 .page-container {
   padding: 28px 32px;
   max-width: 1600px;
+  /* 撐到至少跟 main-content 等高，讓 StickyHorizontalScrollbar (position: sticky;
+     bottom: 0) 永遠浮在 viewport 底；資料少的頁面下方只是 background 延伸，看不出來 */
+  min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
 }
 
 /* Light theme overrides */

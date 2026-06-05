@@ -339,9 +339,9 @@ export default function Salary() {
         : employees
 
       // Fetch all data in parallel (correct field names)
-      const [attRes, otRes, lvRes, ssRes, holRes, legalRes] = await Promise.all([
+      const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes] = await Promise.all([
         supabase.from('attendance_records')
-          .select('employee_id, date, total_hours, is_late, late_minutes')
+          .select('employee_id, store_id, date, total_hours, is_late, late_minutes')
           .eq('organization_id', orgId)
           .gte('date', monthStart).lte('date', monthEnd),
         supabase.from('overtime_requests')
@@ -357,7 +357,7 @@ export default function Salary() {
         supabase.from('salary_structures')
           .select('*')
           .in('employee_id', scopedEmployees.map(e => e.id)),
-        // 國定假日清單：用來判定打卡那天是否該加倍計薪（勞基法 §39）
+        // 國定假日清單：用來判定打卡那天是否該加倍計薪
         supabase.from('holidays')
           .select('date, is_workday')
           .gte('date', monthStart).lte('date', monthEnd),
@@ -367,7 +367,16 @@ export default function Salary() {
           .eq('organization_id', orgId)
           .eq('status', '進行中')
           .lte('started_month', month),
+        // 各門市遲到寬鬆設定：低於此分鐘數的遲到忽略不計
+        supabase.from('stores').select('id, late_tolerance_minutes'),
       ])
+
+      // store_id → 寬鬆分鐘數（沒設定則預設 5 分）
+      const storeToleranceMap = {}
+      for (const s of (storeRes.data || [])) {
+        storeToleranceMap[s.id] = Number(s.late_tolerance_minutes) || 5
+      }
+      const DEFAULT_TOLERANCE = 5
 
       // 國定假日 Set（is_workday=false）→ 該日上班自動加倍，不需申請加班
       const holidayDates = new Set(
@@ -380,6 +389,8 @@ export default function Salary() {
       // hours        = 平日 + 補班日 + 例假/休息日 (打卡正常 1 倍工資)
       // holidayHours = 國定假日打卡工時 (要額外加 1 倍 → 合計 2 倍)
       // lateRows     = 遲到原始 row（公式 modal 顯示）
+      // 遲到容差：依該筆 attendance_record 的 store_id 查 stores.late_tolerance_minutes
+      //          ≤ 容差的不算遲到（避免 1~5 分的小遲到也跑進來扣薪）
       const attMap = {}
       for (const a of (attRes.data || [])) {
         const id = a.employee_id
@@ -390,9 +401,11 @@ export default function Salary() {
         }
         attMap[id].hours    += h
         attMap[id].days     += 1
-        if (a.is_late && Number(a.late_minutes || 0) > 0) {
-          attMap[id].lateMins += Number(a.late_minutes || 0)
-          attMap[id].lateRows.push({ date: a.date, late_minutes: Number(a.late_minutes) })
+        const lateMin = Number(a.late_minutes || 0)
+        const tolerance = storeToleranceMap[a.store_id] ?? DEFAULT_TOLERANCE
+        if (a.is_late && lateMin > tolerance) {
+          attMap[id].lateMins += lateMin
+          attMap[id].lateRows.push({ date: a.date, late_minutes: lateMin, tolerance })
         }
       }
 

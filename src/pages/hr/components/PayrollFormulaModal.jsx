@@ -34,7 +34,7 @@ function FormulaRow({ label, value, formula, vars, color, sub, hint }) {
         </div>
       </div>
       {formula && (
-        <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
           {formula}
         </div>
       )}
@@ -141,6 +141,8 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
   const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   const totalMins = sorted.reduce((s, r) => s + (r.late_minutes || 0), 0)
   const totalUnits = Math.floor(totalMins / 30)
+  // 取一筆做容差顯示（同員工同月通常都在同一門市，容差相同）
+  const tolerance = sorted[0]?.tolerance
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
@@ -167,7 +169,8 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
         </tbody>
       </table>
       <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
-        ※ 扣款公式：合計分鐘 ÷ 30 (無條件捨去) × 時薪 × 0.5
+        {tolerance != null && <>※ 門市容差：≤ {tolerance} 分鐘的遲到忽略不計，本表只列超過者。<br/></>}
+        ※ 扣款公式：合計分鐘 ÷ 30（無條件捨去）× 時薪 × 0.5
         ＝ {totalUnits} × {hourlyRate} × 0.5 ＝ {fmt(lateDeduction || 0)}
       </div>
     </div>
@@ -291,23 +294,19 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="加班費"
                 value={p.regular_overtime_pay}
-                formula={
-                  '三桶階梯倍率：\n' +
-                  '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67\n' +
-                  '・休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67\n' +
-                  '・國定/例假加班：加班時數 × 時薪 × 2.0\n' +
-                  (isHourly ? '・時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0' : '')
-                }
+                formula={[
+                  '三桶階梯倍率：',
+                  p.otWeekday > 0 ? '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67' : null,
+                  p.otRestday > 0 ? '・休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67' : null,
+                  p.otHoliday > 0 ? '・國定/例假加班：加班時數 × 時薪 × 2.0' : null,
+                  isHourly && p.holidayBonus > 0 ? '・時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0' : null,
+                ].filter(Boolean).join('\n')}
                 vars={[
-                  { k: '平日加班時數', v: p.otWeekday },
-                  { k: '休息日加班時數', v: p.otRestday },
-                  { k: '國定/例假加班時數', v: p.otHoliday },
-                  ...(isHourly ? [{ k: '國定打卡時數', v: p.holidayHours || 0 }] : []),
                   { k: '時薪', v: hr },
-                  { k: '平日加班費', v: p.otPayWeekday },
-                  { k: '休息日加班費', v: p.otPayRestday },
-                  { k: '國定/例假加班費', v: p.otPayHoliday },
-                  ...(isHourly && p.holidayBonus > 0 ? [{ k: '國定打卡加給', v: p.holidayBonus }] : []),
+                  ...(p.otWeekday > 0 ? [{ k: '平日加班時數', v: p.otWeekday }, { k: '平日加班費', v: p.otPayWeekday }] : []),
+                  ...(p.otRestday > 0 ? [{ k: '休息日加班時數', v: p.otRestday }, { k: '休息日加班費', v: p.otPayRestday }] : []),
+                  ...(p.otHoliday > 0 ? [{ k: '國定/例假加班時數', v: p.otHoliday }, { k: '國定/例假加班費', v: p.otPayHoliday }] : []),
+                  ...(isHourly && p.holidayBonus > 0 ? [{ k: '國定打卡時數', v: p.holidayHours || 0 }, { k: '國定打卡加給', v: p.holidayBonus }] : []),
                 ]}
               />
             )}
@@ -317,12 +316,9 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 value={p.extra_overtime_pay}
                 formula="倍率算法與「加班費」相同（同三桶階梯）"
                 vars={[
-                  { k: '平日加班時數', v: p._ot_exc_weekday },
-                  { k: '休息日加班時數', v: p._ot_exc_restday },
-                  { k: '國定/例假加班時數', v: p._ot_exc_holiday },
-                  { k: '平日加班費', v: p._ot_exc_weekday_pay },
-                  { k: '休息日加班費', v: p._ot_exc_restday_pay },
-                  { k: '國定/例假加班費', v: p._ot_exc_holiday_pay },
+                  ...(p._ot_exc_weekday > 0 ? [{ k: '平日加班時數', v: p._ot_exc_weekday }, { k: '平日加班費', v: p._ot_exc_weekday_pay }] : []),
+                  ...(p._ot_exc_restday > 0 ? [{ k: '休息日加班時數', v: p._ot_exc_restday }, { k: '休息日加班費', v: p._ot_exc_restday_pay }] : []),
+                  ...(p._ot_exc_holiday > 0 ? [{ k: '國定/例假加班時數', v: p._ot_exc_holiday }, { k: '國定/例假加班費', v: p._ot_exc_holiday_pay }] : []),
                 ]}
               />
             )}

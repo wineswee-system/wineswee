@@ -12,8 +12,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 //   - scope='business_non_expense'  → 非費用組
 
 const FIXED_EXPENSE = [
-  { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
-  { icon: Receipt, name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷(驗收)兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
+  { icon: Receipt, name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷(驗收)）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
 ]
 
 const COLOR_MAP = {
@@ -83,8 +83,8 @@ export default function BusinessApplications() {
         </div>
       </div>
 
-      <FormGroup title="💰 費用組" desc="會產生費用支出，需核銷" items={expenseGroup} navigate={navigate} />
-      <FormGroup title="📋 非費用組" desc="純流程申請，不涉及核銷" items={nonExpenseGroup} navigate={navigate} />
+      <FormGroup title="💰 費用組" desc="會產生費用支出，需核銷(驗收)" items={expenseGroup} navigate={navigate} />
+      <FormGroup title="📋 非費用組" desc="純流程申請，不涉及核銷(驗收)" items={nonExpenseGroup} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

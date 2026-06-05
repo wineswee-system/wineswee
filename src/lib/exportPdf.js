@@ -280,7 +280,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
   }
 
   if (!isNonExpense && req.notes) {
-    sections.push({ title: '核銷備註', text: req.notes })
+    sections.push({ title: '核銷(驗收)備註', text: req.notes })
   }
 
   printSignOff({

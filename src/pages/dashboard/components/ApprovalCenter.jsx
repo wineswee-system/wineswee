@@ -29,7 +29,7 @@ const SIGNED_TYPE_LABEL = {
   resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
   form_submission: '表單申請',
   off_request: '希望休', shift_swap: '換班',
-  task_confirmation: '任務確認', expense_settle: '費用核銷',
+  task_confirmation: '任務確認', expense_settle: '費用核銷(驗收)',
   workflow: '流程簽核',
 }
 
@@ -58,7 +58,7 @@ const GROUPS = [
     key: 'finance', label: '經費', icon: Wallet, color: 'var(--accent-green)',
     tabs: [
       { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中' },
-      { key: 'expense_settle',  label: '核銷', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷' },
+      { key: 'expense_settle',  label: '核銷(驗收)', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷' },
     ],
   },
   {
@@ -360,7 +360,7 @@ function getRowDisplay(row, tabKey) {
       }
     case 'expense_settle':
       return {
-        title: `${row.employee} · 核銷 ${row.title || ''}`,
+        title: `${row.employee} · 核銷(驗收) ${row.title || ''}`,
         subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
       }
     case 'loa':

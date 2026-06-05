@@ -43,7 +43,7 @@ export const FEATURES = [
   { module: '員工體驗', label: 'AI 離職預測',    view: 'ai_attrition.view',  edit: null },
   // 行政庶務
   { module: '行政庶務', label: '費用申請審核', view: 'expense.view',         edit: 'expense.approve' },
-  { module: '行政庶務', label: '費用核銷',     view: 'expense.settle_view',  edit: 'expense.settle' },
+  { module: '行政庶務', label: '費用核銷(驗收)', view: 'expense.settle_view',  edit: 'expense.settle' },
   { module: '行政庶務', label: '會計科目',     view: 'expense.account_view', edit: 'expense.account_edit' },
   { module: '行政庶務', label: '文件',         view: 'doc.view',             edit: 'doc.delete' },
   // 專案流程

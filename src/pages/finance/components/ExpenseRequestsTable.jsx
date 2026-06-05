@@ -5,6 +5,7 @@
  */
 import { Check, X, Send } from 'lucide-react'
 import AsyncButton from '../../../components/AsyncButton'
+import { displaySettleStatus } from '../../../lib/displayLabel'
 
 const STATUS_COLORS = {
   '申請中':     { bg: 'var(--accent-blue-dim)',   color: 'var(--accent-blue)' },
@@ -72,7 +73,7 @@ export default function ExpenseRequestsTable({
                 </td>
                 <td>
                   <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>
-                    {r.status}
+                    {displaySettleStatus(r.status)}
                   </span>
                 </td>
                 <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
@@ -90,7 +91,7 @@ export default function ExpenseRequestsTable({
                     )}
                     {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
                       <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onOpenSettle(r)}>
-                        <Send size={12} /> 核銷
+                        <Send size={12} /> 核銷(驗收)
                       </button>
                     )}
                     {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
@@ -105,7 +106,7 @@ export default function ExpenseRequestsTable({
                     )}
                     {r.status === '核銷已退回' && r.employee === profile?.name && (
                       <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => onOpenSettle(r)}>
-                        ✏️ 重新核銷
+                        ✏️ 重新核銷(驗收)
                       </button>
                     )}
                     {['申請中', '待審', '已駁回', '已退回'].includes(r.status) && r.employee === profile?.name && (

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal, { Field } from '../../../components/Modal'
+import { displaySettleStatus } from '../../../lib/displayLabel'
 import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
@@ -413,7 +414,7 @@ export default function ProjectDetailPanel({
                     color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
                     background: 'var(--glass-light)',
                     whiteSpace: 'nowrap',
-                  }}>{e.status}</span>
+                  }}>{displaySettleStatus(e.status)}</span>
                   <button
                     title="取消連結"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', borderRadius: 4, color: 'var(--accent-red)', flexShrink: 0 }}
@@ -450,7 +451,7 @@ export default function ProjectDetailPanel({
                         fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
                         color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
                         background: 'var(--glass-light)', whiteSpace: 'nowrap',
-                      }}>{e.status}</span>
+                      }}>{displaySettleStatus(e.status)}</span>
                       <button
                         className="btn btn-secondary"
                         style={{ fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}

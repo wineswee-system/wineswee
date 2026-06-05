@@ -178,7 +178,7 @@ export default function Expenses() {
         description: data.description,
         date: data.date,
       }, { source: 'Expenses.jsx' })
-      toast.success('已核銷')
+      toast.success('已核銷(驗收)')
     }
   }
 
@@ -311,11 +311,11 @@ export default function Expenses() {
           <div className="stat-card-value">{filtered.filter(e => e.status === '待審核').length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
-          <div className="stat-card-label">已核銷金額</div>
+          <div className="stat-card-label">已核銷(驗收)金額</div>
           <div className="stat-card-value">NT$ {totalApproved.toLocaleString()}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">待核銷金額</div>
+          <div className="stat-card-label">待核銷(驗收)金額</div>
           <div className="stat-card-value">NT$ {totalPending.toLocaleString()}</div>
         </div>
       </div>
@@ -339,7 +339,7 @@ export default function Expenses() {
                   <td>{e.receipt ? <span className="badge badge-success">✓ 有</span> : <span className="badge badge-danger">✗ 無</span>}</td>
                   <td>
                     <span className={`badge ${e.status === '已核銷' ? 'badge-success' : e.status === '已駁回' ? 'badge-danger' : 'badge-warning'}`}>
-                      <span className="badge-dot"></span>{e.status}
+                      <span className="badge-dot"></span>{e.status === '已核銷' ? '已核銷(驗收)' : e.status}
                     </span>
                     {e.reject_reason && (
                       <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>原因：{e.reject_reason}</div>
@@ -484,7 +484,7 @@ export default function Expenses() {
                 onApprove: async () => handleApprove(detailRow.id),
                 onReject: async (_r, reason) => handleReject(detailRow.id, reason),
                 onChanged: () => { load(); setDetailRow(null); returnNav() },
-                approveLabel: '核銷',
+                approveLabel: '核銷(驗收)',
               } : null
             }
           />

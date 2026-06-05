@@ -18,6 +18,7 @@ import SettleModal from './components/SettleModal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { displaySettleStatus as displayStatus } from '../../lib/displayLabel'
 const STATUS_COLORS = {
   '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
   '已核准': { bg: 'var(--accent-green-dim)', color: 'var(--accent-green)' },
@@ -27,10 +28,6 @@ const STATUS_COLORS = {
   '已駁回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
   '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
 }
-
-// 核銷相關 status 顯示時加 (驗收) 後綴 — 業務面對齊「核銷=驗收」
-const displayStatus = (s) =>
-  (s === '未送核銷' || s === '待核銷' || s === '已核銷' || s === '核銷已退回') ? `${s}(驗收)` : s
 
 const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
 const fmtCur = (n, cur) => {
@@ -527,9 +524,9 @@ export default function ExpenseRequests() {
         let settleIntervalText = null
         if (settleStartAt && req.approved_at) {
           const diffSec = Math.floor((new Date(settleStartAt) - new Date(req.approved_at)) / 1000)
-          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送核銷`
-          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送核銷`
-          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送核銷`
+          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送核銷(驗收)`
+          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送核銷(驗收)`
+          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送核銷(驗收)`
         }
         const settleApplicantStep = {
           label: '申請人（送核銷/驗收）',
@@ -610,15 +607,15 @@ export default function ExpenseRequests() {
         NOT_AUTHENTICATED: '尚未登入',
         EMPLOYEE_NOT_FOUND: '找不到對應員工',
         NOT_FOUND: '找不到此申請單',
-        NOT_PENDING_SETTLE: `狀態不是待核銷（${data?.current_status}）`,
+        NOT_PENDING_SETTLE: `狀態不是待核銷(驗收)（${data?.current_status}）`,
         NOT_AUTHORIZED_FOR_STEP: '此關不是你負責',
         STEP_NOT_FOUND: 'chain step 設定異常',
         PENDING_EXTRA_STEP: '此關有加簽待處理，請等加簽完成後再核准',
       }
-      toast.error(map[data?.error] || data?.error || '核銷失敗')
+      toast.error(map[data?.error] || data?.error || '核銷(驗收)失敗')
       return
     }
-    toast.success(data.fully_settled ? '核銷完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
+    toast.success(data.fully_settled ? '核銷(驗收)完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
     load()
   }
 
@@ -663,8 +660,8 @@ export default function ExpenseRequests() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📝</span> 申請（申請與核銷）</h2>
-            <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷入帳</p>
+            <h2><span className="header-icon">📝</span> 申請（申請與核銷(驗收)）</h2>
+            <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {isAdmin && (
@@ -954,11 +951,11 @@ export default function ExpenseRequests() {
         })
 
         if (showDetail.reject_reason) fields.push({ label: '駁回原因', value: showDetail.reject_reason, multiline: true })
-        if (showDetail.notes) fields.push({ label: '核銷備註', value: showDetail.notes, multiline: true })
+        if (showDetail.notes) fields.push({ label: '核銷(驗收)備註', value: showDetail.notes, multiline: true })
 
         const atts = (attachments[showDetail.id] || []).map(a => ({
           url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-          name: `${a.file_name}${a.stage === 'settlement' ? '（核銷）' : '（申請）'}`,
+          name: `${a.file_name}${a.stage === 'settlement' ? '（核銷(驗收)）' : '（申請）'}`,
           type: a.file_type,
         }))
 
@@ -1059,8 +1056,8 @@ export default function ExpenseRequests() {
                     if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
                   },
                   onChanged: refreshDetail,
-                  approveLabel: '核准核銷',
-                  rejectLabel: '核銷退回',
+                  approveLabel: '核准核銷(驗收)',
+                  rejectLabel: '核銷(驗收)退回',
                 }
               }
               return null

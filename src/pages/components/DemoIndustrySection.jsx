@@ -21,7 +21,7 @@ const INDUSTRIES = [
   {
     icon: HeadphonesIcon, title: '服務業', color: '#7c3aed',
     pains: ['客戶資料散在業務手機裡，離職就帶走', '專案進度追蹤靠問人，沒有系統化管理', '員工報帳流程冗長，紙本簽核效率低'],
-    solutions: ['CRM 客戶 360° 集中管理', '任務流程 + SOP 範本 + 即時追蹤', 'LINE 行動簽核 + 費用線上核銷'],
+    solutions: ['CRM 客戶 360° 集中管理', '任務流程 + SOP 範本 + 即時追蹤', 'LINE 行動簽核 + 費用線上核銷(驗收)'],
   },
   {
     icon: Globe, title: '貿易物流', color: '#d97706',

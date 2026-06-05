@@ -250,6 +250,9 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                   ? [{ k: '月薪', v: Math.round(p.base_salary / _p) }, { k: '在職比例', v: `${p.salary_actual_wd}/${p.salary_total_wd} 工作日` }]
                   : [{ k: '月薪', v: p.base_salary }]
               }
+              hint={!isHourly && p._base_for_insure
+                ? `時薪計算基底（本薪 + 經常性津貼）：NT$ ${p._base_for_insure.toLocaleString()}　→　時薪 = ${p._base_for_insure.toLocaleString()} ÷ 30 ÷ 8 = ${hr}`
+                : null}
             />
 
             {(p.role_allowance > 0 || p._raw_role_allowance > 0 || p._supervisor_allowance > 0) && (

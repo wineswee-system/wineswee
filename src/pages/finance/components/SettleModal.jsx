@@ -3,7 +3,13 @@ import { X, Upload, FileText, Image } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import { clearError } from '../../../lib/formValidation'
 
-const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+// 對齊 ExpenseRequests.jsx 的 CURRENCY_SYMBOL；request.currency 可能是 USD/JPY/EUR/CNY
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
+const fmt = (n, cur) => {
+  if (n == null) return '-'
+  const sym = CURRENCY_SYMBOL[cur] || (cur ?? 'NT$')
+  return `${sym} ${Number(n).toLocaleString()}`
+}
 
 /**
  * SettleModal — settle/reimburse modal.
@@ -40,14 +46,14 @@ export default function SettleModal({
       >
         {/* Header */}
         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-          <h3 style={{ margin: 0 }}>核銷：{request.title}</h3>
+          <h3 style={{ margin: 0 }}>核銷(驗收)：{request.title}</h3>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={onClose}><X size={20} /></button>
         </div>
 
         {/* Body */}
         <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-            預估金額：<strong>{fmt(request.estimated_amount)}</strong>
+            預估金額：<strong>{fmt(request.estimated_amount, request.currency)}</strong>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
@@ -111,7 +117,7 @@ export default function SettleModal({
         {/* Footer */}
         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '提交中...' : '提交核銷'}</button>
+          <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '提交中...' : '提交核銷(驗收)'}</button>
         </div>
       </div>
     </ModalOverlay>

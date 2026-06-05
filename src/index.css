@@ -336,8 +336,8 @@ input, select, textarea {
 /* Custom scrollbar — 拉粗 + 拉深，讓不同螢幕大小下 overflow 滾動明顯可見
    (原本 6px / 0.15 透明度太細太淡，使用者反映「沒滾輪」) */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 15px;
+  height: 15px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

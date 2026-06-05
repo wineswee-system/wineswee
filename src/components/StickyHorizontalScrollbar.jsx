@@ -163,7 +163,7 @@ export default function StickyHorizontalScrollbar() {
         bottom: 0,
         left: 0,
         right: 0,
-        height: trackWidth > 0 ? 14 : 0,
+        height: trackWidth > 0 ? 21 : 0,
         overflowX: 'auto',
         overflowY: 'hidden',
         background: 'var(--bg-secondary)',

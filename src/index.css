@@ -1090,11 +1090,16 @@ input, select, textarea {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  /* 隱藏原生橫向滾軸 — 改用 StickyHorizontalScrollbar 浮在 viewport 底
-     scrollbar 仍然可用（程式碼透過 scrollLeft 同步），只是 UI 不顯示 */
+}
+
+/* 隱藏 wrapper / div.data-table 的原生橫向滾軸 — 改用 StickyHorizontalScrollbar
+   浮在 viewport 底。scrollLeft 仍透過程式雙向同步，只是 UI 不顯示 native 那條 */
+.data-table-wrapper,
+div.data-table {
   scrollbar-width: none;
 }
-.data-table-wrapper::-webkit-scrollbar {
+.data-table-wrapper::-webkit-scrollbar,
+div.data-table::-webkit-scrollbar {
   display: none;
 }
 

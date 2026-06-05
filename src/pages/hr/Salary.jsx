@@ -345,7 +345,7 @@ export default function Salary() {
           .eq('organization_id', orgId)
           .gte('date', monthStart).lte('date', monthEnd),
         supabase.from('overtime_requests')
-          .select('employee_id, ot_hours, ot_type, ot_category, request_date')
+          .select('employee_id, ot_hours, ot_type, ot_category, request_date, is_exception')
           .eq('status', '已核准')
           .eq('organization_id', orgId)
           .gte('request_date', monthStart).lte('request_date', monthEnd),
@@ -396,15 +396,17 @@ export default function Salary() {
         }
       }
 
-      // overtime map: employee_id → { weekday, restday, holiday, rows }
-      // ot_category 由 DB trigger 依 holidays 表 + 星期幾自動分類（勞基法 §36）：
-      //   weekday=平日 ×1.34/1.67、restday=休息日 ×1.34/1.67/2.67、holiday=例假/國定 ×2
-      // 舊資料若 ot_category 為 NULL，fallback：用 request_date 的星期幾粗略分類
-      // rows = 加班申請原始 row（公式 modal 顯示「哪一天加班幾小時」）
+      // overtime map：拆兩條
+      //   otMap         = 合法加班（is_exception=false/null）→ 算加班費
+      //   otExceptionMap = 特例加班（is_exception=true，從 /otx 匯入超勞基法的）→ 算額外加班費
+      // 兩條都用相同三桶階梯算法（勞基法 §24 倍率不變，只是配額已超而已）
+      // ot_category 由 DB trigger 依 holidays 表 + 星期幾自動分類；NULL 時 fallback 用 dow
       const otMap = {}
+      const otExceptionMap = {}
       for (const o of (otRes.data || [])) {
         const id = o.employee_id
-        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0, holiday: 0, rows: [] }
+        const target = o.is_exception ? otExceptionMap : otMap
+        if (!target[id]) target[id] = { weekday: 0, restday: 0, holiday: 0, rows: [] }
         let cat = o.ot_category
         if (!cat && o.request_date) {
           const dow = new Date(o.request_date).getDay()  // 0=Sun, 6=Sat
@@ -412,8 +414,8 @@ export default function Salary() {
         }
         cat = cat || 'weekday'
         const hours = Number(o.ot_hours || 0)
-        otMap[id][cat] = (otMap[id][cat] || 0) + hours
-        otMap[id].rows.push({ date: o.request_date, hours, category: cat, type: o.ot_type })
+        target[id][cat] = (target[id][cat] || 0) + hours
+        target[id].rows.push({ date: o.request_date, hours, category: cat, type: o.ot_type, is_exception: !!o.is_exception })
       }
 
       // leave map: employee_id → { unpaidHours, halfPayHours, unpaidDays }
@@ -475,7 +477,8 @@ export default function Salary() {
         const ss              = ssMap[emp.id] || {}
         const isHourly        = ss.salary_type === 'hourly'
         const att          = attMap[emp.id] || { hours: 0, holidayHours: 0, lateMins: 0, days: 0 }
-        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0 }
+        const ot           = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0, rows: [] }
+        const otException  = otExceptionMap[emp.id] || { weekday: 0, restday: 0, holiday: 0, rows: [] }
         const leaveStats   = lvMap[emp.id]  || { unpaidHours: 0, halfPayHours: 0, unpaidDays: 0 }
         const absenceDays  = leaveStats.unpaidDays         // 全日無薪天數（給 attendance bonus 判定用）
         const unpaidHours  = leaveStats.unpaidHours        // 無薪假時數（事假/無薪假）
@@ -532,32 +535,45 @@ export default function Salary() {
           ? (Number(ss.hourly_rate) || 0)
           : Math.round(baseForInsure / 30 / 8)
 
-        // 加班費：勞基法 §24 三桶階梯
-        // 平日延長工時：前 2h × 1.34，第 3~4h × 1.67
-        const otPayWeekday = ot.weekday <= 2
-          ? Math.round(ot.weekday * hourlyRate * 1.34)
-          : Math.round(2 * hourlyRate * 1.34 + (ot.weekday - 2) * hourlyRate * 1.67)
+        // 勞基法 §24 三桶階梯 — 抽 helper 給合法/特例 OT 重用
+        // 平日：前 2h ×1.34；超過 ×1.67
+        // 休息日：前 2h ×1.34；3-8h ×1.67；9-12h ×2.67
+        // 例假/國定加班：全額 ×2
+        const calcOtPay = (bucket) => {
+          const weekday = bucket.weekday <= 2
+            ? Math.round(bucket.weekday * hourlyRate * 1.34)
+            : Math.round(2 * hourlyRate * 1.34 + (bucket.weekday - 2) * hourlyRate * 1.67)
+          const rd1 = Math.min(bucket.restday, 2)
+          const rd2 = Math.min(Math.max(bucket.restday - 2, 0), 6)
+          const rd3 = Math.max(bucket.restday - 8, 0)
+          const restday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+          const holiday = Math.round(bucket.holiday * hourlyRate * 2)
+          return { weekday, restday, holiday, total: weekday + restday + holiday }
+        }
 
-        // 休息日加班：前 2h × 1.34，第 3~8h × 1.67，第 9~12h × 2.67
-        const rd1 = Math.min(ot.restday, 2)
-        const rd2 = Math.min(Math.max(ot.restday - 2, 0), 6)
-        const rd3 = Math.max(ot.restday - 8, 0)
-        const otPayRestday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+        const otLegalPay = calcOtPay(ot)
+        const otExceptionPay = calcOtPay(otException)
 
-        // 例假日/國定假日「加班申請」：全額加倍 × 2
-        const otPayHoliday = Math.round(ot.holiday * hourlyRate * 2)
-
-        // 國定假日「正常打卡上班」加給：僅時薪制適用
-        //   時薪制：baseSalary 已含 1 倍（hourly × hours），這裡再加 1 倍 → 合計 ×2
-        //   月薪制：月薪固定值已含整月工資（含國定假日），廠商實務上不另外加給 → 0
+        // 國定假日「正常打卡上班」加給（純打卡，非加班申請）：僅時薪制適用
+        //   時薪制：baseSalary 已含 1 倍，這裡再加 1 倍 → 合計 ×2
+        //   月薪制：月薪固定值已含整月工資，國定打卡不另算
         const holidayBonus = isHourly
           ? Math.round((att.holidayHours || 0) * hourlyRate * 1)
           : 0
 
-        // 對齊廠商 PDF：加班費 = 平日 + 休息日；額外加班費 = 國定/例假 + 國定打卡加給
-        const regularOvertimePay = otPayWeekday + otPayRestday
-        const extraOvertimePay   = otPayHoliday + holidayBonus
+        // 新定義（2026-06-05）：
+        //   加班費       = 合法 OT 三桶 + 時薪制國定打卡加給（不分平/休/國全合一起）
+        //   額外加班費   = 特例 OT (is_exception=true) 三桶 — 來自 /otx 匯入超勞基法的
+        // 倍率算法一樣，差別只是「是否超勞基法 §32 配額」
+        // 變數名保留向下相容：regularOvertimePay / extraOvertimePay
+        const regularOvertimePay = otLegalPay.total + holidayBonus
+        const extraOvertimePay   = otExceptionPay.total
         const overtimePay        = regularOvertimePay + extraOvertimePay
+
+        // 給 modal 顯示用的分桶細項
+        const otPayWeekday = otLegalPay.weekday
+        const otPayRestday = otLegalPay.restday
+        const otPayHoliday = otLegalPay.holiday
 
         // Late deduction: FLOOR(lateMins/30) × hourlyRate × 0.5（hourlyRate 已用新基準）
         const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
@@ -705,7 +721,18 @@ export default function Salary() {
           _supervisor_allowance: Number(ss.supervisor_allowance || 0),
           _raw_role_allowance:  Number(ss.role_allowance || 0),
           _ot_rows:             ot.rows || [],
+          _ot_exception_rows:   otException.rows || [],
           _late_rows:           att.lateRows || [],
+          // 合法 OT 三桶 + 特例 OT 三桶（給公式 modal 拆解顯示）
+          _ot_legal_weekday:    ot.weekday,
+          _ot_legal_restday:    ot.restday,
+          _ot_legal_holiday:    ot.holiday,
+          _ot_exc_weekday:      otException.weekday,
+          _ot_exc_restday:      otException.restday,
+          _ot_exc_holiday:      otException.holiday,
+          _ot_exc_weekday_pay:  otExceptionPay.weekday,
+          _ot_exc_restday_pay:  otExceptionPay.restday,
+          _ot_exc_holiday_pay:  otExceptionPay.holiday,
 
           // ── 扣項明細 ──
           absenceDeduction,           // = unpaid + half-pay 合計

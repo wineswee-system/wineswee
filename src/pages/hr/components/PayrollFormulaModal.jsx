@@ -289,34 +289,40 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
             {p.regular_overtime_pay > 0 && (
               <FormulaRow
-                label="加班費（平日 + 休息日）"
+                label="加班費"
                 value={p.regular_overtime_pay}
                 formula={
-                  '平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67（勞基法 §24）\n' +
-                  '休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67'
+                  '三桶階梯倍率：\n' +
+                  '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67\n' +
+                  '・休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67\n' +
+                  '・國定/例假加班：加班時數 × 時薪 × 2.0\n' +
+                  (isHourly ? '・時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0' : '')
                 }
                 vars={[
-                  { k: '平日加班總時數', v: p.otWeekday },
-                  { k: '休息日加班總時數', v: p.otRestday },
+                  { k: '平日加班時數', v: p.otWeekday },
+                  { k: '休息日加班時數', v: p.otRestday },
+                  { k: '國定/例假加班時數', v: p.otHoliday },
+                  ...(isHourly ? [{ k: '國定打卡時數', v: p.holidayHours || 0 }] : []),
                   { k: '時薪', v: hr },
                   { k: '平日加班費', v: p.otPayWeekday },
                   { k: '休息日加班費', v: p.otPayRestday },
+                  { k: '國定/例假加班費', v: p.otPayHoliday },
+                  ...(isHourly && p.holidayBonus > 0 ? [{ k: '國定打卡加給', v: p.holidayBonus }] : []),
                 ]}
               />
             )}
             {p.extra_overtime_pay > 0 && (
               <FormulaRow
-                label="額外加班費（國定/例假 + 國定打卡加給）"
+                label="額外加班費"
                 value={p.extra_overtime_pay}
-                formula={
-                  '國定/例假加班：加班時數 × 時薪 × 2.0\n' +
-                  (isHourly ? '時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0（再加 1 倍，本薪已含 1 倍 → 合計 ×2）' : '月薪制：月薪固定值已含整月工資，國定打卡不另外加給')
-                }
+                formula="倍率算法與「加班費」相同（同三桶階梯）"
                 vars={[
-                  { k: '國定/例假加班時數', v: p.otHoliday },
-                  { k: '國定打卡時數', v: p.holidayHours || 0 },
-                  { k: '國定/例假加班費', v: p.otPayHoliday },
-                  { k: '國定打卡加給', v: p.holidayBonus || 0 },
+                  { k: '平日加班時數', v: p._ot_exc_weekday },
+                  { k: '休息日加班時數', v: p._ot_exc_restday },
+                  { k: '國定/例假加班時數', v: p._ot_exc_holiday },
+                  { k: '平日加班費', v: p._ot_exc_weekday_pay },
+                  { k: '休息日加班費', v: p._ot_exc_restday_pay },
+                  { k: '國定/例假加班費', v: p._ot_exc_holiday_pay },
                 ]}
               />
             )}
@@ -342,8 +348,15 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
           {/* ── 加班明細 ── */}
           {(otRows.length > 0) && (
-            <Section title="📅 加班申請明細" color="var(--accent-cyan)">
+            <Section title="📅 加班明細" color="var(--accent-cyan)">
               <OvertimeDetailTable rows={otRows} hourlyRate={hr} />
+            </Section>
+          )}
+
+          {/* ── 額外加班明細 ── */}
+          {((p._ot_exception_rows || []).length > 0) && (
+            <Section title="📅 額外加班明細" color="var(--accent-cyan)">
+              <OvertimeDetailTable rows={p._ot_exception_rows} hourlyRate={hr} />
             </Section>
           )}
 

@@ -1103,11 +1103,14 @@ input, select, textarea {
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
-   讓 div 自己當 overflow 容器，滾軸貼表格底部 */
+   讓 div 自己當 overflow 容器，且**限制高度**讓滾軸永遠浮在 viewport 內
+   (不然資料很多時，橫向滾軸貼在容器底，要捲到最後一列才看得到) */
 div.data-table {
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
   width: 100%;
+  /* 預留約 320px 給 page-header + 統計卡 + 搜尋列，桌面/手機通用 */
+  max-height: calc(100vh - 320px);
 }
 /* 讓內層 table 跟著內容自然撐寬，超過 div 寬度時 div 才會出橫向滾軸；
    min-width: 100% 確保即便內容很少也撐滿容器 */

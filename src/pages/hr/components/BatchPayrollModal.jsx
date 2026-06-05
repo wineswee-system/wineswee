@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon, Pencil } from 'lucide-react'
+import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon, Pencil, FunctionSquare } from 'lucide-react'
 import { detectPayrollAnomalies, isConfigured as aiReady } from '../../../lib/ai/hrAI'
+import PayrollFormulaModal from './PayrollFormulaModal'
 
 import { toast } from '../../../lib/toast'
 import { fmtNT as fmt } from '../../../lib/currency'
@@ -21,6 +22,7 @@ const SEVERITY_STYLE = {
 export default function BatchPayrollModal({ month, batchPreview, batchSaving, onClose, onSave, onSaveAsDraft }) {
   const [anomalyReport, setAnomalyReport] = useState(null)
   const [aiChecking, setAiChecking] = useState(false)
+  const [formulaPayroll, setFormulaPayroll] = useState(null)
 
   const handleAICheck = async () => {
     setAiChecking(true)
@@ -133,7 +135,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
               <thead>
                 {/* 第 1 列：分組標題 */}
                 <tr style={{ background: 'var(--bg-card)' }}>
-                  <th colSpan={3} style={{ position: 'sticky', left: 0, background: 'var(--bg-card)', borderRight: '2px solid var(--border-medium)' }}>員工</th>
+                  <th colSpan={4} style={{ position: 'sticky', left: 0, background: 'var(--bg-card)', borderRight: '2px solid var(--border-medium)' }}>員工</th>
                   <th colSpan={11} style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>薪資項目（加項）</th>
                   <th style={{ textAlign: 'center', background: 'var(--bg-secondary)' }}>應領</th>
                   <th colSpan={6} style={{ textAlign: 'center', color: 'var(--accent-orange)' }}>扣款項目</th>
@@ -145,7 +147,8 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                 <tr>
                   <th style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)', zIndex: 1 }}>姓名</th>
                   <th style={{ position: 'sticky', left: 60, background: 'var(--bg-secondary)', zIndex: 1, color: 'var(--text-muted)' }}>職稱</th>
-                  <th style={{ position: 'sticky', left: 140, background: 'var(--bg-secondary)', zIndex: 1, borderRight: '2px solid var(--border-medium)', color: 'var(--text-muted)' }}>部門</th>
+                  <th style={{ position: 'sticky', left: 140, background: 'var(--bg-secondary)', zIndex: 1, color: 'var(--text-muted)' }}>部門</th>
+                  <th style={{ position: 'sticky', left: 230, background: 'var(--bg-secondary)', zIndex: 1, borderRight: '2px solid var(--border-medium)', color: 'var(--text-muted)', textAlign: 'center' }}>公式</th>
                   {/* 加項 11 欄 */}
                   <th>本薪</th>
                   <th>伙食津貼</th>
@@ -203,7 +206,16 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                         )}
                       </td>
                       <td style={{ position: 'sticky', left: 60, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{p.position || '-'}</td>
-                      <td style={{ position: 'sticky', left: 140, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)', borderRight: '2px solid var(--border-medium)' }}>{p.dept || '-'}</td>
+                      <td style={{ position: 'sticky', left: 140, background: rowBg || 'var(--bg-secondary)', color: 'var(--text-muted)' }}>{p.dept || '-'}</td>
+                      <td style={{ position: 'sticky', left: 230, background: rowBg || 'var(--bg-secondary)', borderRight: '2px solid var(--border-medium)', textAlign: 'center' }}>
+                        <button
+                          onClick={() => setFormulaPayroll(p)}
+                          title="看完整計算公式"
+                          style={{ padding: '2px 6px', border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', borderRadius: 4, cursor: 'pointer', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                        >
+                          <FunctionSquare size={10} /> 看
+                        </button>
+                      </td>
                       {/* 加項 */}
                       <td>{p.base_salary?.toLocaleString() || 0}</td>
                       <td>{p.meal_allowance?.toLocaleString() || 0}</td>
@@ -249,7 +261,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
               </tbody>
               <tfoot>
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
-                  <td colSpan={3} style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)' }}>合計</td>
+                  <td colSpan={4} style={{ position: 'sticky', left: 0, background: 'var(--bg-secondary)' }}>合計</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.base_salary || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.meal_allowance || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.role_allowance || 0), 0).toLocaleString()}</td>
@@ -307,6 +319,14 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
         </div>
 
       </div>
+
+      {formulaPayroll && (
+        <PayrollFormulaModal
+          payroll={formulaPayroll}
+          month={month}
+          onClose={() => setFormulaPayroll(null)}
+        />
+      )}
     </div>
   )
 }

@@ -690,6 +690,14 @@ export default function Salary() {
           halfPayHours,
           lateMins:         att.lateMins,
 
+          // ── 公式說明用（debug）──
+          _is_hourly:           isHourly,
+          _hourly_rate:         hourlyRate,
+          _base_for_insure:     baseForInsure,
+          _insured_salary:      insuredSalary,
+          _supervisor_allowance: Number(ss.supervisor_allowance || 0),
+          _raw_role_allowance:  Number(ss.role_allowance || 0),
+
           // ── 扣項明細 ──
           absenceDeduction,           // = unpaid + half-pay 合計
           unpaidDeduction,            // 無薪假扣款

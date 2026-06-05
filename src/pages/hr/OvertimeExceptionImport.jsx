@@ -21,6 +21,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { computeBatchPayroll } from '../../lib/payrollCalc'
 import BatchPayrollModal from './components/BatchPayrollModal'
 import { fmtNT as fmt } from '../../lib/currency'
+import Salary from './Salary'
 
 const CSV_HEADERS = ['員工名稱', '日期', '開始時間', '結束時間', '時數', '類型', '原因', '備註']
 
@@ -370,6 +371,16 @@ export default function OvertimeExceptionImport() {
             <strong>注意</strong>：本頁匯入的紀錄會直接入帳，並會被薪資計算引用。
             每筆匯入會記錄操作人與時間，作為內部稽核追溯依據。請確認資料正確後再匯入。
           </div>
+        </div>
+      </div>
+
+      {/* ─── 嵌入完整薪資管理（同 /hr/salary 全功能）─── */}
+      <div className="card" style={{ marginBottom: 16, padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+          💰 薪資管理（完整功能）
+        </div>
+        <div style={{ padding: 0 }}>
+          <Salary />
         </div>
       </div>
 

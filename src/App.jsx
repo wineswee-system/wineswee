@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
 import LoadingSpinner from './components/LoadingSpinner'
 import ConfirmDialog from './components/ConfirmDialog'
+import StickyHorizontalScrollbar from './components/StickyHorizontalScrollbar'
 import { Toaster } from 'sonner'
 import { TOAST_POSITION } from './lib/toast'
 import { logError } from './lib/systemLogger.js'
@@ -130,6 +131,9 @@ function AdminApp() {
           </Routes>
           </Suspense>
         </div>
+        {/* 浮動橫向滾軸：自動同步當前 viewport 內可見的 .data-table-wrapper / div.data-table。
+            sticky bottom: 0 黏在 .main-content 底，永遠在 viewport 可見 */}
+        <StickyHorizontalScrollbar />
       </main>
     </div>
   )

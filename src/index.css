@@ -886,13 +886,6 @@ input, select, textarea {
 .page-container {
   padding: 28px 32px;
   max-width: 1600px;
-  /* flex chain：讓內層列表頁的表格區自動填滿剩餘空間，不用估 buffer
-     min-height + max-height 鎖住高度上限，否則 .fade-in 自然撐高
-     會把 page-container 一起撐高，flex: 1 沒「剩餘」可填 */
-  display: flex;
-  flex-direction: column;
-  min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
-  max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
 }
 
 /* Light theme overrides */
@@ -1092,12 +1085,8 @@ input, select, textarea {
 /* ---- Data Table ---- */
 .data-table-wrapper {
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  /* flex chain：在 .fade-in flex column 內自動填滿剩餘空間，
-     不用估 buffer。沒 flex parent 時 flex: 1 不會生效，安全 fallback */
-  flex: 1;
-  min-height: 0;
 }
 
 .data-table {
@@ -1114,13 +1103,11 @@ input, select, textarea {
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
-   讓 div 自己當 overflow 容器，flex chain 內自動填滿剩餘空間 */
+   讓 div 自己當橫向 overflow 容器（垂直由 main-content 處理） */
 div.data-table {
-  overflow: auto;
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   width: 100%;
-  flex: 1;
-  min-height: 0;
 }
 /* 讓內層 table 跟著內容自然撐寬，超過 div 寬度時 div 才會出橫向滾軸；
    min-width: 100% 確保即便內容很少也撐滿容器 */
@@ -1705,11 +1692,6 @@ div.data-table > table {
 
 .fade-in {
   animation: fadeIn var(--transition-normal) forwards;
-  /* flex chain (page-container → fade-in → 內層 table)：讓表格區自動填滿剩餘 */
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .slide-in-left {

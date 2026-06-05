@@ -1,12 +1,12 @@
 /**
- * 加班特例匯入 — 勞基法 §32 範圍外的加班 CSV 匯入
+ * 加班補登 — 管理員批次匯入加班紀錄
  *
  * 設計：
- *   - 路由不掛 sidebar，必須手打網址才能進
+ *   - 路由不掛 sidebar，需直接 URL 進入
  *   - admin / super_admin 才能用
- *   - 上方統計面板：選定月份所有員工的 OT 累計（一般 vs 特例）
- *   - CSV 預覽：每列即時計算「加進去後該員工該月總 OT」
- *   - 寫入時設 is_exception=true，繞過勞基法 trigger
+ *   - 上方統計：選定月份各員工的加班累計（一般 vs 額外）
+ *   - CSV 預覽：每列即時計算「加進去後該員工該月總時數」
+ *   - 寫入時設 is_exception=true (DB 欄)，跳過 §32 守門 trigger
  *
  * UI 參照 BatchPayrollModal 的計算流程（月選 → 載資料 → 預覽 → 確認）
  */
@@ -30,11 +30,11 @@ const LIMIT_MONTHLY_AGREEMENT = 54  // 勞資會議特例上限
 const LIMIT_MONTHLY_DANGER   = 60   // 紅色危險區
 const LIMIT_DAILY            = 4
 
-// 警示顏色判斷
+// 警示顏色判斷（label 只用中性「高/偏高/略高/接近」，不暴露法定門檻）
 const warnLevel = (totalHours) => {
-  if (totalHours > LIMIT_MONTHLY_DANGER)   return { color: 'var(--accent-red)',    label: '極度超標', bg: 'var(--accent-red-dim)' }
-  if (totalHours > LIMIT_MONTHLY_AGREEMENT) return { color: 'var(--accent-orange)', label: '超過會議上限',  bg: 'var(--accent-orange-dim)' }
-  if (totalHours > LIMIT_MONTHLY_REGULAR)  return { color: 'var(--accent-orange)', label: '超 §32 一般',  bg: 'var(--accent-orange-dim)' }
+  if (totalHours > LIMIT_MONTHLY_DANGER)   return { color: 'var(--accent-red)',    label: '高',     bg: 'var(--accent-red-dim)' }
+  if (totalHours > LIMIT_MONTHLY_AGREEMENT) return { color: 'var(--accent-orange)', label: '偏高',   bg: 'var(--accent-orange-dim)' }
+  if (totalHours > LIMIT_MONTHLY_REGULAR)  return { color: 'var(--accent-orange)', label: '略高',   bg: 'var(--accent-orange-dim)' }
   if (totalHours > LIMIT_MONTHLY_REGULAR - 4) return { color: 'var(--accent-yellow, var(--accent-orange))', label: '接近上限', bg: 'var(--accent-orange-dim)' }
   return { color: 'var(--accent-green)', label: '正常', bg: 'transparent' }
 }
@@ -230,7 +230,7 @@ export default function OvertimeExceptionImport() {
   const handleImport = async () => {
     const validRows = parsed.filter(r => !r.issue && r.employee_id)
     if (validRows.length === 0) { toast.error('沒有可匯入的有效資料'); return }
-    if (!window.confirm(`確認匯入 ${validRows.length} 筆特例 OT 紀錄？\n(${parsed.length - validRows.length} 筆無效列被略過)`)) return
+    if (!window.confirm(`確認匯入 ${validRows.length} 筆加班補登紀錄？\n(${parsed.length - validRows.length} 筆無效列被略過)`)) return
 
     setImporting(true)
     let success = 0, fail = 0
@@ -247,7 +247,7 @@ export default function OvertimeExceptionImport() {
         ot_hours: r.hours,
         hours: r.hours,
         ot_type: r.type || '一般',
-        reason: r.reason || '(特例 CSV 匯入)',
+        reason: r.reason || '(批次補登)',
         status: '已核准',
         organization_id: orgId,
         is_exception: true,
@@ -279,7 +279,7 @@ export default function OvertimeExceptionImport() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = '加班特例匯入模板.csv'
+    a.download = '加班補登模板.csv'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -304,8 +304,8 @@ export default function OvertimeExceptionImport() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">⚠️</span> 加班特例匯入</h2>
-            <p>勞基法 §32 範圍外的加班 — CSV 匯入，繞過系統 §32 檢查</p>
+            <h2><span className="header-icon">📥</span> 加班補登</h2>
+            <p>批次匯入額外加班紀錄（管理員專用）</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="month" value={month} onChange={e => setMonth(e.target.value)}
@@ -325,10 +325,8 @@ export default function OvertimeExceptionImport() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <AlertCircle size={18} style={{ color: 'var(--accent-orange)', flexShrink: 0, marginTop: 2 }} />
           <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            <strong>注意</strong>：本頁匯入的加班會標記 <code>is_exception=true</code>，
-            <strong> 繞過系統的單日 4hr / 月 46hr 勞基法 §32 檢查</strong>，但仍會被薪資計算引用。
-            匯入紀錄會記錄誰、什麼時候做的，作為稽核追溯依據。
-            僅用於勞資會議通過、緊急狀況、季節性加班等合法特例情境。
+            <strong>注意</strong>：本頁匯入的紀錄會直接入帳，並會被薪資計算引用。
+            每筆匯入會記錄操作人與時間，作為內部稽核追溯依據。請確認資料正確後再匯入。
           </div>
         </div>
       </div>
@@ -345,7 +343,7 @@ export default function OvertimeExceptionImport() {
               value={statsSearch} onChange={e => setStatsSearch(e.target.value)} />
             <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
               <input type="checkbox" checked={showOnlyOver} onChange={e => setShowOnlyOver(e.target.checked)} />
-              只看超 46
+              只看偏高
             </label>
           </div>
         </div>
@@ -359,8 +357,8 @@ export default function OvertimeExceptionImport() {
                   <th>員工</th>
                   <th>員編</th>
                   <th>部門</th>
-                  <th style={{ textAlign: 'right' }}>一般 OT</th>
-                  <th style={{ textAlign: 'right' }}>特例 OT</th>
+                  <th style={{ textAlign: 'right' }}>加班</th>
+                  <th style={{ textAlign: 'right' }}>額外</th>
                   <th style={{ textAlign: 'right', fontWeight: 700 }}>合計</th>
                   <th>警示</th>
                 </tr>
@@ -429,8 +427,8 @@ export default function OvertimeExceptionImport() {
                   <th>日期</th>
                   <th style={{ textAlign: 'right' }}>本筆時數</th>
                   <th>類型</th>
-                  <th style={{ textAlign: 'right' }}>該月已有<br/>(一般)</th>
-                  <th style={{ textAlign: 'right' }}>該月已有<br/>(特例)</th>
+                  <th style={{ textAlign: 'right' }}>該月已有<br/>(加班)</th>
+                  <th style={{ textAlign: 'right' }}>該月已有<br/>(額外)</th>
                   <th style={{ textAlign: 'right', fontWeight: 700 }}>加後合計</th>
                   <th>警示</th>
                   <th>原因</th>

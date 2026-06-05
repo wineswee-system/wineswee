@@ -76,10 +76,33 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
   if (!rows || rows.length === 0) return (
     <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無加班申請</div>
   )
-  // 依日期排
+  // 單筆獨立用三桶算（假設這筆是該分類的全部 ot 時數）
+  // 跟上面「加班費」欄的合算結果可能略有差異（因為合算是按該分類「全月累計總時數」分段）
+  const calcRowPay = (hours, cat) => {
+    if (cat === 'holiday') return Math.round(hours * hourlyRate * 2)
+    if (cat === 'restday') {
+      const rd1 = Math.min(hours, 2)
+      const rd2 = Math.min(Math.max(hours - 2, 0), 6)
+      const rd3 = Math.max(hours - 8, 0)
+      return Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+    }
+    // weekday
+    return hours <= 2
+      ? Math.round(hours * hourlyRate * 1.34)
+      : Math.round(2 * hourlyRate * 1.34 + (hours - 2) * hourlyRate * 1.67)
+  }
+  const rateLabelFor = (hours, cat) => {
+    if (cat === 'holiday') return '×2.0'
+    if (cat === 'restday') return hours <= 2 ? '×1.34' : hours <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67'
+    return hours <= 2 ? '×1.34' : '×1.34 / ×1.67'
+  }
+
   const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   return (
     <div style={{ overflowX: 'auto' }}>
+      <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', borderRadius: 6, marginBottom: 6 }}>
+        <span>單筆金額 = 該筆時數獨立套三桶階梯（時薪 <strong style={{ color: 'var(--accent-cyan)' }}>NT$ {hourlyRate.toLocaleString()}</strong>）</span>
+      </div>
       <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
@@ -93,23 +116,7 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
         <tbody>
           {sorted.map((r, i) => {
             const cat = r.category || 'weekday'
-            // 推估這筆的金額（粗略，因為三桶階梯要按總時數累積，這裡顯示參考用）
-            let rateLabel = ''
-            let amount = 0
-            if (cat === 'holiday') {
-              rateLabel = '×2.0'
-              amount = Math.round(r.hours * hourlyRate * 2)
-            } else if (cat === 'restday') {
-              rateLabel = r.hours <= 2 ? '×1.34' : r.hours <= 8 ? '×1.34/1.67' : '×1.34/1.67/2.67'
-              amount = r.hours <= 2
-                ? Math.round(r.hours * hourlyRate * 1.34)
-                : '見階梯'
-            } else {
-              rateLabel = r.hours <= 2 ? '×1.34' : '×1.34/1.67'
-              amount = r.hours <= 2
-                ? Math.round(r.hours * hourlyRate * 1.34)
-                : '見階梯'
-            }
+            const amount = calcRowPay(r.hours, cat)
             return (
               <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '5px 8px' }}>{r.date}</td>
@@ -119,15 +126,15 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
                   </span>
                 </td>
                 <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{r.hours} 小時</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{rateLabel}</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{typeof amount === 'number' ? fmt(amount) : amount}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{rateLabelFor(r.hours, cat)}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{fmt(amount)}</td>
               </tr>
             )
           })}
         </tbody>
       </table>
       <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
-        ※ 三桶階梯依「分類後加總時數」計算（平日/休息日各分 2h/6h/4h 三段），單筆「本筆金額」僅供參考。實際分桶後的金額看上面「加班費」欄。
+        ※ 上面「加班費」欄是「同分類全月加總後」才套三桶算，跟這裡的逐筆獨立加總可能略有差異（差異來自階梯交界的時數歸屬）。
       </div>
     </div>
   )

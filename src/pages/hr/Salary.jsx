@@ -376,37 +376,44 @@ export default function Salary() {
           .map(h => h.date)
       )
 
-      // attendance map: employee_id → { hours, holidayHours, lateMins, days }
+      // attendance map: employee_id → { hours, holidayHours, lateMins, days, lateRows }
       // hours        = 平日 + 補班日 + 例假/休息日 (打卡正常 1 倍工資)
       // holidayHours = 國定假日打卡工時 (要額外加 1 倍 → 合計 2 倍)
+      // lateRows     = 遲到原始 row（公式 modal 顯示）
       const attMap = {}
       for (const a of (attRes.data || [])) {
         const id = a.employee_id
-        if (!attMap[id]) attMap[id] = { hours: 0, holidayHours: 0, lateMins: 0, days: 0 }
+        if (!attMap[id]) attMap[id] = { hours: 0, holidayHours: 0, lateMins: 0, days: 0, lateRows: [] }
         const h = Number(a.total_hours || 0)
         if (holidayDates.has(a.date)) {
           attMap[id].holidayHours += h
         }
         attMap[id].hours    += h
         attMap[id].days     += 1
-        if (a.is_late) attMap[id].lateMins += Number(a.late_minutes || 0)
+        if (a.is_late && Number(a.late_minutes || 0) > 0) {
+          attMap[id].lateMins += Number(a.late_minutes || 0)
+          attMap[id].lateRows.push({ date: a.date, late_minutes: Number(a.late_minutes) })
+        }
       }
 
-      // overtime map: employee_id → { weekday, restday, holiday }
+      // overtime map: employee_id → { weekday, restday, holiday, rows }
       // ot_category 由 DB trigger 依 holidays 表 + 星期幾自動分類（勞基法 §36）：
       //   weekday=平日 ×1.34/1.67、restday=休息日 ×1.34/1.67/2.67、holiday=例假/國定 ×2
       // 舊資料若 ot_category 為 NULL，fallback：用 request_date 的星期幾粗略分類
+      // rows = 加班申請原始 row（公式 modal 顯示「哪一天加班幾小時」）
       const otMap = {}
       for (const o of (otRes.data || [])) {
         const id = o.employee_id
-        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0, holiday: 0 }
+        if (!otMap[id]) otMap[id] = { weekday: 0, restday: 0, holiday: 0, rows: [] }
         let cat = o.ot_category
         if (!cat && o.request_date) {
           const dow = new Date(o.request_date).getDay()  // 0=Sun, 6=Sat
           cat = dow === 0 ? 'holiday' : dow === 6 ? 'restday' : 'weekday'
         }
         cat = cat || 'weekday'
-        otMap[id][cat] = (otMap[id][cat] || 0) + Number(o.ot_hours || 0)
+        const hours = Number(o.ot_hours || 0)
+        otMap[id][cat] = (otMap[id][cat] || 0) + hours
+        otMap[id].rows.push({ date: o.request_date, hours, category: cat, type: o.ot_type })
       }
 
       // leave map: employee_id → { unpaidHours, halfPayHours, unpaidDays }
@@ -697,6 +704,8 @@ export default function Salary() {
           _insured_salary:      insuredSalary,
           _supervisor_allowance: Number(ss.supervisor_allowance || 0),
           _raw_role_allowance:  Number(ss.role_allowance || 0),
+          _ot_rows:             ot.rows || [],
+          _late_rows:           att.lateRows || [],
 
           // ── 扣項明細 ──
           absenceDeduction,           // = unpaid + half-pay 合計

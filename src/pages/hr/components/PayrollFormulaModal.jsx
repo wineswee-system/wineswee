@@ -2,7 +2,18 @@ import { createPortal } from 'react-dom'
 import { X, FunctionSquare } from 'lucide-react'
 import { fmtNT as fmt } from '../../../lib/currency'
 
-// 每項顯示一張小卡片：標籤 / 數值 / 公式 / 變數明細
+const CATEGORY_LABEL = {
+  weekday: '平日',
+  restday: '休息日',
+  holiday: '國定/例假',
+}
+
+const CATEGORY_COLOR = {
+  weekday: 'var(--accent-cyan)',
+  restday: 'var(--accent-orange)',
+  holiday: 'var(--accent-red)',
+}
+
 function FormulaRow({ label, value, formula, vars, color, sub, hint }) {
   const isNeg = value < 0
   return (
@@ -23,25 +34,24 @@ function FormulaRow({ label, value, formula, vars, color, sub, hint }) {
         </div>
       </div>
       {formula && (
-        <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary)', fontFamily: 'ui-monospace, monospace', fontSize: 11, color: 'var(--text-secondary)' }}>
+        <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           {formula}
         </div>
       )}
       {vars && vars.length > 0 && (
-        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 11 }}>
+        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11 }}>
           {vars.map((v, i) => (
             <span key={i} style={{
               padding: '2px 8px', borderRadius: 4,
               background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
-              fontFamily: 'ui-monospace, monospace',
             }}>
-              {v.k} = {typeof v.v === 'number' ? (Number.isInteger(v.v) ? v.v.toLocaleString() : v.v.toFixed(2)) : v.v}
+              {v.k}：{typeof v.v === 'number' ? (Number.isInteger(v.v) ? v.v.toLocaleString() : v.v.toFixed(2)) : v.v}
             </span>
           ))}
         </div>
       )}
       {hint && (
-        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>※ {hint}</div>
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>※ {hint}</div>
       )}
     </div>
   )
@@ -61,6 +71,109 @@ function Section({ title, color, children }) {
   )
 }
 
+// 加班明細小表
+function OvertimeDetailTable({ rows, hourlyRate }) {
+  if (!rows || rows.length === 0) return (
+    <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無加班申請</div>
+  )
+  // 依日期排
+  const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>日期</th>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>類別</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>時數</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>適用倍率</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>本筆金額</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r, i) => {
+            const cat = r.category || 'weekday'
+            // 推估這筆的金額（粗略，因為三桶階梯要按總時數累積，這裡顯示參考用）
+            let rateLabel = ''
+            let amount = 0
+            if (cat === 'holiday') {
+              rateLabel = '×2.0'
+              amount = Math.round(r.hours * hourlyRate * 2)
+            } else if (cat === 'restday') {
+              rateLabel = r.hours <= 2 ? '×1.34' : r.hours <= 8 ? '×1.34/1.67' : '×1.34/1.67/2.67'
+              amount = r.hours <= 2
+                ? Math.round(r.hours * hourlyRate * 1.34)
+                : '見階梯'
+            } else {
+              rateLabel = r.hours <= 2 ? '×1.34' : '×1.34/1.67'
+              amount = r.hours <= 2
+                ? Math.round(r.hours * hourlyRate * 1.34)
+                : '見階梯'
+            }
+            return (
+              <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <td style={{ padding: '5px 8px' }}>{r.date}</td>
+                <td style={{ padding: '5px 8px' }}>
+                  <span style={{ padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', color: CATEGORY_COLOR[cat], fontSize: 11 }}>
+                    {CATEGORY_LABEL[cat]}
+                  </span>
+                </td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{r.hours} 小時</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{rateLabel}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{typeof amount === 'number' ? fmt(amount) : amount}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
+        ※ 三桶階梯依「分類後加總時數」計算（平日/休息日各分 2h/6h/4h 三段），單筆「本筆金額」僅供參考。實際分桶後的金額看上面「加班費」欄。
+      </div>
+    </div>
+  )
+}
+
+// 遲到明細小表
+function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
+  if (!rows || rows.length === 0) return (
+    <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無遲到紀錄</div>
+  )
+  const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const totalMins = sorted.reduce((s, r) => s + (r.late_minutes || 0), 0)
+  const totalUnits = Math.floor(totalMins / 30)
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>日期</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>遲到分鐘</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>滿 30 分單位數</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '5px 8px' }}>{r.date}</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--accent-orange)' }}>{r.late_minutes} 分</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{Math.floor(r.late_minutes / 30)}</td>
+            </tr>
+          ))}
+          <tr style={{ borderTop: '2px solid var(--border-medium)', fontWeight: 700, background: 'var(--bg-secondary)' }}>
+            <td style={{ padding: '6px 8px' }}>合計</td>
+            <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--accent-orange)' }}>{totalMins} 分</td>
+            <td style={{ padding: '6px 8px', textAlign: 'right' }}>{totalUnits} 單位</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
+        ※ 扣款公式：合計分鐘 ÷ 30 (無條件捨去) × 時薪 × 0.5
+        ＝ {totalUnits} × {hourlyRate} × 0.5 ＝ {fmt(lateDeduction || 0)}
+      </div>
+    </div>
+  )
+}
+
 export default function PayrollFormulaModal({ payroll, month, onClose }) {
   if (!payroll) return null
   const p = payroll
@@ -68,14 +181,14 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
   const hr = p._hourly_rate || 0
   const _p = p.salary_prorate_ratio ?? 1
   const isProrated = _p < 0.9999
+  const otRows = p._ot_rows || []
+  const lateRows = p._late_rows || []
 
-  // 加項數值
   const allowancesSum = (p.role_allowance||0) + (p.meal_allowance||0) + (p.transport_allowance||0)
     + (p.night_allowance||0) + (p.cross_store_allowance||0) + (p.other_custom_total||0) + (p.attendance_bonus||0)
   const otSum = (p.regular_overtime_pay||0) + (p.extra_overtime_pay||0)
   const grossCheck = (p.base_salary||0) + allowancesSum + otSum + (p.policyBonus||0)
 
-  // 扣項數值
   const leaveDeduction = (p.unpaidDeduction||0) + (p.halfPayDeduction||0)
   const totalDedCheck = (p.laborInsurance||0) + (p.healthInsurance||0) + (p.pension||0)
     + leaveDeduction + (p.lateDeduction||0) + (p.legal_deduction||0)
@@ -90,9 +203,8 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{
         background: 'var(--bg-secondary)', borderRadius: 16,
         border: '1px solid var(--border-medium)', boxShadow: 'var(--shadow-xl)',
-        width: '100%', maxWidth: 800,
+        width: '100%', maxWidth: 820,
       }}>
-        {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -112,7 +224,6 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: '16px 20px', maxHeight: '80vh', overflowY: 'auto' }}>
 
           {/* ── 加項 ── */}
@@ -121,13 +232,13 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               label="本薪"
               value={p.base_salary}
               formula={isHourly
-                ? `hourly_rate × 當月工時${isProrated ? '（已含比例）' : ''}`
-                : `salary_structures.base_salary${isProrated ? ` × 工作日比例` : ''}`}
+                ? `時薪 × 當月實際打卡工時${isProrated ? '（已含在職比例）' : ''}`
+                : `月薪設定值${isProrated ? ' × 在職工作日比例' : ''}`}
               vars={isHourly
-                ? [{ k: 'hourly_rate', v: hr }, { k: 'work_hours', v: p.workHours }]
+                ? [{ k: '時薪', v: hr }, { k: '當月工時', v: p.workHours }]
                 : isProrated
-                  ? [{ k: 'base', v: Math.round(p.base_salary / _p) }, { k: '比例', v: `${p.salary_actual_wd}/${p.salary_total_wd}` }]
-                  : [{ k: 'base', v: p.base_salary }]
+                  ? [{ k: '月薪', v: Math.round(p.base_salary / _p) }, { k: '在職比例', v: `${p.salary_actual_wd}/${p.salary_total_wd} 工作日` }]
+                  : [{ k: '月薪', v: p.base_salary }]
               }
             />
 
@@ -135,43 +246,42 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="主管/職務津貼"
                 value={p.role_allowance}
-                formula="supervisor_allowance + role_allowance"
+                formula="主管津貼 + 職務津貼（舊資料 fallback）"
                 vars={[
-                  { k: 'supervisor', v: p._supervisor_allowance },
-                  { k: 'role', v: p._raw_role_allowance },
-                  ...(isProrated ? [{ k: '比例', v: _p }] : []),
+                  { k: '主管', v: p._supervisor_allowance },
+                  { k: '職務', v: p._raw_role_allowance },
+                  ...(isProrated ? [{ k: '在職比例', v: _p }] : []),
                 ]}
-                hint="2026-05-13 後新資料用 supervisor_allowance；舊資料 role_allowance > 0 仍會吃（永春 setup script）"
               />
             )}
 
             {p.meal_allowance > 0 && (
               <FormulaRow label="伙食津貼" value={p.meal_allowance}
-                formula={`meal_allowance${isProrated ? ' × 比例' : ''}`} />
+                formula={`設定值${isProrated ? ' × 在職比例' : ''}`} />
             )}
             {p.transport_allowance > 0 && (
               <FormulaRow label="交通津貼" value={p.transport_allowance}
-                formula={`transport_allowance${isProrated ? ' × 比例' : ''}`} />
+                formula={`設定值${isProrated ? ' × 在職比例' : ''}`} />
             )}
             {p.night_allowance > 0 && (
               <FormulaRow label="夜間津貼" value={p.night_allowance}
-                formula={`night_shift_allowance${isProrated ? ' × 比例' : ''}`} />
+                formula={`設定值${isProrated ? ' × 在職比例' : ''}`} />
             )}
             {p.cross_store_allowance > 0 && (
               <FormulaRow label="跨店津貼" value={p.cross_store_allowance}
-                formula={`cross_store_allowance${isProrated ? ' × 比例' : ''}`} />
+                formula={`設定值${isProrated ? ' × 在職比例' : ''}`} />
             )}
             {p.other_custom_total > 0 && (
               <FormulaRow label="其他自訂津貼" value={p.other_custom_total}
-                formula="SUM(custom_allowances) 排除已歸類的夜班/跨區" />
+                formula="自訂津貼加總（排除已歸類的夜班/跨店）" />
             )}
             <FormulaRow
               label="全勤獎金"
               value={p.attendance_bonus}
-              formula="lateMins=0 AND absenceDays=0 ? attendance_bonus_base : 0"
+              formula="若整月無遲到、無無薪缺勤 → 給設定值，否則 0"
               vars={[
-                { k: 'late_mins', v: p.lateMins },
-                { k: 'absence_days', v: p.absenceDays },
+                { k: '遲到分鐘', v: p.lateMins },
+                { k: '無薪缺勤天數', v: p.absenceDays },
               ]}
               hint={p.attendance_bonus === 0 && (p.lateMins > 0 || p.absenceDays > 0)
                 ? '有遲到或無薪缺勤 → 不發' : null}
@@ -179,36 +289,40 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
             {p.regular_overtime_pay > 0 && (
               <FormulaRow
-                label="加班費（平日+休息日）"
+                label="加班費（平日 + 休息日）"
                 value={p.regular_overtime_pay}
-                formula="平日: ≤2h ×1.34；>2h: 2×hr×1.34 + (剩)×hr×1.67｜休息日: ≤2h ×1.34；3-8h ×1.67；9-12h ×2.67"
+                formula={
+                  '平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67（勞基法 §24）\n' +
+                  '休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67'
+                }
                 vars={[
-                  { k: 'ot_weekday', v: p.otWeekday },
-                  { k: 'ot_restday', v: p.otRestday },
-                  { k: 'hr', v: hr },
-                  { k: '平日OT$', v: p.otPayWeekday },
-                  { k: '休息日OT$', v: p.otPayRestday },
+                  { k: '平日加班總時數', v: p.otWeekday },
+                  { k: '休息日加班總時數', v: p.otRestday },
+                  { k: '時薪', v: hr },
+                  { k: '平日加班費', v: p.otPayWeekday },
+                  { k: '休息日加班費', v: p.otPayRestday },
                 ]}
               />
             )}
             {p.extra_overtime_pay > 0 && (
               <FormulaRow
-                label="額外加班（國定/例假 + 國定打卡加給）"
+                label="額外加班費（國定/例假 + 國定打卡加給）"
                 value={p.extra_overtime_pay}
-                formula="國定/例假加班: ot_hours × hr × 2｜時薪制國定打卡: holiday_hours × hr × 1（再加 1 倍）"
+                formula={
+                  '國定/例假加班：加班時數 × 時薪 × 2.0\n' +
+                  (isHourly ? '時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0（再加 1 倍，本薪已含 1 倍 → 合計 ×2）' : '月薪制：月薪固定值已含整月工資，國定打卡不另外加給')
+                }
                 vars={[
-                  { k: 'ot_holiday', v: p.otHoliday },
-                  { k: 'holiday_hours', v: p.holidayHours || 0 },
-                  { k: '國定/例假OT$', v: p.otPayHoliday },
+                  { k: '國定/例假加班時數', v: p.otHoliday },
+                  { k: '國定打卡時數', v: p.holidayHours || 0 },
+                  { k: '國定/例假加班費', v: p.otPayHoliday },
                   { k: '國定打卡加給', v: p.holidayBonus || 0 },
                 ]}
-                hint={isHourly ? '時薪制：國定打卡 baseSalary 已含 1 倍，這裡再加 1 倍 → 合計 ×2' : '月薪制：固定值已含整月工資，國定打卡不另外加給'}
               />
             )}
             {p.policyBonus > 0 && (
               <FormulaRow label="政策獎金" value={p.policyBonus}
-                formula="SUM(getEffectiveBenefits('bonus')) — 業績/出勤等規則"
-                hint="目前 sales=0, attendance_rate=1 是 stub" />
+                formula="依業績/出勤獎金規則計算（業績與出勤率目前帶 0 / 1 stub）" />
             )}
 
             <FormulaRow
@@ -221,42 +335,56 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 { k: '津貼小計', v: allowancesSum },
                 { k: '加班費', v: otSum },
                 { k: '獎金', v: p.policyBonus || 0 },
-                { k: '加總', v: grossCheck },
+                { k: '驗算', v: grossCheck },
               ]}
             />
           </Section>
+
+          {/* ── 加班明細 ── */}
+          {(otRows.length > 0) && (
+            <Section title="📅 加班申請明細" color="var(--accent-cyan)">
+              <OvertimeDetailTable rows={otRows} hourlyRate={hr} />
+            </Section>
+          )}
+
+          {/* ── 遲到明細 ── */}
+          {(lateRows.length > 0) && (
+            <Section title="⏰ 遲到明細" color="var(--accent-orange)">
+              <LateDetailTable rows={lateRows} hourlyRate={hr} lateDeduction={p.lateDeduction} />
+            </Section>
+          )}
 
           {/* ── 扣項 ── */}
           <Section title="② 扣項" color="var(--accent-orange)">
             <FormulaRow
               label="投保金額"
               value={p.insuredLabor === p.insuredHealth ? p.insuredLabor : 0}
-              formula="salary_structures.base_insured (若有) 否則 = base + 所有經常性津貼"
+              formula="員工檔的「投保金額」設定值；若沒設定 → 本薪 + 所有經常性津貼"
               vars={p.insuredLabor === p.insuredHealth
-                ? [{ k: 'insured', v: p.insuredLabor }]
+                ? [{ k: '投保金額', v: p.insuredLabor }]
                 : [{ k: '勞保上限', v: p.insuredLabor }, { k: '健保上限', v: p.insuredHealth }]
               }
-              hint={p.insuredLabor !== p.insuredHealth ? '高薪：勞保上限 45,800 / 健保上限 313,000，故兩者不同' : null}
+              hint={p.insuredLabor !== p.insuredHealth ? '高薪：勞保最高 45,800 / 健保最高 313,000，故兩者不同' : null}
             />
             <FormulaRow
               label="勞保（員工自付）"
               value={-p.laborInsurance}
-              formula="級距表 lookup × 員工分擔比例 (20%)"
+              formula="級距表查表 × 員工分擔比例 20%"
               hint={isProrated ? `在職曆日比例 ${p.in_service_days}/${p.month_days} 已套用` : null}
             />
             <FormulaRow
               label="健保（員工自付）"
               value={-p.healthInsurance}
-              formula="級距表 lookup × 員工分擔比例 (30%) × (1 + 眷屬數)"
+              formula="級距表查表 × 員工分擔比例 30% ×（1 + 眷屬數）"
               vars={[{ k: '眷屬', v: p.health_ins_dependents }]}
-              hint="健保不打在職比例（月初有保就全月）"
+              hint="健保不打在職比例（月初有保就全月收）"
             />
             {p.pension > 0 && (
               <FormulaRow
                 label="勞退（員工自提）"
                 value={-p.pension}
-                formula="投保金額 × voluntary_pension_rate%"
-                vars={[{ k: 'rate%', v: p.pension_self_pct }]}
+                formula="投保金額 × 員工自提%"
+                vars={[{ k: '自提%', v: p.pension_self_pct }]}
                 hint={isProrated ? '已套在職比例' : null}
               />
             )}
@@ -264,13 +392,13 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="請假扣款"
                 value={-leaveDeduction}
-                formula="無薪假: hours × hr × 1.0｜半薪假(病/生理): hours × hr × 0.5"
+                formula={'無薪假（事假/無薪假）：時數 × 時薪 × 1.0\n半薪假（病假/生理假）：時數 × 時薪 × 0.5'}
                 vars={[
-                  { k: 'unpaid_h', v: p.unpaidHours },
-                  { k: 'halfPay_h', v: p.halfPayHours },
-                  { k: 'hr', v: hr },
-                  { k: 'unpaid扣', v: p.unpaidDeduction },
-                  { k: 'halfPay扣', v: p.halfPayDeduction },
+                  { k: '無薪時數', v: p.unpaidHours },
+                  { k: '半薪時數', v: p.halfPayHours },
+                  { k: '時薪', v: hr },
+                  { k: '無薪扣款', v: p.unpaidDeduction },
+                  { k: '半薪扣款', v: p.halfPayDeduction },
                 ]}
                 hint={isHourly ? '時薪制 PT 請假不扣（沒上班→沒工時→自然不算薪）' : null}
               />
@@ -279,17 +407,17 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="遲到扣款"
                 value={-p.lateDeduction}
-                formula="FLOOR(lateMins / 30) × hr × 0.5"
-                vars={[{ k: 'late_mins', v: p.lateMins }, { k: 'hr', v: hr }]}
-                hint="每滿 30 分鐘扣半小時薪"
+                formula="合計遲到分鐘 ÷ 30（無條件捨去）× 時薪 × 0.5"
+                vars={[{ k: '合計遲到分鐘', v: p.lateMins }, { k: '時薪', v: hr }]}
+                hint="每滿 30 分鐘扣半小時薪；上方有逐筆遲到日明細"
               />
             )}
             {p.legal_deduction > 0 && (
               <FormulaRow
                 label="法扣（民事執行/養育費/債務）"
                 value={-p.legal_deduction}
-                formula="SUM(legal_deductions WHERE status=進行中 AND started_month ≤ 當月)"
-                hint="目前只算 fixed amount；percent 型待加"
+                formula="進行中且開始月份 ≤ 當月的法扣設定加總"
+                hint="目前只算固定金額；百分比型尚未支援"
               />
             )}
 
@@ -298,7 +426,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               value={-p.totalDeductions}
               color="var(--accent-red)"
               formula="勞保 + 健保 + 勞退自提 + 請假扣 + 遲到扣 + 法扣"
-              vars={[{ k: '加總驗算', v: totalDedCheck }]}
+              vars={[{ k: '驗算', v: totalDedCheck }]}
             />
           </Section>
 
@@ -319,12 +447,12 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
           {/* ── 雇主負擔 ── */}
           <Section title="④ 雇主負擔（成本參考，不影響員工實領）" color="var(--text-muted)">
-            <FormulaRow label="勞保（公司）" value={p.laborEmployer}
-              formula="級距 × 70%" />
-            <FormulaRow label="健保（公司）" value={p.healthEmployer}
-              formula="級距 × 60%（公司分擔比例）" />
-            <FormulaRow label="勞退（公司）" value={p.pensionEmployer}
-              formula="投保金額 × 6%（強制提撥）" />
+            <FormulaRow label="勞保（公司負擔）" value={p.laborEmployer}
+              formula="級距 × 公司分擔比例 70%" />
+            <FormulaRow label="健保（公司負擔）" value={p.healthEmployer}
+              formula="級距 × 公司分擔比例 60%" />
+            <FormulaRow label="勞退（公司提撥）" value={p.pensionEmployer}
+              formula="投保金額 × 6%（勞退條例強制提撥）" />
             <FormulaRow
               label="總人事成本"
               value={(p.laborEmployer || 0) + (p.healthEmployer || 0) + (p.pensionEmployer || 0) + p.gross}

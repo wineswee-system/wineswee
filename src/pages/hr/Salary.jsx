@@ -526,7 +526,9 @@ export default function Salary() {
           return s + (Number(c.amount) || 0)
         }, 0)
         const dependents       = ss.health_ins_dependents || 0
-        const voluntaryRate    = (ss.voluntary_pension_rate || 0) / 100
+        // 勞退自提% 從 employees.labor_pension_self_rate 抓（per Payroll.jsx 說明）
+        // 早期錯讀 ss.voluntary_pension_rate（salary_structures 沒這欄）→ 永遠 0
+        const voluntaryRate    = (Number(emp.labor_pension_self_rate) || 0) / 100
 
         // 業務鐵則 v3：正職時薪 / 日薪 / 投保 都以「本薪 + 所有經常性津貼」為基準
         //   = base + 主管 + 夜班 + 跨區 + 餐費 + 交通 + 全勤 + 其他自訂
@@ -756,7 +758,7 @@ export default function Salary() {
 
           // ── 配置 ──
           health_ins_dependents: dependents,
-          pension_self_pct: ss.voluntary_pension_rate || 0,
+          pension_self_pct: Number(emp.labor_pension_self_rate) || 0,
 
           // ── 在職天數（保費曆日比例）+ 薪資工作日比例 ──
           in_service_days:       inServiceDays,

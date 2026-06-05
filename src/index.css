@@ -1085,8 +1085,11 @@ input, select, textarea {
 /* ---- Data Table ---- */
 .data-table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* 同 div.data-table 邏輯：限高度讓橫向滾軸永遠浮在 viewport 內，
+     不用捲到最後一列才看得到 */
+  max-height: calc(100vh - 320px);
 }
 
 .data-table {

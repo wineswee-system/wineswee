@@ -23,8 +23,12 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
   const batchBrackets = await loadInsuranceBrackets(_y)
 
+  // 跨店打卡支援：員工是「primary store=該店」或「additional_stores 含該店」都算
   const scopedEmployees = storeFilter
-    ? employees.filter(e => e.store === storeFilter)
+    ? employees.filter(e =>
+        e.store === storeFilter
+        || (Array.isArray(e.additional_stores) && e.additional_stores.includes(storeFilter))
+      )
     : employees
 
   const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes] = await Promise.all([

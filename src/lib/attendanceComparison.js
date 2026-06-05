@@ -62,11 +62,23 @@ export async function compareAttendanceWithSchedule(dateStart, dateEnd, storeNam
 
   // [Fix 2+3] Scope both tables consistently when a store is given.
   // attendance_records has store_id; schedules does not — scope via employee IDs.
+  // 跨店打卡支援：員工 list 含 primary store=該店 OR additional_stores 含該店店名
   if (scopedStoreId) {
     attQ = attQ.eq('store_id', scopedStoreId)
 
-    const { data: storeEmps } = await supabase
-      .from('employees').select('id').eq('store_id', scopedStoreId)
+    // 拿該店名給 additional_stores TEXT[] 比對
+    const { data: storeRow } = await supabase
+      .from('stores').select('name').eq('id', scopedStoreId).maybeSingle()
+    const storeName = storeRow?.name || null
+
+    // primary 或 additional_stores 含該店名 都算這店的員工
+    let empQ = supabase.from('employees').select('id')
+    if (storeName) {
+      empQ = empQ.or(`store_id.eq.${scopedStoreId},additional_stores.cs.{${storeName}}`)
+    } else {
+      empQ = empQ.eq('store_id', scopedStoreId)
+    }
+    const { data: storeEmps } = await empQ
     const empIds = (storeEmps || []).map(e => e.id)
     if (empIds.length) schedQ = schedQ.in('employee_id', empIds)
   }

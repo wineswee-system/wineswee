@@ -311,14 +311,16 @@ export default function OvertimeExceptionImport() {
             <p>批次匯入額外加班紀錄（管理員專用）</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-              className="form-input" style={{ width: 140 }} />
             <button className="btn btn-secondary" onClick={loadMonthStats} disabled={loading}>
               <RefreshCw size={14} /> 重整
             </button>
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               <Download size={14} /> 下載 CSV 模板
             </button>
+            <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <input type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: 'none' }} />
+              <Upload size={14} /> 選 CSV 檔案
+            </label>
           </div>
         </div>
       </div>
@@ -334,20 +336,12 @@ export default function OvertimeExceptionImport() {
         </div>
       </div>
 
-      {/* ─── 上傳區 ─── */}
-      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-        <label style={{ display: 'inline-block', cursor: 'pointer' }}>
-          <input type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: 'none' }} />
-          <span className="btn btn-primary">
-            <Upload size={14} /> 選 CSV 檔案
-          </span>
-        </label>
-        {parsed.length > 0 && (
-          <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-            已解析 {parsed.length} 列，其中 {parsed.filter(r => !r.issue).length} 列可匯入
-          </span>
-        )}
-      </div>
+      {/* ─── CSV 解析狀態（按鈕在 header）─── */}
+      {parsed.length > 0 && (
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+          已解析 {parsed.length} 列，其中 {parsed.filter(r => !r.issue).length} 列可匯入
+        </div>
+      )}
 
       {/* ─── CSV 預覽 ─── */}
       {parsed.length > 0 && (

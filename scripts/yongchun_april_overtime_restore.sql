@@ -82,7 +82,7 @@ BEGIN
     (v_chen_id, '陳嘉益', v_store_name, v_org_id, '2026-04-21', '2026-04-21', 1.0, 1.0, 'weekday', 'pay', '已核准', '加班'),
     (v_chen_id, '陳嘉益', v_store_name, v_org_id, '2026-04-23', '2026-04-23', 2.0, 2.0, 'weekday', 'pay', '已核准', '加班'),
     (v_chen_id, '陳嘉益', v_store_name, v_org_id, '2026-04-24', '2026-04-24', 2.0, 2.0, 'weekday', 'pay', '已核准', '加班'),
-    (v_chen_id, '陳嘉益', v_store_name, v_org_id, '2026-04-29', '2026-04-29', 8.0, 8.0, 'holiday', 'pay', '已核准', '加班');
+    (v_chen_id, '陳嘉益', v_store_name, v_org_id, '2026-04-29', '2026-04-29', 8.0, 8.0, 'weekday', 'pay', '已核准', '加班');  -- 2026-04-29 是星期三平日（之前手寫成 holiday 是錯）
 
   -- 徐宥芯 (L2025063) 1 筆
   INSERT INTO overtime_requests

@@ -16,6 +16,7 @@ const emptyStep = () => ({
   title: '', role: '', priority: '中', description: '',
   checklist_id: '', approval_chain_id: '', required_forms: [],
   trigger_template_id: '',
+  branch_on_approved: '', branch_on_rejected: '',
 })
 
 /** Normalise a raw step from DB / version JSONB into the local editor shape. */
@@ -28,6 +29,8 @@ const normalizeStep = (s) => ({
   approval_chain_id: s.approval_chain_id || '',
   required_forms: s.required_forms || [],
   trigger_template_id: s.trigger_template_id || '',
+  branch_on_approved: s.branch_on_approved || '',
+  branch_on_rejected: s.branch_on_rejected || '',
 })
 
 const emptyTpl = () => ({
@@ -76,7 +79,7 @@ export default function TemplateStudio() {
         supabase.from('checklists').select('id, name, items').order('name'),
         supabase.from('approval_chains').select('id, name, approval_chain_steps(count)').order('name'),
         supabase.from('sop_templates').select('id, name').order('name'),
-        supabase.from('workflow_categories').select('id, name').order('name'),
+        supabase.from('workflow_categories').select('id, name').eq('scope', 'workflow').order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {
@@ -206,6 +209,8 @@ export default function TemplateStudio() {
         approval_chain_id: s.approval_chain_id || null,
         required_forms: s.required_forms?.length > 0 ? s.required_forms : null,
         trigger_template_id: s.trigger_template_id || null,
+        branch_on_approved: s.branch_on_approved || null,
+        branch_on_rejected: s.branch_on_rejected || null,
       }))
       const payload = {
         name: tpl.name.trim(),
@@ -360,6 +365,9 @@ export default function TemplateStudio() {
                   onChange={e => updateTpl(t => ({ ...t, category: e.target.value }))}
                 >
                   {categories.map(c => <option key={c}>{c}</option>)}
+                  {tpl.category && !categories.includes(tpl.category) && (
+                    <option value={tpl.category}>{tpl.category}</option>
+                  )}
                 </select>
               </Field>
               <Field label={

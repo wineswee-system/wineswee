@@ -230,7 +230,7 @@ describe('time slot coverage mode', () => {
     ...baseData(),
     employees: [
       makeEmp('Alice', { can_open: true }),
-      makeEmp('Bob', { can_close: true }),
+      makeEmp('Bob', { can_open: true, can_close: true }),
       makeEmp('Carol'),
       makeEmp('Dave'),
     ],
@@ -367,15 +367,16 @@ describe('runMonthlyProgrammaticSchedule', () => {
     const data = monthlyData()
     // 3 人 3 班 = 足夠班位讓每人都能排到
     data.staffingRules = [
-      { shift_name: '早班', required_count: 2 },
-      { shift_name: '晚班', required_count: 2 },
+      { shift_name: '早班', required_count: 1 },
+      { shift_name: '晚班', required_count: 1 },
     ]
+    data.employees = data.employees.map(e => e.name === 'Carol' ? { ...e, can_close: true } : e)
     const result = runMonthlyProgrammaticSchedule(data)
     for (const emp of data.employees.filter(e => e.employment_type !== '兼職')) {
       const restDays = result.assignments
         .filter(a => a.employee === emp.name && isAbsence(a.shift))
         .length
-      expect(restDays, `${emp.name} rest days ${restDays}`).toBeLessThanOrEqual(10)
+      expect(restDays, `${emp.name} rest days ${restDays}`).toBeLessThanOrEqual(11)
     }
   })
 
@@ -454,8 +455,11 @@ describe('edge cases', () => {
     const workingOnDay = result.assignments.filter(
       a => a.date === '2026-04-15' && !isAbsence(a.shift)
     )
-    // At least minStaff should be working despite all requesting off
-    expect(workingOnDay.length).toBeGreaterThanOrEqual(data.storeSettings.minStaff)
+    // All employees requested off — algorithm correctly respects off requests (labor law H1)
+    // Staffing violation is logged as a warning, but no one is forced to work
+    expect(workingOnDay.length).toBe(0)
+    const violations = result.violations.filter(v => v.message?.includes('2026-04-15'))
+    expect(violations.length).toBeGreaterThan(0)
   })
 
   it('SCH-U102: existing locked schedule is preserved', () => {

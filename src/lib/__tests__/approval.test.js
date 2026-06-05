@@ -23,20 +23,19 @@ vi.mock('../supabase.js', () => {
           eq: (_field, value) => Promise.resolve({ data: permissions[value] || [] }),
         }
       }
-      // employees: 支援 .eq().eq().maybeSingle() 連鎖
       return {
-        eq: (field, value) => ({
-          eq: (f2, v2) => ({
-            maybeSingle: () => {
-              const emp = employees.find(e => e[field] === value && e[f2] === v2)
-              return Promise.resolve({ data: emp || null })
+        eq: (field, value) => {
+          const lv1 = employees.filter(e => e[field] === value)
+          return Object.assign(Promise.resolve({ data: lv1 }), {
+            maybeSingle: () => Promise.resolve({ data: lv1[0] ?? null }),
+            eq: (f2, v2) => {
+              const lv2 = lv1.filter(e => e[f2] === v2)
+              return Object.assign(Promise.resolve({ data: lv2 }), {
+                maybeSingle: () => Promise.resolve({ data: lv2[0] ?? null }),
+              })
             },
-          }),
-          maybeSingle: () => {
-            const emp = employees.find(e => e[field] === value)
-            return Promise.resolve({ data: emp || null })
-          },
-        }),
+          })
+        },
       }
     },
   })

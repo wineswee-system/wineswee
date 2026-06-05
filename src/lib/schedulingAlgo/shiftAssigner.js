@@ -366,6 +366,7 @@ export function runOpenerCloserFixes(ctx) {
     sortedShifts, shiftDefs, offMap, availMap, data,
   } = ctx
 
+  const lockedKeys = new Set((data.existingSchedules || []).filter(s => s.employee && s.date).map(s => `${s.employee}_${s.date}`))
   for (const date of weekDates) {
     const dayAssignments = employees.filter(emp => { const s = schedule[emp.name][date]; return s && !isAbsence(s) })
     for (const shiftDef of sortedShifts) {
@@ -379,13 +380,15 @@ export function runOpenerCloserFixes(ctx) {
           emp.can_open &&
           schedule[emp.name][date] === '休' &&
           !offMap.has(`${emp.name}_${date}`) &&
+          !lockedKeys.has(`${emp.name}_${date}`) &&
           isShiftAvailable(emp, shiftDef, date, schedule, shiftDefs, weekDates, data, availMap)
         )
         if (restingOpener) {
-          const swapOut = scheduled.find(emp => !emp.can_open)
+          const swapOut = scheduled.find(emp => !emp.can_open && !lockedKeys.has(`${emp.name}_${date}`))
           if (swapOut) {
             schedule[restingOpener.name][date] = shiftDef.name
             schedule[swapOut.name][date] = '休'
+            lockedKeys.add(`${swapOut.name}_${date}`) // prevent re-selection in later shiftDef iterations
             actualTimes[`${restingOpener.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
             delete actualTimes[`${swapOut.name}_${date}`]
           }
@@ -396,13 +399,15 @@ export function runOpenerCloserFixes(ctx) {
           emp.can_close &&
           schedule[emp.name][date] === '休' &&
           !offMap.has(`${emp.name}_${date}`) &&
+          !lockedKeys.has(`${emp.name}_${date}`) &&
           isShiftAvailable(emp, shiftDef, date, schedule, shiftDefs, weekDates, data, availMap)
         )
         if (restingCloser) {
-          const swapOut = scheduled.find(emp => !emp.can_close)
+          const swapOut = scheduled.find(emp => !emp.can_close && !lockedKeys.has(`${emp.name}_${date}`))
           if (swapOut) {
             schedule[restingCloser.name][date] = shiftDef.name
             schedule[swapOut.name][date] = '休'
+            lockedKeys.add(`${swapOut.name}_${date}`) // prevent re-selection in later shiftDef iterations
             actualTimes[`${restingCloser.name}_${date}`] = actualTimes[`${swapOut.name}_${date}`]
             delete actualTimes[`${swapOut.name}_${date}`]
           }

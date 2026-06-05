@@ -28,6 +28,7 @@ describe('HR-Payroll Integration', () => {
       days: 3,
       usedDays: 2,
       gender: 'male',
+      joinDate: '2025-01-01',
     })
     expect(request.valid).toBe(true)
 
@@ -91,7 +92,7 @@ describe('HR-Payroll Integration', () => {
   })
 
   it('INT-20: payroll JE is balanced (Dr Salary Expense, Cr Payable)', () => {
-    const result = calculateNetSalary(45000, { dependents: 1 })
+    const result = calculateNetSalary(45000, { dependents: 1, voluntaryPensionRate: 0.02, withholdTax: true })
     const totalGross = result.gross
 
     const jeLines = [
@@ -100,6 +101,7 @@ describe('HR-Payroll Integration', () => {
       { account_code: '2100', account_name: '代扣勞保', debit: 0, credit: result.laborInsurance },
       { account_code: '2100', account_name: '代扣健保', debit: 0, credit: result.healthInsurance },
       { account_code: '2100', account_name: '代扣所得稅', debit: 0, credit: result.incomeTax },
+      { account_code: '2100', account_name: '代扣勞退', debit: 0, credit: result.pension },
     ]
 
     const validation = validateJournalEntry(jeLines)

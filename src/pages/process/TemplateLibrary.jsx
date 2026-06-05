@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Edit3, Rocket, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -25,7 +24,6 @@ const ALL_LABEL = '全部'
  */
 export default function TemplateLibrary() {
   const navigate = useNavigate()
-  const { profile } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState([])

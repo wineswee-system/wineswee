@@ -50,7 +50,7 @@ export default function StepCard({ step, index, total, isActive, onClick, onMove
         padding: '9px 10px',
         borderRadius: 8,
         border: isActive ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
-        background: isActive ? 'rgba(34,211,238,0.06)' : 'var(--bg-card)',
+        background: isActive ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
         cursor: 'pointer',
         display: 'flex',
         gap: 8,
@@ -95,7 +95,7 @@ export default function StepCard({ step, index, total, isActive, onClick, onMove
           {badges.map((b, i) => (
             <span key={i} style={{
               fontSize: 10, display: 'flex', alignItems: 'center', gap: 2,
-              color: b.color, background: 'rgba(128,128,128,0.1)',
+              color: b.color, background: 'var(--glass-light)',
               padding: '1px 5px', borderRadius: 4,
             }}>
               {b.icon} {b.label}

@@ -211,13 +211,15 @@ function Step2Assign({ form, setForm, steps, employees, departments }) {
                   ))}
                 </optgroup>
               )}
-              <optgroup label="其他人員">
-                {others.map(e => (
-                  <option key={e.id} value={e.name}>
-                    {e.name}{e.position ? ` — ${e.position}` : ''}
-                  </option>
-                ))}
-              </optgroup>
+              {others.length > 0 && (
+                <optgroup label="其他人員">
+                  {others.map(e => (
+                    <option key={e.id} value={e.name}>
+                      {e.name}{e.position ? ` — ${e.position}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         )
@@ -234,7 +236,7 @@ function Step3Schedule({ form, setForm }) {
     <div>
       <div style={{
         padding: '14px', borderRadius: 10, marginBottom: 14,
-        background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)',
+        background: 'var(--accent-purple-dim)', border: '1px solid var(--border-subtle)',
       }}>
         <div style={{
           fontSize: 12, fontWeight: 700, color: 'var(--accent-purple)',
@@ -322,13 +324,23 @@ export default function DeployWizard({ template, stores, employees, departments,
 
   const handleDeploy = async () => {
     setDeploying(true)
+    let instance = null
     try {
+      if (form.planned_start_date && form.planned_end_date &&
+          form.planned_end_date < form.planned_start_date) {
+        throw new Error('結束日期不能早於開始日期')
+      }
       const loc = form.location
       const batchDef = form.batch_defaults || { due_time: '17:00', reminder_preset: '1hr', priority: '中' }
-      const stepOffset = Math.max(1, Math.round((tplSteps.length || 7) / Math.max(1, tplSteps.length)))
+
+      // Spread tasks evenly across the selected date range
+      const totalDays = form.planned_end_date && form.planned_start_date
+        ? Math.max(1, Math.round((new Date(form.planned_end_date) - new Date(form.planned_start_date)) / 86400000))
+        : (tplSteps.length || 7)
+      const stepOffset = Math.max(1, Math.floor(totalDays / Math.max(1, tplSteps.length)))
 
       // 1. Workflow instance
-      const { data: instance, error: instErr } = await supabase
+      const { data: inst, error: instErr } = await supabase
         .from('workflow_instances')
         .insert({
           template_name: template.name,
@@ -345,15 +357,34 @@ export default function DeployWizard({ template, stores, employees, departments,
         })
         .select().single()
       if (instErr) throw instErr
+      if (!inst) {
+        // INSERT succeeded but SELECT was blocked (RLS SELECT policy gap).
+        // Best-effort cleanup — timestamp guard limits blast radius to rows created
+        // in the last 10 s, avoiding deletion of legitimate concurrent deployments.
+        let cleanupQ = supabase.from('workflow_instances').delete()
+          .eq('template_name', template.name)
+          .eq('store', loc)
+          .eq('status', '進行中')
+          .gte('created_at', new Date(Date.now() - 10000).toISOString())
+        // Match null/non-null started_by_id exactly — INSERT stores null when falsy,
+        // so .eq(field,'') would miss it; use .is() for the null branch.
+        if (profile?.id) cleanupQ = cleanupQ.eq('started_by_id', profile.id)
+        else cleanupQ = cleanupQ.is('started_by_id', null)
+        cleanupQ.catch(() => null) // fire-and-forget — result intentionally discarded
+        throw new Error('workflow_instances insert returned no data — check RLS SELECT policy')
+      }
+      instance = inst
 
-      // 2. Tasks
+      // 2. Tasks — rollback instance on any failure
       const insertedTasks = []
+      let formBindingWarnings = 0
       for (let i = 0; i < tplSteps.length; i++) {
         const step = tplSteps[i]
         const offsetDays = (i + 1) * stepOffset
-        const dueDate = form.planned_start_date
+        let dueDate = form.planned_start_date
           ? new Date(new Date(form.planned_start_date).getTime() + offsetDays * 86400000).toISOString().slice(0, 10)
           : new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10)
+        if (form.planned_end_date && dueDate > form.planned_end_date) dueDate = form.planned_end_date
 
         const { data: task, error: taskErr } = await createTask({
           title: step.title,
@@ -377,15 +408,26 @@ export default function DeployWizard({ template, stores, employees, departments,
           approval_chain_id: step.approval_chain_id || null,
           trigger_template_id_on_complete: step.trigger_template_id || null,
         })
-        if (taskErr) throw taskErr
+        if (taskErr) {
+          // FK is ON DELETE SET NULL — delete tasks explicitly before removing the instance
+          if (insertedTasks.length > 0) {
+            await supabase.from('tasks').delete()
+              .in('id', insertedTasks.map(t => t.id))
+              .catch(() => null)
+          }
+          await supabase.from('workflow_instances').delete().eq('id', instance.id).catch(() => null)
+          instance = null
+          throw taskErr
+        }
         if (task) {
           insertedTasks.push(task)
           for (const f of (step.required_forms || [])) {
-            await supabase.rpc('create_task_form_binding', {
+            const { error: fbErr } = await supabase.rpc('create_task_form_binding', {
               p_task_id: task.id,
               p_form_type: f.form_type,
               p_form_template_id: f.form_template_id || null,
-            }).catch(() => null)
+            })
+            if (fbErr) formBindingWarnings++
           }
         }
       }
@@ -398,21 +440,25 @@ export default function DeployWizard({ template, stores, employees, departments,
         }).catch(() => null)
       }
 
+      if (formBindingWarnings > 0) {
+        toast.error(`部署完成，但 ${formBindingWarnings} 個表單綁定設定失敗，請手動確認`)
+      }
+
       const result = { location: loc, taskCount: insertedTasks.length, instanceId: instance.id }
       setDeployed(result)
       onSuccess?.(result)
     } catch (err) {
-      console.error('DeployWizard error:', err)
       toast.error('部署失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setDeploying(false)
     }
-    setDeploying(false)
   }
 
   const body = (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 9000,
-        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
+        background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
       }}
       onClick={e => { if (e.target === e.currentTarget && !deploying) onClose() }}
@@ -421,7 +467,7 @@ export default function DeployWizard({ template, stores, employees, departments,
         background: 'var(--bg-primary)', borderRadius: 16,
         width: '100%', maxWidth: 680, maxHeight: '90vh', overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+        boxShadow: 'var(--shadow-xl)',
       }}>
         {/* Modal header */}
         <div style={{

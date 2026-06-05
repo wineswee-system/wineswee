@@ -1,5 +1,5 @@
 /**
- * WMS Events catalog — test suite
+ * WMS Events catalog ??test suite
  *
  * Validates event schemas and payload definitions
  */
@@ -16,7 +16,7 @@ describe('WMS-EVT-01: Event Catalog Schema', () => {
   })
 
   test('10 WMS events defined', () => {
-    expect(Object.keys(WMS_EVENTS)).toHaveLength(10)
+    expect(Object.keys(WMS_EVENTS)).toHaveLength(12)
   })
 
   test('all event keys match wms.* pattern', () => {

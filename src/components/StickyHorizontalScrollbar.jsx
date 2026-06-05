@@ -151,8 +151,9 @@ export default function StickyHorizontalScrollbar() {
     }
   }, [trackWidth])
 
-  if (trackWidth === 0) return null
-
+  // 注意：sticky bar always mount — 不能 return null（會破壞 ref，
+  // 害 pickTarget 算不出 inner width，trackWidth 永遠卡 0）。
+  // 沒 target 時 inner div 寬度 0，native 不出滾軸，視覺上是 14px 同色背景條
   return (
     <div
       ref={stickyRef}
@@ -162,15 +163,15 @@ export default function StickyHorizontalScrollbar() {
         bottom: 0,
         left: 0,
         right: 0,
-        height: 14,
+        height: trackWidth > 0 ? 14 : 0,
         overflowX: 'auto',
         overflowY: 'hidden',
         background: 'var(--bg-secondary)',
-        borderTop: '1px solid var(--border-subtle)',
+        borderTop: trackWidth > 0 ? '1px solid var(--border-subtle)' : 'none',
         zIndex: 10,
+        transition: 'height 0.15s ease',
       }}
     >
-      {/* 內層 div 寬度 = target.scrollWidth，撐出滾動長度 */}
       <div style={{ width: trackWidth, height: 1 }} />
     </div>
   )

@@ -51,6 +51,7 @@ export default function ExpenseRequests() {
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
+  const [stores, setStores] = useState([])
   const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -79,7 +80,7 @@ export default function ExpenseRequests() {
     const orgId = profile?.organization_id
     let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
-    const [reqRes, accRes, empRes, orgRes, extraRes] = await Promise.all([
+    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes] = await Promise.all([
       reqQuery,
       getAccounts(orgId),
       getEmployees(orgId),
@@ -89,10 +90,13 @@ export default function ExpenseRequests() {
         .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status, created_at')
         .eq('source_table', 'expense_requests')
         .eq('status', 'pending'),
+      // 門市清單給費用表單下拉用
+      supabase.from('stores').select('id, name').order('name'),
     ])
     setRequests(reqRes.data || [])
     setAccounts(accRes.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
+    setStores(storeRes?.data || [])
     setOrganization(orgRes?.data || null)
     // 把 extras 索引化：{ [source_id]: extra_row }（每張單同一 step 只會有一筆 pending）
     const idx = {}
@@ -209,10 +213,10 @@ export default function ExpenseRequests() {
     const validItems = lineItems.filter(li => li.name && li.qty > 0)
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
 
-    // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計
+    // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計 + 門市必填
     if (isExpense) {
       const validateForm = { ...form, _total: total }
-      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total'], setErrors, { zeroInvalid: true })) return
+      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store'], setErrors, { zeroInvalid: true })) return
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
@@ -839,6 +843,7 @@ export default function ExpenseRequests() {
         setFiles={setFiles}
         employees={employees}
         accounts={accounts}
+        stores={stores}
         editingId={editingId}
         isExpense={isExpense}
         setIsExpense={setIsExpense}

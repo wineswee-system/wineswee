@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { X, Plus, Upload, FileText, Image, Download } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -8,6 +8,56 @@ import { toast } from '../../../lib/toast'
 const CURRENCY_PREFIX = { TWD: 'NT$' }
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
+
+// 門市下拉 + 其他自填子組件
+function StoreSelect({ value, onChange, stores, error }) {
+  const storeNames = stores.map(s => s.name)
+  // 進場時若 value 不在清單但非空 → 「其他」模式（編輯舊單時觸發）
+  const [isOther, setIsOther] = useState(() => !!value && !storeNames.includes(value))
+
+  useEffect(() => {
+    if (value && !storeNames.includes(value)) setIsOther(true)
+  }, [value, storeNames])
+
+  const selectValue = isOther ? '__OTHER__' : (value || '')
+
+  return (
+    <div className={error ? 'field-error' : undefined}>
+      <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>
+        門市 <span style={{ color: 'var(--accent-red)' }}>*</span>
+      </label>
+      <select
+        value={selectValue}
+        onChange={e => {
+          const v = e.target.value
+          if (v === '__OTHER__') {
+            setIsOther(true)
+            onChange('')  // 清空等使用者填
+          } else {
+            setIsOther(false)
+            onChange(v)
+          }
+        }}
+        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+      >
+        <option value="">— 請選擇門市 —</option>
+        {storeNames.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__OTHER__">其他（自填）</option>
+      </select>
+      {isOther && (
+        <input
+          type="text"
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder="請輸入門市名稱"
+          autoFocus
+          style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+        />
+      )}
+      {error && <div className="field-error-msg">⚠ 請選擇或輸入門市</div>}
+    </div>
+  )
+}
 
 /**
  * ExpenseFormModal — create/edit expense request form modal with line items editor.
@@ -36,7 +86,7 @@ export default function ExpenseFormModal({
   form, setForm,
   lineItems, setLineItems,
   files, setFiles,
-  employees, accounts,
+  employees, accounts, stores,
   editingId,
   isExpense, setIsExpense,
   onSubmit, saving, errors, setErrors,
@@ -202,11 +252,12 @@ export default function ExpenseFormModal({
                 <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>門市</label>
-                <input type="text" value={form.store} onChange={e => set('store', e.target.value)} placeholder="選填"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-              </div>
+              <StoreSelect
+                value={form.store || ''}
+                onChange={v => { set('store', v); clearError('store', setErrors) }}
+                stores={stores || []}
+                error={errors.store}
+              />
             </div>
           )}
 

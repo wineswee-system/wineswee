@@ -886,6 +886,10 @@ input, select, textarea {
 .page-container {
   padding: 28px 32px;
   max-width: 1600px;
+  /* flex chain：讓內層列表頁的表格區自動填滿剩餘空間，不用估 buffer */
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 /* Light theme overrides */
@@ -1087,9 +1091,10 @@ input, select, textarea {
   width: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  /* 同 div.data-table 邏輯：限高度讓橫向滾軸永遠浮在 viewport 內，
-     不用捲到最後一列才看得到 */
-  max-height: calc(100vh - 400px);
+  /* flex chain：在 .fade-in flex column 內自動填滿剩餘空間，
+     不用估 buffer。沒 flex parent 時 flex: 1 不會生效，安全 fallback */
+  flex: 1;
+  min-height: 0;
 }
 
 .data-table {
@@ -1106,14 +1111,13 @@ input, select, textarea {
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
-   讓 div 自己當 overflow 容器，且**限制高度**讓滾軸永遠浮在 viewport 內
-   (不然資料很多時，橫向滾軸貼在容器底，要捲到最後一列才看得到) */
+   讓 div 自己當 overflow 容器，flex chain 內自動填滿剩餘空間 */
 div.data-table {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   width: 100%;
-  /* 預留約 320px 給 page-header + 統計卡 + 搜尋列，桌面/手機通用 */
-  max-height: calc(100vh - 400px);
+  flex: 1;
+  min-height: 0;
 }
 /* 讓內層 table 跟著內容自然撐寬，超過 div 寬度時 div 才會出橫向滾軸；
    min-width: 100% 確保即便內容很少也撐滿容器 */
@@ -1698,6 +1702,11 @@ div.data-table > table {
 
 .fade-in {
   animation: fadeIn var(--transition-normal) forwards;
+  /* flex chain (page-container → fade-in → 內層 table)：讓表格區自動填滿剩餘 */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .slide-in-left {

@@ -18,6 +18,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { computeBatchPayroll } from '../../lib/payrollCalc'
+import BatchPayrollModal from './components/BatchPayrollModal'
+import { fmtNT as fmt } from '../../lib/currency'
 
 const CSV_HEADERS = ['員工名稱', '日期', '開始時間', '結束時間', '時數', '類型', '原因', '備註']
 
@@ -67,7 +70,10 @@ export default function OvertimeExceptionImport() {
 
   const [month, setMonth] = useState(currentMonth())
   const [loading, setLoading] = useState(false)
-  const [employees, setEmployees] = useState([])    // 全部在職員工
+  const [employees, setEmployees] = useState([])    // 全部在職 + 當月離職員工（給批次計薪用）
+  const [batchPreview, setBatchPreview] = useState([])
+  const [showBatchModal, setShowBatchModal] = useState(false)
+  const [batchLoading, setBatchLoading] = useState(false)
   const [otByEmp, setOtByEmp] = useState({})        // { emp_id: { regular: hrs, exception: hrs } }
   const [parsed, setParsed] = useState([])          // CSV 預覽資料
   const [importing, setImporting] = useState(false)
@@ -85,10 +91,11 @@ export default function OvertimeExceptionImport() {
       const monthEnd = `${month}-${String(new Date(yr, mo, 0).getDate()).padStart(2, '0')}`
 
       const [empRes, otRes, recRes] = await Promise.all([
+        // employees：在職 + 當月離職（給批次計薪用，欄位對齊 Salary.jsx 第 145 行）
         supabase.from('employees')
-          .select('id, name, employee_number, dept, store, status, organization_id')
+          .select('id, name, employee_number, dept, store, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, organization_id, departments!department_id(name), stores!store_id(name)')
           .eq('organization_id', orgId)
-          .eq('status', '在職')
+          .or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${monthStart})`)
           .order('name'),
         supabase.from('overtime_requests')
           .select('employee_id, ot_hours, hours, is_exception, status, request_date, date')
@@ -114,6 +121,8 @@ export default function OvertimeExceptionImport() {
       setEmployees(empRes.data || [])
       setOtByEmp(tally)
       setRecentImports(recRes.data || [])
+      // 月份切換或重整時，把舊的 preview 清掉（避免顯示上月資料）
+      setBatchPreview([])
     } catch (err) {
       console.error('Load failed:', err)
       toast.error('載入失敗：' + (err.message || ''))
@@ -125,6 +134,22 @@ export default function OvertimeExceptionImport() {
   useEffect(() => {
     if (isAuthorized) loadMonthStats()
   }, [isAuthorized, loadMonthStats])
+
+  // ── 批次計薪（共用 computeBatchPayroll，與 /hr/salary 同邏輯）──
+  const handleBatchPayroll = async () => {
+    if (!employees.length) return toast.error('員工清單尚未載入')
+    setBatchLoading(true)
+    try {
+      const preview = await computeBatchPayroll({ month, orgId, employees, storeFilter: null })
+      setBatchPreview(preview)
+      setShowBatchModal(true)
+    } catch (err) {
+      console.error('Batch payroll failed:', err)
+      toast.error('計薪失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setBatchLoading(false)
+    }
+  }
 
   // ── CSV 解析 + lookup employees + 計算「加進後合計」──
   const handleFile = async (e) => {
@@ -213,18 +238,32 @@ export default function OvertimeExceptionImport() {
     setParsed(enriched)
   }
 
-  // ── 即時統計：根據 employees + otByEmp 渲染統計面板 ──
+  // ── 即時統計：employees + otByEmp + batchPreview 合併渲染 ──
+  // 跑過批次計薪後，每列會多出「加班費 / 額外加班費 / 應領 / 實領」
+  const payrollByEmp = useMemo(() => {
+    const m = {}
+    for (const p of (batchPreview || [])) m[p.employee_id] = p
+    return m
+  }, [batchPreview])
+
   const empStats = useMemo(() => {
     return employees
       .map(e => {
         const t = otByEmp[e.id] || { regular: 0, exception: 0 }
         const total = t.regular + t.exception
-        return { ...e, regular: t.regular, exception: t.exception, total }
+        const p = payrollByEmp[e.id] || null
+        return {
+          ...e,
+          regular: t.regular,
+          exception: t.exception,
+          total,
+          payroll: p,  // null = 還沒跑批次計薪
+        }
       })
       .filter(e => !statsSearch || e.name.includes(statsSearch) || e.employee_number?.includes(statsSearch))
       .filter(e => !showOnlyOver || e.total > LIMIT_MONTHLY_REGULAR)
       .sort((a, b) => b.total - a.total)
-  }, [employees, otByEmp, statsSearch, showOnlyOver])
+  }, [employees, otByEmp, payrollByEmp, statsSearch, showOnlyOver])
 
   // ── 匯入 ──
   const handleImport = async () => {
@@ -316,6 +355,9 @@ export default function OvertimeExceptionImport() {
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               <Download size={14} /> 下載 CSV 模板
             </button>
+            <button className="btn btn-primary" onClick={handleBatchPayroll} disabled={batchLoading || !employees.length}>
+              <Calculator size={14} /> {batchLoading ? '計薪中...' : '批次計薪'}
+            </button>
           </div>
         </div>
       </div>
@@ -329,67 +371,6 @@ export default function OvertimeExceptionImport() {
             每筆匯入會記錄操作人與時間，作為內部稽核追溯依據。請確認資料正確後再匯入。
           </div>
         </div>
-      </div>
-
-      {/* ─── 統計面板 ─── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">
-            <Calculator size={14} style={{ verticalAlign: 'middle' }} /> {month} 全員 OT 累計
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="text" placeholder="搜尋姓名 / 員編"
-              className="form-input" style={{ width: 180, fontSize: 12 }}
-              value={statsSearch} onChange={e => setStatsSearch(e.target.value)} />
-            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input type="checkbox" checked={showOnlyOver} onChange={e => setShowOnlyOver(e.target.checked)} />
-              只看偏高
-            </label>
-          </div>
-        </div>
-        {loading ? (
-          <div style={{ padding: 24, textAlign: 'center' }}><LoadingSpinner /></div>
-        ) : (
-          <div style={{ overflowX: 'auto', maxHeight: 360 }}>
-            <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>員工</th>
-                  <th>員編</th>
-                  <th>部門</th>
-                  <th style={{ textAlign: 'right' }}>加班</th>
-                  <th style={{ textAlign: 'right' }}>額外</th>
-                  <th style={{ textAlign: 'right', fontWeight: 700 }}>合計</th>
-                  <th>警示</th>
-                </tr>
-              </thead>
-              <tbody>
-                {empStats.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>無資料</td></tr>
-                ) : empStats.map(e => {
-                  const w = warnLevel(e.total)
-                  return (
-                    <tr key={e.id}>
-                      <td>{e.name}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{e.employee_number || '—'}</td>
-                      <td style={{ color: 'var(--text-muted)' }}>{e.dept || '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{e.regular.toFixed(1)}</td>
-                      <td style={{ textAlign: 'right', color: e.exception > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                        {e.exception > 0 ? e.exception.toFixed(1) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: w.color }}>{e.total.toFixed(1)}</td>
-                      <td>
-                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: w.color, background: w.bg }}>
-                          {w.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
       {/* ─── 上傳區 ─── */}
@@ -513,6 +494,97 @@ export default function OvertimeExceptionImport() {
           </table>
         </div>
       </div>
+
+      {/* ─── 統計面板（移到最下方，加薪資欄）─── */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header">
+          <div className="card-title">
+            <Calculator size={14} style={{ verticalAlign: 'middle' }} /> {month} 全員加班 + 薪資總覽
+            {batchPreview.length === 0 && (
+              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+                （上方按「批次計薪」後會帶出薪資欄）
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="text" placeholder="搜尋姓名 / 員編"
+              className="form-input" style={{ width: 180, fontSize: 12 }}
+              value={statsSearch} onChange={e => setStatsSearch(e.target.value)} />
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={showOnlyOver} onChange={e => setShowOnlyOver(e.target.checked)} />
+              只看偏高
+            </label>
+          </div>
+        </div>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: 'center' }}><LoadingSpinner /></div>
+        ) : (
+          <div style={{ overflowX: 'auto', maxHeight: 460 }}>
+            <table className="data-table" style={{ fontSize: 12, width: '100%', whiteSpace: 'nowrap' }}>
+              <thead>
+                <tr>
+                  <th>員工</th>
+                  <th>員編</th>
+                  <th>部門</th>
+                  <th style={{ textAlign: 'right' }}>加班</th>
+                  <th style={{ textAlign: 'right' }}>額外</th>
+                  <th style={{ textAlign: 'right', fontWeight: 700 }}>合計時數</th>
+                  <th>警示</th>
+                  <th style={{ textAlign: 'right', color: 'var(--accent-cyan)' }}>加班費</th>
+                  <th style={{ textAlign: 'right', color: 'var(--accent-cyan)' }}>額外加班費</th>
+                  <th style={{ textAlign: 'right', color: 'var(--accent-cyan)' }}>應領</th>
+                  <th style={{ textAlign: 'right', color: 'var(--accent-green)', fontWeight: 700 }}>實領</th>
+                </tr>
+              </thead>
+              <tbody>
+                {empStats.length === 0 ? (
+                  <tr><td colSpan={11} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>無資料</td></tr>
+                ) : empStats.map(e => {
+                  const w = warnLevel(e.total)
+                  const p = e.payroll
+                  return (
+                    <tr key={e.id}>
+                      <td>{e.name}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{e.employee_number || '—'}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{e.dept || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{e.regular.toFixed(1)}</td>
+                      <td style={{ textAlign: 'right', color: e.exception > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                        {e.exception > 0 ? e.exception.toFixed(1) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: w.color }}>{e.total.toFixed(1)}</td>
+                      <td>
+                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: w.color, background: w.bg }}>
+                          {w.label}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{p ? fmt(p.regular_overtime_pay || 0) : '—'}</td>
+                      <td style={{ textAlign: 'right', color: p && p.extra_overtime_pay > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                        {p && p.extra_overtime_pay > 0 ? fmt(p.extra_overtime_pay) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{p ? fmt(p.gross || 0) : '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-green)' }}>
+                        {p ? fmt(p.netSalary || 0) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showBatchModal && (
+        <BatchPayrollModal
+          month={month}
+          batchPreview={batchPreview}
+          batchSaving={false}
+          onClose={() => setShowBatchModal(false)}
+          onSave={() => {
+            toast.info('儲存功能請到 /hr/salary 進行（本頁僅試算）')
+          }}
+        />
+      )}
     </div>
   )
 }

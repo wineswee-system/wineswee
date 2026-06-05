@@ -35,6 +35,14 @@ export default function StickyHorizontalScrollbar() {
     const main = document.querySelector('.main-content')
     if (!main) return
 
+    function computeInnerWidth(target, sticky) {
+      // sticky bar 寬度 ≠ target 寬度（target 在 page-container 內，有 64px padding）
+      // 要讓 sticky.maxScrollLeft = target.maxScrollLeft，inner div 寬度必須是：
+      //   target.scrollWidth - target.clientWidth + sticky.clientWidth
+      // 這樣兩邊都能完整拉到底
+      return target.scrollWidth - target.clientWidth + sticky.clientWidth
+    }
+
     function pickTarget() {
       const candidates = main.querySelectorAll(
         '.data-table-wrapper, div.data-table'
@@ -65,17 +73,18 @@ export default function StickyHorizontalScrollbar() {
       const prevTarget = targetRef.current
       targetRef.current = best
 
-      if (best) {
-        if (best.scrollWidth !== trackWidth) {
-          setTrackWidth(best.scrollWidth)
+      if (best && stickyRef.current) {
+        const newWidth = computeInnerWidth(best, stickyRef.current)
+        if (newWidth !== trackWidth) {
+          setTrackWidth(newWidth)
         }
         // 同步 sticky bar 的 scrollLeft 跟新 target 對齊
-        if (stickyRef.current && best !== prevTarget) {
+        if (best !== prevTarget) {
           syncingRef.current = true
           stickyRef.current.scrollLeft = best.scrollLeft
           requestAnimationFrame(() => { syncingRef.current = false })
         }
-      } else if (trackWidth !== 0) {
+      } else if (!best && trackWidth !== 0) {
         setTrackWidth(0)
       }
     }

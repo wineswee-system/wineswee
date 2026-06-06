@@ -190,14 +190,8 @@ export default function Workflows() {
       const updatedTasks = tasks.map(t => t.id === taskId ? data : t)
       setAllTasks(updatedTasks)
 
-      // Notify assignee on any transition to 進行中
-      if (newStatus === '進行中' && data.assignee) {
-        const inst = instances.find(i => i.id === data.workflow_instance_id)
-        notifyTaskAssignee(data.assignee, data.title, inst?.store || inst?.template_name, data.id, {
-          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-          approvalRequired: data.status === '待簽核', priority: data.priority,
-        }).catch(() => {})
-      }
+      // status → 進行中 的 LINE 通知由 DB trigger _task_enqueue_started_notify 處理
+      // （rich payload，跟 hr-notify buildTaskAutoStarted 對齊），前端不再雙推
 
       // Auto-progression: when a task completes, check if dependent tasks can start
       let latestTasks = updatedTasks
@@ -347,13 +341,8 @@ export default function Workflows() {
       if (started) {
         result = result.map(t => t.id === started.id ? started : t)
         setAllTasks(prev => prev.map(t => t.id === started.id ? started : t))
-        if (started.assignee) {
-          const inst = instances.find(i => i.id === instanceId)
-          notifyTaskAssignee(started.assignee, started.title, inst?.store || inst?.template_name, started.id, {
-            dueDate: started.due_date, description: started.description, notes: started.notes, store: started.store,
-            approvalRequired: started.status === '待簽核', priority: started.priority,
-          }).catch(() => {})
-        }
+        // cascade 推進到下一關時的 LINE 通知由 DB trigger _task_enqueue_started_notify 處理，
+        // updateTask 改 status 就會 fire（rich payload + 對齊樣式）
       }
     }
 

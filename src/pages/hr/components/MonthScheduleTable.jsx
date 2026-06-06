@@ -164,7 +164,9 @@ export default function MonthScheduleTable({
                       getStoreShifts={getStoreShifts}
                       storeFilter={store}
                       holidaySet={holidaySet}
+                      storeSettings={storeSettings}
                       pendingLeaveMap={pendingLeaveMap}
+                      schedules={schedules}
                     />
                   )
                 })
@@ -189,6 +191,7 @@ export default function MonthScheduleTable({
                     holidaySet={holidaySet}
                     storeSettings={storeSettings}
                     pendingLeaveMap={pendingLeaveMap}
+                    schedules={schedules}
                   />
                 ))
               )}
@@ -228,7 +231,7 @@ function EmployeeRow({
   emp, monthDates, getShift, getShiftStyle, getOffRequest,
   editCell, setEditCell, handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
-  pendingLeaveMap = {},
+  pendingLeaveMap = {}, schedules = [],
 }) {
   let workDays = 0
   let restDays = 0
@@ -260,13 +263,17 @@ function EmployeeRow({
         const isRest = isAbsence(shift)
         const absenceCfg = isRest ? getAbsenceConfig(shift) : null
         const hasPendingLeave = pendingLeaveMap[emp.name]?.has(date)
+        // 跨店：該天 source_store 若不是員工主店 → 顯示淡紫色背景
+        const daySchedule = schedules.find(s => s.employee === emp.name && s.date === date)
+        const isCrossStore = daySchedule?.source_store && emp.store && daySchedule.source_store !== emp.store
 
         return (
           <td key={date} style={{
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
             border: '1px solid var(--border-medium)',
-            background: isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
+            background: isCrossStore ? 'rgba(168,85,247,0.08)'
+              : isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
           }}
           onClick={() => {
@@ -322,11 +329,25 @@ function EmployeeRow({
               }} title="有待審核請假">●</span>
             )}
 
+            {/* 跨店：左上角小標 — 顯示去支援的店第一個字 */}
+            {isCrossStore && (
+              <span style={{
+                position: 'absolute', top: 1, left: 2,
+                fontSize: 8, lineHeight: 1, pointerEvents: 'none',
+                padding: '1px 3px', borderRadius: 3, fontWeight: 700,
+                background: 'rgba(168,85,247,0.2)', color: '#a855f7',
+              }} title={`今天在 ${daySchedule.source_store}`}>
+                {daySchedule.source_store.slice(0, 1)}
+              </span>
+            )}
+
             {/* Fixed Editor Popup */}
             {isEditing && (
               <MonthEditPopup
                 emp={emp} date={date} shift={shift}
                 storeSettings={storeSettings}
+                schedules={schedules}
+                currentSchedule={schedules.find(s => s.employee === emp.name && s.date === date)}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}
               />
@@ -349,15 +370,45 @@ function EmployeeRow({
 }
 
 // ── Edit popup for month view (rendered via portal at body level) ──
-function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handleDeleteShift, onClose }) {
+function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSchedule, handleSetShift, handleDeleteShift, onClose }) {
   const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const oh = storeSettings?.operating_hours?.[dayNames[new Date(date).getDay()]]
   const storeOpen = oh?.open || '11:00'
   const storeClose = oh?.close || '00:00'
 
-  const [startTime, setStartTime] = useState(storeOpen)
-  const [endTime, setEndTime] = useState(storeClose)
+  // 上次用的 preset 從 localStorage 拿
+  const lastPresetKey = `lastShiftPreset_${emp.store || 'default'}`
+  const lastPreset = (() => {
+    try { return JSON.parse(localStorage.getItem(lastPresetKey) || 'null') } catch { return null }
+  })()
+
+  const [startTime, setStartTime] = useState(lastPreset?.start || storeOpen)
+  const [endTime, setEndTime] = useState(lastPreset?.end || storeClose)
+
+  // 跨店：員工授權的所有店（主店 + additional_stores）
+  const storeOptions = [
+    emp.store,
+    ...(Array.isArray(emp.additional_stores) ? emp.additional_stores : []),
+  ].filter(Boolean)
+  const [sourceStore, setSourceStore] = useState(currentSchedule?.source_store || emp.store || '')
+
+  // 前一日的班 — 給「複製前一日」用
+  const prevDateStr = (() => {
+    const d = new Date(date); d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  })()
+  const prevSchedule = schedules?.find(s => s.employee === emp.name && s.date === prevDateStr)
+  const hasPrev = !!prevSchedule?.shift
+
+  const handleCopyPrev = () => {
+    if (!prevSchedule) return
+    handleSetShift(
+      emp.name, date, prevSchedule.shift,
+      prevSchedule.actual_start, prevSchedule.actual_end,
+      prevSchedule.source_store || emp.store
+    )
+  }
 
   // Quick presets based on operating hours
   const openH = parseInt(storeOpen) || 11
@@ -379,7 +430,13 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
     if (!startTime || !endTime) return
     const s = startTime.replace(':00', '').replace(/^0/, '')
     const e = endTime.replace(':00', '').replace(/^0/, '')
-    handleSetShift(emp.name, date, `${s}~${e}`, startTime, endTime)
+    // 記住這次選的 preset 給下次預填
+    try { localStorage.setItem(lastPresetKey, JSON.stringify({ start: startTime, end: endTime })) } catch {}
+    handleSetShift(emp.name, date, `${s}~${e}`, startTime, endTime, sourceStore || null)
+  }
+
+  const setAbsence = (label) => {
+    handleSetShift(emp.name, date, label, null, null, sourceStore || null)
   }
 
   return (
@@ -392,6 +449,32 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 10 }}>
         {emp.name} · {date.slice(5)}({dow})
       </div>
+
+      {/* 跨店：門市下拉（只有多店授權的員工才顯示）*/}
+      {storeOptions.length > 1 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>當天在哪間店</div>
+          <select className="form-input" value={sourceStore} onChange={e => setSourceStore(e.target.value)}
+            style={{ width: '100%', padding: '7px', fontSize: 13, fontWeight: 600 }}>
+            {storeOptions.map(s => (
+              <option key={s} value={s}>
+                {s}{s === emp.store ? ' (主店)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 複製前一日 */}
+      {hasPrev && (
+        <button onClick={handleCopyPrev} style={{
+          width: '100%', padding: '7px', borderRadius: 8, border: '1px dashed var(--accent-cyan)',
+          background: 'rgba(34,211,238,0.06)', color: 'var(--accent-cyan)',
+          fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 8,
+        }}>
+          ↑ 複製前一日（{prevSchedule.shift}{prevSchedule.source_store && prevSchedule.source_store !== emp.store ? ` · ${prevSchedule.source_store}` : ''}）
+        </button>
+      )}
 
       {/* Time pickers */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
@@ -425,27 +508,27 @@ function MonthEditPopup({ emp, date, shift, storeSettings, handleSetShift, handl
 
       {/* Rest / Absence */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginBottom: 6 }}>
-        <button onClick={() => handleSetShift(emp.name, date, '休')} style={{
+        <button onClick={() => setAbsence('休')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'var(--glass-medium)', color: 'var(--text-muted)', fontSize: 12, fontWeight: 600,
         }}>😴 休</button>
-        <button onClick={() => handleSetShift(emp.name, date, '補休')} style={{
+        <button onClick={() => setAbsence('補休')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: 12, fontWeight: 600,
         }}>🔄 補休</button>
-        <button onClick={() => handleSetShift(emp.name, date, '特休')} style={{
+        <button onClick={() => setAbsence('特休')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(16,185,129,0.08)', color: '#10b981', fontSize: 12, fontWeight: 600,
         }}>🌴 特休</button>
-        <button onClick={() => handleSetShift(emp.name, date, '病')} style={{
+        <button onClick={() => setAbsence('病')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12, fontWeight: 600,
         }}>🏥 病假</button>
-        <button onClick={() => handleSetShift(emp.name, date, '會議')} style={{
+        <button onClick={() => setAbsence('會議')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(139,92,246,0.08)', color: '#8b5cf6', fontSize: 12, fontWeight: 600,
         }}>📋 會議</button>
-        <button onClick={() => handleSetShift(emp.name, date, '產')} style={{
+        <button onClick={() => setAbsence('產')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(245,158,11,0.08)', color: '#f59e0b', fontSize: 12, fontWeight: 600,
         }}>👶 產假</button>

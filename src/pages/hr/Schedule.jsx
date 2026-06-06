@@ -228,7 +228,7 @@ export default function Schedule() {
     return s?.shift || ''
   }
 
-  const handleSetShift = async (empName, date, shift, actualStart, actualEnd) => {
+  const handleSetShift = async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
     if (!canEditSchedule) return
 
     // Real-time validation before saving
@@ -251,10 +251,15 @@ export default function Schedule() {
       }
     }
 
+    // source_store：跨店支援。沒指定就用員工主店；指定就用指定的
+    const emp = employees.find(e => e.name === empName)
+    const effectiveSource = sourceStore || emp?.store || null
+
     const record = {
       shift,
       actual_start: actualStart || null,
       actual_end: actualEnd || null,
+      source_store: effectiveSource,
     }
 
     const existing = schedules.find(s => s.employee === empName && s.date === date)

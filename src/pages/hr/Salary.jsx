@@ -62,9 +62,10 @@ function computeDeductions(f, brackets) {
   const laborIns = labor.employee_share
   const healthIns = health.employee_share
   const pensionSelf = pension.employee_voluntary
-  const incomeTax = tax.withholding_amount
+  // 所得稅不代扣（員工年度自行申報），與批次計薪 payrollCalc.js withholdTax: false 對齊
+  const incomeTax = 0
   const manualDeductions = absenceDeduction + lateDeduction + otherDeduction
-  const totalDeductions = laborIns + healthIns + pensionSelf + incomeTax + manualDeductions
+  const totalDeductions = laborIns + healthIns + pensionSelf + manualDeductions
   const net = gross - totalDeductions
 
   return {

@@ -242,6 +242,7 @@ export const groupNav = {
         { icon: UserMinus, label: '離職申請', path: '/hr/forms/resignation' },
         { icon: PauseCircle, label: '留職停薪', path: '/hr/forms/loa' },
         { icon: ArrowRightLeft, label: '人事異動', path: '/hr/forms/transfer' },
+        { icon: UserPlus, label: '人力需求', path: '/hr/forms/headcount' },
         // 表單建立器已搬到「系統設定 → 表單建立器」
         { icon: FileText, label: '文件範本', path: '/org/templates' },
         { icon: Trash2, label: '最近刪除', path: '/hr/recently-deleted' },

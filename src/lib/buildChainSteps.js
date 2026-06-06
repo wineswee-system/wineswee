@@ -496,12 +496,12 @@ export async function buildFormChainSteps({
       status = idx === 0 ? 'current' : 'pending'
     }
     return {
-      label: step.label || step.role_name || `第${i + 1}關`,
+      label: step.label || step.role_name || `第${idx + 1}關`,
       name: names,
       target_emp_id: step.target_emp_id || null,
       role_name: step.role_name || null,
       status,
-      completedAt: status === 'completed' && i === resolved.length - 1 ? approvedAt : undefined,
+      completedAt: status === 'completed' && idx === resolved.length - 1 ? approvedAt : undefined,
       rejectReason: status === 'rejected' ? rejectReason : '',
     }
   })

@@ -18,6 +18,70 @@
 
 BEGIN;
 
+-- ─── 0. 先補 functions（20260601120000 完全沒跑成）───
+CREATE OR REPLACE FUNCTION public._snapshot_settle_chain(
+  p_request_id  INT,
+  p_chain_id    INT,
+  p_employee_id INT
+) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_step            approval_chain_steps;
+  v_resolved_emp_id INT;
+BEGIN
+  IF p_chain_id IS NULL THEN RETURN; END IF;
+
+  DELETE FROM request_chain_snapshots
+  WHERE request_type = 'expense_settle' AND request_id = p_request_id;
+
+  FOR v_step IN
+    SELECT * FROM approval_chain_steps
+    WHERE chain_id = p_chain_id ORDER BY step_order
+  LOOP
+    IF v_step.target_type IN (
+      'applicant_supervisor', 'applicant_dept_manager', 'applicant_section_supervisor'
+    ) THEN
+      SELECT emp_id INTO v_resolved_emp_id
+      FROM resolve_chain_step_approvers(v_step.id, p_employee_id)
+      LIMIT 1;
+    ELSE
+      v_resolved_emp_id := v_step.target_emp_id;
+    END IF;
+
+    INSERT INTO public.request_chain_snapshots (
+      request_type, request_id, chain_id, step_order,
+      label, role_name, target_type,
+      target_emp_id, target_role_id, target_dept_id,
+      target_store_id, target_section_id
+    ) VALUES (
+      'expense_settle', p_request_id, p_chain_id, v_step.step_order,
+      v_step.label, v_step.role_name, v_step.target_type,
+      COALESCE(v_resolved_emp_id, v_step.target_emp_id),
+      v_step.target_role_id, v_step.target_dept_id,
+      v_step.target_store_id, v_step.target_section_id
+    )
+    ON CONFLICT (request_type, request_id, step_order) DO UPDATE SET
+      chain_id      = EXCLUDED.chain_id,
+      label         = EXCLUDED.label,
+      role_name     = EXCLUDED.role_name,
+      target_type   = EXCLUDED.target_type,
+      target_emp_id = EXCLUDED.target_emp_id,
+      snapshotted_at = NOW();
+  END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION public._trg_snapshot_expense_settle_chain()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status = '待核銷'
+     AND (OLD.status IS DISTINCT FROM '待核銷' OR OLD.settle_chain_id IS DISTINCT FROM NEW.settle_chain_id)
+     AND NEW.settle_chain_id IS NOT NULL THEN
+    PERFORM public._snapshot_settle_chain(NEW.id, NEW.settle_chain_id, NEW.employee_id);
+  END IF;
+  RETURN NEW;
+END $$;
+
+
 -- ─── A. 重建 trigger ───
 DROP TRIGGER IF EXISTS trg_snapshot_expense_settle_chain ON public.expense_requests;
 CREATE TRIGGER trg_snapshot_expense_settle_chain

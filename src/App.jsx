@@ -111,8 +111,8 @@ function AdminApp() {
             <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
             <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
             <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.view') ? <FinanceModule /> : blocked} />
-            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'audit.view') ? <AnalyticsModule /> : blocked} />
-            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'audit.view') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'nav.group.analytics') ? <AnalyticsModule /> : blocked} />
+            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'nav.group.analytics') ? <AnalyticsModule /> : blocked} />
             <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
             <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
             <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
@@ -121,6 +121,8 @@ function AdminApp() {
             <Route path="/pos" element={canAccess('/pos') ? <POSModule /> : blocked} />
             <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
             <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
+            {/* /process/settings/* 設定頁需 nav.project.admin perm（不只是 office_staff 路由就能進） */}
+            <Route path="/process/settings/*" element={canAccessWithPerm('/process', 'nav.project.admin') ? <ProcessModule /> : blocked} />
             <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
             <Route path="/system/*" element={canAccessWithPerm('/system', 'system.admin') ? <SystemModule /> : blocked} />
             <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
@@ -197,9 +199,18 @@ function ProtectedApp() {
 
 // ── Portal auth guard — portal pages fetch sensitive employee data ──
 function PortalGuard({ children }) {
-  const { loading, profileReady, isAuthenticated, profile } = useAuth()
+  const { loading, profileReady, isAuthenticated, profile, user, signOut } = useAuth()
   if (loading || !profileReady) return <LoadingSpinner />
   if (!isAuthenticated || !profile) return <Navigate to="/login" replace />
+  // 離職/停用員工也擋下 portal（跟主系統 ProtectedApp 對齊）
+  if (profile.status && profile.status !== '在職') return (
+    <BlockedAccountScreen
+      title="帳號已停用"
+      message={`您的員工狀態為「${profile.status}」，已無法使用員工 portal`}
+      hint="如有問題請聯絡系統管理員。"
+      user={user} signOut={signOut}
+    />
+  )
   return children
 }
 

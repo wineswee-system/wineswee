@@ -34,11 +34,10 @@ const CHANNELS = {
   line: {
     name: 'LINE',
     icon: 'MessageCircle',
-    configured: !!import.meta.env.VITE_LINE_CHANNEL_TOKEN,
-    config: {
-      channelToken: import.meta.env.VITE_LINE_CHANNEL_TOKEN || '',
-      channelSecret: import.meta.env.VITE_LINE_CHANNEL_SECRET || '',
-    }
+    // 實際 LINE 推送走 hr-notify Edge Function，channel token 存在 supabase 的 secret，
+    // 不從 Vite env 讀（之前的 VITE_LINE_CHANNEL_TOKEN 已拔，避免後人誤以為要設）
+    configured: true,
+    config: { via: 'edge_function:hr-notify' }
   }
 }
 

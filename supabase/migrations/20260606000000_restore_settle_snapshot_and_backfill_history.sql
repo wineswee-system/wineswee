@@ -123,7 +123,8 @@ DECLARE
   v_inserted INT := 0;
 BEGIN
   FOR v_req IN
-    SELECT id, settle_chain_id, settle_current_step, status, settled_at, organization_id
+    SELECT id, settle_chain_id, settle_current_step, status,
+           settled_at, approved_at, created_at, organization_id
       FROM public.expense_requests
      WHERE status IN ('待核銷', '已核銷', '核銷已退回')
        AND settle_chain_id IS NOT NULL
@@ -148,8 +149,9 @@ BEGIN
         ) VALUES (
           'expense_settle', v_req.id, v_req.organization_id, v_req.settle_chain_id,
           v_snap.step_order, v_snap.label, v_snap.target_type,
-          -- entered/exited 填 NULL（沒記錄），最後一關 exited_at 用 settled_at
-          NULL,
+          -- entered_at 不能 NULL，用 approved_at（settle 開始時間）作 placeholder
+          COALESCE(v_req.approved_at, v_req.created_at),
+          -- 最後一關 exited_at 用 settled_at；其他 NULL
           CASE
             WHEN v_req.status = '已核銷'
              AND v_snap.step_order = (

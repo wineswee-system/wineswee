@@ -139,8 +139,8 @@ function AdminApp() {
   )
 }
 
-// ── 帳號未綁定畫面：有 Supabase auth session 但 employees 表沒對應 row（沒 LINE 綁定也沒 email 帳號 link）──
-function UnboundAccountScreen({ user, signOut }) {
+// ── 登入擋下畫面：帳號未綁定 / 已離職 ──
+function BlockedAccountScreen({ title, message, hint, user, signOut }) {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -152,12 +152,12 @@ function UnboundAccountScreen({ user, signOut }) {
         boxShadow: 'var(--shadow-xl)', textAlign: 'center',
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
-        <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)' }}>帳號未綁定</h2>
+        <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)' }}>{title}</h2>
         <p style={{ margin: '0 0 8px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          您的帳號（{user?.email || '—'}）尚未綁定到員工資料。
+          {message}（{user?.email || '—'}）
         </p>
         <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6 }}>
-          請聯絡系統管理員協助綁定 LINE 或 email 帳號後才能使用系統。
+          {hint}
         </p>
         <button onClick={signOut} className="btn btn-primary" style={{ padding: '10px 28px' }}>
           登出
@@ -174,7 +174,23 @@ function ProtectedApp() {
   if (loading || !profileReady) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
   // 有 Supabase auth 但找不到對應 employees row → 沒被綁定，直接擋下不准進主系統
-  if (!profile) return <UnboundAccountScreen user={user} signOut={signOut} />
+  if (!profile) return (
+    <BlockedAccountScreen
+      title="帳號未綁定"
+      message="您的帳號尚未綁定到員工資料"
+      hint="請聯絡系統管理員協助綁定 LINE 或 email 帳號後才能使用系統。"
+      user={user} signOut={signOut}
+    />
+  )
+  // 員工已離職 / 停用 → 擋下不准進
+  if (profile.status && profile.status !== '在職') return (
+    <BlockedAccountScreen
+      title="帳號已停用"
+      message={`您的員工狀態為「${profile.status}」，已無法登入系統`}
+      hint="如有問題請聯絡系統管理員。"
+      user={user} signOut={signOut}
+    />
+  )
 
   return <AdminApp />
 }

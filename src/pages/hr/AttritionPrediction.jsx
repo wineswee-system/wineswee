@@ -180,8 +180,12 @@ export default function AttritionPrediction() {
   const handleSaveSnapshots = async () => {
     setComputing(true)
     const today = new Date().toISOString().slice(0, 10)
+    const orgId = profile?.organization_id || null
+    let success = 0
+    let failed = 0
     for (const emp of riskData) {
-      await supabase.from('attrition_risk_snapshots').upsert({
+      const { error: upErr } = await supabase.from('attrition_risk_snapshots').upsert({
+        organization_id: orgId,
         employee: emp.name,
         snapshot_date: today,
         risk_score: emp.risk_score,
@@ -194,9 +198,12 @@ export default function AttritionPrediction() {
         salary_percentile: emp.salary_percentile,
         engagement_score: emp.engagement_score,
       }, { onConflict: 'employee,snapshot_date' })
+      if (upErr) { failed++; console.error('[attrition snapshot] upsert failed:', emp.name, upErr) }
+      else success++
     }
     setComputing(false)
-    toast.error('風險快照已儲存')
+    if (failed > 0) toast.error(`儲存失敗 ${failed} 筆（成功 ${success} 筆）`)
+    else toast.success(`風險快照已儲存（${success} 筆）`)
   }
 
   const toggleSort = (field) => {

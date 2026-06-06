@@ -151,23 +151,3 @@ export const updateApprovalRequest = (id, data) =>
     p_reject_reason: data.reject_reason ?? null,
   })
 
-export const getApprovalDelegations = (orgId) => {
-  let q = supabase.from('approval_delegations').select('*').order('start_date', { ascending: false }).limit(200)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
-}
-
-export const createApprovalDelegation = (data) =>
-  supabase.from('approval_delegations').insert(data).select().single()
-
-export const updateApprovalDelegation = (id, data, orgId) => {
-  let q = supabase.from('approval_delegations').update(data).eq('id', id)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q.select().single()
-}
-
-export const deleteApprovalDelegation = (id, orgId) => {
-  let q = supabase.from('approval_delegations').delete().eq('id', id)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
-}

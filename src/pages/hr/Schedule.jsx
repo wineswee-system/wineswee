@@ -1107,31 +1107,7 @@ export default function Schedule() {
             {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </div>
-        {selection && (() => {
-          const fEmps = employees.filter(em =>
-            (deptFilter === '' || em.dept === deptFilter) &&
-            (storeFilter === '' || em.store === storeFilter)
-          )
-          const aIdx = fEmps.findIndex(em => em.name === selection.anchor.empName)
-          const eIdx = fEmps.findIndex(em => em.name === selection.end.empName)
-          const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
-          const eDIdx = activeDates.findIndex(d => d === selection.end.date)
-          const cnt = (aIdx < 0 || eIdx < 0 || aDIdx < 0 || eDIdx < 0)
-            ? 0
-            : (Math.abs(aIdx - eIdx) + 1) * (Math.abs(aDIdx - eDIdx) + 1)
-          return (
-            <div style={{
-              padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-              background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              🔵 已選 {cnt} 格 — R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
-              <button onClick={() => setSelection(null)} style={{
-                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0,
-              }}>×</button>
-            </div>
-          )
-        })()}
+        {/* 框選提示條：fixed 飄右下角，不參與 flex 佈局避免班表往下跳 */}
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden' }}>
           {[
             { key: 'schedule', label: '📋 班表總覽' },
@@ -1347,6 +1323,36 @@ export default function Schedule() {
         handleAssignCover={handleAssignCover}
         handlePostCoverRequest={handlePostCoverRequest}
       />
+
+      {/* 框選提示條：fixed 飄右下角，不參與 flex 佈局避免班表往下跳 */}
+      {selection && (() => {
+        const fEmps = employees.filter(em =>
+          (deptFilter === '' || em.dept === deptFilter) &&
+          (storeFilter === '' || em.store === storeFilter)
+        )
+        const aIdx = fEmps.findIndex(em => em.name === selection.anchor.empName)
+        const eIdx = fEmps.findIndex(em => em.name === selection.end.empName)
+        const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
+        const eDIdx = activeDates.findIndex(d => d === selection.end.date)
+        const cnt = (aIdx < 0 || eIdx < 0 || aDIdx < 0 || eDIdx < 0)
+          ? 0
+          : (Math.abs(aIdx - eIdx) + 1) * (Math.abs(aDIdx - eDIdx) + 1)
+        return (
+          <div style={{
+            position: 'fixed', bottom: 20, right: 20, zIndex: 9000,
+            padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            background: 'var(--bg-secondary)', color: 'var(--accent-cyan)',
+            border: '1px solid var(--accent-cyan)',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            🔵 已選 {cnt} 格 — R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
+            <button onClick={() => setSelection(null)} style={{
+              background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, fontSize: 16,
+            }}>×</button>
+          </div>
+        )
+      })()}
     </div>
   )
 }

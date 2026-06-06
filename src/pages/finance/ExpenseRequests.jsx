@@ -268,9 +268,14 @@ export default function ExpenseRequests() {
           p_type: 'expense_request',
           p_id: editingId,
         })
-        if (rpcErr) console.error('[resume_workflow] error:', rpcErr)
-        else console.log('[resume_workflow] result:', rpcResult)
-      } catch (e) { console.error('[resume_workflow] failed:', e) }
+        if (rpcErr) {
+          console.error('[resume_workflow] error:', rpcErr)
+          toast.error('簽核流程重啟失敗：' + rpcErr.message)
+        } else console.log('[resume_workflow] result:', rpcResult)
+      } catch (e) {
+        console.error('[resume_workflow] failed:', e)
+        toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+      }
 
       setSaving(false)
       setShowModal(false)
@@ -299,13 +304,19 @@ export default function ExpenseRequests() {
     if (data) {
       try {
         const wfResult = await createApprovalWorkflow('expense_request', data, form.employee)
-        if (wfResult?.error) console.error('[createApprovalWorkflow] error:', wfResult.error)
+        if (wfResult?.error) {
+          console.error('[createApprovalWorkflow] error:', wfResult.error)
+          toast.error('簽核流程建立失敗：' + (wfResult.error.message || wfResult.error))
+        }
         if (wfResult?.instance?.id) {
           await supabase.from('expense_requests')
             .update({ workflow_instance_id: wfResult.instance.id })
             .eq('id', data.id)
         }
-      } catch (e) { console.error('[createApprovalWorkflow] failed:', e) }
+      } catch (e) {
+        console.error('[createApprovalWorkflow] failed:', e)
+        toast.error('簽核流程建立失敗：' + (e.message || '未知錯誤'))
+      }
     }
 
     setSaving(false)

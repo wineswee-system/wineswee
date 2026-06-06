@@ -152,8 +152,15 @@ export default function Overtime() {
           .eq('id', editingId)
         if (updErr) throw updErr
         try {
-          await supabase.rpc('resume_workflow_for_request', { p_type: 'overtime', p_id: editingId })
-        } catch (e) { console.error('[resume_workflow] failed:', e) }
+          const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'overtime', p_id: editingId })
+          if (rpcErr) {
+            console.error('[resume_workflow] error:', rpcErr)
+            toast.error('簽核流程重啟失敗：' + rpcErr.message)
+          }
+        } catch (e) {
+          console.error('[resume_workflow] failed:', e)
+          toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+        }
         setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
         setShowModal(false)
         setEditingId(null)

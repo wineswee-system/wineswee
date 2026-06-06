@@ -178,8 +178,15 @@ export default function LeaveOfAbsence() {
         .update({ ...payload, reject_reason: null }).eq('id', editingId)
       if (updErr) return toast.error('更新失敗：' + updErr.message)
       try {
-        await supabase.rpc('resume_workflow_for_request', { p_type: 'loa', p_id: editingId })
-      } catch (e) { console.error('[resume_workflow] failed:', e) }
+        const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'loa', p_id: editingId })
+        if (rpcErr) {
+          console.error('[resume_workflow] error:', rpcErr)
+          toast.error('簽核流程重啟失敗：' + rpcErr.message)
+        }
+      } catch (e) {
+        console.error('[resume_workflow] failed:', e)
+        toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+      }
       setShowForm(false); setEditingId(null)
       setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '產假', reason_detail: '' })
       load()

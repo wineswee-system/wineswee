@@ -137,8 +137,15 @@ export default function Expenses() {
         .eq('id', editingId)
       if (updErr) { toast.error('更新失敗：' + updErr.message); return }
       try {
-        await supabase.rpc('resume_workflow_for_request', { p_type: 'expense', p_id: editingId })
-      } catch (e) { console.error('[resume_workflow] failed:', e) }
+        const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'expense', p_id: editingId })
+        if (rpcErr) {
+          console.error('[resume_workflow] error:', rpcErr)
+          toast.error('簽核流程重啟失敗：' + rpcErr.message)
+        }
+      } catch (e) {
+        console.error('[resume_workflow] failed:', e)
+        toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+      }
       setExpenses(prev => prev.map(x => x.id === editingId ? { ...x, ...payload, status: '待審核', reject_reason: null } : x))
       setShowModal(false)
       setEditingId(null)

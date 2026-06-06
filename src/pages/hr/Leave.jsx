@@ -260,8 +260,15 @@ export default function Leave() {
         .eq('id', editingId)
       if (updErr) { toast.error('更新失敗：' + updErr.message); return }
       try {
-        await supabase.rpc('resume_workflow_for_request', { p_type: 'leave', p_id: editingId })
-      } catch (e) { console.error('[resume_workflow] failed:', e) }
+        const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'leave', p_id: editingId })
+        if (rpcErr) {
+          console.error('[resume_workflow] error:', rpcErr)
+          toast.error('簽核流程重啟失敗：' + rpcErr.message)
+        }
+      } catch (e) {
+        console.error('[resume_workflow] failed:', e)
+        toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+      }
       setLeaves(prev => prev.map(l => l.id === editingId ? { ...l, ...payload, status: '待審核', reject_reason: null } : l))
       setShowModal(false)
       setEditingId(null)

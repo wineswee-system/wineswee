@@ -421,7 +421,7 @@ function TimelineDot({ step, index, isLast }) {
           {fmtDateTime(step.completedAt)}
         </div>
       )}
-      {step.durationText && (
+      {step.durationText && step.durationText !== '0 秒' && (
         <div style={{
           fontSize: 12, color: 'var(--text-secondary)', marginTop: 4,
           display: 'inline-flex', alignItems: 'center', gap: 4,

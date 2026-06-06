@@ -834,91 +834,6 @@ export default function Schedule() {
     }
   }
 
-  // ── Python 排班 v2（呼叫 /api/schedule.py 純手寫 backtracking solver）──
-  const handlePythonSchedule = async () => {
-    if (!storeFilter) { toast.error('請先選擇門市'); return }
-    if (filtered.length === 0) { toast.error('沒有員工可排班'); return }
-    const selectedStoreObj = locations.find(l => l.name === storeFilter)
-    if (!selectedStoreObj) { toast.error('找不到門市資料'); return }
-    const isMonthly = viewMode === 'month'
-    const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
-    const rangeLabel = isCycle
-      ? `Cycle ${cycleInfo.start} ~ ${cycleInfo.end}`
-      : isMonthly ? `${selectedMonth} 月排班`
-      : `${weekStart} ~ ${weekEnd}`
-    if (!(await confirm({ message: `用 Python 演算法為 ${filtered.length} 位員工排班（${rangeLabel}）\n\nv2 純手寫 backtracking solver，hard rule 嚴格保證 H3/H4 不違法。產出為草稿。` }))) return
-
-    setAutoScheduling(true)
-    setAiDraft(null)
-    setAiProgress('Python solver 計算中... (最多 30 秒)')
-
-    try {
-      const dates = isCycle ? cycleDates : isMonthly ? monthDates : weekDates
-
-      const res = await fetch('/api/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          store_id: selectedStoreObj.id,
-          organization_id: authProfile?.organization_id,
-          cycle_dates: dates,
-          timeout_seconds: 25,
-        }),
-      })
-      if (!res.ok) {
-        const errBody = await res.text()
-        throw new Error(`HTTP ${res.status}: ${errBody}`)
-      }
-      const result = await res.json()
-
-      // 把 Python output 轉成跟現有 schedulingAlgo 一致的 shape
-      const name_by_id = Object.fromEntries(filtered.map(e => [e.id, e.name]))
-      const assignments = result.assignments.map(a => ({
-        employee: name_by_id[a.employee_id] || `#${a.employee_id}`,
-        date: a.date,
-        shift: a.is_rest ? '休' : (a.window_start && a.window_end ? `${a.window_start}-${a.window_end}` : '上班'),
-        actual_start: a.window_start,
-        actual_end: a.window_end,
-        actual_hours: a.hours,
-      }))
-      const errors = result.violations.filter(v => v.severity === 'error').map(v => ({
-        employee: name_by_id[v.employee_id] || '-',
-        constraint: v.constraint,
-        date: v.date,
-        message: v.message,
-        severity: 'error',
-      }))
-      const warnings = result.violations.filter(v => v.severity === 'warning').map(v => ({
-        employee: name_by_id[v.employee_id] || '-',
-        constraint: v.constraint,
-        date: v.date,
-        message: v.message,
-        severity: 'warning',
-      }))
-
-      setAiDraft({
-        success: result.success,
-        assignments,
-        errors,
-        warnings,
-        violations: [...errors, ...warnings],
-        reasoning: `Python solver v2 (backtracking)：${assignments.length} 筆。耗時 ${result.elapsed_ms}ms。`,
-        meta: { model: 'python-backtracking-v1', mode: 'hybrid' },
-        stats: result.stats,
-      })
-      setAiProgress('')
-      if (!result.success) {
-        toast.warning('Python solver 沒找到完全合法解，請看 violations 手動調整')
-      }
-    } catch (err) {
-      console.error('[Python Schedule] Error:', err)
-      toast.error(`Python 排班失敗：${err.message}`)
-      setAiProgress('')
-    } finally {
-      setAutoScheduling(false)
-    }
-  }
-
   // Load store settings + events whenever storeFilter changes
   useEffect(() => {
     if (storeFilter && locations.length > 0) {
@@ -1096,11 +1011,6 @@ export default function Schedule() {
                 <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
                   onClick={handleAutoSchedule} disabled={autoScheduling}>
                   <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
-                </button>
-                <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue, #3b82f6))' }}
-                  onClick={handlePythonSchedule} disabled={autoScheduling}
-                  title="純 Python backtracking solver — H3/H4 嚴格保證、跨 cycle 月休不超標">
-                  🐍 {autoScheduling && aiProgress.includes('Python') ? aiProgress : 'Python 排班 v2'}
                 </button>
               </>
             )}

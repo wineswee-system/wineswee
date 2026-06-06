@@ -15,6 +15,7 @@ import AnalyticsTab from './components/AnalyticsTab'
 import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
 import ScheduleImportModal from './components/ScheduleImportModal'
+import EmployeeSchedulePatternsModal from './components/EmployeeSchedulePatternsModal'
 import CoverShiftModal from './components/CoverShiftModal'
 import CompOffModal from './components/CompOffModal'
 import ScheduleCalendarEvents from './components/ScheduleCalendarEvents'
@@ -70,6 +71,7 @@ export default function Schedule() {
   const [minStaffWeekend, setMinStaffWeekend] = useState(3)
   const [showLawModal, setShowLawModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showPatternsModal, setShowPatternsModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
@@ -941,6 +943,9 @@ export default function Schedule() {
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowImportModal(true)}>
               📤 匯入 CSV
             </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowPatternsModal(true)}>
+              🗂️ 員工排班模板
+            </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
               exportScheduleCalendarPdf({
                 storeName: storeFilter || '全部門市',
@@ -1221,7 +1226,19 @@ export default function Schedule() {
         stores={locations}
         orgId={authProfile?.organization_id}
         onImported={async () => {
-          // 重抓本月排班
+          const { data } = await supabase.from('schedules').select('*')
+            .gte('date', activeStart).lte('date', activeEnd)
+          if (data) setSchedules(data)
+        }}
+      />
+      <EmployeeSchedulePatternsModal
+        open={showPatternsModal}
+        onClose={() => setShowPatternsModal(false)}
+        employees={employees}
+        stores={locations}
+        orgId={authProfile?.organization_id}
+        currentMonth={selectedMonth}
+        onApplied={async () => {
           const { data } = await supabase.from('schedules').select('*')
             .gte('date', activeStart).lte('date', activeEnd)
           if (data) setSchedules(data)

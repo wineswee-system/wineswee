@@ -61,6 +61,8 @@ export default function Schedule() {
   const [storeFilter, setStoreFilter] = useState('')
   const [editCell, setEditCell] = useState(null)
   const [focusedCell, setFocusedCell] = useState(null)  // { empName, date } 鍵盤導航的焦點
+  const [selection, setSelection] = useState(null)       // { anchor: {empName, date}, end: {empName, date} } 拖曳框選
+  const [selecting, setSelecting] = useState(false)      // mousedown 拖曳中
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
@@ -219,6 +221,36 @@ export default function Schedule() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, weekStart])
 
+  // 套用班別到當前 selection 範圍
+  const applyToSelection = async (shift, actualStart = null, actualEnd = null) => {
+    if (!selection) return
+    const filteredEmps = employees.filter(em =>
+      (deptFilter === '' || em.dept === deptFilter) &&
+      (storeFilter === '' || em.store === storeFilter)
+    )
+    const aIdx = filteredEmps.findIndex(em => em.name === selection.anchor.empName)
+    const eIdx = filteredEmps.findIndex(em => em.name === selection.end.empName)
+    const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
+    const eDIdx = activeDates.findIndex(d => d === selection.end.date)
+    const eMin = Math.min(aIdx, eIdx), eMax = Math.max(aIdx, eIdx)
+    const dMin = Math.min(aDIdx, eDIdx), dMax = Math.max(aDIdx, eDIdx)
+    const targets = []
+    for (let i = eMin; i <= eMax; i++) {
+      for (let j = dMin; j <= dMax; j++) {
+        targets.push({ empName: filteredEmps[i].name, date: activeDates[j] })
+      }
+    }
+    // 一次處理多格，showpr 確認
+    if (targets.length > 5) {
+      const ok = await confirm({ message: `套用「${shift}」到 ${targets.length} 格？` })
+      if (!ok) return
+    }
+    for (const t of targets) {
+      const emp = filteredEmps.find(em => em.name === t.empName)
+      await handleSetShift(t.empName, t.date, shift, actualStart, actualEnd, emp?.store || null)
+    }
+  }
+
   // 鍵盤導航：方向鍵移動 focused cell + Space/Enter 開 modal
   useEffect(() => {
     if (!canEditSchedule) return
@@ -235,6 +267,38 @@ export default function Schedule() {
       )
       const dates = activeDates
       if (filteredEmps.length === 0 || dates.length === 0) return
+
+      // 有 selection 時：R/S/B/M 套到整個範圍，Del 刪除整個範圍
+      if (selection) {
+        const k = e.key.toLowerCase()
+        if (k === 'r') { e.preventDefault(); applyToSelection('休'); return }
+        if (k === 's') { e.preventDefault(); applyToSelection('特休'); return }
+        if (k === 'b') { e.preventDefault(); applyToSelection('病'); return }
+        if (k === 'm') { e.preventDefault(); applyToSelection('會議'); return }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault()
+          // 砍 selection 範圍內所有 cell
+          ;(async () => {
+            const aIdx = filteredEmps.findIndex(em => em.name === selection.anchor.empName)
+            const eIdx = filteredEmps.findIndex(em => em.name === selection.end.empName)
+            const aDIdx = dates.findIndex(d => d === selection.anchor.date)
+            const eDIdx = dates.findIndex(d => d === selection.end.date)
+            const eMin = Math.min(aIdx, eIdx), eMax = Math.max(aIdx, eIdx)
+            const dMin = Math.min(aDIdx, eDIdx), dMax = Math.max(aDIdx, eDIdx)
+            for (let i = eMin; i <= eMax; i++) {
+              for (let j = dMin; j <= dMax; j++) {
+                await handleDeleteShift(filteredEmps[i].name, dates[j])
+              }
+            }
+          })()
+          return
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setSelection(null)
+          return
+        }
+      }
 
       // 沒 focus 時，方向鍵設第一格
       if (!focusedCell) {
@@ -278,7 +342,8 @@ export default function Schedule() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [focusedCell, editCell, canEditSchedule, employees, deptFilter, storeFilter, activeDates])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedCell, editCell, canEditSchedule, employees, deptFilter, storeFilter, activeDates, selection])
 
   const getShift = (empName, date) => {
     // 模擬中：aiDraft 存在時純看 draft（找不到也不 fallback DB）
@@ -1132,6 +1197,31 @@ export default function Schedule() {
             {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </div>
+        {selection && (() => {
+          const fEmps = employees.filter(em =>
+            (deptFilter === '' || em.dept === deptFilter) &&
+            (storeFilter === '' || em.store === storeFilter)
+          )
+          const aIdx = fEmps.findIndex(em => em.name === selection.anchor.empName)
+          const eIdx = fEmps.findIndex(em => em.name === selection.end.empName)
+          const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
+          const eDIdx = activeDates.findIndex(d => d === selection.end.date)
+          const cnt = (aIdx < 0 || eIdx < 0 || aDIdx < 0 || eDIdx < 0)
+            ? 0
+            : (Math.abs(aIdx - eIdx) + 1) * (Math.abs(aDIdx - eDIdx) + 1)
+          return (
+            <div style={{
+              padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              🔵 已選 {cnt} 格 — R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
+              <button onClick={() => setSelection(null)} style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0,
+              }}>×</button>
+            </div>
+          )
+        })()}
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden' }}>
           {[
             { key: 'schedule', label: '📋 班表總覽' },
@@ -1227,6 +1317,10 @@ export default function Schedule() {
           setEditCell={setEditCell}
           focusedCell={focusedCell}
           setFocusedCell={setFocusedCell}
+          selection={selection}
+          setSelection={setSelection}
+          selecting={selecting}
+          setSelecting={setSelecting}
           handleSetShift={handleSetShift}
           handleDeleteShift={handleDeleteShift}
           canEditSchedule={canEditSchedule}

@@ -19,6 +19,10 @@ export default function MonthScheduleTable({
   setEditCell,
   focusedCell,
   setFocusedCell,
+  selection,
+  setSelection,
+  selecting,
+  setSelecting,
   handleSetShift,
   handleDeleteShift,
   canEditSchedule = true,
@@ -43,6 +47,30 @@ export default function MonthScheduleTable({
     : null
 
   const absenceOptions = getAbsenceOptions()
+
+  // 滑鼠拖曳框選 — 在 window 接 mouseup 才不會放開時鼠標已移出 cell
+  useEffect(() => {
+    if (!selecting) return
+    const onUp = () => setSelecting(false)
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [selecting, setSelecting])
+
+  // 判斷 cell 是否在 selection 矩形範圍內
+  const isCellInSelection = (empName, date) => {
+    if (!selection) return false
+    // 在所有可見員工裡查 index（橫跨 store group 也算）
+    const aIdx = filtered.findIndex(em => em.name === selection.anchor.empName)
+    const eIdx = filtered.findIndex(em => em.name === selection.end.empName)
+    const cIdx = filtered.findIndex(em => em.name === empName)
+    const aDIdx = monthDates.findIndex(d => d === selection.anchor.date)
+    const eDIdx = monthDates.findIndex(d => d === selection.end.date)
+    const cDIdx = monthDates.findIndex(d => d === date)
+    if (cIdx < 0 || cDIdx < 0) return false
+    const eMin = Math.min(aIdx, eIdx), eMax = Math.max(aIdx, eIdx)
+    const dMin = Math.min(aDIdx, eDIdx), dMax = Math.max(aDIdx, eDIdx)
+    return cIdx >= eMin && cIdx <= eMax && cDIdx >= dMin && cDIdx <= dMax
+  }
 
   // Compute stats
   const totalWorkDays = filtered.reduce((sum, emp) => {
@@ -161,6 +189,11 @@ export default function MonthScheduleTable({
                       setEditCell={setEditCell}
                       focusedCell={focusedCell}
                       setFocusedCell={setFocusedCell}
+                      selection={selection}
+                      setSelection={setSelection}
+                      selecting={selecting}
+                      setSelecting={setSelecting}
+                      isCellInSelection={isCellInSelection}
                       handleSetShift={handleSetShift}
                       handleDeleteShift={handleDeleteShift}
                       canEditSchedule={canEditSchedule}
@@ -188,6 +221,11 @@ export default function MonthScheduleTable({
                     setEditCell={setEditCell}
                     focusedCell={focusedCell}
                     setFocusedCell={setFocusedCell}
+                    selection={selection}
+                    setSelection={setSelection}
+                    selecting={selecting}
+                    setSelecting={setSelecting}
+                    isCellInSelection={isCellInSelection}
                     handleSetShift={handleSetShift}
                     handleDeleteShift={handleDeleteShift}
                     canEditSchedule={canEditSchedule}
@@ -236,6 +274,7 @@ function StoreSection({ storeName, storeEmps, monthDates, ...rest }) {
 function EmployeeRow({
   emp, monthDates, getShift, getShiftStyle, getOffRequest,
   editCell, setEditCell, focusedCell, setFocusedCell,
+  selection, setSelection, selecting, setSelecting, isCellInSelection,
   handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   pendingLeaveMap = {}, schedules = [],
@@ -268,6 +307,7 @@ function EmployeeRow({
         const isHoliday = holidaySet?.has(date)
         const isEditing = editCell?.empName === emp.name && editCell?.date === date
         const isFocused = focusedCell?.empName === emp.name && focusedCell?.date === date
+        const isSelected = isCellInSelection?.(emp.name, date)
         const isRest = isAbsence(shift)
         const absenceCfg = isRest ? getAbsenceConfig(shift) : null
         const hasPendingLeave = pendingLeaveMap[emp.name]?.has(date)
@@ -280,16 +320,41 @@ function EmployeeRow({
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
             border: isFocused ? '2px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
-            background: isCrossStore ? 'rgba(168,85,247,0.08)'
+            background: isSelected ? 'rgba(34,211,238,0.20)'
+              : isCrossStore ? 'rgba(168,85,247,0.08)'
               : isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
             outline: isFocused ? '1px solid var(--accent-cyan)' : 'none',
+            userSelect: 'none',
           }}
-          onClick={() => {
-            if (canEditSchedule) {
-              setFocusedCell?.({ empName: emp.name, date })
-              if (!isEditing) setEditCell({ empName: emp.name, date })
+          onMouseDown={(e) => {
+            if (!canEditSchedule) return
+            // 拖曳開始：set anchor + 進入 selecting；不開 modal
+            // Shift+click → 從原 anchor 延伸到這格
+            if (e.shiftKey && selection?.anchor) {
+              setSelection?.({ anchor: selection.anchor, end: { empName: emp.name, date } })
+              return
             }
+            e.preventDefault()
+            setSelection?.({ anchor: { empName: emp.name, date }, end: { empName: emp.name, date } })
+            setSelecting?.(true)
+            setFocusedCell?.({ empName: emp.name, date })
+          }}
+          onMouseEnter={() => {
+            if (selecting && selection?.anchor) {
+              setSelection?.({ anchor: selection.anchor, end: { empName: emp.name, date } })
+            }
+          }}
+          onClick={(e) => {
+            if (!canEditSchedule) return
+            // 拖曳到別格了 → 不開 modal（多格選取）
+            if (selection && (selection.anchor.empName !== selection.end.empName
+              || selection.anchor.date !== selection.end.date)) return
+            // 單格點擊 → 清 selection，開 modal
+            if (e.shiftKey) return
+            setSelection?.(null)
+            setFocusedCell?.({ empName: emp.name, date })
+            if (!isEditing) setEditCell({ empName: emp.name, date })
           }}>
             {/* Cell Content */}
             {isRest ? (

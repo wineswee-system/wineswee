@@ -60,6 +60,7 @@ export default function Schedule() {
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
   const [editCell, setEditCell] = useState(null)
+  const [focusedCell, setFocusedCell] = useState(null)  // { empName, date } 鍵盤導航的焦點
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
@@ -217,6 +218,67 @@ export default function Schedule() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, weekStart])
+
+  // 鍵盤導航：方向鍵移動 focused cell + Space/Enter 開 modal
+  useEffect(() => {
+    if (!canEditSchedule) return
+    const handler = (e) => {
+      // 編輯 modal 開啟時不接管（modal 內自己處理）
+      if (editCell) return
+      // 在 input/select/textarea 內不接管
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return
+
+      const filteredEmps = employees.filter(em =>
+        (deptFilter === '' || em.dept === deptFilter) &&
+        (storeFilter === '' || em.store === storeFilter)
+      )
+      const dates = activeDates
+      if (filteredEmps.length === 0 || dates.length === 0) return
+
+      // 沒 focus 時，方向鍵設第一格
+      if (!focusedCell) {
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+          e.preventDefault()
+          setFocusedCell({ empName: filteredEmps[0].name, date: dates[0] })
+        }
+        return
+      }
+
+      const eIdx = filteredEmps.findIndex(em => em.name === focusedCell.empName)
+      const dIdx = dates.findIndex(d => d === focusedCell.date)
+      if (eIdx < 0 || dIdx < 0) {
+        // focus 失效，重設
+        setFocusedCell({ empName: filteredEmps[0].name, date: dates[0] })
+        return
+      }
+
+      let ne = eIdx, nd = dIdx
+      switch (e.key) {
+        case 'ArrowUp':    ne = Math.max(0, eIdx - 1); break
+        case 'ArrowDown':  ne = Math.min(filteredEmps.length - 1, eIdx + 1); break
+        case 'ArrowLeft':  nd = Math.max(0, dIdx - 1); break
+        case 'ArrowRight': nd = Math.min(dates.length - 1, dIdx + 1); break
+        case 'Home':       nd = 0; break
+        case 'End':        nd = dates.length - 1; break
+        case ' ':
+        case 'Enter':
+          e.preventDefault()
+          setEditCell({ empName: focusedCell.empName, date: focusedCell.date })
+          return
+        case 'Escape':
+          e.preventDefault()
+          setFocusedCell(null)
+          return
+        default:
+          return
+      }
+      e.preventDefault()
+      setFocusedCell({ empName: filteredEmps[ne].name, date: dates[nd] })
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [focusedCell, editCell, canEditSchedule, employees, deptFilter, storeFilter, activeDates])
 
   const getShift = (empName, date) => {
     // 模擬中：aiDraft 存在時純看 draft（找不到也不 fallback DB）
@@ -1163,6 +1225,8 @@ export default function Schedule() {
           getOffRequest={getOffRequest}
           editCell={editCell}
           setEditCell={setEditCell}
+          focusedCell={focusedCell}
+          setFocusedCell={setFocusedCell}
           handleSetShift={handleSetShift}
           handleDeleteShift={handleDeleteShift}
           canEditSchedule={canEditSchedule}

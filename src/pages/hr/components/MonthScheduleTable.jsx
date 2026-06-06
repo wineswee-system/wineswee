@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { parseTime } from '../../../lib/scheduleUtils'
@@ -17,6 +17,8 @@ export default function MonthScheduleTable({
   getOffRequest,
   editCell,
   setEditCell,
+  focusedCell,
+  setFocusedCell,
   handleSetShift,
   handleDeleteShift,
   canEditSchedule = true,
@@ -157,6 +159,8 @@ export default function MonthScheduleTable({
                       getOffRequest={getOffRequest}
                       editCell={editCell}
                       setEditCell={setEditCell}
+                      focusedCell={focusedCell}
+                      setFocusedCell={setFocusedCell}
                       handleSetShift={handleSetShift}
                       handleDeleteShift={handleDeleteShift}
                       canEditSchedule={canEditSchedule}
@@ -182,6 +186,8 @@ export default function MonthScheduleTable({
                     getOffRequest={getOffRequest}
                     editCell={editCell}
                     setEditCell={setEditCell}
+                    focusedCell={focusedCell}
+                    setFocusedCell={setFocusedCell}
                     handleSetShift={handleSetShift}
                     handleDeleteShift={handleDeleteShift}
                     canEditSchedule={canEditSchedule}
@@ -229,7 +235,8 @@ function StoreSection({ storeName, storeEmps, monthDates, ...rest }) {
 // ── Employee Row ──
 function EmployeeRow({
   emp, monthDates, getShift, getShiftStyle, getOffRequest,
-  editCell, setEditCell, handleSetShift, handleDeleteShift,
+  editCell, setEditCell, focusedCell, setFocusedCell,
+  handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   pendingLeaveMap = {}, schedules = [],
 }) {
@@ -260,6 +267,7 @@ function EmployeeRow({
         const isWeekend = isWeekendDay(dayOfWeek)
         const isHoliday = holidaySet?.has(date)
         const isEditing = editCell?.empName === emp.name && editCell?.date === date
+        const isFocused = focusedCell?.empName === emp.name && focusedCell?.date === date
         const isRest = isAbsence(shift)
         const absenceCfg = isRest ? getAbsenceConfig(shift) : null
         const hasPendingLeave = pendingLeaveMap[emp.name]?.has(date)
@@ -271,13 +279,17 @@ function EmployeeRow({
           <td key={date} style={{
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
-            border: '1px solid var(--border-medium)',
+            border: isFocused ? '2px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
             background: isCrossStore ? 'rgba(168,85,247,0.08)'
               : isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
             cursor: canEditSchedule ? 'pointer' : 'default',
+            outline: isFocused ? '1px solid var(--accent-cyan)' : 'none',
           }}
           onClick={() => {
-            if (canEditSchedule && !isEditing) setEditCell({ empName: emp.name, date })
+            if (canEditSchedule) {
+              setFocusedCell?.({ empName: emp.name, date })
+              if (!isEditing) setEditCell({ empName: emp.name, date })
+            }
           }}>
             {/* Cell Content */}
             {isRest ? (
@@ -439,6 +451,42 @@ function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSch
     handleSetShift(emp.name, date, label, null, null, sourceStore || null)
   }
 
+  // 鍵盤快捷鍵：1-5 = preset / R = 休 / S = 特休 / B = 病 / M = 會議
+  //           Enter = 確認 / ESC = 取消 / Backspace+Delete = 刪除
+  useEffect(() => {
+    const handler = (e) => {
+      // 在 input/select/textarea 內不接管（讓使用者正常輸入時間）
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') {
+        if (e.key === 'Enter') { e.preventDefault(); handleConfirm() }
+        if (e.key === 'Escape') { e.preventDefault(); onClose() }
+        return
+      }
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+      if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); return }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (shift && handleDeleteShift) { e.preventDefault(); handleDeleteShift(emp.name, date) }
+        return
+      }
+      // 1-5 = 對應 preset
+      const num = parseInt(e.key, 10)
+      if (!isNaN(num) && num >= 1 && num <= presets.length) {
+        e.preventDefault()
+        const p = presets[num - 1]
+        setStartTime(p.start); setEndTime(p.end)
+        return
+      }
+      const k = e.key.toLowerCase()
+      if (k === 'r') { e.preventDefault(); setAbsence('休') }
+      else if (k === 's') { e.preventDefault(); setAbsence('特休') }
+      else if (k === 'b') { e.preventDefault(); setAbsence('病') }
+      else if (k === 'm') { e.preventDefault(); setAbsence('會議') }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startTime, endTime, sourceStore, shift])
+
   return (
     <ModalOverlay onClose={onClose}>
       <div style={{
@@ -532,6 +580,11 @@ function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSch
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(245,158,11,0.08)', color: '#f59e0b', fontSize: 12, fontWeight: 600,
         }}>👶 產假</button>
+      </div>
+
+      {/* Keyboard hints */}
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 4 }}>
+        ⌨ 1-5=班別 / R=休 S=特休 B=病 / Enter=確認 / Del=刪除 / Esc=關
       </div>
 
       {/* Delete + Cancel */}

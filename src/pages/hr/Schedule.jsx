@@ -14,6 +14,7 @@ import SwapsTab from './components/SwapsTab'
 import AnalyticsTab from './components/AnalyticsTab'
 import CrossStoreTab from './components/CrossStoreTab'
 import LawReferenceModal from './components/LawReferenceModal'
+import ScheduleImportModal from './components/ScheduleImportModal'
 import CoverShiftModal from './components/CoverShiftModal'
 import CompOffModal from './components/CompOffModal'
 import ScheduleCalendarEvents from './components/ScheduleCalendarEvents'
@@ -68,6 +69,7 @@ export default function Schedule() {
   const [minStaff, setMinStaff] = useState(3)
   const [minStaffWeekend, setMinStaffWeekend] = useState(3)
   const [showLawModal, setShowLawModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
@@ -936,6 +938,9 @@ export default function Schedule() {
             }}>
               📥 匯出 CSV
             </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowImportModal(true)}>
+              📤 匯入 CSV
+            </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
               exportScheduleCalendarPdf({
                 storeName: storeFilter || '全部門市',
@@ -1209,6 +1214,19 @@ export default function Schedule() {
       )}
 
       {showLawModal && <LawReferenceModal onClose={() => setShowLawModal(false)} />}
+      <ScheduleImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        employees={employees}
+        stores={locations}
+        orgId={authProfile?.organization_id}
+        onImported={async () => {
+          // 重抓本月排班
+          const { data } = await supabase.from('schedules').select('*')
+            .gte('date', activeStart).lte('date', activeEnd)
+          if (data) setSchedules(data)
+        }}
+      />
 
       {/* Comp-off assignment modal */}
       {showCompOff && (

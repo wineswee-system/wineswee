@@ -139,12 +139,42 @@ function AdminApp() {
   )
 }
 
+// ── 帳號未綁定畫面：有 Supabase auth session 但 employees 表沒對應 row（沒 LINE 綁定也沒 email 帳號 link）──
+function UnboundAccountScreen({ user, signOut }) {
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 32, background: 'var(--bg-primary)',
+    }}>
+      <div style={{
+        maxWidth: 480, padding: 36, borderRadius: 14,
+        background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
+        boxShadow: 'var(--shadow-xl)', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+        <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)' }}>帳號未綁定</h2>
+        <p style={{ margin: '0 0 8px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          您的帳號（{user?.email || '—'}）尚未綁定到員工資料。
+        </p>
+        <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6 }}>
+          請聯絡系統管理員協助綁定 LINE 或 email 帳號後才能使用系統。
+        </p>
+        <button onClick={signOut} className="btn btn-primary" style={{ padding: '10px 28px' }}>
+          登出
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Protected wrapper ──
 function ProtectedApp() {
-  const { loading, profileReady, isAuthenticated } = useAuth()
+  const { loading, profileReady, isAuthenticated, profile, user, signOut } = useAuth()
 
   if (loading || !profileReady) return <LoadingSpinner />
   if (!isAuthenticated) return <Suspense fallback={<LoadingSpinner />}><Login /></Suspense>
+  // 有 Supabase auth 但找不到對應 employees row → 沒被綁定，直接擋下不准進主系統
+  if (!profile) return <UnboundAccountScreen user={user} signOut={signOut} />
 
   return <AdminApp />
 }

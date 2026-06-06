@@ -108,7 +108,7 @@ const PERM_KEY_MAP = {
   hire_approval: 'offer_letters',
   headcount:     'headcount_requests',
   form_submission: 'form_submissions',
-  // 排班 / 任務（暫未在 web_list_my_pending_approval_ids 內 → 後續補）
+  // 排班 / 任務（2026-06-06 migration 20260606060000 補進 RPC）
   off_request: 'off_requests',
   shift_swap_peer: 'shift_swaps',
   shift_swap_manager: 'shift_swaps',

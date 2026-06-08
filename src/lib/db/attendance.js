@@ -52,9 +52,11 @@ export const deleteLeaveRequest = (id, deletedBy) =>
   supabase.rpc('soft_delete_request', { p_table: 'leave_requests', p_id: id, p_deleted_by: deletedBy ?? null })
 
 export const getOvertimeRequests = (options = {}) => {
-  let q = supabase.from('overtime_requests').select('*').is('deleted_at', null).order('id')
+  // 預設新的在上、limit 2000（避免大量歷史 OT 把新匯入的擠出 500 筆窗口）
+  let q = supabase.from('overtime_requests').select('*').is('deleted_at', null)
+                  .order('id', { ascending: false })
   if (options.orgId) q = q.eq('organization_id', options.orgId)
-  return q.limit(options.limit ?? 500)
+  return q.limit(options.limit ?? 2000)
 }
 
 export const createOvertimeRequest = (data) =>

@@ -339,7 +339,7 @@ export default function SalaryStructures() {
                 <input className="form-input" type="number" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} placeholder="0" />
               </Field>
             )}
-            <Field label="主管津貼">
+            <Field label="主管加給">
               <input className="form-input" type="number" value={form.supervisor_allowance} onChange={e => set('supervisor_allowance', e.target.value)} placeholder="0" />
             </Field>
             {/* 職務津貼欄位 2026-05-13 移除（Plan A）— DB column role_allowance 保留向下相容，

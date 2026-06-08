@@ -257,12 +257,11 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
             {(p.role_allowance > 0 || p._raw_role_allowance > 0 || p._supervisor_allowance > 0) && (
               <FormulaRow
-                label="主管/職務津貼"
+                label="主管加給"
                 value={p.role_allowance}
-                formula="主管津貼 + 職務津貼（舊資料 fallback）"
+                formula={isProrated ? '主管加給 × 在職比例' : '主管加給'}
                 vars={[
-                  { k: '主管', v: p._supervisor_allowance },
-                  { k: '職務', v: p._raw_role_allowance },
+                  { k: '主管加給', v: p._supervisor_allowance + (p._raw_role_allowance || 0) },
                   ...(isProrated ? [{ k: '在職比例', v: _p }] : []),
                 ]}
               />

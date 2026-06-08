@@ -32,8 +32,9 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
             {rec.base_insured > 0 && rec.base_insured !== rec.base_salary && (
               <DetailRow label="└ 申報底薪" value={fmt(rec.base_insured)} />
             )}
-            {rec.supervisor_allowance > 0 && <DetailRow label="主管加給" value={fmt(rec.supervisor_allowance)} />}
-            <DetailRow label="職務津貼" value={fmt(rec.role_allowance)} />
+            {((rec.supervisor_allowance || 0) + (rec.role_allowance || 0)) > 0 && (
+              <DetailRow label="主管加給" value={fmt((rec.supervisor_allowance || 0) + (rec.role_allowance || 0))} />
+            )}
             {rec.night_shift_allowance > 0 && <DetailRow label="夜班津貼" value={fmt(rec.night_shift_allowance)} />}
             {rec.cross_store_allowance > 0 && <DetailRow label="跨區津貼" value={fmt(rec.cross_store_allowance)} />}
             <DetailRow label="伙食津貼" value={fmt(rec.meal_allowance)} />

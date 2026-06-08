@@ -303,8 +303,7 @@ export default function Payroll() {
   <div class="section"><h2 style="color:#16a34a">應發項目</h2><table>
     ${row('本薪', rec.base_salary)}
     ${rec.base_insured && rec.base_insured !== rec.base_salary ? row('└ 申報底薪', rec.base_insured) : ''}
-    ${row('主管加給', rec.supervisor_allowance)}
-    ${row('職務津貼', rec.role_allowance)}
+    ${row('主管加給', (rec.supervisor_allowance || 0) + (rec.role_allowance || 0))}
     ${row('夜班津貼', rec.night_shift_allowance)}
     ${row('跨區津貼', rec.cross_store_allowance)}
     ${row('伙食津貼', rec.meal_allowance)}

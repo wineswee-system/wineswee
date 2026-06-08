@@ -47,7 +47,7 @@ const TRANSFER_EMPTY = {
   effective_date: todayStr(),
   reason: '',
   base_salary: '',
-  role_allowance: '',
+  supervisor_allowance: '',
   meal_allowance: '',
   transport_allowance: '',
 }
@@ -55,7 +55,7 @@ const TRANSFER_EMPTY = {
 const SALARY_EMPTY = {
   employee_id: '',
   base_salary: '',
-  role_allowance: '',
+  supervisor_allowance: '',
   meal_allowance: '',
   transport_allowance: '',
   effective_from: todayStr(),
@@ -197,7 +197,7 @@ export default function Transfer() {
         const { error } = await supabase.from('salary_structures').insert({
           employee_id: empId,
           base_salary: Number(transferForm.base_salary) || 0,
-          role_allowance: Number(transferForm.role_allowance) || 0,
+          supervisor_allowance: Number(transferForm.supervisor_allowance) || 0,
           meal_allowance: Number(transferForm.meal_allowance) || 0,
           transport_allowance: Number(transferForm.transport_allowance) || 0,
           effective_from: transferForm.effective_date,
@@ -257,7 +257,7 @@ export default function Transfer() {
       const { error } = await supabase.from('salary_structures').insert({
         employee_id: Number(salaryForm.employee_id),
         base_salary: Number(salaryForm.base_salary) || 0,
-        role_allowance: Number(salaryForm.role_allowance) || 0,
+        supervisor_allowance: Number(salaryForm.supervisor_allowance) || 0,
         meal_allowance: Number(salaryForm.meal_allowance) || 0,
         transport_allowance: Number(salaryForm.transport_allowance) || 0,
         effective_from: salaryForm.effective_from,
@@ -507,7 +507,7 @@ export default function Transfer() {
                       <th>員工</th>
                       <th>部門 / 門市</th>
                       <th>基本薪資</th>
-                      <th>職務津貼</th>
+                      <th>主管加給</th>
                       <th>餐補</th>
                       <th>交通津貼</th>
                       <th>生效日</th>
@@ -530,7 +530,7 @@ export default function Transfer() {
                           <td style={{ fontWeight: 600 }}>{emp?.name || `#${row.employee_id}`}</td>
                           <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{unit}</td>
                           <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{fmt(row.base_salary)}</td>
-                          <td>{fmt(row.role_allowance)}</td>
+                          <td>{fmt((row.supervisor_allowance || 0) + (row.role_allowance || 0))}</td>
                           <td>{fmt(row.meal_allowance)}</td>
                           <td>{fmt(row.transport_allowance)}</td>
                           <td>{row.effective_from || '—'}</td>
@@ -641,8 +641,8 @@ export default function Transfer() {
                   className="form-input"
                   type="number"
                   placeholder="0"
-                  value={transferForm.role_allowance}
-                  onChange={e => setTF('role_allowance', e.target.value)}
+                  value={transferForm.supervisor_allowance}
+                  onChange={e => setTF('supervisor_allowance', e.target.value)}
                 />
               </Field>
               <Field label="餐補">
@@ -720,8 +720,8 @@ export default function Transfer() {
                 className="form-input"
                 type="number"
                 placeholder="0"
-                value={salaryForm.role_allowance}
-                onChange={e => setSF('role_allowance', e.target.value)}
+                value={salaryForm.supervisor_allowance}
+                onChange={e => setSF('supervisor_allowance', e.target.value)}
               />
             </Field>
             <Field label="餐補">

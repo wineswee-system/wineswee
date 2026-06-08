@@ -243,11 +243,11 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               value={p.base_salary}
               formula={isHourly
                 ? `時薪 × 當月實際打卡工時${isProrated ? '（已含在職比例）' : ''}`
-                : `月薪設定值${isProrated ? ' × 在職工作日比例' : ''}`}
+                : `月薪設定值 × 在職曆日 ÷ 當月曆日數${isProrated ? '' : '（足月 = 1）'}`}
               vars={isHourly
                 ? [{ k: '時薪', v: hr }, { k: '當月工時', v: p.workHours }]
                 : isProrated
-                  ? [{ k: '月薪', v: Math.round(p.base_salary / _p) }, { k: '在職比例', v: `${p.salary_actual_wd}/${p.salary_total_wd} 工作日` }]
+                  ? [{ k: '月薪', v: Math.round(p.base_salary / _p) }, { k: '在職比例', v: `${p.salary_actual_wd}/${p.salary_total_wd} 曆日` }]
                   : [{ k: '月薪', v: p.base_salary }]
               }
               hint={!isHourly && p._base_for_insure

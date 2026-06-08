@@ -194,7 +194,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                         {(p.salary_prorate_ratio != null && p.salary_prorate_ratio < 0.9999) && (
                           <span
                             title={[
-                              `薪資比例：${p.salary_actual_wd}/${p.salary_total_wd} 工作日（${(p.salary_prorate_ratio * 100).toFixed(1)}%）`,
+                              `薪資比例：${p.salary_actual_wd}/${p.salary_total_wd} 曆日（${(p.salary_prorate_ratio * 100).toFixed(1)}%）`,
                               p.is_partial_month ? `在保比例：${p.in_service_days}/${p.month_days} 曆日` : null,
                               p.join_date   ? `入職 ${p.join_date}`   : null,
                               p.resign_date ? `離職 ${p.resign_date}` : null,

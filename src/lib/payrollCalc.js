@@ -230,22 +230,21 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
 
     // 月薪底薪 / 固定津貼比例（月中入職 / 當月離職）
+    // 用「在職曆日 / 當月曆日數」當分母：
+    //   - 4 月就 ?/30，3 月 ?/31，2 月 ?/28(or 29)
+    //   - 不分週六週日、不扣國定，純曆日
+    //   - 配合 §30-1 四週變形（沒固定 Mon-Fri）
     const [_yr, _mo] = month.split('-').map(Number)
     const _mStart = new Date(_yr, _mo - 1, 1)
     const _mEnd   = new Date(_yr, _mo, 0)
-    const _countWD = (from, to) => {
+    const _countDays = (from, to) => {
       let n = 0; const d = new Date(from)
-      while (d <= to) {
-        const dow = d.getDay()
-        const ds  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-        if (dow !== 0 && dow !== 6 && !holidayDates.has(ds)) n++
-        d.setDate(d.getDate() + 1)
-      }
+      while (d <= to) { n++; d.setDate(d.getDate() + 1) }
       return n
     }
-    const _totalWD = _countWD(_mStart, _mEnd) || 1
+    const _totalDays = _countDays(_mStart, _mEnd) || 1  // = 月曆日總數
     let salaryProrateRatio = 1
-    let salaryActualWD     = _totalWD
+    let salaryActualDays   = _totalDays
     if (!isHourly) {
       const _toD = s => { const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1],+m[2]-1,+m[3]) : null }
       const _joinD   = _toD(emp.join_date)
@@ -253,10 +252,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       const _effStart = _joinD   && _joinD   > _mStart ? _joinD   : _mStart
       const _effEnd   = _resignD && _resignD < _mEnd   ? _resignD : _mEnd
       if (_effStart > _mStart || _effEnd < _mEnd) {
-        salaryActualWD     = _countWD(_effStart, _effEnd) || 1
-        salaryProrateRatio = salaryActualWD / _totalWD
+        salaryActualDays   = _countDays(_effStart, _effEnd) || 1
+        salaryProrateRatio = salaryActualDays / _totalDays
       }
     }
+    // 舊欄名相容（外部消費者讀 salary_actual_wd / salary_total_wd）— 把曆日數寫進去
+    const salaryActualWD = salaryActualDays
+    const _totalWD       = _totalDays
     const _p = salaryProrateRatio
     const effBase      = !isHourly ? Math.round(baseSalary          * _p) : baseSalary
     const effRole      = !isHourly ? Math.round(roleAllowance       * _p) : roleAllowance

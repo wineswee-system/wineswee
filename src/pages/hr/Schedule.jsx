@@ -1260,6 +1260,19 @@ export default function Schedule() {
           departments={departments}
           storeSettings={storeSettings}
           pendingLeaveMap={pendingLeaveMap}
+          violationsByEmp={(() => {
+            const map = {}
+            for (const e of (compliance.errors || [])) {
+              if (!map[e.employee]) map[e.employee] = { errors: 0, warnings: 0 }
+              map[e.employee].errors++
+            }
+            for (const w of (compliance.warnings || [])) {
+              if (!map[w.employee]) map[w.employee] = { errors: 0, warnings: 0 }
+              map[w.employee].warnings++
+            }
+            return map
+          })()}
+          onClickEmployeeBadge={() => setShowComplianceModal(true)}
         />
       )}
 

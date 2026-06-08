@@ -34,6 +34,8 @@ export default function MonthScheduleTable({
   departments,
   storeSettings,
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
+  violationsByEmp = {},   // empName → { errors: N, warnings: N }
+  onClickEmployeeBadge,   // 點 badge 開合規 modal
 }) {
   // Group employees by store when no store filter.
   // 沒分配門市的員工（store = null/空）集中到「未分配門市」群組，避免被吃掉看不到。
@@ -204,6 +206,8 @@ export default function MonthScheduleTable({
                       storeSettings={storeSettings}
                       pendingLeaveMap={pendingLeaveMap}
                       schedules={schedules}
+                      violationsByEmp={violationsByEmp}
+                      onClickEmployeeBadge={onClickEmployeeBadge}
                     />
                   )
                 })
@@ -236,6 +240,8 @@ export default function MonthScheduleTable({
                     storeSettings={storeSettings}
                     pendingLeaveMap={pendingLeaveMap}
                     schedules={schedules}
+                    violationsByEmp={violationsByEmp}
+                    onClickEmployeeBadge={onClickEmployeeBadge}
                   />
                 ))
               )}
@@ -278,7 +284,9 @@ function EmployeeRow({
   handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   pendingLeaveMap = {}, schedules = [],
+  violationsByEmp = {}, onClickEmployeeBadge,
 }) {
+  const v = violationsByEmp[emp.name] || { errors: 0, warnings: 0 }
   let workDays = 0
   let restDays = 0
   for (const d of monthDates) {
@@ -295,8 +303,22 @@ function EmployeeRow({
         position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)',
         padding: '4px 8px', borderRight: '1px solid var(--border-light)',
       }}>
-        <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap' }}>
-          {emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}
+        <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>{emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}</span>
+          {(v.errors > 0 || v.warnings > 0) && (
+            <span
+              onClick={onClickEmployeeBadge}
+              title={v.errors > 0 ? `${v.errors} 個違規（點開看詳情）` : `${v.warnings} 個提醒（點開看詳情）`}
+              style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 8, fontWeight: 700, cursor: 'pointer',
+                background: v.errors > 0 ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',
+                color: v.errors > 0 ? '#dc2626' : '#d97706',
+                lineHeight: '14px',
+              }}
+            >
+              {v.errors > 0 ? `❌${v.errors}` : `⚠${v.warnings}`}
+            </span>
+          )}
         </div>
       </td>
       {monthDates.map(date => {

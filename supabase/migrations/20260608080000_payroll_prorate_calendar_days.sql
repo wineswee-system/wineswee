@@ -1,18 +1,15 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- 月薪比例改用「在職曆日 / 當月曆日數」
+-- generate_payroll 兩項修正
 --
--- 原本 generate_payroll 用「排週末 + 國定假日」算工作日當分母，不適用
--- §30-1 四週變形（沒固定 Mon-Fri 結構）。
+-- 1. 月薪比例改用「在職曆日 / 當月曆日數」（§30-1 四週變形適用）
+--    例：陳楷仁 4/20 入職 → 11/30 = 36.67%（舊算法是 9/20 = 45%）
 --
--- 新規則（純曆日）：
---   分母 = 當月曆日數（28/29/30/31）
---   分子 = 入職日 / 離職日邊界內的曆日數
+-- 2. 入職日 > 結算月末 的員工不入該月薪資
+--    例：5/15 入職的人不該出現在 4 月薪資
 --
--- 例：陳楷仁 4/20 入職 → 11/30 = 36.67%（舊算法是 9/20 = 45%）
---
--- 此 migration 是對 20260603020000 的精準 patch：只動 v_work_days 跟
--- v_actual_work_days 兩段計算，其他（勞健保、所得稅、二代健保、法定扣款、
--- 特休折現、shift_swap OT 等）完全照舊。
+-- 對 20260603020000 的精準 patch：只動 v_work_days / v_actual_work_days 兩段
+-- 計算 + WHERE 加入職日過濾。其他（勞健保 / 所得稅 / 二代健保 / 法定扣款 /
+-- 特休折現 / shift_swap OT）完全照舊。
 --
 -- 影響：已生成的 payroll_records 不會回溯，需重新 generate 該月才會套新算法。
 -- ════════════════════════════════════════════════════════════════════════════
@@ -74,11 +71,14 @@ BEGIN
       (ss.id IS NULL)                             AS no_salary_structure
     FROM employees e
     LEFT JOIN salary_structures ss ON ss.employee_id = e.id
-    WHERE e.status = '在職'
-       OR (e.status = '離職'
-           AND e.resign_date IS NOT NULL
-           AND e.resign_date >= v_month_start
-           AND e.resign_date <= v_month_end)
+    WHERE (e.join_date IS NULL OR e.join_date <= v_month_end)
+      AND (
+        e.status = '在職'
+        OR (e.status = '離職'
+            AND e.resign_date IS NOT NULL
+            AND e.resign_date >= v_month_start
+            AND e.resign_date <= v_month_end)
+      )
   LOOP
     DECLARE
       v_base             NUMERIC(10,2) := rec.base_salary;

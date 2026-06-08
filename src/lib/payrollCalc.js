@@ -24,12 +24,14 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
   const batchBrackets = await loadInsuranceBrackets(_y)
 
   // 跨店打卡支援：員工是「primary store=該店」或「additional_stores 含該店」都算
-  const scopedEmployees = storeFilter
+  // 加掛入職日過濾：入職日 > 月末 的員工不入該月薪資（例：5/15 入職的人不該出現在 4 月薪資）
+  const scopedEmployees = (storeFilter
     ? employees.filter(e =>
         e.store === storeFilter
         || (Array.isArray(e.additional_stores) && e.additional_stores.includes(storeFilter))
       )
     : employees
+  ).filter(e => !e.join_date || e.join_date <= monthEnd)
 
   const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes] = await Promise.all([
     supabase.from('attendance_records')

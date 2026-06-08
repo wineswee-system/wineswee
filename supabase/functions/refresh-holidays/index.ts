@@ -56,8 +56,8 @@ const LUNAR_HOLIDAYS: Record<number, Array<{ month: number; day: number; name: s
     { month: 2, day: 18, name: '春節初二' },
     { month: 2, day: 19, name: '春節初三' },
     { month: 4, day: 5, name: '清明節' },
-    { month: 5, day: 31, name: '端午節' },
-    { month: 9, day: 21, name: '中秋節' },
+    { month: 6, day: 19, name: '端午節' },
+    { month: 9, day: 25, name: '中秋節' },
   ],
   2027: [
     { month: 2, day: 5, name: '小年夜' },

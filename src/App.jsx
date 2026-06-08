@@ -23,23 +23,9 @@ const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
 const Login = lazy(() => import('./pages/Login'))
 const OvertimeExceptionImport = lazy(() => import('./pages/hr/OvertimeExceptionImport'))
 
-// ── Module-level lazy loading ──
-const HRModule = lazy(() => import('./modules/HRModule'))
-const CRMModule = lazy(() => import('./modules/CRMModule'))
-const FinanceModule = lazy(() => import('./modules/FinanceModule'))
-const AnalyticsModule = lazy(() => import('./modules/AnalyticsModule'))
-const PurchaseModule = lazy(() => import('./modules/PurchaseModule'))
-const WMSModule = lazy(() => import('./modules/WMSModule'))
-const ManufacturingModule = lazy(() => import('./modules/ManufacturingModule'))
-const SalesModule = lazy(() => import('./modules/SalesModule'))
-const POSModule = lazy(() => import('./modules/POSModule'))
-const OrgModule = lazy(() => import('./modules/OrgModule'))
-const ProcessModule = lazy(() => import('./modules/ProcessModule'))
-const SystemModule = lazy(() => import('./modules/SystemModule'))
-const AIModule = lazy(() => import('./modules/AIModule'))
-const IntegrationModule = lazy(() => import('./modules/IntegrationModule'))
-const SuperAdminModule = lazy(() => import('./modules/SuperAdminModule'))
-const LMSModule = lazy(() => import('./modules/LMSModule'))
+// ── Module registry (lazy components + manifests) ──
+import { ALL_MODULES } from './modules/index'
+import { renderModule } from './modules/renderModule'
 
 // ── Route-level access control — 5 roles ──
 const ROLE_ROUTES = {
@@ -108,27 +94,7 @@ function AdminApp() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/otx" element={<OvertimeExceptionImport />} />
-            <Route path="/hr/*" element={canAccess('/hr') ? <HRModule /> : blocked} />
-            <Route path="/crm/*" element={canAccess('/crm') ? <CRMModule /> : blocked} />
-            <Route path="/finance/*" element={canAccessWithPerm('/finance', 'finance.view') ? <FinanceModule /> : blocked} />
-            <Route path="/analytics" element={canAccessWithPerm('/analytics', 'nav.group.analytics') ? <AnalyticsModule /> : blocked} />
-            <Route path="/analytics/*" element={canAccessWithPerm('/analytics', 'nav.group.analytics') ? <AnalyticsModule /> : blocked} />
-            <Route path="/purchase/*" element={canAccess('/purchase') ? <PurchaseModule /> : blocked} />
-            <Route path="/wms/*" element={canAccess('/wms') ? <WMSModule /> : blocked} />
-            <Route path="/manufacturing/*" element={canAccess('/manufacturing') ? <ManufacturingModule /> : blocked} />
-            <Route path="/sales" element={canAccess('/sales') ? <SalesModule /> : blocked} />
-            <Route path="/sales/*" element={canAccess('/sales') ? <SalesModule /> : blocked} />
-            <Route path="/pos" element={canAccess('/pos') ? <POSModule /> : blocked} />
-            <Route path="/pos/*" element={canAccess('/pos') ? <POSModule /> : blocked} />
-            <Route path="/org/*" element={canAccess('/org') ? <OrgModule /> : blocked} />
-            {/* /process/settings/* 設定頁需 nav.project.admin perm（不只是 office_staff 路由就能進） */}
-            <Route path="/process/settings/*" element={canAccessWithPerm('/process', 'nav.project.admin') ? <ProcessModule /> : blocked} />
-            <Route path="/process/*" element={canAccess('/process') ? <ProcessModule /> : blocked} />
-            <Route path="/system/*" element={canAccessWithPerm('/system', 'system.admin') ? <SystemModule /> : blocked} />
-            <Route path="/ai/*" element={canAccess('/ai') ? <AIModule /> : blocked} />
-            <Route path="/integration/*" element={canAccess('/integration') ? <IntegrationModule /> : blocked} />
-            <Route path="/lms/*" element={canAccess('/lms') ? <LMSModule /> : blocked} />
-            <Route path="/super-admin/*" element={isSuperAdmin ? <SuperAdminModule /> : blocked} />
+            {ALL_MODULES.flatMap(m => renderModule(m, { canAccess, canAccessWithPerm, isSuperAdmin }))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

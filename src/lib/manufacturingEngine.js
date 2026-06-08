@@ -1,6 +1,0 @@
-export * from './manufacturing/moLifecycle'
-export * from './manufacturing/qualityInspection'
-export * from './manufacturing/routing'
-export * from './manufacturing/bom'
-export * from './manufacturing/costAnalysis'
-export * from './manufacturing/oee'

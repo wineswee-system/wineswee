@@ -15,11 +15,11 @@ import Chains from '../pages/process/settings/Chains'
 import ExpenseChains from '../pages/process/settings/ExpenseChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import BusinessApplications from '../pages/process/BusinessApplications'
-import StoreAudits from '../pages/hr/StoreAudits'
-import ExpenseRequests from '../pages/finance/ExpenseRequests'
-import Expenses from '../pages/hr/Expenses'
-import CustomFormFill from '../pages/hr/CustomFormFill'
-import FormSubmissions from '../pages/hr/FormSubmissions'
+import StoreAudits from '../pages/workflow/StoreAudits'
+import ExpenseRequests from '../pages/workflow/ExpenseRequests'
+import Expenses from '../pages/workflow/Expenses'
+import CustomFormFill from '../pages/workflow/CustomFormFill'
+import FormSubmissions from '../pages/workflow/FormSubmissions'
 
 // 老頁面已下架（2026-05-08），但 2026-05-11 重做為中央 library 管理：
 //   /process/settings/chains         → 全 chain library（取代舊 /process/approval-chains）

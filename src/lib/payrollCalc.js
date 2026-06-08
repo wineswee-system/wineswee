@@ -12,7 +12,7 @@
 
 import { supabase } from './supabase'
 import { calculateNetSalary, calculateInServiceDays } from './payroll'
-import { loadInsuranceBrackets } from './insuranceBrackets'
+import { loadInsuranceBrackets, findPTInsuredSalary } from './insuranceBrackets'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from './benefitPolicy'
 
 export async function computeBatchPayroll({ month, orgId, employees, storeFilter }) {
@@ -260,9 +260,15 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const effCross     = !isHourly ? Math.round(crossStoreAllowance * _p) : crossStoreAllowance
     const effOtherC    = !isHourly ? Math.round(otherCustomTotal    * _p) : otherCustomTotal
 
+    // 投保金額：
+    // 1. 員工有設 base_insured → 用設定值（廠商手動覆寫）
+    // 2. PT 沒設 → 自動找級距（時薪 × 工時 → PT 11,100~29,500 範圍對應級距）
+    // 3. FT 沒設 → 用 baseForInsure (base + 津貼)
     const insuredSalary = ss.base_insured != null && Number(ss.base_insured) > 0
       ? Number(ss.base_insured)
-      : (isHourly ? 0 : baseForInsure)
+      : (isHourly
+        ? findPTInsuredSalary(batchBrackets?.labor || [], baseSalary + roleAllowance)
+        : baseForInsure)
 
     const fullMonthResult = calculateNetSalary(effBase, {
       insuredSalary,

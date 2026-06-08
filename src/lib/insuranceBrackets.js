@@ -122,6 +122,39 @@ export function findHealthBracket(healthBrackets, salary) {
 }
 
 /**
+ * PT 投保金額查表（11,100 ~ 29,500 區間，跟 FT 不同的範圍）
+ *
+ * 法規嚴格說 PT 投保用「最近 3 個月平均收入」對應級距，但實務常用
+ * 當月薪資（時薪 × 工時）當估算。誤差小且免去歷史平均計算負擔。
+ *
+ * - salary < 11,100 → 11,100（PT 法定最低投保）
+ * - 11,100 ~ 29,500 → 找第一個 >= salary 的級距
+ * - salary > 29,500 → 29,500（PT 法定上限）
+ *
+ * @param {Array} brackets - labor 或 health brackets（同一演算法都適用）
+ * @param {number} salary - PT 當月薪資（時薪 × 工時 + 常規津貼）
+ * @returns {number} PT 適用投保金額，找不到 brackets 時 fallback 到 11,100
+ */
+export function findPTInsuredSalary(brackets, salary) {
+  const PT_MIN = 11100
+  const PT_MAX = 29500
+  if (!brackets || brackets.length === 0) return PT_MIN
+
+  // 篩出 PT 範圍內級距，並依 insured_salary 升序排（防 DB 排序不可靠）
+  const ptBrackets = brackets
+    .filter(b => b.insured_salary >= PT_MIN && b.insured_salary <= PT_MAX)
+    .slice()
+    .sort((a, b) => a.insured_salary - b.insured_salary)
+  if (ptBrackets.length === 0) return PT_MIN
+
+  for (const b of ptBrackets) {
+    if (b.insured_salary >= salary) return b.insured_salary
+  }
+  // 超過 PT_MAX → cap
+  return PT_MAX
+}
+
+/**
  * 從投保金額反查 row（給「指定投保金額」場景用，如手動指定 insured_salary）
  *
  * @param {Array} brackets

@@ -136,8 +136,11 @@ function resolveLeaveType(raw) {
   return s
 }
 
-// 104 打卡紀錄：每筆一行（上班/下班各一行）→ 合併成一行
-function transform104Attendance(rows) {
+// 打卡明細：每筆一行（上班/下班各一行）→ 合併成一行
+// 支援兩種來源格式：
+//   舊 104：欄位「上/下班」+「打卡日期時間」+「日期」
+//   新格式：欄位「卡別」+「實際打卡時間」(完整 datetime) +「工作日期」
+function transformPunchDetail(rows) {
   const map = new Map()
   for (const r of rows) {
     const rawName = r['姓名'] || r['員工姓名'] || r['員工'] || ''
@@ -145,18 +148,22 @@ function transform104Attendance(rows) {
     const nameM = String(rawName).trim().match(/^\S*\d+\s+(.+)$/)
     const name = nameM ? nameM[1].trim() : String(rawName).trim()
 
-    const date = r['日期'] || ''
-    const direction = r['上/下班'] || ''
-    const rawTs = r['打卡日期時間'] || r['打卡時間'] || r['時間'] || ''
-    const timeM = String(rawTs).match(/(\d{1,2}:\d{2})/)
-    const time = timeM ? timeM[1] : ''
+    const date = r['工作日期'] || r['日期'] || ''
+    const direction = r['卡別'] || r['上/下班'] || ''
+    // 只認實際打卡時間；應刷卡時間是「預期該打」不是「實際打了」，不能用來假裝有打卡
+    const rawTs = r['實際打卡時間'] || r['打卡日期時間'] || r['打卡時間'] || r['時間'] || ''
+    const timeM = String(rawTs).match(/(\d{1,2}):(\d{2})/)
+    const time = timeM ? `${timeM[1]}:${timeM[2]}` : ''
 
+    if (!name || !date) continue
+    const empNo = r['員工編號'] || r['員工編碼'] || ''
     const key = `${name}__${date}`
-    if (!map.has(key)) map.set(key, { '員工姓名': name, '日期': date })
+    if (!map.has(key)) map.set(key, { '員工姓名': name, '員工編號': empNo, '日期': date })
     const entry = map.get(key)
-    if (direction === '上班') entry['上班時間'] = time
-    if (direction === '下班') entry['下班時間'] = time
+    if (direction === '上班' && time) entry['上班時間'] = time
+    if (direction === '下班' && time) entry['下班時間'] = time
     if (r['狀態'] && !entry['狀態']) entry['狀態'] = r['狀態']
+    if (r['比對結果'] && !entry['狀態']) entry['狀態'] = r['比對結果']
   }
   return [...map.values()]
 }
@@ -223,10 +230,10 @@ export default function HRImport() {
         if (headerIdx > 0) csvText = lines.slice(headerIdx).join('\n')
 
         const { rows: rawRows } = parseCSV(csvText)
-        // 104 打卡格式偵測：每筆打卡一行含「上/下班」欄 → 先合併
-        const rows = (mod === 'attendance' && rawRows.length > 0 && '上/下班' in rawRows[0])
-          ? transform104Attendance(rawRows)
-          : rawRows
+        // 打卡明細格式偵測：每筆打卡一行含「卡別」或「上/下班」欄 → 先合併成一天一行
+        const isPunchDetail = mod === 'attendance' && rawRows.length > 0
+          && ('卡別' in rawRows[0] || '上/下班' in rawRows[0])
+        const rows = isPunchDetail ? transformPunchDetail(rawRows) : rawRows
         const m = HR_MODULES[mod]
         const parsed = rows.map((rawRow, idx) => {
           // 欄位對應（以 fieldMap 正向 + 原始欄名 fallback）

@@ -75,6 +75,7 @@ export default function Schedule() {
   const [showLawModal, setShowLawModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showPatternsModal, setShowPatternsModal] = useState(false)
+  const [showComplianceModal, setShowComplianceModal] = useState(false)
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
@@ -1016,6 +1017,33 @@ export default function Schedule() {
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
               <Shield size={14} /> 排班條件
             </button>
+            {/* 排班檢查按鈕：依 compliance state 顯示狀態 */}
+            <button
+              className="btn btn-secondary"
+              style={{
+                width: 'auto', padding: '8px 16px',
+                background: compliance.errors.length > 0
+                  ? 'rgba(239,68,68,0.12)'
+                  : compliance.warnings.length > 0
+                    ? 'rgba(245,158,11,0.12)'
+                    : 'rgba(16,185,129,0.10)',
+                color: compliance.errors.length > 0
+                  ? 'var(--accent-red)'
+                  : compliance.warnings.length > 0
+                    ? 'var(--accent-orange)'
+                    : 'var(--accent-green)',
+                border: '1px solid currentColor',
+                fontWeight: 600,
+              }}
+              onClick={() => setShowComplianceModal(true)}
+              title="點開看排班違規與提醒"
+            >
+              {compliance.errors.length > 0
+                ? `❌ 排班檢查（${compliance.errors.length} 違規）`
+                : compliance.warnings.length > 0
+                  ? `⚠️ 排班檢查（${compliance.warnings.length} 提醒）`
+                  : '✓ 排班檢查'}
+            </button>
             {canUseAISchedule && (
               <>
                 <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
@@ -1277,6 +1305,122 @@ export default function Schedule() {
       )}
 
       {showLawModal && <LawReferenceModal onClose={() => setShowLawModal(false)} />}
+
+      {/* 排班檢查結果 modal — 顯示 errors + warnings，按員工分組 */}
+      {showComplianceModal && (() => {
+        // 按員工分組
+        const groupedErrors = {}
+        const groupedWarnings = {}
+        for (const e of compliance.errors) {
+          if (!groupedErrors[e.employee]) groupedErrors[e.employee] = []
+          groupedErrors[e.employee].push(e)
+        }
+        for (const w of compliance.warnings) {
+          if (!groupedWarnings[w.employee]) groupedWarnings[w.employee] = []
+          groupedWarnings[w.employee].push(w)
+        }
+        const allEmployees = [...new Set([...Object.keys(groupedErrors), ...Object.keys(groupedWarnings)])].sort()
+
+        return (
+          <div onClick={() => setShowComplianceModal(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 10000,
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px',
+            overflowY: 'auto',
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg-secondary)', borderRadius: 14,
+              border: '1px solid var(--border-medium)', boxShadow: 'var(--shadow-xl)',
+              width: '100%', maxWidth: 720, maxHeight: '90vh',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                  📋 排班檢查結果 — {selectedMonth}
+                </h3>
+                <button onClick={() => setShowComplianceModal(false)} className="btn btn-secondary" style={{ padding: '4px 10px' }}>
+                  關閉
+                </button>
+              </div>
+
+              {/* Summary stats */}
+              <div style={{ padding: '12px 20px', display: 'flex', gap: 16, fontSize: 13, borderBottom: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--accent-red)', fontWeight: 600 }}>
+                  ❌ {compliance.errors.length} 違規
+                </span>
+                <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>
+                  ⚠️ {compliance.warnings.length} 提醒
+                </span>
+                {compliance.isValid && compliance.warnings.length === 0 && (
+                  <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>
+                    ✓ 全部合規
+                  </span>
+                )}
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+                {allEmployees.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                    🎉 本月排班全部合規，沒有問題
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {allEmployees.map(empName => {
+                      const errs = groupedErrors[empName] || []
+                      const warns = groupedWarnings[empName] || []
+                      return (
+                        <div key={empName} style={{
+                          background: 'var(--bg-card)', borderRadius: 8,
+                          padding: 12, border: '1px solid var(--border-subtle)',
+                        }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--text-primary)' }}>
+                            👤 {empName}
+                          </div>
+                          {errs.map((e, i) => (
+                            <div key={`e${i}`} style={{
+                              fontSize: 13, padding: '5px 8px', marginBottom: 4,
+                              background: 'rgba(239,68,68,0.08)', borderLeft: '3px solid var(--accent-red)',
+                              color: 'var(--text-secondary)',
+                            }}>
+                              <strong style={{ color: 'var(--accent-red)' }}>❌ </strong>
+                              {e.message}
+                              {e.law && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>({e.law})</span>}
+                            </div>
+                          ))}
+                          {warns.map((w, i) => (
+                            <div key={`w${i}`} style={{
+                              fontSize: 13, padding: '5px 8px', marginBottom: 4,
+                              background: 'rgba(245,158,11,0.08)', borderLeft: '3px solid var(--accent-orange)',
+                              color: 'var(--text-secondary)',
+                            }}>
+                              <strong style={{ color: 'var(--accent-orange)' }}>⚠️ </strong>
+                              {w.message}
+                              {w.law && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>({w.law})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer hint */}
+              <div style={{
+                padding: '10px 20px', borderTop: '1px solid var(--border-subtle)',
+                fontSize: 11, color: 'var(--text-muted)', textAlign: 'center',
+              }}>
+                💡 編輯排班後此檢查自動更新；點員工名可在班表上看到對應排班
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       <ScheduleImportModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}

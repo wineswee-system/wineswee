@@ -13,7 +13,8 @@ export const getAttendance = (date, options = {}) => {
     const end = `${options.month}-${String(lastDay).padStart(2, '0')}`
     q = q.gte('date', start).lte('date', end)
   }
-  return q.limit(options.limit ?? 2000)
+  // 月份既然限制了範圍就不再上 cap；給個大數蓋掉 Supabase server-side db.max_rows 預設
+  return q.limit(options.limit ?? 50000)
 }
 
 export const upsertAttendance = (data) =>

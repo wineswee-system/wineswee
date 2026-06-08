@@ -6,8 +6,14 @@ export const getAttendance = (date, options = {}) => {
   if (date) q = q.eq('date', date)
   if (options.orgId) q = q.eq('organization_id', options.orgId)
   if (options.from) q = q.gte('date', options.from)
-  if (options.limit) q = q.limit(options.limit)
-  return q
+  if (options.month && /^\d{4}-\d{2}$/.test(options.month)) {
+    const [y, m] = options.month.split('-').map(Number)
+    const start = `${options.month}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const end = `${options.month}-${String(lastDay).padStart(2, '0')}`
+    q = q.gte('date', start).lte('date', end)
+  }
+  return q.limit(options.limit ?? 2000)
 }
 
 export const upsertAttendance = (data) =>

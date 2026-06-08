@@ -49,6 +49,9 @@ export default function Attendance() {
   const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
+  const [monthFilter, setMonthFilter] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
   const [search, setSearch] = useState(isStaff ? (profile?.name || '') : '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -58,8 +61,9 @@ export default function Attendance() {
 
   useEffect(() => {
     const orgId = profile?.organization_id
+    setLoading(true)
     Promise.all([
-      getAttendance(null, { orgId }),
+      getAttendance(null, { orgId, month: monthFilter }),
       getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
       getDepartments(orgId),
       getStores(),
@@ -86,7 +90,7 @@ export default function Attendance() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [monthFilter, profile?.organization_id])
 
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
   const getEmpStore = useCallback((name) => employees.find(e => e.name === name)?.store || '', [employees])
@@ -105,9 +109,16 @@ export default function Attendance() {
     [filtered]
   )
 
+  // 「今日未打卡」只在「看當月」時顯示 — 看過去月份時硬塞「今天 未打卡」row 沒意義
+  const currentMonth = useMemo(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }, [])
+  const showNotClockedToday = monthFilter === currentMonth
+
   const allRows = useMemo(() => {
-    const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
     const recordRows = filtered.map(r => ({ ...r, _rowType: 'record' }))
+    if (!showNotClockedToday) return recordRows
+    const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
     const notClockedRows = employees
       .filter(e =>
         !todayEmpNames.has(e.name) &&
@@ -117,7 +128,7 @@ export default function Attendance() {
       )
       .map(e => ({ _rowType: 'notClocked', id: `nc-${e.id}`, employee: e.name, dept: e.dept, store: e.store, date: today }))
     return [...recordRows, ...notClockedRows]
-  }, [filtered, records, employees, storeFilter, deptFilter, search, today])
+  }, [filtered, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
 
   // 出勤紀錄最多數百筆，不需要 virtual scroll，直接 map 避免渲染問題
 
@@ -217,21 +228,24 @@ export default function Attendance() {
         ))}
       </div>
 
-      {/* 門市篩選 — store_staff 不顯示 */}
-      {!isStaff && (
-        <div style={{
-          display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
-          background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-          alignItems: 'center',
-        }}>
+      {/* 月份 + 門市篩選 */}
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+        alignItems: 'center', flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 月份</span>
+        <input type="month" className="form-input" style={{ fontSize: 13, minWidth: 160 }}
+          value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
+        {!isStaff && <>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
             disabled={isManager}>
             <option value="">全部門市</option>
             {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
-        </div>
-      )}
+        </>}
+      </div>
 
       {tab === 'records' && <>
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>

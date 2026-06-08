@@ -545,3 +545,109 @@ export function listCyclesInRange(rangeStart, rangeEnd, system, anchorDate) {
   }
   return result
 }
+
+// ══════════════════════════════════════════════════════════════
+//  例假 / 休息 quota 檢查（依工時制不同）
+// ══════════════════════════════════════════════════════════════
+//
+// 各工時制 §36 要求：
+// - 標準工時：每 7 天 ≥1 例 + ≥1 休
+// - 2 週變形 (§30-I)：每 7 天 ≥1 例；2 週共 2 例 + 4 休
+// - 4 週變形 (§30-II)：每 2 週 ≥1 例；4 週共 4 例 + 4 休（彈性集中放 OK）
+// - 8 週變形 (§30-III)：同標準工時（每 7 天 1 例 1 休）
+//
+// legacy '休' 視為「休息」（向後相容；未來新排都明確標 '例假' / '休息'）
+//
+// @param schedules - [{ employee, date, shift }]
+// @param workHourSystem - '標準工時' | '2週變形' | '4週變形' | '8週變形'
+// @param anchorDate - 變形工時 cycle 起算日 'YYYY-MM-DD'（標準工時可省）
+// @param startDate, endDate - 檢查範圍 'YYYY-MM-DD'
+// @returns { errors: [{ employee, constraint, law, message, severity }], warnings: [] }
+export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate }) {
+  const errors = []
+  const warnings = []
+  if (!schedules || schedules.length === 0) return { errors, warnings }
+  if (!startDate || !endDate) return { errors, warnings }
+
+  const isWeeklyOff = s => s === '例假'
+  const isRestDay = s => s === '休息' || s === '休' // legacy 休 算休息
+
+  // group by employee
+  const byEmp = {}
+  schedules.forEach(s => {
+    if (!byEmp[s.employee]) byEmp[s.employee] = []
+    byEmp[s.employee].push(s)
+  })
+
+  for (const [empName, scheds] of Object.entries(byEmp)) {
+    const checkRange = (rangeStart, rangeEnd, label, minWeeklyOff, minRestDays) => {
+      const inRange = scheds.filter(s => s.date >= rangeStart && s.date <= rangeEnd)
+      const woCount = inRange.filter(s => isWeeklyOff(s.shift)).length
+      const rdCount = inRange.filter(s => isRestDay(s.shift)).length
+      if (woCount < minWeeklyOff) {
+        errors.push({
+          employee: empName,
+          constraint: 'H5',
+          law: '勞基法 §36',
+          message: `${empName} ${label} 例假 ${woCount}/${minWeeklyOff} 不足`,
+          severity: 'error',
+        })
+      }
+      if (rdCount < minRestDays) {
+        errors.push({
+          employee: empName,
+          constraint: 'H5',
+          law: '勞基法 §36',
+          message: `${empName} ${label} 休息 ${rdCount}/${minRestDays} 不足`,
+          severity: 'error',
+        })
+      }
+    }
+
+    if (workHourSystem === '4週變形' && anchorDate) {
+      // 4 週變形：每 cycle (4 週) 4+4，且每 2 週至少 1 例
+      const cycles = listCyclesInRange(startDate, endDate, '4週變形', anchorDate)
+      for (const c of cycles) {
+        checkRange(c.start, c.end, c.label, 4, 4)
+        // 每 2 週子窗口 ≥1 例
+        const cs = _toDate(c.start)
+        for (let w = 0; w < 4; w += 2) {
+          const subStart = _addDays(cs, w * 7)
+          const subEnd = _addDays(subStart, 13)
+          const inSub = scheds.filter(s => s.date >= _isoDate(subStart) && s.date <= _isoDate(subEnd))
+          const woInSub = inSub.filter(s => isWeeklyOff(s.shift)).length
+          if (woInSub < 1) {
+            errors.push({
+              employee: empName,
+              constraint: 'H5',
+              law: '勞基法 §36',
+              message: `${empName} ${_isoDate(subStart)}~${_isoDate(subEnd)} 2 週內缺例假`,
+              severity: 'error',
+            })
+          }
+        }
+      }
+    } else if (workHourSystem === '2週變形' && anchorDate) {
+      // 2 週變形：每 cycle 2+4
+      const cycles = listCyclesInRange(startDate, endDate, '2週變形', anchorDate)
+      for (const c of cycles) {
+        checkRange(c.start, c.end, c.label, 2, 4)
+      }
+    } else {
+      // 標準工時 / 8 週變形 / 沒 anchor → 每 7 天 ≥1 例 + ≥1 休
+      // 以 startDate 為基準切 7-day windows
+      const start = _toDate(startDate)
+      const end = _toDate(endDate)
+      const totalDays = Math.floor((end.getTime() - start.getTime()) / _msPerDay) + 1
+      for (let i = 0; i + 7 <= totalDays; i += 7) {
+        const ws = _addDays(start, i)
+        const we = _addDays(ws, 6)
+        const wsStr = _isoDate(ws)
+        const weStr = _isoDate(we)
+        checkRange(wsStr, weStr, `${wsStr}~${weStr}`, 1, 1)
+      }
+    }
+  }
+
+  return { errors, warnings }
+}

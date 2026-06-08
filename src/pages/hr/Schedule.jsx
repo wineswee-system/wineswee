@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -216,10 +216,23 @@ export default function Schedule() {
   // Run compliance check when schedules update
   useEffect(() => {
     if (schedules.length > 0) {
-      setCompliance(validateSchedule(schedules, weekDates, shiftDefs))
+      const baseResult = validateSchedule(schedules, weekDates, shiftDefs)
+      // 加 cycle-aware 例休 quota 檢查（依當前店設定的工時制）
+      const quotaResult = validateLeisureQuota({
+        schedules,
+        workHourSystem: storeSettings?.work_hour_system,
+        anchorDate: storeSettings?.variable_period_start,
+        startDate: activeStart,
+        endDate: activeEnd,
+      })
+      setCompliance({
+        errors: [...baseResult.errors, ...quotaResult.errors],
+        warnings: [...baseResult.warnings, ...quotaResult.warnings],
+        isValid: baseResult.errors.length + quotaResult.errors.length === 0,
+      })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules, weekStart])
+  }, [schedules, weekStart, storeSettings, activeStart, activeEnd])
 
   // 套用班別到當前 selection 範圍
   const applyToSelection = async (shift, actualStart = null, actualEnd = null) => {

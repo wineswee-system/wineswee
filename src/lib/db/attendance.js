@@ -52,10 +52,20 @@ export const deleteLeaveRequest = (id, deletedBy) =>
   supabase.rpc('soft_delete_request', { p_table: 'leave_requests', p_id: id, p_deleted_by: deletedBy ?? null })
 
 export const getOvertimeRequests = (options = {}) => {
-  // 預設新的在上、limit 2000（避免大量歷史 OT 把新匯入的擠出 500 筆窗口）
+  // 預設新的在上、limit 2000（治標）；options.month 給的話再加範圍篩選（治本）
   let q = supabase.from('overtime_requests').select('*').is('deleted_at', null)
                   .order('id', { ascending: false })
   if (options.orgId) q = q.eq('organization_id', options.orgId)
+  if (options.month && /^\d{4}-\d{2}$/.test(options.month)) {
+    const [y, m] = options.month.split('-').map(Number)
+    const start = `${options.month}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const end = `${options.month}-${String(lastDay).padStart(2, '0')}`
+    // date 跟 request_date 任一落在區間都算（schema drift 相容）
+    q = q.or(
+      `and(date.gte.${start},date.lte.${end}),and(request_date.gte.${start},request_date.lte.${end})`
+    )
+  }
   return q.limit(options.limit ?? 2000)
 }
 

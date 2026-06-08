@@ -47,6 +47,11 @@ export default function Overtime() {
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
+  const [monthFilter, setMonthFilter] = useState(() => {
+    // 預設當月 YYYY-MM
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -97,7 +102,7 @@ export default function Overtime() {
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([
-      getOvertimeRequests(),
+      getOvertimeRequests({ month: monthFilter }),
       supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('id, name, overtime_step_hours, organization_id').eq('organization_id', profile?.organization_id ?? -1).order('name'),
@@ -119,7 +124,7 @@ export default function Overtime() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [monthFilter, profile?.organization_id])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -384,6 +389,14 @@ export default function Overtime() {
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
         alignItems: 'center',
       }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 月份</span>
+        <input
+          type="month"
+          className="form-input"
+          style={{ fontSize: 13, minWidth: 140 }}
+          value={monthFilter}
+          onChange={e => setMonthFilter(e.target.value)}
+        />
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
         <SearchableSelect
           value={deptFilter || ''}

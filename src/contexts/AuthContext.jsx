@@ -114,7 +114,11 @@ export function AuthProvider({ children }) {
         table: 'employees',
         filter: `id=eq.${empId}`,
       }, (payload) => {
-        if (payload.new?.force_logout_at) {
+        // 跟 polling 同邏輯：只有 force_logout_at 比本次登入「晚」才登出，
+        // 不然 admin 編輯員工資料 → UPDATE → 觸發 Realtime → 員工 force_logout_at
+        // 還留著舊 timestamp → 誤觸 signOut
+        const flag = payload.new?.force_logout_at
+        if (flag && new Date(flag).getTime() > loginTime) {
           supabase.auth.signOut()
         }
       })

@@ -271,7 +271,8 @@ export default function Schedule() {
       // 有 selection 時：R/S/B/M 套到整個範圍，Del 刪除整個範圍
       if (selection) {
         const k = e.key.toLowerCase()
-        if (k === 'r') { e.preventDefault(); applyToSelection('休'); return }
+        if (k === 'e') { e.preventDefault(); applyToSelection('例假'); return }
+        if (k === 'r') { e.preventDefault(); applyToSelection('休息'); return }
         if (k === 's') { e.preventDefault(); applyToSelection('特休'); return }
         if (k === 'b') { e.preventDefault(); applyToSelection('病'); return }
         if (k === 'm') { e.preventDefault(); applyToSelection('會議'); return }
@@ -1346,7 +1347,7 @@ export default function Schedule() {
             boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            🔵 已選 {cnt} 格 — R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
+            🔵 已選 {cnt} 格 — E=例 R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
             <button onClick={() => setSelection(null)} style={{
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, fontSize: 16,
             }}>×</button>

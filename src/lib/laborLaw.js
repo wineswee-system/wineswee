@@ -308,6 +308,11 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
       })
     }
 
+    // H5 一例一休檢查改在月制 / 變形工時 layer 算（cycle-based）
+    // 4 週變形：每 2 週 ≥1 例 + 4 週 ≥4 例 4 休
+    // 標準工時：每 7 天 ≥1 例 + ≥1 休
+    // 這段邏輯放在 src/lib/scheduleValidator.js 跟排班演算法處理，這裡不做硬擋
+
     // H3: 連續工作不超過6天 (§36 七休一)
     let consecutiveWork = 0
     let maxConsecutive = 0

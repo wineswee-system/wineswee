@@ -91,11 +91,12 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
   for (const o of (otRes.data || [])) {
     const id = o.employee_id
     const target = o.is_exception ? otExceptionMap : otMap
-    if (!target[id]) target[id] = { weekday: 0, restday: 0, holiday: 0, rows: [] }
+    if (!target[id]) target[id] = { weekday: 0, restday: 0, weekly_off: 0, holiday: 0, rows: [] }
     let cat = o.ot_category
     if (!cat && o.request_date) {
       const dow = new Date(o.request_date).getDay()
-      cat = dow === 0 ? 'holiday' : dow === 6 ? 'restday' : 'weekday'
+      // 沒分類就退而求其次依 DOW 估：週日 → 例假、週六 → 休息、其他 → 平日
+      cat = dow === 0 ? 'weekly_off' : dow === 6 ? 'restday' : 'weekday'
     }
     cat = cat || 'weekday'
     const hours = Number(o.ot_hours || 0)
@@ -197,8 +198,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       const rd2 = Math.min(Math.max(bucket.restday - 2, 0), 6)
       const rd3 = Math.max(bucket.restday - 8, 0)
       const restday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+      // 例假日加班：×2（emergency-only 工作，倍率跟國定假日一樣）
+      const weeklyOff = Math.round((bucket.weekly_off || 0) * hourlyRate * 2)
       const holiday = Math.round(bucket.holiday * hourlyRate * 2)
-      return { weekday, restday, holiday, total: weekday + restday + holiday }
+      return {
+        weekday, restday, weekly_off: weeklyOff, holiday,
+        total: weekday + restday + weeklyOff + holiday,
+      }
     }
 
     const otLegalPay = calcOtPay(ot)
@@ -212,9 +218,10 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const extraOvertimePay   = otExceptionPay.total
     const overtimePay        = regularOvertimePay + extraOvertimePay
 
-    const otPayWeekday = otLegalPay.weekday
-    const otPayRestday = otLegalPay.restday
-    const otPayHoliday = otLegalPay.holiday
+    const otPayWeekday   = otLegalPay.weekday
+    const otPayRestday   = otLegalPay.restday
+    const otPayWeeklyOff = otLegalPay.weekly_off
+    const otPayHoliday   = otLegalPay.holiday
 
     const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
     const unpaidDeduction   = isHourly ? 0 : Math.round(unpaidHours * hourlyRate)
@@ -337,9 +344,11 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       holidayBonus,
       otWeekday:        ot.weekday,
       otRestday:        ot.restday,
+      otWeeklyOff:      ot.weekly_off || 0,
       otHoliday:        ot.holiday,
       otPayWeekday,
       otPayRestday,
+      otPayWeeklyOff,
       otPayHoliday,
       absenceDays,
       unpaidHours,
@@ -355,15 +364,18 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       _ot_rows:             ot.rows || [],
       _ot_exception_rows:   otException.rows || [],
       _late_rows:           att.lateRows || [],
-      _ot_legal_weekday:    ot.weekday,
-      _ot_legal_restday:    ot.restday,
-      _ot_legal_holiday:    ot.holiday,
-      _ot_exc_weekday:      otException.weekday,
-      _ot_exc_restday:      otException.restday,
-      _ot_exc_holiday:      otException.holiday,
-      _ot_exc_weekday_pay:  otExceptionPay.weekday,
-      _ot_exc_restday_pay:  otExceptionPay.restday,
-      _ot_exc_holiday_pay:  otExceptionPay.holiday,
+      _ot_legal_weekday:     ot.weekday,
+      _ot_legal_restday:     ot.restday,
+      _ot_legal_weekly_off:  ot.weekly_off || 0,
+      _ot_legal_holiday:     ot.holiday,
+      _ot_exc_weekday:       otException.weekday,
+      _ot_exc_restday:       otException.restday,
+      _ot_exc_weekly_off:    otException.weekly_off || 0,
+      _ot_exc_holiday:       otException.holiday,
+      _ot_exc_weekday_pay:   otExceptionPay.weekday,
+      _ot_exc_restday_pay:   otExceptionPay.restday,
+      _ot_exc_weekly_off_pay:otExceptionPay.weekly_off,
+      _ot_exc_holiday_pay:   otExceptionPay.holiday,
 
       absenceDeduction,
       unpaidDeduction,

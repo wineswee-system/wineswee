@@ -542,7 +542,8 @@ function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSch
         return
       }
       const k = e.key.toLowerCase()
-      if (k === 'r') { e.preventDefault(); setAbsence('休') }
+      if (k === 'e') { e.preventDefault(); setAbsence('例假') }
+      else if (k === 'r') { e.preventDefault(); setAbsence('休息') }
       else if (k === 's') { e.preventDefault(); setAbsence('特休') }
       else if (k === 'b') { e.preventDefault(); setAbsence('病') }
       else if (k === 'm') { e.preventDefault(); setAbsence('會議') }
@@ -621,10 +622,14 @@ function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSch
 
       {/* Rest / Absence */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginBottom: 6 }}>
-        <button onClick={() => setAbsence('休')} style={{
+        <button onClick={() => setAbsence('例假')} style={{
+          padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
+          background: 'rgba(220,38,38,0.10)', color: '#dc2626', fontSize: 12, fontWeight: 600,
+        }}>🛑 例假</button>
+        <button onClick={() => setAbsence('休息')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'var(--glass-medium)', color: 'var(--text-muted)', fontSize: 12, fontWeight: 600,
-        }}>😴 休</button>
+        }}>🌙 休息</button>
         <button onClick={() => setAbsence('補休')} style={{
           padding: '7px', borderRadius: 8, border: 'none', cursor: 'pointer',
           background: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: 12, fontWeight: 600,
@@ -649,7 +654,7 @@ function MonthEditPopup({ emp, date, shift, storeSettings, schedules, currentSch
 
       {/* Keyboard hints */}
       <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 4 }}>
-        ⌨ 1-5=班別 / R=休 S=特休 B=病 / Enter=確認 / Del=刪除 / Esc=關
+        ⌨ 1-5=班別 / E=例 R=休 S=特休 B=病 / Enter=確認 / Del=刪除 / Esc=關
       </div>
 
       {/* Delete + Cancel */}

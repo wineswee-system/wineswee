@@ -26,6 +26,7 @@ export default function PortalHome() {
   const [distance, setDistance] = useState(null)            // metres to store
   const [gpsRetrying, setGpsRetrying] = useState(false)     // 距離 151–1800m 時自動重抓一次
   const retriedRef = useRef(false)                          // 同次 mount 只重試 1 次
+  const gpsTimestampRef = useRef(null)                      // 最後一次成功抓 GPS 的時間，給 validateClockIn 判 fresh
   const [clientIp, setClientIp] = useState(null)
   const [wifiMatch, setWifiMatch] = useState(null)          // null=checking, true/false
 
@@ -49,6 +50,7 @@ export default function PortalHome() {
           const { latitude, longitude, accuracy } = pos.coords
           setGpsLocation({ lat: latitude, lng: longitude })
           setGpsAccuracy(Math.round(accuracy))
+          gpsTimestampRef.current = Date.now()
           if (accuracy > GPS_ACCURACY_THRESHOLD) {
             setGpsWeak(true)
             setGpsError(`GPS 精確度不足（${Math.round(accuracy)}m），定位結果僅供參考`)
@@ -58,7 +60,7 @@ export default function PortalHome() {
           }
         },
         (err) => setGpsError(err.code === 1 ? '請開啟定位權限' : '無法取得定位'),
-        { enableHighAccuracy: true, timeout: 15000 }
+        { enableHighAccuracy: true, timeout: 25000 }
       )
     } else {
       setGpsError('此裝置不支援 GPS')
@@ -84,13 +86,14 @@ export default function PortalHome() {
             const weak = accuracy > GPS_ACCURACY_THRESHOLD
             setGpsLocation({ lat: latitude, lng: longitude })
             setGpsAccuracy(Math.round(accuracy))
+            gpsTimestampRef.current = Date.now()
             setDistance(newDist)
             setGpsWeak(weak)
             setGpsError(weak ? `GPS 精確度不足（${Math.round(accuracy)}m），定位結果僅供參考` : '')
             setGpsRetrying(false)
           },
           () => setGpsRetrying(false),
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
         )
       }, 1500)
       return () => clearTimeout(timer)
@@ -144,7 +147,15 @@ export default function PortalHome() {
     setClockMsg(null)
     try {
       // Client-side validation first (blocks if location check fails)
-      const result = await validateClockIn(store)
+      // 把 mount 時抓到的 GPS 傳進去當 prefetched —— 30s 內 fresh 就不重抓，
+      // 解決「畫面綠燈但按下去 GPS 又失敗」的偶發狀況
+      const prefetchedGeo = gpsLocation ? {
+        lat: gpsLocation.lat,
+        lng: gpsLocation.lng,
+        accuracy: gpsAccuracy,
+        timestamp: gpsTimestampRef.current,
+      } : null
+      const result = await validateClockIn(store, prefetchedGeo)
 
       // Server-side validation + record write
       const data = await serverClockIn({

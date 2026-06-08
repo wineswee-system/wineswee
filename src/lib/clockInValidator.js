@@ -19,23 +19,32 @@ export function haversineMetres(lat1, lng1, lat2, lng2) {
 }
 
 // Get current GPS position via browser Geolocation API
-function getGeoPosition() {
+// retryWithCache: 第二次嘗試時放寬 timeout 並容忍 60s 快取（避開瀏覽器忙的 race）
+function getGeoPosition(retryWithCache = false) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('瀏覽器不支援 GPS 定位'))
+    const options = retryWithCache
+      ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+      : { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords
-        if (accuracy > GPS_ACCURACY_THRESHOLD) {
-          // GPS signal too weak — resolve with accuracy info so caller can decide
-          resolve({ lat: latitude, lng: longitude, accuracy, weak: true })
-        } else {
-          resolve({ lat: latitude, lng: longitude, accuracy, weak: false })
-        }
+        const weak = accuracy > GPS_ACCURACY_THRESHOLD
+        resolve({ lat: latitude, lng: longitude, accuracy, weak })
       },
       (err) => reject(new Error(err.code === 1 ? 'GPS 定位被拒絕，請允許位置存取權限' : 'GPS 定位失敗，請確認裝置已開啟定位')),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      options
     )
   })
+}
+
+// 第一次失敗自動 retry 一次（容忍 60s 快取）
+async function getGeoPositionWithRetry() {
+  try {
+    return await getGeoPosition(false)
+  } catch {
+    return await getGeoPosition(true)
+  }
 }
 
 // Get public IP with retry (up to 2 attempts, fallback to backup API)
@@ -89,16 +98,39 @@ export function ipMatchesCIDR(ip, cidr) {
 /**
  * Main validation entry point.
  * @param {Object|null} store - The store record (with lat, lng, clock_radius, allowed_wifi)
+ * @param {Object|null} prefetchedGeo - { lat, lng, accuracy, timestamp } 若 30s 內 fresh 直接用，
+ *                                       避免按打卡時又重抓一次（mount 時已抓過的好結果）
  * @returns {Promise<{lat, lng, ip, method, locationName}>}
  * @throws {Error} when validation is required but fails — caller should display error and block clock-in
  */
-export async function validateClockIn(store) {
-  // Capture GPS + IP in parallel
-  const [geoResult, ipResult] = await Promise.allSettled([getGeoPosition(), getPublicIP()])
+export async function validateClockIn(store, prefetchedGeo = null) {
+  const PREFETCH_MAX_AGE_MS = 30000
+  const usePrefetch = !!(
+    prefetchedGeo?.lat && prefetchedGeo?.lng &&
+    prefetchedGeo?.timestamp && (Date.now() - prefetchedGeo.timestamp < PREFETCH_MAX_AGE_MS)
+  )
 
-  const geo = geoResult.status === 'fulfilled' ? geoResult.value : null
-  const geoError = geoResult.status === 'rejected' ? geoResult.reason.message : null
-  const publicIP = ipResult.status === 'fulfilled' ? ipResult.value : null
+  let geo = null
+  let geoError = null
+  let publicIP = null
+
+  if (usePrefetch) {
+    // 用 mount 時抓到的 fresh GPS，省去按打卡時再抓一次的等待 + 失敗風險
+    const acc = prefetchedGeo.accuracy ?? 0
+    geo = {
+      lat: prefetchedGeo.lat,
+      lng: prefetchedGeo.lng,
+      accuracy: acc,
+      weak: acc > GPS_ACCURACY_THRESHOLD,
+    }
+    publicIP = await getPublicIP()
+  } else {
+    // 沒 prefetch 或過期 → 抓 GPS + IP（GPS 帶 retry 容錯）
+    const [geoResult, ipResult] = await Promise.allSettled([getGeoPositionWithRetry(), getPublicIP()])
+    geo = geoResult.status === 'fulfilled' ? geoResult.value : null
+    geoError = geoResult.status === 'rejected' ? geoResult.reason.message : null
+    publicIP = ipResult.status === 'fulfilled' ? ipResult.value : null
+  }
 
   // If no store configured, just record the data without validation
   if (!store) {

@@ -46,6 +46,7 @@ export default function Overtime() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -341,6 +342,7 @@ export default function Overtime() {
 
   const filtered = records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
+    (storeFilter === '' || r.store === storeFilter) &&
     (!search.trim() || String(r.id).includes(search.trim()))
   )
 
@@ -391,6 +393,17 @@ export default function Overtime() {
             ...departments.map(d => ({ value: d.name, label: d.name })),
           ]}
           placeholder="全部部門"
+          style={{ minWidth: 180 }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
+        <SearchableSelect
+          value={storeFilter || ''}
+          onChange={(v) => setStoreFilter(v || '')}
+          options={[
+            { value: '', label: '全部門市' },
+            ...stores.map(s => ({ value: s.name, label: s.name })),
+          ]}
+          placeholder="全部門市"
           style={{ minWidth: 180 }}
         />
       </div>

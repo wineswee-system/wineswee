@@ -383,10 +383,16 @@ export default function Overtime() {
         alignItems: 'center',
       }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-          <option value="">全部部門</option>
-          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={deptFilter || ''}
+          onChange={(v) => setDeptFilter(v || '')}
+          options={[
+            { value: '', label: '全部部門' },
+            ...departments.map(d => ({ value: d.name, label: d.name })),
+          ]}
+          placeholder="全部部門"
+          style={{ minWidth: 180 }}
+        />
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>

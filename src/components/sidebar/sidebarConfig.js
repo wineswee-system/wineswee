@@ -231,6 +231,7 @@ export const groupNav = {
         { icon: Workflow, label: '排班規則', path: '/hr/schedule-rules' },
         { icon: Workflow, label: '工時/假別單位', path: '/hr/work-unit-settings' },
         { icon: CalendarDays, label: '假日管理', path: '/hr/holidays' },
+        { icon: Upload, label: '排班總表匯入', path: '/hr/schedule-xlsx-import' },
       ]
     },
     {

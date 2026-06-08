@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseCSV } from '../../lib/wenzhong'
@@ -211,25 +212,57 @@ export default function HRImport() {
     return employees.find(e => e.name === q || e.employee_number === q) || null
   }
 
-  // ── 解析 CSV → preview ──────────────────────────────
+  // ── 從 XLSX sheet 抽出 flat rows（略過 metadata，自動找標題行）──
+  function xlsxToRows(buffer) {
+    const wb  = XLSX.read(buffer, { type: 'array' })
+    const ws  = wb.Sheets[wb.SheetNames[0]]
+    const mat = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+
+    // 找到真正的標題行（同 CSV 邏輯）
+    let hi = mat.findIndex(row => {
+      const cells = row.map(c => String(c))
+      return cells.some(c => c.includes('員工編號') || c.includes('員工編碼')) ||
+        (cells.some(c => c.includes('姓名')) && cells.some(c => c.includes('部門')))
+    })
+    if (hi < 0) hi = 0
+
+    const headers = mat[hi].map(String)
+    return mat.slice(hi + 1)
+      .filter(row => row.some(c => c !== ''))
+      .map(row => {
+        const obj = {}
+        headers.forEach((h, i) => { if (h.trim()) obj[h.trim()] = row[i] ?? '' })
+        return obj
+      })
+  }
+
+  // ── 解析 CSV / XLSX → preview ────────────────────────
   function handleFile(file) {
     if (!file) return
     setResult(null)
     setPreview([])
+
+    const isXlsx = /\.xlsx?$/i.test(file.name)
     const reader = new FileReader()
+
     reader.onload = (e) => {
       try {
-        // 104 匯出前幾行是 metadata（資料類型/日期/條件/筆數 + 空白）
-        // 找到真正的欄位標題行（含「員工編號」或「員工姓名」或同時含「姓名」+「部門」）
-        let csvText = e.target.result
-        const lines = csvText.split(/\r?\n/)
-        const headerIdx = lines.findIndex(line =>
-          line.includes('員工編號') || line.includes('員工編碼') ||
-          (line.includes('姓名') && line.includes('部門'))
-        )
-        if (headerIdx > 0) csvText = lines.slice(headerIdx).join('\n')
+        let rawRows
+        if (isXlsx) {
+          rawRows = xlsxToRows(new Uint8Array(e.target.result))
+        } else {
+          // 104 匯出前幾行是 metadata（資料類型/日期/條件/筆數 + 空白）
+          // 找到真正的欄位標題行（含「員工編號」或「員工姓名」或同時含「姓名」+「部門」）
+          let csvText = e.target.result
+          const lines = csvText.split(/\r?\n/)
+          const headerIdx = lines.findIndex(line =>
+            line.includes('員工編號') || line.includes('員工編碼') ||
+            (line.includes('姓名') && line.includes('部門'))
+          )
+          if (headerIdx > 0) csvText = lines.slice(headerIdx).join('\n')
+          ;({ rows: rawRows } = parseCSV(csvText))
+        }
 
-        const { rows: rawRows } = parseCSV(csvText)
         // 打卡明細格式偵測：每筆打卡一行含「卡別」或「上/下班」欄 → 先合併成一天一行
         const isPunchDetail = mod === 'attendance' && rawRows.length > 0
           && ('卡別' in rawRows[0] || '上/下班' in rawRows[0])
@@ -333,7 +366,11 @@ export default function HRImport() {
         toast.error('CSV 解析失敗：' + err.message)
       }
     }
-    reader.readAsText(file, 'utf-8')
+    if (isXlsx) {
+      reader.readAsArrayBuffer(file)
+    } else {
+      reader.readAsText(file, 'utf-8')
+    }
   }
 
   // ── 執行匯入 ─────────────────────────────────────────
@@ -454,8 +491,8 @@ export default function HRImport() {
           background: 'var(--accent-cyan)', color: '#fff',
           fontSize: 13, fontWeight: 600,
         }}>
-          <Upload size={14} /> 選擇 CSV
-          <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }}
+          <Upload size={14} /> 選擇 CSV / XLSX
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }}
             onChange={e => handleFile(e.target.files[0])} />
         </label>
 

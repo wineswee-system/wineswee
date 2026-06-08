@@ -575,8 +575,8 @@ export function calculateNetSalary(grossSalary, options = {}) {
   const totalDeductions =
     laborInsurance + healthInsurance + pensionSelfContribution + incomeTax + otherDeductions;
 
-  // 實領薪資
-  const netSalary = totalGross - totalDeductions;
+  // 實領薪資 — 無條件進位到整數元
+  const netSalary = Math.ceil(totalGross - totalDeductions);
 
   // 雇主負擔合計（不計入員工扣項，僅供 audit 報表用）
   const employerTotalCost = totalGross + labor.employer_share + health.employer_share + pension.employer_contribution;

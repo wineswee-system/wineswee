@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- generate_payroll 兩項修正
+-- generate_payroll 三項修正
 --
 -- 1. 月薪比例改用「在職曆日 / 當月曆日數」（§30-1 四週變形適用）
 --    例：陳楷仁 4/20 入職 → 11/30 = 36.67%（舊算法是 9/20 = 45%）
@@ -7,9 +7,11 @@
 -- 2. 入職日 > 結算月末 的員工不入該月薪資
 --    例：5/15 入職的人不該出現在 4 月薪資
 --
--- 對 20260603020000 的精準 patch：只動 v_work_days / v_actual_work_days 兩段
--- 計算 + WHERE 加入職日過濾。其他（勞健保 / 所得稅 / 二代健保 / 法定扣款 /
--- 特休折現 / shift_swap OT）完全照舊。
+-- 3. 實領薪資 v_net 無條件進位到整數元
+--    （時薪 v_hourly_rate 已用 NUMERIC(10,2)，天然 2 位小數）
+--
+-- 對 20260603020000 的精準 patch：4 處精準替換。其他（勞健保 / 所得稅 /
+-- 二代健保 / 法定扣款 / 特休折現 / shift_swap OT）完全照舊。
 --
 -- 影響：已生成的 payroll_records 不會回溯，需重新 generate 該月才會套新算法。
 -- ════════════════════════════════════════════════════════════════════════════
@@ -476,7 +478,8 @@ BEGIN
       END LOOP;
 
       v_total_deductions := v_total_deductions + v_legal_total;
-      v_net              := v_gross - v_total_deductions;
+      -- 實領薪資無條件進位到整數元
+      v_net              := CEIL(v_gross - v_total_deductions);
 
       -- ── Insert payroll_record ──
       INSERT INTO payroll_records (

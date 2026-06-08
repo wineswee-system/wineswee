@@ -190,7 +190,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
     const hourlyRate = isHourly
       ? (Number(ss.hourly_rate) || 0)
-      : Math.round(baseForInsure / 30 / 8)
+      : Math.round(baseForInsure / 30 / 8 * 100) / 100  // 四捨五入到小數第 2 位
 
     const calcOtPay = (bucket) => {
       const weekday = bucket.weekday <= 2
@@ -314,7 +314,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
         laborEmployer:     proratedLaborE,
         pensionEmployer:   proratedPensionE,
         totalDeductions:   newTotalDeductions,
-        netSalary:         fullMonthResult.gross - newTotalDeductions,
+        netSalary:         Math.ceil(fullMonthResult.gross - newTotalDeductions),  // 無條件進位到整數元
         employerTotalCost: fullMonthResult.gross + proratedLaborE + fullMonthResult.healthEmployer + proratedPensionE,
       }
     }

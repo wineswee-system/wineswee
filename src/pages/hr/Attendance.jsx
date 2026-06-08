@@ -92,8 +92,16 @@ export default function Attendance() {
     })
   }, [monthFilter, profile?.organization_id])
 
-  const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])
-  const getEmpStore = useCallback((name) => employees.find(e => e.name === name)?.store || '', [employees])
+  // dept / store 優先用 FK join 出來的名字（departments.name / stores.name），
+  // 退而求其次才用 text 欄（e.dept / e.store）— 新匯入員工 text 欄常常是 NULL
+  const getEmpDept = useCallback((name) => {
+    const e = employees.find(emp => emp.name === name)
+    return e?.departments?.name || e?.dept || ''
+  }, [employees])
+  const getEmpStore = useCallback((name) => {
+    const e = employees.find(emp => emp.name === name)
+    return e?.stores?.name || e?.store || ''
+  }, [employees])
 
   const today = todayTW()
 
@@ -120,13 +128,20 @@ export default function Attendance() {
     if (!showNotClockedToday) return recordRows
     const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
     const notClockedRows = employees
-      .filter(e =>
-        !todayEmpNames.has(e.name) &&
-        (storeFilter === '' || e.store === storeFilter) &&
-        (deptFilter === '' || e.dept === deptFilter) &&
-        (search === '' || e.name.includes(search))
-      )
-      .map(e => ({ _rowType: 'notClocked', id: `nc-${e.id}`, employee: e.name, dept: e.dept, store: e.store, date: today }))
+      .filter(e => {
+        const empDept  = e.departments?.name || e.dept || ''
+        const empStore = e.stores?.name || e.store || ''
+        return !todayEmpNames.has(e.name) &&
+          (storeFilter === '' || empStore === storeFilter) &&
+          (deptFilter === '' || empDept === deptFilter) &&
+          (search === '' || e.name.includes(search))
+      })
+      .map(e => ({
+        _rowType: 'notClocked', id: `nc-${e.id}`, employee: e.name,
+        dept: e.departments?.name || e.dept,
+        store: e.stores?.name || e.store,
+        date: today,
+      }))
     return [...recordRows, ...notClockedRows]
   }, [filtered, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
 

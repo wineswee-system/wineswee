@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseCSV } from '../../lib/wenzhong'
+import { formatShiftLabel } from '../../lib/scheduleUtils'
 import { toast } from '../../lib/toast'
 
 // ── 假別中文 → code ──────────────────────────────────────
@@ -310,7 +311,7 @@ export default function HRImport() {
             const date = normalizeDate(mapped.date)
             if (!date) errors.push('日期格式錯誤')
             if (!mapped.shift) errors.push('缺班別')
-            payload = { ...payload, date, shift: mapped.shift }
+            payload = { ...payload, date, shift: formatShiftLabel(mapped.shift || '') || mapped.shift }
 
           } else if (mod === 'leave') {
             const startDate = normalizeDate(mapped.start_date)
@@ -363,7 +364,7 @@ export default function HRImport() {
         })
         setPreview(parsed)
       } catch (err) {
-        toast.error('CSV 解析失敗：' + err.message)
+        toast.error((isXlsx ? 'XLSX' : 'CSV') + ' 解析失敗：' + err.message)
       }
     }
     if (isXlsx) {

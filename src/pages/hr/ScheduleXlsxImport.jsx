@@ -4,15 +4,61 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
+import { formatShiftLabel } from '../../lib/scheduleUtils'
 
-// ── 常數 ────────────────────────────────────────────────────
+// ── 假別標籤 → schedules.absence_type（與 ABSENCE_CONFIG 對齊）────
 const ABSENCE_MAP = {
-  '例假日': '例假',
-  '休息日': '休',
-  '國定假日': '國定',
-  '病假': '病',
+  // 排班表印出的完整標籤
+  '例假日':     '例假',   // 勞基法 §36 強制例假
+  '休息日':     '休息',   // 勞基法 §36 休息日（可加班）
+  '國定假日':   '國定假', // 國定假日（獨立類型，非 §36）
+  '病假':       '病',
+  '特休':       '特休',
+  '特休假':     '特休',
+  '特別休假':   '特休',
+  '事假':       '事',
+  '公假':       '公',
+  '補休':       '補休',
+  '補休假':     '補休',
+  '婚假':       '婚',
+  '喪假':       '喪',
+  '生理假':     '生',
+  '產假':       '產',
+  '陪產假':     '陪產',
+  '育嬰假':     '育嬰',
+  '產檢假':     '產檢',
+  '工傷假':     '工傷',
+  '家庭照顧假': '家',
+  '心理健康假': '心',
+  '會議':       '會議',
 }
 const OFF_LABELS = new Set(Object.keys(ABSENCE_MAP))
+
+// ── 班別代碼正規化 ─────────────────────────────────────────
+// 把 XLSX 的班別代碼轉成系統標準 HH:MM~HH:MM 格式
+// 例: "AU-正11-20" → "11:00~20:00"、"AX-正1300-2200" → "13:00~22:00"
+// 無法辨識時間範圍的命名班別（文心晚班、微風早）原樣保留
+function normalizeShift(raw) {
+  if (!raw) return raw
+  // 已是標準格式（或可直接正規化的時段）
+  const direct = formatShiftLabel(raw)
+  if (direct !== raw) return direct
+  // 從複合代碼尾端抽出時段，例: "區-區早11-20" → 抽 "11-20" → "11:00~20:00"
+  const m = raw.match(/(\d{2,4}[-~]\d{2,4})$/)
+  if (m) {
+    const normalized = formatShiftLabel(m[1])
+    if (normalized !== m[1]) return normalized
+  }
+  return raw
+}
+
+// ── 員工姓名正規化 ─────────────────────────────────────────
+// 去除 "0001 林襄" 格式的員工編號前綴
+function normalizeName(raw) {
+  const s = String(raw || '').trim()
+  const m = s.match(/^\S*\d+\s+(.+)$/)
+  return m ? m[1].trim() : s
+}
 
 // ── XLSX 解析（純函式，無副作用）────────────────────────────
 function parseScheduleXlsx(buffer) {
@@ -44,7 +90,7 @@ function parseScheduleXlsx(buffer) {
   for (const row of raw.slice(6)) {
     const empNo = String(row[0] || '').trim()
     if (!empNo) continue
-    const name  = String(row[1] || '').trim()
+    const name  = normalizeName(row[1])
     if (!name)  continue
     const dept  = String(row[2] || '').trim()
 
@@ -60,19 +106,24 @@ function parseScheduleXlsx(buffer) {
       const lines     = rawCell.split('\n').map(l => l.trim()).filter(Boolean)
       const firstLine = lines[0]
 
-      let shift        = firstLine
+      let shift        = null
       let absence_type = null
 
       const offType = ABSENCE_MAP[firstLine]
       if (offType) {
         absence_type = offType
-        // 第二行是班別代碼（假日加班）→ 以班別為主
         if (lines.length > 1 && !OFF_LABELS.has(lines[1])) {
-          shift = lines[1]
+          // 第二行是班別代碼（假日加班）→ 正規化班別
+          shift = normalizeShift(lines[1])
+        } else {
+          // 純假日/休息 → shift 與 absence_type 一致
+          shift = offType
         }
       } else if (lines.length > 1) {
-        // 兩段時間 → 合併（例：11:00~15:00 / 15:30~18:00）
-        shift = lines.join(' / ')
+        // 兩段時間 → 各自正規化再合併（例：11:00~15:00 / 15:30~18:00）
+        shift = lines.map(normalizeShift).join(' / ')
+      } else {
+        shift = normalizeShift(firstLine)
       }
 
       records.push({ employee: name, employee_no: empNo, date, shift, absence_type: absence_type || null, month_group: date.slice(0, 7) })

@@ -542,6 +542,9 @@ export function calculateNetSalary(grossSalary, options = {}) {
     //   { labor: [...], health: [...] }
     //   未傳 → calculateLaborInsurance/HealthInsurance 走 hardcoded fallback
     brackets,
+    // 新增：員工是否有保勞保 / 健保（false → 該險自付歸 0、雇主負擔也歸 0）
+    skipLaborInsurance = false,
+    skipHealthInsurance = false,
   } = options;
 
   // 應發薪資總額
@@ -550,18 +553,22 @@ export function calculateNetSalary(grossSalary, options = {}) {
   // 投保金額（沒傳就 fallback 用 grossSalary）
   const insuranceBase = insuredSalary != null ? insuredSalary : grossSalary;
 
-  // 勞保
-  const labor = calculateLaborInsurance(insuranceBase, {
-    employeeAge, isPartTime,
-    brackets: brackets?.labor,
-  });
+  // 勞保（toggle off → 全歸 0）
+  const labor = skipLaborInsurance
+    ? { employee_share: 0, employer_share: 0, insured_salary: 0 }
+    : calculateLaborInsurance(insuranceBase, {
+        employeeAge, isPartTime,
+        brackets: brackets?.labor,
+      });
   const laborInsurance = labor.employee_share;
 
-  // 健保
-  const health = calculateHealthInsurance(insuranceBase, {
-    dependents, isPartTime,
-    brackets: brackets?.health,
-  });
+  // 健保（toggle off → 全歸 0）
+  const health = skipHealthInsurance
+    ? { employee_share: 0, employer_share: 0, insured_salary: 0 }
+    : calculateHealthInsurance(insuranceBase, {
+        dependents, isPartTime,
+        brackets: brackets?.health,
+      });
   const healthInsurance = health.employee_share;
 
   // 勞退自提（以底薪計算）

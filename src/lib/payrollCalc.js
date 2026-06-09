@@ -314,6 +314,9 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       bonus: policyBonus,
       otherDeductions: absenceDeduction + lateDeduction + legalDeductionTotal,
       withholdTax: false,
+      // 員工資料的勞健保 toggle（false → 該險全歸 0）
+      skipLaborInsurance:  !emp.labor_insurance,
+      skipHealthInsurance: !emp.health_insurance,
     })
 
     const { inServiceDays, monthDays } = calculateInServiceDays(emp.join_date, emp.resign_date, month)

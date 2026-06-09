@@ -144,7 +144,7 @@ export default function Salary() {
     Promise.all([
       supabase.from('salary_records').select('*').eq('organization_id', orgId).order('id'),
       supabase.from('bonus_records').select('*').eq('organization_id', orgId),
-      supabase.from('employees').select('id, name, dept, store, additional_stores, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10)})`).eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, dept, store, additional_stores, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, labor_insurance, health_insurance, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10)})`).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, b, e, d, st]) => {

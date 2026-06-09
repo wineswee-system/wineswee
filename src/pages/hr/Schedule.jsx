@@ -155,7 +155,9 @@ export default function Schedule() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date').eq('status', '在職').order('name'),
+      // 不過濾 status：要支援「看歷史月份時，當時還在職、現在已離職」的員工顯示
+      // 由 filtered 的 join_date/resign_date 範圍過濾掉跟 view 沒重疊的人
+      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date, status').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -238,9 +240,13 @@ export default function Schedule() {
   // 套用班別到當前 selection 範圍
   const applyToSelection = async (shift, actualStart = null, actualEnd = null) => {
     if (!selection) return
+    const vStart = activeDates?.[0]
+    const vEnd = activeDates?.[activeDates.length - 1]
     const filteredEmps = employees.filter(em =>
       (deptFilter === '' || em.dept === deptFilter) &&
-      (storeFilter === '' || em.store === storeFilter)
+      (storeFilter === '' || em.store === storeFilter) &&
+      (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
+      (!em.resign_date || !vStart || em.resign_date >= vStart)
     )
     const aIdx = filteredEmps.findIndex(em => em.name === selection.anchor.empName)
     const eIdx = filteredEmps.findIndex(em => em.name === selection.end.empName)
@@ -275,9 +281,13 @@ export default function Schedule() {
       const tag = (e.target?.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'select' || tag === 'textarea') return
 
+      const vStart = activeDates?.[0]
+      const vEnd = activeDates?.[activeDates.length - 1]
       const filteredEmps = employees.filter(em =>
         (deptFilter === '' || em.dept === deptFilter) &&
-        (storeFilter === '' || em.store === storeFilter)
+        (storeFilter === '' || em.store === storeFilter) &&
+        (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
+        (!em.resign_date || !vStart || em.resign_date >= vStart)
       )
       const dates = activeDates
       if (filteredEmps.length === 0 || dates.length === 0) return
@@ -882,9 +892,15 @@ export default function Schedule() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
+  // 視窗範圍：看 4 月就用 4/1 ~ 4/30；看 cycle 用 cycle 起迄
+  // 用來過濾「跟 view 完全沒重疊」的員工（從沒入職過、或整段都已離職）
+  const viewStart = activeDates?.[0] || monthStart
+  const viewEnd = activeDates?.[activeDates.length - 1] || monthEnd
   const filtered = employees.filter(e =>
     (deptFilter === '' || e.dept === deptFilter) &&
-    (storeFilter === '' || e.store === storeFilter)
+    (storeFilter === '' || e.store === storeFilter) &&
+    (!e.join_date   || e.join_date   <= viewEnd) &&   // 4/30 之後入職 → 4 月不顯示
+    (!e.resign_date || e.resign_date >= viewStart)    // 4/1 前就已離職 → 4 月不顯示
   )
 
   const getShiftStyle = (shift) => {
@@ -1497,9 +1513,13 @@ export default function Schedule() {
 
       {/* 框選提示條：fixed 飄右下角，不參與 flex 佈局避免班表往下跳 */}
       {selection && (() => {
+        const vStart = activeDates?.[0]
+        const vEnd = activeDates?.[activeDates.length - 1]
         const fEmps = employees.filter(em =>
           (deptFilter === '' || em.dept === deptFilter) &&
-          (storeFilter === '' || em.store === storeFilter)
+          (storeFilter === '' || em.store === storeFilter) &&
+          (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
+          (!em.resign_date || !vStart || em.resign_date >= vStart)
         )
         const aIdx = fEmps.findIndex(em => em.name === selection.anchor.empName)
         const eIdx = fEmps.findIndex(em => em.name === selection.end.empName)

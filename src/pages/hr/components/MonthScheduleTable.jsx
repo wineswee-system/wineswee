@@ -322,6 +322,32 @@ function EmployeeRow({
         </div>
       </td>
       {monthDates.map(date => {
+        // ★ 任期外的日期 (未入職 / 已離職) — 視覺灰掉、不可編輯
+        //   join_date / resign_date 都是 'YYYY-MM-DD' 字串，直接字典序比較
+        const isBeforeJoin = emp.join_date && date < emp.join_date
+        const isAfterResign = emp.resign_date && date > emp.resign_date
+        const isOutOfTenure = isBeforeJoin || isAfterResign
+        if (isOutOfTenure) {
+          return (
+            <td key={date} style={{
+              textAlign: 'center', padding: '2px 1px', position: 'relative',
+              width: 42, minWidth: 42, maxWidth: 42, height: 42,
+              border: '1px solid var(--border-medium)',
+              background: 'var(--bg-tertiary)',
+              cursor: 'not-allowed',
+              userSelect: 'none',
+            }}
+            title={isBeforeJoin ? `${emp.join_date} 入職` : `${emp.resign_date} 離職`}>
+              <span style={{
+                fontSize: 9, color: 'var(--text-muted)', opacity: 0.55,
+                fontStyle: 'italic',
+              }}>
+                {isBeforeJoin ? '未入職' : '已離職'}
+              </span>
+            </td>
+          )
+        }
+
         const shift = getShift(emp.name, date)
         const offReq = getOffRequest(emp.name, date)
         const dayOfWeek = new Date(date).getDay()

@@ -1,0 +1,225 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- HOTFIX: 補回 resolve_snapshot_step_approvers 漏掉的兩個 case
+--
+-- 20260609131000_goods_transfer_chain_targets.sql 重寫這支 function 時
+-- 把原本的 applicant_section_supervisor / specific_section_supervisor 兩個
+-- case 漏掉 → 用這兩個 target_type 的 chain step 解不出 approver →
+-- 整條 chain 卡死。
+--
+-- 把這兩個 case 從原始定義（20260528200000_chain_snapshot.sql）抄回來：
+--   - applicant_section_supervisor：v_app.store_id → stores.section_id
+--                                   → department_sections.supervisor_id
+--   - specific_section_supervisor：v_snap.target_section_id
+--                                  → department_sections.supervisor_id
+--
+-- 其他 case 完全照搬 131000 內容，不動。
+-- ════════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.resolve_snapshot_step_approvers(
+  p_request_type     TEXT,
+  p_request_id       INT,
+  p_step_order       INT,
+  p_applicant_emp_id INT
+)
+RETURNS TABLE (emp_id INT, emp_name TEXT, line_user_id TEXT, channel_code TEXT)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_snap          public.request_chain_snapshots;
+  v_app           employees;
+  v_target_emp_id INT;
+  v_section_id    INT;
+  v_store_id      INT;
+BEGIN
+  SELECT * INTO v_snap
+    FROM public.request_chain_snapshots
+   WHERE request_type = p_request_type
+     AND request_id   = p_request_id
+     AND step_order   = p_step_order;
+  IF v_snap.id IS NULL THEN RETURN; END IF;
+
+  SELECT * INTO v_app FROM employees WHERE id = p_applicant_emp_id;
+
+  -- ─────── fixed_* ───────
+  IF v_snap.target_type = 'fixed_emp' AND v_snap.target_emp_id IS NOT NULL THEN
+    RETURN QUERY
+      SELECT e.id, e.name,
+        (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+        (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+      FROM employees e WHERE e.id = v_snap.target_emp_id AND e.status = '在職';
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'fixed_role' AND v_snap.target_role_id IS NOT NULL THEN
+    RETURN QUERY
+      SELECT e.id, e.name,
+        (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+        (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+      FROM employees e WHERE e.role_id = v_snap.target_role_id AND e.status = '在職'
+        AND (v_app.organization_id IS NULL OR e.organization_id = v_app.organization_id);
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'fixed_dept' AND v_snap.target_dept_id IS NOT NULL THEN
+    RETURN QUERY
+      SELECT e.id, e.name,
+        (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+        (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+      FROM employees e WHERE e.department_id = v_snap.target_dept_id AND e.status = '在職';
+    RETURN;
+  END IF;
+
+  IF v_app.id IS NULL THEN RETURN; END IF;
+
+  -- ─────── applicant_* ───────
+  IF v_snap.target_type = 'applicant_supervisor' THEN
+    v_target_emp_id := COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'applicant_dept_manager' AND v_app.department_id IS NOT NULL THEN
+    SELECT d.manager_id INTO v_target_emp_id FROM departments d WHERE d.id = v_app.department_id;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'applicant_store_manager' AND v_app.store_id IS NOT NULL THEN
+    SELECT s.manager_id INTO v_target_emp_id FROM stores s WHERE s.id = v_app.store_id;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  -- 補回：applicant_section_supervisor
+  -- 申請人 store → stores.section_id → department_sections.supervisor_id
+  IF v_snap.target_type = 'applicant_section_supervisor' THEN
+    IF v_app.store_id IS NOT NULL THEN
+      SELECT s.section_id INTO v_section_id FROM stores s WHERE s.id = v_app.store_id;
+      IF v_section_id IS NOT NULL THEN
+        SELECT ds.supervisor_id INTO v_target_emp_id
+          FROM department_sections ds WHERE ds.id = v_section_id;
+        IF v_target_emp_id IS NOT NULL THEN
+          RETURN QUERY
+            SELECT e.id, e.name,
+              (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+              (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+            FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+        END IF;
+      END IF;
+    END IF;
+    RETURN;
+  END IF;
+
+  -- ─────── specific_* ───────
+  IF v_snap.target_type = 'specific_dept_manager' AND v_snap.target_dept_id IS NOT NULL THEN
+    SELECT d.manager_id INTO v_target_emp_id FROM departments d WHERE d.id = v_snap.target_dept_id;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'specific_store_manager' AND v_snap.target_store_id IS NOT NULL THEN
+    SELECT s.manager_id INTO v_target_emp_id FROM stores s WHERE s.id = v_snap.target_store_id;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  -- 補回：specific_section_supervisor
+  IF v_snap.target_type = 'specific_section_supervisor' AND v_snap.target_section_id IS NOT NULL THEN
+    SELECT ds.supervisor_id INTO v_target_emp_id
+      FROM department_sections ds WHERE ds.id = v_snap.target_section_id;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  -- ─────── 商品調撥 5 個 dynamic target ───────
+  IF v_snap.target_type IN ('transfer_in_store_manager', 'transfer_out_store_manager') THEN
+    v_store_id := public._goods_transfer_target_store(p_request_id,
+      CASE v_snap.target_type WHEN 'transfer_in_store_manager' THEN 'to' ELSE 'from' END);
+    IF v_store_id IS NOT NULL THEN
+      SELECT s.manager_id INTO v_target_emp_id FROM stores s WHERE s.id = v_store_id;
+      IF v_target_emp_id IS NOT NULL THEN
+        RETURN QUERY
+          SELECT e.id, e.name,
+            (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+            (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+          FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+      END IF;
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type IN ('transfer_in_store_supervisor', 'transfer_out_store_supervisor') THEN
+    v_store_id := public._goods_transfer_target_store(p_request_id,
+      CASE v_snap.target_type WHEN 'transfer_in_store_supervisor' THEN 'to' ELSE 'from' END);
+    IF v_store_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e
+        WHERE e.store_id = v_store_id
+          AND e.position = '督導'
+          AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_snap.target_type = 'warehouse_supervisor' THEN
+    SELECT d.manager_id INTO v_target_emp_id
+      FROM departments d
+     WHERE d.name = '倉儲物流部'
+       AND (v_app.organization_id IS NULL OR d.organization_id = v_app.organization_id)
+     LIMIT 1;
+    IF v_target_emp_id IS NOT NULL THEN
+      RETURN QUERY
+        SELECT e.id, e.name,
+          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+        FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+    END IF;
+    RETURN;
+  END IF;
+
+  RETURN;
+END $$;
+
+COMMIT;
+
+NOTIFY pgrst, 'reload schema';

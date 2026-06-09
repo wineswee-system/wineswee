@@ -5,7 +5,7 @@ import { supabase } from '../../../lib/supabase'
 // 極簡 chain library — 直接撈所有 chain 顯示，繞過原本 ChainConfigModal
 // 不擋 isAdmin gate（這頁本來就唯讀；撈不到 chain 就會顯示空）
 export default function Chains() {
-  const { user, profile, role } = useAuth()
+  const { user, profile, role, isAdmin, isSuperAdmin } = useAuth()
   const [chains, setChains] = useState([])
   const [steps, setSteps] = useState({})
   const [loading, setLoading] = useState(true)
@@ -41,6 +41,15 @@ export default function Chains() {
     load()
     return () => { cancelled = true }
   }, [])
+
+  if (!(isAdmin || isSuperAdmin)) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <h3 style={{ color: 'var(--accent-red)' }}>無權限</h3>
+        <p style={{ color: 'var(--text-secondary)' }}>僅 admin / super_admin 可管理簽核鏈</p>
+      </div>
+    )
+  }
 
   return (
     <div className="fade-in">

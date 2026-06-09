@@ -22,11 +22,11 @@ export const DEFS = [
   { basePath: '/sales',         perm: null,    alsoBase: true, load: () => import('./SalesModule') },
   { basePath: '/pos',           perm: null,    alsoBase: true, load: () => import('./POSModule') },
   { basePath: '/org',           perm: null,                   load: () => import('./OrgModule') },
-  {
-    basePath: '/process', perm: null,
-    subRoutes: [{ path: 'settings/*', perm: 'nav.project.admin' }],
-    load: () => import('./ProcessModule'),
-  },
+  // 不要用 subRoutes 把 /process/settings/* 切出來 —
+  // renderModule 的 subRoute outer 會吃 /process/settings/，剩下 'chains'，
+  // 但 ProcessModule inner Route 寫 'settings/chains'，對不齊 → 全部空白。
+  // 權限改在頁面內擋（isAdmin / isSuperAdmin）。
+  { basePath: '/process', perm: null, load: () => import('./ProcessModule') },
   { basePath: '/system',        perm: 'system.admin',         load: () => import('./SystemModule') },
   { basePath: '/ai',            perm: null,                   load: () => import('./AIModule') },
   { basePath: '/integration',   perm: null,                   load: () => import('./IntegrationModule') },

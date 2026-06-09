@@ -35,7 +35,17 @@ export default function ScheduleBuilder() {
   const monthDates = getMonthDates(monthYear, monthNum)
   const rangeStart = range?.start || monthDates[0]
   const rangeEnd = range?.end || monthDates[monthDates.length - 1]
-  const dates = monthDates.filter(d => d >= rangeStart && d <= rangeEnd)
+  // Generate every date in range — handles cross-month cycles (e.g. 4-week Jun 26~Jul 23)
+  const dates = (() => {
+    const result = []
+    let cur = new Date(rangeStart + 'T00:00:00Z')
+    const end = new Date(rangeEnd + 'T00:00:00Z')
+    while (cur <= end) {
+      result.push(`${cur.getUTCFullYear()}-${String(cur.getUTCMonth()+1).padStart(2,'0')}-${String(cur.getUTCDate()).padStart(2,'0')}`)
+      cur.setUTCDate(cur.getUTCDate() + 1)
+    }
+    return result
+  })()
 
   useEffect(() => {
     if (!storeId) {

@@ -106,6 +106,10 @@ export default function Schedule() {
   const [wizardMode, setWizardMode] = useState('manual')
   const [showWizardDropdown, setShowWizardDropdown] = useState(false)
   const wizardDropdownRef = useRef(null)
+  // Prevents cycleProbeDate from being reset when wizard fires storeFilter+month changes together
+  const skipCycleReset = useRef(false)
+  // Sync ref so effects can read current storeFilter without adding it to deps
+  const storeFilterRef = useRef('')
   // View mode: week or month
   const [viewMode, setViewMode] = useState('month') // 'month' | 'cycle'
   // Cycle view 用的探測日期，null = 跟著 selectedMonth 的 1 號走
@@ -126,15 +130,25 @@ export default function Schedule() {
   const monthEnd = monthDates[monthDates.length - 1]
 
   // 換月 / 換店時 reset cycle probe，避免拿舊 anchor 算
-  useEffect(() => { setCycleProbeDate(null) }, [selectedMonth, storeFilter])
+  // skipCycleReset prevents the reset when the wizard changes both store and month simultaneously
+  useEffect(() => {
+    storeFilterRef.current = storeFilter
+    if (skipCycleReset.current) { skipCycleReset.current = false; return }
+    setCycleProbeDate(null)
+  }, [selectedMonth, storeFilter])
 
   // 換到非變形工時店時，自動切回月視圖（不然 toggle 會消失但 viewMode 卡在 cycle）
+  // Guard: skip when storeSettings is null (not yet loaded) or belongs to a different store
+  // — prevents premature revert before new settings arrive after a store switch
   useEffect(() => {
+    if (!storeSettings) return
+    const locMatch = locations.find(l => l.name === storeFilterRef.current)
+    if (locMatch && storeSettings.store_id && storeSettings.store_id !== locMatch.id) return
     const ws = storeSettings?.work_hour_system
     const anchor = storeSettings?.variable_period_start
     const canCycle = ws && ws !== '標準工時' && !!anchor
     if (!canCycle && viewMode === 'cycle') setViewMode('month')
-  }, [storeSettings, viewMode])
+  }, [storeSettings, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cycle view: derive cycle from probe date (defaults to monthStart)
   const effectiveCycleProbe = cycleProbeDate || monthStart
@@ -809,8 +823,13 @@ export default function Schedule() {
         },
       })
     } else {
+      // Set skip flag so the [selectedMonth, storeFilter] effect doesn't reset the probe date
+      skipCycleReset.current = true
       setStoreFilter(primary.store)
       setSelectedMonth(primaryRange.start.slice(0, 7))
+      // Switch to cycle view so the full cross-month period (e.g. 4-week Jun 26~Jul 23) is built
+      setViewMode('cycle')
+      setCycleProbeDate(primaryRange.start)
       toast.success(`已設定門市「${primary.store}」，請點擊 AI 自動排班`)
     }
   }

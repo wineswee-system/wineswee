@@ -950,16 +950,32 @@ export default function Schedule() {
               人/天
             </div>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              // Copy last month's schedule
-              const prevMonth = new Date(monthYear, monthNum - 2, 1)
-              const prevDates = getMonthDates(prevMonth.getFullYear(), prevMonth.getMonth() + 1)
+              // 複製：cycle 視角 → 上個 cycle；month 視角 → 上個月
+              // 兩者都用 day-of-week 對應，避免日期不對齊
+              let srcStart, srcEnd, targetDates, targetLabel
+              if (useCycleView) {
+                // 上個 cycle：current cycle start - 1 day 探測
+                const ws = storeSettings?.work_hour_system
+                const anchor = storeSettings?.variable_period_start
+                const probeMs = new Date(cycleInfo.start + 'T00:00:00Z').getTime() - 86400000
+                const prevCycle = getCycleFor(new Date(probeMs).toISOString().slice(0, 10), ws, anchor)
+                if (!prevCycle) { toast.error('找不到上個週期'); return }
+                srcStart = prevCycle.start; srcEnd = prevCycle.end
+                targetDates = cycleDates
+                targetLabel = `Cycle #${cycleInfo.index} (${cycleInfo.start} ~ ${cycleInfo.end})`
+              } else {
+                const prevMonth = new Date(monthYear, monthNum - 2, 1)
+                const prevDates = getMonthDates(prevMonth.getFullYear(), prevMonth.getMonth() + 1)
+                srcStart = prevDates[0]; srcEnd = prevDates[prevDates.length - 1]
+                targetDates = monthDates
+                targetLabel = selectedMonth
+              }
               const empNames = filtered.map(e => e.name)
               const { data: lastSchedules } = await supabase.from('schedules').select('*')
                 .in('employee', empNames)
-                .gte('date', prevDates[0]).lte('date', prevDates[prevDates.length - 1])
-              if (!lastSchedules?.length) { toast.error('上月無排班資料'); return }
-              if (!(await confirm({ message: `將上月 ${lastSchedules.length} 筆排班複製到 ${selectedMonth}？\n\n會根據星期幾對應，已有的排班會被覆蓋。` }))) return
-              // Map by day-of-week: group last month shifts by (employee, dow)
+                .gte('date', srcStart).lte('date', srcEnd)
+              if (!lastSchedules?.length) { toast.error(useCycleView ? '上個週期無排班資料' : '上月無排班資料'); return }
+              if (!(await confirm({ message: `將${useCycleView ? '上個週期' : '上月'} ${lastSchedules.length} 筆排班複製到 ${targetLabel}？\n\n會根據星期幾對應，已有的排班會被覆蓋。` }))) return
               const byEmpDow = {}
               for (const s of lastSchedules) {
                 const dow = new Date(s.date).getDay()
@@ -967,7 +983,7 @@ export default function Schedule() {
                 if (!byEmpDow[key]) byEmpDow[key] = s
               }
               const newSchedules = []
-              for (const date of monthDates) {
+              for (const date of targetDates) {
                 const dow = new Date(date).getDay()
                 for (const emp of empNames) {
                   const src = byEmpDow[`${emp}_${dow}`]
@@ -977,10 +993,10 @@ export default function Schedule() {
               if (newSchedules.length > 0) {
                 const { data } = await supabase.from('schedules').upsert(newSchedules, { onConflict: 'employee,date' }).select()
                 if (data) setSchedules(prev => { const map = {}; for (const s of [...prev, ...data]) map[`${s.employee}_${s.date}`] = s; return Object.values(map) })
-                toast.success(`已複製 ${newSchedules.length} 筆排班到 ${selectedMonth}`)
+                toast.success(`已複製 ${newSchedules.length} 筆排班到 ${targetLabel}`)
               }
             }}>
-              📋 複製上月
+              📋 {useCycleView ? '複製上個週期' : '複製上月'}
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
@@ -989,35 +1005,6 @@ export default function Schedule() {
               setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
             }}>
               🗑️ 清除本月
-            </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }} onClick={() => setShowCompOff(true)}>
-              🔄 指派補休
-            </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
-              // Export schedule as CSV
-              const rows = [['員工', ...monthDates.map(d => d.slice(5))]]
-              for (const emp of filtered) {
-                const row = [emp.name]
-                for (const date of monthDates) {
-                  const s = schedules.find(x => x.employee === emp.name && x.date === date)
-                  row.push(s?.shift || '')
-                }
-                rows.push(row)
-              }
-              const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\n')
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url; a.download = `排班表_${storeFilter || '全部'}_${selectedMonth}.csv`
-              a.click(); URL.revokeObjectURL(url)
-            }}>
-              📥 匯出 CSV
-            </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowImportModal(true)}>
-              📤 匯入 CSV
-            </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowPatternsModal(true)}>
-              🗂️ 員工排班模板
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
               exportScheduleCalendarPdf({

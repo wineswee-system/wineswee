@@ -1,5 +1,6 @@
 import { useAuth } from '../../../contexts/AuthContext'
 import ChainConfigModal from '../../../components/ChainConfigModal'
+import LoadingSpinner from '../../../components/LoadingSpinner'
 
 export default function Chains() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
@@ -13,12 +14,15 @@ export default function Chains() {
     )
   }
 
+  // profile 還沒載完前不 render modal — 避免 organizationId=undefined 觸發 query 卡死
+  if (!profile?.organization_id) return <LoadingSpinner />
+
   return (
     <ChainConfigModal
       open
       onClose={() => {}}
       formLabel="簽核鏈"
-      organizationId={profile?.organization_id}
+      organizationId={profile.organization_id}
       mode="library"
       embedded
     />

@@ -88,20 +88,25 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
 
   // ── 載入下拉選項（modal 開啟時跑一次） ──
   const loadOptions = useCallback(async () => {
-    const [empRes, roleRes, deptRes, storeRes, sectionRes] = await Promise.all([
-      supabase.from('employees')
-        .select('id, name, name_en, employee_number, status, position, dept, store, departments!department_id(name), stores!store_id(name)')
-        .eq('organization_id', organizationId).eq('status', '在職').order('name'),
-      supabase.from('roles').select('id, name').order('name'),
-      supabase.from('departments').select('id, name').eq('organization_id', organizationId).order('name'),
-      supabase.from('stores').select('id, name').eq('organization_id', organizationId).order('name'),
-      supabase.from('department_sections').select('id, name, department_id').eq('organization_id', organizationId).order('name'),
-    ])
-    setEmployees(empRes.data || [])
-    setRoles(roleRes.data || [])
-    setDepts(deptRes.data || [])
-    setStores(storeRes.data || [])
-    setSections(sectionRes.data || [])
+    if (!organizationId) return  // profile 還沒載完前不打 query（避免 .eq('organization_id', undefined) 拋錯卡死 loading）
+    try {
+      const [empRes, roleRes, deptRes, storeRes, sectionRes] = await Promise.all([
+        supabase.from('employees')
+          .select('id, name, name_en, employee_number, status, position, dept, store, departments!department_id(name), stores!store_id(name)')
+          .eq('organization_id', organizationId).eq('status', '在職').order('name'),
+        supabase.from('roles').select('id, name').order('name'),
+        supabase.from('departments').select('id, name').eq('organization_id', organizationId).order('name'),
+        supabase.from('stores').select('id, name').eq('organization_id', organizationId).order('name'),
+        supabase.from('department_sections').select('id, name, department_id').eq('organization_id', organizationId).order('name'),
+      ])
+      setEmployees(empRes.data || [])
+      setRoles(roleRes.data || [])
+      setDepts(deptRes.data || [])
+      setStores(storeRes.data || [])
+      setSections(sectionRes.data || [])
+    } catch (e) {
+      console.error('[ChainConfigModal] loadOptions failed:', e)
+    }
   }, [organizationId])
 
   // ── 載入 amount_grouped / library 列表 ──
@@ -195,17 +200,22 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
   const load = useCallback(async () => {
     if (!open) return
     setLoading(true)
-    await loadOptions()
-    if (hasListView) {
-      if (view === 'list') {
-        await loadList()
+    try {
+      await loadOptions()
+      if (hasListView) {
+        if (view === 'list') {
+          await loadList()
+        }
+        // editor view：等使用者點「編輯/新增」才 load 對應 chain
+      } else {
+        // single mode：開啟就直接進 editor
+        await loadSingle()
       }
-      // editor view：等使用者點「編輯/新增」才 load 對應 chain
-    } else {
-      // single mode：開啟就直接進 editor
-      await loadSingle()
+    } catch (e) {
+      console.error('[ChainConfigModal] load failed:', e)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [open, hasListView, view, loadOptions, loadList, loadSingle])
 
   useEffect(() => { load() }, [load])

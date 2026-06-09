@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Image as ImageIcon } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -46,6 +47,7 @@ const emptyForm = () => ({
 
 export default function TransferRequests() {
   const { profile, role } = useAuth()
+  const navigate = useNavigate()
   const userRole = role?.name || profile?.role || 'store_staff'
 
   const [records, setRecords] = useState([])
@@ -224,24 +226,45 @@ export default function TransferRequests() {
             <h2><span className="header-icon">📦</span> 商品調撥申請</h2>
             <p>跨門市 / 總倉↔門市商品調撥 — 申請 + 驗收兩階段</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm()); setShowFormModal(true) }}>
-            <Plus size={14} /> 新增調撥
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(userRole === 'admin' || userRole === 'super_admin') && (
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains')} title="管理「商品調撥-*」3 條簽核鏈">
+                <Settings size={14} /> 簽核設定
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm()); setShowFormModal(true) }}>
+              <Plus size={14} /> 新增調撥
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 篩選 */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>📋 狀態</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 140 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">全部</option>
-          {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <div className="search-bar" style={{ flex: 1, minWidth: 200 }}>
-          <Search className="search-icon" />
-          <input type="text" placeholder="搜尋單號 / 申請人..." className="form-input" style={{ paddingLeft: 38 }}
-            value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
+      {/* Stats / Filter cards — 點卡片切換 status filter */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+        {['申請審核中', '待驗收', '驗收審核中', '已完成', '已駁回', '已撤回'].map(s => {
+          const sc = STATUS_COLORS[s]
+          const count = records.filter(r => r.status === s).length
+          const selected = statusFilter === s
+          return (
+            <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: selected ? `2px solid ${sc.fg}` : '1px solid var(--border-medium)' }}
+              onClick={() => setStatusFilter(selected ? '' : s)}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: sc.fg }}>{count}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Search inline */}
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginBottom: 12 }}>
+        <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號 / 申請人"
+          style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 200 }} />
+        {search && (
+          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {/* 列表 */}

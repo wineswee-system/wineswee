@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, UserPlus, Check } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
-import { isAbsence, getShiftHours, isWeekendDay } from '../../../lib/scheduleUtils'
+import { isAbsence, getNetWorkHours, isWeekendDay } from '../../../lib/scheduleUtils'
 
 /**
  * Staffing Gap Detection + Candidate Suggestion Panel
@@ -83,7 +83,7 @@ export default function StaffingGapPanel({
         const s = schedules.find(x => x.employee === emp.name && x.date === d)
         if (s && !isAbsence(s.shift)) {
           const def = shiftDefMap[s.shift]
-          weekHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+          weekHours += def ? getNetWorkHours(def) : 8
         }
       })
       const targetH = emp.weekly_target_hours || 40

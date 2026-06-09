@@ -1,5 +1,5 @@
 import {
-  parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
+  parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
@@ -122,12 +122,12 @@ export function isLegallyValid(emp, shiftDef, date, schedule, allShiftDefs, week
   const buffer = wsc.canConcentrateRest
     ? Math.max(8, Math.round(targetH * 0.3))
     : Math.max(4, Math.round(targetH * 0.15))
-  let weeklyHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
+  let weeklyHours = getNetWorkHours(shiftDef)
   for (const d of weekDates) {
     const sName = schedule[emp.name][d]
     if (!sName || isAbsence(sName)) continue
     const sDef = allShiftDefs.find(dd => dd.name === sName)
-    weeklyHours += sDef ? getShiftHours(sDef) - (sDef.break_minutes || 60) / 60 : 8
+    weeklyHours += sDef ? getNetWorkHours(sDef) : 8
   }
   if (weeklyHours > targetH + buffer) return false
 
@@ -358,7 +358,7 @@ export function validateMonthlyResult(assignments, data) {
     let totalHours = 0
     for (const a of workEntries) {
       const def = lookupShiftDef(a.shift)
-      totalHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+      totalHours += def ? getNetWorkHours(def) : 8
     }
     const standardHours = workEntries.length * 8
     const overtime = Math.max(0, totalHours - standardHours)
@@ -380,7 +380,7 @@ export function validateMonthlyResult(assignments, data) {
         let cycleHours = 0
         for (const a of workEntries) {
           const def = lookupShiftDef(a.shift)
-          cycleHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+          cycleHours += def ? getNetWorkHours(def) : 8
         }
         if (cycleHours > wsm.periodTotalHours) {
           violations.push({
@@ -410,7 +410,7 @@ export function validateMonthlyResult(assignments, data) {
           const a = workEntries.find(a => a.date === d)
           if (a) {
             const def = lookupShiftDef(a.shift)
-            periodHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+            periodHours += def ? getNetWorkHours(def) : 8
           }
         }
         const actualWeeks = periodWeeks.length

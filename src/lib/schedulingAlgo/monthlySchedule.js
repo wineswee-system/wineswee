@@ -5,7 +5,8 @@
  */
 
 import {
-  getShiftHours, isAbsence, countsAsMonthlyRest,
+  getNetWorkHours, getRestMinutes,
+  isAbsence, countsAsMonthlyRest,
   splitIntoWeeks, getCycleFor, isPartTime, parseTime,
   MAX_CONSECUTIVE_WORK_DAYS, isShiftWithinOH, getOperatingHoursForDate, isWeekendDay,
 } from '../scheduleUtils'
@@ -541,8 +542,8 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
       }
       // sortBySdFitForFT — 跟 Step3b 同邏輯，FT 偏好 net=8h（9h gross - 1h break）
       const sortBySdFitForFT = (a, b) => {
-        const aNet = getShiftHours(a) - (a.break_minutes || 60) / 60
-        const bNet = getShiftHours(b) - (b.break_minutes || 60) / 60
+        const aNet = getNetWorkHours(a)
+        const bNet = getNetWorkHours(b)
         const aDist = Math.abs(aNet - 8)
         const bDist = Math.abs(bNet - 8)
         if (aDist !== bDist) return aDist - bDist
@@ -623,7 +624,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
           ra.shift = picked.name
           ra.actual_start = picked.start_time?.slice(0, 5) || '11:00'
           ra.actual_end = picked.end_time?.slice(0, 5) || '20:00'
-          ra.actual_hours = getShiftHours(picked) - (picked.break_minutes || 60) / 60
+          ra.actual_hours = getNetWorkHours(picked)
           // 同步 schedFromAll 給下個 iteration 的 isLegallyValid 看
           if (!schedFromAll[emp.name]) schedFromAll[emp.name] = {}
           schedFromAll[emp.name][ra.date] = picked.name
@@ -650,7 +651,7 @@ export function runMonthlyProgrammaticSchedule(data, onProgress) {
               ra.shift = `${startStr}~${endStr}`
               ra.actual_start = startStr
               ra.actual_end = endStr
-              ra.actual_hours = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+              ra.actual_hours = grossH - getRestMinutes(grossH) / 60
             }
           }
         }

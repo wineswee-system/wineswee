@@ -6,7 +6,7 @@
  */
 
 import {
-  parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
+  parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   getWorkSystemConstraints,
   DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS,
 } from './scheduleUtils'
@@ -124,13 +124,13 @@ export function validateShiftChange({
   }
 
   // Weekly hours warning
-  let weeklyHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
+  let weeklyHours = getNetWorkHours(shiftDef)
   for (const d of weekDates) {
     if (d === date) continue
     const s = getShiftForDate(d)
     if (s && !isAbsence(s)) {
       const def = shiftDefMap[s]
-      weeklyHours += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+      weeklyHours += def ? getNetWorkHours(def) : 8
     }
   }
   const isPT = emp.employment_type === '兼職' || emp.employment_type === 'PT'

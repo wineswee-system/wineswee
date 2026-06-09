@@ -9,7 +9,7 @@
  */
 
 import {
-  parseTime, getShiftHours, isAbsence,
+  parseTime, getNetWorkHours, getRestMinutes, isAbsence,
   isWeekendDay, getWorkSystemConstraints,
   formatShiftLabel, parseShiftRange,
 } from '../scheduleUtils'
@@ -158,7 +158,7 @@ export function runProgrammaticSchedule(data) {
           if (def) {
             st = def.start_time
             et = def.end_time
-            if (!h) h = getShiftHours(def) - (def.break_minutes || 60) / 60
+            if (!h) h = getNetWorkHours(def)
           }
         }
         // 終極 fallback：shift 本身就是時段範圍 label（時段制動態 window，
@@ -172,7 +172,7 @@ export function runProgrammaticSchedule(data) {
               const sH = parseTime(st), eH = parseTime(et)
               const eEff = eH <= sH ? eH + 24 : eH
               const grossH = eEff - sH
-              h = grossH >= 6 ? grossH - 1 : grossH  // 6h+ 扣 1h 休息
+              h = grossH - getRestMinutes(grossH) / 60
             }
           }
         }

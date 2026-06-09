@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Calendar, Clock, ChevronLeft, ChevronRight, CalendarOff, ArrowLeftRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getShiftHours, formatShiftLabel } from '../../lib/scheduleUtils'
+import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getNetWorkHours, formatShiftLabel } from '../../lib/scheduleUtils'
 import { todayTW } from '../../lib/datetime'
 
 import { toast } from '../../lib/toast'

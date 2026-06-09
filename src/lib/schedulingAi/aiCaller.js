@@ -8,7 +8,7 @@
 
 import { supabase } from '../supabase'
 import {
-  parseTime, getShiftHours, effectiveEndHour, isNightShift, isAbsence,
+  parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks,
   MIN_SHIFT_INTERVAL, MAX_CONSECUTIVE_WORK_DAYS, MIN_WEEKLY_REST_DAYS,
   DAILY_MAX_HOURS, MONTHLY_OVERTIME_CAP, MONTHLY_REST_DAYS_TARGET,
@@ -412,7 +412,7 @@ function applyAiSuggestions(assignments, suggestions, data) {
         if (def) {
           assignments[idx].actual_start = def.start_time?.slice(0, 5) || null
           assignments[idx].actual_end = def.end_time?.slice(0, 5) || null
-          assignments[idx].actual_hours = getShiftHours(def) - (def.break_minutes || 60) / 60
+          assignments[idx].actual_hours = getNetWorkHours(def)
         } else if (isAbsence(suggestion.to_shift)) {
           assignments[idx].actual_start = null
           assignments[idx].actual_end = null

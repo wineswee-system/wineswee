@@ -1,4 +1,4 @@
-import { getShiftHours, isAbsence, parseTime, isWeekendDay } from '../scheduleUtils'
+import { getNetWorkHours, isAbsence, parseTime, isWeekendDay } from '../scheduleUtils'
 
 export function computeStats(assignments, employees, shiftDefs, _dates, _holidays, targetHoursMap) {
   const shiftDefMap = {}
@@ -17,7 +17,7 @@ export function computeStats(assignments, employees, shiftDefs, _dates, _holiday
     for (const a of work) {
       const def = shiftDefMap[a.shift]
       if (def) {
-        totalHours += getShiftHours(def) - (def.break_minutes || 60) / 60
+        totalHours += getNetWorkHours(def)
         const dow = new Date(a.date).getDay()
         if (isWeekendDay(dow)) weekendShifts++
         if (parseTime(def.start_time) >= 15) eveningShifts++

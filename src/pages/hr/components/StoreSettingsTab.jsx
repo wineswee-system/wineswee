@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Trash2, Pencil, Check, X, Plus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
-import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay } from '../../../lib/scheduleUtils'
+import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay, getRestMinutes, getNetWorkHours } from '../../../lib/scheduleUtils'
 import Modal, { Field } from '../../../components/Modal'
 
 import { toast } from '../../../lib/toast'
@@ -87,8 +87,11 @@ export default function StoreSettingsTab({
 
   const handleShiftSubmit = async () => {
     if (!shiftForm.name) return
-    const bm = Number(shiftForm.break_minutes)
-    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: isNaN(bm) ? 60 : bm, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
+    const sh = parseTime(shiftForm.start_time)
+    const eh = parseTime(shiftForm.end_time)
+    const grossH = eh > sh ? eh - sh : (24 - sh + eh)
+    const autoBreak = getRestMinutes(grossH)
+    const payload = { name: shiftForm.name, start_time: shiftForm.start_time, end_time: shiftForm.end_time, break_minutes: autoBreak, color: shiftForm.color, shift_type: shiftForm.shift_type || 'morning', employee_type: shiftForm.employee_type || 'all', day_type: shiftForm.day_type || 'all', store_id: selectedStore?.id || null }
 
     if (editingShift) {
       const { data } = await supabase.from('shift_definitions').update(payload).eq('id', editingShift.id).select().single()
@@ -284,7 +287,9 @@ export default function StoreSettingsTab({
               {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無班別，請新增</td></tr>}
               {shiftDefs.filter(d => !d.store_id || d.store_id === selectedStore?.id).map(d => {
                 const sh = parseTime(d.start_time), eh = parseTime(d.end_time)
-                const wh = eh > sh ? eh - sh - (d.break_minutes || 0) / 60 : (24 - sh + eh) - (d.break_minutes || 0) / 60
+                const grossH = eh > sh ? eh - sh : (24 - sh + eh)
+                const autoBreak = getRestMinutes(grossH)
+                const wh = getNetWorkHours(d)
                 return (
                   <tr key={d.id}>
                     <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--accent-cyan)' }} /><b>{d.name}</b></div></td>
@@ -299,7 +304,7 @@ export default function StoreSettingsTab({
                     </td>
                     <td>{d.start_time?.slice(0, 5)}</td>
                     <td>{d.end_time?.slice(0, 5)}</td>
-                    <td>{d.break_minutes}分鐘</td>
+                    <td>{autoBreak}分鐘</td>
                     <td style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
                     <td style={{ fontSize: 10 }}>
                       {d.employee_type === 'pt' ? '兼職' : d.employee_type === 'full_time' ? '正職' : '全部'}
@@ -717,8 +722,24 @@ export default function StoreSettingsTab({
               <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.end_time} onChange={e => setField('end_time', e.target.value)} />
             </Field>
           </div>
-          <Field label="休息時間（分鐘）">
-            <input className="form-input" type="number" style={{ width: '100%' }} min={0} step={15} value={shiftForm.break_minutes} onChange={e => setField('break_minutes', e.target.value)} />
+          <Field label="休息時間（自動計算）">
+            {(() => {
+              const sh = parseTime(shiftForm.start_time)
+              const eh = parseTime(shiftForm.end_time)
+              const grossH = sh && eh ? (eh > sh ? eh - sh : (24 - sh + eh)) : 0
+              const autoBreak = getRestMinutes(grossH)
+              const netH = grossH - autoBreak / 60
+              return (
+                <div style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--bg-tertiary)', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  毛時數 <strong style={{ color: 'var(--text-primary)' }}>{grossH.toFixed(1)}h</strong>
+                  　休息 <strong style={{ color: 'var(--accent-orange)' }}>{autoBreak} 分</strong>
+                  　淨工時 <strong style={{ color: 'var(--accent-cyan)' }}>{netH.toFixed(1)}h</strong>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {'規則：< 5h 不扣休息；5~9h 扣 30 分；≥ 9h 扣 60 分'}
+                  </div>
+                </div>
+              )
+            })()}
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="適用對象">

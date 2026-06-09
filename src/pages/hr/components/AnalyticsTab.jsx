@@ -1,4 +1,4 @@
-import { parseTime, getShiftHours, isWeekendDay, isAbsence, getCycleFor } from '../../../lib/scheduleUtils'
+import { parseTime, getNetWorkHours, isWeekendDay, isAbsence, getCycleFor } from '../../../lib/scheduleUtils'
 
 export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs, storeSettings }) {
   const rate = storeSettings?.default_hourly_rate || 196
@@ -24,7 +24,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
       } else {
         const def = shiftDefMap[s.shift]
         if (def) {
-          totalHours += getShiftHours(def) - (def.break_minutes || 60) / 60
+          totalHours += getNetWorkHours(def)
         } else {
           totalHours += 8
         }
@@ -96,7 +96,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
           if (s.actual_hours) cycleHours[s.employee] += s.actual_hours
           else {
             const def = shiftDefMap[s.shift]
-            if (def) cycleHours[s.employee] += getShiftHours(def) - (def.break_minutes || 60) / 60
+            if (def) cycleHours[s.employee] += getNetWorkHours(def)
             else cycleHours[s.employee] += 8
           }
         }

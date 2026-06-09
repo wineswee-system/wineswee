@@ -5,7 +5,7 @@
  */
 
 import {
-  parseTime, isAbsence, countsAsMonthlyRest,
+  parseTime, isAbsence, countsAsMonthlyRest, getRestMinutes,
   isWeekendDay, MIN_SHIFT_INTERVAL, isPartTime,
 } from '../scheduleUtils'
 import { isLegallyValid } from './validation'
@@ -167,7 +167,7 @@ export function runTimeSlotMode(ctx) {
     }
 
     const tryShift = (emp, startH, grossH) => {
-      const netH = grossH >= 6 ? grossH - 1 : (grossH >= 4 ? grossH - 0.5 : grossH)
+      const netH = grossH - getRestMinutes(grossH) / 60
       const endH = startH + grossH
       // ★ 寫死不得超過營業時間：startH/endH 必須完全落在 [storeOpenH, effectiveCloseH] 內。
       //   只留 0.01h 浮點 rounding tolerance；不再給 0.5h 寬限（會超 30 分）。

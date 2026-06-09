@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
-import { getShiftHours, formatShiftLabel } from '../../../lib/scheduleUtils'
+import { getNetWorkHours, formatShiftLabel } from '../../../lib/scheduleUtils'
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -164,7 +164,7 @@ export default function ScheduleTable({
                           if (s?.actual_hours) h += s.actual_hours
                           else if (s?.shift && s.shift !== '休') {
                             const def = shiftDefs.find(sd => sd.name === s.shift)
-                            h += def ? getShiftHours(def) - (def.break_minutes || 60) / 60 : 8
+                            h += def ? getNetWorkHours(def) : 8
                           }
                         })
                         return Math.round(h)

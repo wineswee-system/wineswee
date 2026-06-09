@@ -5,7 +5,7 @@
  */
 
 import {
-  parseTime, getShiftHours, isAbsence, countsAsMonthlyRest,
+  parseTime, getShiftHours, getNetWorkHours, isAbsence, countsAsMonthlyRest,
   isWeekendDay, MONTHLY_OVERTIME_CAP, isPartTime, isShiftWithinOH,
 } from '../scheduleUtils'
 import { isLegallyValid } from './validation'
@@ -121,7 +121,7 @@ export function runShiftBasedAssignment(ctx) {
         actualTimes[`${emp.name}_${date}`] = {
           start: shiftDef?.start_time?.slice(0, 5),
           end: shiftDef?.end_time?.slice(0, 5),
-          hours: shiftDef ? getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60 : 8,
+          hours: shiftDef ? getNetWorkHours(shiftDef) : 8,
         }
         shiftCounts[shiftName] = (shiftCounts[shiftName] || 0) + 1
         assigned.add(emp.name)
@@ -163,7 +163,7 @@ export function runShiftBasedAssignment(ctx) {
         if (pref?.preferred.has(shiftDef.name)) score += 20
         else if (pref?.neutral.has(shiftDef.name)) score += 8
         if (monthRestExhausted) score += 60
-        const shiftHours = getShiftHours(shiftDef) - (shiftDef.break_minutes || 60) / 60
+        const shiftHours = getNetWorkHours(shiftDef)
         const afterHours = currentWeekHours + shiftHours
         if (afterHours <= targetH) score += 15
         else if (afterHours <= targetH + 4) score += 5
@@ -181,7 +181,7 @@ export function runShiftBasedAssignment(ctx) {
         actualTimes[`${emp.name}_${date}`] = {
           start: bestShift.start_time?.slice(0, 5),
           end: bestShift.end_time?.slice(0, 5),
-          hours: getShiftHours(bestShift) - (bestShift.break_minutes || 60) / 60,
+          hours: getNetWorkHours(bestShift),
         }
         shiftCounts[bestShift.name] = (shiftCounts[bestShift.name] || 0) + 1
       } else if (monthRestExhausted) {
@@ -194,7 +194,7 @@ export function runShiftBasedAssignment(ctx) {
           actualTimes[`${emp.name}_${date}`] = {
             start: fallback.start_time?.slice(0, 5),
             end: fallback.end_time?.slice(0, 5),
-            hours: getShiftHours(fallback) - (fallback.break_minutes || 60) / 60,
+            hours: getNetWorkHours(fallback),
           }
           shiftCounts[fallback.name] = (shiftCounts[fallback.name] || 0) + 1
         } else if (isPTEmp(emp)) schedule[emp.name][date] = '休'
@@ -341,7 +341,7 @@ export function runCrossStoreBorrowing(ctx) {
         if (!isLegallyValid(emp, sd, date, fakeSchedule, shiftDefs, weekDates, data)) continue
         // ★ 跨店借調也必須符合「該日」目標店 OH（防止源頭 shiftDef 跨日 union 漏網）
         if (!isShiftWithinOH(sd, date, data?.storeSettings)) continue
-        const shiftHours = getShiftHours(sd) - (sd.break_minutes || 60) / 60
+        const shiftHours = getNetWorkHours(sd)
         const isPT = isPartTime(emp)
         if ((emp._weeklyHours || 0) + shiftHours > (isPT ? 40 : 48)) continue
         if ((emp._monthlyHours || 0) + shiftHours > MONTHLY_OVERTIME_CAP + 160) continue
@@ -571,8 +571,8 @@ export function runFillUnassignedFT(ctx) {
   //        如果該店 shift_definitions 內有 11:00-17:00 (6h) 跟 11:00-20:00 (9h) 並存，
   //        且 start_time 相同 → safe[0] 會撿到 6h 短班 → FT 整月被排成 6h
   const sortBySdFitForFT = (a, b) => {
-    const aNet = getShiftHours(a) - (a.break_minutes || 60) / 60
-    const bNet = getShiftHours(b) - (b.break_minutes || 60) / 60
+    const aNet = getNetWorkHours(a)
+    const bNet = getNetWorkHours(b)
     const aDist = Math.abs(aNet - 8)
     const bDist = Math.abs(bNet - 8)
     if (aDist !== bDist) return aDist - bDist
@@ -641,15 +641,15 @@ export function runFillUnassignedFT(ctx) {
         } else {
           const sd = [...eligible].sort(sortBySdFitForFT)[0]
           schedule[emp.name][date] = sd.name
-          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
+          actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getNetWorkHours(sd) }
           if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} 班別制 → ${sd.name}`)
         }
         continue
       }
       const sd = [...safe].sort(sortBySdFitForFT)[0]
       schedule[emp.name][date] = sd.name
-      actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getShiftHours(sd) - (sd.break_minutes || 60) / 60 }
-      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (net=${(getShiftHours(sd)-(sd.break_minutes||60)/60).toFixed(1)}h)`)
+      actualTimes[`${emp.name}_${date}`] = { start: sd.start_time?.slice(0, 5), end: sd.end_time?.slice(0, 5), hours: getNetWorkHours(sd) }
+      if (date === weekDates[0]) console.log(`[DBG ${date}] Step3b ${emp.name} → ${sd.name} (net=${getNetWorkHours(sd).toFixed(1)}h)`)
     }
   }
 }

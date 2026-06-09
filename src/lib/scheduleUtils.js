@@ -28,6 +28,25 @@ export function getShiftHours(def) {
   return e > s ? e - s : (24 - s + e)
 }
 
+/**
+ * 依班次毛時數推算休息分鐘（公司政策階梯）：
+ *   gross < 5h  → 0 分
+ *   5 ≤ gross < 9h → 30 分
+ *   gross ≥ 9h → 60 分（上限）
+ * 不讀 break_minutes 欄位 — 班別表的舊資料一律以本公式為準。
+ */
+export function getRestMinutes(grossHours) {
+  if (grossHours < 5) return 0
+  if (grossHours < 9) return 30
+  return 60
+}
+
+/** 班次淨工時（毛時數扣自動算出的休息），取代 `getShiftHours(def) - (def.break_minutes||60)/60` */
+export function getNetWorkHours(def) {
+  const gross = getShiftHours(def)
+  return gross - getRestMinutes(gross) / 60
+}
+
 /** Get the effective end hour (adds 24 for midnight-crossing shifts) */
 export function effectiveEndHour(def) {
   const s = parseTime(def.start_time)

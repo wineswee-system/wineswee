@@ -163,6 +163,19 @@ export default function Leave() {
     if (form.unit === 'hour') requiredKeys.push('start_time', 'end_time')
     if (!validateRequired(form, requiredKeys, setErrors)) return
 
+    // 解析假別 policy（之前漏宣告 → selectedPolicy.shortName 永遠 undefined，
+    // 導致 leave_requests.type 存到 code 而不是中文 shortName）
+    const selectedPolicy = getLeaveTypeInfo(form.type)
+
+    // 補休不准直接編輯（要先撤回再重新申請；對齊 LIFF）
+    if (editingId) {
+      const existingLeave = leaves.find(l => l.id === editingId)
+      if (existingLeave?.type === '補休' || form.type === 'comp_time') {
+        setValidationMsg('補休請假不能直接編輯，請先撤回再重新申請')
+        return
+      }
+    }
+
     // 取此假別此員工的 step 設定（先看員工所屬店覆寫，沒有則全公司預設，再沒有用 leavePolicy.js）
     const empForStep = employees.find(em => em.name === form.employee)
     const storeKey = empForStep?.store_id || null

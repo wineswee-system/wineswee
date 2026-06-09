@@ -36,6 +36,7 @@ export default function CompTimeBalance() {
         .from('comp_time_ledger')
         .select('*, overtime_requests(reason)')
         .eq('status', 'active')
+        .eq('organization_id', orgId)
         .gt('hours', 0)
         .order('expires_at', { ascending: true }),
       supabase.from('departments').select('id, name').eq('organization_id', orgId),

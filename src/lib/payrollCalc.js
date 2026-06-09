@@ -213,16 +213,24 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       : Math.round(baseForInsure / 30 / 8 * 100) / 100  // 四捨五入到小數第 2 位
 
     const calcOtPay = (bucket) => {
+      // 平日：FT/PT 一樣
       const weekday = bucket.weekday <= 2
         ? Math.ceil(bucket.weekday * hourlyRate * 1.34)
         : Math.ceil(2 * hourlyRate * 1.34 + (bucket.weekday - 2) * hourlyRate * 1.67)
+      // 休息日：FT/PT 一樣，階梯 1.34/1.67/2.67
       const rd1 = Math.min(bucket.restday, 2)
       const rd2 = Math.min(Math.max(bucket.restday - 2, 0), 6)
       const rd3 = Math.max(bucket.restday - 8, 0)
       const restday = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
-      // 例假日加班：×2（emergency-only 工作，倍率跟國定假日一樣）
+      // 例假：FT/PT 都 ×2 全程
       const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
-      const holiday = Math.ceil(bucket.holiday * hourlyRate * 2)
+      // 國定假日：FT 用平日倍率（月薪已含此日工資）/ PT 用 ×2
+      const ho = bucket.holiday || 0
+      const holiday = isHourly
+        ? Math.ceil(ho * hourlyRate * 2)
+        : (ho <= 2
+            ? Math.ceil(ho * hourlyRate * 1.34)
+            : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
         total: weekday + restday + weeklyOff + holiday,

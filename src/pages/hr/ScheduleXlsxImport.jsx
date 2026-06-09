@@ -5,13 +5,19 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { formatShiftLabel } from '../../lib/scheduleUtils'
+import { logger } from '../../lib/logger'
 
 // ── 假別標籤 → schedules.absence_type（與 ABSENCE_CONFIG 對齊）────
 const ABSENCE_MAP = {
-  // 排班表印出的完整標籤
+  // 完整標籤（XLSX 常見格式）
   '例假日':     '例假',   // 勞基法 §36 強制例假
   '休息日':     '休息',   // 勞基法 §36 休息日（可加班）
+  // 短格式（不帶「日」的縮寫）
+  '例假':       '例假',
+  '休息':       '休息',
+  // 國定
   '國定假日':   '國定假', // 國定假日（獨立類型，非 §36）
+  // 病/事/特休
   '病假':       '病',
   '特休':       '特休',
   '特休假':     '特休',
@@ -34,22 +40,54 @@ const ABSENCE_MAP = {
 }
 const OFF_LABELS = new Set(Object.keys(ABSENCE_MAP))
 
+// ── 店名前綴辨識 ──────────────────────────────────────────
+// 命名班別尾端的班型關鍵字：早/中/晚/大夜/小夜/日/夜/凌晨，後接可選「班」與數字
+const SHIFT_SUFFIX_RE = /(早|中|晚|大夜|小夜|日|夜|凌晨)(班)?(\s*\d+)?$/
+// 純 CJK 統一表意字元（U+4E00–U+9FFF 主區 + U+3400–U+4DBF 擴充A）
+// 不含全形 ASCII（Ａ-Ｚ、０-９），避免全形字母的班別代碼前綴被誤判為店名
+const CJK_RE = /^[一-鿿㐀-䶿]+$/
+
+// 解析命名班別，抽出店名前綴
+// "文心晚班 2" → { shift: "晚班 2", store: "文心" }
+// "微風早"     → { shift: "早",     store: "微風" }
+// "大夜班"     → { shift: "大夜班", store: null }   ← 無前綴
+// "AU-正晚班"  → { shift: "AU-正晚班", store: null } ← 前綴含 ASCII，不視為店名
+function parseNamedShift(raw) {
+  const m = raw.match(SHIFT_SUFFIX_RE)
+  if (!m || m.index === 0) return { shift: raw, store: null }
+  const prefix = raw.slice(0, m.index).trim()
+  // 店名至少 2 個 CJK 字元，避免單字（如 "豐"）被誤判
+  if (prefix.length < 2 || !CJK_RE.test(prefix)) return { shift: raw, store: null }
+  return { shift: raw.slice(m.index).trim(), store: prefix }
+}
+
 // ── 班別代碼正規化 ─────────────────────────────────────────
-// 把 XLSX 的班別代碼轉成系統標準 HH:MM~HH:MM 格式
-// 例: "AU-正11-20" → "11:00~20:00"、"AX-正1300-2200" → "13:00~22:00"
-// 無法辨識時間範圍的命名班別（文心晚班、微風早）原樣保留
-function normalizeShift(raw) {
-  if (!raw) return raw
-  // 已是標準格式（或可直接正規化的時段）
+// normalizeShiftFull — 單一轉換路徑，回傳 { shift, store }
+// 所有呼叫端透過此函式取值，確保 shift 與 store 永遠一致
+// "AU-正11-20" → { shift: "11:00~20:00", store: null }
+// "文心晚班 2" → { shift: "晚班 2",       store: "文心" }
+// "大夜班"     → { shift: "大夜班",        store: null }
+function normalizeShiftFull(raw) {
+  if (!raw) return { shift: raw, store: null }
   const direct = formatShiftLabel(raw)
-  if (direct !== raw) return direct
-  // 從複合代碼尾端抽出時段，例: "區-區早11-20" → 抽 "11-20" → "11:00~20:00"
+  if (direct !== raw) return { shift: direct, store: null }
   const m = raw.match(/(\d{2,4}[-~]\d{2,4})$/)
   if (m) {
     const normalized = formatShiftLabel(m[1])
-    if (normalized !== m[1]) return normalized
+    if (normalized !== m[1]) {
+      // 確認抽出的小時值合理（0–23），防止非時間數字被誤判為時段
+      const hm = normalized.match(/^(\d{2}):\d{2}~(\d{2}):\d{2}$/)
+      if (hm && parseInt(hm[1]) <= 23 && parseInt(hm[2]) <= 23) {
+        return { shift: normalized, store: null }
+      }
+    }
   }
-  return raw
+  return parseNamedShift(raw)
+}
+
+// 僅需班別字串時的便利包裝（多行合併、純班別比對等場合）
+function normalizeShift(raw) {
+  return normalizeShiftFull(raw).shift
 }
 
 // ── 員工姓名正規化 ─────────────────────────────────────────
@@ -108,25 +146,28 @@ function parseScheduleXlsx(buffer) {
 
       let shift        = null
       let absence_type = null
+      let store        = null  // 店名前綴（顯示用，不寫入 DB）
 
       const offType = ABSENCE_MAP[firstLine]
       if (offType) {
         absence_type = offType
         if (lines.length > 1 && !OFF_LABELS.has(lines[1])) {
-          // 第二行是班別代碼（假日加班）→ 正規化班別
-          shift = normalizeShift(lines[1])
+          // 第二行是班別代碼（假日加班）→ 正規化班別，並嘗試抽店名
+          ;({ shift, store } = normalizeShiftFull(lines[1]))
         } else {
           // 純假日/休息 → shift 與 absence_type 一致
           shift = offType
         }
       } else if (lines.length > 1) {
-        // 兩段時間 → 各自正規化再合併（例：11:00~15:00 / 15:30~18:00）
-        shift = lines.map(normalizeShift).join(' / ')
+        // 兩段時間 → 各自正規化再合併；取第一個找到的店名
+        const parts = lines.map(normalizeShiftFull)
+        shift = parts.map(p => p.shift).join(' / ')
+        store = parts.find(p => p.store)?.store || null
       } else {
-        shift = normalizeShift(firstLine)
+        ;({ shift, store } = normalizeShiftFull(firstLine))
       }
 
-      records.push({ employee: name, employee_no: empNo, date, shift, absence_type: absence_type || null, month_group: date.slice(0, 7) })
+      records.push({ employee: name, employee_no: empNo, date, shift, absence_type: absence_type || null, month_group: date.slice(0, 7), store })
       empRecordCount++
     }
 
@@ -177,8 +218,9 @@ function EmpRow({ emp, dbMatched, resigned, records }) {
             }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {records.map((r, i) => {
-                  const isOff = OFF_LABELS.has(r.shift)
-                  const isOT  = r.absence_type && !isOff
+                  // 純假日/休息：shift === absence_type（無實際班次）
+                  const isOff = !!(r.absence_type && r.shift === r.absence_type)
+                  const isOT  = !!(r.absence_type && r.shift !== r.absence_type)
                   return (
                     <div key={i} title={r.date} style={{
                       fontSize: 11, padding: '3px 7px', borderRadius: 6,
@@ -187,6 +229,7 @@ function EmpRow({ emp, dbMatched, resigned, records }) {
                       border: '1px solid var(--border-subtle)',
                     }}>
                       <span style={{ opacity: 0.65 }}>{r.date.slice(5)}</span>{' '}{r.shift}
+                      {r.store && <span style={{ opacity: 0.45, marginLeft: 3, fontSize: 10 }}>[{r.store}]</span>}
                       {isOT && <span style={{ opacity: 0.6, marginLeft: 3 }}>({r.absence_type})</span>}
                     </div>
                   )
@@ -301,12 +344,12 @@ export default function ScheduleXlsxImport() {
         const chunk = rows.slice(i, i + CHUNK)
         if (dupMode === 'overwrite') {
           const { error } = await supabase.from('schedules').upsert(chunk, { onConflict: 'employee,date' })
-          if (error) { errored += chunk.length; console.error(error) }
+          if (error) { errored += chunk.length; logger.error('schedule upsert failed', { error, chunkSize: chunk.length }) }
           else inserted += chunk.length
         } else {
           const { error } = await supabase.from('schedules').insert(chunk)
           if (error?.code === '23505') { /* skipped */ }
-          else if (error) { errored += chunk.length; console.error(error) }
+          else if (error) { errored += chunk.length; logger.error('schedule insert failed', { error, chunkSize: chunk.length }) }
           else inserted += chunk.length
         }
       }
@@ -324,10 +367,11 @@ export default function ScheduleXlsxImport() {
   }
 
   // 衍生統計（三類互斥：一般班次 + 假日加班 + 例休/假日 = matchedRecs）
+  // 判斷依據：純假日的 shift === absence_type；假日加班的 shift 是實際時段（≠ absence_type）
   const matchedRecs    = enriched.filter(r => r.dbEmp)
-  const offRecs        = matchedRecs.filter(r => OFF_LABELS.has(r.shift))
-  const holidayOTRecs  = matchedRecs.filter(r => !OFF_LABELS.has(r.shift) && r.absence_type)
-  const pureWorkRecs   = matchedRecs.filter(r => !OFF_LABELS.has(r.shift) && !r.absence_type)
+  const offRecs        = matchedRecs.filter(r => r.absence_type && r.shift === r.absence_type)
+  const holidayOTRecs  = matchedRecs.filter(r => r.absence_type && r.shift !== r.absence_type)
+  const pureWorkRecs   = matchedRecs.filter(r => !r.absence_type)
 
   return (
     <div style={{ padding: 28, maxWidth: 1100 }}>

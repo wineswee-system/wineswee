@@ -1,5 +1,6 @@
-﻿import { useState, useEffect } from 'react'
-import { Sparkles, Shield, Save, Code } from 'lucide-react'
+﻿import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Sparkles, Shield, Save, Code, Wand2, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
@@ -20,6 +21,7 @@ import CoverShiftModal from './components/CoverShiftModal'
 import CompOffModal from './components/CompOffModal'
 import ScheduleCalendarEvents from './components/ScheduleCalendarEvents'
 import AiDraftReviewPanel from './components/AiDraftReviewPanel'
+import CreateScheduleWizard from './components/CreateScheduleWizard'
 import { notifySchedulePublished, notifyCoverInvitationFromWeb } from '../../lib/lineNotify'
 import { exportScheduleCalendarPdf } from '../../lib/exportPdf'
 import { validateShiftChange } from '../../lib/scheduleValidator'
@@ -46,6 +48,7 @@ function buildShiftTypes(dbShifts) {
 
 export default function Schedule() {
 
+  const navigate = useNavigate()
   const { role: authRole, profile: authProfile } = useAuth()
   const userRole = authRole?.name || 'store_staff'
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
@@ -98,6 +101,11 @@ export default function Schedule() {
   // AI Draft workflow
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
+  // Schedule Wizard
+  const [showWizard, setShowWizard] = useState(false)
+  const [wizardMode, setWizardMode] = useState('manual')
+  const [showWizardDropdown, setShowWizardDropdown] = useState(false)
+  const wizardDropdownRef = useRef(null)
   // View mode: week or month
   const [viewMode, setViewMode] = useState('month') // 'month' | 'cycle'
   // Cycle view 用的探測日期，null = 跟著 selectedMonth 的 1 號走
@@ -782,6 +790,19 @@ export default function Schedule() {
     if ((await confirm({ message: '確定要捨棄排班草稿嗎？' }))) setAiDraft(null)
   }
 
+  // ── Wizard complete handler ──
+  const handleWizardComplete = ({ mode, store, storeId, month, range, workHourSystem, restDayMap }) => {
+    setShowWizard(false)
+    if (mode === 'manual') {
+      navigate('/hr/schedule-builder', { state: { store, storeId, month, range, workHourSystem, restDayMap } })
+    } else {
+      // Auto mode: pre-fill store/month filters then show toast to trigger AI
+      setStoreFilter(store)
+      setSelectedMonth(month)
+      toast.success(`已設定門市「${store}」和月份「${month}」，請點擊 AI 自動排班`)
+    }
+  }
+
   // ── Helper: merge current schedule 休 into offRequests ──
   const mergeRestDaysAsOffRequests = (schedulingData, dateStart, dateEnd) => {
     const empNames = filtered.map(e => e.name)
@@ -1059,6 +1080,57 @@ export default function Schedule() {
                   ? `⚠️ 排班檢查（${compliance.warnings.length} 提醒）`
                   : '✓ 排班檢查'}
             </button>
+            {/* 排班精靈 split-button */}
+            {canEditSchedule && (
+              <div ref={wizardDropdownRef} style={{ position: 'relative', display: 'inline-flex' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    width: 'auto', padding: '8px 14px', borderRadius: '8px 0 0 8px',
+                    background: 'linear-gradient(135deg, var(--accent-purple), #7c3aed)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                  onClick={() => { setWizardMode('manual'); setShowWizard(true); setShowWizardDropdown(false) }}
+                >
+                  <Wand2 size={14} /> 排班精靈
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    width: 'auto', padding: '8px 8px', borderRadius: '0 8px 8px 0',
+                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                    borderLeft: '1px solid rgba(255,255,255,0.2)',
+                    display: 'flex', alignItems: 'center',
+                  }}
+                  onClick={(e) => { e.stopPropagation(); setShowWizardDropdown(v => !v) }}
+                >
+                  <ChevronDown size={14} />
+                </button>
+                {showWizardDropdown && (
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, zIndex: 500, marginTop: 4,
+                    background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+                    borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', minWidth: 150, overflow: 'hidden',
+                  }} onClick={() => setShowWizardDropdown(false)}>
+                    <button onClick={() => { setWizardMode('manual'); setShowWizard(true) }} style={{
+                      width: '100%', padding: '11px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                      background: 'transparent', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      📋 手動建立
+                    </button>
+                    <button onClick={() => { setWizardMode('auto'); setShowWizard(true) }} style={{
+                      width: '100%', padding: '11px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                      background: 'transparent', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      borderTop: '1px solid var(--border-light)',
+                    }}>
+                      ✨ 自動建立
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {canUseAISchedule && (
               <>
                 <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
@@ -1514,6 +1586,20 @@ export default function Schedule() {
       />
 
       {/* 框選提示條：fixed 飄右下角，不參與 flex 佈局避免班表往下跳 */}
+      {/* 排班精靈 wizard */}
+      <CreateScheduleWizard
+        open={showWizard}
+        mode={wizardMode}
+        locations={locations}
+        onClose={() => setShowWizard(false)}
+        onComplete={handleWizardComplete}
+      />
+
+      {/* Close wizard dropdown on outside click */}
+      {showWizardDropdown && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 499 }} onClick={() => setShowWizardDropdown(false)} />
+      )}
+
       {selection && (() => {
         const vStart = activeDates?.[0]
         const vEnd = activeDates?.[activeDates.length - 1]

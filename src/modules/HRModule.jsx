@@ -59,6 +59,7 @@ import ForeignWorkers from '../pages/hr/ForeignWorkers'
 import ClockRules from '../pages/hr/ClockRules'
 import HRImport from '../pages/hr/HRImport'
 import ScheduleXlsxImport from '../pages/hr/ScheduleXlsxImport'
+import ScheduleBuilder from '../pages/hr/ScheduleBuilder'
 
 export default memo(function HRModule() {
   return (
@@ -122,6 +123,7 @@ export default memo(function HRModule() {
       <Route path="clock-rules" element={<ClockRules />} />
       <Route path="import" element={<HRImport />} />
       <Route path="schedule-xlsx-import" element={<ScheduleXlsxImport />} />
+      <Route path="schedule-builder" element={<ScheduleBuilder />} />
     </Routes>
   )
 })

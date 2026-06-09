@@ -36,6 +36,7 @@ export default function Leave() {
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const [leaves, setLeaves] = useState([])
+  const [signedIds, setSignedIds] = useState(new Set())  // 已有人簽過的 leave id（編輯/撤回鎖用）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
@@ -128,7 +129,20 @@ export default function Leave() {
       supabase.from('holidays').select('date'),
     ]).then(([l, e, d, ls, orgRes, hd]) => {
       const emps = e.data || []
-      setLeaves(l.data || [])
+      const leaveList = l.data || []
+      setLeaves(leaveList)
+      // 抓「已有人簽過」的 leave id
+      const ids = leaveList.map(x => x.id).filter(Boolean)
+      if (ids.length) {
+        supabase.from('approval_step_history')
+          .select('request_id')
+          .eq('request_type', 'leave')
+          .not('exited_at', 'is', null)
+          .in('request_id', ids)
+          .then(({ data }) => {
+            setSignedIds(new Set((data || []).map(r => r.request_id)))
+          })
+      }
       setEmployees(emps)
       setDepartments(d.data || [])
       setOrganization(orgRes?.data || null)
@@ -634,25 +648,37 @@ export default function Leave() {
                       {l.status === '待審核' && canApprove('leave_requests', l.id) && (
                         <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
-                      {['待審核','申請中','已拒絕','已駁回','已退回'].includes(l.status) && l.employee === profile?.name && (
-                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                          setEditingId(l.id)
-                          setForm({
-                            employee: l.employee || '',
-                            type: l.type || 'annual',
-                            start_date: l.start_date || '',
-                            end_date: l.end_date || '',
-                            start_time: l.start_time || '09:00',
-                            end_time: l.end_time || '18:00',
-                            unit: l.start_time ? 'hour' : 'day',
-                            hours: l.hours || 0,
-                            days: l.days || 1,
-                            reason: l.reason || '',
-                          })
-                          setShowModal(true)
-                        }}>✏️ {(['已拒絕','已駁回','已退回'].includes(l.status)) ? '編輯重送' : '編輯'}</button>
-                      )}
-                      {l.status === '待審核' && l.employee === profile?.name && (
+                      {(() => {
+                        const isRejected = ['已拒絕','已駁回','已退回'].includes(l.status)
+                        const isPending = ['待審核','申請中'].includes(l.status)
+                        const hasSigned = signedIds.has(l.id)
+                        const canEdit = l.employee === profile?.name && (isRejected || (isPending && !hasSigned))
+                        if (!canEdit) {
+                          if (isPending && hasSigned && l.employee === profile?.name) {
+                            return <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title="已有人簽核，無法編輯">🔒 簽核中</span>
+                          }
+                          return null
+                        }
+                        return (
+                          <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                            setEditingId(l.id)
+                            setForm({
+                              employee: l.employee || '',
+                              type: l.type || 'annual',
+                              start_date: l.start_date || '',
+                              end_date: l.end_date || '',
+                              start_time: l.start_time || '09:00',
+                              end_time: l.end_time || '18:00',
+                              unit: l.start_time ? 'hour' : 'day',
+                              hours: l.hours || 0,
+                              days: l.days || 1,
+                              reason: l.reason || '',
+                            })
+                            setShowModal(true)
+                          }}>✏️ {isRejected ? '編輯重送' : '編輯'}</button>
+                        )
+                      })()}
+                      {l.status === '待審核' && l.employee === profile?.name && !signedIds.has(l.id) && (
                         <AsyncButton className="btn btn-sm btn-secondary"
                           style={{ color: 'var(--accent-red)' }}
                           onClick={async () => {

@@ -43,6 +43,7 @@ export default function Overtime() {
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const [records, setRecords] = useState([])
+  const [signedIds, setSignedIds] = useState(new Set())  // 已有人簽過的 OT request id（編輯/撤回鎖用）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
@@ -103,7 +104,7 @@ export default function Overtime() {
     const orgId = profile?.organization_id
     Promise.all([
       getOvertimeRequests({ month: monthFilter }),
-      supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name), salary_structures(salary_type)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('id, name, overtime_step_hours, organization_id').eq('organization_id', profile?.organization_id ?? -1).order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -125,6 +126,22 @@ export default function Overtime() {
       setLoading(false)
     })
   }, [monthFilter, profile?.organization_id])
+
+  // 抓「已有人簽過」的 OT id（approval_step_history.exited_at IS NOT NULL = 完成那關）
+  // 用來鎖編輯/撤回：status 還是 待審核 但已經有人簽 → 不准改
+  useEffect(() => {
+    if (!records.length) { setSignedIds(new Set()); return }
+    const ids = records.map(r => r.id).filter(Boolean)
+    if (!ids.length) return
+    supabase.from('approval_step_history')
+      .select('request_id')
+      .eq('request_type', 'overtime')
+      .not('exited_at', 'is', null)
+      .in('request_id', ids)
+      .then(({ data }) => {
+        setSignedIds(new Set((data || []).map(r => r.request_id)))
+      })
+  }, [records])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -473,13 +490,26 @@ export default function Overtime() {
                       {o.status === '待審核' && canApprove('overtime_requests', o.id) && (
                         <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細簽核</span>
                       )}
-                      {['待審核','申請中','已拒絕','已駁回','已退回'].includes(o.status) && o.employee === profile?.name && (
-                        <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
-                          setEditingId(o.id)
-                          setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
-                          setShowModal(true)
-                        }}>✏️ {(['已拒絕','已駁回','已退回'].includes(o.status)) ? '編輯重送' : '編輯'}</button>
-                      )}
+                      {/* 編輯規則：rejected 系列永遠可編輯重送；待審核/申請中 必須沒人簽過 */}
+                      {(() => {
+                        const isRejected = ['已拒絕','已駁回','已退回'].includes(o.status)
+                        const isPending = ['待審核','申請中'].includes(o.status)
+                        const hasSigned = signedIds.has(o.id)
+                        const canEdit = o.employee === profile?.name && (isRejected || (isPending && !hasSigned))
+                        if (!canEdit) {
+                          if (isPending && hasSigned && o.employee === profile?.name) {
+                            return <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title="已有人簽核，無法編輯">🔒 簽核中</span>
+                          }
+                          return null
+                        }
+                        return (
+                          <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                            setEditingId(o.id)
+                            setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
+                            setShowModal(true)
+                          }}>✏️ {isRejected ? '編輯重送' : '編輯'}</button>
+                        )
+                      })()}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(o)}>
                         <Printer size={11} />
@@ -619,35 +649,66 @@ export default function Overtime() {
               </>
             )
           })()}
-          <Field label="加班結算方式" required>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {[
-                { v: 'pay',       label: '💰 加班費',   hint: '當月薪資領取' },
-                { v: 'comp_time', label: '🕐 補休',     hint: '同時數補休（1 年內有效，未用自動換加班費）' },
-              ].map(opt => {
-                const selected = (form.ot_type || 'pay') === opt.v
-                return (
-                  <label key={opt.v} style={{
-                    flex: '1 1 200px', cursor: 'pointer',
-                    padding: '10px 14px', borderRadius: 8,
-                    background: selected ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
-                    border: `2px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
-                    transition: 'all 0.15s',
+          {(() => {
+            // FT 例假偵測：選的員工是 monthly 且日期 DOW=0（週日）→ 強制 ×2 + 自動補休，沒得選
+            const selEmp = employees.find(e => e.name === form.employee)
+            const empSalaryType = selEmp?.salary_structures?.[0]?.salary_type
+              || selEmp?.salary_structures?.salary_type
+              || 'monthly'
+            const isFT = empSalaryType === 'monthly'
+            const dowZero = form.date && new Date(form.date + 'T00:00:00').getDay() === 0
+            const isFTWeeklyOff = isFT && dowZero
+            // 強制設 pay（避免員工已選 comp_time）
+            if (isFTWeeklyOff && (form.ot_type || 'pay') !== 'pay') {
+              setTimeout(() => set('ot_type', 'pay'), 0)
+            }
+            return (
+              <Field label="加班結算方式" required>
+                {isFTWeeklyOff ? (
+                  <div style={{
+                    padding: '12px 16px', borderRadius: 10,
+                    background: 'var(--accent-orange-dim)', border: '1px solid var(--accent-orange)',
+                    color: 'var(--accent-orange)', fontSize: 13, fontWeight: 600, lineHeight: 1.5,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input type="radio" name="ot_type" value={opt.v} checked={selected}
-                        onChange={() => set('ot_type', opt.v)} style={{ accentColor: 'var(--accent-cyan)' }} />
-                      <span style={{ fontWeight: 600, fontSize: 14, color: selected ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{opt.label}</span>
+                    🔒 正職員工例假上班 → 自動「加班費 ×2 + 補休（時數同 OT）」
+                    <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4, color: 'var(--text-secondary)' }}>
+                      系統強制套用，無法選擇純補休
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{opt.hint}</div>
-                  </label>
-                )
-              })}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              💡 補休送出後不能改成加班費；補休沒用完到期前一個月會提醒，過期自動兌現
-            </div>
-          </Field>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {[
+                        { v: 'pay',       label: '💰 加班費',   hint: '當月薪資領取' },
+                        { v: 'comp_time', label: '🕐 補休',     hint: '同時數補休（1 年內有效，未用自動換加班費）' },
+                      ].map(opt => {
+                        const selected = (form.ot_type || 'pay') === opt.v
+                        return (
+                          <label key={opt.v} style={{
+                            flex: '1 1 200px', cursor: 'pointer',
+                            padding: '10px 14px', borderRadius: 8,
+                            background: selected ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                            border: `2px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                            transition: 'all 0.15s',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <input type="radio" name="ot_type" value={opt.v} checked={selected}
+                                onChange={() => set('ot_type', opt.v)} style={{ accentColor: 'var(--accent-cyan)' }} />
+                              <span style={{ fontWeight: 600, fontSize: 14, color: selected ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{opt.label}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{opt.hint}</div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                      💡 補休送出後不能改成加班費；補休沒用完到期前一個月會提醒，過期自動兌現
+                    </div>
+                  </>
+                )}
+              </Field>
+            )
+          })()}
           <Field label="原因" required error={errors.reason} errorMsg="請填寫加班原因">
             <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>

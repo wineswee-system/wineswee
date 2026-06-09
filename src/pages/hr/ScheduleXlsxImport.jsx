@@ -287,7 +287,9 @@ export default function ScheduleXlsxImport() {
   const [shiftCatalog,    setShiftCatalog]  = useState([])
   const [defImporting,    setDefImporting]  = useState(false)
   const [defImportResult, setDefResult]     = useState(null)
-  const fileRef = useRef(null)
+  const [catalogDragging, setCatalogDrag]  = useState(false)
+  const fileRef    = useRef(null)
+  const catalogRef = useRef(null)
 
   // 含離職員工 — 匯入歷史排班仍需對應到已離職者的 employee_id
   useEffect(() => {

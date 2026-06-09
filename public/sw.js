@@ -10,7 +10,7 @@
 
 // ★ 每次 build chunk 換 hash 時 bump 這個版本號，會自動清掉舊快取
 //    避免「舊 index.html 引用的舊 chunk 找不到」造成 App crash
-const CACHE_VERSION = 'sme-ops-v3'
+const CACHE_VERSION = 'sme-ops-v4'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
 const API_CACHE = `${CACHE_VERSION}-api`
 const OFFLINE_QUEUE = 'sme-ops-offline-queue'

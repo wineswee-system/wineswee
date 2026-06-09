@@ -99,6 +99,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   // `${storeId}|${empName}|${type}` → boolean
   const [showPicker, setShowPicker] = useState({})
   const [isSaving, setIsSaving]     = useState(false)
+  const [activeStoreTab, setActiveStoreTab] = useState(null)
 
   useEffect(() => {
     if (open) {
@@ -113,6 +114,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setEmpRestMap({})
       setShowPicker({})
       setIsSaving(false)
+      setActiveStoreTab(null)
     }
   }, [open])
 
@@ -424,7 +426,13 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         )}
 
         {/* ── Step 2: 員工設定 ── */}
-        {step === 2 && (
+        {step === 2 && (() => {
+          const tabStoreId = (activeStoreTab && selectedStoreIds.has(activeStoreTab))
+            ? activeStoreTab
+            : selectedStores[0]?.id || null
+          const tabStore = selectedStores.find(s => s.id === tabStoreId)
+
+          return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>👥 員工假別設定</div>
@@ -433,7 +441,41 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               </div>
             </div>
 
-            {selectedStores.map(store => {
+            {/* Store tabs */}
+            {selectedStores.length > 1 && (
+              <div style={{
+                display: 'flex', gap: 0, borderBottom: '2px solid var(--border-light)',
+                overflowX: 'auto',
+              }}>
+                {selectedStores.map(store => {
+                  const isActive = store.id === tabStoreId
+                  const empCount = storeEmployees[store.id]?.length
+                  return (
+                    <button key={store.id} onClick={() => setActiveStoreTab(store.id)} style={{
+                      padding: '8px 18px', fontSize: 13, fontWeight: isActive ? 700 : 500,
+                      color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                      marginBottom: -2, whiteSpace: 'nowrap', transition: 'color 0.15s',
+                    }}>
+                      {store.name}
+                      {empCount != null && (
+                        <span style={{
+                          marginLeft: 6, fontSize: 10, fontWeight: 600,
+                          padding: '1px 6px', borderRadius: 10,
+                          background: isActive ? 'rgba(34,211,238,0.12)' : 'var(--bg-secondary)',
+                          color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                        }}>{empCount}</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Active store panel */}
+            {tabStore && (() => {
+              const store      = tabStore
               const emps       = storeEmployees[store.id] || []
               const isLoading  = loadingSet.has(store.id)
               const rangeStart = storeStartOverrides[store.id] || selectedPeriod?.start || ''
@@ -491,7 +533,6 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
 
                                 return (
                                   <td key={type} style={{ padding: '10px 10px', borderBottom: '1px solid var(--border-light)', verticalAlign: 'top' }}>
-                                    {/* Added date chips */}
                                     {dates.map(date => (
                                       <DateChip
                                         key={date}
@@ -501,7 +542,6 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                                       />
                                     ))}
 
-                                    {/* Inline date picker */}
                                     {isPicking ? (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <input
@@ -509,14 +549,16 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                                           autoFocus
                                           min={rangeStart}
                                           max={rangeEnd}
+                                          defaultValue={rangeStart}
                                           style={{
                                             padding: '4px 6px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                                             border: `1px solid ${typeColor}`,
                                             background: 'var(--bg-card)', color: 'var(--text-primary)', width: 130,
                                           }}
                                           onChange={e => {
-                                            if (e.target.value) {
-                                              addDate(store.id, emp.name, type, e.target.value)
+                                            const v = e.target.value
+                                            if (v && v >= rangeStart && v <= rangeEnd) {
+                                              addDate(store.id, emp.name, type, v)
                                               closePicker(store.id, emp.name, type)
                                             }
                                           }}
@@ -546,14 +588,15 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                   )}
                 </div>
               )
-            })}
+            })()}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" style={{ padding: '10px 20px' }} onClick={() => setStep(1)}>← 上一步</button>
               <button className="btn btn-primary" style={{ padding: '10px 28px' }} onClick={() => setStep(3)}>下一步 →</button>
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ── Step 3: 完成 ── */}
         {step === 3 && (

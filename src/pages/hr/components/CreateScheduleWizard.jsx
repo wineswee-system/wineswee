@@ -88,6 +88,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   const [selectedStoreIds, setSelectedStoreIds] = useState(new Set())
   const [storeEmployees, setStoreEmployees]     = useState({})
   const [storeLastDates, setStoreLastDates]     = useState({})
+  const [storeSettingsMap, setStoreSettingsMap] = useState({}) // storeId → store_settings row
   const [loadingSet, setLoadingSet]             = useState(new Set())
 
   const [selectedPeriodIdx, setSelectedPeriodIdx]       = useState(0)
@@ -105,6 +106,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setSelectedStoreIds(new Set())
       setStoreEmployees({})
       setStoreLastDates({})
+      setStoreSettingsMap({})
       setLoadingSet(new Set())
       setSelectedPeriodIdx(0)
       setStoreStartOverrides({})
@@ -113,6 +115,18 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setIsSaving(false)
     }
   }, [open])
+
+  // Eagerly fetch store_settings for all locations when wizard opens
+  // (work_hour_system + variable_period_start live here, not in the stores table)
+  useEffect(() => {
+    if (!open || !locations.length) return
+    Promise.all(
+      locations.map(loc =>
+        supabase.from('store_settings').select('*').eq('store_id', loc.id).maybeSingle()
+          .then(({ data }) => [loc.id, data || {}])
+      )
+    ).then(results => setStoreSettingsMap(Object.fromEntries(results)))
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const toFetch = Array.from(selectedStoreIds).filter(id => !storeEmployees[id] && !loadingSet.has(id))
@@ -143,10 +157,16 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
 
   useEffect(() => { setStoreStartOverrides({}) }, [selectedPeriodIdx])
 
-  const selectedStores = locations.filter(l => selectedStoreIds.has(l.id))
-  const primaryStore   = selectedStores[0]
-  const periods        = primaryStore ? getNextTwoPeriods(primaryStore.work_hour_system, primaryStore.variable_period_start) : []
-  const selectedPeriod = periods[selectedPeriodIdx] || null
+  const selectedStores   = locations.filter(l => selectedStoreIds.has(l.id))
+  const primaryStore     = selectedStores[0]
+  const primarySettings  = primaryStore ? (storeSettingsMap[primaryStore.id] || {}) : {}
+  const periods          = primaryStore
+    ? getNextTwoPeriods(primarySettings.work_hour_system, primarySettings.variable_period_start)
+    : []
+  const selectedPeriod   = periods[selectedPeriodIdx] || null
+
+  // Helper: get real work_hour_system for a store (from store_settings, not stores table)
+  const getWhs = (storeId) => storeSettingsMap[storeId]?.work_hour_system || null
 
   const toggleStore = (id) => {
     setSelectedStoreIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -205,7 +225,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         mode: actionMode,
         stores: selectedStores.map(s => ({
           store: s.name, storeId: s.id,
-          workHourSystem: s.work_hour_system || '標準工時',
+          workHourSystem: getWhs(s.id) || '標準工時',
           employees: storeEmployees[s.id] || [],
         })),
         period: selectedPeriod,
@@ -290,7 +310,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                         color: '#fff', fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
                       }}>{checked && '✓'}</div>
                       <span style={{ fontWeight: 600, color: 'var(--text-primary)', flex: 1, fontSize: 14 }}>{loc.name}</span>
-                      <WhsTag whs={loc.work_hour_system} />
+                      <WhsTag whs={getWhs(loc.id)} />
                     </div>
                   )
                 })}
@@ -301,7 +321,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               <div>
                 <label style={labelStyle}>
                   選擇排班期間
-                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {primaryStore?.work_hour_system || '標準工時'} 自動計算下兩期</span>
+                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {primarySettinggetWhs(s.id) || '標準工時'} 自動計算下兩期</span>
                 </label>
                 {periods.length === 0 ? (
                   <div style={warnBox}>⚠ 此門市尚未設定工時制度或週期基準日，請先到門市設定完善資料</div>
@@ -336,7 +356,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                     })}
                   </div>
                 )}
-                {selectedStores.length > 1 && new Set(selectedStores.map(s => s.work_hour_system)).size > 1 && (
+                {selectedStores.length > 1 && new Set(selectedStores.map(s => getWhs(s.id))).size > 1 && (
                   <div style={{ ...warnBox, marginTop: 8 }}>⚠ 已選門市的工時制度不同，期間依「{primaryStore?.name}」計算</div>
                 )}
               </div>
@@ -356,7 +376,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                       <div key={store.id} style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: 14, border: '1px solid var(--border-light)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>🏪 {store.name}</span>
-                          <WhsTag whs={store.work_hour_system} />
+                          <WhsTag whs={getWhs(store.id)} />
                           <GapChip gap={gap} loading={isLoading} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -426,7 +446,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                     background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-light)',
                   }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>🏪 {store.name}</span>
-                    <WhsTag whs={store.work_hour_system} />
+                    <WhsTag whs={getWhs(store.id)} />
                     {rangeStart && (
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>{rangeStart} ~ {rangeEnd}</span>
                     )}
@@ -566,7 +586,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               })}
               <SummaryRow label="工時制度">
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {[...new Set(selectedStores.map(s => s.work_hour_system || '標準工時'))].map(whs => (
+                  {[...new Set(selectedStores.map(s => getWhs(s.id) || '標準工時'))].map(whs => (
                     <WhsTag key={whs} whs={whs} />
                   ))}
                 </div>

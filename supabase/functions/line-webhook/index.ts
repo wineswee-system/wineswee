@@ -360,10 +360,14 @@ serve(async (req) => {
         if (!reason) {
           resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
         } else {
-          // off_request 走獨立 RPC liff_approve_off_request，其他走通用 liff_approve_request
+          // off_request → liff_approve_off_request；goods_transfer → liff_approve_transfer；其他 → liff_approve_request
           let data: any, error: any;
           if (pending.request_type === "off_request") {
             ({ data, error } = await db.rpc("liff_approve_off_request", {
+              p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          } else if (pending.request_type === "goods_transfer") {
+            ({ data, error } = await db.rpc("liff_approve_transfer", {
               p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
             }));
           } else {

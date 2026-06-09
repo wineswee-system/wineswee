@@ -20,7 +20,7 @@ function txt(s: string) { return { type: "text", text: s }; }
 function parseRequestType(s: string | undefined): ApprovalRequestType | null {
   const valid: ApprovalRequestType[] = [
     "leave", "overtime", "trip", "expense", "expense_request", "expense_settle",
-    "correction", "cover", "off_request", "form_submission",
+    "correction", "cover", "off_request", "form_submission", "goods_transfer",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
 }
@@ -37,10 +37,15 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
 
   const palette = REQUEST_TYPE_COLORS[rt];
 
-  // 呼叫對應 RPC：off_request 走 liff_approve_off_request，其他走 liff_approve_request
+  // 呼叫對應 RPC：off_request 走 liff_approve_off_request、
+  // goods_transfer 走 liff_approve_transfer、其他走 liff_approve_request
   let data: any, error: any;
   if (rt === "off_request") {
     ({ data, error } = await ctx.db.rpc("liff_approve_off_request", {
+      p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  } else if (rt === "goods_transfer") {
+    ({ data, error } = await ctx.db.rpc("liff_approve_transfer", {
       p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
     }));
   } else {
@@ -146,27 +151,32 @@ const handleReject: PostbackHandler = async (params, ctx) => {
     correction: "clock_corrections", cover: "shift_cover_requests",
     off_request: "off_requests",
     form_submission: "form_submissions",
+    goods_transfer: "goods_transfer_requests",
   };
-  const { data: rec } = await ctx.db.from(tableMap[rt]).select("status, employee").eq("id", id).maybeSingle();
+  // 不同類型查不同欄位（goods_transfer 用 applicant_name；其他用 employee）
+  const nameCol = rt === "goods_transfer" ? "applicant_name" : "employee";
+  const { data: rec } = await ctx.db.from(tableMap[rt]).select(`status, ${nameCol}`).eq("id", id).maybeSingle();
   if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
-  // expense_settle 期待狀態是「待核銷」；其他類型是「待審核/申請中」
+  // expense_settle 期待狀態是「待核銷」；goods_transfer 期待「申請審核中」或「驗收審核中」；其他「待審核/申請中」
   const validStatus = rt === "expense_settle"
     ? rec.status === "待核銷"
+    : rt === "goods_transfer"
+    ? (rec.status === "申請審核中" || rec.status === "驗收審核中")
     : (rec.status === "待審核" || rec.status === "申請中");
   if (!validStatus) {
     return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
   }
 
   // 寫 pending action — 下一段使用者打的文字會被當駁回原因
+  const applicantName = (rec as any).applicant_name ?? (rec as any).employee ?? "員工";
   await setPending(ctx, {
     action: "approval_reject_reason",
     request_type: rt,
     request_id: id,
-    title: `${rec.employee ?? "員工"}的${palette.label}`,
+    title: `${applicantName}的${palette.label}`,
   });
 
   // 提示：4 個常用按鈕 (一鍵送) + 自己寫 (跳 LIFF popup) + 取消
-  const applicantName = rec.employee ?? "員工";
   const promptText =
     `❌ 你正在駁回「${applicantName}」的${palette.label}（#${id}）\n\n` +
     `下方選常用原因（一鍵送出）\n` +

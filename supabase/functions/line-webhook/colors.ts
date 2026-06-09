@@ -70,4 +70,5 @@ export const REQUEST_TYPE_COLORS: Record<string, { header: string; subtitle: str
   cover:           { header: COLOR_COVER,       subtitle: TEXT_DIM_ATTENDANCE,  emoji: "🔄", label: "代班邀請"   },
   off_request:     { header: COLOR_OFF_REQUEST, subtitle: TEXT_DIM_OFF_REQUEST, emoji: "🌴", label: "希望休申請" },
   form_submission: { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "📋", label: "自訂表單"   },
+  goods_transfer:  { header: COLOR_WARNING,     subtitle: TEXT_DIM_WARNING,     emoji: "📦", label: "商品調撥"   },
 };

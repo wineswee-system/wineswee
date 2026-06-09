@@ -242,20 +242,37 @@ function buildCorrectionNotification(type: "approved" | "rejected", details: {
 
 // ── 4.5 商品調撥通知 ─────────────────────────────────────────
 function buildGoodsTransferNotification(
-  type: "step_assigned" | "approved" | "rejected" | "receipt_pending",
+  type:
+    | "step_assigned" | "approved" | "rejected" | "receipt_pending"
+    // 加簽 4 種
+    | "extra_assigned" | "extra_approved_back" | "extra_rejected_back" | "extra_cancelled_info",
   details: {
     document_no: string; applicant_name?: string;
     transfer_type_label?: string; from_label?: string; to_label?: string;
     items_count?: number; step_label?: string; stage?: string;
     rejection_reason?: string;
+    // 加簽用
+    extra_step_id?: number; reason?: string; requested_by_name?: string; assignee_name?: string;
+    // 用來組 LIFF URL
+    id?: number;
   }
 ) {
   const palette = {
-    step_assigned:   { color: "#E67E22", icon: "📦", title: "新調撥單待簽核" },
-    approved:        { color: "#27AE60", icon: "✅", title: "調撥單已完成" },
-    rejected:        { color: "#C53030", icon: "❌", title: "調撥單已駁回" },
-    receipt_pending: { color: "#3182CE", icon: "📦", title: "請填驗收實收數量" },
+    step_assigned:        { color: "#E67E22", icon: "📦", title: "新調撥單待簽核" },
+    approved:             { color: "#27AE60", icon: "✅", title: "調撥單已完成" },
+    rejected:             { color: "#C53030", icon: "❌", title: "調撥單已駁回" },
+    receipt_pending:      { color: "#3182CE", icon: "📦", title: "請填驗收實收數量" },
+    extra_assigned:       { color: "#8b5cf6", icon: "✍️", title: "請你加簽商品調撥單" },
+    extra_approved_back:  { color: "#27AE60", icon: "✅", title: "加簽人已簽核，請繼續" },
+    extra_rejected_back:  { color: "#C53030", icon: "❌", title: "加簽人退回此單" },
+    extra_cancelled_info: { color: "#9CA3AF", icon: "🚫", title: "加簽請求已取消" },
   }[type];
+
+  // LIFF URL（給 receipt_pending / step_assigned 開單據詳情用）
+  const liffId = Deno.env.get("LIFF_HR_ID") || Deno.env.get("LIFF_ID") || "";
+  const liffUrl = (details.id && liffId)
+    ? `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/transfer-request?id=${details.id}`)}`
+    : null;
 
   const bodyContents: object[] = [
     row("單號", details.document_no),
@@ -266,6 +283,56 @@ function buildGoodsTransferNotification(
   if (details.items_count) bodyContents.push(row("項數", `${details.items_count} 項商品`));
   if (details.step_label && type === "step_assigned") bodyContents.push(row("關卡", details.step_label));
   if (type === "rejected" && details.rejection_reason) bodyContents.push(row("原因", details.rejection_reason, "#C53030"));
+
+  // 加簽資訊
+  if (type === "extra_assigned") {
+    if (details.requested_by_name) bodyContents.push(row("發起人", details.requested_by_name));
+    if (details.reason) bodyContents.push(row("加簽原因", details.reason));
+  }
+  if (type === "extra_approved_back" && details.assignee_name) {
+    bodyContents.push(row("加簽人", details.assignee_name));
+  }
+  if (type === "extra_rejected_back" && details.rejection_reason) {
+    bodyContents.push(row("退回原因", details.rejection_reason, "#C53030"));
+  }
+
+  // ── 底部按鈕 ──
+  const footerButtons: object[] = [];
+  const sid = details.id;
+  if (type === "step_assigned" && sid) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 核准",
+          data: `action=approve&type=request&rt=goods_transfer&id=${sid}`,
+          displayText: "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 駁回",
+          data: `action=reject&type=request&rt=goods_transfer&id=${sid}`,
+          displayText: "駁回" } },
+    );
+  }
+  if (type === "extra_assigned" && details.extra_step_id) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 同意加簽",
+          data: `action=approve&type=extra&extra_id=${details.extra_step_id}`,
+          displayText: "同意" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=extra&extra_id=${details.extra_step_id}`,
+          displayText: "退回" } },
+    );
+  }
+  if ((type === "receipt_pending" || type === "extra_approved_back") && liffUrl) {
+    footerButtons.push({
+      type: "button", style: "primary", color: palette.color, height: "sm",
+      action: { type: "uri", label: type === "receipt_pending" ? "📝 填驗收" : "✍️ 繼續簽核", uri: liffUrl }
+    });
+  }
+  if (liffUrl && (type === "step_assigned" || type === "rejected" || type === "approved")) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: "📋 看詳情", uri: liffUrl } });
+  }
 
   return {
     type: "flex",
@@ -280,6 +347,9 @@ function buildGoodsTransferNotification(
         type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
         contents: bodyContents,
       },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
     },
   };
 }
@@ -1104,6 +1174,14 @@ serve(async (req) => {
       message = buildGoodsTransferNotification("rejected", details);
     } else if (type === "goods_transfer_receipt_pending") {
       message = buildGoodsTransferNotification("receipt_pending", details);
+    } else if (type === "goods_transfer_extra_assigned") {
+      message = buildGoodsTransferNotification("extra_assigned", details);
+    } else if (type === "goods_transfer_extra_approved_back") {
+      message = buildGoodsTransferNotification("extra_approved_back", details);
+    } else if (type === "goods_transfer_extra_rejected_back") {
+      message = buildGoodsTransferNotification("extra_rejected_back", details);
+    } else if (type === "goods_transfer_extra_cancelled_info") {
+      message = buildGoodsTransferNotification("extra_cancelled_info", details);
     } else if (type === "store_audit_on_duty_assigned") {
       message = buildStoreAuditNotification("on_duty_assigned", details);
     } else if (type === "store_audit_step_assigned") {

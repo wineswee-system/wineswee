@@ -16,7 +16,8 @@ export type ApprovalRequestType =
   | "correction"
   | "cover"
   | "off_request"
-  | "form_submission";
+  | "form_submission"
+  | "goods_transfer";
 
 // ── Pending Action types ────────────────────────────────────────────────────
 

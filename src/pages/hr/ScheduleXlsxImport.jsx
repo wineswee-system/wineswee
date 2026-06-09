@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
-import { formatShiftLabel } from '../../lib/scheduleUtils'
+import { formatShiftLabel, parseWorkRange } from '../../lib/scheduleUtils'
 import { logger } from '../../lib/logger'
 
 // ── 假別標籤 → schedules.absence_type（與 ABSENCE_CONFIG 對齊）────
@@ -177,6 +177,30 @@ function parseScheduleXlsx(buffer) {
   return { meta: { company: companyRaw, dateRange: dateRangeRaw, exportedAt: exportedRaw, year }, empList, records }
 }
 
+// ── 班別定義目錄解析（掃描所有工作表找 班別名稱/工作範圍 標頭）────
+function parseShiftCatalog(wb) {
+  for (const sheetName of wb.SheetNames) {
+    const ws  = wb.Sheets[sheetName]
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+    for (let ri = 0; ri < Math.min(raw.length, 20); ri++) {
+      const row      = raw[ri].map(c => String(c).trim())
+      const nameCol  = row.findIndex(c => c === '班別名稱' || c === '班別')
+      const rangeCol = row.findIndex(c => c === '工作範圍' || c === '工作時間' || c === '工作時段')
+      if (nameCol < 0 || rangeCol < 0) continue
+      const defs = []
+      for (let i = ri + 1; i < raw.length; i++) {
+        const name     = String(raw[i][nameCol]  || '').trim()
+        const rangeRaw = String(raw[i][rangeCol] || '').trim()
+        if (!name) continue
+        const parsed = rangeRaw ? parseWorkRange(rangeRaw) : null
+        defs.push({ name, rangeRaw, ...(parsed || {}) })
+      }
+      if (defs.length > 0) return defs
+    }
+  }
+  return []
+}
+
 // ── 員工列（可展開顯示每日班別）────────────────────────────
 function EmpRow({ emp, dbMatched, resigned, records }) {
   const [open, setOpen] = useState(false)
@@ -256,10 +280,13 @@ export default function ScheduleXlsxImport() {
   const [parsed,        setParsed]      = useState(null)   // { meta, empList, records }
   const [enriched,      setEnriched]    = useState([])     // records + dbEmp
   const [unmatchedEmps, setUnmatched]   = useState([])
-  const [dupMode,       setDupMode]     = useState('overwrite')
-  const [importing,     setImporting]   = useState(false)
-  const [result,        setResult]      = useState(null)
-  const [dragging,      setDragging]    = useState(false)
+  const [dupMode,         setDupMode]       = useState('overwrite')
+  const [importing,       setImporting]     = useState(false)
+  const [result,          setResult]        = useState(null)
+  const [dragging,        setDragging]      = useState(false)
+  const [shiftCatalog,    setShiftCatalog]  = useState([])
+  const [defImporting,    setDefImporting]  = useState(false)
+  const [defImportResult, setDefResult]     = useState(null)
   const fileRef = useRef(null)
 
   // 含離職員工 — 匯入歷史排班仍需對應到已離職者的 employee_id
@@ -304,13 +331,16 @@ export default function ScheduleXlsxImport() {
     if (!file) return
     if (empsLoading) { toast.error('員工資料載入中，請稍候再試'); return }
     if (!file.name.match(/\.xlsx?$/i)) { toast.error('請選擇 .xlsx 或 .xls 檔案'); return }
-    setResult(null); setParsed(null); setEnriched([]); setUnmatched([])
+    setResult(null); setParsed(null); setEnriched([]); setUnmatched([]); setShiftCatalog([]); setDefResult(null)
 
     const buffer = await file.arrayBuffer()
+    const bytes  = new Uint8Array(buffer)
     try {
-      const parsedData = parseScheduleXlsx(new Uint8Array(buffer))
+      const wb         = XLSX.read(bytes, { type: 'array' })
+      const parsedData = parseScheduleXlsx(bytes)
+      const catalog    = parseShiftCatalog(wb)
       setParsed(parsedData)
-      // matchEmployees is triggered by the [dbEmployees, parsed] effect above
+      setShiftCatalog(catalog)
     } catch (err) {
       toast.error('解析失敗：' + err.message)
     }
@@ -363,7 +393,39 @@ export default function ScheduleXlsxImport() {
 
   function reset() {
     setParsed(null); setEnriched([]); setUnmatched([]); setResult(null)
+    setShiftCatalog([]); setDefResult(null)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function handleShiftDefImport() {
+    if (!shiftCatalog.length || !orgId) return
+    setDefImporting(true); setDefResult(null)
+    let inserted = 0, skipped = 0, errored = 0
+
+    for (const def of shiftCatalog) {
+      if (!def.start || !def.end) { skipped++; continue }
+      const { data: existing } = await supabase
+        .from('shift_definitions')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('name', def.name)
+        .maybeSingle()
+      if (existing) { skipped++; continue }
+      const { error } = await supabase.from('shift_definitions').insert({
+        organization_id: orgId,
+        name:            def.name,
+        start_time:      def.start,
+        end_time:        def.end,
+        employee_type:   'all',
+      })
+      if (error) { errored++; logger.error('shift def insert failed', { error, name: def.name }) }
+      else inserted++
+    }
+
+    setDefResult({ inserted, skipped, errored })
+    setDefImporting(false)
+    if (inserted > 0) toast.success(`班別定義匯入：新增 ${inserted} 筆`)
+    else toast.info(`班別定義：${skipped} 筆已存在，略過`)
   }
 
   // 衍生統計（三類互斥：一般班次 + 假日加班 + 例休/假日 = matchedRecs）
@@ -517,6 +579,77 @@ export default function ScheduleXlsxImport() {
                 已寫入 <strong>{result.inserted}</strong> 筆
                 {result.errored > 0 && <> ，<strong style={{ color: 'var(--accent-red)' }}>{result.errored}</strong> 筆失敗</>}
               </span>
+            </div>
+          )}
+
+          {/* 班別定義目錄 */}
+          {shiftCatalog.length > 0 && (
+            <div style={{ marginTop: 24, border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{
+                padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)',
+                background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>班別定義目錄</span>
+                <span style={{
+                  padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                }}>{shiftCatalog.length} 筆</span>
+                <span style={{ flex: 1 }} />
+                {defImportResult && (
+                  <span style={{ fontSize: 12, color: defImportResult.errored > 0 ? 'var(--accent-orange)' : 'var(--accent-green)' }}>
+                    新增 {defImportResult.inserted}・略過 {defImportResult.skipped}
+                    {defImportResult.errored > 0 && `・失敗 ${defImportResult.errored}`}
+                  </span>
+                )}
+                <button
+                  onClick={handleShiftDefImport}
+                  disabled={defImporting}
+                  style={{
+                    padding: '5px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    border: 'none', cursor: 'pointer',
+                    background: 'var(--accent-purple)', color: '#fff',
+                    opacity: defImporting ? 0.6 : 1,
+                  }}
+                >
+                  {defImporting ? '匯入中…' : '匯入班別定義'}
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: 320 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '6px 12px', textAlign: 'left' }}>班別名稱</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'left' }}>工作範圍（原始）</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'center' }}>開始</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'center' }}>結束</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'center' }}>跨日</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'right' }}>毛工時</th>
+                      <th style={{ padding: '6px 12px', textAlign: 'right' }}>淨工時</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shiftCatalog.map((d, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '5px 12px', fontWeight: 600 }}>{d.name}</td>
+                        <td style={{ padding: '5px 12px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.rangeRaw || '—'}</td>
+                        <td style={{ padding: '5px 12px', textAlign: 'center' }}>{d.start || <span style={{ color: 'var(--accent-red)' }}>?</span>}</td>
+                        <td style={{ padding: '5px 12px', textAlign: 'center' }}>{d.end   || <span style={{ color: 'var(--accent-red)' }}>?</span>}</td>
+                        <td style={{ padding: '5px 12px', textAlign: 'center' }}>
+                          {d.crossMidnight
+                            ? <span style={{ color: 'var(--accent-orange)', fontSize: 11 }}>跨日</span>
+                            : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>}
+                        </td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                          {d.grossHours != null ? `${d.grossHours}h` : '—'}
+                        </td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                          {d.netHours != null ? `${d.netHours}h` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

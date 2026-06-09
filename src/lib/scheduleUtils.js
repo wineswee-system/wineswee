@@ -211,6 +211,48 @@ export function parseShiftRange(shift) {
 }
 
 /**
+ * Parse 工作範圍 column from 排班總表 export.
+ * Handles the "N|HH:MM" day-of-month cross-midnight prefix used by some HR exports.
+ *   "12:30~16:30"    → { start: "12:30", end: "16:30", crossMidnight: false, grossHours: 4,   netHours: 3.5 }
+ *   "20:00~03|01:00" → { start: "20:00", end: "01:00", crossMidnight: true,  grossHours: 5,   netHours: 4.5 }
+ *   "20:30~01:30"    → { start: "20:30", end: "01:30", crossMidnight: true,  grossHours: 5,   netHours: 4.5 }
+ * Returns null if unparseable.
+ */
+export function parseWorkRange(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  const parts = raw.trim().split(/[~～]/)
+  if (parts.length !== 2) return null
+  const startStr = parts[0].trim()
+  // "N|HH:MM" — day-of-month prefix marks cross-midnight end
+  const hadDayPrefix = /^\d+\|/.test(parts[1].trim())
+  const endStr = parts[1].trim().replace(/^\d+\|/, '')
+  const normalizeHM = s => {
+    const m1 = s.match(/^(\d{1,2}):(\d{2})$/)
+    if (m1) return `${m1[1].padStart(2, '0')}:${m1[2]}`
+    const m2 = s.match(/^(\d{2})(\d{2})$/)
+    if (m2) return `${m2[1]}:${m2[2]}`
+    const m3 = s.match(/^(\d{1,2})$/)
+    if (m3) return `${s.padStart(2, '0')}:00`
+    return null
+  }
+  const start = normalizeHM(startStr)
+  const end = normalizeHM(endStr)
+  if (!start || !end) return null
+  const startH = parseTime(start)
+  const endH = parseTime(end)
+  const crossMidnight = hadDayPrefix || endH < startH
+  const gross = crossMidnight ? (24 - startH + endH) : (endH - startH)
+  const net = gross - getRestMinutes(gross) / 60
+  return {
+    start,
+    end,
+    crossMidnight,
+    grossHours: Math.round(gross * 100) / 100,
+    netHours:   Math.round(net  * 100) / 100,
+  }
+}
+
+/**
  * Normalize shift display label：把所有時間範圍格式統一成 HH:MM~HH:MM
  *   '1030-1930'   → '10:30~19:30'   (compact no-colon dash)
  *   '10:30-19:30' → '10:30~19:30'   (colon dash)

@@ -13,7 +13,7 @@ import StepEditor from './components/StepEditor'
 const DEFAULT_CATEGORIES = ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
 
 const emptyStep = () => ({
-  title: '', role: '', priority: '中', description: '',
+  title: '', role: '', assignee: '', priority: '中', description: '',
   checklist_id: '', approval_chain_id: '', required_forms: [],
   trigger_template_id: '',
   branch_on_approved: '', branch_on_rejected: '',
@@ -23,6 +23,7 @@ const emptyStep = () => ({
 const normalizeStep = (s) => ({
   title: s.title || '',
   role: s.role || '',
+  assignee: s.assignee || '',
   priority: s.priority || '中',
   description: s.description || '',
   checklist_id: s.checklist_id || '',
@@ -66,6 +67,7 @@ export default function TemplateStudio() {
   const [approvalChains, setApprovalChains] = useState([])
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
   const [otherTemplates, setOtherTemplates] = useState([])  // trigger picker (excludes self)
+  const [departments, setDepartments] = useState([])
 
   // Version history state
   const [versions, setVersions] = useState([])
@@ -75,11 +77,12 @@ export default function TemplateStudio() {
   // ── Load reference data + template (if editing) ──
   useEffect(() => {
     const fetchAll = async () => {
-      const [clRes, acRes, tplsRes, catsRes] = await Promise.allSettled([
+      const [clRes, acRes, tplsRes, catsRes, deptRes] = await Promise.allSettled([
         supabase.from('checklists').select('id, name, items').order('name'),
         supabase.from('approval_chains').select('id, name, approval_chain_steps(count)').order('name'),
         supabase.from('sop_templates').select('id, name').order('name'),
         supabase.from('workflow_categories').select('id, name').eq('scope', 'workflow').order('name'),
+        supabase.from('departments').select('id, name').order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {
@@ -97,6 +100,9 @@ export default function TemplateStudio() {
       }
       if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
         setCategories(catsRes.value.data.map(c => c.name))
+      }
+      if (deptRes.status === 'fulfilled' && deptRes.value.data) {
+        setDepartments(deptRes.value.data)
       }
 
       // Load existing template in edit mode
@@ -203,6 +209,7 @@ export default function TemplateStudio() {
       const cleanSteps = tpl.steps.filter(s => s.title.trim()).map(s => ({
         title: s.title.trim(),
         role: s.role?.trim() || null,
+        assignee: s.assignee?.trim() || null,
         priority: s.priority || '中',
         description: s.description?.trim() || null,
         checklist_id: s.checklist_id || null,
@@ -545,6 +552,7 @@ export default function TemplateStudio() {
                 templates={otherTemplates}
                 steps={steps}
                 stepIndex={selectedStep}
+                departments={departments}
               />
             </>
           ) : (

@@ -48,7 +48,7 @@ function Section({ icon, label, color, children, defaultOpen = false }) {
  *   steps          — Array of all steps (for conditional branch pickers)
  *   stepIndex      — 0-based index of the current step (to exclude self from pickers)
  */
-export default function StepEditor({ step, onChange, checklists = [], approvalChains = [], templates = [], steps = [], stepIndex = -1 }) {
+export default function StepEditor({ step, onChange, checklists = [], approvalChains = [], templates = [], steps = [], stepIndex = -1, departments = [] }) {
   if (!step) {
     return (
       <div style={{
@@ -68,7 +68,7 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
     <div style={{ padding: '20px 28px', overflowY: 'auto', flex: 1 }}>
 
       {/* ── Basic fields ── */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
         <Field label="步驟名稱" required>
           <input
             className="form-input"
@@ -77,19 +77,6 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
             placeholder="例：人事資料建檔"
             value={step.title}
             onChange={e => set('title', e.target.value)}
-          />
-        </Field>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <Field label="負責角色 / 部門">
-          <input
-            className="form-input"
-            type="text"
-            style={{ width: '100%' }}
-            placeholder="例：人資部、督導"
-            value={step.role}
-            onChange={e => set('role', e.target.value)}
           />
         </Field>
         <Field label="優先度">
@@ -102,6 +89,35 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
             <option value="高">高</option>
             <option value="中">中</option>
             <option value="低">低</option>
+          </select>
+        </Field>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <Field label="負責人">
+          <input
+            className="form-input"
+            type="text"
+            style={{ width: '100%' }}
+            placeholder="例：王小明、人資主管"
+            value={step.assignee || ''}
+            onChange={e => set('assignee', e.target.value)}
+          />
+        </Field>
+        <Field label="負責角色 / 部門">
+          <select
+            className="form-input"
+            style={{ width: '100%' }}
+            value={step.role || ''}
+            onChange={e => set('role', e.target.value)}
+          >
+            <option value="">未指定</option>
+            {departments.map(d => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+            {step.role && !departments.some(d => d.name === step.role) && (
+              <option value={step.role}>{step.role}</option>
+            )}
           </select>
         </Field>
       </div>

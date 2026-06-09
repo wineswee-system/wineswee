@@ -223,9 +223,9 @@ export function parseWorkRange(raw) {
   const parts = raw.trim().split(/[~～]/)
   if (parts.length !== 2) return null
   const startStr = parts[0].trim()
-  // "N|HH:MM" — day-of-month prefix marks cross-midnight end
-  const hadDayPrefix = /^\d+\|/.test(parts[1].trim())
-  const endStr = parts[1].trim().replace(/^\d+\|/, '')
+  // "N|HH:MM" or "次日HH:MM" — cross-midnight end markers
+  const hadDayPrefix = /^\d+\|/.test(parts[1].trim()) || /^次日/.test(parts[1].trim())
+  const endStr = parts[1].trim().replace(/^\d+\|/, '').replace(/^次日\s*/, '')
   const normalizeHM = s => {
     const m1 = s.match(/^(\d{1,2}):(\d{2})$/)
     if (m1) return `${m1[1].padStart(2, '0')}:${m1[2]}`
@@ -282,6 +282,12 @@ export function formatShiftLabel(shift) {
       return `${h.padStart(2, '0')}:${m}`
     }
     return `${pad(s)}~${pad(e)}`
+  }
+  // "HH:MM~次日HH:MM" — cross-midnight with 次日 (next-day) marker; strip marker, keep canonical form
+  const nextDayMatch = shift.match(/^(\d{1,2}:\d{2})\s*[-~～]\s*次日\s*(\d{1,2}:\d{2})$/)
+  if (nextDayMatch) {
+    const pad = t => { const [h, m] = t.split(':'); return `${h.padStart(2, '0')}:${m}` }
+    return `${pad(nextDayMatch[1])}~${pad(nextDayMatch[2])}`
   }
   return shift
 }

@@ -940,6 +940,7 @@ export default function Schedule() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* 平日/假日人數 暫時隱藏 — AI 自動排班拿掉後沒有用到
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
               平日
               <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
@@ -949,33 +950,39 @@ export default function Schedule() {
                 value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
               人/天
             </div>
+            */}
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              // 複製：cycle 視角 → 上個 cycle；month 視角 → 上個月
-              // 兩者都用 day-of-week 對應，避免日期不對齊
-              let srcStart, srcEnd, targetDates, targetLabel
-              if (useCycleView) {
-                // 上個 cycle：current cycle start - 1 day 探測
-                const ws = storeSettings?.work_hour_system
-                const anchor = storeSettings?.variable_period_start
-                const probeMs = new Date(cycleInfo.start + 'T00:00:00Z').getTime() - 86400000
-                const prevCycle = getCycleFor(new Date(probeMs).toISOString().slice(0, 10), ws, anchor)
-                if (!prevCycle) { toast.error('找不到上個週期'); return }
-                srcStart = prevCycle.start; srcEnd = prevCycle.end
-                targetDates = cycleDates
-                targetLabel = `Cycle #${cycleInfo.index} (${cycleInfo.start} ~ ${cycleInfo.end})`
-              } else {
-                const prevMonth = new Date(monthYear, monthNum - 2, 1)
-                const prevDates = getMonthDates(prevMonth.getFullYear(), prevMonth.getMonth() + 1)
-                srcStart = prevDates[0]; srcEnd = prevDates[prevDates.length - 1]
-                targetDates = monthDates
-                targetLabel = selectedMonth
+              // 複製上個週期 — 一律走 cycle 邏輯（需要店家有設變形工時 anchor）
+              const ws = storeSettings?.work_hour_system
+              const anchor = storeSettings?.variable_period_start
+              if (!ws || ws === '標準工時' || !anchor) {
+                toast.error('門市沒設定變形工時起算日，無法用週期複製。請到「門市設定」設好再來。')
+                return
               }
+              // 探測：用目前 cycle（cycle view）或當月初（month view）→ 抓對應 cycle
+              const probeAnchor = (useCycleView && cycleInfo) ? cycleInfo.start : monthStart
+              const curCycle = getCycleFor(probeAnchor, ws, anchor)
+              if (!curCycle) { toast.error('找不到目前週期'); return }
+              const prevProbe = new Date(new Date(curCycle.start + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10)
+              const prevCycle = getCycleFor(prevProbe, ws, anchor)
+              if (!prevCycle) { toast.error('找不到上個週期'); return }
+              const srcStart = prevCycle.start
+              const srcEnd = prevCycle.end
+              const targetDates = []
+              {
+                const s = new Date(curCycle.start + 'T00:00:00Z')
+                const e = new Date(curCycle.end + 'T00:00:00Z')
+                for (let d = s; d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+                  targetDates.push(d.toISOString().slice(0, 10))
+                }
+              }
+              const targetLabel = `Cycle #${curCycle.index} (${curCycle.start} ~ ${curCycle.end})`
               const empNames = filtered.map(e => e.name)
               const { data: lastSchedules } = await supabase.from('schedules').select('*')
                 .in('employee', empNames)
                 .gte('date', srcStart).lte('date', srcEnd)
-              if (!lastSchedules?.length) { toast.error(useCycleView ? '上個週期無排班資料' : '上月無排班資料'); return }
-              if (!(await confirm({ message: `將${useCycleView ? '上個週期' : '上月'} ${lastSchedules.length} 筆排班複製到 ${targetLabel}？\n\n會根據星期幾對應，已有的排班會被覆蓋。` }))) return
+              if (!lastSchedules?.length) { toast.error('上個週期無排班資料'); return }
+              if (!(await confirm({ message: `將上個週期 ${lastSchedules.length} 筆排班複製到 ${targetLabel}？\n\n會根據星期幾對應，已有的排班會被覆蓋。` }))) return
               const byEmpDow = {}
               for (const s of lastSchedules) {
                 const dow = new Date(s.date).getDay()
@@ -996,7 +1003,7 @@ export default function Schedule() {
                 toast.success(`已複製 ${newSchedules.length} 筆排班到 ${targetLabel}`)
               }
             }}>
-              📋 {useCycleView ? '複製上個週期' : '複製上月'}
+              📋 複製上個週期
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
@@ -1053,10 +1060,13 @@ export default function Schedule() {
                   onClick={handleCodeSchedule} disabled={autoScheduling}>
                   <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
                 </button>
-                <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
-                  onClick={handleAutoSchedule} disabled={autoScheduling}>
-                  <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
-                </button>
+                {/* AI 自動排班 暫時隱藏（保留功能 + handler，之後想開直接拿掉註解） */}
+                {false && (
+                  <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
+                    onClick={handleAutoSchedule} disabled={autoScheduling}>
+                    <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
+                  </button>
+                )}
               </>
             )}
             {aiDraft && (

@@ -15,6 +15,7 @@ import Chains from '../pages/process/settings/Chains'
 import ExpenseChains from '../pages/process/settings/ExpenseChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import BusinessApplications from '../pages/process/BusinessApplications'
+import TransferRequests from '../pages/process/TransferRequests'
 import StoreAudits from '../pages/workflow/StoreAudits'
 import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
@@ -42,6 +43,7 @@ export default function ProcessModule() {
       <Route path="sop/legacy" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
       <Route path="applications" element={<BusinessApplications />} />
+      <Route path="transfer-requests" element={<TransferRequests />} />
       <Route path="store-audits" element={<StoreAudits />} />
       {/* 業務表單 alias 路由 — 讓頂部 tab 維持「專案流程」 */}
       <Route path="expense-requests" element={<ExpenseRequests />} />

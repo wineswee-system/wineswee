@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wallet, Receipt, FileText, ClipboardList } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -14,6 +14,10 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 const FIXED_EXPENSE = [
   { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷(驗收)兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
   { icon: Receipt, name: '費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷(驗收)）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+]
+
+const FIXED_NON_EXPENSE = [
+  { icon: Package, name: '商品調撥', desc: '總倉 ↔ 門市 / 跨門市調貨 → 申請審核 + 驗收兩階段', action: '/process/transfer-requests', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '兩階段' },
 ]
 
 const COLOR_MAP = {
@@ -70,7 +74,7 @@ export default function BusinessApplications() {
   if (loading) return <LoadingSpinner />
 
   const expenseGroup = [...FIXED_EXPENSE, ...customExpense]
-  const nonExpenseGroup = customNonExpense
+  const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...customNonExpense]
 
   return (
     <div className="fade-in">

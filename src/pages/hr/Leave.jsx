@@ -223,6 +223,18 @@ export default function Leave() {
     const leaveBenefits = await getEffectiveBenefits(emp?.id || null, storeId, 'leave')
     const customPolicy = leaveBenefits[form.type] || null
 
+    // ── 補休：先檢查 ledger 餘額（前端 guard，DB RPC 也會擋）──
+    if (form.type === 'comp_time') {
+      if (!emp?.id) { setValidationMsg('找不到員工資料，無法查補休餘額'); return }
+      const { data: ledgers, error: balErr } = await supabase.rpc('get_comp_time_balance', { p_employee_id: emp.id })
+      if (balErr) { setValidationMsg('查補休餘額失敗：' + balErr.message); return }
+      const totalRemaining = (ledgers || []).reduce((s, l) => s + Number(l.hours_remaining || 0), 0)
+      if (totalRemaining < hours) {
+        setValidationMsg(`補休餘額不足：剩 ${totalRemaining} 小時，本次要請 ${hours} 小時`)
+        return
+      }
+    }
+
     const result = validateLeaveRequest({
       type: form.type,
       days,
@@ -281,6 +293,20 @@ export default function Leave() {
     const { data } = await createLeaveRequest({ ...payload, status: '待審核', approver: '-' })
     if (data) {
       setLeaves(prev => [data, ...prev])
+
+      // ── 補休：FIFO 扣 comp_time_ledger（送出即扣，駁回後需手動退）──
+      if (form.type === 'comp_time' && empRow?.id) {
+        const { data: dedRes, error: dedErr } = await supabase.rpc('deduct_comp_time', {
+          p_leave_request_id: data.id,
+          p_employee_id: empRow.id,
+          p_hours: hours,
+        })
+        if (dedErr || !dedRes?.ok) {
+          toast.error('補休扣帳失敗：' + (dedErr?.message || dedRes?.error || '未知錯誤'))
+          // 不 rollback leave_request — 讓 HR 知道有掉拍要處理
+        }
+      }
+
       // 附件上傳（與 LIFF 同 bucket / path 規則）
       if (attachFiles.length > 0) {
         await uploadAttachments(data.id, empRow?.id)

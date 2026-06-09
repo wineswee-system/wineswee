@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Paperclip } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { LEAVE_TYPES, getLeaveTypeInfo } from '../../../lib/leavePolicy'
 import { clearError } from '../../../lib/formValidation'
 import { countWorkDays, snapToStep, diffHours } from '../../../lib/leaveDaysCalc'
+import { supabase } from '../../../lib/supabase'
 
 // Props: open, onClose, form, setForm, employees, departments, stepSettings,
 //        onSubmit, errors, setErrors, editingId, attachFiles, onFileSelect,
@@ -33,6 +34,26 @@ export default function LeaveFormModal({
   }
 
   const selectedPolicy = getLeaveTypeInfo(form.type)
+
+  // 補休：查 comp_time_ledger 餘額（只有 type=comp_time 時 fetch）
+  const [compBalance, setCompBalance] = useState(null) // { totalRemaining, ledgers: [...] }
+  useEffect(() => {
+    if (!selectedPolicy || selectedPolicy.code !== 'comp_time' || !form.employee) {
+      setCompBalance(null)
+      return
+    }
+    const emp = employees.find(e => e.name === form.employee)
+    if (!emp?.id) { setCompBalance(null); return }
+    let cancelled = false
+    supabase.rpc('get_comp_time_balance', { p_employee_id: emp.id }).then(({ data, error }) => {
+      if (cancelled) return
+      if (error) { console.error('[comp_time_balance]', error); setCompBalance({ totalRemaining: 0, ledgers: [] }); return }
+      const ledgers = data || []
+      const totalRemaining = ledgers.reduce((s, l) => s + Number(l.hours_remaining || 0), 0)
+      setCompBalance({ totalRemaining, ledgers })
+    })
+    return () => { cancelled = true }
+  }, [form.employee, selectedPolicy?.code, employees])
 
   // 計算員工該假別的年度餘額（顯示在 modal 法源 info 下方）
   const balance = useMemo(() => {
@@ -84,10 +105,45 @@ export default function LeaveFormModal({
           background: 'var(--accent-cyan-dim)', border: '1px solid rgba(34,211,238,0.15)',
           color: 'var(--text-secondary)', lineHeight: 1.7,
         }}>
-          <div><strong style={{ color: 'var(--accent-cyan)' }}>法源：</strong>{selectedPolicy.law}</div>
-          <div><strong style={{ color: 'var(--accent-cyan)' }}>薪資：</strong>{selectedPolicy.salary}</div>
+          {selectedPolicy.law && <div><strong style={{ color: 'var(--accent-cyan)' }}>法源：</strong>{selectedPolicy.law}</div>}
+          {selectedPolicy.salary && <div><strong style={{ color: 'var(--accent-cyan)' }}>薪資：</strong>{selectedPolicy.salary}</div>}
           <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{selectedPolicy.description}</div>
-          {balance && (
+          {selectedPolicy.code === 'comp_time' && compBalance && (
+            <div style={{
+              marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(34,211,238,0.2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <strong style={{ color: 'var(--accent-cyan)' }}>補休餘額</strong>
+                <span style={{ fontSize: 14, fontWeight: 700, color: compBalance.totalRemaining <= 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  剩 {compBalance.totalRemaining} 小時
+                </span>
+              </div>
+              {compBalance.ledgers.length > 0 ? (
+                <div style={{ fontSize: 11, marginTop: 6, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  <div style={{ marginBottom: 4 }}>📋 明細（最早到期先扣 / FIFO）：</div>
+                  {compBalance.ledgers.slice(0, 5).map(l => (
+                    <div key={l.ledger_id}>
+                      • {l.ot_date} 加班 → 剩 <b style={{ color: 'var(--text-secondary)' }}>{l.hours_remaining}h</b>，
+                      {l.expires_at} 到期
+                      {l.days_to_expire <= 30 && (
+                        <span style={{ color: 'var(--accent-orange)', marginLeft: 4 }}>
+                          （{l.days_to_expire} 天後到期）
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {compBalance.ledgers.length > 5 && (
+                    <div style={{ marginTop: 2, fontStyle: 'italic' }}>… 另有 {compBalance.ledgers.length - 5} 筆</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>
+                  目前沒有補休餘額（加班申請時選「補休」才會累積）
+                </div>
+              )}
+            </div>
+          )}
+          {selectedPolicy.code !== 'comp_time' && balance && (
             <div style={{
               marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(34,211,238,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',

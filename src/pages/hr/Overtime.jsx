@@ -56,7 +56,7 @@ export default function Overtime() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
+  const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
   const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
   const [errors, setErrors] = useState({})
@@ -170,7 +170,7 @@ export default function Overtime() {
         setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
         setShowModal(false)
         setEditingId(null)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
         return
       }
 
@@ -185,7 +185,7 @@ export default function Overtime() {
         }
         setRecords(prev => [...prev, data])
         setShowModal(false)
-        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
+        setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
         await createApprovalWorkflow('overtime', data, form.employee)
       }
     } catch (err) {
@@ -375,7 +375,7 @@ export default function Overtime() {
               onClick={() => {
                 if (chainGuard.blocked) { toast.error(chainGuard.reason); return }
                 setEditingId(null)
-                setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '' })
+                setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
                 setErrors({})
                 setShowModal(true)
               }}><Plus size={14} /> 新增加班</button>
@@ -476,7 +476,7 @@ export default function Overtime() {
                       {['待審核','申請中','已拒絕','已駁回','已退回'].includes(o.status) && o.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(o.id)
-                          setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '' })
+                          setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
                           setShowModal(true)
                         }}>✏️ {(['已拒絕','已駁回','已退回'].includes(o.status)) ? '編輯重送' : '編輯'}</button>
                       )}
@@ -619,6 +619,35 @@ export default function Overtime() {
               </>
             )
           })()}
+          <Field label="加班結算方式" required>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {[
+                { v: 'pay',       label: '💰 加班費',   hint: '當月薪資領取' },
+                { v: 'comp_time', label: '🕐 補休',     hint: '同時數補休（1 年內有效，未用自動換加班費）' },
+              ].map(opt => {
+                const selected = (form.ot_type || 'pay') === opt.v
+                return (
+                  <label key={opt.v} style={{
+                    flex: '1 1 200px', cursor: 'pointer',
+                    padding: '10px 14px', borderRadius: 8,
+                    background: selected ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                    border: `2px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                    transition: 'all 0.15s',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="radio" name="ot_type" value={opt.v} checked={selected}
+                        onChange={() => set('ot_type', opt.v)} style={{ accentColor: 'var(--accent-cyan)' }} />
+                      <span style={{ fontWeight: 600, fontSize: 14, color: selected ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{opt.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{opt.hint}</div>
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              💡 補休送出後不能改成加班費；補休沒用完到期前一個月會提醒，過期自動兌現
+            </div>
+          </Field>
           <Field label="原因" required error={errors.reason} errorMsg="請填寫加班原因">
             <textarea className="form-input" rows={2} style={{ width: '100%', resize: 'vertical' }} placeholder="請輸入加班原因" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
           </Field>

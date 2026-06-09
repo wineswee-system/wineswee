@@ -264,6 +264,22 @@ export const LEAVE_TYPES = [
     description: '子女未滿2歲需哺乳者，每日2次哺乳時間各30分鐘，視為工作時間',
   },
 
+  // ── 補休（扣 comp_time_ledger，FIFO 扣最早到期那筆）──
+  // 不是法定強制假別，是加班結算方式之一（員工申請加班時可選「加班費」或「補休」）
+  {
+    code: 'comp_time',
+    name: '補休',
+    shortName: '補休',
+    law: '',
+    paid: true,
+    unit: 'hour',
+    minUnit: 0.5,
+    allowHourly: true,
+    salary: '由補休餘額抵扣（不另扣薪）',
+    description: '使用先前加班累積的補休時數；FIFO 扣最早到期那筆',
+    requireBalance: true,  // 前端用：標記需先查餘額
+  },
+
   // ── 性平法 §15：產檢假 ──
   {
     code: 'prenatal',

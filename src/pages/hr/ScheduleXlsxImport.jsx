@@ -272,11 +272,7 @@ function EmpRow({ emp, dbMatched, resigned, records, catalogMap }) {
                     }}>
                       <span style={{ opacity: 0.65 }}>{r.date.slice(5)}</span>{' '}
                       {resolved ? `${resolved.start}~${resolved.end}` : r.shift}
-                      {r.store && <span style={{ opacity: 0.45, marginLeft: 3, fontSize: 10 }}>[{r.store}]</span>}
                       {isOT && <span style={{ opacity: 0.6, marginLeft: 3 }}>({r.absence_type})</span>}
-                      {resolved && (
-                        <span style={{ opacity: 0.45, marginLeft: 4, fontSize: 10 }}>{r.shift}</span>
-                      )}
                     </div>
                   )
                 })}

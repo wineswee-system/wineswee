@@ -50,6 +50,7 @@ export default function Schedule() {
   const userRole = authRole?.name || 'store_staff'
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
   const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
+  const isSuperAdmin = userRole === 'super_admin'
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -940,17 +941,18 @@ export default function Schedule() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* 平日/假日人數 暫時隱藏 — AI 自動排班拿掉後沒有用到
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
-              平日
-              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
-                value={minStaff} onChange={e => setMinStaff(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
-              假日
-              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
-                value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
-              人/天
-            </div>
-            */}
+            {/* 平日/假日人數 — super_admin only（AI 自動排班用） */}
+            {isSuperAdmin && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+                平日
+                <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
+                  value={minStaff} onChange={e => setMinStaff(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
+                假日
+                <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
+                  value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
+                人/天
+              </div>
+            )}
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               // 複製上個週期 — 一律走 cycle 邏輯（需要店家有設變形工時 anchor）
               const ws = storeSettings?.work_hour_system
@@ -1005,14 +1007,17 @@ export default function Schedule() {
             }}>
               📋 複製上個週期
             </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-              const empNames = filtered.map(e => e.name)
-              if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
-              await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
-              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
-            }}>
-              🗑️ 清除本月
-            </button>
+            {/* 清除本月 — super_admin only（破壞性動作） */}
+            {isSuperAdmin && (
+              <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
+                const empNames = filtered.map(e => e.name)
+                if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
+                await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
+                setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
+              }}>
+                🗑️ 清除本月
+              </button>
+            )}
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
               exportScheduleCalendarPdf({
                 storeName: storeFilter || '全部門市',
@@ -1060,8 +1065,8 @@ export default function Schedule() {
                   onClick={handleCodeSchedule} disabled={autoScheduling}>
                   <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
                 </button>
-                {/* AI 自動排班 暫時隱藏（保留功能 + handler，之後想開直接拿掉註解） */}
-                {false && (
+                {/* AI 自動排班 — super_admin only */}
+                {isSuperAdmin && (
                   <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
                     onClick={handleAutoSchedule} disabled={autoScheduling}>
                     <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}

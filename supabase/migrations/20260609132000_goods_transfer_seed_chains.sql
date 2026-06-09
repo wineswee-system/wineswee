@@ -24,8 +24,8 @@ BEGIN
      WHERE organization_id = v_org.id AND name = '商品調撥-申請-倉↔門市';
 
     IF v_chain_id IS NULL THEN
-      INSERT INTO approval_chains (organization_id, name, description)
-      VALUES (v_org.id, '商品調撥-申請-倉↔門市', '總倉↔門市調撥申請鏈：直屬主管 → 倉儲主管')
+      INSERT INTO approval_chains (organization_id, name, description, category)
+      VALUES (v_org.id, '商品調撥-申請-倉↔門市', '總倉↔門市調撥申請鏈：直屬主管 → 倉儲主管', '商品調撥-申請')
       RETURNING id INTO v_chain_id;
 
       INSERT INTO approval_chain_steps (chain_id, step_order, role_name, label, target_type, organization_id) VALUES
@@ -39,9 +39,10 @@ BEGIN
      WHERE organization_id = v_org.id AND name = '商品調撥-申請-門市↔門市';
 
     IF v_chain_id IS NULL THEN
-      INSERT INTO approval_chains (organization_id, name, description)
+      INSERT INTO approval_chains (organization_id, name, description, category)
       VALUES (v_org.id, '商品調撥-申請-門市↔門市',
-              '門市↔門市調撥申請鏈：調出店長 → 調入店督導 → 調出店督導（申請人=調入店長為發起人，不在簽核鏈內）')
+              '門市↔門市調撥申請鏈：調出店長 → 調入店督導 → 調出店督導（申請人=調入店長為發起人，不在簽核鏈內）',
+              '商品調撥-申請')
       RETURNING id INTO v_chain_id;
 
       INSERT INTO approval_chain_steps (chain_id, step_order, role_name, label, target_type, organization_id) VALUES
@@ -56,8 +57,8 @@ BEGIN
      WHERE organization_id = v_org.id AND name = '商品調撥-驗收';
 
     IF v_chain_id IS NULL THEN
-      INSERT INTO approval_chains (organization_id, name, description)
-      VALUES (v_org.id, '商品調撥-驗收', '商品調撥驗收鏈：申請人填實收 → 直屬主管確認')
+      INSERT INTO approval_chains (organization_id, name, description, category)
+      VALUES (v_org.id, '商品調撥-驗收', '商品調撥驗收鏈：申請人填實收 → 直屬主管確認', '商品調撥-驗收')
       RETURNING id INTO v_chain_id;
 
       INSERT INTO approval_chain_steps (chain_id, step_order, role_name, label, target_type, organization_id) VALUES

@@ -62,7 +62,9 @@ const blankStep = (idx) => ({
   target_section_id: null,
 })
 
-export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false, applicantType = 'all' }) {
+export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false, applicantType = 'all', categoryFilter = null }) {
+  // categoryFilter — library mode 額外傳入，只列出該 category 的 chain
+  // 新增 chain 時也預設此 category（給商品調撥申請/驗收這類分群用）
   // ── view state（amount_grouped / library 才會切 list ↔ editor） ──
   const hasListView = mode === 'amount_grouped' || mode === 'library'
   const [view, setView] = useState(hasListView ? 'list' : 'editor')
@@ -117,6 +119,9 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       .select('id, name, description, category, min_amount, max_amount, is_active, organization_id')
     if (mode === 'amount_grouped') {
       q = q.eq('category', formLabel).order('min_amount', { ascending: true, nullsFirst: true })
+    } else if (mode === 'library' && categoryFilter) {
+      // library + categoryFilter：只列出該 category 的 chain（給商品調撥申請/驗收這類分群用）
+      q = q.eq('category', categoryFilter).order('name')
     } else {
       // library: 依 category, name 排序
       q = q.order('category', { ascending: true, nullsFirst: false }).order('name')
@@ -144,7 +149,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       ...c,
       steps: stepsByChain[c.id] || [],
     })))
-  }, [mode, formLabel, organizationId])
+  }, [mode, formLabel, organizationId, categoryFilter])
 
   // ── 載入 single 模式：form_chain_configs → chain ──
   const loadSingle = useCallback(async () => {
@@ -190,7 +195,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
     setChainId(null)
     setChainName(mode === 'library' ? '' : `${formLabel}簽核鏈${typeSuffix}`)
     setChainDescription('')
-    setLibraryCategory('')
+    setLibraryCategory(mode === 'library' && categoryFilter ? categoryFilter : '')
     setMinAmount('')
     setMaxAmount('')
     setSteps([blankStep(0)])

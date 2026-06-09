@@ -13,6 +13,8 @@ import Categories from '../pages/process/settings/Categories'
 import Tags from '../pages/process/settings/Tags'
 import Chains from '../pages/process/settings/Chains'
 import ExpenseChains from '../pages/process/settings/ExpenseChains'
+import TransferApplyChains from '../pages/process/settings/TransferApplyChains'
+import TransferReceiptChains from '../pages/process/settings/TransferReceiptChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import BusinessApplications from '../pages/process/BusinessApplications'
 import TransferRequests from '../pages/process/TransferRequests'
@@ -56,6 +58,8 @@ export default function ProcessModule() {
       <Route path="settings/chains" element={<Chains />} />
       <Route path="settings/chains/edit" element={<ChainEdit />} />
       <Route path="settings/expense-chains" element={<ExpenseChains />} />
+      <Route path="settings/transfer-apply-chains" element={<TransferApplyChains />} />
+      <Route path="settings/transfer-receipt-chains" element={<TransferReceiptChains />} />
     </Routes>
   )
 }

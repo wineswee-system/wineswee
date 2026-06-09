@@ -228,9 +228,14 @@ export default function TransferRequests() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(userRole === 'admin' || userRole === 'super_admin') && (
-              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains')} title="管理「商品調撥-*」3 條簽核鏈">
-                <Settings size={14} /> 簽核設定
-              </button>
+              <>
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/transfer-apply-chains')} title="管理「商品調撥-申請」簽核鏈（倉↔門市、門市↔門市）">
+                  <Settings size={14} /> 申請簽核設定
+                </button>
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/transfer-receipt-chains')} title="管理「商品調撥-驗收」簽核鏈">
+                  <Settings size={14} /> 驗收簽核設定
+                </button>
+              </>
             )}
             <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm()); setShowFormModal(true) }}>
               <Plus size={14} /> 新增調撥

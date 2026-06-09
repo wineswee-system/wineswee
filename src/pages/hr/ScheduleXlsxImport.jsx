@@ -264,19 +264,18 @@ function EmpRow({ emp, dbMatched, resigned, records, catalogMap }) {
                   const isOT      = !!(r.absence_type && r.shift !== r.absence_type)
                   const resolved  = !isOff ? resolveShiftTime(r.shift, r.store, catalogMap) : null
                   return (
-                    <div key={i} title={`${r.date}${resolved ? ` ${resolved.start}~${resolved.end} (${resolved.netHours}h)` : ''}`} style={{
+                    <div key={i} title={`${r.date} ${r.shift}${resolved ? ` → ${resolved.start}~${resolved.end} (${resolved.netHours}h淨)` : ''}`} style={{
                       fontSize: 11, padding: '3px 7px', borderRadius: 6,
                       background: isOff ? 'var(--bg-secondary)' : isOT ? 'var(--accent-orange-dim)' : 'var(--accent-cyan-dim)',
                       color:      isOff ? 'var(--text-muted)'   : isOT ? 'var(--accent-orange)'     : 'var(--accent-cyan)',
                       border: '1px solid var(--border-subtle)',
                     }}>
-                      <span style={{ opacity: 0.65 }}>{r.date.slice(5)}</span>{' '}{r.shift}
+                      <span style={{ opacity: 0.65 }}>{r.date.slice(5)}</span>{' '}
+                      {resolved ? `${resolved.start}~${resolved.end}` : r.shift}
                       {r.store && <span style={{ opacity: 0.45, marginLeft: 3, fontSize: 10 }}>[{r.store}]</span>}
                       {isOT && <span style={{ opacity: 0.6, marginLeft: 3 }}>({r.absence_type})</span>}
                       {resolved && (
-                        <span style={{ opacity: 0.7, marginLeft: 4, fontSize: 10, color: 'var(--accent-green)' }}>
-                          {resolved.start}~{resolved.end}
-                        </span>
+                        <span style={{ opacity: 0.45, marginLeft: 4, fontSize: 10 }}>{r.shift}</span>
                       )}
                     </div>
                   )

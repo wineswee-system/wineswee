@@ -395,11 +395,13 @@ export default function Employees() {
 
       {pageTab === 'employees' && <>
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)', cursor: 'pointer', outline: statusFilter === '在職' ? '2px solid var(--accent-green)' : 'none' }}
+          onClick={() => setStatusFilter(statusFilter === '在職' ? '' : '在職')}>
           <div className="stat-card-label">在職</div>
           <div className="stat-card-value">{employees.filter(e => e.status === '在職').length}</div>
         </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)' }}>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)', cursor: 'pointer', outline: statusFilter === '離職' ? '2px solid var(--accent-red)' : 'none' }}
+          onClick={() => setStatusFilter(statusFilter === '離職' ? '' : '離職')}>
           <div className="stat-card-label">離職</div>
           <div className="stat-card-value">{employees.filter(e => e.status === '離職').length}</div>
         </div>

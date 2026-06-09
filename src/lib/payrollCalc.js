@@ -33,7 +33,15 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     : employees
   ).filter(e => !e.join_date || e.join_date <= monthEnd)
 
-  const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes] = await Promise.all([
+  // 補休過期：拉所有 scopedEmployees 在月底之前到期、status='active' 的 ledger
+  // 月結時 generate_payroll 會把這些自動兌現加進加班費 → 預覽也要顯示
+  const compTimeLedgerPromise = supabase.from('comp_time_ledger')
+    .select('employee_id, hours, hours_used, frozen_ot_amount, expires_at')
+    .eq('status', 'active')
+    .lt('expires_at', monthEnd)
+    .in('employee_id', scopedEmployees.map(e => e.id))
+
+  const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes, ctRes] = await Promise.all([
     supabase.from('attendance_records')
       .select('employee_id, store_id, date, total_hours, is_late, late_minutes')
       .eq('organization_id', orgId)
@@ -60,7 +68,19 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       .eq('status', '進行中')
       .lte('started_month', month),
     supabase.from('stores').select('id, late_tolerance_minutes'),
+    compTimeLedgerPromise,
   ])
+
+  // 過期補休：聚合到 employee_id → 兌現金額（frozen_amount × remaining / hours）
+  const ctMap = {}
+  for (const l of (ctRes?.data || [])) {
+    const remaining = Number(l.hours) - Number(l.hours_used)
+    if (remaining <= 0) continue
+    const amt = Math.round(Number(l.frozen_ot_amount || 0) * remaining / Math.max(Number(l.hours), 1))
+    if (!ctMap[l.employee_id]) ctMap[l.employee_id] = { amount: 0, count: 0 }
+    ctMap[l.employee_id].amount += amt
+    ctMap[l.employee_id].count += 1
+  }
 
   const storeToleranceMap = {}
   for (const s of (storeRes.data || [])) {
@@ -216,7 +236,10 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       ? Math.round((att.holidayHours || 0) * hourlyRate * 1)
       : 0
 
-    const regularOvertimePay = otLegalPay.total + holidayBonus
+    // 過期補休兌現（generate_payroll 月結時也會同樣加進去）
+    const compTimeSettledPay   = ctMap[emp.id]?.amount || 0
+    const compTimeSettledCount = ctMap[emp.id]?.count  || 0
+    const regularOvertimePay = otLegalPay.total + holidayBonus + compTimeSettledPay
     const extraOvertimePay   = otExceptionPay.total
     const overtimePay        = regularOvertimePay + extraOvertimePay
 
@@ -340,6 +363,9 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       regular_overtime_pay: regularOvertimePay,
       extra_overtime_pay:   extraOvertimePay,
       overtimePay,
+      // 過期補休兌現（已併入 regular_overtime_pay，這裡分開列出來給 UI 顯示）
+      comp_time_settled_pay:   compTimeSettledPay,
+      comp_time_settled_count: compTimeSettledCount,
       policyBonus,
 
       workDays:         att.days,

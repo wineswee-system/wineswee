@@ -217,6 +217,7 @@ export const groupNav = {
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
         { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
+        { icon: CalendarDays, label: '補休餘額', path: '/hr/comp-time-balance', title: '加班選補休後累積的時數；FIFO 扣，過期月結自動兌現' },
         { icon: Upload, label: '資料匯入', path: '/hr/import' },
       ]
     },

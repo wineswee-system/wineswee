@@ -158,6 +158,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                   <th>其他津貼</th>
                   <th>全勤</th>
                   <th>加班費</th>
+                  <th title="過期補休自動兌現（已含在加班費內）">過期補休</th>
                   <th>額外加班</th>
                   <th>獎金</th>
                   <th>請假折現</th>
@@ -225,6 +226,10 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                       <td>{p.other_custom_total?.toLocaleString() || 0}</td>
                       <td>{p.attendance_bonus?.toLocaleString() || 0}</td>
                       <td>{p.regular_overtime_pay?.toLocaleString() || 0}</td>
+                      <td style={{ color: p.comp_time_settled_pay > 0 ? 'var(--accent-orange)' : 'var(--text-muted)' }}
+                          title={p.comp_time_settled_count > 0 ? `${p.comp_time_settled_count} 筆過期補休兌現` : ''}>
+                        {p.comp_time_settled_pay > 0 ? p.comp_time_settled_pay.toLocaleString() : '-'}
+                      </td>
                       <td>{p.extra_overtime_pay?.toLocaleString() || 0}</td>
                       <td>{p.policyBonus?.toLocaleString() || 0}</td>
                       <td style={{ color: 'var(--text-muted)' }}>0</td>{/* 請假折現（特休未休） — Stage #5 補 */}
@@ -270,6 +275,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                   <td>{batchPreview.reduce((s, p) => s + (p.other_custom_total || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.attendance_bonus || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.regular_overtime_pay || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: 'var(--accent-orange)' }}>{batchPreview.reduce((s, p) => s + (p.comp_time_settled_pay || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.extra_overtime_pay || 0), 0).toLocaleString()}</td>
                   <td>{batchPreview.reduce((s, p) => s + (p.policyBonus || 0), 0).toLocaleString()}</td>
                   <td>0</td>

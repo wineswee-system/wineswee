@@ -71,7 +71,7 @@ function normalizeShiftFull(raw) {
   if (!raw) return { shift: raw, store: null }
   const direct = formatShiftLabel(raw)
   if (direct !== raw) return { shift: direct, store: null }
-  const m = raw.match(/(\d{2,4}[-~]\d{2,4})$/)
+  const m = raw.match(/(\d{1,4}[-~]\d{1,4})$/)
   if (m) {
     const normalized = formatShiftLabel(m[1])
     if (normalized !== m[1]) {

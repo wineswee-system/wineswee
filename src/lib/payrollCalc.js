@@ -76,7 +76,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
   for (const l of (ctRes?.data || [])) {
     const remaining = Number(l.hours) - Number(l.hours_used)
     if (remaining <= 0) continue
-    const amt = Math.round(Number(l.frozen_ot_amount || 0) * remaining / Math.max(Number(l.hours), 1))
+    const amt = Math.ceil(Number(l.frozen_ot_amount || 0) * remaining / Math.max(Number(l.hours), 1))
     if (!ctMap[l.employee_id]) ctMap[l.employee_id] = { amount: 0, count: 0 }
     ctMap[l.employee_id].amount += amt
     ctMap[l.employee_id].count += 1
@@ -183,7 +183,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const legalDeductionTotal = legalMap[emp.id] || 0
 
     const baseSalary = isHourly
-      ? Math.round((ss.hourly_rate || 0) * att.hours)
+      ? Math.ceil((ss.hourly_rate || 0) * att.hours)
       : (ss.base_salary || emp.base_salary || 0)
     const roleAllowance   = Number(ss.supervisor_allowance || 0) + Number(ss.role_allowance || 0)
     const mealAllowance   = ss.meal_allowance    || 0
@@ -214,15 +214,15 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
     const calcOtPay = (bucket) => {
       const weekday = bucket.weekday <= 2
-        ? Math.round(bucket.weekday * hourlyRate * 1.34)
-        : Math.round(2 * hourlyRate * 1.34 + (bucket.weekday - 2) * hourlyRate * 1.67)
+        ? Math.ceil(bucket.weekday * hourlyRate * 1.34)
+        : Math.ceil(2 * hourlyRate * 1.34 + (bucket.weekday - 2) * hourlyRate * 1.67)
       const rd1 = Math.min(bucket.restday, 2)
       const rd2 = Math.min(Math.max(bucket.restday - 2, 0), 6)
       const rd3 = Math.max(bucket.restday - 8, 0)
-      const restday = Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+      const restday = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
       // 例假日加班：×2（emergency-only 工作，倍率跟國定假日一樣）
-      const weeklyOff = Math.round((bucket.weekly_off || 0) * hourlyRate * 2)
-      const holiday = Math.round(bucket.holiday * hourlyRate * 2)
+      const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
+      const holiday = Math.ceil(bucket.holiday * hourlyRate * 2)
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
         total: weekday + restday + weeklyOff + holiday,
@@ -233,7 +233,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const otExceptionPay = calcOtPay(otException)
 
     const holidayBonus = isHourly
-      ? Math.round((att.holidayHours || 0) * hourlyRate * 1)
+      ? Math.ceil((att.holidayHours || 0) * hourlyRate * 1)
       : 0
 
     // 過期補休兌現（generate_payroll 月結時也會同樣加進去）
@@ -248,9 +248,9 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const otPayWeeklyOff = otLegalPay.weekly_off
     const otPayHoliday   = otLegalPay.holiday
 
-    const lateDeduction   = Math.floor(att.lateMins / 30) * Math.round(hourlyRate * 0.5)
-    const unpaidDeduction   = isHourly ? 0 : Math.round(unpaidHours * hourlyRate)
-    const halfPayDeduction  = isHourly ? 0 : Math.round(halfPayHours * hourlyRate * 0.5)
+    const lateDeduction   = Math.floor(att.lateMins / 30) * Math.floor(hourlyRate * 0.5)
+    const unpaidDeduction   = isHourly ? 0 : Math.floor(unpaidHours * hourlyRate)
+    const halfPayDeduction  = isHourly ? 0 : Math.floor(halfPayHours * hourlyRate * 0.5)
     const absenceDeduction  = unpaidDeduction + halfPayDeduction
     const attendanceBonus = (att.lateMins > 0 || absenceDays > 0) ? 0 : attendanceBonusBase
 
@@ -285,14 +285,14 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const salaryActualWD = salaryActualDays
     const _totalWD       = _totalDays
     const _p = salaryProrateRatio
-    const effBase      = !isHourly ? Math.round(baseSalary          * _p) : baseSalary
-    const effRole      = !isHourly ? Math.round(roleAllowance       * _p) : roleAllowance
-    const effMeal      = !isHourly ? Math.round(mealAllowance       * _p) : mealAllowance
-    const effTransp    = !isHourly ? Math.round(transportAllow      * _p) : transportAllow
-    const effAttBonus  = !isHourly ? Math.round(attendanceBonus     * _p) : attendanceBonus
-    const effNight     = !isHourly ? Math.round(nightAllowance      * _p) : nightAllowance
-    const effCross     = !isHourly ? Math.round(crossStoreAllowance * _p) : crossStoreAllowance
-    const effOtherC    = !isHourly ? Math.round(otherCustomTotal    * _p) : otherCustomTotal
+    const effBase      = !isHourly ? Math.ceil(baseSalary          * _p) : baseSalary
+    const effRole      = !isHourly ? Math.ceil(roleAllowance       * _p) : roleAllowance
+    const effMeal      = !isHourly ? Math.ceil(mealAllowance       * _p) : mealAllowance
+    const effTransp    = !isHourly ? Math.ceil(transportAllow      * _p) : transportAllow
+    const effAttBonus  = !isHourly ? Math.ceil(attendanceBonus     * _p) : attendanceBonus
+    const effNight     = !isHourly ? Math.ceil(nightAllowance      * _p) : nightAllowance
+    const effCross     = !isHourly ? Math.ceil(crossStoreAllowance * _p) : crossStoreAllowance
+    const effOtherC    = !isHourly ? Math.ceil(otherCustomTotal    * _p) : otherCustomTotal
 
     // 投保金額：
     // 1. 員工有設 base_insured → 用設定值（廠商手動覆寫）
@@ -322,10 +322,10 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
     let result = fullMonthResult
     if (isPartialMonth) {
-      const proratedLabor   = Math.round(fullMonthResult.laborInsurance * prorationRatio)
-      const proratedPension = Math.round(fullMonthResult.pension        * prorationRatio)
-      const proratedLaborE  = Math.round(fullMonthResult.laborEmployer  * prorationRatio)
-      const proratedPensionE= Math.round(fullMonthResult.pensionEmployer* prorationRatio)
+      const proratedLabor   = Math.floor(fullMonthResult.laborInsurance * prorationRatio)
+      const proratedPension = Math.floor(fullMonthResult.pension        * prorationRatio)
+      const proratedLaborE  = Math.ceil(fullMonthResult.laborEmployer  * prorationRatio)
+      const proratedPensionE= Math.ceil(fullMonthResult.pensionEmployer* prorationRatio)
       const insuranceDelta  =
         (fullMonthResult.laborInsurance + fullMonthResult.pension)
         - (proratedLabor + proratedPension)
@@ -359,7 +359,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       other_custom_total: Math.max(0, effOtherC),
       attendance_bonus: effAttBonus,
       custom_allowances: customAllowances,
-      custom_allowances_total: !isHourly ? Math.round(customTotal * _p) : customTotal,
+      custom_allowances_total: !isHourly ? Math.ceil(customTotal * _p) : customTotal,
       regular_overtime_pay: regularOvertimePay,
       extra_overtime_pay:   extraOvertimePay,
       overtimePay,

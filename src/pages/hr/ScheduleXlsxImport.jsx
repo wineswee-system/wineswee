@@ -370,6 +370,29 @@ export default function ScheduleXlsxImport() {
     handleFile(e.dataTransfer.files[0])
   }
 
+  async function handleCatalogFile(file) {
+    if (!file) return
+    if (!file.name.match(/\.xlsx?$/i)) { toast.error('請選擇 .xlsx / .xls 檔案'); return }
+    const buffer = await file.arrayBuffer()
+    try {
+      const wb      = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+      const catalog = parseShiftCatalog(wb)
+      if (catalog.length === 0) {
+        toast.error('未找到班別定義欄位（需含「班別名稱」與「工作範圍」欄）')
+      } else {
+        setShiftCatalog(catalog)
+        toast.success(`已載入 ${catalog.length} 筆班別定義`)
+      }
+    } catch (err) {
+      toast.error('班別定義解析失敗：' + err.message)
+    }
+  }
+
+  function onDropCatalog(e) {
+    e.preventDefault(); setCatalogDrag(false)
+    handleCatalogFile(e.dataTransfer.files[0])
+  }
+
   async function handleImport() {
     const toImport = enriched.filter(r => r.dbEmp)
     if (!toImport.length) { toast.error('沒有可匯入的有效資料'); return }
@@ -587,19 +610,42 @@ export default function ScheduleXlsxImport() {
           )}
 
           {/* 班別定義目錄 */}
-          {shiftCatalog.length > 0 && (
-            <div style={{ marginTop: 24, border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{
-                padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)',
-                background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>班別定義目錄</span>
-                <span style={{
-                  padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                  background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
-                }}>{shiftCatalog.length} 筆</span>
-                <span style={{ flex: 1 }} />
+          <div style={{ marginTop: 24, border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{
+              padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>班別定義目錄</span>
+              {shiftCatalog.length > 0
+                ? <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>{shiftCatalog.length} 筆</span>
+                : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>未載入</span>
+              }
+              <span style={{ flex: 1 }} />
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <Upload size={12} />
+                {shiftCatalog.length > 0 ? '重新上傳' : '上傳班別定義 XLSX'}
+                <input ref={catalogRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
+                  onChange={e => handleCatalogFile(e.target.files[0])} />
+              </label>
+            </div>
+            {shiftCatalog.length === 0 ? (
+              <div
+                onDragOver={e => { e.preventDefault(); setCatalogDrag(true) }}
+                onDragLeave={() => setCatalogDrag(false)}
+                onDrop={onDropCatalog}
+                onClick={() => catalogRef.current?.click()}
+                style={{
+                  padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
+                  background: catalogDragging ? 'var(--accent-purple-dim)' : 'var(--bg-secondary)',
+                  outline: catalogDragging ? '2px dashed var(--accent-purple)' : undefined,
+                  transition: 'all .15s',
+                }}
+              >
+                <Upload size={28} style={{ color: 'var(--accent-purple)', marginBottom: 10 }} />
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>拖曳班別定義 XLSX 到這裡</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>需含「班別名稱」與「工作範圍」欄位</div>
               </div>
+            ) : (
               <div style={{ overflowX: 'auto', maxHeight: 320 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
@@ -636,8 +682,8 @@ export default function ScheduleXlsxImport() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* 員工預覽表 */}
           <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>

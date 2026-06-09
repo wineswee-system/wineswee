@@ -11,6 +11,7 @@ export default function CompTimeBalance() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
+  const isManager = userRole === 'manager'
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -29,7 +30,7 @@ export default function CompTimeBalance() {
     Promise.all([
       supabase
         .from('employees')
-        .select('id, name, dept, store, status, departments!department_id(name), stores!store_id(name)')
+        .select('id, name, dept, store, status, additional_stores, departments!department_id(name), stores!store_id(name)')
         .eq('organization_id', orgId)
         .order('name'),
       supabase
@@ -43,12 +44,25 @@ export default function CompTimeBalance() {
       supabase.from('stores').select('id, name').eq('organization_id', orgId),
     ]).then(([eRes, lRes, dRes, sRes]) => {
       let emps = eRes.data || []
-      if (isStaff && profile?.name) emps = emps.filter(e => e.name === profile.name)
+      if (isStaff && profile?.name) {
+        emps = emps.filter(e => e.name === profile.name)
+      } else if (isManager && profile?.store) {
+        // manager 只看自己門市 + additional_stores 的員工
+        const myStores = new Set([profile.store, ...(Array.isArray(profile.additional_stores) ? profile.additional_stores : [])])
+        emps = emps.filter(e => {
+          const empStore = e.stores?.name || e.store
+          if (myStores.has(empStore)) return true
+          if (Array.isArray(e.additional_stores) && e.additional_stores.some(s => myStores.has(s))) return true
+          return false
+        })
+      }
       setEmployees(emps)
       const allLedgers = (lRes.data || []).filter(l => Number(l.hours) - Number(l.hours_used) > 0)
       setLedgers(allLedgers)
       setDepartments(dRes.data || [])
       setStores(sRes.data || [])
+      // manager: 把 storeFilter 預設成自己的店（避免一打開看到全部 store dropdown 但只能看部分人）
+      if (isManager && profile?.store) setStoreFilter(profile.store)
     }).catch(err => {
       console.error('Failed to load comp_time balance:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -147,8 +161,11 @@ export default function CompTimeBalance() {
           alignItems: 'center', flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
-            <option value="">全部門市</option>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter}
+            onChange={e => setStoreFilter(e.target.value)}
+            disabled={isManager}
+            title={isManager ? '主管角色只能看自己門市' : ''}>
+            {!isManager && <option value="">全部門市</option>}
             {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>

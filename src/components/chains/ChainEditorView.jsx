@@ -13,6 +13,13 @@ const TARGET_TYPES = [
   { value: 'specific_dept_manager',         group: '🏢 指定單位主管', label: '特定部門的主管',   needs: 'dept'    },
   { value: 'specific_store_manager',        group: '🏢 指定單位主管', label: '特定門市的店長',   needs: 'store'   },
   { value: 'specific_section_supervisor',   group: '🏢 指定單位主管', label: '特定課別的督導',   needs: 'section' },
+  // 商品調撥動態（從調撥單的 from/to_store 反查；不需 FK 預先指定）
+  // categoryFilter='商品調撥-*' 時才在下拉露出，避免污染 HR / 費用 chain 編輯
+  { value: 'transfer_in_store_manager',     group: '📦 商品調撥連動', label: '調入門市的店長（從表單 to_store 動態解）',     needs: null, transferOnly: true },
+  { value: 'transfer_out_store_manager',    group: '📦 商品調撥連動', label: '調出門市的店長（從表單 from_store 動態解）',   needs: null, transferOnly: true },
+  { value: 'transfer_in_store_supervisor',  group: '📦 商品調撥連動', label: '調入門市的督導（從表單 to_store 動態解）',     needs: null, transferOnly: true },
+  { value: 'transfer_out_store_supervisor', group: '📦 商品調撥連動', label: '調出門市的督導（從表單 from_store 動態解）',   needs: null, transferOnly: true },
+  { value: 'warehouse_supervisor',          group: '📦 商品調撥連動', label: '倉儲主管（departments.name=倉儲物流部）',     needs: null, transferOnly: true },
 ]
 
 // ── 預覽該關會由誰簽（與 ChainConfigModal.stepPreview 邏輯一致） ──
@@ -63,7 +70,11 @@ export default function ChainEditorView({
   minAmount, setMinAmount, maxAmount, setMaxAmount,
   steps, updateStep, addStep, removeStep, moveStep, changeTargetType,
   employees, roles, depts, stores, sections, formLabel,
+  categoryFilter = null,
 }) {
+  // 商品調撥連動類型只在編商品調撥 chain 時露出
+  const isTransferContext = (categoryFilter || libraryCategory || '').startsWith('商品調撥')
+  const availableTypes = TARGET_TYPES.filter(t => !t.transferOnly || isTransferContext)
   return (
     <>
       {/* Chain name + (amount_grouped) amount + (library) category */}
@@ -155,9 +166,9 @@ export default function ChainEditorView({
                 <select className="form-input" style={{ width: '100%' }}
                   value={step.target_type}
                   onChange={e => changeTargetType(idx, e.target.value)}>
-                  {Array.from(new Set(TARGET_TYPES.map(t => t.group))).map(g => (
+                  {Array.from(new Set(availableTypes.map(t => t.group))).map(g => (
                     <optgroup key={g} label={g}>
-                      {TARGET_TYPES.filter(t => t.group === g).map(t => (
+                      {availableTypes.filter(t => t.group === g).map(t => (
                         <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </optgroup>

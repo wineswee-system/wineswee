@@ -48,6 +48,12 @@ const TARGET_TYPES = [
   { value: 'specific_dept_manager',         group: '🏢 指定單位主管', label: '特定部門的主管',   needs: 'dept'    },
   { value: 'specific_store_manager',        group: '🏢 指定單位主管', label: '特定門市的店長',   needs: 'store'   },
   { value: 'specific_section_supervisor',   group: '🏢 指定單位主管', label: '特定課別的督導',   needs: 'section' },
+  // 商品調撥動態（從調撥單的 from/to_store 反查；不需 FK 預先指定）
+  { value: 'transfer_in_store_manager',     group: '📦 商品調撥連動', label: '調入門市的店長（從表單 to_store_id 動態解）',     needs: null, transferOnly: true },
+  { value: 'transfer_out_store_manager',    group: '📦 商品調撥連動', label: '調出門市的店長（從表單 from_store_id 動態解）',   needs: null, transferOnly: true },
+  { value: 'transfer_in_store_supervisor',  group: '📦 商品調撥連動', label: '調入門市的督導（從表單 to_store_id 動態解）',     needs: null, transferOnly: true },
+  { value: 'transfer_out_store_supervisor', group: '📦 商品調撥連動', label: '調出門市的督導（從表單 from_store_id 動態解）',   needs: null, transferOnly: true },
+  { value: 'warehouse_supervisor',          group: '📦 商品調撥連動', label: '倉儲主管（departments.name=倉儲物流部）',         needs: null, transferOnly: true },
 ]
 
 const blankStep = (idx) => ({
@@ -583,6 +589,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       ) : (
         <ChainEditorView
           mode={mode}
+          categoryFilter={categoryFilter}
           chainName={chainName} setChainName={setChainName}
           chainDescription={chainDescription} setChainDescription={setChainDescription}
           libraryCategory={libraryCategory} setLibraryCategory={setLibraryCategory}

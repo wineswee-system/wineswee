@@ -2,30 +2,41 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 
-// 極簡版 chain library — 直接撈所有 chain 顯示，繞過原本 ChainConfigModal 套件
+// 極簡 chain library — 直接撈所有 chain 顯示，繞過原本 ChainConfigModal
+// 不擋 isAdmin gate（這頁本來就唯讀；撈不到 chain 就會顯示空）
 export default function Chains() {
-  const { isAdmin, isSuperAdmin } = useAuth()
+  const { user, profile, role } = useAuth()
   const [chains, setChains] = useState([])
-  const [steps, setSteps] = useState({})  // chain_id → steps[]
+  const [steps, setSteps] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [debug, setDebug] = useState('')
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    supabase.from('approval_chains')
-      .select('id, name, description, category, is_active, organization_id, min_amount, max_amount')
-      .order('category', { ascending: true, nullsFirst: false })
-      .order('name')
-      .then(async ({ data, error }) => {
-        if (error) { setError(error.message); setLoading(false); return }
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const { data, error: e1 } = await supabase
+          .from('approval_chains')
+          .select('id, name, description, category, is_active, organization_id, min_amount, max_amount')
+          .order('category', { ascending: true, nullsFirst: false })
+          .order('name')
+        if (cancelled) return
+        if (e1) { setError(`approval_chains 查詢失敗：${e1.message}`); setLoading(false); return }
         const list = data || []
         setChains(list)
+        setDebug(`撈到 ${list.length} 條 chain`)
         if (list.length > 0) {
           const ids = list.map(c => c.id)
-          const { data: stepData } = await supabase.from('approval_chain_steps')
+          const { data: stepData, error: e2 } = await supabase
+            .from('approval_chain_steps')
             .select('chain_id, step_order, label, target_type, target_emp_id, target_role_id, target_dept_id, target_store_id')
-            .in('chain_id', ids).order('step_order')
+            .in('chain_id', ids)
+            .order('step_order')
+          if (cancelled) return
+          if (e2) { setError(`approval_chain_steps 查詢失敗：${e2.message}`) }
           const map = {}
           for (const s of (stepData || [])) {
             if (!map[s.chain_id]) map[s.chain_id] = []
@@ -33,18 +44,15 @@ export default function Chains() {
           }
           setSteps(map)
         }
-        setLoading(false)
-      })
+      } catch (err) {
+        if (!cancelled) setError(`例外：${err?.message || String(err)}`)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [])
-
-  if (!(isAdmin || isSuperAdmin)) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center' }}>
-        <h3 style={{ color: 'var(--accent-red)' }}>無權限</h3>
-        <p style={{ color: 'var(--text-secondary)' }}>僅 admin / super_admin 可管理簽核鏈</p>
-      </div>
-    )
-  }
 
   return (
     <div className="fade-in">
@@ -57,16 +65,23 @@ export default function Chains() {
         </div>
       </div>
 
+      {/* Debug strip — 永遠顯示，確認 component 有 mount */}
+      <div style={{ padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, fontFamily: 'monospace' }}>
+        user={user?.email || '無'} · role={role?.name || '無'} · org={profile?.organization_id ?? '無'} · {debug || (loading ? '載入中…' : '尚未撈')}
+      </div>
+
       {error && (
         <div style={{ padding: '12px 16px', background: 'var(--accent-red-dim)', color: 'var(--accent-red)', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-          載入失敗：{error}
+          ❌ {error}
         </div>
       )}
 
       {loading ? (
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>載入中…</div>
       ) : chains.length === 0 ? (
-        <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>沒有任何 chain</div>
+        <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+          沒有任何 chain（如果 DB 有資料但這裡看不到，多半是 RLS 擋掉 — role={role?.name || '未知'}）
+        </div>
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>
           {chains.map(c => (

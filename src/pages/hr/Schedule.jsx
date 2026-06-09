@@ -791,17 +791,18 @@ export default function Schedule() {
   }
 
   // ── Wizard complete handler ──
-  const handleWizardComplete = ({ mode, stores, period, empRestMap }) => {
+  const handleWizardComplete = ({ mode, stores, period, storeRanges, empRestMap }) => {
     setShowWizard(false)
     if (!stores?.length || !period) return
     const primary = stores[0]
+    const primaryRange = storeRanges?.[primary.storeId] || period
     if (mode === 'manual') {
       navigate('/hr/schedule-builder', {
         state: {
           store: primary.store,
           storeId: primary.storeId,
-          month: period.start.slice(0, 7),
-          range: { start: period.start, end: period.end },
+          month: primaryRange.start.slice(0, 7),
+          range: { start: primaryRange.start, end: primaryRange.end },
           workHourSystem: primary.workHourSystem,
           restDayMap: {},
           empRestMap: empRestMap || {},
@@ -809,7 +810,7 @@ export default function Schedule() {
       })
     } else {
       setStoreFilter(primary.store)
-      setSelectedMonth(period.start.slice(0, 7))
+      setSelectedMonth(primaryRange.start.slice(0, 7))
       toast.success(`已設定門市「${primary.store}」，請點擊 AI 自動排班`)
     }
   }

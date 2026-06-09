@@ -11,6 +11,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 const STATUS_CONFIG = {
   '進行中': { color: 'var(--accent-cyan)', icon: Clock, badge: 'badge-info' },
   '已完成': { color: 'var(--accent-green)', icon: CheckCircle, badge: 'badge-success' },
@@ -392,6 +393,7 @@ const PRIORITY_OPTIONS = ['低', '中', '高']
 function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject, onSaved, actionLoading }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
   const [form, setForm] = useState({
     title: task.title || '',
     status: task.status || '待簽核',
@@ -403,12 +405,39 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
     notes: task.notes || '',
   })
 
+  const setFD = (updates) => { setForm(f => ({ ...f, ...updates })); setIsDirty(true) }
+
+  const handleClose = async () => {
+    if (editing && isDirty && !(await confirm({ message: '有未儲存的變更，確定要離開嗎？' }))) return
+    onClose()
+  }
+
+  const handleCancel = () => {
+    setEditing(false)
+    setIsDirty(false)
+    setForm({
+      title: task.title || '',
+      status: task.status || '待簽核',
+      assignee: task.assignee || '',
+      role: task.role || '',
+      priority: task.priority || '中',
+      due_date: task.due_date?.slice(0, 10) || '',
+      description: task.description || '',
+      notes: task.notes || '',
+    })
+  }
+
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = async (e) => {
+      if (e.key === 'Escape') {
+        if (editing && isDirty && !(await confirm({ message: '有未儲存的變更，確定要離開嗎？' }))) return
+        onClose()
+      }
+    }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
-  }, [onClose])
+  }, [editing, isDirty, onClose])
 
   const inst = task._instance || {}
   const statusBadge = task.status === '已完成' ? 'badge-success' : task.status === '已退回' ? 'badge-danger' : task.status === '進行中' ? 'badge-info' : 'badge-warning'
@@ -417,9 +446,15 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
   const handleSave = async () => {
     setSaving(true)
     try {
-      const payload = { ...form, due_date: form.due_date || null }
+      const payload = {
+        ...form,
+        due_date: form.due_date || null,
+        assignee_id: employees.find(e => e.name === form.assignee)?.id ?? null,
+        completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
+      }
       const { error } = await updateTask(task.id, payload)
       if (error) throw error
+      toast.success('已儲存')
       onSaved?.()
     } catch (err) {
       console.error('[Overview] Failed to update task:', err)
@@ -442,15 +477,9 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
     </div>
   )
 
-  const inputStyle = {
-    width: '100%', padding: '6px 10px', fontSize: 13,
-    background: 'var(--bg-secondary)', color: 'var(--text-primary)',
-    border: '1px solid var(--border-subtle)', borderRadius: 6,
-  }
-
   return createPortal(
     <div
-      onClick={onClose}
+      onClick={handleClose}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -473,8 +502,8 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
               color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0,
             }}>{task.step_order}</div>
             {editing ? (
-              <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-                style={{ ...inputStyle, fontSize: 15, fontWeight: 600 }} />
+              <input value={form.title} onChange={e => setFD({ title: e.target.value })}
+                className="form-input" style={{ fontSize: 15, fontWeight: 600, flex: 1 }} />
             ) : (
               <h3 style={{ margin: 0, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</h3>
             )}
@@ -485,7 +514,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
                 <Pencil size={14} /> 編輯
               </button>
             )}
-            <button onClick={onClose} className="btn btn-sm" style={{ padding: 6 }} aria-label="關閉"><X size={14} /></button>
+            <button onClick={handleClose} className="btn btn-sm" style={{ padding: 6 }} aria-label="關閉"><X size={14} /></button>
           </div>
         </div>
 
@@ -493,7 +522,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
           {editing ? (
             <>
               <Field label="狀態">
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inputStyle}>
+                <select value={form.status} onChange={e => setFD({ status: e.target.value })} className="form-input" style={{ width: '100%' }}>
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
@@ -502,27 +531,27 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
               <Field label="負責人">
                 <SearchableSelect
                   value={form.assignee}
-                  onChange={(v) => setForm({ ...form, assignee: v || '' })}
+                  onChange={(v) => setFD({ assignee: v || '' })}
                   options={empOptions(employees, { keyBy: 'name' })}
                   placeholder="搜尋員工姓名/職稱..."
                 />
               </Field>
               <Field label="角色">
-                <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} style={inputStyle} />
+                <input value={form.role} onChange={e => setFD({ role: e.target.value })} className="form-input" style={{ width: '100%' }} />
               </Field>
               <Field label="優先順序">
-                <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} style={inputStyle}>
+                <select value={form.priority} onChange={e => setFD({ priority: e.target.value })} className="form-input" style={{ width: '100%' }}>
                   {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </Field>
               <Field label="到期日">
-                <input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} style={inputStyle} />
+                <input type="date" value={form.due_date} onChange={e => setFD({ due_date: e.target.value })} className="form-input" style={{ width: '100%' }} />
               </Field>
               <Field label="描述">
-                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+                <textarea value={form.description} onChange={e => setFD({ description: e.target.value })} rows={3} className="form-input" style={{ width: '100%', resize: 'vertical' }} />
               </Field>
               <Field label="備註">
-                <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+                <textarea value={form.notes} onChange={e => setFD({ notes: e.target.value })} rows={2} className="form-input" style={{ width: '100%', resize: 'vertical' }} />
               </Field>
             </>
           ) : (
@@ -547,7 +576,7 @@ function TaskDetailOverlay({ task, employees = [], onClose, onApprove, onReject,
 
         {editing ? (
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid var(--border-subtle)' }}>
-            <button className="btn btn-sm" disabled={saving} onClick={() => setEditing(false)}>取消</button>
+            <button className="btn btn-sm" disabled={saving} onClick={handleCancel}>取消</button>
             <button className="btn btn-sm btn-primary" disabled={saving} onClick={handleSave}>
               <Save size={12} /> {saving ? '儲存中…' : '儲存'}
             </button>

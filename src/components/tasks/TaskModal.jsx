@@ -221,7 +221,7 @@ export default function TaskModal({
       recurrence_rule: form.recurrence_rule || null,
       recurrence_until: form.recurrence_until || null,
       notes: form.notes || null,
-      description: form.notes || null,
+      description: form.description || null,
       workflow_instance_id: form.workflow_instance_id ? Number(form.workflow_instance_id) : null,
       project_id: form.project_id ? Number(form.project_id) : null,
       approval_chain_id: form.approval_chain_id ? Number(form.approval_chain_id) : null,
@@ -238,6 +238,7 @@ export default function TaskModal({
       diffAndLogTask(logFieldChange, task, data)
       notifyWatchers(task.id, { taskTitle: data.title, action: '任務已更新', actor: user?.name }).catch(() => {})
       onChange?.(data)
+      toast.success('已更新')
     }
     setSaving(false)
   }

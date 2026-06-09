@@ -219,6 +219,7 @@ export default function TaskDetailPanel({
     const { data } = await updateTask(task.id, payload)
     if (data) {
       onUpdate(data)
+      toast.success('已更新')
       setIsDirty(false)
       diffAndLogTask(logFieldChange, task, data)
       if (form.status === '已完成' && prevStatus !== '已完成') {
@@ -486,6 +487,32 @@ export default function TaskDetailPanel({
                 <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
                   placeholder="備註..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
               </div>
+
+              {(task.bucket || task.section_id || task.recurrence_rule) && (
+                <div style={{ ...sectionStyle, background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>唯讀欄位（在任務頁編輯）</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {task.bucket && (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-muted)', width: 80, flexShrink: 0 }}>類型</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{task.bucket}</span>
+                      </div>
+                    )}
+                    {task.section_id && (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-muted)', width: 80, flexShrink: 0 }}>看板欄 ID</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{task.section_id}</span>
+                      </div>
+                    )}
+                    {task.recurrence_rule && (
+                      <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-muted)', width: 80, flexShrink: 0 }}>重複規則</span>
+                        <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 12 }}>{task.recurrence_rule}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
                 ID: {task.id} &nbsp;&nbsp; 建立: {task.created_at?.slice(0, 10)}

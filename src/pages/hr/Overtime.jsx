@@ -127,21 +127,30 @@ export default function Overtime() {
     })
   }, [monthFilter, profile?.organization_id])
 
-  // 抓「已有人簽過」的 OT id（approval_step_history.exited_at IS NOT NULL = 完成那關）
-  // 用來鎖編輯/撤回：status 還是 待審核 但已經有人簽 → 不准改
+  // 抓「已有人 approved 過」的 OT id（駁回不算）— 用來鎖編輯/撤回
+  // 走 SECURITY DEFINER RPC 繞 approval_step_history 的 RLS
   useEffect(() => {
     if (!records.length) { setSignedIds(new Set()); return }
     const ids = records.map(r => r.id).filter(Boolean)
     if (!ids.length) return
-    supabase.from('approval_step_history')
-      .select('request_id')
-      .eq('request_type', 'overtime')
-      .not('exited_at', 'is', null)
-      .in('request_id', ids)
-      .then(({ data }) => {
-        setSignedIds(new Set((data || []).map(r => r.request_id)))
-      })
+    supabase.rpc('list_request_ids_with_approved_step', {
+      p_request_type: 'overtime',
+      p_request_ids: ids,
+    }).then(({ data }) => {
+      setSignedIds(new Set((data || []).map(r => typeof r === 'number' ? r : r.list_request_ids_with_approved_step)))
+    })
   }, [records])
+
+  // 表單選好員工 + 日期 → 自動分類 ot_category（給 FT 例假 UI 鎖用）
+  const [otCategory, setOtCategory] = useState(null)
+  useEffect(() => {
+    const emp = employees.find(e => e.name === form.employee)
+    if (!form.date || !emp?.id) { setOtCategory(null); return }
+    supabase.rpc('classify_ot_category_safe', {
+      p_date: form.date,
+      p_employee_id: emp.id,
+    }).then(({ data }) => setOtCategory(data))
+  }, [form.date, form.employee, employees])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -650,14 +659,13 @@ export default function Overtime() {
             )
           })()}
           {(() => {
-            // FT 例假偵測：選的員工是 monthly 且日期 DOW=0（週日）→ 強制 ×2 + 自動補休，沒得選
+            // FT 例假偵測：靠 PG classify_ot_category_safe RPC（吃排班 shift '例假' / 國定假日 / DOW fallback）
             const selEmp = employees.find(e => e.name === form.employee)
             const empSalaryType = selEmp?.salary_structures?.[0]?.salary_type
               || selEmp?.salary_structures?.salary_type
               || 'monthly'
             const isFT = empSalaryType === 'monthly'
-            const dowZero = form.date && new Date(form.date + 'T00:00:00').getDay() === 0
-            const isFTWeeklyOff = isFT && dowZero
+            const isFTWeeklyOff = isFT && otCategory === 'weekly_off'
             // 強制設 pay（避免員工已選 comp_time）
             if (isFTWeeklyOff && (form.ot_type || 'pay') !== 'pay') {
               setTimeout(() => set('ot_type', 'pay'), 0)

@@ -131,17 +131,15 @@ export default function Leave() {
       const emps = e.data || []
       const leaveList = l.data || []
       setLeaves(leaveList)
-      // 抓「已有人簽過」的 leave id
+      // 抓「已有人 approved 過」的 leave id（駁回不算）
       const ids = leaveList.map(x => x.id).filter(Boolean)
       if (ids.length) {
-        supabase.from('approval_step_history')
-          .select('request_id')
-          .eq('request_type', 'leave')
-          .not('exited_at', 'is', null)
-          .in('request_id', ids)
-          .then(({ data }) => {
-            setSignedIds(new Set((data || []).map(r => r.request_id)))
-          })
+        supabase.rpc('list_request_ids_with_approved_step', {
+          p_request_type: 'leave',
+          p_request_ids: ids,
+        }).then(({ data }) => {
+          setSignedIds(new Set((data || []).map(r => typeof r === 'number' ? r : r.list_request_ids_with_approved_step)))
+        })
       }
       setEmployees(emps)
       setDepartments(d.data || [])

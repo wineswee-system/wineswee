@@ -216,6 +216,18 @@ export default function TransferRequests() {
     reload()
   }
 
+  // 一鍵重送：不改內容，直接 reset chain 回申請審核中（重建 snapshot）
+  const handleResubmit = async (row) => {
+    if (!(await confirm({ message: `確定一鍵重送單號 ${row.document_no}？（內容不變，重跑申請鏈）` }))) return
+    const { data, error } = await supabase.rpc('goods_transfer_resubmit', {
+      p_id: row.id, p_applicant_id: profile?.id,
+    })
+    if (error) { toast.error('重送失敗：' + error.message); return }
+    if (!data?.ok) { toast.error('重送失敗：' + (data?.error || '未知錯誤')); return }
+    toast.success('已重送，狀態回到申請審核中')
+    reload()
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -302,9 +314,14 @@ export default function TransferRequests() {
               <div style={{ padding: '10px 8px' }} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {r.status === '已駁回' && r.applicant_id === profile?.id && (
-                    <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(r)} title="編輯重送">
-                      <Pencil size={11} />
-                    </button>
+                    <>
+                      <button className="btn btn-sm btn-secondary" onClick={() => handleResubmit(r)} title="一鍵重送（內容不變）">
+                        🔁
+                      </button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(r)} title="編輯重送">
+                        <Pencil size={11} />
+                      </button>
+                    </>
                   )}
                   {['草稿','申請審核中'].includes(r.status) && r.applicant_id === profile?.id && (
                     <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(r)} title="撤回" style={{ color: 'var(--accent-red)' }}>

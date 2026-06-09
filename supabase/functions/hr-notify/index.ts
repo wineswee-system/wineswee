@@ -253,8 +253,8 @@ function buildGoodsTransferNotification(
     rejection_reason?: string;
     // 加簽用
     extra_step_id?: number; reason?: string; requested_by_name?: string; assignee_name?: string;
-    // 用來組 LIFF URL
-    id?: number;
+    // 用來組 LIFF URL（per-user 從 employee_line_accounts 解出來，由 dispatch 注入）
+    id?: number; liff_id?: string | null;
   }
 ) {
   const palette = {
@@ -269,9 +269,9 @@ function buildGoodsTransferNotification(
   }[type];
 
   // LIFF URL（給 receipt_pending / step_assigned 開單據詳情用）
-  const liffId = Deno.env.get("LIFF_HR_ID") || Deno.env.get("LIFF_ID") || "";
-  const liffUrl = (details.id && liffId)
-    ? `https://liff.line.me/${liffId}?to=${encodeURIComponent(`/transfer-request?id=${details.id}`)}`
+  // liff_id 從 dispatch 端注入（per-user 從 employee_line_accounts 解）
+  const liffUrl = (details.id && details.liff_id)
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/transfer-request?id=${details.id}`)}`
     : null;
 
   const bodyContents: object[] = [
@@ -1136,7 +1136,15 @@ serve(async (req) => {
 
     // ── All remaining: send to the employee_id ──
     // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
-    const needsLiff = type === "task_auto_started" || type === "task_with_bindings_assigned" || type === "interview_completed";
+    const needsLiff = type === "task_auto_started"
+      || type === "task_with_bindings_assigned"
+      || type === "interview_completed"
+      || type === "goods_transfer_step_assigned"
+      || type === "goods_transfer_receipt_pending"
+      || type === "goods_transfer_extra_assigned"
+      || type === "goods_transfer_extra_approved_back"
+      || type === "goods_transfer_rejected"
+      || type === "goods_transfer_approved";
     const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
     const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
@@ -1167,17 +1175,17 @@ serve(async (req) => {
     } else if (type === "form_submission_rejected") {
       message = buildFormSubmissionNotification("rejected", details);
     } else if (type === "goods_transfer_step_assigned") {
-      message = buildGoodsTransferNotification("step_assigned", details);
+      message = buildGoodsTransferNotification("step_assigned", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_approved") {
-      message = buildGoodsTransferNotification("approved", details);
+      message = buildGoodsTransferNotification("approved", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_rejected") {
-      message = buildGoodsTransferNotification("rejected", details);
+      message = buildGoodsTransferNotification("rejected", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_receipt_pending") {
-      message = buildGoodsTransferNotification("receipt_pending", details);
+      message = buildGoodsTransferNotification("receipt_pending", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_extra_assigned") {
-      message = buildGoodsTransferNotification("extra_assigned", details);
+      message = buildGoodsTransferNotification("extra_assigned", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_extra_approved_back") {
-      message = buildGoodsTransferNotification("extra_approved_back", details);
+      message = buildGoodsTransferNotification("extra_approved_back", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "goods_transfer_extra_rejected_back") {
       message = buildGoodsTransferNotification("extra_rejected_back", details);
     } else if (type === "goods_transfer_extra_cancelled_info") {

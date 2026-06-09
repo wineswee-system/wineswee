@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, FileSpreadsheet, Users, Calendar } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
@@ -201,8 +201,22 @@ function parseShiftCatalog(wb) {
   return []
 }
 
+// ── 班別目錄工時對應 ──────────────────────────────────────
+// 嘗試三種策略匹配班別名稱到目錄中的時段
+//   1. 直接比對 shift
+//   2. 店名前綴重組：store + shift（"微風" + "早" → "微風早"）
+//   3. 剝去代碼前綴："文-文心晚班 2" → "文心晚班 2"
+function resolveShiftTime(shift, store, catalogMap) {
+  if (!shift || !catalogMap || !catalogMap.size) return null
+  if (catalogMap.has(shift)) return catalogMap.get(shift)
+  if (store && catalogMap.has(store + shift)) return catalogMap.get(store + shift)
+  const stripped = shift.replace(/^[\w一-鿿]{1,3}-/, '')
+  if (stripped !== shift && catalogMap.has(stripped)) return catalogMap.get(stripped)
+  return null
+}
+
 // ── 員工列（可展開顯示每日班別）────────────────────────────
-function EmpRow({ emp, dbMatched, resigned, records }) {
+function EmpRow({ emp, dbMatched, resigned, records, catalogMap }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -242,11 +256,11 @@ function EmpRow({ emp, dbMatched, resigned, records }) {
             }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {records.map((r, i) => {
-                  // 純假日/休息：shift === absence_type（無實際班次）
-                  const isOff = !!(r.absence_type && r.shift === r.absence_type)
-                  const isOT  = !!(r.absence_type && r.shift !== r.absence_type)
+                  const isOff     = !!(r.absence_type && r.shift === r.absence_type)
+                  const isOT      = !!(r.absence_type && r.shift !== r.absence_type)
+                  const resolved  = !isOff ? resolveShiftTime(r.shift, r.store, catalogMap) : null
                   return (
-                    <div key={i} title={r.date} style={{
+                    <div key={i} title={`${r.date}${resolved ? ` ${resolved.start}~${resolved.end} (${resolved.netHours}h)` : ''}`} style={{
                       fontSize: 11, padding: '3px 7px', borderRadius: 6,
                       background: isOff ? 'var(--bg-secondary)' : isOT ? 'var(--accent-orange-dim)' : 'var(--accent-cyan-dim)',
                       color:      isOff ? 'var(--text-muted)'   : isOT ? 'var(--accent-orange)'     : 'var(--accent-cyan)',
@@ -255,6 +269,11 @@ function EmpRow({ emp, dbMatched, resigned, records }) {
                       <span style={{ opacity: 0.65 }}>{r.date.slice(5)}</span>{' '}{r.shift}
                       {r.store && <span style={{ opacity: 0.45, marginLeft: 3, fontSize: 10 }}>[{r.store}]</span>}
                       {isOT && <span style={{ opacity: 0.6, marginLeft: 3 }}>({r.absence_type})</span>}
+                      {resolved && (
+                        <span style={{ opacity: 0.7, marginLeft: 4, fontSize: 10, color: 'var(--accent-green)' }}>
+                          {resolved.start}~{resolved.end}
+                        </span>
+                      )}
                     </div>
                   )
                 })}
@@ -285,8 +304,6 @@ export default function ScheduleXlsxImport() {
   const [result,          setResult]        = useState(null)
   const [dragging,        setDragging]      = useState(false)
   const [shiftCatalog,    setShiftCatalog]  = useState([])
-  const [defImporting,    setDefImporting]  = useState(false)
-  const [defImportResult, setDefResult]     = useState(null)
   const [catalogDragging, setCatalogDrag]  = useState(false)
   const fileRef    = useRef(null)
   const catalogRef = useRef(null)
@@ -333,7 +350,7 @@ export default function ScheduleXlsxImport() {
     if (!file) return
     if (empsLoading) { toast.error('員工資料載入中，請稍候再試'); return }
     if (!file.name.match(/\.xlsx?$/i)) { toast.error('請選擇 .xlsx 或 .xls 檔案'); return }
-    setResult(null); setParsed(null); setEnriched([]); setUnmatched([]); setShiftCatalog([]); setDefResult(null)
+    setResult(null); setParsed(null); setEnriched([]); setUnmatched([]); setShiftCatalog([])
 
     const buffer = await file.arrayBuffer()
     const bytes  = new Uint8Array(buffer)
@@ -358,15 +375,20 @@ export default function ScheduleXlsxImport() {
     if (!toImport.length) { toast.error('沒有可匯入的有效資料'); return }
     setImporting(true)
 
-    const rows = toImport.map(r => ({
-      organization_id: orgId,
-      employee:        r.employee,
-      employee_id:     r.dbEmp?.id ?? null,
-      date:            r.date,
-      shift:           r.shift,
-      absence_type:    r.absence_type,
-      month_group:     r.month_group,
-    }))
+    const rows = toImport.map(r => {
+      const resolved = resolveShiftTime(r.shift, r.store, catalogMap)
+      return {
+        organization_id: orgId,
+        employee:        r.employee,
+        employee_id:     r.dbEmp?.id ?? null,
+        date:            r.date,
+        shift:           r.shift,
+        absence_type:    r.absence_type,
+        month_group:     r.month_group,
+        actual_start:    resolved?.start ?? null,
+        actual_end:      resolved?.end   ?? null,
+      }
+    })
 
     const CHUNK = 500
     let inserted = 0, errored = 0
@@ -395,40 +417,18 @@ export default function ScheduleXlsxImport() {
 
   function reset() {
     setParsed(null); setEnriched([]); setUnmatched([]); setResult(null)
-    setShiftCatalog([]); setDefResult(null)
+    setShiftCatalog([])
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  async function handleShiftDefImport() {
-    if (!shiftCatalog.length || !orgId) return
-    setDefImporting(true); setDefResult(null)
-    let inserted = 0, skipped = 0, errored = 0
-
-    for (const def of shiftCatalog) {
-      if (!def.start || !def.end) { skipped++; continue }
-      const { data: existing } = await supabase
-        .from('shift_definitions')
-        .select('id')
-        .eq('organization_id', orgId)
-        .eq('name', def.name)
-        .maybeSingle()
-      if (existing) { skipped++; continue }
-      const { error } = await supabase.from('shift_definitions').insert({
-        organization_id: orgId,
-        name:            def.name,
-        start_time:      def.start,
-        end_time:        def.end,
-        employee_type:   'all',
-      })
-      if (error) { errored++; logger.error('shift def insert failed', { error, name: def.name }) }
-      else inserted++
+  // 班別目錄 Map（name → def）— 用於工時對應與匯入填值
+  const catalogMap = useMemo(() => {
+    const m = new Map()
+    for (const d of shiftCatalog) {
+      if (d.name && d.start && d.end) m.set(d.name, d)
     }
-
-    setDefResult({ inserted, skipped, errored })
-    setDefImporting(false)
-    if (inserted > 0) toast.success(`班別定義匯入：新增 ${inserted} 筆`)
-    else toast.info(`班別定義：${skipped} 筆已存在，略過`)
-  }
+    return m
+  }, [shiftCatalog])
 
   // 衍生統計（三類互斥：一般班次 + 假日加班 + 例休/假日 = matchedRecs）
   // 判斷依據：純假日的 shift === absence_type；假日加班的 shift 是實際時段（≠ absence_type）
@@ -436,6 +436,7 @@ export default function ScheduleXlsxImport() {
   const offRecs        = matchedRecs.filter(r => r.absence_type && r.shift === r.absence_type)
   const holidayOTRecs  = matchedRecs.filter(r => r.absence_type && r.shift !== r.absence_type)
   const pureWorkRecs   = matchedRecs.filter(r => !r.absence_type)
+  const resolvedCount  = pureWorkRecs.filter(r => resolveShiftTime(r.shift, r.store, catalogMap)).length
 
   return (
     <div style={{ padding: 28, maxWidth: 1100 }}>
@@ -512,6 +513,7 @@ export default function ScheduleXlsxImport() {
               { label: '例休/假日', value: offRecs.length,        color: 'var(--text-muted)',    icon: Calendar },
               { label: '假日加班',  value: holidayOTRecs.length,  color: 'var(--accent-orange)', icon: Calendar },
               { label: '未對應員工', value: unmatchedEmps.length,  color: unmatchedEmps.length > 0 ? 'var(--accent-red)' : 'var(--accent-green)', icon: Users },
+              ...(catalogMap.size > 0 ? [{ label: '已對應工時', value: `${resolvedCount}/${pureWorkRecs.length}`, color: resolvedCount > 0 ? 'var(--accent-green)' : 'var(--text-muted)', icon: Calendar }] : []),
             ].map(s => (
               <div key={s.label} style={{
                 flex: '1 1 140px', padding: '14px 18px', borderRadius: 12,
@@ -597,24 +599,6 @@ export default function ScheduleXlsxImport() {
                   background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
                 }}>{shiftCatalog.length} 筆</span>
                 <span style={{ flex: 1 }} />
-                {defImportResult && (
-                  <span style={{ fontSize: 12, color: defImportResult.errored > 0 ? 'var(--accent-orange)' : 'var(--accent-green)' }}>
-                    新增 {defImportResult.inserted}・略過 {defImportResult.skipped}
-                    {defImportResult.errored > 0 && `・失敗 ${defImportResult.errored}`}
-                  </span>
-                )}
-                <button
-                  onClick={handleShiftDefImport}
-                  disabled={defImporting}
-                  style={{
-                    padding: '5px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                    border: 'none', cursor: 'pointer',
-                    background: 'var(--accent-purple)', color: '#fff',
-                    opacity: defImporting ? 0.6 : 1,
-                  }}
-                >
-                  {defImporting ? '匯入中…' : '匯入班別定義'}
-                </button>
               </div>
               <div style={{ overflowX: 'auto', maxHeight: 320 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -686,7 +670,7 @@ export default function ScheduleXlsxImport() {
                   const resigned  = dbEmp?.status === '離職'
                   const empRecs = enriched.filter(r => r.employee_no === emp.empNo)
                   return (
-                    <EmpRow key={emp.empNo} emp={emp} dbMatched={dbMatched} resigned={resigned} records={empRecs} />
+                    <EmpRow key={emp.empNo} emp={emp} dbMatched={dbMatched} resigned={resigned} records={empRecs} catalogMap={catalogMap} />
                   )
                 })}
               </tbody>

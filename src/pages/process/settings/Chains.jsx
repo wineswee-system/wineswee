@@ -18,32 +18,20 @@ export default function Chains() {
       setLoading(true)
       setError(null)
       try {
-        const { data, error: e1 } = await supabase
-          .from('approval_chains')
-          .select('id, name, description, category, is_active, organization_id, min_amount, max_amount')
-          .order('category', { ascending: true, nullsFirst: false })
-          .order('name')
+        // 走 SECURITY DEFINER RPC，繞 approval_chains RLS（之前直查吃 503）
+        const { data, error: e1 } = await supabase.rpc('list_all_chains_with_steps')
         if (cancelled) return
-        if (e1) { setError(`approval_chains 查詢失敗：${e1.message}`); setLoading(false); return }
-        const list = data || []
+        if (e1) { setError(`list_all_chains_with_steps 失敗：${e1.message}`); setLoading(false); return }
+        const list = data?.chains || []
+        const stepList = data?.steps || []
         setChains(list)
-        setDebug(`撈到 ${list.length} 條 chain`)
-        if (list.length > 0) {
-          const ids = list.map(c => c.id)
-          const { data: stepData, error: e2 } = await supabase
-            .from('approval_chain_steps')
-            .select('chain_id, step_order, label, target_type, target_emp_id, target_role_id, target_dept_id, target_store_id')
-            .in('chain_id', ids)
-            .order('step_order')
-          if (cancelled) return
-          if (e2) { setError(`approval_chain_steps 查詢失敗：${e2.message}`) }
-          const map = {}
-          for (const s of (stepData || [])) {
-            if (!map[s.chain_id]) map[s.chain_id] = []
-            map[s.chain_id].push(s)
-          }
-          setSteps(map)
+        setDebug(`role=${data?.role || '無'} · org=${data?.org_id ?? '無'} · 撈到 ${list.length} 條 chain / ${stepList.length} 個 step`)
+        const map = {}
+        for (const s of stepList) {
+          if (!map[s.chain_id]) map[s.chain_id] = []
+          map[s.chain_id].push(s)
         }
+        setSteps(map)
       } catch (err) {
         if (!cancelled) setError(`例外：${err?.message || String(err)}`)
       } finally {

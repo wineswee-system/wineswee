@@ -138,7 +138,11 @@ function parseScheduleXlsx(buffer) {
       const date    = dates[i]
       if (!date) continue
       const rawCell = String(row[4 + i] || '').trim()
-      if (!rawCell) continue // 空白 = 未排班，跳過
+      if (!rawCell) {
+        records.push({ employee: name, employee_no: empNo, date, shift: '休息', absence_type: '休息', month_group: date.slice(0, 7), store: null })
+        empRecordCount++
+        continue
+      }
 
       // 多行 cell（\n 分隔）
       const lines     = rawCell.split('\n').map(l => l.trim()).filter(Boolean)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X } from 'lucide-react'
+import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -7,6 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl } from '../../lib/formAttachments'
 
 // 商品調撥申請單 — 兩階段流程（申請審核 + 驗收審核）
 
@@ -39,6 +40,7 @@ const emptyForm = () => ({
   reasons: [],
   reason_other: '',
   attachments: [],
+  attachFiles: [],  // [{ file, preview }] 新選的檔案，submit 後再 upload
   items: [{ line_no: 1, product_code: '', product_name: '', spec: '', unit: '', requested_qty: '', notes: '' }],
 })
 
@@ -137,8 +139,8 @@ export default function TransferRequests() {
     }
 
     try {
+      let targetId = editingId
       if (editingId) {
-        // 重送：先 update 主表
         const { error } = await supabase.from('goods_transfer_requests').update({
           ...payload,
           status: '申請審核中',
@@ -146,7 +148,6 @@ export default function TransferRequests() {
           rejected_at: null,
         }).eq('id', editingId)
         if (error) throw error
-        // 砍掉舊明細，重插（簡單版）
         await supabase.from('goods_transfer_items').delete().eq('transfer_request_id', editingId)
         await supabase.from('goods_transfer_items').insert(form.items.map((it, i) => ({
           transfer_request_id: editingId, line_no: i + 1,
@@ -157,12 +158,25 @@ export default function TransferRequests() {
       } else {
         const { data, error } = await supabase.from('goods_transfer_requests').insert(payload).select().single()
         if (error) throw error
+        targetId = data.id
         await supabase.from('goods_transfer_items').insert(form.items.map((it, i) => ({
           transfer_request_id: data.id, line_no: i + 1,
           product_code: it.product_code, product_name: it.product_name,
           spec: it.spec, unit: it.unit, requested_qty: Number(it.requested_qty), notes: it.notes,
         })))
         toast.success(`已送出申請 ${data.document_no}`)
+      }
+      // 上傳附件（如果有選）
+      if (form.attachFiles?.length > 0 && targetId) {
+        const res = await uploadFormAttachments({
+          formType: 'goods_transfer_apply',
+          formId: targetId,
+          files: form.attachFiles,
+          organizationId: profile?.organization_id,
+          uploaderEmpId: profile?.id,
+          uploaderName: profile?.name,
+        })
+        if (res.errors?.length) toast.error(`部分附件上傳失敗：${res.errors.length} 筆`)
       }
       setShowFormModal(false)
       setEditingId(null)
@@ -427,6 +441,42 @@ function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, 
         <input className="form-input" placeholder="其他原因（補充說明）" style={{ marginTop: 8, fontSize: 13 }}
           value={form.reason_other} onChange={e => set('reason_other', e.target.value)} />
       </Field>
+
+      <Field label="附件（截圖 / PDF，最多 5 個）">
+        <label style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          padding: '10px', borderRadius: 8, border: '2px dashed var(--border-medium)',
+          color: 'var(--accent-cyan)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        }}>
+          <Paperclip size={14} /> 選擇檔案
+          <input type="file" multiple accept="image/*,application/pdf" hidden
+            onChange={e => {
+              const files = Array.from(e.target.files || [])
+              const newOnes = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+              setForm(f => ({ ...f, attachFiles: [...(f.attachFiles || []), ...newOnes].slice(0, 5) }))
+              e.target.value = ''
+            }} />
+        </label>
+        {form.attachFiles?.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            {form.attachFiles.map((a, i) => (
+              <div key={i} style={{ position: 'relative', width: 72, height: 72, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-medium)' }}>
+                {a.file.type.startsWith('image/') ? (
+                  <img src={a.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 10, color: 'var(--text-muted)' }}>
+                    {(a.file.name.split('.').pop() || '?').toUpperCase()}
+                  </div>
+                )}
+                <button onClick={() => setForm(f => ({ ...f, attachFiles: f.attachFiles.filter((_, j) => j !== i) }))}
+                  style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Field>
     </Modal>
   )
 }
@@ -437,10 +487,12 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
     (row.items || []).sort((a, b) => a.line_no - b.line_no).map(it => ({ ...it, received_qty: it.received_qty ?? it.requested_qty }))
   )
   const [submitting, setSubmitting] = useState(false)
-  const [approverStep, setApproverStep] = useState(null)  // 我是不是目前 step 的 approver
+  const [approverStep, setApproverStep] = useState(null)
+  const [applyAttachments, setApplyAttachments] = useState([])
+  const [receiptAttachments, setReceiptAttachments] = useState([])
+  const [receiptFiles, setReceiptFiles] = useState([])  // 員工驗收時新上傳的
 
   useEffect(() => {
-    // 查我是不是目前 step 的可簽核人
     if (!['申請審核中', '驗收審核中'].includes(row.status)) return
     const reqType = row.current_stage === 'apply' ? 'goods_transfer_apply' : 'goods_transfer_receipt'
     supabase.rpc('resolve_snapshot_step_approvers', {
@@ -454,10 +506,28 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
     })
   }, [row, profile?.id])
 
+  // 載入兩階段附件
+  useEffect(() => {
+    listFormAttachments('goods_transfer_apply', row.id).then(setApplyAttachments)
+    listFormAttachments('goods_transfer_receipt', row.id).then(setReceiptAttachments)
+  }, [row.id])
+
   const canSubmitReceipt = row.status === '待驗收' && row.applicant_id === profile?.id
 
   const handleSubmitReceipt = async () => {
     setSubmitting(true)
+    // 先上傳附件
+    if (receiptFiles.length > 0) {
+      const res = await uploadFormAttachments({
+        formType: 'goods_transfer_receipt',
+        formId: row.id,
+        files: receiptFiles,
+        organizationId: profile?.organization_id,
+        uploaderEmpId: profile?.id,
+        uploaderName: profile?.name,
+      })
+      if (res.errors?.length) toast.error(`部分附件上傳失敗：${res.errors.length} 筆`)
+    }
     const { data, error } = await supabase.rpc('goods_transfer_submit_receipt', {
       p_id: row.id,
       p_items: receiptItems.map(it => ({ id: it.id, received_qty: it.received_qty })),
@@ -467,6 +537,11 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
     if (error || !data?.ok) { toast.error('送驗收失敗：' + (error?.message || data?.error)); return }
     toast.success('已送驗收審核')
     onChanged()
+  }
+
+  const openAttachment = async (att) => {
+    const url = await getAttachmentSignedUrl({ bucket: att.storage_bucket || 'attachments', path: att.storage_path })
+    if (url) window.open(url, '_blank')
   }
 
   const handleApprove = async (action) => {
@@ -542,6 +617,80 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
       {row.reject_reason && (
         <div style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontSize: 12, marginBottom: 12 }}>
           <b>駁回原因：</b>{row.reject_reason}
+        </div>
+      )}
+
+      {/* 申請附件 */}
+      {applyAttachments.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <b style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>📎 申請附件：</b>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {applyAttachments.map((a, i) => (
+              <button key={i} onClick={() => openAttachment(a)} style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                <Paperclip size={11} /> {a.file_name || `附件 ${i+1}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 驗收附件 */}
+      {receiptAttachments.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <b style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>📎 驗收附件：</b>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {receiptAttachments.map((a, i) => (
+              <button key={i} onClick={() => openAttachment(a)} style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                <Paperclip size={11} /> {a.file_name || `附件 ${i+1}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 驗收時可上傳新附件 */}
+      {canSubmitReceipt && (
+        <div style={{ marginBottom: 12 }}>
+          <b style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>📎 上傳驗收附件（截圖 / PDF，最多 5 個）：</b>
+          <label style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '8px', borderRadius: 8, border: '2px dashed var(--border-medium)',
+            color: 'var(--accent-cyan)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}>
+            <Paperclip size={12} /> 選擇檔案
+            <input type="file" multiple accept="image/*,application/pdf" hidden
+              onChange={e => {
+                const files = Array.from(e.target.files || [])
+                const newOnes = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+                setReceiptFiles(prev => [...prev, ...newOnes].slice(0, 5))
+                e.target.value = ''
+              }} />
+          </label>
+          {receiptFiles.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+              {receiptFiles.map((a, i) => (
+                <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-medium)' }}>
+                  {a.file.type.startsWith('image/')
+                    ? <img src={a.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 9, color: 'var(--text-muted)' }}>
+                        {(a.file.name.split('.').pop() || '?').toUpperCase()}
+                      </div>}
+                  <button onClick={() => setReceiptFiles(prev => prev.filter((_, j) => j !== i))}
+                    style={{ position: 'absolute', top: 1, right: 1, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <X size={9} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

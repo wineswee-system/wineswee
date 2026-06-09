@@ -240,6 +240,50 @@ function buildCorrectionNotification(type: "approved" | "rejected", details: {
   };
 }
 
+// ── 4.5 商品調撥通知 ─────────────────────────────────────────
+function buildGoodsTransferNotification(
+  type: "step_assigned" | "approved" | "rejected" | "receipt_pending",
+  details: {
+    document_no: string; applicant_name?: string;
+    transfer_type_label?: string; from_label?: string; to_label?: string;
+    items_count?: number; step_label?: string; stage?: string;
+    rejection_reason?: string;
+  }
+) {
+  const palette = {
+    step_assigned:   { color: "#E67E22", icon: "📦", title: "新調撥單待簽核" },
+    approved:        { color: "#27AE60", icon: "✅", title: "調撥單已完成" },
+    rejected:        { color: "#C53030", icon: "❌", title: "調撥單已駁回" },
+    receipt_pending: { color: "#3182CE", icon: "📦", title: "請填驗收實收數量" },
+  }[type];
+
+  const bodyContents: object[] = [
+    row("單號", details.document_no),
+  ];
+  if (details.applicant_name) bodyContents.push(row("申請人", details.applicant_name));
+  if (details.transfer_type_label) bodyContents.push(row("類型", details.transfer_type_label));
+  if (details.from_label && details.to_label) bodyContents.push(row("路線", `${details.from_label} → ${details.to_label}`));
+  if (details.items_count) bodyContents.push(row("項數", `${details.items_count} 項商品`));
+  if (details.step_label && type === "step_assigned") bodyContents.push(row("關卡", details.step_label));
+  if (type === "rejected" && details.rejection_reason) bodyContents.push(row("原因", details.rejection_reason, "#C53030"));
+
+  return {
+    type: "flex",
+    altText: `${palette.icon} ${palette.title} — ${details.document_no}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: palette.color, paddingAll: "14px",
+        contents: [{ type: "text", text: `${palette.icon} ${palette.title}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: bodyContents,
+      },
+    },
+  };
+}
+
 // ── 5. 班表發佈 → 通知員工（含班次明細）─────────────────────
 function buildScheduleNotification(details: {
   store_name: string; week_start: string; week_end: string;
@@ -1052,6 +1096,14 @@ serve(async (req) => {
       message = buildFormSubmissionNotification("approved", details);
     } else if (type === "form_submission_rejected") {
       message = buildFormSubmissionNotification("rejected", details);
+    } else if (type === "goods_transfer_step_assigned") {
+      message = buildGoodsTransferNotification("step_assigned", details);
+    } else if (type === "goods_transfer_approved") {
+      message = buildGoodsTransferNotification("approved", details);
+    } else if (type === "goods_transfer_rejected") {
+      message = buildGoodsTransferNotification("rejected", details);
+    } else if (type === "goods_transfer_receipt_pending") {
+      message = buildGoodsTransferNotification("receipt_pending", details);
     } else if (type === "store_audit_on_duty_assigned") {
       message = buildStoreAuditNotification("on_duty_assigned", details);
     } else if (type === "store_audit_step_assigned") {

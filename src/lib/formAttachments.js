@@ -16,6 +16,8 @@ const FORM_DIR = {
   loa: 'loa',
   shift_swap: 'shift-swap',
   off_request: 'off-request',
+  goods_transfer_apply: 'goods-transfer-apply',
+  goods_transfer_receipt: 'goods-transfer-receipt',
 }
 
 export async function uploadFormAttachments({

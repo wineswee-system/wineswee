@@ -25,6 +25,20 @@ type ClockMode = typeof VALID_MODES[number]
 
 // ── Helpers ──────────────────────────────────────────────
 
+/**
+ * 依班次毛時數推算休息分鐘（公司政策階梯）：
+ *   gross < 5h  → 0 分
+ *   5 ≤ gross < 9h → 30 分
+ *   gross ≥ 9h → 60 分（上限）
+ * 跟前端 src/lib/scheduleUtils.js#getRestMinutes 同公式。
+ */
+function getRestMinutes(grossHours: number): number {
+  if (grossHours <= 0) return 0
+  if (grossHours < 5) return 0
+  if (grossHours < 9) return 30
+  return 60
+}
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -289,15 +303,17 @@ serve(async (req: Request) => {
       if (!clockOutRecord?.clock_in) return jsonResp({ error: '尚未打上班卡' }, 409)
       if (clockOutRecord.clock_out)  return jsonResp({ error: '今日已打過下班卡' }, 409)
 
-      // 工時計算（跨午夜處理）
+      // 工時計算（跨午夜處理 + 自動扣休息）
       const [inH, inM] = (clockOutRecord.clock_in as string).split(':').map(Number)
       let workedMinutes = currentMinutes - (inH * 60 + inM)
       if (workedMinutes < 0) workedMinutes += 1440
+      const grossHours = workedMinutes / 60
+      const netMinutes = workedMinutes - getRestMinutes(grossHours)
 
       const updatePayload: Record<string, unknown> = {
         clock_out:       timeStr,
         clock_out_time:  now.toISOString(),
-        total_hours:     parseFloat((workedMinutes / 60).toFixed(2)),
+        total_hours:     parseFloat((netMinutes / 60).toFixed(2)),
         clock_out_mode:  clockMode,
         // outing 下班才覆寫 status，normal 不動 clock_in 寫入的 status
         ...(clockMode === 'outing' ? { status: '外出' } : {}),

@@ -321,7 +321,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               <div>
                 <label style={labelStyle}>
                   選擇排班期間
-                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {primarySettinggetWhs(s.id) || '標準工時'} 自動計算下兩期</span>
+                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {getWhs(primaryStore?.id) || '標準工時'} 自動計算下兩期</span>
                 </label>
                 {periods.length === 0 ? (
                   <div style={warnBox}>⚠ 此門市尚未設定工時制度或週期基準日，請先到門市設定完善資料</div>

@@ -256,12 +256,22 @@ export default function ScheduleBuilderGrid({
                             background: style.background, color: style.color,
                             minWidth: 34, lineHeight: 1.2, cursor: 'grab',
                           }}>
-                            {/~/.test(shift) ? (
-                              <>
-                                <span style={{ fontSize: 9 }}>{shift.split('~')[0]}</span>
-                                <span style={{ fontSize: 9 }}>{shift.split('~')[1]}</span>
-                              </>
-                            ) : shift}
+                            {(() => {
+                              // Resolve named shift to HH:MM~HH:MM via shiftDefs
+                              let label = shift
+                              if (!/^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)) {
+                                const def = shiftDefs.find(d => d.name === shift)
+                                if (def?.start_time && def?.end_time) {
+                                  label = `${def.start_time.slice(0, 5)}~${def.end_time.slice(0, 5)}`
+                                }
+                              }
+                              return /~/.test(label) ? (
+                                <>
+                                  <span style={{ fontSize: 9 }}>{label.split('~')[0]}</span>
+                                  <span style={{ fontSize: 9 }}>{label.split('~')[1]}</span>
+                                </>
+                              ) : label
+                            })()}
                           </div>
                         ) : (
                           <div style={{

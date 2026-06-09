@@ -415,10 +415,13 @@ function EmployeeRow({
                 {shift}
               </span>
             ) : shift ? (
-              // 班別名 normalize 後若為時段範圍（HH:MM~HH:MM）→ 上下分兩行顯示
-              // formatShiftLabel 把 "1030-1930" / "11~20" 等都統一成 "HH:MM~HH:MM"
+              // Normalise format; if still a named shift, resolve to HH:MM~HH:MM via SHIFT_TYPES
               (() => {
-                const label = formatShiftLabel(shift)
+                let label = formatShiftLabel(shift)
+                if (!/^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)) {
+                  const def = SHIFT_TYPES.find(t => t.label === shift)
+                  if (def?.start_time && def?.end_time) label = `${def.start_time}~${def.end_time}`
+                }
                 const isTimeRange = /^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)
                 return isTimeRange ? (
                   <span style={{

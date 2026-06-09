@@ -397,16 +397,16 @@ function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, 
       </Field>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {form.transfer_type !== 'warehouse_to_store' && (
-          <Field label="調出門市" required>
-            <SearchableSelect value={form.from_store_id || ''} onChange={(v) => set('from_store_id', Number(v) || null)}
-              options={storeOpts} placeholder="選調出門市" />
-          </Field>
-        )}
         {form.transfer_type !== 'store_to_warehouse' && (
           <Field label="調入門市" required>
             <SearchableSelect value={form.to_store_id || ''} onChange={(v) => set('to_store_id', Number(v) || null)}
               options={storeOpts} placeholder="選調入門市" />
+          </Field>
+        )}
+        {form.transfer_type !== 'warehouse_to_store' && (
+          <Field label="調出門市" required>
+            <SearchableSelect value={form.from_store_id || ''} onChange={(v) => set('from_store_id', Number(v) || null)}
+              options={storeOpts} placeholder="選調出門市" />
           </Field>
         )}
       </div>

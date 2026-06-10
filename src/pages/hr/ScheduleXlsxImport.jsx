@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
-import { formatShiftLabel, parseWorkRange } from '../../lib/scheduleUtils'
+import { formatShiftLabel, parseWorkRange, parseTime } from '../../lib/scheduleUtils'
 import { logger } from '../../lib/logger'
 
 // ── 假別標籤 → schedules.absence_type（與 ABSENCE_CONFIG 對齊）────
@@ -218,6 +218,23 @@ function resolveShiftTime(shift, store, catalogMap) {
     if (store && catalogMap.has(store + shift)) return catalogMap.get(store + shift)
     const stripped = shift.replace(/^[\w一-鿿]{1,3}-/, '')
     if (stripped !== shift && catalogMap.has(stripped)) return catalogMap.get(stripped)
+  }
+  // 分段班（"11:00~14:00 / 18:00~23:00"）— 各段分別 parse，合計工時
+  if (shift.includes('/')) {
+    const segs = shift.split(/\s*\/\s*/).map(s => parseWorkRange(s.trim())).filter(Boolean)
+    if (segs.length >= 2) {
+      const grossHours = Math.round(segs.reduce((s, r) => s + r.grossHours, 0) * 100) / 100
+      const netHours   = Math.round(segs.reduce((s, r) => s + r.netHours,   0) * 100) / 100
+      const lastEnd    = parseTime(segs[segs.length - 1].end)
+      const firstStart = parseTime(segs[0].start)
+      return {
+        start: segs[0].start,
+        end:   segs[segs.length - 1].end,
+        crossMidnight: segs.some(s => s.crossMidnight) || lastEnd < firstStart,
+        grossHours,
+        netHours,
+      }
+    }
   }
   // 班別代碼已被 normalizeShiftFull 轉為 "HH:MM~HH:MM" — 直接 parse 時段
   return parseWorkRange(shift)

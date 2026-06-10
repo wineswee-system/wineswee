@@ -91,13 +91,14 @@ export default function ScheduleBuilder() {
   }, [storeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoSave = useCallback(async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
-    await supabase.from('schedules').upsert({
+    // schedules 表沒有 status 欄位，「未發布」是用 isDirty 在前端算的
+    const { error } = await supabase.from('schedules').upsert({
       employee: empName, date, shift,
       actual_start: actualStart, actual_end: actualEnd,
       source_store: sourceStore,
-      status: 'draft',
       organization_id: authProfile?.organization_id,
     }, { onConflict: 'employee,date' })
+    if (error) toast.error('自動儲存失敗：' + error.message)
   }, [authProfile])
 
   const handleSetShift = useCallback((empName, date, shift, actualStart, actualEnd, sourceStore) => {
@@ -134,7 +135,6 @@ export default function ScheduleBuilder() {
           employee: empName, date, shift: val.shift,
           actual_start: val.actual_start, actual_end: val.actual_end,
           source_store: val.source_store,
-          status: 'published',
           organization_id: authProfile?.organization_id,
         })
       }

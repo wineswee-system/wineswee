@@ -243,41 +243,42 @@ export default function ScheduleBuilderGrid({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-      {/* ── 多選 toolbar：只在有選或有複製內容時顯示 ── */}
-      {(selectedCells.size > 0 || clipboard) && (
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 50,
-          marginBottom: 8, padding: '8px 14px',
-          borderRadius: 10, background: 'rgba(139,92,246,0.12)',
-          border: '1px solid rgba(139,92,246,0.35)',
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          fontSize: 12, color: 'var(--text-primary)',
-        }}>
-          <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
-            {selectedCells.size > 0 ? `🎯 已選 ${selectedCells.size} 格` : '📋 剪貼簿有內容'}
-          </span>
-          {selectedCells.size > 0 && (
-            <span style={{ color: 'var(--text-muted)' }}>
-              點左側班別套用 · <kbd style={kbdStyle}>Ctrl</kbd>+<kbd style={kbdStyle}>C</kbd> 複製 · <kbd style={kbdStyle}>Del</kbd> 清空 · <kbd style={kbdStyle}>Esc</kbd> 取消
-            </span>
+      {/* ── 多選 toolbar：永遠顯示（沒選時當提示） ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        marginBottom: 8, padding: '8px 14px',
+        borderRadius: 10,
+        background: selectedCells.size > 0 || clipboard ? 'rgba(139,92,246,0.12)' : 'var(--bg-card)',
+        border: `1px solid ${selectedCells.size > 0 || clipboard ? 'rgba(139,92,246,0.35)' : 'var(--border-medium)'}`,
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        fontSize: 12, color: 'var(--text-primary)',
+      }}>
+        <span style={{ fontWeight: 700, color: selectedCells.size > 0 || clipboard ? '#8b5cf6' : 'var(--text-secondary)' }}>
+          {selectedCells.size > 0 ? `🎯 已選 ${selectedCells.size} 格` : clipboard ? '📋 剪貼簿有內容' : '💡 批次填班'}
+        </span>
+        <span style={{ color: 'var(--text-muted)' }}>
+          {selectedCells.size > 0 ? (
+            <>點左側班別套用 · <kbd style={kbdStyle}>Ctrl</kbd>+<kbd style={kbdStyle}>C</kbd> 複製 · <kbd style={kbdStyle}>Del</kbd> 清空 · <kbd style={kbdStyle}>Esc</kbd> 取消</>
+          ) : (
+            <><kbd style={kbdStyle}>Ctrl</kbd>+點 多選 · <kbd style={kbdStyle}>Shift</kbd>+點 範圍選 · 選好後點左側班別套用 / <kbd style={kbdStyle}>Ctrl</kbd>+<kbd style={kbdStyle}>C</kbd>/<kbd style={kbdStyle}>V</kbd> 複製貼上</>
           )}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            {selectedCells.size > 0 && (
-              <>
-                <button onClick={copySelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📋 複製</button>
-                {clipboard && (
-                  <button onClick={pasteSelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📥 貼上 ({clipboard.length})</button>
-                )}
-                <button onClick={deleteSelection} className="btn btn-sm btn-secondary" style={{ ...btnSmStyle, color: 'var(--accent-red)' }}>🗑️ 刪除</button>
-                <button onClick={() => { setSelectedCells(new Set()); setLastClicked(null) }} className="btn btn-sm btn-secondary" style={btnSmStyle}>✕ 取消選擇</button>
-              </>
-            )}
-            {selectedCells.size === 0 && clipboard && (
-              <button onClick={() => setClipboard(null)} className="btn btn-sm btn-secondary" style={btnSmStyle}>清空剪貼簿</button>
-            )}
-          </div>
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {selectedCells.size > 0 && (
+            <>
+              <button onClick={copySelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📋 複製</button>
+              {clipboard && (
+                <button onClick={pasteSelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📥 貼上 ({clipboard.length})</button>
+              )}
+              <button onClick={deleteSelection} className="btn btn-sm btn-secondary" style={{ ...btnSmStyle, color: 'var(--accent-red)' }}>🗑️ 刪除</button>
+              <button onClick={() => { setSelectedCells(new Set()); setLastClicked(null) }} className="btn btn-sm btn-secondary" style={btnSmStyle}>✕ 取消選擇</button>
+            </>
+          )}
+          {selectedCells.size === 0 && clipboard && (
+            <button onClick={() => setClipboard(null)} className="btn btn-sm btn-secondary" style={btnSmStyle}>清空剪貼簿</button>
+          )}
         </div>
-      )}
+      </div>
 
       <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
 

@@ -237,29 +237,50 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const empIsVariableHours = isVariableHours(empStoreId)
 
     const calcOtPay = (bucket) => {
-      // 平日：FT/PT 一樣
-      const weekday = bucket.weekday <= 2
-        ? Math.ceil(bucket.weekday * hourlyRate * 1.34)
-        : Math.ceil(2 * hourlyRate * 1.34 + (bucket.weekday - 2) * hourlyRate * 1.67)
-      // 休息日：FT/PT 一樣，階梯 1.34/1.67/2.67
-      const rd1 = Math.min(bucket.restday, 2)
-      const rd2 = Math.min(Math.max(bucket.restday - 2, 0), 6)
-      const rd3 = Math.max(bucket.restday - 8, 0)
-      const restday = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
-      // 例假：FT/PT 都 ×2 全程
+      // 把 rows 按 date+category 分組（同日同類別合計再套階梯，§32 是「每日」重設）
+      // bucket.rows: [{ date, hours, category }]
+      const rowsByDayCat = {}
+      for (const r of (bucket.rows || [])) {
+        const key = `${r.date}|${r.category}`
+        rowsByDayCat[key] = (rowsByDayCat[key] || 0) + (Number(r.hours) || 0)
+      }
+      const sumByDay = (cat, perDayCalc) => {
+        let total = 0
+        for (const [key, h] of Object.entries(rowsByDayCat)) {
+          if (!key.endsWith(`|${cat}`)) continue
+          total += perDayCalc(h)
+        }
+        return total
+      }
+
+      // 平日：每日前 2h × 1.34，超過 × 1.67
+      const weekday = sumByDay('weekday', h =>
+        h <= 2
+          ? Math.ceil(h * hourlyRate * 1.34)
+          : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
+      )
+      // 休息日：每日 前 2h × 1.34，3~8h × 1.67，9~12h × 2.67
+      const restday = sumByDay('restday', h => {
+        const rd1 = Math.min(h, 2)
+        const rd2 = Math.min(Math.max(h - 2, 0), 6)
+        const rd3 = Math.max(h - 8, 0)
+        return Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+      })
+      // 例假：FT/PT 都 ×2 全程（沒階梯，flat）
       const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
       // 國定假日加班 — 依員工所屬店的工時制度分流：
       //  - PT 時薪：×2 全程
-      //  - FT + 變形工時店（12 家門市）：1.34/1.67 階梯（§30-1 國定可調移）
-      //  - FT + 其他（行政員工掛總部 / 標準工時）：×1 全程（月薪已含 30 天工資）
-      const ho = bucket.holiday || 0
-      const holiday = isHourly
-        ? Math.ceil(ho * hourlyRate * 2)
-        : empIsVariableHours
-          ? (ho <= 2
-              ? Math.ceil(ho * hourlyRate * 1.34)
-              : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
-          : Math.ceil(ho * hourlyRate)  // 行政正職：×1
+      //  - FT + 變形工時店（12 家門市）：每日前 2h × 1.34，超過 × 1.67
+      //  - FT + 其他（行政員工掛總部）：×1 全程（月薪已含 30 天工資）
+      const holiday = sumByDay('holiday', h => {
+        if (isHourly) return Math.ceil(h * hourlyRate * 2)
+        if (empIsVariableHours) {
+          return h <= 2
+            ? Math.ceil(h * hourlyRate * 1.34)
+            : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
+        }
+        return Math.ceil(h * hourlyRate)  // 行政正職：×1
+      })
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
         total: weekday + restday + weeklyOff + holiday,

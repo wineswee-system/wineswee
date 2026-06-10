@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Settings } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -60,6 +60,7 @@ export default function TransferRequests() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm())
   const [detailRow, setDetailRow] = useState(null)
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -74,6 +75,14 @@ export default function TransferRequests() {
       setStores(s.data || [])
     }).finally(() => setLoading(false))
   }, [profile?.organization_id])
+
+  // 從 Dashboard / LINE 卡片連過來時 ?focus=ID → 自動開該單詳情
+  useEffect(() => {
+    const focusId = searchParams.get('focus')
+    if (!focusId || !records.length || detailRow) return
+    const target = records.find(r => String(r.id) === String(focusId))
+    if (target) setDetailRow(target)
+  }, [searchParams, records, detailRow])
 
   const storeMap = useMemo(() => Object.fromEntries(stores.map(s => [s.id, s])), [stores])
   const empMap = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])

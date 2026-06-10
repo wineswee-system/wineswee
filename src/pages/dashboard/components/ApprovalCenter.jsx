@@ -88,7 +88,9 @@ const GROUPS = [
   {
     key: 'form', label: '自訂表單', icon: FileText, color: 'var(--accent-blue)',
     tabs: [
-      { key: 'form_submission', label: '表單申請', table: 'form_submissions', route: '/hr/forms/submissions', pendingStatus: '申請中' },
+      { key: 'form_submission',         label: '表單申請', table: 'form_submissions',        route: '/hr/forms/submissions',   pendingStatus: '申請中' },
+      { key: 'goods_transfer_apply',    label: '調撥-申請', table: 'goods_transfer_requests', route: '/process/transfer-requests', pendingStatus: '申請審核中' },
+      { key: 'goods_transfer_receipt',  label: '調撥-驗收', table: 'goods_transfer_requests', route: '/process/transfer-requests', pendingStatus: '驗收審核中' },
     ],
   },
 ]
@@ -113,6 +115,9 @@ const PERM_KEY_MAP = {
   shift_swap_peer: 'shift_swaps',
   shift_swap_manager: 'shift_swaps',
   task_confirmation: 'task_confirmations',
+  // 商品調撥（snapshot-aware，RPC 已支援）
+  goods_transfer_apply:   'goods_transfer_apply_requests',
+  goods_transfer_receipt: 'goods_transfer_receipt_requests',
 }
 
 // ── 待簽核 view (原 ApprovalCenter 內容 1:1 不動) ────────────────────────

@@ -65,6 +65,7 @@ export default function ScheduleBuilderGrid({
       anchorDate: storeSettings?.variable_period_start,
       startDate: dates[0],
       endDate: dates[dates.length - 1],
+      shiftDefs,
     })
     return {
       errors: [...base.errors, ...quota.errors],
@@ -353,7 +354,6 @@ export default function ScheduleBuilderGrid({
                         }}>
                           <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>❌ </span>
                           {e.message}
-                          {e.law && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>({e.law})</span>}
                         </div>
                       ))}
                       {warns.map((w, i) => (
@@ -364,7 +364,6 @@ export default function ScheduleBuilderGrid({
                         }}>
                           <span style={{ color: 'var(--accent-orange)', fontWeight: 700 }}>⚠️ </span>
                           {w.message}
-                          {w.law && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>({w.law})</span>}
                         </div>
                       ))}
                     </div>

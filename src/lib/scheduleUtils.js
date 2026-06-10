@@ -643,7 +643,7 @@ export function listCyclesInRange(rangeStart, rangeEnd, system, anchorDate) {
 // @param anchorDate - 變形工時 cycle 起算日 'YYYY-MM-DD'（標準工時可省）
 // @param startDate, endDate - 檢查範圍 'YYYY-MM-DD'
 // @returns { errors: [{ employee, constraint, law, message, severity }], warnings: [] }
-export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate }) {
+export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate, shiftDefs = [] }) {
   const errors = []
   const warnings = []
   if (!schedules || schedules.length === 0) return { errors, warnings }
@@ -651,6 +651,26 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
 
   const isWeeklyOff = s => s === '例假'
   const isRestDay = s => s === '休息' || s === '休' // legacy 休 算休息
+  const isAbsenceShift = s => !s || isWeeklyOff(s) || isRestDay(s) || ['補休', '特休', '病', '會議', '產', '事'].includes(s)
+
+  // 班別 → 工時 對照（沒設定的當 8h 估）
+  const hoursMap = {}
+  shiftDefs.forEach(d => {
+    if (!d.name) return
+    const startH = parseInt(d.start_time) || 0
+    const startM = parseInt((d.start_time || '').split(':')[1]) || 0
+    const endH = parseInt(d.end_time) || 0
+    const endM = parseInt((d.end_time || '').split(':')[1]) || 0
+    const start = startH + startM / 60
+    const end = endH + endM / 60
+    hoursMap[d.name] = end > start ? end - start : (24 - start + end)
+  })
+
+  // 取得 workHourSystem 的 cycle 工時上限（沒 shiftDefs 也能跑，純基於 constraint）
+  const constraints = getWorkSystemConstraints(workHourSystem)
+  const periodHourCap = constraints.periodTotalHours
+  const periodLabel = constraints.periodWeeks === 1 ? '週'
+    : `${constraints.periodWeeks} 週`
 
   // group by employee
   const byEmp = {}
@@ -680,6 +700,19 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
           law: '勞基法 §36',
           message: `${empName} ${label} 休息 ${rdCount}/${minRestDays} 不足`,
           severity: 'error',
+        })
+      }
+      // 統計週期工時：把 inRange 的工作班 hours 累加，超 cap 給 warning
+      const periodHours = inRange
+        .filter(s => !isAbsenceShift(s.shift))
+        .reduce((sum, s) => sum + (hoursMap[s.shift] || 8), 0)
+      if (periodHours > periodHourCap) {
+        warnings.push({
+          employee: empName,
+          constraint: 'WH',
+          law: '勞基法 §30',
+          message: `${empName} ${label} ${periodLabel}統計工時 ${periodHours.toFixed(1)}h 偏高`,
+          severity: 'warning',
         })
       }
     }

@@ -279,7 +279,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
           employee: emp,
           constraint: 'H2',
           law: '勞基法 §32',
-          message: `${emp} ${s.date} 班次「${s.shift}」工時 ${hours.toFixed(1)}h，超過每日12小時上限`,
+          message: `${emp} ${s.date} 班次「${s.shift}」單日工時 ${hours.toFixed(1)}h 過長`,
           severity: 'error',
         })
       } else if (hours && hours > 8) {
@@ -287,26 +287,14 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
           employee: emp,
           constraint: 'H2',
           law: '勞基法 §30',
-          message: `${emp} ${s.date} 班次「${s.shift}」工時 ${hours.toFixed(1)}h，超過正常8小時（含加班）`,
+          message: `${emp} ${s.date} 班次「${s.shift}」單日工時 ${hours.toFixed(1)}h 偏高`,
           severity: 'warning',
         })
       }
     }
 
-    // 每週工時不超過40小時 (§30)
-    let weeklyHours = 0
-    for (const s of workDays) {
-      weeklyHours += shiftHoursMap[s.shift] || 8
-    }
-    if (weeklyHours > 40) {
-      warnings.push({
-        employee: emp,
-        constraint: 'S3',
-        law: '勞基法 §30',
-        message: `${emp} 本週工時 ${weeklyHours.toFixed(1)}h 超過40小時上限`,
-        severity: 'warning',
-      })
-    }
+    // 週/cycle 工時上限已移到 validateLeisureQuota（cycle-aware：標準工時 7 天/變形依 cycle）
+    // 原來這裡寫的 weeklyHours = sum(empSchedules) 等於把整段排班當一週，遇到月資料會 240h 誤報
 
     // H5 一例一休檢查改在月制 / 變形工時 layer 算（cycle-based）
     // 4 週變形：每 2 週 ≥1 例 + 4 週 ≥4 例 4 休
@@ -330,7 +318,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
         employee: emp,
         constraint: 'H3',
         law: '勞基法 §36',
-        message: `${emp} 連續工作 ${maxConsecutive} 天，超過6天上限（每7日應有1日例假）`,
+        message: `${emp} 連續工作 ${maxConsecutive} 天，建議安排休息`,
         severity: 'error',
       })
     }
@@ -363,7 +351,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
             employee: emp,
             constraint: 'H4',
             law: '勞基法 §34',
-            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），低於協議最低8小時`,
+            message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap}h 過短（${prev.shift}→${curr.shift}）`,
             severity: 'error',
           })
         } else if (gap < LABOR_STANDARDS.shiftInterval.minHours) {
@@ -371,7 +359,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
             employee: emp,
             constraint: 'H4',
             law: '勞基法 §34',
-            message: `${emp} ${prev.date}→${curr.date} 輪班間隔僅 ${gap}h（${prev.shift}→${curr.shift}），應至少11小時`,
+            message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap}h 偏短（${prev.shift}→${curr.shift}）`,
             severity: 'warning',
           })
         }

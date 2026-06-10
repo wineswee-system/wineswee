@@ -6,6 +6,7 @@ import {
   validateSchedule,
   calculateOvertimePay,
 } from '../laborLaw.js'
+import { validateLeisureQuota } from '../scheduleUtils.js'
 
 // ═════════════════════════════════════════════════════════════
 //  LABOR_STANDARDS Constants
@@ -88,8 +89,8 @@ describe('validateSchedule', () => {
     expect(result.errors).toHaveLength(0)
   })
 
-  it('HR-U14: weekly > 40h triggers warning', () => {
-    // 6 work days = 48h
+  it('HR-U14: weekly > 40h triggers warning (now lives in validateLeisureQuota)', () => {
+    // 6 work days = 48h；check 移到 validateLeisureQuota（cycle-aware：標準工時 cycle = 1 週 40h）
     const schedules = [
       { employee: '王小明', date: '2026-04-06', shift: '9-18' },
       { employee: '王小明', date: '2026-04-07', shift: '9-18' },
@@ -99,8 +100,13 @@ describe('validateSchedule', () => {
       { employee: '王小明', date: '2026-04-11', shift: '9-18' },
       { employee: '王小明', date: '2026-04-12', shift: '休' },
     ]
-    const result = validateSchedule(schedules, weekDates)
-    expect(result.warnings.some(w => w.law === '勞基法 §30')).toBe(true)
+    const result = validateLeisureQuota({
+      schedules,
+      workHourSystem: '標準工時',
+      startDate: weekDates[0],
+      endDate: weekDates[weekDates.length - 1],
+    })
+    expect(result.warnings.some(w => w.constraint === 'WH')).toBe(true)
   })
 
   it('HR-U15: < 2 rest days triggers error (§36)', () => {

@@ -251,6 +251,7 @@ export default function Schedule() {
         anchorDate: storeSettings?.variable_period_start,
         startDate: activeStart,
         endDate: activeEnd,
+        shiftDefs,
       })
       setCompliance({
         errors: [...baseResult.errors, ...quotaResult.errors],
@@ -1540,7 +1541,6 @@ export default function Schedule() {
                             }}>
                               <strong style={{ color: 'var(--accent-red)' }}>❌ </strong>
                               {e.message}
-                              {e.law && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>({e.law})</span>}
                             </div>
                           ))}
                           {warns.map((w, i) => (
@@ -1551,7 +1551,6 @@ export default function Schedule() {
                             }}>
                               <strong style={{ color: 'var(--accent-orange)' }}>⚠️ </strong>
                               {w.message}
-                              {w.law && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>({w.law})</span>}
                             </div>
                           ))}
                         </div>

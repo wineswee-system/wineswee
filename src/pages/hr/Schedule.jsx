@@ -1209,6 +1209,19 @@ export default function Schedule() {
             </button>
           </div>
         )}
+        {isSuperAdmin && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>部門</span>
+            <select className="form-input" style={{ width: 160, padding: '4px 8px', fontSize: 13 }}
+              value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              <option value="">全部部門</option>
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </select>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              篩選結果：{filtered.length} 人
+            </span>
+          </div>
+        )}
       </div>
 
       {/* View mode toggle + Store selector + Tabs */}
@@ -1407,9 +1420,6 @@ export default function Schedule() {
           getStoreShifts={getStoreShifts}
           storeFilter={storeFilter}
           holidaySet={holidaySet}
-          deptFilter={deptFilter}
-          setDeptFilter={setDeptFilter}
-          departments={departments}
           storeSettings={storeSettings}
           pendingLeaveMap={pendingLeaveMap}
           violationsByEmp={(() => {

@@ -29,9 +29,6 @@ export default function MonthScheduleTable({
   getStoreShifts,
   storeFilter,
   holidaySet,
-  deptFilter,
-  setDeptFilter,
-  departments,
   storeSettings,
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
@@ -87,36 +84,13 @@ export default function MonthScheduleTable({
 
   return (
     <>
-      {/* Compact filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>部門</span>
-          <select className="form-input" style={{ width: 160, padding: '6px 10px', fontSize: 13 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-            <option value="">全部部門</option>
-            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-          </select>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          篩選結果：{filtered.length} 人 · 月出勤 {totalWorkDays} 天 · 人均休假 {avgRestDays} 天
-        </div>
-      </div>
-
       {/* Shift Legend — simplified when viewing all stores */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {storeFilter ? (
-          // Single store: show only that store's shifts (deduplicated)
-          getStoreShifts(storeFilter).map(d => (
-            <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(d.name) }}>
-              {d.name}
-            </span>
-          ))
-        ) : (
-          // All stores: just show a generic "work shift" chip
-          <span style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
-            background: 'rgba(34,211,238,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }}>
-            工作班
+        {storeFilter && getStoreShifts(storeFilter).map(d => (
+          <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(d.name) }}>
+            {d.name}
           </span>
-        )}
+        ))}
         <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
         {absenceOptions.map(a => (
           <span key={a.value} style={{ fontSize: 10, color: getAbsenceConfig(a.value)?.color || '#666' }}>

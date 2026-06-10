@@ -33,7 +33,9 @@ export default function MonthScheduleTable({
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
+  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
 }) {
+  const isDateLocked = (date) => lockedDates && lockedDates.has(date)
   // Group employees by store when no store filter.
   // 沒分配門市的員工（store = null/空）集中到「未分配門市」群組，避免被吃掉看不到。
   const UNASSIGNED_LABEL = '未分配門市'
@@ -182,6 +184,7 @@ export default function MonthScheduleTable({
                       schedules={schedules}
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
+                      lockedDates={lockedDates}
                     />
                   )
                 })
@@ -216,6 +219,7 @@ export default function MonthScheduleTable({
                     schedules={schedules}
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
+                    lockedDates={lockedDates}
                   />
                 ))
               )}
@@ -259,7 +263,9 @@ function EmployeeRow({
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   pendingLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
+  lockedDates = new Set(),
 }) {
+  const isDateLocked = (date) => lockedDates && lockedDates.has(date)
   const v = violationsByEmp[emp.name] || { errors: 0, warnings: 0 }
   let workDays = 0
   let restDays = 0
@@ -336,21 +342,25 @@ function EmployeeRow({
         // 跨店：該天 source_store 若不是員工主店 → 顯示淡紫色背景
         const daySchedule = schedules.find(s => s.employee === emp.name && s.date === date)
         const isCrossStore = daySchedule?.source_store && emp.store && daySchedule.source_store !== emp.store
+        const cellLocked = isDateLocked(date)
 
         return (
           <td key={date} style={{
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
             border: isFocused ? '2px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
-            background: isSelected ? 'rgba(34,211,238,0.20)'
+            background: cellLocked
+              ? 'repeating-linear-gradient(45deg, rgba(100,116,139,0.06), rgba(100,116,139,0.06) 4px, transparent 4px, transparent 8px)'
+              : isSelected ? 'rgba(34,211,238,0.20)'
               : isCrossStore ? 'rgba(168,85,247,0.08)'
               : isHoliday ? 'rgba(239,68,68,0.05)' : isWeekend ? 'rgba(99,102,241,0.03)' : undefined,
-            cursor: canEditSchedule ? 'pointer' : 'default',
+            cursor: cellLocked ? 'not-allowed' : (canEditSchedule ? 'pointer' : 'default'),
             outline: isFocused ? '1px solid var(--accent-cyan)' : 'none',
             userSelect: 'none',
           }}
+          title={cellLocked ? '此排班已發布鎖定' : undefined}
           onMouseDown={(e) => {
-            if (!canEditSchedule) return
+            if (!canEditSchedule || cellLocked) return
             // 拖曳開始：set anchor + 進入 selecting；不開 modal
             // Shift+click → 從原 anchor 延伸到這格
             if (e.shiftKey && selection?.anchor) {
@@ -363,12 +373,13 @@ function EmployeeRow({
             setFocusedCell?.({ empName: emp.name, date })
           }}
           onMouseEnter={() => {
+            if (cellLocked) return
             if (selecting && selection?.anchor) {
               setSelection?.({ anchor: selection.anchor, end: { empName: emp.name, date } })
             }
           }}
           onClick={(e) => {
-            if (!canEditSchedule) return
+            if (!canEditSchedule || cellLocked) return
             // 拖曳到別格了 → 不開 modal（多格選取）
             if (selection && (selection.anchor.empName !== selection.end.empName
               || selection.anchor.date !== selection.end.date)) return

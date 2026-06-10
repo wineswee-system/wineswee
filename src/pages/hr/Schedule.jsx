@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, validateHolidayWork } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, validateHolidayWork, getLockedDateSetForStore } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -89,7 +89,8 @@ export default function Schedule() {
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
   // Store settings
-  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at }
+  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at } — 舊單筆 (legacy)
+  const [publishStatusRows, setPublishStatusRows] = useState([]) // 多筆 cycle 級別發布狀態
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
   const [operatingHours, setOperatingHours] = useState({})
@@ -252,17 +253,59 @@ export default function Schedule() {
       if (!signal.aborted) setScheduleLoading(false)
     })
 
-    // Load publish status for current month
+    // Load publish status for current month (legacy single) + cycle-level (multi)
     const month = activeStart?.slice(0, 7)
     const store = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
     if (month && store) {
       supabase.from('schedule_publish_status').select('*')
         .eq('store_id', store.id).eq('month', month).maybeSingle()
         .then(({ data }) => { if (!signal.aborted) setPublishStatus(data) })
+      // 撈整月範圍可能涉及的所有 cycle publish_status（cycle 可跨月）
+      supabase.from('schedule_publish_status').select('*')
+        .eq('store_id', store.id)
+        .or(`and(cycle_start.lte.${activeEnd},cycle_end.gte.${activeStart}),month.eq.${month}`)
+        .then(({ data }) => { if (!signal.aborted) setPublishStatusRows(data || []) })
+    } else {
+      setPublishStatusRows([])
     }
 
     return () => controller.abort()
   }, [activeStart, activeEnd, storeFilter, locations])
+
+  // 鎖定日期 Set（從 publishStatusRows 算）
+  const currentStore = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
+  const lockedDates = currentStore
+    ? getLockedDateSetForStore(publishStatusRows, currentStore.id)
+    : new Set()
+
+  // 當前 cycle 鎖定狀態 — 給 header chip 用
+  // 用 activeStart 對應到的 cycle row（cycle_start <= activeStart <= cycle_end）
+  const currentCycleRow = publishStatusRows.find(r =>
+    r.cycle_start && r.cycle_end
+    && r.store_id === currentStore?.id
+    && r.cycle_start <= activeStart
+    && r.cycle_end >= activeStart
+  )
+  const isCurrentCycleLocked = currentCycleRow?.status === 'published' && !!currentCycleRow?.locked_at
+  const isAdmin = ['admin', 'super_admin'].includes(authRole)
+
+  // 解鎖當前 cycle (admin only)
+  const handleUnpublishCycle = async () => {
+    if (!isAdmin || !currentCycleRow || !currentStore) return
+    const ok = window.confirm(`確定解鎖此 cycle？\n\n${currentCycleRow.cycle_start} ~ ${currentCycleRow.cycle_end}\n\n解鎖後 cell 可再次編輯。`)
+    if (!ok) return
+    const { error } = await supabase.rpc('unpublish_schedule_cycle', {
+      p_store_id: currentStore.id,
+      p_cycle_start: currentCycleRow.cycle_start,
+      p_cycle_end: currentCycleRow.cycle_end,
+    })
+    if (error) { window.alert('解鎖失敗：' + error.message); return }
+    // 重撈
+    const { data } = await supabase.from('schedule_publish_status').select('*')
+      .eq('store_id', currentStore.id)
+      .or(`and(cycle_start.lte.${activeEnd},cycle_end.gte.${activeStart}),month.eq.${activeStart?.slice(0, 7)}`)
+    setPublishStatusRows(data || [])
+  }
 
   // Run compliance check when schedules update
   useEffect(() => {
@@ -1019,6 +1062,28 @@ export default function Schedule() {
                   未發布
                 </span>
               )}
+              {/* Cycle-level lock chip (新機制) */}
+              {currentCycleRow && (
+                <span style={{
+                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: isCurrentCycleLocked ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                  color: isCurrentCycleLocked ? 'var(--accent-green)' : 'var(--accent-orange)',
+                  border: `1px solid ${isCurrentCycleLocked ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
+                }} title={`Cycle ${currentCycleRow.cycle_start} ~ ${currentCycleRow.cycle_end}`}>
+                  {isCurrentCycleLocked ? '🟢 Cycle 已鎖定' : '🟡 Cycle 草稿'}
+                </span>
+              )}
+              {isCurrentCycleLocked && isAdmin && (
+                <button onClick={handleUnpublishCycle} style={{
+                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: 'rgba(245,158,11,0.12)',
+                  color: 'var(--accent-orange)',
+                  border: '1px solid var(--accent-orange)',
+                  cursor: 'pointer',
+                }} title="解鎖此 cycle（admin 才看得到）">
+                  🔓 解鎖
+                </button>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1435,6 +1500,7 @@ export default function Schedule() {
             return map
           })()}
           onClickEmployeeBadge={(empName) => { setComplianceFilterEmp(empName || null); setShowComplianceModal(true) }}
+          lockedDates={lockedDates}
         />
         </div>
       )}

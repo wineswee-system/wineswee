@@ -764,3 +764,52 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
 
   return { errors, warnings }
 }
+
+// 月累計加班檢查 — §32 月 ≤ 46h（不在 UI 顯示法條，只警示數字）
+// 「加班」定義：單日工時 > 8h 的超出部分
+// @param schedules - [{ employee, date, shift }]
+// @param shiftDefs - [{ name, start_time, end_time }]
+export function validateMonthlyOvertime({ schedules, shiftDefs = [] }) {
+  const errors = []
+  const warnings = []
+  if (!schedules?.length) return { errors, warnings }
+
+  const hoursMap = {}
+  shiftDefs.forEach(d => {
+    if (!d.name) return
+    const startH = parseInt(d.start_time) || 0
+    const startM = parseInt((d.start_time || '').split(':')[1]) || 0
+    const endH = parseInt(d.end_time) || 0
+    const endM = parseInt((d.end_time || '').split(':')[1]) || 0
+    const start = startH + startM / 60
+    const end = endH + endM / 60
+    hoursMap[d.name] = end > start ? end - start : (24 - start + end)
+  })
+
+  // group by employee + YYYY-MM
+  const byEmpMonth = {}
+  for (const s of schedules) {
+    if (!s.shift) continue
+    if (['例假', '休息', '休', '補休', '特休', '病', '會議', '產', '事'].includes(s.shift)) continue
+    const ym = (s.date || '').slice(0, 7)
+    if (!ym) continue
+    const key = `${s.employee}|${ym}`
+    if (!byEmpMonth[key]) byEmpMonth[key] = { emp: s.employee, month: ym, ot: 0 }
+    const dailyHours = hoursMap[s.shift] || 8
+    byEmpMonth[key].ot += Math.max(0, dailyHours - 8)
+  }
+
+  for (const { emp, month, ot } of Object.values(byEmpMonth)) {
+    if (ot > 46) {
+      warnings.push({
+        employee: emp,
+        constraint: 'OT-M',
+        law: '勞基法 §32',
+        message: `${emp} ${month} 月累計加班時數 ${ot.toFixed(1)}h 偏高`,
+        severity: 'warning',
+      })
+    }
+  }
+
+  return { errors, warnings }
+}

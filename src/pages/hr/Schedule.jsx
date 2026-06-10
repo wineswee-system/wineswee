@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -268,10 +268,11 @@ export default function Schedule() {
         endDate: activeEnd,
         shiftDefs,
       })
+      const otResult = validateMonthlyOvertime({ schedules, shiftDefs })
       setCompliance({
-        errors: [...baseResult.errors, ...quotaResult.errors],
-        warnings: [...baseResult.warnings, ...quotaResult.warnings],
-        isValid: baseResult.errors.length + quotaResult.errors.length === 0,
+        errors: [...baseResult.errors, ...quotaResult.errors, ...otResult.errors],
+        warnings: [...baseResult.warnings, ...quotaResult.warnings, ...otResult.warnings],
+        isValid: baseResult.errors.length + quotaResult.errors.length + otResult.errors.length === 0,
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

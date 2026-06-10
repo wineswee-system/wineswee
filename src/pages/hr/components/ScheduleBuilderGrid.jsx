@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ShiftEditPopup from './ShiftEditPopup'
-import { isAbsence, validateLeisureQuota } from '../../../lib/scheduleUtils'
+import { isAbsence, validateLeisureQuota, validateMonthlyOvertime } from '../../../lib/scheduleUtils'
 import { validateSchedule } from '../../../lib/laborLaw'
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
@@ -67,10 +67,11 @@ export default function ScheduleBuilderGrid({
       endDate: dates[dates.length - 1],
       shiftDefs,
     })
+    const ot = validateMonthlyOvertime({ schedules, shiftDefs })
     return {
-      errors: [...base.errors, ...quota.errors],
-      warnings: [...base.warnings, ...quota.warnings],
-      isValid: base.errors.length + quota.errors.length === 0,
+      errors: [...base.errors, ...quota.errors, ...ot.errors],
+      warnings: [...base.warnings, ...quota.warnings, ...ot.warnings],
+      isValid: base.errors.length + quota.errors.length + ot.errors.length === 0,
     }
   }, [employees, dates, assignments, shiftDefs, storeSettings])
 

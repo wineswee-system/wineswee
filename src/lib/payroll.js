@@ -97,25 +97,6 @@ const PENSION_WAGE_CEILING = 150000;
 // ══════════════════════════════════════
 
 /**
- * 按在職天數比例縮減金額（給在職不滿月使用）
- *
- * @param {number} amount - 原始金額
- * @param {number} inServiceDays - 當月在職天數
- * @param {number} monthDays - 當月總天數 (28/29/30/31)
- * @returns {number} 縮減後金額（四捨五入）
- *
- * 範例：8/15 入職、8 月 31 天、月薪 30,000
- *   prorateAmount(30000, 17, 31) → round(30000 × 17/31) = 16,452
- */
-export function prorateAmount(amount, inServiceDays, monthDays) {
-  if (!Number.isFinite(amount) || !Number.isFinite(inServiceDays) || !Number.isFinite(monthDays) || monthDays <= 0) {
-    return amount;
-  }
-  const ratio = Math.max(0, Math.min(1, inServiceDays / monthDays));
-  return Math.round(amount * ratio);
-}
-
-/**
  * 計算當月在職天數（給新進、離職、留停切換月使用）
  *
  * 全部用 local midnight 比對，避開 JS Date 'YYYY-MM-DD' 字串會被當 UTC 解析的時區陷阱

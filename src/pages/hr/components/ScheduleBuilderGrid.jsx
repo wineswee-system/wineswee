@@ -460,12 +460,14 @@ export default function ScheduleBuilderGrid({
                             minWidth: 34, lineHeight: 1.2, cursor: 'grab',
                           }}>
                             {(() => {
-                              // Resolve named shift to HH:MM~HH:MM via shiftDefs
+                              // Resolve named shift to HH:MM~HH:MM via shiftDefs, then actual_start/actual_end
                               let label = shift
                               if (!/^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)) {
                                 const def = shiftDefs.find(d => d.name === shift)
                                 if (def?.start_time && def?.end_time) {
                                   label = `${def.start_time.slice(0, 5)}~${def.end_time.slice(0, 5)}`
+                                } else if (asgn?.actual_start && asgn?.actual_end) {
+                                  label = `${asgn.actual_start.slice(0, 5)}~${asgn.actual_end.slice(0, 5)}`
                                 }
                               }
                               return /~/.test(label) ? (

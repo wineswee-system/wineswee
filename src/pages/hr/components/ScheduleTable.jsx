@@ -174,6 +174,14 @@ export default function ScheduleTable({
                   {weekDates.map(date => {
                     const shift = getShift(emp.name, date)
                     const isEditing = editCell?.empName === emp.name && editCell?.date === date
+                    // Prefer actual_start/actual_end (or shiftDef times) over raw name for the badge
+                    const schedRec  = shift && shift !== '休' ? schedules.find(x => x.employee === emp.name && x.date === date) : null
+                    const shiftDef  = shift && shift !== '休' ? shiftDefs.find(d => d.name === shift) : null
+                    const startT    = schedRec?.actual_start?.slice(0, 5) || shiftDef?.start_time?.slice(0, 5)
+                    const endT      = schedRec?.actual_end?.slice(0, 5)   || shiftDef?.end_time?.slice(0, 5)
+                    const shiftBadgeLabel = shift && !/^\d{1,2}:\d{2}~/.test(shift) && startT && endT
+                      ? `${startT}~${endT}`
+                      : formatShiftLabel(shift || '')
                     return (
                       <td key={date} style={{ textAlign: 'center', padding: '6px 4px', position: 'relative' }}>
                         {isEditing ? (
@@ -203,19 +211,7 @@ export default function ScheduleTable({
                               ...(shift ? getShiftStyle(shift) : { background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px dashed var(--border-medium)' }),
                             }}
                           >
-                            {shift ? formatShiftLabel(shift) : '+'}
-                          </span>
-                          {shift && shift !== '休' && (() => {
-                            const sched = schedules.find(x => x.employee === emp.name && x.date === date)
-                            const def = shiftDefs.find(d => d.name === shift)
-                            const startT = sched?.actual_start?.slice(0, 5) || def?.start_time?.slice(0, 5)
-                            const endT = sched?.actual_end?.slice(0, 5) || def?.end_time?.slice(0, 5)
-                            return startT && endT ? (
-                              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1, fontFamily: 'monospace' }}>
-                                {startT}~{endT}
-                              </div>
-                            ) : null
-                          })()}
+                            {shift ? shiftBadgeLabel : '+'}
                           {shift && shift !== '休' && (
                             <button title="找人代班" onClick={e => {
                               e.stopPropagation()

@@ -80,6 +80,7 @@ export default function Schedule() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [showPatternsModal, setShowPatternsModal] = useState(false)
   const [showComplianceModal, setShowComplianceModal] = useState(false)
+  const [complianceFilterEmp, setComplianceFilterEmp] = useState(null)  // 點員工 badge 帶員工名，只看他的
   const [compliance, setCompliance] = useState({ errors: [], warnings: [], isValid: true })
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
@@ -1393,7 +1394,7 @@ export default function Schedule() {
             }
             return map
           })()}
-          onClickEmployeeBadge={() => setShowComplianceModal(true)}
+          onClickEmployeeBadge={(empName) => { setComplianceFilterEmp(empName || null); setShowComplianceModal(true) }}
         />
       )}
 
@@ -1442,21 +1443,28 @@ export default function Schedule() {
 
       {/* 排班檢查結果 modal — 顯示 errors + warnings，按員工分組 */}
       {showComplianceModal && (() => {
-        // 按員工分組
+        const closeModal = () => { setShowComplianceModal(false); setComplianceFilterEmp(null) }
+        // 按員工分組（先 filter 員工，如果 badge 點進來只看單一員工）
+        const errsScope = complianceFilterEmp
+          ? compliance.errors.filter(e => e.employee === complianceFilterEmp)
+          : compliance.errors
+        const warnsScope = complianceFilterEmp
+          ? compliance.warnings.filter(w => w.employee === complianceFilterEmp)
+          : compliance.warnings
         const groupedErrors = {}
         const groupedWarnings = {}
-        for (const e of compliance.errors) {
+        for (const e of errsScope) {
           if (!groupedErrors[e.employee]) groupedErrors[e.employee] = []
           groupedErrors[e.employee].push(e)
         }
-        for (const w of compliance.warnings) {
+        for (const w of warnsScope) {
           if (!groupedWarnings[w.employee]) groupedWarnings[w.employee] = []
           groupedWarnings[w.employee].push(w)
         }
         const allEmployees = [...new Set([...Object.keys(groupedErrors), ...Object.keys(groupedWarnings)])].sort()
 
         return (
-          <div onClick={() => setShowComplianceModal(false)} style={{
+          <div onClick={closeModal} style={{
             position: 'fixed', inset: 0, zIndex: 10000,
             background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px',
@@ -1471,27 +1479,36 @@ export default function Schedule() {
               {/* Header */}
               <div style={{
                 padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
               }}>
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                  📋 排班檢查結果 — {selectedMonth}
+                  {complianceFilterEmp
+                    ? `👤 ${complianceFilterEmp} 的排班問題 — ${selectedMonth}`
+                    : `📋 排班檢查結果 — ${selectedMonth}`}
                 </h3>
-                <button onClick={() => setShowComplianceModal(false)} className="btn btn-secondary" style={{ padding: '4px 10px' }}>
-                  關閉
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {complianceFilterEmp && (
+                    <button onClick={() => setComplianceFilterEmp(null)} className="btn btn-secondary" style={{ padding: '4px 10px' }}>
+                      看全部
+                    </button>
+                  )}
+                  <button onClick={closeModal} className="btn btn-secondary" style={{ padding: '4px 10px' }}>
+                    關閉
+                  </button>
+                </div>
               </div>
 
               {/* Summary stats */}
               <div style={{ padding: '12px 20px', display: 'flex', gap: 16, fontSize: 13, borderBottom: '1px solid var(--border-subtle)' }}>
                 <span style={{ color: 'var(--accent-red)', fontWeight: 600 }}>
-                  ❌ {compliance.errors.length} 違規
+                  ❌ {errsScope.length} 違規
                 </span>
                 <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>
-                  ⚠️ {compliance.warnings.length} 提醒
+                  ⚠️ {warnsScope.length} 提醒
                 </span>
-                {compliance.isValid && compliance.warnings.length === 0 && (
+                {errsScope.length === 0 && warnsScope.length === 0 && (
                   <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>
-                    ✓ 全部合規
+                    ✓ {complianceFilterEmp ? '此員工合規' : '全部合規'}
                   </span>
                 )}
               </div>
@@ -1549,7 +1566,7 @@ export default function Schedule() {
                 padding: '10px 20px', borderTop: '1px solid var(--border-subtle)',
                 fontSize: 11, color: 'var(--text-muted)', textAlign: 'center',
               }}>
-                💡 編輯排班後此檢查自動更新；點員工名可在班表上看到對應排班
+                💡 編輯排班後此檢查自動更新；{complianceFilterEmp ? '點「看全部」回所有員工' : '點員工名旁邊紅/橘 badge 只看那個人的問題'}
               </div>
             </div>
           </div>

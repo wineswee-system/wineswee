@@ -307,8 +307,8 @@ function EmployeeRow({
           <span>{emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}</span>
           {(v.errors > 0 || v.warnings > 0) && (
             <span
-              onClick={onClickEmployeeBadge}
-              title={v.errors > 0 ? `${v.errors} 個違規（點開看詳情）` : `${v.warnings} 個提醒（點開看詳情）`}
+              onClick={() => onClickEmployeeBadge?.(emp.name)}
+              title={v.errors > 0 ? `${v.errors} 個違規（點開只看 ${emp.name} 的）` : `${v.warnings} 個提醒（點開只看 ${emp.name} 的）`}
               style={{
                 fontSize: 9, padding: '1px 5px', borderRadius: 8, fontWeight: 700, cursor: 'pointer',
                 background: v.errors > 0 ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',

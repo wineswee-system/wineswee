@@ -111,6 +111,11 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   const [isSaving, setIsSaving]     = useState(false)
   const [activeStoreTab, setActiveStoreTab] = useState(null)
 
+  // 草稿續排 session — 中斷後可續排
+  const [sessionId, setSessionId] = useState(null)
+  const [pendingResumeSession, setPendingResumeSession] = useState(null)  // 開啟時偵測到的未完成 session
+  const sessionTimerRef = useRef(null)
+
   useEffect(() => {
     if (open) {
       setStep(1)
@@ -125,9 +130,75 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setShowPicker({})
       setIsSaving(false)
       setActiveStoreTab(null)
+      setSessionId(null)
+      setPendingResumeSession(null)
       wishDates.current = new Set()
+
+      // 偵測未完成 session — 撈最新一筆 in_progress
+      if (authProfile?.id) {
+        supabase.from('schedule_draft_sessions')
+          .select('*')
+          .eq('created_by', authProfile.id)
+          .eq('status', 'in_progress')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data) setPendingResumeSession(data)
+          })
+      }
     }
-  }, [open])
+  }, [open, authProfile?.id])
+
+  // 續排 — restore state 從 session
+  const handleResumeSession = () => {
+    const s = pendingResumeSession
+    if (!s) return
+    setSessionId(s.id)
+    setSelectedStoreIds(new Set(s.store_ids || []))
+    setSelectedPeriodIdx(s.selected_period_idx || 0)
+    setStoreStartOverrides(s.store_start_overrides || {})
+    setEmpRestMap(s.emp_rest_map || {})
+    setStep(s.step || 1)
+    setPendingResumeSession(null)
+  }
+
+  // 忽略 — 標 abandoned，下次開不再提示
+  const handleDiscardSession = async () => {
+    if (!pendingResumeSession) return
+    await supabase.from('schedule_draft_sessions')
+      .update({ status: 'abandoned' })
+      .eq('id', pendingResumeSession.id)
+    setPendingResumeSession(null)
+  }
+
+  // Debounce upsert session 進度（state 變動時自動存）
+  // 只在使用者已實際操作 (selectedStoreIds 非空 或 sessionId 已存在) 才存
+  useEffect(() => {
+    if (!open || !authProfile?.id) return
+    if (selectedStoreIds.size === 0 && !sessionId) return  // 還沒選店且沒既有 session → 不存
+    if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current)
+    sessionTimerRef.current = setTimeout(async () => {
+      const payload = {
+        created_by: authProfile.id,
+        organization_id: authProfile.organization_id || null,
+        store_ids: Array.from(selectedStoreIds),
+        selected_period_idx: selectedPeriodIdx,
+        store_start_overrides: storeStartOverrides,
+        emp_rest_map: empRestMap,
+        step,
+        mode: mode || 'manual',
+        status: 'in_progress',
+      }
+      if (sessionId) {
+        await supabase.from('schedule_draft_sessions').update(payload).eq('id', sessionId)
+      } else {
+        const { data } = await supabase.from('schedule_draft_sessions').insert(payload).select('id').single()
+        if (data?.id) setSessionId(data.id)
+      }
+    }, 1500)
+    return () => sessionTimerRef.current && clearTimeout(sessionTimerRef.current)
+  }, [open, authProfile?.id, authProfile?.organization_id, mode, sessionId, selectedStoreIds, selectedPeriodIdx, storeStartOverrides, empRestMap, step])
 
   // Eagerly fetch store_settings for all locations when wizard opens
   // (work_hour_system + variable_period_start live here, not in the stores table)
@@ -280,6 +351,13 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         if (error) throw new Error('草稿建立失敗：' + error.message)
       }
 
+      // 標 session = completed（成功進入 builder 才算完成）
+      if (sessionId) {
+        await supabase.from('schedule_draft_sessions')
+          .update({ status: 'completed' })
+          .eq('id', sessionId)
+      }
+
       onComplete({
         mode: actionMode,
         stores: selectedStores.map(s => ({
@@ -353,6 +431,31 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         {/* Body — 可滾，含 step content + footer buttons */}
         {/* minHeight:0 是 flexbox 陷阱關鍵：沒這條 flex:1 子元素會撐到內容高，把 header 擠出去 */}
         <div style={{ padding: '24px 32px 28px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+
+        {/* 草稿續排提示 — 偵測到未完成 session 時顯示 */}
+        {pendingResumeSession && (
+          <div style={{
+            marginBottom: 20, padding: '12px 14px',
+            borderRadius: 10, background: 'rgba(59,130,246,0.10)',
+            border: '1px solid rgba(59,130,246,0.30)',
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--accent-blue, #3b82f6)', fontWeight: 700 }}>
+              📂 上次有未完成的排班草稿
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              步驟 {pendingResumeSession.step || 1}／{pendingResumeSession.store_ids?.length || 0} 家店 · {new Date(pendingResumeSession.updated_at).toLocaleString('zh-TW')}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              <button onClick={handleResumeSession} className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12 }}>
+                ▶ 續排
+              </button>
+              <button onClick={handleDiscardSession} className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 12 }}>
+                ✕ 忽略
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Step 1: 班表日期範圍 ── */}
         {step === 1 && (

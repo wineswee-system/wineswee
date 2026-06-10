@@ -30,7 +30,8 @@ export default function ScheduleBuilder() {
   const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role)
 
   // 儲存狀態 indicator — 給使用者看「✓ 已儲存」/「💾 儲存中...」/「⚠️ 失敗」
-  const [saveStatus, setSaveStatus] = useState('idle')  // 'idle' | 'saving' | 'saved' | 'error'
+  // 預設 'saved' — 剛從 DB 載入的就是儲存狀態，使用者一進來就看得到「✓ 已儲存」
+  const [saveStatus, setSaveStatus] = useState('saved')  // 'saving' | 'saved' | 'error'
   const [lastSavedAt, setLastSavedAt] = useState(null)
   const pendingSavesRef = useRef(0)  // in-flight save count
 
@@ -268,8 +269,8 @@ export default function ScheduleBuilder() {
             }}>
               {isLocked ? '🟢 已發布（鎖定）' : '🟡 草稿'}
             </span>
-            {/* 儲存狀態 indicator — 每改一格自動存，給使用者看得到回饋 */}
-            {!isLocked && (saveStatus !== 'idle') && (
+            {/* 儲存狀態 indicator — 永遠顯示，剛載入就是「✓ 已儲存」 */}
+            {!isLocked && (
               <span style={{
                 fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 10,
                 background: saveStatus === 'saving' ? 'rgba(59,130,246,0.12)'
@@ -279,7 +280,7 @@ export default function ScheduleBuilder() {
                   : saveStatus === 'saved' ? 'var(--accent-green)'
                   : 'var(--accent-red)',
                 border: `1px solid ${saveStatus === 'saving' ? 'rgba(59,130,246,0.30)' : saveStatus === 'saved' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.30)'}`,
-              }} title={lastSavedAt ? `最後儲存：${new Date(lastSavedAt).toLocaleTimeString('zh-TW')}` : undefined}>
+              }} title={lastSavedAt ? `最後儲存：${new Date(lastSavedAt).toLocaleTimeString('zh-TW')}` : '剛從資料庫載入'}>
                 {saveStatus === 'saving' ? '💾 儲存中...' : saveStatus === 'saved' ? '✓ 已儲存' : '⚠ 儲存失敗'}
               </span>
             )}

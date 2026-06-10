@@ -76,24 +76,19 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
   if (!rows || rows.length === 0) return (
     <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無加班申請</div>
   )
-  // 單筆獨立用三桶算（假設這筆是該分類的全部 ot 時數）
-  // 跟上面「加班費」欄的合算結果可能略有差異（因為合算是按該分類「全月累計總時數」分段）
-  const calcRowPay = (hours, cat) => {
-    if (cat === 'holiday') return Math.round(hours * hourlyRate * 2)
-    if (cat === 'restday') {
-      const rd1 = Math.min(hours, 2)
-      const rd2 = Math.min(Math.max(hours - 2, 0), 6)
-      const rd3 = Math.max(hours - 8, 0)
-      return Math.round(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
-    }
-    // weekday
+  // 每筆 row 的金額/倍率 label 由 backend 算好（payrollCalc.js → calcRowPayAndLabel）
+  // 因為 holiday 倍率要看員工分類（PT ×2 / 行政 ×1 / 門市 1.34/1.67），UI 不再自算
+  // fallback：舊資料沒 _pay 時用最基本算法（不分流，weekday 階梯）
+  const calcRowPay = (row) => {
+    if (typeof row._pay === 'number') return row._pay
+    const hours = row.hours || 0
     return hours <= 2
       ? Math.round(hours * hourlyRate * 1.34)
       : Math.round(2 * hourlyRate * 1.34 + (hours - 2) * hourlyRate * 1.67)
   }
-  const rateLabelFor = (hours, cat) => {
-    if (cat === 'holiday') return '×2.0'
-    if (cat === 'restday') return hours <= 2 ? '×1.34' : hours <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67'
+  const rateLabelFor = (row) => {
+    if (row._rate_label) return row._rate_label
+    const hours = row.hours || 0
     return hours <= 2 ? '×1.34' : '×1.34 / ×1.67'
   }
 
@@ -116,7 +111,7 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
         <tbody>
           {sorted.map((r, i) => {
             const cat = r.category || 'weekday'
-            const amount = calcRowPay(r.hours, cat)
+            const amount = calcRowPay(r)
             return (
               <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '5px 8px' }}>{r.date}</td>
@@ -126,7 +121,7 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
                   </span>
                 </td>
                 <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{r.hours} 小時</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{rateLabelFor(r.hours, cat)}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{rateLabelFor(r)}</td>
                 <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{fmt(amount)}</td>
               </tr>
             )

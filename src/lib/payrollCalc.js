@@ -236,6 +236,50 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const empStoreId = storeIdMap[emp.store] || null
     const empIsVariableHours = isVariableHours(empStoreId)
 
+    // ── 單筆 (per-row) 倍率計算 — 給 detail UI 顯示用 ──
+    // 依員工分類給 holiday 的倍率算法（PT ×2 / 行政 ×1 / 門市 1.34/1.67）
+    const calcRowPayAndLabel = (hours, cat) => {
+      const h = Number(hours) || 0
+      if (cat === 'restday') {
+        const rd1 = Math.min(h, 2)
+        const rd2 = Math.min(Math.max(h - 2, 0), 6)
+        const rd3 = Math.max(h - 8, 0)
+        const pay = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+        const label = h <= 2 ? '×1.34' : h <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67'
+        return { _pay: pay, _rate_label: label }
+      }
+      if (cat === 'weekly_off') {
+        return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
+      }
+      if (cat === 'holiday') {
+        if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
+        if (empIsVariableHours) {
+          const pay = h <= 2
+            ? Math.ceil(h * hourlyRate * 1.34)
+            : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
+          return { _pay: pay, _rate_label: h <= 2 ? '×1.34' : '×1.34 / ×1.67' }
+        }
+        // 行政 FT：×1（月薪已含）
+        return { _pay: Math.ceil(h * hourlyRate), _rate_label: '×1.0' }
+      }
+      // weekday
+      const pay = h <= 2
+        ? Math.ceil(h * hourlyRate * 1.34)
+        : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
+      return { _pay: pay, _rate_label: h <= 2 ? '×1.34' : '×1.34 / ×1.67' }
+    }
+
+    // 把 row 加上 _pay 跟 _rate_label，讓 detail UI 直接顯示，不再自己算
+    const enrichRows = (rows) => {
+      for (const r of (rows || [])) {
+        const { _pay, _rate_label } = calcRowPayAndLabel(r.hours, r.category || 'weekday')
+        r._pay = _pay
+        r._rate_label = _rate_label
+      }
+    }
+    enrichRows(ot.rows)
+    enrichRows(otException.rows)
+
     const calcOtPay = (bucket) => {
       // 把 rows 按 date+category 分組（同日同類別合計再套階梯，§32 是「每日」重設）
       // bucket.rows: [{ date, hours, category }]

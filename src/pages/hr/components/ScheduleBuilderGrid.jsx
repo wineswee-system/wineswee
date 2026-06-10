@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import ShiftEditPopup from './ShiftEditPopup'
 import { isAbsence } from '../../../lib/scheduleUtils'
 
@@ -35,9 +35,150 @@ export default function ScheduleBuilderGrid({
   const [dropTarget, setDropTarget] = useState(null)
   const dragActiveRef = useRef(false)
 
+  // ── 多選 / 複製貼上 state ──
+  // selectedCells: Set<"empName|date">
+  // lastClicked: 上次 plain/ctrl-click 的 cell（給 shift+click range 用）
+  // clipboard: Array<{ rowOffset, colOffset, shift, actual_start, actual_end }> 複製內容（相對位置）
+  const [selectedCells, setSelectedCells] = useState(() => new Set())
+  const [lastClicked, setLastClicked] = useState(null)
+  const [clipboard, setClipboard] = useState(null)
+
   const paletteShifts = shiftDefs.filter(d => d.name)
 
   const getAssignment = (empName, date) => assignments[`${empName}|${date}`] || null
+  const cellKey = (empName, date) => `${empName}|${date}`
+
+  // ── 多選邏輯 ──
+  const handleCellSelect = (e, empName, date) => {
+    const key = cellKey(empName, date)
+    // Ctrl/Cmd + click：toggle 進/出選擇
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      setSelectedCells(prev => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+      setLastClicked({ empName, date })
+      return true  // 攔截，不開 popup
+    }
+    // Shift + click：從 lastClicked 到本 cell 範圍選
+    if (e.shiftKey && lastClicked) {
+      e.preventDefault()
+      const empNames = employees.map(x => x.name)
+      const ri0 = empNames.indexOf(lastClicked.empName)
+      const ri1 = empNames.indexOf(empName)
+      const di0 = dates.indexOf(lastClicked.date)
+      const di1 = dates.indexOf(date)
+      if (ri0 < 0 || ri1 < 0 || di0 < 0 || di1 < 0) return false
+      const rMin = Math.min(ri0, ri1), rMax = Math.max(ri0, ri1)
+      const dMin = Math.min(di0, di1), dMax = Math.max(di0, di1)
+      const next = new Set(selectedCells)
+      for (let r = rMin; r <= rMax; r++) {
+        for (let d = dMin; d <= dMax; d++) {
+          next.add(cellKey(empNames[r], dates[d]))
+        }
+      }
+      setSelectedCells(next)
+      return true  // 攔截
+    }
+    // 沒選擇集時：plain click 走原本（開 popup）
+    // 有選擇集時：plain click 先清選擇集（避免使用者誤填）
+    if (selectedCells.size > 0) {
+      setSelectedCells(new Set())
+      setLastClicked(null)
+    }
+    setLastClicked({ empName, date })
+    return false  // 不攔，讓 popup 開
+  }
+
+  // 套用班別到全部已選 cell
+  const applyShiftToSelection = useCallback((shift) => {
+    if (selectedCells.size === 0 || !shift) return
+    for (const key of selectedCells) {
+      const pi = key.lastIndexOf('|')
+      const empName = key.slice(0, pi)
+      const date = key.slice(pi + 1)
+      handleSetShift(empName, date, shift.label, shift.start_time || null, shift.end_time || null, null)
+    }
+  }, [selectedCells, handleSetShift])
+
+  // 複製：取 selected cells 的相對 pattern
+  const copySelection = useCallback(() => {
+    if (selectedCells.size === 0) return
+    const empNames = employees.map(x => x.name)
+    const cells = []
+    let minRow = Infinity, minCol = Infinity
+    for (const key of selectedCells) {
+      const pi = key.lastIndexOf('|')
+      const empName = key.slice(0, pi)
+      const date = key.slice(pi + 1)
+      const row = empNames.indexOf(empName)
+      const col = dates.indexOf(date)
+      if (row < 0 || col < 0) continue
+      const asgn = getAssignment(empName, date)
+      cells.push({ row, col, shift: asgn?.shift || null, actual_start: asgn?.actual_start, actual_end: asgn?.actual_end })
+      if (row < minRow) minRow = row
+      if (col < minCol) minCol = col
+    }
+    setClipboard(cells.map(c => ({
+      rowOffset: c.row - minRow,
+      colOffset: c.col - minCol,
+      shift: c.shift, actual_start: c.actual_start, actual_end: c.actual_end,
+    })))
+  }, [selectedCells, employees, dates, assignments]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 貼上：以選擇集的左上角當基準（若選擇集只有 1 格也行），按 clipboard 偏移貼
+  const pasteSelection = useCallback(() => {
+    if (!clipboard || clipboard.length === 0 || selectedCells.size === 0) return
+    const empNames = employees.map(x => x.name)
+    let minRow = Infinity, minCol = Infinity
+    for (const key of selectedCells) {
+      const pi = key.lastIndexOf('|')
+      const row = empNames.indexOf(key.slice(0, pi))
+      const col = dates.indexOf(key.slice(pi + 1))
+      if (row < minRow) minRow = row
+      if (col < minCol) minCol = col
+    }
+    for (const c of clipboard) {
+      const r = minRow + c.rowOffset
+      const d = minCol + c.colOffset
+      if (r < 0 || r >= empNames.length || d < 0 || d >= dates.length) continue
+      if (c.shift) handleSetShift(empNames[r], dates[d], c.shift, c.actual_start || null, c.actual_end || null, null)
+      else handleDeleteShift(empNames[r], dates[d])
+    }
+  }, [clipboard, selectedCells, employees, dates, handleSetShift, handleDeleteShift])
+
+  // 刪除已選
+  const deleteSelection = useCallback(() => {
+    if (selectedCells.size === 0) return
+    for (const key of selectedCells) {
+      const pi = key.lastIndexOf('|')
+      handleDeleteShift(key.slice(0, pi), key.slice(pi + 1))
+    }
+  }, [selectedCells, handleDeleteShift])
+
+  // 鍵盤快捷
+  useEffect(() => {
+    const onKey = (e) => {
+      // 編輯中（input/textarea/select）不攔，避免影響 popup 輸入
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (['input', 'textarea', 'select'].includes(tag) || e.target?.isContentEditable) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (selectedCells.size > 0) { e.preventDefault(); copySelection() }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (clipboard && selectedCells.size > 0) { e.preventDefault(); pasteSelection() }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedCells.size > 0) { e.preventDefault(); deleteSelection() }
+      } else if (e.key === 'Escape') {
+        setSelectedCells(new Set())
+        setLastClicked(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedCells, clipboard, copySelection, pasteSelection, deleteSelection])
 
   const onPaletteDragStart = (shift) => {
     dragActiveRef.current = true
@@ -100,7 +241,45 @@ export default function ScheduleBuilderGrid({
   })
 
   return (
-    <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+      {/* ── 多選 toolbar：只在有選或有複製內容時顯示 ── */}
+      {(selectedCells.size > 0 || clipboard) && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 50,
+          marginBottom: 8, padding: '8px 14px',
+          borderRadius: 10, background: 'rgba(139,92,246,0.12)',
+          border: '1px solid rgba(139,92,246,0.35)',
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          fontSize: 12, color: 'var(--text-primary)',
+        }}>
+          <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
+            {selectedCells.size > 0 ? `🎯 已選 ${selectedCells.size} 格` : '📋 剪貼簿有內容'}
+          </span>
+          {selectedCells.size > 0 && (
+            <span style={{ color: 'var(--text-muted)' }}>
+              點左側班別套用 · <kbd style={kbdStyle}>Ctrl</kbd>+<kbd style={kbdStyle}>C</kbd> 複製 · <kbd style={kbdStyle}>Del</kbd> 清空 · <kbd style={kbdStyle}>Esc</kbd> 取消
+            </span>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {selectedCells.size > 0 && (
+              <>
+                <button onClick={copySelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📋 複製</button>
+                {clipboard && (
+                  <button onClick={pasteSelection} className="btn btn-sm btn-secondary" style={btnSmStyle}>📥 貼上 ({clipboard.length})</button>
+                )}
+                <button onClick={deleteSelection} className="btn btn-sm btn-secondary" style={{ ...btnSmStyle, color: 'var(--accent-red)' }}>🗑️ 刪除</button>
+                <button onClick={() => { setSelectedCells(new Set()); setLastClicked(null) }} className="btn btn-sm btn-secondary" style={btnSmStyle}>✕ 取消選擇</button>
+              </>
+            )}
+            {selectedCells.size === 0 && clipboard && (
+              <button onClick={() => setClipboard(null)} className="btn btn-sm btn-secondary" style={btnSmStyle}>清空剪貼簿</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
 
       {/* ── Palette ── */}
       <div style={{
@@ -118,8 +297,15 @@ export default function ScheduleBuilderGrid({
             draggable
             onDragStart={() => onPaletteDragStart({ label: shift.name, start_time: shift.start_time, end_time: shift.end_time })}
             onDragEnd={onDragEnd}
+            onClick={() => {
+              // 有選擇集時：click 直接套用班別到全部已選 cell
+              if (selectedCells.size > 0) {
+                applyShiftToSelection({ label: shift.name, start_time: shift.start_time, end_time: shift.end_time })
+              }
+            }}
+            title={selectedCells.size > 0 ? `點擊套用到 ${selectedCells.size} 個已選格` : '拖曳到格子'}
             style={{
-              padding: '8px 10px', borderRadius: 8, cursor: 'grab', userSelect: 'none',
+              padding: '8px 10px', borderRadius: 8, cursor: selectedCells.size > 0 ? 'pointer' : 'grab', userSelect: 'none',
               border: `1px solid ${shift.color ? shift.color + '55' : 'var(--border-medium)'}`,
               background: shift.color ? hexToDim(shift.color) : 'var(--bg-secondary)',
               color: shift.color || 'var(--text-secondary)',
@@ -154,8 +340,14 @@ export default function ScheduleBuilderGrid({
               draggable
               onDragStart={() => onPaletteDragStart({ label: a.label, start_time: null, end_time: null })}
               onDragEnd={onDragEnd}
+              onClick={() => {
+                if (selectedCells.size > 0) {
+                  applyShiftToSelection({ label: a.label, start_time: null, end_time: null })
+                }
+              }}
+              title={selectedCells.size > 0 ? `點擊套用到 ${selectedCells.size} 個已選格` : '拖曳到格子'}
               style={{
-                padding: '7px 10px', borderRadius: 8, cursor: 'grab', userSelect: 'none',
+                padding: '7px 10px', borderRadius: 8, cursor: selectedCells.size > 0 ? 'pointer' : 'grab', userSelect: 'none',
                 background: a.bg, color: a.color, fontSize: 12, fontWeight: 700, marginBottom: 4,
               }}
             >
@@ -229,22 +421,32 @@ export default function ScheduleBuilderGrid({
                         onDragLeave={() => setDropTarget(prev =>
                           prev?.empName === emp.name && prev?.date === date ? null : prev
                         )}
-                        onClick={() => !dragActiveRef.current && setEditCell({ empName: emp.name, date })}
+                        onClick={(e) => {
+                          if (dragActiveRef.current) return
+                          // ctrl/cmd/shift → 多選，攔截 popup
+                          if (handleCellSelect(e, emp.name, date)) return
+                          setEditCell({ empName: emp.name, date })
+                        }}
                         style={{
                           padding: '3px 2px', textAlign: 'center',
                           borderBottom: '1px solid var(--border-light)',
                           cursor: 'pointer', minWidth: 44, height: 48, verticalAlign: 'middle',
                           position: 'relative',
-                          background: isDropOver
-                            ? 'rgba(34,211,238,0.18)'
-                            : isDragSrc
-                              ? 'rgba(34,211,238,0.08)'
-                              : isWeekend
-                                ? 'rgba(245,158,11,0.03)'
-                                : rowBg,
-                          outline: isDropOver ? '2px solid var(--accent-cyan)' : 'none',
+                          background: selectedCells.has(cellKey(emp.name, date))
+                            ? 'rgba(139,92,246,0.18)'
+                            : isDropOver
+                              ? 'rgba(34,211,238,0.18)'
+                              : isDragSrc
+                                ? 'rgba(34,211,238,0.08)'
+                                : isWeekend
+                                  ? 'rgba(245,158,11,0.03)'
+                                  : rowBg,
+                          outline: selectedCells.has(cellKey(emp.name, date))
+                            ? '2px solid #8b5cf6'
+                            : isDropOver ? '2px solid var(--accent-cyan)' : 'none',
                           outlineOffset: -2,
                           opacity: isDragSrc ? 0.45 : 1,
+                          userSelect: 'none',
                         }}
                       >
                         {shift ? (
@@ -313,8 +515,20 @@ export default function ScheduleBuilderGrid({
           </tbody>
         </table>
       </div>
+
+      </div>{/* /grid-row */}
     </div>
   )
+}
+
+const kbdStyle = {
+  fontFamily: 'monospace', fontSize: 10, padding: '1px 5px',
+  background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+  borderRadius: 4, color: 'var(--text-secondary)',
+}
+const btnSmStyle = {
+  padding: '4px 10px', fontSize: 11, fontWeight: 600,
+  borderRadius: 6,
 }
 
 const thEmp = {

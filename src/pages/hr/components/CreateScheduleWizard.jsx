@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { getCycleFor } from '../../../lib/scheduleUtils'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -61,7 +61,7 @@ function GapChip({ gap, loading }) {
   return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: c.bg, color: c.color }}>{c.label}</span>
 }
 
-function DateChip({ date, type, onRemove }) {
+function DateChip({ date, type, onRemove, isWish }) {
   const isRest = type === '休假'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 4 }}>
@@ -73,6 +73,13 @@ function DateChip({ date, type, onRemove }) {
       }}>
         {date.slice(5)}
       </span>
+      {isWish && (
+        <span style={{
+          fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
+          background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)',
+          border: '1px solid rgba(34,211,238,0.25)',
+        }} title="已核准希望休">希</span>
+      )}
       <button onClick={onRemove} style={{
         width: 16, height: 16, borderRadius: '50%', border: 'none', cursor: 'pointer',
         background: 'var(--bg-secondary)', color: 'var(--text-muted)',
@@ -97,6 +104,8 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
 
   // `${storeId}|${empName}` → { 休假: ['YYYY-MM-DD',...], 例假: ['YYYY-MM-DD',...] }
   const [empRestMap, setEmpRestMap] = useState({})
+  // `${empName}|${date}` — dates auto-filled from approved off_requests (희望休)
+  const wishDates = useRef(new Set())
   // `${storeId}|${empName}|${type}` → boolean
   const [showPicker, setShowPicker] = useState({})
   const [isSaving, setIsSaving]     = useState(false)
@@ -116,6 +125,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setShowPicker({})
       setIsSaving(false)
       setActiveStoreTab(null)
+      wishDates.current = new Set()
     }
   }, [open])
 
@@ -159,6 +169,49 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   }, [selectedStoreIds]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setStoreStartOverrides({}) }, [selectedPeriodIdx])
+
+  // When entering step 2, auto-populate 休假 from approved off_requests (希望休)
+  useEffect(() => {
+    if (step !== 2 || !selectedPeriod || !authProfile?.organization_id) return
+    const storeNames = selectedStores.map(s => s.name)
+    if (!storeNames.length) return
+
+    const allStarts = selectedStores.map(s => storeStartOverrides[s.id] || selectedPeriod.start)
+    const earliestStart = allStarts.reduce((a, b) => (a < b ? a : b))
+    const latestEnd = selectedPeriod.end
+
+    supabase
+      .from('off_requests')
+      .select('employee, date, store')
+      .eq('organization_id', authProfile.organization_id)
+      .eq('status', '已核准')
+      .in('store', storeNames)
+      .gte('date', earliestStart)
+      .lte('date', latestEnd)
+      .then(({ data, error }) => {
+        if (error || !data?.length) return
+        const nameToStore = Object.fromEntries(selectedStores.map(s => [s.name, s]))
+        const newWish = new Set()
+        setEmpRestMap(prev => {
+          const next = { ...prev }
+          for (const row of data) {
+            const store = nameToStore[row.store]
+            if (!store) continue
+            const rangeStart = storeStartOverrides[store.id] || selectedPeriod.start
+            if (row.date < rangeStart || row.date > selectedPeriod.end) continue
+            const key = `${store.id}|${row.employee}`
+            const cur = next[key] || { 休假: [], 例假: [] }
+            if (!cur['休假'].includes(row.date)) {
+              next[key] = { ...cur, 休假: [...cur['休假'], row.date].sort() }
+            }
+            newWish.add(`${row.employee}|${row.date}`)
+          }
+          return next
+        })
+        wishDates.current = newWish
+        if (newWish.size > 0) toast.success(`已自動帶入 ${newWish.size} 筆已核准希望休`)
+      })
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedStores   = locations.filter(l => selectedStoreIds.has(l.id))
   const primaryStore     = selectedStores[0]
@@ -448,7 +501,10 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>👥 員工假別設定</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                點擊「+」選擇日期 · 可連續新增 · 完成後儲存為草稿排班
+                已核准希望休自動帶入（標示
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, margin: '0 3px',
+                  background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}>希</span>
+                ）· 點擊「+」新增 · 完成後儲存為草稿排班
               </div>
             </div>
 
@@ -549,6 +605,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                                         key={date}
                                         date={date}
                                         type={type}
+                                        isWish={wishDates.current.has(`${emp.name}|${date}`)}
                                         onRemove={() => removeDate(store.id, emp.name, type, date)}
                                       />
                                     ))}

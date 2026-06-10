@@ -29,7 +29,11 @@ export default function ScheduleBuilder() {
   const [publishStatusRows, setPublishStatusRows] = useState([])  // 整個 cycle 範圍的發布狀態
   const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role)
 
-  const saveTimer = useRef(null)
+  // 儲存狀態 indicator — 給使用者看「✓ 已儲存」/「💾 儲存中...」/「⚠️ 失敗」
+  const [saveStatus, setSaveStatus] = useState('idle')  // 'idle' | 'saving' | 'saved' | 'error'
+  const [lastSavedAt, setLastSavedAt] = useState(null)
+  const pendingSavesRef = useRef(0)  // in-flight save count
+
   const isDirtyRef = useRef(false)
 
   const safMonth = month || formatYearMonth(new Date().getFullYear(), new Date().getMonth() + 1)
@@ -108,15 +112,24 @@ export default function ScheduleBuilder() {
   })()
   const isLocked = currentCycleStatus === 'published'
 
+  // 即時儲存（每筆獨立、不共用 debounce timer — 修之前「快速連點只存最後一筆」bug）
   const autoSave = useCallback(async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
-    // schedules 表沒有 status 欄位，「未發布」是用 isDirty 在前端算的
+    pendingSavesRef.current++
+    setSaveStatus('saving')
     const { error } = await supabase.from('schedules').upsert({
       employee: empName, date, shift,
       actual_start: actualStart, actual_end: actualEnd,
       source_store: sourceStore,
       organization_id: authProfile?.organization_id,
     }, { onConflict: 'employee,date' })
-    if (error) toast.error('自動儲存失敗：' + error.message)
+    pendingSavesRef.current--
+    if (error) {
+      setSaveStatus('error')
+      toast.error('自動儲存失敗：' + error.message)
+    } else if (pendingSavesRef.current === 0) {
+      setSaveStatus('saved')
+      setLastSavedAt(Date.now())
+    }
   }, [authProfile])
 
   const handleSetShift = useCallback((empName, date, shift, actualStart, actualEnd, sourceStore) => {
@@ -126,11 +139,10 @@ export default function ScheduleBuilder() {
     }))
     setIsDirty(true)
     isDirtyRef.current = true
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => autoSave(empName, date, shift, actualStart, actualEnd, sourceStore), 800)
+    autoSave(empName, date, shift, actualStart, actualEnd, sourceStore)
   }, [autoSave])
 
-  const handleDeleteShift = useCallback((empName, date) => {
+  const handleDeleteShift = useCallback(async (empName, date) => {
     setAssignments(prev => {
       const next = { ...prev }
       delete next[`${empName}|${date}`]
@@ -138,7 +150,17 @@ export default function ScheduleBuilder() {
     })
     setIsDirty(true)
     isDirtyRef.current = true
-    supabase.from('schedules').delete().eq('employee', empName).eq('date', date)
+    pendingSavesRef.current++
+    setSaveStatus('saving')
+    const { error } = await supabase.from('schedules').delete().eq('employee', empName).eq('date', date)
+    pendingSavesRef.current--
+    if (error) {
+      setSaveStatus('error')
+      toast.error('刪除失敗：' + error.message)
+    } else if (pendingSavesRef.current === 0) {
+      setSaveStatus('saved')
+      setLastSavedAt(Date.now())
+    }
   }, [])
 
   const handlePublish = async () => {
@@ -236,7 +258,7 @@ export default function ScheduleBuilder() {
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {store} · {safMonth} 排班
             <span style={{
               fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 10,
@@ -246,6 +268,21 @@ export default function ScheduleBuilder() {
             }}>
               {isLocked ? '🟢 已發布（鎖定）' : '🟡 草稿'}
             </span>
+            {/* 儲存狀態 indicator — 每改一格自動存，給使用者看得到回饋 */}
+            {!isLocked && (saveStatus !== 'idle') && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 10,
+                background: saveStatus === 'saving' ? 'rgba(59,130,246,0.12)'
+                  : saveStatus === 'saved' ? 'rgba(16,185,129,0.10)'
+                  : 'rgba(239,68,68,0.12)',
+                color: saveStatus === 'saving' ? '#3b82f6'
+                  : saveStatus === 'saved' ? 'var(--accent-green)'
+                  : 'var(--accent-red)',
+                border: `1px solid ${saveStatus === 'saving' ? 'rgba(59,130,246,0.30)' : saveStatus === 'saved' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.30)'}`,
+              }} title={lastSavedAt ? `最後儲存：${new Date(lastSavedAt).toLocaleTimeString('zh-TW')}` : undefined}>
+                {saveStatus === 'saving' ? '💾 儲存中...' : saveStatus === 'saved' ? '✓ 已儲存' : '⚠ 儲存失敗'}
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {workHourSystem} · {rangeStart} ~ {rangeEnd} · {employees.length} 人 · {assignedCount} 格已排

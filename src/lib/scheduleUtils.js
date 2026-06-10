@@ -765,6 +765,96 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
   return { errors, warnings }
 }
 
+// 女性員工夜班檢查 — §49 22:00~06:00 應徵得同意
+// gender 欄位值不一：'F'/'女'/'female' 都當女性
+// @param schedules - [{ employee, date, shift }]
+// @param employees - [{ name, gender }]
+// @param shiftDefs - [{ name, start_time, end_time }]
+export function validateNightShiftProtection({ schedules, employees = [], shiftDefs = [] }) {
+  const errors = []
+  const warnings = []
+  if (!schedules?.length || !employees?.length) return { errors, warnings }
+
+  const femaleNames = new Set(
+    employees
+      .filter(e => ['F', '女', 'female', 'Female'].includes(e.gender))
+      .map(e => e.name)
+  )
+  if (femaleNames.size === 0) return { errors, warnings }
+
+  // 判班別是否跨夜 (end < start) 或 end 落在 22~24 或 start < 6
+  const isNightShift = (shift) => {
+    const def = shiftDefs.find(d => d.name === shift)
+    if (!def?.start_time || !def?.end_time) return false
+    const startH = parseInt(def.start_time) || 0
+    const endH = parseInt(def.end_time) || 0
+    // 跨夜班一定算
+    if (endH < startH) return true
+    // 開始在 22:00 後，或結束在 06:00 前
+    if (startH >= 22 || endH >= 22 || endH <= 6) return true
+    return false
+  }
+
+  // 按員工+月份累計夜班數，避免每天 warn 太煩；改成「本月夜班排了 N 天」一次 warn
+  const byEmpMonth = {}
+  for (const s of schedules) {
+    if (!femaleNames.has(s.employee)) continue
+    if (!isNightShift(s.shift)) continue
+    const ym = (s.date || '').slice(0, 7)
+    if (!ym) continue
+    const key = `${s.employee}|${ym}`
+    if (!byEmpMonth[key]) byEmpMonth[key] = { emp: s.employee, month: ym, count: 0 }
+    byEmpMonth[key].count++
+  }
+
+  for (const { emp, month, count } of Object.values(byEmpMonth)) {
+    warnings.push({
+      employee: emp,
+      constraint: 'NIGHT-F',
+      law: '勞基法 §49',
+      message: `${emp} ${month} 排了 ${count} 天夜間班次，請確認已取得本人同意`,
+      severity: 'warning',
+    })
+  }
+
+  return { errors, warnings }
+}
+
+// 國定假日工作提醒 — 排在國定假日當天 → 提醒 manager 是否要補假
+// @param schedules - [{ employee, date, shift }]
+// @param holidaySet - Set<'YYYY-MM-DD'> 國定假日日期集合（外面傳進來）
+export function validateHolidayWork({ schedules, holidaySet }) {
+  const errors = []
+  const warnings = []
+  if (!schedules?.length || !holidaySet || holidaySet.size === 0) return { errors, warnings }
+
+  const ABSENCES = new Set(['例假', '休息', '休', '補休', '特休', '病', '會議', '產', '事'])
+
+  // 按員工 + 月份累計
+  const byEmpMonth = {}
+  for (const s of schedules) {
+    if (!s.shift || ABSENCES.has(s.shift)) continue
+    if (!holidaySet.has(s.date)) continue
+    const ym = (s.date || '').slice(0, 7)
+    if (!ym) continue
+    const key = `${s.employee}|${ym}`
+    if (!byEmpMonth[key]) byEmpMonth[key] = { emp: s.employee, month: ym, dates: [] }
+    byEmpMonth[key].dates.push(s.date)
+  }
+
+  for (const { emp, month, dates } of Object.values(byEmpMonth)) {
+    warnings.push({
+      employee: emp,
+      constraint: 'HOL-WORK',
+      law: '勞基法 §37',
+      message: `${emp} ${month} 國定假日當天有排班 ${dates.length} 天（${dates.join(', ')}），記得另計或補假`,
+      severity: 'warning',
+    })
+  }
+
+  return { errors, warnings }
+}
+
 // 月累計加班檢查 — §32 月 ≤ 46h（不在 UI 顯示法條，只警示數字）
 // 「加班」定義：單日工時 > 8h 的超出部分
 // @param schedules - [{ employee, date, shift }]

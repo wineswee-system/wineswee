@@ -41,7 +41,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     .lt('expires_at', monthEnd)
     .in('employee_id', scopedEmployees.map(e => e.id))
 
-  const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes, ctRes] = await Promise.all([
+  const [attRes, otRes, lvRes, ssRes, holRes, legalRes, storeRes, ctRes, storeSettingsRes] = await Promise.all([
     supabase.from('attendance_records')
       .select('employee_id, store_id, date, total_hours, is_late, late_minutes')
       .eq('organization_id', orgId)
@@ -69,6 +69,7 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       .lte('started_month', month),
     supabase.from('stores').select('id, late_tolerance_minutes'),
     compTimeLedgerPromise,
+    supabase.from('store_settings').select('store_id, work_hour_system'),
   ])
 
   // 過期補休：聚合到 employee_id → 兌現金額（frozen_amount × remaining / hours）
@@ -87,6 +88,18 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     storeToleranceMap[s.id] = Number(s.late_tolerance_minutes) || 5
   }
   const DEFAULT_TOLERANCE = 5
+
+  // store_id → work_hour_system，給「國定加班倍率」分流用
+  // - 變形工時（2週/4週/8週）：§30-1 國定可調移 → 當日視為平日，FT 不另計加倍
+  // - 標準工時 / 行政員工（無 store）：§37 國定加倍 → FT 也應 ×2
+  const storeWhsMap = {}
+  for (const ss of (storeSettingsRes?.data || [])) {
+    if (ss.store_id) storeWhsMap[ss.store_id] = ss.work_hour_system || '標準工時'
+  }
+  const isVariableHours = (storeId) => {
+    const whs = storeWhsMap[storeId]
+    return whs && whs !== '標準工時'  // 任何變形工時都算
+  }
 
   const holidayDates = new Set(
     (holRes.data || []).filter(h => h.is_workday === false).map(h => h.date)
@@ -212,6 +225,10 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       ? (Number(ss.hourly_rate) || 0)
       : Math.round(baseForInsure / 30 / 8 * 100) / 100  // 四捨五入到小數第 2 位
 
+    // 該員工所屬店是否為變形工時（決定國定加倍是否套用）
+    const empStoreId = storeIdMap[emp.store] || null
+    const empIsVariableHours = isVariableHours(empStoreId)
+
     const calcOtPay = (bucket) => {
       // 平日：FT/PT 一樣
       const weekday = bucket.weekday <= 2
@@ -224,13 +241,18 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       const restday = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
       // 例假：FT/PT 都 ×2 全程
       const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
-      // 國定假日：FT 用平日倍率（月薪已含此日工資）/ PT 用 ×2
+      // 國定假日加班計算 — 依員工身份分流：
+      //  - PT（時薪）：×2 全程
+      //  - FT 月薪 + 變形工時店：套平日倍率（國定可調移，當日視為平日）
+      //  - FT 月薪 + 標準工時 / 行政（無 store）：×2 全程
       const ho = bucket.holiday || 0
       const holiday = isHourly
         ? Math.ceil(ho * hourlyRate * 2)
-        : (ho <= 2
-            ? Math.ceil(ho * hourlyRate * 1.34)
-            : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
+        : empIsVariableHours
+          ? (ho <= 2
+              ? Math.ceil(ho * hourlyRate * 1.34)
+              : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
+          : Math.ceil(ho * hourlyRate * 2)
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
         total: weekday + restday + weeklyOff + holiday,

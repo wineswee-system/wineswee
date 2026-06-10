@@ -42,11 +42,11 @@ describe('module registry (DEFS / ALL_MODULES)', () => {
     expect(sa.superAdminOnly).toBe(true)
   })
 
-  it('/process has subRoutes for settings with nav.project.admin perm', () => {
+  it('/process exists with perm null (access guarded in-page; subRoutes caused routing conflict)', () => {
     const proc = ALL_MODULES.find(m => m.basePath === '/process')
-    expect(proc.subRoutes).toHaveLength(1)
-    expect(proc.subRoutes[0].path).toBe('settings/*')
-    expect(proc.subRoutes[0].perm).toBe('nav.project.admin')
+    expect(proc).toBeDefined()
+    expect(proc.perm).toBeNull()
+    expect(proc.subRoutes).toBeUndefined()
   })
 
   it('/finance has perm finance.view', () => {

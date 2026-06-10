@@ -263,7 +263,7 @@ export function parseWorkRange(raw) {
  */
 export function formatShiftLabel(shift) {
   if (!shift || typeof shift !== 'string') return shift
-  // "HHMM-HHMM" / "HHMM~HHMM" (compact no-colon, both sides 4 digits)
+  // "HHMM-HHMM" / "HHMM~HHMM" (compact no-colon)
   const compactMatch = shift.match(/^(\d{2})(\d{2})\s*[-~]\s*(\d{2})(\d{2})$/)
   if (compactMatch) {
     return `${compactMatch[1]}:${compactMatch[2]}~${compactMatch[3]}:${compactMatch[4]}`
@@ -274,7 +274,7 @@ export function formatShiftLabel(shift) {
     return `${mixed4to2[1]}:${mixed4to2[2]}~${mixed4to2[3].padStart(2, '0')}:00`
   }
   // "H[H]-HHMM" (1-2 digit start hour, 4-digit end, e.g. "11-1530" → "11:00~15:30")
-  // Handles 24+ notation: "20-2430" → "20:00~00:30" (HR systems sometimes use 24:xx for next-day)
+  // Handles 24+ notation: "20-2430" → "20:00~00:30"
   const mixed2to4 = shift.match(/^(\d{1,2})\s*[-~]\s*(\d{2})(\d{2})$/)
   if (mixed2to4) {
     let endH = parseInt(mixed2to4[2])

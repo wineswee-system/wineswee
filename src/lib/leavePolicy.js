@@ -270,7 +270,7 @@ export const LEAVE_TYPES = [
     code: 'comp_time',
     name: '補休',
     shortName: '補休',
-    law: '',
+    law: '勞基法 §32-1（加班選補休）',
     paid: true,
     unit: 'hour',
     minUnit: 0.5,

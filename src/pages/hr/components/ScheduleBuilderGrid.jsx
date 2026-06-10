@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ShiftEditPopup from './ShiftEditPopup'
-import { isAbsence } from '../../../lib/scheduleUtils'
+import { isAbsence, validateLeisureQuota } from '../../../lib/scheduleUtils'
+import { validateSchedule } from '../../../lib/laborLaw'
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -42,6 +43,40 @@ export default function ScheduleBuilderGrid({
   const [selectedCells, setSelectedCells] = useState(() => new Set())
   const [lastClicked, setLastClicked] = useState(null)
   const [clipboard, setClipboard] = useState(null)
+
+  // ── 排班檢查布告欄 ──
+  // 預設摺起來；有違規時自動展開
+  const [boardExpanded, setBoardExpanded] = useState(false)
+  const [userToggled, setUserToggled] = useState(false)
+  const compliance = useMemo(() => {
+    // 把 assignments object 攤平成 [{ employee, date, shift }]
+    const schedules = []
+    for (const emp of employees) {
+      for (const date of dates) {
+        const asgn = assignments[`${emp.name}|${date}`]
+        if (asgn?.shift) schedules.push({ employee: emp.name, date, shift: asgn.shift })
+      }
+    }
+    if (schedules.length === 0) return { errors: [], warnings: [], isValid: true }
+    const base = validateSchedule(schedules, dates, shiftDefs)
+    const quota = validateLeisureQuota({
+      schedules,
+      workHourSystem: storeSettings?.work_hour_system,
+      anchorDate: storeSettings?.variable_period_start,
+      startDate: dates[0],
+      endDate: dates[dates.length - 1],
+    })
+    return {
+      errors: [...base.errors, ...quota.errors],
+      warnings: [...base.warnings, ...quota.warnings],
+      isValid: base.errors.length + quota.errors.length === 0,
+    }
+  }, [employees, dates, assignments, shiftDefs, storeSettings])
+
+  // 有違規時自動展開（除非使用者手動摺起來過）
+  useEffect(() => {
+    if (compliance.errors.length > 0 && !userToggled) setBoardExpanded(true)
+  }, [compliance.errors.length, userToggled])
 
   const paletteShifts = shiftDefs.filter(d => d.name)
 
@@ -242,6 +277,104 @@ export default function ScheduleBuilderGrid({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+      {/* ── 排班檢查布告欄：即時 feedback，可摺疊 ── */}
+      {(() => {
+        const errCount = compliance.errors.length
+        const warnCount = compliance.warnings.length
+        const tone = errCount > 0 ? 'error' : warnCount > 0 ? 'warn' : 'ok'
+        const palette = {
+          error: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.35)', color: 'var(--accent-red)' },
+          warn:  { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.35)', color: 'var(--accent-orange)' },
+          ok:    { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.30)', color: 'var(--accent-green)' },
+        }[tone]
+        const icon = tone === 'error' ? '❌' : tone === 'warn' ? '⚠️' : '✓'
+        const summary = tone === 'error'
+          ? `${errCount} 違規${warnCount > 0 ? ` · ${warnCount} 提醒` : ''}`
+          : tone === 'warn' ? `${warnCount} 提醒` : '全部合規'
+
+        // 按員工分組
+        const groupedErrs = {}, groupedWarns = {}
+        for (const e of compliance.errors) (groupedErrs[e.employee] ??= []).push(e)
+        for (const w of compliance.warnings) (groupedWarns[w.employee] ??= []).push(w)
+        const empNames = [...new Set([...Object.keys(groupedErrs), ...Object.keys(groupedWarns)])].sort()
+
+        return (
+          <div style={{
+            marginBottom: 8, borderRadius: 10,
+            background: palette.bg, border: `1px solid ${palette.border}`,
+            overflow: 'hidden',
+          }}>
+            {/* Header — 點擊切展開 */}
+            <div
+              onClick={() => { setBoardExpanded(v => !v); setUserToggled(true) }}
+              style={{
+                padding: '8px 14px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 10, fontSize: 12,
+                color: palette.color, fontWeight: 700,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{icon} 排班檢查：{summary}</span>
+              {empNames.length > 0 && (
+                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+                  · 影響 {empNames.length} 人
+                </span>
+              )}
+              <span style={{
+                marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500,
+              }}>
+                {boardExpanded ? '▲ 收合' : empNames.length > 0 ? '▼ 點開看詳情' : '✓'}
+              </span>
+            </div>
+
+            {/* Body — 展開時顯示按員工分組的詳情 */}
+            {boardExpanded && empNames.length > 0 && (
+              <div style={{
+                padding: '4px 10px 10px', display: 'flex', flexDirection: 'column', gap: 8,
+                maxHeight: 240, overflowY: 'auto',
+                borderTop: `1px solid ${palette.border}`,
+              }}>
+                {empNames.map(empName => {
+                  const errs = groupedErrs[empName] || []
+                  const warns = groupedWarns[empName] || []
+                  return (
+                    <div key={empName} style={{
+                      background: 'var(--bg-card)', borderRadius: 6,
+                      padding: '6px 10px', border: '1px solid var(--border-subtle)',
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4, color: 'var(--text-primary)' }}>
+                        👤 {empName}
+                      </div>
+                      {errs.map((e, i) => (
+                        <div key={`e${i}`} style={{
+                          fontSize: 12, padding: '3px 6px', marginBottom: 3,
+                          borderLeft: '3px solid var(--accent-red)', background: 'rgba(239,68,68,0.06)',
+                          color: 'var(--text-secondary)',
+                        }}>
+                          <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>❌ </span>
+                          {e.message}
+                          {e.law && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>({e.law})</span>}
+                        </div>
+                      ))}
+                      {warns.map((w, i) => (
+                        <div key={`w${i}`} style={{
+                          fontSize: 12, padding: '3px 6px', marginBottom: 3,
+                          borderLeft: '3px solid var(--accent-orange)', background: 'rgba(245,158,11,0.06)',
+                          color: 'var(--text-secondary)',
+                        }}>
+                          <span style={{ color: 'var(--accent-orange)', fontWeight: 700 }}>⚠️ </span>
+                          {w.message}
+                          {w.law && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>({w.law})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── 多選 toolbar：永遠顯示（沒選時當提示） ── */}
       <div style={{

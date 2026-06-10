@@ -24,7 +24,6 @@ export default function ScheduleBuilder() {
   const [assignments, setAssignments] = useState({})
   const [view, setView] = useState('grid')
   const [calendarSubView, setCalendarSubView] = useState('month')
-  const [isDirty, setIsDirty] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishStatusRows, setPublishStatusRows] = useState([])  // 整個 cycle 範圍的發布狀態
   const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role)
@@ -34,8 +33,6 @@ export default function ScheduleBuilder() {
   const [saveStatus, setSaveStatus] = useState('saved')  // 'saving' | 'saved' | 'error'
   const [lastSavedAt, setLastSavedAt] = useState(null)
   const pendingSavesRef = useRef(0)  // in-flight save count
-
-  const isDirtyRef = useRef(false)
 
   const safMonth = month || formatYearMonth(new Date().getFullYear(), new Date().getMonth() + 1)
   const { year: monthYear, month: monthNum } = parseYearMonth(safMonth)
@@ -138,9 +135,7 @@ export default function ScheduleBuilder() {
       ...prev,
       [`${empName}|${date}`]: { shift, actual_start: actualStart, actual_end: actualEnd, source_store: sourceStore },
     }))
-    setIsDirty(true)
-    isDirtyRef.current = true
-    autoSave(empName, date, shift, actualStart, actualEnd, sourceStore)
+autoSave(empName, date, shift, actualStart, actualEnd, sourceStore)
   }, [autoSave])
 
   const handleDeleteShift = useCallback(async (empName, date) => {
@@ -149,9 +144,7 @@ export default function ScheduleBuilder() {
       delete next[`${empName}|${date}`]
       return next
     })
-    setIsDirty(true)
-    isDirtyRef.current = true
-    pendingSavesRef.current++
+pendingSavesRef.current++
     setSaveStatus('saving')
     const { error } = await supabase.from('schedules').delete().eq('employee', empName).eq('date', date)
     pendingSavesRef.current--
@@ -196,8 +189,6 @@ export default function ScheduleBuilder() {
     setPublishing(false)
     if (error) { toast.error('發布失敗：' + error.message); return }
     toast.success(`✅ 已發布並鎖定 ${data?.locked_rows ?? 0} 筆排班`)
-    setIsDirty(false)
-    isDirtyRef.current = false
     // 重撈狀態
     const { data: ps } = await supabase.from('schedule_publish_status').select('*')
       .eq('store_id', storeId)
@@ -226,8 +217,11 @@ export default function ScheduleBuilder() {
   }
 
   const handleBack = async () => {
-    if (isDirtyRef.current) {
-      if (!(await confirm({ message: '有未儲存的變更，確定要離開？\n\n（草稿已自動儲存，離開後可在排班管理找到）' }))) return
+    // 只在「儲存中」或「儲存失敗」時警告 — 已存好 (saved) 直接離開
+    if (saveStatus === 'saving') {
+      if (!(await confirm({ message: '仍有資料正在儲存中，確定要離開？' }))) return
+    } else if (saveStatus === 'error') {
+      if (!(await confirm({ message: '上次儲存失敗，未存的變更會掉。仍要離開？' }))) return
     }
     navigate('/hr/schedule')
   }
@@ -287,7 +281,6 @@ export default function ScheduleBuilder() {
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {workHourSystem} · {rangeStart} ~ {rangeEnd} · {employees.length} 人 · {assignedCount} 格已排
-            {!isLocked && isDirty && <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>● 未發布</span>}
           </div>
         </div>
 
@@ -302,6 +295,47 @@ export default function ScheduleBuilder() {
           ))}
         </div>
 
+        {/* 💾 存草稿按鈕 — 視覺確認用（自動存已經跑了，這是給使用者安心） */}
+        {!isLocked && (
+          <button
+            className="btn btn-secondary"
+            style={{
+              padding: '8px 16px', whiteSpace: 'nowrap',
+              opacity: saveStatus === 'saving' ? 0.7 : 1,
+            }}
+            onClick={async () => {
+              // 強制存所有 in-memory assignments（即使 autoSave 應該都跑過了，再保險一次）
+              const rows = []
+              for (const [key, val] of Object.entries(assignments)) {
+                const pi = key.lastIndexOf('|')
+                const empName = key.slice(0, pi)
+                const date = key.slice(pi + 1)
+                if (date >= rangeStart && date <= rangeEnd && val.shift) {
+                  rows.push({
+                    employee: empName, date, shift: val.shift,
+                    actual_start: val.actual_start, actual_end: val.actual_end,
+                    source_store: val.source_store,
+                    organization_id: authProfile?.organization_id,
+                  })
+                }
+              }
+              if (rows.length === 0) { toast('沒有資料可存', { icon: 'ℹ️' }); return }
+              setSaveStatus('saving')
+              const { error } = await supabase.from('schedules').upsert(rows, { onConflict: 'employee,date' })
+              if (error) {
+                setSaveStatus('error')
+                toast.error('儲存失敗：' + error.message)
+              } else {
+                setSaveStatus('saved')
+                setLastSavedAt(Date.now())
+                toast.success(`✓ 已儲存 ${rows.length} 筆`)
+              }
+            }}
+            disabled={saveStatus === 'saving'}
+          >
+            {saveStatus === 'saving' ? '💾 儲存中...' : '💾 存草稿'}
+          </button>
+        )}
         {isLocked ? (
           isAdmin ? (
             <button

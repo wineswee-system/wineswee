@@ -499,18 +499,26 @@ export default function ScheduleXlsxImport() {
   const pureWorkRecs   = matchedRecs.filter(r => !r.absence_type)
   const resolvedCount  = pureWorkRecs.filter(r => resolveShiftTime(r.shift, r.store, catalogMap)).length
 
-  // 未對應班別統計：統計出每個無法解析的班別名稱及出現次數（僅一般班次）
+  // 未對應班別統計：每個班別名稱 → { count, depts: Set, emps: Set }
   const unresolvedShifts = useMemo(() => {
     if (!catalogMap.size) return []
-    const counts = new Map()
+    const empDept = new Map((parsed?.empList || []).map(e => [e.name, e.dept]))
+    const data = new Map()
     for (const r of pureWorkRecs) {
       if (!resolveShiftTime(r.shift, r.store, catalogMap)) {
         const key = r.store ? `${r.store}${r.shift}` : r.shift
-        counts.set(key, (counts.get(key) || 0) + 1)
+        if (!data.has(key)) data.set(key, { count: 0, depts: new Set(), emps: new Set() })
+        const entry = data.get(key)
+        entry.count++
+        const dept = empDept.get(r.employee)
+        if (dept) entry.depts.add(dept)
+        entry.emps.add(r.employee)
       }
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])
-  }, [pureWorkRecs, catalogMap]) // eslint-disable-line react-hooks/exhaustive-deps
+    return [...data.entries()]
+      .map(([name, d]) => ({ name, count: d.count, depts: [...d.depts], emps: [...d.emps] }))
+      .sort((a, b) => b.count - a.count)
+  }, [pureWorkRecs, catalogMap, parsed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ padding: 28, maxWidth: 1100 }}>
@@ -774,21 +782,34 @@ export default function ScheduleXlsxImport() {
                   {unresolvedShifts.length} 種班別未對應工時
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>
-                  — 請在班別定義目錄中補充以下班別的工作範圍
+                  — 以下班別時段無法從目錄或班別字串解析
                 </span>
               </div>
-              <div style={{ padding: '10px 16px', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {unresolvedShifts.map(([name, count]) => (
-                  <span key={name} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '3px 10px', borderRadius: 20, fontSize: 12,
-                    background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)',
-                    color: 'var(--text-secondary)',
-                  }}>
-                    {name}
-                    <span style={{ opacity: 0.55, fontSize: 11 }}>×{count}</span>
-                  </span>
-                ))}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '6px 14px', textAlign: 'left', fontWeight: 600 }}>班別</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 600 }}>次數</th>
+                      <th style={{ padding: '6px 14px', textAlign: 'left', fontWeight: 600 }}>部門</th>
+                      <th style={{ padding: '6px 14px', textAlign: 'left', fontWeight: 600 }}>員工</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unresolvedShifts.map(({ name, count, depts, emps }) => (
+                      <tr key={name} style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)' }}>
+                        <td style={{ padding: '6px 14px', fontFamily: 'monospace', color: 'var(--accent-orange)', fontWeight: 600 }}>{name}</td>
+                        <td style={{ padding: '6px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>{count}</td>
+                        <td style={{ padding: '6px 14px', color: 'var(--text-secondary)' }}>
+                          {depts.length > 0 ? depts.join('、') : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '6px 14px', color: 'var(--text-muted)' }}>
+                          {emps.join('、')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

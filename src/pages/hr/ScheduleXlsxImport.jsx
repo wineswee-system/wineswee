@@ -206,17 +206,21 @@ function parseShiftCatalog(wb) {
 }
 
 // ── 班別目錄工時對應 ──────────────────────────────────────
-// 嘗試三種策略匹配班別名稱到目錄中的時段
+// 嘗試四種策略匹配班別名稱到目錄中的時段
 //   1. 直接比對 shift
 //   2. 店名前綴重組：store + shift（"微風" + "早" → "微風早"）
 //   3. 剝去代碼前綴："文-文心晚班 2" → "文心晚班 2"
+//   4. 直接從班別字串 parse 時段（"11:00~20:00" 本身就是時間範圍）
 function resolveShiftTime(shift, store, catalogMap) {
-  if (!shift || !catalogMap || !catalogMap.size) return null
-  if (catalogMap.has(shift)) return catalogMap.get(shift)
-  if (store && catalogMap.has(store + shift)) return catalogMap.get(store + shift)
-  const stripped = shift.replace(/^[\w一-鿿]{1,3}-/, '')
-  if (stripped !== shift && catalogMap.has(stripped)) return catalogMap.get(stripped)
-  return null
+  if (!shift) return null
+  if (catalogMap?.size) {
+    if (catalogMap.has(shift)) return catalogMap.get(shift)
+    if (store && catalogMap.has(store + shift)) return catalogMap.get(store + shift)
+    const stripped = shift.replace(/^[\w一-鿿]{1,3}-/, '')
+    if (stripped !== shift && catalogMap.has(stripped)) return catalogMap.get(stripped)
+  }
+  // 班別代碼已被 normalizeShiftFull 轉為 "HH:MM~HH:MM" — 直接 parse 時段
+  return parseWorkRange(shift)
 }
 
 // ── 員工列（可展開顯示每日班別）────────────────────────────
@@ -304,8 +308,18 @@ export default function ScheduleXlsxImport() {
   const [dragging,        setDragging]      = useState(false)
   const [shiftCatalog,    setShiftCatalog]  = useState([])
   const [catalogDragging, setCatalogDrag]  = useState(false)
+  const [savedCatalog,    setSavedCatalog] = useState(null)
   const fileRef    = useRef(null)
   const catalogRef = useRef(null)
+
+  // 從 localStorage 載入上次班別定義（per-org）
+  useEffect(() => {
+    if (!orgId) return
+    try {
+      const raw = localStorage.getItem(`sme_shift_catalog_${orgId}`)
+      if (raw) setSavedCatalog(JSON.parse(raw))
+    } catch { /* ignore */ }
+  }, [orgId])
 
   // 含離職員工 — 匯入歷史排班仍需對應到已離職者的 employee_id
   useEffect(() => {
@@ -380,6 +394,8 @@ export default function ScheduleXlsxImport() {
         toast.error('未找到班別定義欄位（需含「班別名稱」與「工作範圍」欄）')
       } else {
         setShiftCatalog(catalog)
+        setSavedCatalog(catalog)
+        try { localStorage.setItem(`sme_shift_catalog_${orgId}`, JSON.stringify(catalog)) } catch { /* storage full */ }
         toast.success(`已載入 ${catalog.length} 筆班別定義`)
       }
     } catch (err) {
@@ -390,6 +406,12 @@ export default function ScheduleXlsxImport() {
   function onDropCatalog(e) {
     e.preventDefault(); setCatalogDrag(false)
     handleCatalogFile(e.dataTransfer.files[0])
+  }
+
+  function handleReuseCatalog() {
+    if (!savedCatalog?.length) return
+    setShiftCatalog(savedCatalog)
+    toast.success(`已套用上次班別定義（${savedCatalog.length} 筆）`)
   }
 
   async function handleImport() {
@@ -628,22 +650,45 @@ export default function ScheduleXlsxImport() {
               </label>
             </div>
             {shiftCatalog.length === 0 ? (
-              <div
-                onDragOver={e => { e.preventDefault(); setCatalogDrag(true) }}
-                onDragLeave={() => setCatalogDrag(false)}
-                onDrop={onDropCatalog}
-                onClick={() => catalogRef.current?.click()}
-                style={{
-                  padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
-                  background: catalogDragging ? 'var(--accent-purple-dim)' : 'var(--bg-secondary)',
-                  outline: catalogDragging ? '2px dashed var(--accent-purple)' : undefined,
-                  transition: 'all .15s',
-                }}
-              >
-                <Upload size={28} style={{ color: 'var(--accent-purple)', marginBottom: 10 }} />
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>拖曳班別定義 XLSX 到這裡</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>需含「班別名稱」與「工作範圍」欄位</div>
-              </div>
+              <>
+                {savedCatalog?.length > 0 && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-secondary)',
+                  }}>
+                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      上次已上傳班別定義（{savedCatalog.length} 筆）
+                    </span>
+                    <button
+                      onClick={handleReuseCatalog}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                        border: '1px solid var(--accent-purple)', cursor: 'pointer',
+                      }}
+                    >
+                      ↩ 套用上次
+                    </button>
+                  </div>
+                )}
+                <div
+                  onDragOver={e => { e.preventDefault(); setCatalogDrag(true) }}
+                  onDragLeave={() => setCatalogDrag(false)}
+                  onDrop={onDropCatalog}
+                  onClick={() => catalogRef.current?.click()}
+                  style={{
+                    padding: '32px 24px', textAlign: 'center', cursor: 'pointer',
+                    background: catalogDragging ? 'var(--accent-purple-dim)' : 'var(--bg-secondary)',
+                    outline: catalogDragging ? '2px dashed var(--accent-purple)' : undefined,
+                    transition: 'all .15s',
+                  }}
+                >
+                  <Upload size={28} style={{ color: 'var(--accent-purple)', marginBottom: 10 }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>拖曳班別定義 XLSX 到這裡</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>需含「班別名稱」與「工作範圍」欄位</div>
+                </div>
+              </>
             ) : (
               <div style={{ overflowX: 'auto', maxHeight: 320 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

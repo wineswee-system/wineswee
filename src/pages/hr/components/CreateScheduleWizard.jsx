@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { getCycleFor } from '../../../lib/scheduleUtils'
 import { useAuth } from '../../../contexts/AuthContext'
+import { toast } from '../../../lib/toast'
 
 const WHS_COLORS = {
   '四週變形': { bg: 'rgba(139,92,246,0.15)', color: '#8b5cf6', border: 'rgba(139,92,246,0.3)' },
@@ -208,19 +209,22 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       }
 
       // Save draft schedule entries for all marked days
+      // 對齊 cdee833：schedules 表沒 status 欄位，「未發布」是前端 isDirty 算的；
+      // 寫 status 會被 PostgREST 退 400 → 整個精靈卡住
       const draftRows = []
       for (const [key, val] of Object.entries(empRestMap)) {
         const pipeIdx = key.indexOf('|')
         const empName = key.slice(pipeIdx + 1)
         for (const date of (val['休假'] || [])) {
-          draftRows.push({ employee: empName, date, shift: '休息', status: 'draft', organization_id: authProfile?.organization_id })
+          draftRows.push({ employee: empName, date, shift: '休息', organization_id: authProfile?.organization_id })
         }
         for (const date of (val['例假'] || [])) {
-          draftRows.push({ employee: empName, date, shift: '例假', status: 'draft', organization_id: authProfile?.organization_id })
+          draftRows.push({ employee: empName, date, shift: '例假', organization_id: authProfile?.organization_id })
         }
       }
       if (draftRows.length > 0) {
-        await supabase.from('schedules').upsert(draftRows, { onConflict: 'employee,date' })
+        const { error } = await supabase.from('schedules').upsert(draftRows, { onConflict: 'employee,date' })
+        if (error) throw new Error('草稿建立失敗：' + error.message)
       }
 
       onComplete({
@@ -236,6 +240,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       })
     } catch (err) {
       console.error('Draft save error:', err)
+      toast.error(err.message || '建立草稿失敗')
       setIsSaving(false)
     }
   }
@@ -252,41 +257,47 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
     }} onClick={onClose}>
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-        borderRadius: 18, padding: 32, width: 660, maxWidth: '95vw', maxHeight: '90vh',
-        overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
+        borderRadius: 18, width: 660, maxWidth: '95vw', maxHeight: '90vh',
+        boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column',  // ← flex column 讓 header 固定 + body 滾
       }} onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-              🧙 排班精靈 — {mode === 'auto' ? '自動建立' : '手動建立'}
+        {/* Header — 固定不滾 */}
+        <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                🧙 排班精靈 — {mode === 'auto' ? '自動建立' : '手動建立'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>步驟 {step} / 3</div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>步驟 {step} / 3</div>
+            <button onClick={onClose} style={{
+              width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-medium)',
+              background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+            }}>✕</button>
           </div>
-          <button onClick={onClose} style={{
-            width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-medium)',
-            background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
-          }}>✕</button>
+
+          {/* Progress */}
+          <div style={{ display: 'flex', gap: 6, paddingBottom: 20, borderBottom: '1px solid var(--border-light)' }}>
+            {['班表日期範圍', '員工設定', '完成'].map((label, i) => {
+              const n = i + 1
+              return (
+                <div key={n} style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{
+                    height: 4, borderRadius: 4, marginBottom: 6, transition: 'background 0.2s',
+                    background: step >= n ? 'var(--accent-cyan)' : 'var(--border-medium)',
+                  }} />
+                  <div style={{ fontSize: 10, fontWeight: step === n ? 700 : 400, color: step >= n ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                    {n}. {label}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        {/* Progress */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
-          {['班表日期範圍', '員工設定', '完成'].map((label, i) => {
-            const n = i + 1
-            return (
-              <div key={n} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{
-                  height: 4, borderRadius: 4, marginBottom: 6, transition: 'background 0.2s',
-                  background: step >= n ? 'var(--accent-cyan)' : 'var(--border-medium)',
-                }} />
-                <div style={{ fontSize: 10, fontWeight: step === n ? 700 : 400, color: step >= n ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                  {n}. {label}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {/* Body — 可滾，含 step content + footer buttons */}
+        <div style={{ padding: '24px 32px 28px', overflowY: 'auto', flex: 1 }}>
 
         {/* ── Step 1: 班表日期範圍 ── */}
         {step === 1 && (
@@ -671,6 +682,8 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               disabled={isSaving} onClick={() => setStep(2)}>← 上一步</button>
           </div>
         )}
+
+        </div>{/* /Body */}
       </div>
     </div>
   )

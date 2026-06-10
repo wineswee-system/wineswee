@@ -226,15 +226,15 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       : Math.round(baseForInsure / 30 / 8 * 100) / 100  // 四捨五入到小數第 2 位
 
     // 判斷員工分類（決定國定加班倍率）：
-    // - 行政正職 (office_staff / admin / super_admin)：國定當日視為平日 → ×1 全程
-    //   理由：月薪已涵蓋 30 天工資，當日上班不另加倍
-    // - 門市正職 (manager / store_staff) + 變形工時店：1.34/1.67 階梯
-    //   理由：§30-1 國定可調移，當日視為平日；超過 8h 才有 §32 加班倍率
-    // - 門市正職 + 標準工時店：×2 全程（§37 加倍工資；門市實務罕見）
+    // 不用 role 判斷（部分行政員工 role 設成 manager/store_staff，但實際掛在「總部」）
+    // 改看所屬店的 work_hour_system：
+    // - store 變形工時（12 家實體門市都設 4週變形）→ 門市正職
+    //   → 1.34/1.67 階梯（§30-1 國定可調移，當日視為平日）
+    // - store 標準工時 / 未設（行政員工掛在威士威總部）→ 行政正職
+    //   → ×1 全程（月薪已含 30 天工資）
     // - PT (isHourly)：×2 全程
     const empStoreId = storeIdMap[emp.store] || null
     const empIsVariableHours = isVariableHours(empStoreId)
-    const empIsOfficeRole = ['office_staff', 'admin', 'super_admin'].includes(emp.role)
 
     const calcOtPay = (bucket) => {
       // 平日：FT/PT 一樣
@@ -248,21 +248,18 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       const restday = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
       // 例假：FT/PT 都 ×2 全程
       const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
-      // 國定假日加班 — 依員工分類分流：
+      // 國定假日加班 — 依員工所屬店的工時制度分流：
       //  - PT 時薪：×2 全程
-      //  - 行政正職 (office_staff/admin/super_admin)：×1 全程（月薪已含 30 天工資）
-      //  - 門市正職 + 變形工時店：1.34/1.67 階梯（§30-1 國定可調移）
-      //  - 門市正職 + 標準工時店：×2 全程（罕見邊界，理論上 §37 加倍）
+      //  - FT + 變形工時店（12 家門市）：1.34/1.67 階梯（§30-1 國定可調移）
+      //  - FT + 其他（行政員工掛總部 / 標準工時）：×1 全程（月薪已含 30 天工資）
       const ho = bucket.holiday || 0
       const holiday = isHourly
         ? Math.ceil(ho * hourlyRate * 2)
-        : empIsOfficeRole
-          ? Math.ceil(ho * hourlyRate)  // 行政：×1
-          : empIsVariableHours
-            ? (ho <= 2
-                ? Math.ceil(ho * hourlyRate * 1.34)
-                : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
-            : Math.ceil(ho * hourlyRate * 2)
+        : empIsVariableHours
+          ? (ho <= 2
+              ? Math.ceil(ho * hourlyRate * 1.34)
+              : Math.ceil(2 * hourlyRate * 1.34 + (ho - 2) * hourlyRate * 1.67))
+          : Math.ceil(ho * hourlyRate)  // 行政正職：×1
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
         total: weekday + restday + weeklyOff + holiday,

@@ -54,6 +54,9 @@ export default function Schedule() {
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
   const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
   const isSuperAdmin = userRole === 'super_admin'
+  const userPosition = authProfile?.position || ''
+  const isStoreMgr = !canEditSchedule && userPosition.includes('店長')
+  const isSupervisor = !canEditSchedule && userPosition.includes('督導')
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -106,6 +109,7 @@ export default function Schedule() {
   // Schedule Wizard
   const [showWizard, setShowWizard] = useState(false)
   const [wizardMode, setWizardMode] = useState('manual')
+  const [myStoreIds, setMyStoreIds] = useState([])
   const [showWizardDropdown, setShowWizardDropdown] = useState(false)
   const wizardDropdownRef = useRef(null)
   // Prevents cycleProbeDate from being reset when wizard fires storeFilter+month changes together
@@ -203,6 +207,11 @@ export default function Schedule() {
       setEmployees(enriched)
       setDepartments(d.data || [])
       setLocations(l.data || [])
+      // Fetch current user's store assignments for role-scoped wizard filtering
+      if (authProfile?.id) {
+        supabase.from('user_stores').select('store_id').eq('employee_id', authProfile.id)
+          .then(({ data }) => setMyStoreIds((data || []).map(r => r.store_id)))
+      }
       const defs = sd.data || []
       setShiftDefs(defs)
       setShiftTypes(buildShiftTypes(defs))
@@ -1078,9 +1087,6 @@ export default function Schedule() {
             }}>
               📅 月曆 PDF
             </button>
-            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
-              <Shield size={14} /> 排班條件
-            </button>
             {/* 排班檢查按鈕：依 compliance state 顯示狀態 */}
             <button
               className="btn btn-secondary"
@@ -1159,12 +1165,6 @@ export default function Schedule() {
                 )}
               </div>
             )}
-            {canUseAISchedule && (
-              <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
-                onClick={handleCodeSchedule} disabled={autoScheduling}>
-                <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
-              </button>
-            )}
             {aiDraft && (
               <>
                 <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handlePublishDraft}>
@@ -1188,6 +1188,13 @@ export default function Schedule() {
                 value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
               人/天
             </div>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowLawModal(true)}>
+              <Shield size={14} /> 排班條件
+            </button>
+            <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
+              onClick={handleCodeSchedule} disabled={autoScheduling}>
+              <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
+            </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
               if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
@@ -1660,7 +1667,12 @@ export default function Schedule() {
       <CreateScheduleWizard
         open={showWizard}
         mode={wizardMode}
-        locations={locations}
+        locations={(() => {
+          if (canEditSchedule) return locations
+          if (isSupervisor) return locations.filter(l => myStoreIds.includes(l.id))
+          if (isStoreMgr) return locations.filter(l => l.id === authProfile?.store_id)
+          return []
+        })()}
         onClose={() => setShowWizard(false)}
         onComplete={handleWizardComplete}
       />

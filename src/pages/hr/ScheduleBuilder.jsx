@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { getMonthDates, formatYearMonth, parseYearMonth } from '../../lib/scheduleUtils'
+import { getMonthDates, formatYearMonth, parseYearMonth, getLockedDateSetForStore } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import ScheduleBuilderGrid from './components/ScheduleBuilderGrid'
 import ScheduleBuilderCalendar from './components/ScheduleBuilderCalendar'
@@ -26,6 +26,8 @@ export default function ScheduleBuilder() {
   const [calendarSubView, setCalendarSubView] = useState('month')
   const [isDirty, setIsDirty] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [publishStatusRows, setPublishStatusRows] = useState([])  // 整個 cycle 範圍的發布狀態
+  const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role)
 
   const saveTimer = useRef(null)
   const isDirtyRef = useRef(false)
@@ -63,7 +65,10 @@ export default function ScheduleBuilder() {
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('stores').select('*').eq('id', storeId).single(),
       supabase.from('schedules').select('*').gte('date', rangeStart).lte('date', rangeEnd),
-    ]).then(([empRes, sdRes, storeRes, schedRes]) => {
+      supabase.from('schedule_publish_status').select('*')
+        .eq('store_id', storeId)
+        .or(`cycle_start.lte.${rangeEnd},month.eq.${safMonth}`),  // overlap range OR legacy month match
+    ]).then(([empRes, sdRes, storeRes, schedRes, psRes]) => {
       const emps = empRes.data || []
       setEmployees(emps)
 
@@ -86,9 +91,22 @@ export default function ScheduleBuilder() {
         }
       }
       setAssignments(init)
+      setPublishStatusRows(psRes.data || [])
       setLoading(false)
     })
   }, [storeId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const lockedDates = getLockedDateSetForStore(publishStatusRows, storeId)
+  // 找此 range 對應 cycle 是否已發布（顯示 chip + 控制按鈕用）
+  const currentCycleStatus = (() => {
+    const row = publishStatusRows.find(r =>
+      r.store_id === storeId
+      && r.cycle_start === rangeStart
+      && r.cycle_end === rangeEnd
+    )
+    return row?.status === 'published' && row?.locked_at ? 'published' : 'draft'
+  })()
+  const isLocked = currentCycleStatus === 'published'
 
   const autoSave = useCallback(async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
     // schedules 表沒有 status 欄位，「未發布」是用 isDirty 在前端算的
@@ -124,13 +142,16 @@ export default function ScheduleBuilder() {
   }, [])
 
   const handlePublish = async () => {
+    if (isLocked) { toast.error('此 cycle 已發布並鎖定'); return }
+    if (!(await confirm({ message: `確定發布並鎖定此 cycle？\n\n${rangeStart} ~ ${rangeEnd}\n\n發布後 cell 將無法編輯，需 admin 解鎖才能改。` }))) return
     setPublishing(true)
+    // 先確保所有編輯都 flush 到 schedules（autoSave 是 debounce，可能還沒寫）
     const rows = []
     for (const [key, val] of Object.entries(assignments)) {
       const pi = key.lastIndexOf('|')
       const empName = key.slice(0, pi)
       const date = key.slice(pi + 1)
-      if (date >= rangeStart && date <= rangeEnd) {
+      if (date >= rangeStart && date <= rangeEnd && val.shift) {
         rows.push({
           employee: empName, date, shift: val.shift,
           actual_start: val.actual_start, actual_end: val.actual_end,
@@ -139,14 +160,46 @@ export default function ScheduleBuilder() {
         })
       }
     }
-    if (!rows.length) { toast.error('無排班資料可發布'); setPublishing(false); return }
-    const { error } = await supabase.from('schedules').upsert(rows, { onConflict: 'employee,date' })
+    if (rows.length) {
+      const { error: upErr } = await supabase.from('schedules').upsert(rows, { onConflict: 'employee,date' })
+      if (upErr) { toast.error('寫入失敗：' + upErr.message); setPublishing(false); return }
+    }
+    // 呼叫 RPC：翻 published + 鎖定
+    const { data, error } = await supabase.rpc('publish_schedule_cycle', {
+      p_store_id: storeId,
+      p_cycle_start: rangeStart,
+      p_cycle_end: rangeEnd,
+    })
     setPublishing(false)
     if (error) { toast.error('發布失敗：' + error.message); return }
-    toast.success(`✅ 已發布 ${rows.length} 筆排班`)
+    toast.success(`✅ 已發布並鎖定 ${data?.locked_rows ?? 0} 筆排班`)
     setIsDirty(false)
     isDirtyRef.current = false
+    // 重撈狀態
+    const { data: ps } = await supabase.from('schedule_publish_status').select('*')
+      .eq('store_id', storeId)
+      .or(`cycle_start.lte.${rangeEnd},month.eq.${safMonth}`)
+    setPublishStatusRows(ps || [])
     navigate('/hr/schedule')
+  }
+
+  const handleUnpublish = async () => {
+    if (!isAdmin) { toast.error('只有管理員可解鎖'); return }
+    if (!(await confirm({ message: `確定解鎖此 cycle？\n\n${rangeStart} ~ ${rangeEnd}\n\n解鎖後 cell 可再次編輯。` }))) return
+    setPublishing(true)
+    const { data, error } = await supabase.rpc('unpublish_schedule_cycle', {
+      p_store_id: storeId,
+      p_cycle_start: rangeStart,
+      p_cycle_end: rangeEnd,
+    })
+    setPublishing(false)
+    if (error) { toast.error('解鎖失敗：' + error.message); return }
+    toast.success(`🔓 已解鎖 ${data?.unlocked_rows ?? 0} 筆排班`)
+    // 重撈狀態
+    const { data: ps } = await supabase.from('schedule_publish_status').select('*')
+      .eq('store_id', storeId)
+      .or(`cycle_start.lte.${rangeEnd},month.eq.${safMonth}`)
+    setPublishStatusRows(ps || [])
   }
 
   const handleBack = async () => {
@@ -183,12 +236,20 @@ export default function ScheduleBuilder() {
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
             {store} · {safMonth} 排班
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 10,
+              background: isLocked ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+              color:      isLocked ? 'var(--accent-green)'   : 'var(--accent-orange)',
+              border: `1px solid ${isLocked ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
+            }}>
+              {isLocked ? '🟢 已發布（鎖定）' : '🟡 草稿'}
+            </span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {workHourSystem} · {rangeStart} ~ {rangeEnd} · {employees.length} 人 · {assignedCount} 格已排
-            {isDirty && <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>● 未發布</span>}
+            {!isLocked && isDirty && <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>● 未發布</span>}
           </div>
         </div>
 
@@ -203,18 +264,41 @@ export default function ScheduleBuilder() {
           ))}
         </div>
 
-        <button
-          className="btn btn-primary"
-          style={{
-            padding: '8px 22px', whiteSpace: 'nowrap',
-            background: 'linear-gradient(135deg, var(--accent-cyan), #3b82f6)',
-            opacity: publishing ? 0.7 : 1,
-          }}
-          onClick={handlePublish}
-          disabled={publishing}
-        >
-          {publishing ? '發布中...' : '📢 發布排班'}
-        </button>
+        {isLocked ? (
+          isAdmin ? (
+            <button
+              className="btn btn-secondary"
+              style={{
+                padding: '8px 22px', whiteSpace: 'nowrap',
+                background: 'rgba(245,158,11,0.12)',
+                color: 'var(--accent-orange)',
+                border: '1px solid var(--accent-orange)',
+                opacity: publishing ? 0.7 : 1,
+              }}
+              onClick={handleUnpublish}
+              disabled={publishing}
+            >
+              {publishing ? '解鎖中...' : '🔓 解鎖此 cycle'}
+            </button>
+          ) : (
+            <button className="btn btn-secondary" style={{ padding: '8px 22px', whiteSpace: 'nowrap', opacity: 0.6, cursor: 'not-allowed' }} disabled>
+              🔒 已鎖定
+            </button>
+          )
+        ) : (
+          <button
+            className="btn btn-primary"
+            style={{
+              padding: '8px 22px', whiteSpace: 'nowrap',
+              background: 'linear-gradient(135deg, var(--accent-cyan), #3b82f6)',
+              opacity: publishing ? 0.7 : 1,
+            }}
+            onClick={handlePublish}
+            disabled={publishing}
+          >
+            {publishing ? '發布中...' : '📢 發布並鎖定'}
+          </button>
+        )}
       </div>
 
       {/* Info bar */}
@@ -250,6 +334,7 @@ export default function ScheduleBuilder() {
             handleSetShift={handleSetShift}
             handleDeleteShift={handleDeleteShift}
             store={store}
+            lockedDates={lockedDates}
           />
         ) : (
           <ScheduleBuilderCalendar
@@ -262,6 +347,7 @@ export default function ScheduleBuilder() {
             handleDeleteShift={handleDeleteShift}
             calendarSubView={calendarSubView}
             setCalendarSubView={setCalendarSubView}
+            lockedDates={lockedDates}
           />
         )}
       </div>

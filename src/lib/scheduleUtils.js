@@ -765,6 +765,27 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
   return { errors, warnings }
 }
 
+// 從 schedule_publish_status rows 算出某店「鎖定日期 Set」
+// @param publishStatusRows - [{ store_id, cycle_start, cycle_end, status, locked_at }]
+// @param storeId - 要查的 store_id
+// @returns Set<'YYYY-MM-DD'> 鎖定的日期
+export function getLockedDateSetForStore(publishStatusRows, storeId) {
+  const set = new Set()
+  if (!publishStatusRows || !storeId) return set
+  for (const row of publishStatusRows) {
+    if (row.store_id !== storeId) continue
+    if (row.status !== 'published' || !row.locked_at) continue
+    if (!row.cycle_start || !row.cycle_end) continue
+    // 把 cycle_start 到 cycle_end 之間每天都加入
+    const start = new Date(row.cycle_start + 'T00:00:00Z')
+    const end   = new Date(row.cycle_end   + 'T00:00:00Z')
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      set.add(d.toISOString().slice(0, 10))
+    }
+  }
+  return set
+}
+
 // 女性員工夜班檢查 — §49 22:00~06:00 應徵得同意
 // gender 欄位值不一：'F'/'女'/'female' 都當女性
 // @param schedules - [{ employee, date, shift }]

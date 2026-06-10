@@ -29,7 +29,9 @@ function getShiftStyle(shiftLabel, shiftDefs) {
 export default function ScheduleBuilderGrid({
   employees, dates, shiftDefs, storeSettings, assignments,
   handleSetShift, handleDeleteShift,
+  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
 }) {
+  const isLocked = (date) => lockedDates && lockedDates.has(date)
   const [editCell, setEditCell] = useState(null)
   const [dragShift, setDragShift] = useState(null)
   const [dragSource, setDragSource] = useState(null)
@@ -131,16 +133,17 @@ export default function ScheduleBuilderGrid({
     return false  // 不攔，讓 popup 開
   }
 
-  // 套用班別到全部已選 cell
+  // 套用班別到全部已選 cell — 鎖定的跳過
   const applyShiftToSelection = useCallback((shift) => {
     if (selectedCells.size === 0 || !shift) return
     for (const key of selectedCells) {
       const pi = key.lastIndexOf('|')
       const empName = key.slice(0, pi)
       const date = key.slice(pi + 1)
+      if (isLocked(date)) continue  // silent skip
       handleSetShift(empName, date, shift.label, shift.start_time || null, shift.end_time || null, null)
     }
-  }, [selectedCells, handleSetShift])
+  }, [selectedCells, handleSetShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 複製：取 selected cells 的相對 pattern
   const copySelection = useCallback(() => {
@@ -183,19 +186,22 @@ export default function ScheduleBuilderGrid({
       const r = minRow + c.rowOffset
       const d = minCol + c.colOffset
       if (r < 0 || r >= empNames.length || d < 0 || d >= dates.length) continue
+      if (isLocked(dates[d])) continue  // 鎖定日期 silent skip
       if (c.shift) handleSetShift(empNames[r], dates[d], c.shift, c.actual_start || null, c.actual_end || null, null)
       else handleDeleteShift(empNames[r], dates[d])
     }
-  }, [clipboard, selectedCells, employees, dates, handleSetShift, handleDeleteShift])
+  }, [clipboard, selectedCells, employees, dates, handleSetShift, handleDeleteShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 刪除已選
+  // 刪除已選 — 鎖定的跳過
   const deleteSelection = useCallback(() => {
     if (selectedCells.size === 0) return
     for (const key of selectedCells) {
       const pi = key.lastIndexOf('|')
-      handleDeleteShift(key.slice(0, pi), key.slice(pi + 1))
+      const date = key.slice(pi + 1)
+      if (isLocked(date)) continue  // silent skip
+      handleDeleteShift(key.slice(0, pi), date)
     }
-  }, [selectedCells, handleDeleteShift])
+  }, [selectedCells, handleDeleteShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 鍵盤快捷
   useEffect(() => {
@@ -544,30 +550,36 @@ export default function ScheduleBuilderGrid({
                     const dow = new Date(date).getDay()
                     const isWeekend = dow === 0 || dow === 6
                     const style = shift ? getShiftStyle(shift, shiftDefs) : {}
+                    const cellLocked = isLocked(date)
 
                     return (
                       <td
                         key={date}
-                        draggable={!!shift}
-                        onDragStart={(e) => onCellDragStart(e, emp.name, date)}
-                        onDragOver={(e) => onCellDragOver(e, emp.name, date)}
-                        onDrop={(e) => onCellDrop(e, emp.name, date)}
+                        draggable={!!shift && !cellLocked}
+                        onDragStart={(e) => { if (cellLocked) { e.preventDefault(); return } onCellDragStart(e, emp.name, date) }}
+                        onDragOver={(e) => { if (cellLocked) return; onCellDragOver(e, emp.name, date) }}
+                        onDrop={(e) => { if (cellLocked) { e.preventDefault(); return } onCellDrop(e, emp.name, date) }}
                         onDragEnd={onDragEnd}
                         onDragLeave={() => setDropTarget(prev =>
                           prev?.empName === emp.name && prev?.date === date ? null : prev
                         )}
                         onClick={(e) => {
                           if (dragActiveRef.current) return
+                          if (cellLocked) return  // 鎖定的 cell 不開 popup 不多選
                           // ctrl/cmd/shift → 多選，攔截 popup
                           if (handleCellSelect(e, emp.name, date)) return
                           setEditCell({ empName: emp.name, date })
                         }}
+                        title={cellLocked ? '此排班已發布鎖定' : undefined}
                         style={{
                           padding: '3px 2px', textAlign: 'center',
                           borderBottom: '1px solid var(--border-light)',
-                          cursor: 'pointer', minWidth: 44, height: 48, verticalAlign: 'middle',
+                          cursor: cellLocked ? 'not-allowed' : 'pointer',
+                          minWidth: 44, height: 48, verticalAlign: 'middle',
                           position: 'relative',
-                          background: selectedCells.has(cellKey(emp.name, date))
+                          background: cellLocked
+                            ? 'repeating-linear-gradient(45deg, rgba(100,116,139,0.06), rgba(100,116,139,0.06) 4px, transparent 4px, transparent 8px)'
+                            : selectedCells.has(cellKey(emp.name, date))
                             ? 'rgba(139,92,246,0.18)'
                             : isDropOver
                               ? 'rgba(34,211,238,0.18)'

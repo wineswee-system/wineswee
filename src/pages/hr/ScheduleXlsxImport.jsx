@@ -482,6 +482,19 @@ export default function ScheduleXlsxImport() {
   const pureWorkRecs   = matchedRecs.filter(r => !r.absence_type)
   const resolvedCount  = pureWorkRecs.filter(r => resolveShiftTime(r.shift, r.store, catalogMap)).length
 
+  // 未對應班別統計：統計出每個無法解析的班別名稱及出現次數（僅一般班次）
+  const unresolvedShifts = useMemo(() => {
+    if (!catalogMap.size) return []
+    const counts = new Map()
+    for (const r of pureWorkRecs) {
+      if (!resolveShiftTime(r.shift, r.store, catalogMap)) {
+        const key = r.store ? `${r.store}${r.shift}` : r.shift
+        counts.set(key, (counts.get(key) || 0) + 1)
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])
+  }, [pureWorkRecs, catalogMap]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ padding: 28, maxWidth: 1100 }}>
       <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>排班總表匯入</h2>
@@ -728,6 +741,40 @@ export default function ScheduleXlsxImport() {
               </div>
             )}
           </div>
+
+          {/* 未對應班別提示 */}
+          {unresolvedShifts.length > 0 && (
+            <div style={{
+              marginTop: 12, border: '1px solid var(--accent-orange)',
+              borderRadius: 12, overflow: 'hidden',
+            }}>
+              <div style={{
+                padding: '10px 16px', background: 'var(--accent-orange-dim)',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <AlertTriangle size={15} style={{ color: 'var(--accent-orange)', flexShrink: 0 }} />
+                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent-orange)' }}>
+                  {unresolvedShifts.length} 種班別未對應工時
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>
+                  — 請在班別定義目錄中補充以下班別的工作範圍
+                </span>
+              </div>
+              <div style={{ padding: '10px 16px', background: 'var(--bg-secondary)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {unresolvedShifts.map(([name, count]) => (
+                  <span key={name} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '3px 10px', borderRadius: 20, fontSize: 12,
+                    background: 'var(--bg-tertiary)', border: '1px solid var(--border-medium)',
+                    color: 'var(--text-secondary)',
+                  }}>
+                    {name}
+                    <span style={{ opacity: 0.55, fontSize: 11 }}>×{count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 員工預覽表 */}
           <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>

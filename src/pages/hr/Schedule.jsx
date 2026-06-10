@@ -60,6 +60,7 @@ export default function Schedule() {
   const [locations, setLocations] = useState([])
   const [schedules, setSchedules] = useState([])
   const [loading, setLoading] = useState(true)
+  const [scheduleLoading, setScheduleLoading] = useState(false)
   const [weekOffset, setWeekOffset] = useState(0)
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
@@ -111,6 +112,7 @@ export default function Schedule() {
   const skipCycleReset = useRef(false)
   // Sync ref so effects can read current storeFilter without adding it to deps
   const storeFilterRef = useRef('')
+  const scheduleAbortRef = useRef(null)
   // View mode: week or month
   const [viewMode, setViewMode] = useState('month') // 'month' | 'cycle'
   // Cycle view 用的探測日期，null = 跟著 selectedMonth 的 1 號走
@@ -214,20 +216,31 @@ export default function Schedule() {
   }, [])
 
   useEffect(() => {
+    // Cancel any in-flight request from a previous month/store change
+    scheduleAbortRef.current?.abort()
+    const controller = new AbortController()
+    scheduleAbortRef.current = controller
+    const { signal } = controller
+
+    setScheduleLoading(true)
     Promise.all([
-      supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd),
-      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd),
+      supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd).abortSignal(signal),
+      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd).abortSignal(signal),
       supabase.from('leave_requests').select('employee, start_date, end_date')
         .in('status', ['待審核', '審核中'])
         .lte('start_date', activeEnd)
         .gte('end_date', activeStart)
-        .eq('unit', 'day'),
+        .eq('unit', 'day')
+        .abortSignal(signal),
     ]).then(([s, o, pl]) => {
+      if (signal.aborted) return
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
       setPendingLeaves(pl.data || [])
     }).catch(err => {
-      console.error('Failed to load schedule data:', err)
+      if (!signal.aborted) console.error('Failed to load schedule data:', err)
+    }).finally(() => {
+      if (!signal.aborted) setScheduleLoading(false)
     })
 
     // Load publish status for current month
@@ -236,8 +249,10 @@ export default function Schedule() {
     if (month && store) {
       supabase.from('schedule_publish_status').select('*')
         .eq('store_id', store.id).eq('month', month).maybeSingle()
-        .then(({ data }) => setPublishStatus(data))
+        .then(({ data }) => { if (!signal.aborted) setPublishStatus(data) })
     }
+
+    return () => controller.abort()
   }, [activeStart, activeEnd, storeFilter, locations])
 
   // Run compliance check when schedules update
@@ -995,18 +1010,6 @@ export default function Schedule() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* 平日/假日人數 — super_admin only（AI 自動排班用） */}
-            {isSuperAdmin && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
-                平日
-                <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
-                  value={minStaff} onChange={e => setMinStaff(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
-                假日
-                <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
-                  value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
-                人/天
-              </div>
-            )}
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               // 複製上個週期 — 一律走 cycle 邏輯（需要店家有設變形工時 anchor）
               const ws = storeSettings?.work_hour_system
@@ -1061,17 +1064,6 @@ export default function Schedule() {
             }}>
               📋 複製上個週期
             </button>
-            {/* 清除本月 — super_admin only（破壞性動作） */}
-            {isSuperAdmin && (
-              <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
-                const empNames = filtered.map(e => e.name)
-                if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
-                await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
-                setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
-              }}>
-                🗑️ 清除本月
-              </button>
-            )}
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => {
               exportScheduleCalendarPdf({
                 storeName: storeFilter || '全部門市',
@@ -1165,19 +1157,10 @@ export default function Schedule() {
               </div>
             )}
             {canUseAISchedule && (
-              <>
-                <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
-                  onClick={handleCodeSchedule} disabled={autoScheduling}>
-                  <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
-                </button>
-                {/* AI 自動排班 — super_admin only */}
-                {isSuperAdmin && (
-                  <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
-                    onClick={handleAutoSchedule} disabled={autoScheduling}>
-                    <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
-                  </button>
-                )}
-              </>
+              <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue, #3b82f6))' }}
+                onClick={handleCodeSchedule} disabled={autoScheduling}>
+                <Code size={14} /> {autoScheduling && aiProgress.includes('程式') ? aiProgress : '排班代碼'}
+              </button>
             )}
             {aiDraft && (
               <>
@@ -1191,6 +1174,31 @@ export default function Schedule() {
             )}
           </div>
         </div>
+        {isSuperAdmin && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-light)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+              平日
+              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
+                value={minStaff} onChange={e => setMinStaff(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
+              假日
+              <input type="number" className="form-input" style={{ width: 42, padding: '4px 6px', fontSize: 12, textAlign: 'center' }}
+                value={minStaffWeekend} onChange={e => setMinStaffWeekend(Math.max(1, Math.min(Number(e.target.value) || 1, 99)))} min={1} max={99} />
+              人/天
+            </div>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
+              const empNames = filtered.map(e => e.name)
+              if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
+              await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
+              setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
+            }}>
+              🗑️ 清除本月
+            </button>
+            <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))' }}
+              onClick={handleAutoSchedule} disabled={autoScheduling}>
+              <Sparkles size={14} /> {autoScheduling && !aiProgress.includes('程式') ? (aiProgress || 'AI 排班中...') : 'AI 自動排班'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* View mode toggle + Store selector + Tabs */}
@@ -1353,6 +1361,17 @@ export default function Schedule() {
       )}
 
       {mainTab === 'schedule' && (
+        <div style={{ position: 'relative' }}>
+          {scheduleLoading && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 10,
+              background: 'rgba(0,0,0,0.35)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 8,
+            }}>
+              <LoadingSpinner />
+            </div>
+          )}
         <MonthScheduleTable
           monthDates={activeDates}
           filtered={filtered}
@@ -1397,6 +1416,7 @@ export default function Schedule() {
           })()}
           onClickEmployeeBadge={(empName) => { setComplianceFilterEmp(empName || null); setShowComplianceModal(true) }}
         />
+        </div>
       )}
 
       {mainTab === 'store-settings' && (

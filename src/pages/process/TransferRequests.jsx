@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Settings } from 'lucide-react'
+import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Settings, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -9,6 +9,7 @@ import SearchableSelect from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl } from '../../lib/formAttachments'
+import { printGoodsTransferSignOff } from '../../lib/signOffAdapters'
 
 // 商品調撥申請單 — 兩階段流程（申請審核 + 驗收審核）
 
@@ -614,6 +615,83 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
     onChanged()
   }
 
+  // 下載簽呈 — 從 request_chain_snapshots (兩階段) + approval_step_history 組 chainSteps
+  const handlePrintSignOff = async () => {
+    // popup blocker 規避：在 user click 同步開 window，後續 async 載入完再寫內容
+    const win = window.open('', '_blank', 'width=900,height=1100')
+    if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
+    try {
+      const [{ data: snaps }, { data: history }, { data: empsWithSig }, { data: org }] = await Promise.all([
+        supabase.from('request_chain_snapshots')
+          .select('request_type, step_order, label, target_type')
+          .in('request_type', ['goods_transfer_apply', 'goods_transfer_receipt'])
+          .eq('request_id', row.id)
+          .order('step_order'),
+        supabase.from('approval_step_history')
+          .select('request_type, step_order, step_label, approver_id, approver_name, action, entered_at, exited_at, notes')
+          .in('request_type', ['goods_transfer_apply', 'goods_transfer_receipt'])
+          .eq('request_id', row.id)
+          .order('exited_at'),
+        supabase.from('employees').select('id, name, signature_url')
+          .eq('organization_id', profile?.organization_id),
+        supabase.from('organizations').select('name, logo_url').eq('id', profile?.organization_id).maybeSingle(),
+      ])
+      // 簽章 map：{ '姓名': signature_url }
+      const signatures = Object.fromEntries(
+        (empsWithSig || []).filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+      )
+      // 組 chainSteps：申請人 → 申請鏈 steps → (若已驗收) 申請人填驗收 → 驗收鏈 steps
+      const chainSteps = [
+        {
+          label: '申請人', name: row.applicant_name || '', status: 'completed',
+          completedAt: row.created_at, isApplicant: true,
+        },
+      ]
+      const applySnaps = (snaps || []).filter(s => s.request_type === 'goods_transfer_apply').sort((a, b) => a.step_order - b.step_order)
+      const applyHist  = (history || []).filter(h => h.request_type === 'goods_transfer_apply')
+      for (const snap of applySnaps) {
+        const h = applyHist.find(x => x.step_order === snap.step_order)
+        chainSteps.push({
+          label: snap.label || `申請-第${snap.step_order + 1}關`,
+          name: h?.approver_name || '',
+          status: h?.action === 'approved' ? 'completed' : h?.action === 'rejected' ? 'rejected' : (row.current_stage === 'apply' && row.current_step === snap.step_order ? 'current' : 'pending'),
+          completedAt: h?.exited_at,
+          rejectReason: h?.action === 'rejected' ? h?.notes : undefined,
+          target_emp_id: h?.approver_id,
+        })
+      }
+      // 驗收段（如果有送驗收）
+      if (row.receipt_submitted_at) {
+        chainSteps.push({
+          label: '驗收提交', name: row.applicant_name || '', status: 'completed',
+          completedAt: row.receipt_submitted_at, isApplicant: true,
+        })
+        const recvSnaps = (snaps || []).filter(s => s.request_type === 'goods_transfer_receipt').sort((a, b) => a.step_order - b.step_order)
+        const recvHist  = (history || []).filter(h => h.request_type === 'goods_transfer_receipt')
+        for (const snap of recvSnaps) {
+          const h = recvHist.find(x => x.step_order === snap.step_order)
+          chainSteps.push({
+            label: snap.label || `驗收-第${snap.step_order + 1}關`,
+            name: h?.approver_name || '',
+            status: h?.action === 'approved' ? 'completed' : h?.action === 'rejected' ? 'rejected' : (row.current_stage === 'receipt' && row.current_step === snap.step_order ? 'current' : 'pending'),
+            completedAt: h?.exited_at,
+            rejectReason: h?.action === 'rejected' ? h?.notes : undefined,
+            target_emp_id: h?.approver_id,
+          })
+        }
+      }
+      printGoodsTransferSignOff(row, {
+        companyName: org?.name, logoUrl: org?.logo_url,
+        applicantDept: '',
+        signatures, chainSteps,
+        _win: win,
+      })
+    } catch (e) {
+      win.close()
+      toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
+    }
+  }
+
   const sc = STATUS_COLORS[row.status] || {}
 
   return (
@@ -765,6 +843,9 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
             </button>
           </>
         )}
+        <button className="btn btn-secondary" onClick={handlePrintSignOff} disabled={submitting} style={{ marginLeft: 'auto' }}>
+          <Printer size={14} /> 下載簽呈 PDF
+        </button>
       </div>
     </Modal>
   )

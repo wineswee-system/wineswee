@@ -405,6 +405,82 @@ export function printFormSubmissionSignOff(row, opts = {}) {
 }
 
 
+// ─── 11. 商品調撥 goods_transfer_requests（兩階段：申請 + 驗收）───
+// row: goods_transfer_requests row + 預期帶 items + from_label/to_label denorm
+// opts: { companyName, logoUrl, chainSteps, signatures, attachments, applicantDept }
+export function printGoodsTransferSignOff(row, opts = {}) {
+  if (!row) return
+  const base = baseOpts(opts)
+
+  const typeLabel = {
+    warehouse_to_store: '總倉 → 門市',
+    store_to_store:     '門市 → 門市',
+    store_to_warehouse: '門市 → 總倉',
+  }[row.transfer_type] || row.transfer_type
+
+  const items = Array.isArray(row.items) ? row.items : []
+  const totalQty = items.reduce((s, it) => s + Number(it.requested_qty || 0), 0)
+
+  // 明細 section（每行 product_code + name + 數量）
+  const itemRows = items.map(it => [
+    `${it.product_code || ''} · ${it.product_name || ''}${it.spec ? ` (${it.spec})` : ''}`,
+    `${it.requested_qty || 0}${it.unit ? ' ' + it.unit : ''}${it.received_qty != null ? ` (實收 ${it.received_qty})` : ''}`,
+  ])
+
+  // 原因（複選 + 其他）
+  const reasonsText = [
+    ...(Array.isArray(row.reasons) ? row.reasons : []),
+    row.reason_other,
+  ].filter(Boolean).join('、')
+
+  const sections = [
+    {
+      title: '調撥資訊',
+      rows: [
+        ['單號',     row.document_no || ''],
+        ['調撥類型', typeLabel],
+        ['路線',     `${row.from_label || '—'}  →  ${row.to_label || '—'}`],
+        ['需求日期', fmtDate(row.needed_date)],
+        ['申請原因', reasonsText || '—'],
+      ],
+    },
+    {
+      title: `商品明細（共 ${items.length} 項 / ${totalQty} 件）`,
+      rows: itemRows.length ? itemRows : [['—', '無明細']],
+    },
+  ]
+
+  // 驗收段（如果已填驗收）
+  if (row.receipt_submitted_at) {
+    sections.push({
+      title: '驗收資訊',
+      rows: [
+        ['驗收送出時間', fmtDate(row.receipt_submitted_at)],
+        ['驗收完成時間', fmtDate(row.receipt_approved_at) || '—'],
+      ],
+    })
+  }
+
+  printSignOff({
+    ...base,
+    docTitle: '商品調撥申請',
+    docNo: row.document_no || row.id,
+    applicant: {
+      name: row.applicant_name || '',
+      dept: opts.applicantDept || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `${typeLabel} ${row.from_label || ''} → ${row.to_label || ''}（${items.length} 項）`,
+    sections,
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    // 不用 simpleSign — chainSteps 由 caller 從 snapshot+history 組好傳進來
+    simpleSign: ['呈文者', '審核人'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
 export function printTransferSignOff(row, opts = {}) {
   if (!row) return
   // 兼容兩種 row shape：(a) 已 join old_dept/new_dept/old_store/new_store 物件

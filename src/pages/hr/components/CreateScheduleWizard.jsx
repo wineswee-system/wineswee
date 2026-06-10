@@ -172,33 +172,55 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
     setPendingResumeSession(null)
   }
 
-  // Debounce upsert session 進度（state 變動時自動存）
-  // 只在使用者已實際操作 (selectedStoreIds 非空 或 sessionId 已存在) 才存
-  useEffect(() => {
-    if (!open || !authProfile?.id) return
-    if (selectedStoreIds.size === 0 && !sessionId) return  // 還沒選店且沒既有 session → 不存
-    if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current)
-    sessionTimerRef.current = setTimeout(async () => {
-      const payload = {
-        created_by: authProfile.id,
-        organization_id: authProfile.organization_id || null,
-        store_ids: Array.from(selectedStoreIds),
-        selected_period_idx: selectedPeriodIdx,
-        store_start_overrides: storeStartOverrides,
-        emp_rest_map: empRestMap,
-        step,
-        mode: mode || 'manual',
-        status: 'in_progress',
-      }
+  // upsert helper — 給 auto-save / 手動按鈕 / onClose flush 共用
+  const upsertSession = async ({ silent = false } = {}) => {
+    if (!authProfile?.id) return null
+    if (selectedStoreIds.size === 0 && !sessionId) return null  // 還沒動就不存
+    const payload = {
+      created_by: authProfile.id,
+      organization_id: authProfile.organization_id || null,
+      store_ids: Array.from(selectedStoreIds),
+      selected_period_idx: selectedPeriodIdx,
+      store_start_overrides: storeStartOverrides,
+      emp_rest_map: empRestMap,
+      step,
+      mode: mode || 'manual',
+      status: 'in_progress',
+    }
+    try {
       if (sessionId) {
         await supabase.from('schedule_draft_sessions').update(payload).eq('id', sessionId)
+        if (!silent) toast.success('✓ 草稿已存')
+        return sessionId
       } else {
-        const { data } = await supabase.from('schedule_draft_sessions').insert(payload).select('id').single()
+        const { data, error } = await supabase.from('schedule_draft_sessions').insert(payload).select('id').single()
+        if (error) throw error
         if (data?.id) setSessionId(data.id)
+        if (!silent) toast.success('✓ 草稿已存')
+        return data?.id
       }
-    }, 1500)
+    } catch (err) {
+      if (!silent) toast.error('存草稿失敗：' + (err.message || err))
+      return null
+    }
+  }
+
+  // Debounce auto-save：state 變動 1.5s 後自動寫（silent）
+  useEffect(() => {
+    if (!open || !authProfile?.id) return
+    if (selectedStoreIds.size === 0 && !sessionId) return
+    if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current)
+    sessionTimerRef.current = setTimeout(() => upsertSession({ silent: true }), 1500)
     return () => sessionTimerRef.current && clearTimeout(sessionTimerRef.current)
-  }, [open, authProfile?.id, authProfile?.organization_id, mode, sessionId, selectedStoreIds, selectedPeriodIdx, storeStartOverrides, empRestMap, step])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sessionId, selectedStoreIds, selectedPeriodIdx, storeStartOverrides, empRestMap, step])
+
+  // 包裹 onClose — 關閉前 flush 一次草稿（保險）
+  const handleClose = async () => {
+    if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current)
+    await upsertSession({ silent: true })
+    onClose?.()
+  }
 
   // Eagerly fetch store_settings for all locations when wizard opens
   // (work_hour_system + variable_period_start live here, not in the stores table)
@@ -385,7 +407,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       position: 'fixed', inset: 0, zIndex: 9000,
       background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
+    }} onClick={handleClose}>
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
         borderRadius: 18, width: 660, maxWidth: '95vw', maxHeight: '90vh',
@@ -403,10 +425,22 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>步驟 {step} / 3</div>
             </div>
-            <button onClick={onClose} style={{
-              width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-medium)',
-              background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
-            }}>✕</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {/* 💾 存草稿 — 立即 upsert + toast，給使用者看得到回饋 */}
+              {(selectedStoreIds.size > 0 || sessionId) && (
+                <button onClick={() => upsertSession()} style={{
+                  padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
+                  background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                }} title="立即存草稿（也會在每次操作後自動存）">
+                  💾 存草稿
+                </button>
+              )}
+              <button onClick={handleClose} style={{
+                width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-medium)',
+                background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+              }}>✕</button>
+            </div>
           </div>
 
           {/* Progress */}

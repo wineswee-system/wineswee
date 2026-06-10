@@ -649,6 +649,7 @@ function TaskFormBindingsBlock({ bindings }) {
       : (b.form_type === 'expense_request' ? `/process/expense-requests?binding_id=${b.id}`
         : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
         : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
+        : b.form_type === 'goods_transfer'  ? `/process/transfer-requests?new=1&binding_id=${b.id}`
         : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
     if (u) window.open(u, '_blank')
   }

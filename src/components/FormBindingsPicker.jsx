@@ -42,6 +42,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           { form_type: 'expense_request', form_template_id: null, icon: '🧾', label: '申請費用', group: '費用' },
           { form_type: 'expense',         form_template_id: null, icon: '💸', label: '費用報銷', group: '費用' },
           { form_type: 'store_audit',     form_template_id: null, icon: '🏪', label: '門市稽核', group: '非費用' },
+          { form_type: 'goods_transfer',  form_template_id: null, icon: '📦', label: '商品調撥', group: '非費用' },
           ...customForms,
         ])
       })

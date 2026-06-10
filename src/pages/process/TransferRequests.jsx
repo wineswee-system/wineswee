@@ -61,7 +61,7 @@ export default function TransferRequests() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm())
   const [detailRow, setDetailRow] = useState(null)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -84,6 +84,19 @@ export default function TransferRequests() {
     const target = records.find(r => String(r.id) === String(focusId))
     if (target) setDetailRow(target)
   }, [searchParams, records, detailRow])
+
+  // 從任務綁定跳過來 ?new=1&binding_id=N → 自動開新建 modal
+  // 開完就把 new=1 拿掉，避免關 modal 又彈出（binding_id 留著給 submit 用）
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && !showFormModal) {
+      setEditingId(null)
+      setForm(emptyForm())
+      setShowFormModal(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, showFormModal, setSearchParams])
 
   const storeMap = useMemo(() => Object.fromEntries(stores.map(s => [s.id, s])), [stores])
   const empMap = useMemo(() => Object.fromEntries(employees.map(e => [e.id, e])), [employees])
@@ -132,6 +145,10 @@ export default function TransferRequests() {
     const fromLabel = form.transfer_type === 'warehouse_to_store' ? '總倉' : (fromStore?.name || '')
     const toLabel   = form.transfer_type === 'store_to_warehouse' ? '總倉' : (toStore?.name || '')
 
+    // 任務綁定跳過來時帶 binding_id（讓 trigger 自動 sync task_form_bindings）
+    const bindingIdParam = searchParams.get('binding_id')
+    const linkedBindingId = bindingIdParam ? Number(bindingIdParam) : null
+
     const payload = {
       organization_id: profile?.organization_id,
       applicant_id: applicantId,
@@ -148,6 +165,7 @@ export default function TransferRequests() {
       attachments: form.attachments,
       request_date: new Date().toISOString().slice(0, 10),
       needed_date: form.needed_date || null,
+      linked_binding_id: linkedBindingId,
     }
 
     try {
@@ -193,6 +211,12 @@ export default function TransferRequests() {
       setShowFormModal(false)
       setEditingId(null)
       setForm(emptyForm())
+      // 任務綁定跳過來的，送出成功後把 binding_id 清掉
+      if (linkedBindingId) {
+        const next = new URLSearchParams(searchParams)
+        next.delete('binding_id')
+        setSearchParams(next, { replace: true })
+      }
       reload()
     } catch (e) {
       toast.error('送出失敗：' + e.message)

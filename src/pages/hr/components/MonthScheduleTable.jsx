@@ -415,12 +415,15 @@ function EmployeeRow({
                 {shift}
               </span>
             ) : shift ? (
-              // Normalise format; if still a named shift, resolve to HH:MM~HH:MM via SHIFT_TYPES
+              // Normalise format; resolve to HH:MM~HH:MM via SHIFT_TYPES then actual_start/actual_end
               (() => {
                 let label = formatShiftLabel(shift)
                 if (!/^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)) {
                   const def = SHIFT_TYPES.find(t => t.label === shift)
                   if (def?.start_time && def?.end_time) label = `${def.start_time}~${def.end_time}`
+                  else if (daySchedule?.actual_start && daySchedule?.actual_end) {
+                    label = `${daySchedule.actual_start.slice(0, 5)}~${daySchedule.actual_end.slice(0, 5)}`
+                  }
                 }
                 const isTimeRange = /^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)
                 return isTimeRange ? (

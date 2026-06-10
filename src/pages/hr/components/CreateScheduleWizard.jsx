@@ -313,6 +313,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         borderRadius: 18, width: 660, maxWidth: '95vw', maxHeight: '90vh',
         boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
         display: 'flex', flexDirection: 'column',  // ← flex column 讓 header 固定 + body 滾
+        overflow: 'hidden',  // 鎖死容器避免內容溢出
       }} onClick={e => e.stopPropagation()}>
 
         {/* Header — 固定不滾 */}
@@ -350,7 +351,8 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         </div>
 
         {/* Body — 可滾，含 step content + footer buttons */}
-        <div style={{ padding: '24px 32px 28px', overflowY: 'auto', flex: 1 }}>
+        {/* minHeight:0 是 flexbox 陷阱關鍵：沒這條 flex:1 子元素會撐到內容高，把 header 擠出去 */}
+        <div style={{ padding: '24px 32px 28px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
 
         {/* ── Step 1: 班表日期範圍 ── */}
         {step === 1 && (

@@ -82,9 +82,10 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
   const calcRowPay = (row) => {
     if (typeof row._pay === 'number') return row._pay
     const hours = row.hours || 0
+    // fallback：薪資金額一律無條件進位（對齊 backend 跟工資不可少給原則）
     return hours <= 2
-      ? Math.round(hours * hourlyRate * 1.34)
-      : Math.round(2 * hourlyRate * 1.34 + (hours - 2) * hourlyRate * 1.67)
+      ? Math.ceil(hours * hourlyRate * 1.34)
+      : Math.ceil(2 * hourlyRate * 1.34 + (hours - 2) * hourlyRate * 1.67)
   }
   const rateLabelFor = (row) => {
     if (row._rate_label) return row._rate_label

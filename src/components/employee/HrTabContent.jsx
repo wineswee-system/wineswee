@@ -1,7 +1,14 @@
-import { Upload, Eye } from 'lucide-react'
+import { Upload, Eye, Plus, X } from 'lucide-react'
 import { empLabel } from '../../lib/empLabel'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
+
+// 跟 SalaryFormModal / SalaryStructures 一致的 12 個常見津貼快選
+const PRESET_ALLOWANCES = [
+  '夜班津貼', '主管加給', '證照津貼', '外語津貼',
+  '專業加給', '危險津貼', '久任津貼', '油資補貼',
+  '通訊費補助', '託兒津貼', '房屋津貼', '績效獎金',
+]
 
 export default function HrTabContent({
   form,
@@ -156,6 +163,87 @@ export default function HrTabContent({
             <div><div style={L}>全勤獎金</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.attendance_bonus || ''} onChange={e => set('attendance_bonus', e.target.value)} /></div>
             <div><div style={L}>夜間津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.night_shift_allowance || ''} onChange={e => set('night_shift_allowance', e.target.value)} /></div>
             <div><div style={L}>跨店津貼</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.cross_store_allowance || ''} onChange={e => set('cross_store_allowance', e.target.value)} /></div>
+          </div>
+
+          {/* ─── 自訂津貼（動態新增）— 算入勞健保 + 加班費基數，跟 SalaryFormModal pattern 一致 ─── */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                ✨ 自訂津貼（會算入投保薪資與加班費基數）
+              </label>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {(form.custom_allowances || []).length} 項
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {PRESET_ALLOWANCES.map(name => {
+                const used = (form.custom_allowances || []).some(c => c.name === name)
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      if (used) return
+                      set('custom_allowances', [...(form.custom_allowances || []), { name, amount: '' }])
+                    }}
+                    disabled={used}
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: used ? 'default' : 'pointer',
+                      border: '1px solid var(--border-subtle)',
+                      background: used ? 'var(--bg-tertiary)' : 'transparent',
+                      color: used ? 'var(--text-muted)' : 'var(--accent-cyan)',
+                      opacity: used ? 0.5 : 1,
+                    }}
+                  >
+                    {used ? '✓ ' : <Plus size={10} style={{ display: 'inline', marginRight: 2 }} />}{name}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => set('custom_allowances', [...(form.custom_allowances || []), { name: '', amount: '' }])}
+                style={{
+                  padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+                  border: '1px dashed var(--accent-purple)',
+                  background: 'rgba(167,139,250,0.08)', color: 'var(--accent-purple)',
+                }}
+              >
+                <Plus size={10} style={{ display: 'inline', marginRight: 2 }} />完全自訂
+              </button>
+            </div>
+            {(form.custom_allowances || []).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {form.custom_allowances.map((c, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="form-input"
+                      placeholder="津貼名稱"
+                      value={c.name || ''}
+                      onChange={e => set('custom_allowances', form.custom_allowances.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
+                      style={{ flex: 2 }}
+                    />
+                    <input
+                      className="form-input"
+                      type="number"
+                      placeholder="金額"
+                      value={c.amount || ''}
+                      onChange={e => set('custom_allowances', form.custom_allowances.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => set('custom_allowances', form.custom_allowances.filter((_, i) => i !== idx))}
+                      style={{
+                        background: 'transparent', border: '1px solid var(--border-subtle)',
+                        color: 'var(--accent-red)', cursor: 'pointer',
+                        borderRadius: 6, padding: 6, display: 'flex',
+                      }}
+                      title="刪除"
+                    ><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <SectionTitle icon="🏦" text="銀行帳戶" />

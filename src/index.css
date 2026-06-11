@@ -4672,6 +4672,8 @@ div.data-table > table {
 @media (max-width: 1024px) {
   .mobile-menu-btn { display: flex; }
   .sidebar-overlay.active { display: block; }
+  /* sticky bar 在 drawer mode 也滿版（sidebar 不佔位） */
+  .sticky-x-scrollbar { left: 0 !important; }
 
   /* sidebar 預設藏到左邊 — 即便有 sidebar-hidden 也照藏（避免被 dashboard 規則覆蓋） */
   .sidebar,

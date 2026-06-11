@@ -194,9 +194,12 @@ export default function StickyHorizontalScrollbar() {
       aria-hidden="true"
       className="sticky-x-scrollbar"
       style={{
-        position: 'sticky',
+        /* 改 fixed：跟 sidebar 一樣 fixed 在 viewport，不靠 sticky 算位置
+           left: var(--sidebar-width) 跟 sidebar 同邏輯避開 sidebar 寬度
+           drawer mode (≤1024px) sidebar 不佔位，由 CSS @media 改 left: 0 */
+        position: 'fixed',
         bottom: 0,
-        left: 0,
+        left: 'var(--sidebar-width)',
         right: 0,
         height: trackWidth > 0 ? 26 : 0,
         overflowX: 'auto',
@@ -204,7 +207,7 @@ export default function StickyHorizontalScrollbar() {
         background: 'var(--accent-cyan-dim)',
         borderTop: trackWidth > 0 ? '2px solid var(--accent-cyan)' : 'none',
         boxShadow: trackWidth > 0 ? '0 -2px 8px rgba(0,0,0,0.08)' : 'none',
-        zIndex: 10,
+        zIndex: 99,
         transition: 'height 0.15s ease',
       }}
     >

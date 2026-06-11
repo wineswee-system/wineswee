@@ -263,6 +263,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         .select('id').eq('employee_id', employee.id).maybeSingle()
       const ssPayload = {
         employee_id: employee.id,
+        organization_id: employee.organization_id || profile?.organization_id || null,
         salary_type: form.salary_type ?? 'monthly',
         base_salary: Number(form.base_salary) || 0,
         hourly_rate: Number(form.hourly_rate) || 0,

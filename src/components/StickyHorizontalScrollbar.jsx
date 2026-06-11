@@ -43,7 +43,17 @@ export default function StickyHorizontalScrollbar() {
       return target.scrollWidth - target.clientWidth + sticky.clientWidth
     }
 
+    function updateStickyPosition() {
+      // 直接抓 main-content 視覺 rect（含 zoom 後），不靠 CSS calc 算 sidebar 寬
+      // 這樣不管 fontScale 多少、sidebar 是 full/compact/drawer 哪個模式，永遠對齊
+      if (!stickyRef.current) return
+      const mainRect = main.getBoundingClientRect()
+      stickyRef.current.style.left = mainRect.left + 'px'
+      stickyRef.current.style.right = (window.innerWidth - mainRect.right) + 'px'
+    }
+
     function pickTarget() {
+      updateStickyPosition()
       const candidates = main.querySelectorAll(
         '.data-table-wrapper, div.data-table'
       )
@@ -199,10 +209,9 @@ export default function StickyHorizontalScrollbar() {
            drawer mode (≤1024px) sidebar 不佔位，由 CSS @media 改 left: 0 */
         position: 'fixed',
         bottom: 0,
-        /* ★ 關鍵：fixed 元素不在 #root zoom 內，但 sidebar 在 zoom 內
-           所以 sticky bar 的 left 必須 = sidebar 邏輯寬 × fontScale，
-           才能對齊 sidebar 視覺右邊。否則 zoom != 1 時左右會跑掉。*/
-        left: 'calc(var(--sidebar-width) * var(--app-font-scale, 1))',
+        /* left / right 由 JS updateStickyPosition() 動態抓 main-content
+           視覺 rect 設定。inline 預設值給個 fallback 避免初次 render 跑掉。*/
+        left: 0,
         right: 0,
         height: trackWidth > 0 ? 21 : 0,
         overflowX: 'auto',

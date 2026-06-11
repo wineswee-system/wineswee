@@ -144,12 +144,16 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           base_salary:         ss.data.base_salary         ?? f.base_salary,
           meal_allowance:      ss.data.meal_allowance      ?? f.meal_allowance,
           transport_allowance: ss.data.transport_allowance ?? f.transport_allowance,
-          // 新版才有的欄位也帶進來（HrTabContent 沒顯示也不會壞，但 Salary 等其他元件可能讀）
+          housing_allowance:   ss.data.housing_allowance   ?? f.housing_allowance,
+          supervisor_allowance: ss.data.supervisor_allowance ?? f.supervisor_allowance,
+          // 新版才有的欄位也帶進來
           role_allowance:        ss.data.role_allowance        ?? 0,
           attendance_bonus:      ss.data.attendance_bonus      ?? 0,
           night_shift_allowance: ss.data.night_shift_allowance ?? 0,
           cross_store_allowance: ss.data.cross_store_allowance ?? 0,
           hourly_rate:           ss.data.hourly_rate           ?? 0,
+          weekly_hours:          ss.data.weekly_hours          ?? f.weekly_hours,
+          custom_allowances:     Array.isArray(ss.data.custom_allowances) ? ss.data.custom_allowances : [],
         }))
       }
     }).catch(() => {})
@@ -240,6 +244,43 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         toast.success(`已調至${form.store}，未來排班已清除，請重新排班`)
       }
     }
+
+    // ★ 薪資真理源 sync — employees 表 update 後同步寫 salary_structures
+    //   （HrTabContent 編輯的薪資/津貼欄位，舊版 save 只 update employees 不寫真理源）
+    //   只在 form 內有薪資相關欄位時才動，避免不必要的 upsert
+    const hasSalaryEdit = ['salary_type', 'base_salary', 'hourly_rate', 'meal_allowance',
+      'transport_allowance', 'housing_allowance', 'supervisor_allowance', 'attendance_bonus',
+      'night_shift_allowance', 'cross_store_allowance', 'custom_allowances', 'weekly_hours']
+      .some(k => k in form)
+    if (hasSalaryEdit) {
+      // 查現有 record 決定 update 還是 insert
+      const { data: existing } = await supabase.from('salary_structures')
+        .select('id').eq('employee_id', employee.id).maybeSingle()
+      const ssPayload = {
+        employee_id: employee.id,
+        salary_type: form.salary_type ?? 'monthly',
+        base_salary: Number(form.base_salary) || 0,
+        hourly_rate: Number(form.hourly_rate) || 0,
+        weekly_hours: Number(form.weekly_hours) || 40,
+        meal_allowance: Number(form.meal_allowance) || 0,
+        transport_allowance: Number(form.transport_allowance) || 0,
+        housing_allowance: Number(form.housing_allowance) || 0,
+        supervisor_allowance: Number(form.supervisor_allowance) || 0,
+        attendance_bonus: Number(form.attendance_bonus) || 0,
+        night_shift_allowance: Number(form.night_shift_allowance) || 0,
+        cross_store_allowance: Number(form.cross_store_allowance) || 0,
+        custom_allowances: Array.isArray(form.custom_allowances) ? form.custom_allowances : [],
+      }
+      const ssOp = existing
+        ? supabase.from('salary_structures').update(ssPayload).eq('id', existing.id)
+        : supabase.from('salary_structures').insert(ssPayload)
+      const { error: ssErr } = await ssOp
+      if (ssErr) {
+        console.warn('salary_structures sync 失敗:', ssErr)
+        toast.error('薪資結構同步失敗 — 員工資料已存，但薪資真理源未更新')
+      }
+    }
+
     setSaving(false)
   }
 

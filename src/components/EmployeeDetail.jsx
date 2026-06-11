@@ -253,8 +253,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     //   （HrTabContent 編輯的薪資/津貼欄位，舊版 save 只 update employees 不寫真理源）
     //   只在 form 內有薪資相關欄位時才動，避免不必要的 upsert
     const hasSalaryEdit = ['salary_type', 'base_salary', 'hourly_rate', 'meal_allowance',
-      'transport_allowance', 'housing_allowance', 'supervisor_allowance', 'attendance_bonus',
-      'night_shift_allowance', 'cross_store_allowance', 'custom_allowances', 'weekly_hours',
+      'transport_allowance', 'supervisor_allowance', 'attendance_bonus',
+      'night_shift_allowance', 'cross_store_allowance', 'custom_allowances',
       'employment_category', 'piece_rate', 'current_piece_count']
       .some(k => k in form)
     if (hasSalaryEdit) {
@@ -267,10 +267,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         salary_type: form.salary_type ?? 'monthly',
         base_salary: Number(form.base_salary) || 0,
         hourly_rate: Number(form.hourly_rate) || 0,
-        weekly_hours: Number(form.weekly_hours) || 40,
         meal_allowance: Number(form.meal_allowance) || 0,
         transport_allowance: Number(form.transport_allowance) || 0,
-        housing_allowance: Number(form.housing_allowance) || 0,
         supervisor_allowance: Number(form.supervisor_allowance) || 0,
         attendance_bonus: Number(form.attendance_bonus) || 0,
         night_shift_allowance: Number(form.night_shift_allowance) || 0,

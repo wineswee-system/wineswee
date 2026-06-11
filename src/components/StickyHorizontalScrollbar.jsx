@@ -53,8 +53,34 @@ export default function StickyHorizontalScrollbar() {
       let bestVisibleHeight = 0
 
       for (const el of candidates) {
-        // 沒橫向 overflow → 跳過（不需要 sticky bar）
-        if (el.scrollWidth <= el.clientWidth + 1) continue
+        const hasOverflow = el.scrollWidth > el.clientWidth + 1
+
+        // ─── 順手管理 .has-fade / .scrolled-to-end class ───
+        //  有橫向 overflow → 加 .has-fade（CSS 右側漸層提示「右邊還有」）
+        //  滾到底 → 加 .scrolled-to-end（漸層淡出）
+        //  沒 overflow → 兩個 class 都拿掉
+        if (hasOverflow) {
+          el.classList.add('has-fade')
+          const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+          el.classList.toggle('scrolled-to-end', atEnd)
+          // 為了讓單一 wrapper 的 scroll 也能即時更新 fade，掛 listener（idempotent）
+          if (!el.__fadeListener) {
+            el.__fadeListener = () => {
+              const atEndNow = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+              el.classList.toggle('scrolled-to-end', atEndNow)
+            }
+            el.addEventListener('scroll', el.__fadeListener, { passive: true })
+          }
+        } else {
+          el.classList.remove('has-fade', 'scrolled-to-end')
+          if (el.__fadeListener) {
+            el.removeEventListener('scroll', el.__fadeListener)
+            delete el.__fadeListener
+          }
+        }
+
+        // 沒橫向 overflow → 跳過 sticky bar pick（不需要浮動滾軸）
+        if (!hasOverflow) continue
 
         const rect = el.getBoundingClientRect()
         const visibleTop = Math.max(rect.top, mainRect.top)
@@ -116,6 +142,14 @@ export default function StickyHorizontalScrollbar() {
       mo.disconnect()
       ro.disconnect()
       if (mutationTimer) clearTimeout(mutationTimer)
+      // 清掉散落在各 wrapper 上的 fade scroll listeners
+      main.querySelectorAll('.data-table-wrapper, div.data-table').forEach(el => {
+        if (el.__fadeListener) {
+          el.removeEventListener('scroll', el.__fadeListener)
+          delete el.__fadeListener
+        }
+        el.classList.remove('has-fade', 'scrolled-to-end')
+      })
     }
     // trackWidth 故意不放 dep — 在 pickTarget 內 setTrackWidth 會引發重 effect
     // 但這 effect 只負責「找 target + 監聽」，沒必要每次 trackWidth 變就重 mount

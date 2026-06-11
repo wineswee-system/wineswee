@@ -156,17 +156,17 @@ export default function ExpenseFormModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        style={{ background: 'var(--bg-card)', borderRadius: 12, width: 520, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }}
+        className="modal-shell modal-md"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-          <h3 style={{ margin: 0 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={onClose}><X size={20} /></button>
+        <div className="modal-shell-header">
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', flexShrink: 0 }} onClick={onClose}><X size={20} /></button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="modal-shell-body">
 
           {/* Applicant */}
           <div className={errors.employee ? 'field-error' : undefined}>
@@ -244,9 +244,10 @@ export default function ExpenseFormModal({
             {errors.title && <div className="field-error-msg">⚠ 請填寫{isExpense ? '項目名稱' : '主旨'}</div>}
           </div>
 
-          {/* Supplier + Store — expense only */}
+          {/* Supplier + Store — expense only.
+              用 auto-fit minmax — 寬夠就兩欄、不夠就自動降一欄，不需要 media query */}
           {isExpense && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
                 <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
@@ -279,73 +280,68 @@ export default function ExpenseFormModal({
             </div>
           )}
 
-          {/* Line items — expense only */}
+          {/* Line items — expense only.
+              用 form-table（CSS grid + container query）取代 table，窄容器自動變兩排排版：
+              品名 + [X] / 數量 × 單價 = 小計 */}
           {isExpense && (
             <div className={errors._total ? 'field-error' : undefined}>
               <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
               {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-main)' }}>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600 }}>品名</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 70 }}>數量</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>單價</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, width: 90 }}>小計</th>
-                      <th style={{ width: 32 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((li, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                        <td style={{ padding: 4 }}>
-                          <input type="text" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="品名"
-                            style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12 }} />
-                        </td>
-                        <td style={{ padding: 4 }}>
-                          <input type="number" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} placeholder="0"
-                            style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} />
-                        </td>
-                        <td style={{ padding: 4 }}>
-                          <input type="number" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} placeholder="0"
-                            style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-main)', fontSize: 12, textAlign: 'right' }} />
-                        </td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{li.subtotal ? fmtAmt(li.subtotal) : '-'}</td>
-                        <td style={{ padding: 4 }}>
-                          {lineItems.length > 1 && (
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}
-                              onClick={() => setLineItems(items => items.filter((_, j) => j !== i))}>
-                              <X size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td colSpan={3} style={{ padding: '6px 8px', display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
-                          onClick={() => setLineItems(items => [...items, emptyItem()])}>
-                          <Plus size={11} /> 新增品項
+              <div className="form-table">
+                <div className="form-table-head">
+                  <div className="form-table-cell-name">品名</div>
+                  <div className="form-table-cell-qty">數量</div>
+                  <div className="form-table-cell-price">單價</div>
+                  <div className="form-table-cell-total">小計</div>
+                  <div className="form-table-cell-action"></div>
+                </div>
+                {lineItems.map((li, i) => (
+                  <div key={i} className="form-table-row">
+                    <div className="form-table-cell-name">
+                      <input type="text" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="品名" />
+                    </div>
+                    {/* 寬容器：display: contents 讓 3 個 cell 直接當 grid items；
+                        窄容器：CSS 改成 display: grid，自己接管 qty / price / total 三欄排版 */}
+                    <div className="form-table-calc-row">
+                      <div className="form-table-cell-qty" data-label="數量">
+                        <input type="number" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} placeholder="0" inputMode="decimal" />
+                      </div>
+                      <div className="form-table-cell-price" data-label="單價">
+                        <input type="number" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} placeholder="0" inputMode="decimal" />
+                      </div>
+                      <div className="form-table-cell-total">{li.subtotal ? fmtAmt(li.subtotal) : '-'}</div>
+                    </div>
+                    <div className="form-table-cell-action">
+                      {lineItems.length > 1 && (
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }}
+                          onClick={() => setLineItems(items => items.filter((_, j) => j !== i))}
+                          aria-label="刪除此品項">
+                          <X size={14} />
                         </button>
-                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
-                          onClick={() => csvRef.current?.click()}
-                          title="3 欄：品名,數量,單價（小計自動算）— UTF-8 編碼">
-                          <Upload size={11} /> 匯入 CSV
-                        </button>
-                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', color: 'var(--accent-cyan)' }}
-                          onClick={handleDownloadTemplate}
-                          title="下載空白 CSV 範本（含標題列 + 2 筆範例）">
-                          <Download size={11} /> 下載範本
-                        </button>
-                        <input ref={csvRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvImport} />
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', fontSize: 14, color: 'var(--accent-blue)' }}>{fmtAmt(lineTotal)}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="form-table-foot">
+                  <div className="form-table-foot-actions">
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => setLineItems(items => [...items, emptyItem()])}>
+                      <Plus size={11} /> 新增品項
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => csvRef.current?.click()}
+                      title="3 欄：品名,數量,單價（小計自動算）— UTF-8 編碼">
+                      <Upload size={11} /> 匯入 CSV
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--accent-cyan)' }}
+                      onClick={handleDownloadTemplate}
+                      title="下載空白 CSV 範本（含標題列 + 2 筆範例）">
+                      <Download size={11} /> 下載範本
+                    </button>
+                    <input ref={csvRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvImport} />
+                  </div>
+                  <div className="form-table-foot-total">{fmtAmt(lineTotal)}</div>
+                </div>
               </div>
             </div>
           )}
@@ -357,10 +353,11 @@ export default function ExpenseFormModal({
               style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 50, resize: 'vertical' }} />
           </div>
 
-          {/* File upload — 3 slots */}
+          {/* File upload — 3 slots.
+              用 auto-fit minmax — 寬夠 3 欄、窄夠 2 欄、再窄 1 欄，全自動 */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>附件（訂購單、報價單...）</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
               {[0, 1, 2].map(idx => {
                 const file = files[idx]
                 return (
@@ -416,7 +413,7 @@ export default function ExpenseFormModal({
         </div>
 
         {/* Footer */}
-        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+        <div className="modal-shell-footer">
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '提交中...' : '提交申請'}</button>
         </div>

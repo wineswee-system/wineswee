@@ -75,6 +75,37 @@
   --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ═══ RWD design system v3 — fluid + container-aware ═══
+     原則：寬度用 min(理想, 95vw)；內距用 clamp()；不寫死斷點 */
+
+  /* Spacing scale (8px base) — 給 utility class + inline calc 用 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Container ideal widths — modal/page max-width 用 */
+  --modal-sm: 400px;
+  --modal-md: 560px;
+  --modal-lg: 760px;
+  --modal-xl: 960px;
+  --content-max: 1600px;
+
+  /* Touch target (Apple HIG 44pt / Google 48dp) */
+  --touch-min: 44px;
+
+  /* Breakpoint reference (give names — 整頁佈局才用，元件用 container query) */
+  --bp-xs: 640px;
+  --bp-sm: 768px;
+  --bp-md: 1024px;
+  --bp-lg: 1280px;
+  --bp-xl: 1536px;
 }
 
 /* ---- Light Theme ---- */
@@ -871,9 +902,10 @@ input, select, textarea {
   min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
   overflow-y: auto;
-  /* overflow-x: hidden 確保橫向不會破版；橫向滾軸由內層 .data-table-wrapper
-     / div.data-table 自己處理，貼著表格底部，使用者一眼可見 */
-  overflow-x: hidden;
+  /* ★ 改 auto（原本 hidden）：當內層 wrapper 該 overflow 卻沒出滾軸時，
+     main-content 自己會出橫滾軸救命。落地頁 .demo-root / .lp-root 自己
+     有 overflow-x: hidden 不受影響 */
+  overflow-x: auto;
   transition: margin-left var(--transition-normal);
 }
 
@@ -1102,7 +1134,13 @@ input, select, textarea {
    避免誤傷 <div className="data-table"> 這種把 class 套在 div 上的舊用法 */
 .data-table-wrapper > table,
 .data-table-wrapper .data-table {
-  min-width: 720px;
+  /* ★ 用 max-content 撐到內容自然寬度（含所有欄位完整顯示），
+       超過 wrapper 寬度時 wrapper 才會 overflow 出滾軸。
+       原本的 width: 100% 會強制 table = wrapper 寬度，後面欄位被擠到沒地方放，
+       導致看起來「吃版但沒滾軸」。
+     min-width: 100% 確保內容少時 table 仍撐滿 wrapper（不會變窄空一塊）*/
+  width: max-content;
+  min-width: 100%;
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —
@@ -4092,3 +4130,518 @@ div.data-table > table {
 @media(max-width:1024px){.lp-nav-links{display:none}.lp-pain-grid{grid-template-columns:repeat(2,1fr)}.lp-hot-grid{grid-template-columns:1fr;max-width:400px}.lp-timeline{grid-template-columns:repeat(2,1fr);gap:32px}.lp-timeline-line{display:none}}
 @media(max-width:768px){.lp-section{padding:80px 24px}.lp-hero{padding:120px 24px 80px}.lp-pain-grid{grid-template-columns:1fr}.lp-hero-stats{gap:24px}.lp-compare-table{font-size:13px}.lp-compare-header,.lp-compare-row{padding:10px 14px}.lp-final-cta{padding:40px 24px}.lp-try-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.lp-hero-h1{font-size:32px}.lp-hero-ctas{flex-direction:column;align-items:center}.lp-timeline{grid-template-columns:1fr}.lp-try-grid{grid-template-columns:1fr}}
+
+/* ════════════════════════════════════════════════════════════════════
+   RWD UI SYSTEM v3 — Fluid + Container-aware
+   ════════════════════════════════════════════════════════════════════
+   設計原則：
+   1. 寬度用 min(理想值, 95vw) — 螢幕多大用多大、上限是理想值
+   2. 內距/字級用 clamp(min, fluid, max) — 隨容器流動
+   3. 元件內部一律 container query，不看 viewport
+   4. 純加法 — 不動 v1/v2 任何既有 class
+   5. 命名前綴 .rwd-* / .ui-* 避免跟 .btn-ui-* 撞
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Layout utilities — 取代多數 inline style ── */
+.ui-flex { display: flex; }
+.ui-flex-col { display: flex; flex-direction: column; }
+.ui-inline-flex { display: inline-flex; }
+.ui-items-center { align-items: center; }
+.ui-items-start { align-items: flex-start; }
+.ui-items-end { align-items: flex-end; }
+.ui-justify-between { justify-content: space-between; }
+.ui-justify-center { justify-content: center; }
+.ui-justify-end { justify-content: flex-end; }
+.ui-grow { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.ui-shrink-0 { flex-shrink: 0; }
+.ui-wrap { flex-wrap: wrap; }
+.ui-grid { display: grid; }
+
+.ui-gap-1 { gap: var(--space-1); }
+.ui-gap-2 { gap: var(--space-2); }
+.ui-gap-3 { gap: var(--space-3); }
+.ui-gap-4 { gap: var(--space-4); }
+.ui-gap-6 { gap: var(--space-6); }
+
+/* ── Container-query helpers ── */
+.ui-cq { container-type: inline-size; }
+.ui-cq-modal { container-type: inline-size; container-name: modal; }
+.ui-cq-page  { container-type: inline-size; container-name: page; }
+.ui-cq-card  { container-type: inline-size; container-name: card; }
+
+/* ── Responsive visibility (用 container — sidebar 收開都對) ── */
+/* fallback：沒包 container 的環境用 viewport */
+@media (max-width: 640px)  { .ui-hide-xs { display: none !important; } }
+@media (max-width: 768px)  { .ui-hide-sm-down { display: none !important; } }
+@media (max-width: 1024px) { .ui-hide-md-down { display: none !important; } }
+@media (min-width: 641px)  { .ui-show-xs-only { display: none !important; } }
+@media (min-width: 769px)  { .ui-show-sm-only { display: none !important; } }
+
+/* ────────────────────────────────────────────────────────────────────
+   MODAL SHELL — 統一 modal 寬度系統
+   ──────────────────────────────────────────────────────────────────── */
+.modal-shell {
+  /* 寬度公式：min(理想, 螢幕-邊距) — 永不超出螢幕，永不超過理想 */
+  width: min(var(--modal-md), calc(100vw - var(--space-4) * 2));
+  max-height: min(90vh, calc(100vh - var(--space-4) * 2));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: clamp(8px, 1.5cqi, 16px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  position: relative;
+  /* ★ 開啟 container query — 內部 form-table 等元件看自己寬度 */
+  container-type: inline-size;
+  container-name: modal;
+}
+.modal-shell.modal-sm { width: min(var(--modal-sm), calc(100vw - var(--space-4) * 2)); }
+.modal-shell.modal-lg { width: min(var(--modal-lg), calc(100vw - var(--space-4) * 2)); }
+.modal-shell.modal-xl { width: min(var(--modal-xl), calc(100vw - var(--space-4) * 2)); }
+.modal-shell.modal-full {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  border: none;
+}
+
+/* 手機/極窄螢幕 — modal 自動近全螢幕（活的：留 8px 邊讓使用者知道後面有 backdrop）*/
+@media (max-width: 480px) {
+  .modal-shell:not(.modal-full) {
+    width: calc(100vw - var(--space-2) * 2);
+    max-height: calc(100vh - var(--space-2) * 2);
+    border-radius: 12px;
+  }
+}
+
+.modal-shell-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: clamp(14px, 2.5cqi, 20px) clamp(16px, 3cqi, 24px);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+.modal-shell-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: clamp(14px, 2.5cqi, 20px) clamp(16px, 3cqi, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.5cqi, 14px);
+  position: relative;
+}
+.modal-shell-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: clamp(12px, 2cqi, 16px) clamp(16px, 3cqi, 24px);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+/* footer button 在窄容器 (modal <420px) 換行排成兩列填滿 */
+@container modal (max-width: 420px) {
+  .modal-shell-footer { flex-direction: column-reverse; }
+  .modal-shell-footer > button { width: 100%; min-height: var(--touch-min); }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   FORM-TABLE — modal 內品項明細編輯表（解 ExpenseFormModal 截圖痛點）
+   寬螢幕：5 欄 grid；窄螢幕：兩排堆疊（品名+刪除 / 數量×單價=小計）
+   ──────────────────────────────────────────────────────────────────── */
+.form-table {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 12px;
+}
+.form-table-head,
+.form-table-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 70px 90px 90px 32px;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+}
+.form-table-head {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-block: 6px;
+}
+.form-table-row {
+  border-top: 1px solid var(--border-subtle);
+}
+.form-table-row:first-child { border-top: none; }
+
+.form-table-cell-name    { grid-column: 1; }
+.form-table-cell-qty     { grid-column: 2; text-align: right; }
+.form-table-cell-price   { grid-column: 3; text-align: right; }
+.form-table-cell-total   { grid-column: 4; text-align: right; font-weight: 600; font-family: monospace; }
+.form-table-cell-action  { grid-column: 5; }
+
+.form-table-row input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+.form-table-row input[type="number"] { text-align: right; }
+
+/* 寬容器預設：.form-table-calc-row 是透明的，3 個 cell 直接成 grid items */
+.form-table-calc-row { display: contents; }
+
+.form-table-foot {
+  border-top: 2px solid var(--border-medium);
+  background: var(--bg-tertiary);
+  padding: var(--space-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.form-table-foot-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.form-table-foot-total {
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 14px;
+  color: var(--accent-blue);
+  margin-left: auto;
+}
+
+/* ★ 窄容器自動變形：品名獨佔一排 + 數量×單價=小計 排第二排
+   觸發點：modal container 寬度 < 480px（不看 viewport，sidebar 開關都正確）*/
+@container modal (max-width: 480px) {
+  .form-table-head { display: none; }
+  .form-table-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "name action"
+      "calc calc";
+    row-gap: var(--space-2);
+    padding: var(--space-3);
+  }
+  .form-table-cell-name   { grid-area: name; grid-column: auto; }
+  .form-table-cell-action { grid-area: action; grid-column: auto; }
+  .form-table-cell-qty,
+  .form-table-cell-price,
+  .form-table-cell-total {
+    grid-column: auto;
+  }
+  /* 窄容器下：.form-table-calc-row 自己變 grid，三欄並排 [數量][單價][小計] */
+  .form-table-row .form-table-calc-row {
+    grid-area: calc;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--space-2);
+    align-items: end;
+  }
+  .form-table-calc-row .form-table-cell-qty,
+  .form-table-calc-row .form-table-cell-price,
+  .form-table-calc-row .form-table-cell-total {
+    grid-column: auto;
+    text-align: left;
+  }
+  .form-table-cell-total {
+    text-align: right;
+    font-size: 13px;
+    padding: 6px 0;
+  }
+  /* 在 input/value 上方加欄位 label */
+  .form-table-calc-row [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 3px;
+    letter-spacing: 0.04em;
+  }
+  .form-table-cell-total::before {
+    content: "小計";
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 3px;
+    letter-spacing: 0.04em;
+  }
+  /* 觸控環境下 input 拉高好按 */
+  .form-table-row input { min-height: 36px; font-size: 13px; }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   DATA-TABLE 升級 — 加 fade 提示 + sticky 第一欄 + 欄位優先級
+   ──────────────────────────────────────────────────────────────────── */
+/* ★ 右側 fade 漸層提示 — 使用者一眼看出「右邊還有」
+   ::after = 漸層遮蓋（深淺主題各自）；::before = cyan 閃動箭頭
+   滾到底自動消失（靠 JS 加 .scrolled-to-end class） */
+.data-table-wrapper.has-fade {
+  position: relative;
+}
+.data-table-wrapper.has-fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 56px;
+  pointer-events: none;
+  /* dark theme 預設：透明 → 深藍灰 */
+  background: linear-gradient(to right, transparent, rgba(12, 16, 41, 0.92) 90%);
+  transition: opacity 0.25s;
+  z-index: 1;
+}
+[data-theme="light"] .data-table-wrapper.has-fade::after {
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.95) 90%);
+}
+.data-table-wrapper.has-fade.scrolled-to-end::after { opacity: 0; }
+
+.data-table-wrapper.has-fade::before {
+  content: '›';
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-cyan);
+  pointer-events: none;
+  animation: fadeHintBounce 1.6s ease-in-out infinite;
+  z-index: 2;
+  text-shadow: 0 0 8px var(--accent-cyan-dim);
+}
+.data-table-wrapper.has-fade.scrolled-to-end::before { display: none; }
+@keyframes fadeHintBounce {
+  0%, 100% { opacity: 0.4; transform: translate(0, -50%); }
+  50%      { opacity: 1;   transform: translate(6px, -50%); }
+}
+
+/* 欄位優先級：1=必顯示 / 2=md+ / 3=lg+ */
+[data-col-priority="2"] { display: none; }
+[data-col-priority="3"] { display: none; }
+@media (min-width: 1024px) {
+  th[data-col-priority="2"], td[data-col-priority="2"] { display: table-cell; }
+}
+@media (min-width: 1280px) {
+  th[data-col-priority="3"], td[data-col-priority="3"] { display: table-cell; }
+}
+
+/* Sticky 第一欄（橫滾時主識別欄不消失）*/
+.data-table.sticky-first-col th:first-child,
+.data-table.sticky-first-col td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--bg-secondary);
+  z-index: 2;
+  box-shadow: 1px 0 0 var(--border-subtle);
+}
+[data-theme="light"] .data-table.sticky-first-col th:first-child,
+[data-theme="light"] .data-table.sticky-first-col td:first-child {
+  background: var(--bg-card);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   PAGE CONTAINER — 自適應內距 + container query 開啟
+   ──────────────────────────────────────────────────────────────────── */
+.page-container.page-fluid {
+  container-type: inline-size;
+  container-name: page;
+  /* 內距用 clamp — 螢幕越窄越省 padding，省下來給內容 */
+  padding: clamp(12px, 3vw, 32px);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   TOUCH-FRIENDLY — 手機環境最小可點區域
+   ──────────────────────────────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  .btn, .btn-ui, .btn-primary, .btn-secondary,
+  button:not(.btn-icon-sm):not([data-touch-exempt]) {
+    min-height: var(--touch-min);
+  }
+  /* form-table 在觸控環境，input 加大 */
+  .form-table-row input { min-height: 36px; font-size: 14px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RWD v3 — Zoom 反算寬度（fontScale > 1 時防止 main-content 跑出視窗）
+   ════════════════════════════════════════════════════════════════════
+   問題：#root zoom 1.5x 把整個畫面視覺放大，但 main-content 的邏輯
+   寬度沒變，視覺寬度 = 邏輯寬 × zoom → 右邊跑出 viewport，被
+   overflow-x:hidden 切掉，使用者看不到右邊欄位。
+
+   修法：main-content 的 max-width 反算 zoom，讓視覺寬度剛好等於
+   可用 viewport 空間。
+
+   公式：
+     可用視覺寬 = 100vw - sidebar 視覺寬
+     sidebar 視覺寬 = var(--sidebar-width) × zoom
+     main-content 邏輯寬 = 可用視覺寬 / zoom
+                       = 100vw / zoom - var(--sidebar-width)
+   ════════════════════════════════════════════════════════════════════ */
+.main-content {
+  /* fontScale 1.0 時 = 100vw - sidebar（跟原行為一致）；> 1 時自動縮邏輯寬 */
+  max-width: calc(100vw / var(--app-font-scale, 1) - var(--sidebar-width));
+}
+
+/* drawer mode (≤1024): sidebar 是 overlay 不佔位 → main-content 滿版 */
+@media (max-width: 1024px) {
+  .main-content {
+    max-width: calc(100vw / var(--app-font-scale, 1));
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RWD v3 — Sidebar 三態 + Layout 全螢幕適配
+   ════════════════════════════════════════════════════════════════════
+   斷點策略：
+     ≥1281px      sidebar full (240px, 完整 label)
+     1025–1280px  sidebar compact (72px, icon-only, SidebarTooltipLayer 補提示)
+     <=1024px     sidebar drawer (off-canvas, mobile-menu-btn 觸發)
+
+   寫在最尾段，source order 蓋過上面舊的 @media (max-width: 1024px) 規則
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 1025–1280px：compact / icon-only mode ── */
+@media (min-width: 1025px) and (max-width: 1280px) {
+  :root { --sidebar-width: 72px; }
+  .sidebar { width: 72px; }
+
+  /* 搜尋區隱藏（hover icon 用 SidebarTooltipLayer 提示） */
+  .sidebar-search { display: none; }
+
+  /* nav 區：icon-only 置中 */
+  .nav-section-label,
+  .nav-divider-label {
+    font-size: 0;
+    padding: 8px 0;
+    border-top-color: var(--border-subtle);
+  }
+  .nav-section-label::after,
+  .nav-divider-label::after {
+    content: '·';
+    display: block;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+  .nav-section-header {
+    justify-content: center;
+    padding: 10px 6px;
+    margin: 2px 6px 0;
+    gap: 0;
+    font-size: 0;
+  }
+  .nav-section-header .nav-section-icon { opacity: 0.7; width: 18px; height: 18px; }
+  .nav-section-header .nav-section-chevron { display: none; }
+  .nav-sub-item {
+    justify-content: center;
+    padding: 8px 6px;
+    margin: 1px 6px;
+    gap: 0;
+    font-size: 0;
+  }
+  .nav-sub-item .nav-sub-item-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+    margin: 0;
+  }
+  .nav-sub-item.active .nav-sub-item-icon { opacity: 1; }
+  /* active 左側 cyan bar 收窄 */
+  .nav-sub-item.active::before {
+    height: 14px;
+    width: 3px;
+  }
+
+  /* footer 簡化：剩 system btn + avatar */
+  .sidebar-footer { padding: 8px 6px; }
+  .sidebar-system-btn {
+    justify-content: center;
+    padding: 8px 6px;
+    gap: 0;
+    font-size: 0;
+  }
+  .sidebar-user {
+    padding: 6px;
+    justify-content: center;
+    gap: 0;
+  }
+  .sidebar-user-info,
+  .sidebar-logout-btn { display: none; }
+
+  /* page-container 多吃一點空間（sidebar 變窄） */
+  .main-content { margin-left: 72px; }
+}
+
+/* ── ≤1024px：drawer mode（擴展原本 768 的 mobile 行為） ── */
+@media (max-width: 1024px) {
+  .mobile-menu-btn { display: flex; }
+  .sidebar-overlay.active { display: block; }
+
+  /* sidebar 預設藏到左邊 — 即便有 sidebar-hidden 也照藏（避免被 dashboard 規則覆蓋） */
+  .sidebar,
+  .sidebar.sidebar-hidden {
+    transform: translateX(-100%);
+    z-index: 150;
+    width: 260px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar.open { transform: translateX(0); width: 260px; }
+
+  .main-content { margin-left: 0 !important; }
+
+  /* topnav 簡化 */
+  .topnav-groups { display: none; }
+
+  /* page-container 緊縮 padding */
+  .page-container,
+  .page-container.page-fluid {
+    padding: clamp(12px, 3vw, 24px);
+  }
+}
+
+/* ── ≤768px：手機/小平板進一步簡化 ── */
+@media (max-width: 768px) {
+  .page-header h2 { font-size: 18px; }
+  .page-header p { font-size: 12px; }
+  .page-header-row {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start !important;
+  }
+  .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+
+  /* topnav 內 brand 文字隱藏（icon 留著） */
+  .topnav-brand-label { display: none; }
+}
+
+/* ── ≤480px：極小螢幕 ── */
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+  .page-header h2 { font-size: 16px; }
+}
+

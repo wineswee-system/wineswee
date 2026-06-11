@@ -41,17 +41,17 @@ export default function SettleModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        style={{ background: 'var(--bg-card)', borderRadius: 12, width: 480, maxHeight: '80vh', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', border: '1px solid var(--border)' }}
+        className="modal-shell"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-          <h3 style={{ margin: 0 }}>核銷(驗收)：{request.title}</h3>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={onClose}><X size={20} /></button>
+        <div className="modal-shell-header">
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>核銷(驗收)：{request.title}</h3>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', flexShrink: 0 }} onClick={onClose}><X size={20} /></button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="modal-shell-body">
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
             預估金額：<strong>{fmt(request.estimated_amount, request.currency)}</strong>
           </div>
@@ -115,7 +115,7 @@ export default function SettleModal({
         </div>
 
         {/* Footer */}
-        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+        <div className="modal-shell-footer">
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '提交中...' : '提交核銷(驗收)'}</button>
         </div>

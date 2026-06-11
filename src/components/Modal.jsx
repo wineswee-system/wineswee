@@ -11,11 +11,19 @@ import { confirm } from '../lib/confirm'
  *   - 傳 string → 顯示「✓ <字串>」綠色 success state，3 秒自動關閉
  *   - 傳 object → { title, hint, autoCloseMs } 完整客製
  *   - 不傳 → 維持舊行為（submit 完直接關 modal，由呼叫端自己用 toast）
+ *
+ * @param {number|string} [maxWidth] modal 寬度上限。
+ *   - 'sm' (400) / 'md' (560) / 'lg' (760) / 'xl' (960) / 'full'
+ *   - 或直接給 number (px) — 會自動套用 min(maxWidth, 95vw) fluid 公式
+ *   - 預設 'md'（560px）
  */
+// 寬度語意 → CSS class 名稱（會去拿 index.css 的 .modal-shell.modal-* 規則）
+const SIZE_TO_CLASS = { sm: 'modal-sm', md: '', lg: 'modal-lg', xl: 'modal-xl', full: 'modal-full' }
+
 export default function Modal({
   title, onClose, children,
   onSubmit, submitLabel = '儲存', submitDisabled = false,
-  maxWidth = 640, headerExtra = null,
+  maxWidth = 'md', headerExtra = null,
   successMessage = null,
   isDirty = false,
 }) {
@@ -91,14 +99,21 @@ export default function Modal({
     onClose()
   }
 
+  // 寬度策略：string → CSS class；number → inline style 套 min() 公式
+  const isStringSize = typeof maxWidth === 'string'
+  const sizeClass = isStringSize ? (SIZE_TO_CLASS[maxWidth] ?? '') : ''
+  const numericStyle = !isStringSize && typeof maxWidth === 'number'
+    ? { width: `min(${maxWidth}px, calc(100vw - 32px))` }
+    : null
+
   return createPortal(
-    <div style={{
+    <div className="modal-overlay-root" style={{
       position: 'fixed', inset: 0, zIndex: 10000,
       background: 'var(--bg-modal-overlay)',
       backdropFilter: 'blur(4px)',
       WebkitBackdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
+      padding: 'clamp(8px, 2vw, 24px)',
     }} onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       <div
         ref={modalRef}
@@ -106,25 +121,16 @@ export default function Modal({
         aria-modal="true"
         aria-busy={submitting}
         aria-label={title}
+        className={`modal-shell ${sizeClass}`.trim()}
         style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-medium)',
-          borderRadius: 16,
-          width: '100%', maxWidth,
-          maxHeight: '80vh',
-          minHeight: 0,
-          // ★ flex column：header / headerExtra / footer 不縮，body 拿剩餘空間並 scroll
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'relative',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          ...(numericStyle || {}),
           animation: 'fadeIn 0.15s ease',
         }}>
         {/* HEADER：固定不縮 */}
-        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>{title}</h3>
+        <div className="modal-shell-header">
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{title}</h3>
           <button onClick={handleClose} aria-label="Close" disabled={submitting}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.4 : 1, padding: 4 }}>
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.4 : 1, padding: 4, flexShrink: 0 }}>
             <X size={18} />
           </button>
         </div>
@@ -134,7 +140,7 @@ export default function Modal({
           </div>
         )}
         {/* BODY：拿剩餘空間，內容過多自己 scroll */}
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
+        <div className="modal-shell-body">
           {success ? (
             <SuccessState title={success.title} hint={success.hint} />
           ) : (
@@ -151,8 +157,7 @@ export default function Modal({
           )}
         </div>
         {!success && (
-          /* FOOTER：固定不縮 */
-          <div style={{ flexShrink: 0, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, background: 'var(--bg-secondary)' }}>
+          <div className="modal-shell-footer">
             <button className="btn btn-secondary" onClick={handleClose} disabled={submitting}
               style={submitting ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
               {onSubmit ? '取消' : '關閉'}
@@ -252,12 +257,12 @@ export function ModalOverlay({ onClose, children, zIndex = 10000, isDirty = fals
   }
 
   return createPortal(
-    <div style={{
+    <div className="modal-overlay-root" style={{
       position: 'fixed', inset: 0, zIndex,
       background: 'var(--bg-modal-overlay)',
       backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
+      padding: 'clamp(8px, 2vw, 24px)',
     }} onMouseDown={e => { if (e.target === e.currentTarget) guardedClose() }}>
       {children}
     </div>,

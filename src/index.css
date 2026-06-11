@@ -1120,11 +1120,35 @@ input, select, textarea {
 /* ---- Data Table ---- */
 .data-table-wrapper {
   width: 100%;
-  /* ★ overflow-x: scroll（不是 auto）— 永遠顯示橫向滾輪
-     不管 table 內容多少，滾輪都會出現，使用者一眼看到「可以滑」
-     缺點：少欄 table 也會有條空滾輪，視覺取捨，但功能可靠性 > 美觀 */
+  /* ★ overflow-x: scroll — 永遠保留滾輪空間
+     配下面 wrapper 專屬 scrollbar 樣式（track 不透明），使用者一定看得到 */
   overflow-x: scroll;
   -webkit-overflow-scrolling: touch;
+}
+/* ★ data-table-wrapper 專屬 scrollbar — track 改成淺底色（不透明）
+   讓使用者一眼看到「這裡可以橫向滑」，不會跟全站 transparent track 搞混 */
+.data-table-wrapper::-webkit-scrollbar {
+  height: 14px;
+}
+.data-table-wrapper::-webkit-scrollbar-track {
+  background: var(--glass-medium);
+  border-radius: 4px;
+}
+.data-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--accent-cyan);
+  border-radius: 4px;
+  border: 2px solid var(--glass-medium);
+  background-clip: padding-box;
+}
+.data-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+  border: 1px solid var(--glass-medium);
+  background-clip: padding-box;
+}
+/* Firefox */
+.data-table-wrapper {
+  scrollbar-width: auto;
+  scrollbar-color: var(--accent-cyan) var(--glass-medium);
 }
 
 .data-table {

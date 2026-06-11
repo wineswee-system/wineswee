@@ -1120,32 +1120,37 @@ input, select, textarea {
 /* ---- Data Table ---- */
 .data-table-wrapper {
   width: 100% !important;
-  /* ★ !important 砸下去：之前 specificity 鬥到沒結果，直接強制
-     不管哪個檔哪個 component override 都贏 */
-  overflow-x: scroll !important;
+  /* ★ 固定高度容器：wrapper 自己變 scroll container，scrollbar 永遠在
+     wrapper 底邊（vertical）+ 右邊（horizontal），使用者一眼看到能滑。
+     比 sticky bar 浮動方案更直觀 — 這是 ERP 系統最常見的做法。*/
+  max-height: min(calc(100vh - 280px), 70vh) !important;
+  overflow: auto !important;
   -webkit-overflow-scrolling: touch;
-  /* 強制 display: block 確保 wrapper 是 block-level，scrollbar 才會出 */
   display: block !important;
 }
-/* ★ data-table-wrapper 專屬 scrollbar — track 改成淺底色（不透明）
-   讓使用者一眼看到「這裡可以橫向滑」，不會跟全站 transparent track 搞混 */
+/* ★ wrapper 自己的 scrollbar — 大尺寸 + 深 cyan thumb + 淺底色，明顯好抓 */
 .data-table-wrapper::-webkit-scrollbar {
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 .data-table-wrapper::-webkit-scrollbar-track {
-  background: var(--glass-medium);
+  background: var(--accent-cyan-dim);
   border-radius: 4px;
 }
 .data-table-wrapper::-webkit-scrollbar-thumb {
-  background: var(--accent-cyan);
-  border-radius: 4px;
-  border: 2px solid var(--glass-medium);
+  background: #0891b2;
+  border-radius: 8px;
+  border: 3px solid var(--accent-cyan-dim);
   background-clip: padding-box;
+  min-width: 60px;
+  min-height: 60px;
 }
 .data-table-wrapper::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-cyan);
-  border: 1px solid var(--glass-medium);
+  background: #155e75;
   background-clip: padding-box;
+}
+.data-table-wrapper::-webkit-scrollbar-corner {
+  background: var(--accent-cyan-dim);
 }
 /* Firefox */
 .data-table-wrapper {

@@ -1120,11 +1120,9 @@ input, select, textarea {
 /* ---- Data Table ---- */
 .data-table-wrapper {
   width: 100% !important;
-  /* ★ 固定高度容器：wrapper 自己變 scroll container，scrollbar 永遠在
-     wrapper 底邊（vertical）+ 右邊（horizontal），使用者一眼看到能滑。
-     比 sticky bar 浮動方案更直觀 — 這是 ERP 系統最常見的做法。*/
-  max-height: min(calc(100vh - 280px), 70vh) !important;
-  overflow: auto !important;
+  /* 回到原本「整頁 flow scroll」的設計 — wrapper 不限高度，順 main-content scroll
+     橫向 overflow 用 sticky bar 救（StickyHorizontalScrollbar.jsx 處理）*/
+  overflow-x: scroll !important;
   -webkit-overflow-scrolling: touch;
   display: block !important;
 }

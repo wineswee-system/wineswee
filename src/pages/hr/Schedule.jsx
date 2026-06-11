@@ -1179,6 +1179,35 @@ export default function Schedule() {
                   ? `⚠️ 排班檢查（${compliance.warnings.length} 提醒）`
                   : '✓ 排班檢查'}
             </button>
+            {/* ✏ 繼續編輯排班 — 當選了店且該店該 cycle 有資料時，直接進 builder 跳過 wizard */}
+            {canEditSchedule && storeFilter && currentStore && schedules.length > 0 && !isCurrentCycleLocked && (
+              <button
+                className="btn btn-secondary"
+                style={{
+                  width: 'auto', padding: '8px 14px',
+                  background: 'rgba(34,211,238,0.10)',
+                  color: 'var(--accent-cyan)',
+                  border: '1px solid var(--accent-cyan)',
+                  fontWeight: 600,
+                }}
+                onClick={() => {
+                  navigate('/hr/schedule-builder', {
+                    state: {
+                      store: storeFilter,
+                      storeId: currentStore.id,
+                      month: activeStart?.slice(0, 7),
+                      range: { start: activeStart, end: activeEnd },
+                      workHourSystem: storeSettings?.work_hour_system || '標準工時',
+                      restDayMap: {},
+                      empRestMap: {},
+                    },
+                  })
+                }}
+                title="直接進手填頁編輯（跳過排班精靈）"
+              >
+                ✏ 繼續編輯
+              </button>
+            )}
             {/* 排班精靈 split-button */}
             {canEditSchedule && (
               <div ref={wizardDropdownRef} style={{ position: 'relative', display: 'inline-flex' }}>

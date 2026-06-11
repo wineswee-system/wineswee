@@ -366,28 +366,35 @@ input, select, textarea {
 
 /* Custom scrollbar — 拉粗 + 拉深，讓不同螢幕大小下 overflow 滾動明顯可見
    (原本 6px / 0.15 透明度太細太淡，使用者反映「沒滾輪」) */
+/* ★ 全站統一 scrollbar 樣式 — cyan-dim 底 + 深 #0891b2 thumb
+   橫的（底）/ 直的（右）/ corner 全套，跟 data-table-wrapper 一致 */
 ::-webkit-scrollbar {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--accent-cyan-dim);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.55);
-  border-radius: 100px;
-  border: 2px solid transparent;
+  background: #0891b2;
+  border-radius: 8px;
+  border: 3px solid var(--accent-cyan-dim);
   background-clip: padding-box;
+  min-width: 40px;
+  min-height: 40px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.8);
+  background: #155e75;
   background-clip: padding-box;
-  border: 2px solid transparent;
+}
+::-webkit-scrollbar-corner {
+  background: var(--accent-cyan-dim);
 }
 /* Firefox */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.6) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: #0891b2 var(--accent-cyan-dim);
 }
 
 /* ========= LAYOUT ========= */

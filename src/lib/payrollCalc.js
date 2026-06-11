@@ -96,11 +96,6 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
   for (const ss of (storeSettingsRes?.data || [])) {
     if (ss.store_id) storeWhsMap[ss.store_id] = ss.work_hour_system || '標準工時'
   }
-  const isVariableHours = (storeId) => {
-    const whs = storeWhsMap[storeId]
-    return whs && whs !== '標準工時'  // 任何變形工時都算
-  }
-
   const holidayDates = new Set(
     (holRes.data || []).filter(h => h.is_workday === false).map(h => h.date)
   )
@@ -243,8 +238,6 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     // - store 標準工時 / 未設（行政員工掛在威士威總部）→ 行政正職
     //   → ×1 全程（月薪已含 30 天工資）
     // - PT (isHourly)：×2 全程
-    const empStoreId = storeIdMap[emp.store] || null
-    const empIsVariableHours = isVariableHours(empStoreId)
 
     // ── 單筆 (per-row) 倍率計算 — 給 detail UI 顯示用 ──
     // 依員工分類給 holiday 的倍率算法（PT ×2 / 行政 ×1 / 門市 1.34/1.67）
@@ -259,17 +252,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
         return { _pay: pay, _rate_label: label }
       }
       if (cat === 'weekly_off') {
-        return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
+        // PT ×2；regular/admin ×1（現金）+ 另補一天補休（OT 登錄端處理）
+        if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
+        return { _pay: Math.ceil(h * hourlyRate), _rate_label: '×1.0' }
       }
       if (cat === 'holiday') {
         if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
-        if (empIsVariableHours) {
-          const pay = h <= 2
-            ? Math.ceil(h * hourlyRate * 1.34)
-            : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
-          return { _pay: pay, _rate_label: h <= 2 ? '×1.34' : '×1.34 / ×1.67' }
-        }
-        // 行政 FT：×1（月薪已含）
+        // regular/admin 國定假日 OT 均 ×1（月薪已含當日工資）
         return { _pay: Math.ceil(h * hourlyRate), _rate_label: '×1.0' }
       }
       // weekday
@@ -320,20 +309,14 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
         const rd3 = Math.max(h - 8, 0)
         return Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
       })
-      // 例假：FT/PT 都 ×2 全程（沒階梯，flat）
-      const weeklyOff = Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
-      // 國定假日加班 — 依員工所屬店的工時制度分流：
-      //  - PT 時薪：×2 全程
-      //  - FT + 變形工時店（12 家門市）：每日前 2h × 1.34，超過 × 1.67
-      //  - FT + 其他（行政員工掛總部）：×1 全程（月薪已含 30 天工資）
+      // 例假：PT ×2；regular/admin ×1 現金 + 補休一天（補休由 OT 登錄端另外建）
+      const weeklyOff = isHourly
+        ? Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
+        : Math.ceil((bucket.weekly_off || 0) * hourlyRate * 1)
+      // 國定假日 OT：PT ×2；regular/admin 均 ×1
       const holiday = sumByDay('holiday', h => {
         if (isHourly) return Math.ceil(h * hourlyRate * 2)
-        if (empIsVariableHours) {
-          return h <= 2
-            ? Math.ceil(h * hourlyRate * 1.34)
-            : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
-        }
-        return Math.ceil(h * hourlyRate)  // 行政正職：×1
+        return Math.ceil(h * hourlyRate)
       })
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,
@@ -344,7 +327,8 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const otLegalPay = calcOtPay(ot)
     const otExceptionPay = calcOtPay(otException)
 
-    const holidayBonus = isHourly
+    // 國定出勤加給：regular/admin/parttime 均 +×1.0；計件無
+    const holidayBonus = !isPiece
       ? Math.ceil((att.holidayHours || 0) * hourlyRate * 1)
       : 0
 

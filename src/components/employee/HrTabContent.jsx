@@ -1,5 +1,6 @@
 import { Upload, Eye, Plus, X } from 'lucide-react'
 import { empLabel } from '../../lib/empLabel'
+import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
@@ -385,6 +386,43 @@ export default function HrTabContent({
               </div>
             )}
           </div>
+
+          {/* ─── 特別休假額度 ─── */}
+          {(() => {
+            const isPT = (form.employment_category || 'regular') === 'parttime'
+            const joinDate = form.join_date
+            if (!joinDate) return null
+            if (isPT) {
+              const wh = Number(form.weekly_hours) || 0
+              const { hours, days, yearsWorked, ratio } = getPTAnnualLeaveHours(joinDate, wh)
+              return (
+                <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--accent-blue-dim)', borderRadius: 10, border: '1px solid var(--accent-blue)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 8 }}>📅 特別休假額度（兼職比例制）</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: 12 }}>
+                    <div><div style={{ color: 'var(--text-muted)', marginBottom: 2 }}>年資</div><div style={{ fontWeight: 600 }}>{yearsWorked} 年</div></div>
+                    <div><div style={{ color: 'var(--text-muted)', marginBottom: 2 }}>正職天數</div><div style={{ fontWeight: 600 }}>{days} 天</div></div>
+                    <div><div style={{ color: 'var(--text-muted)', marginBottom: 2 }}>工時比例</div><div style={{ fontWeight: 600 }}>{wh}h / 40h = {Math.round(ratio * 100)}%</div></div>
+                  </div>
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>本年度特休額度</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-blue)' }}>{hours} 小時</span>
+                  </div>
+                  {wh === 0 && <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 6 }}>⚠ 請先設定每週工時上限</div>}
+                </div>
+              )
+            }
+            // 正職 / 行政
+            const { days, yearsWorked } = getAnnualLeaveEntitlement(joinDate)
+            return (
+              <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--accent-cyan-dim)', borderRadius: 10, border: '1px solid var(--accent-cyan)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 8 }}>📅 特別休假額度</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>年資 {yearsWorked} 年</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-cyan)' }}>{days} 天</span>
+                </div>
+              </div>
+            )
+          })()}
         </>
       )}
     </>

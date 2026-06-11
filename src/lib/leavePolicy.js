@@ -313,6 +313,17 @@ export function getAnnualLeaveEntitlement(joinDate) {
   }
 }
 
+/**
+ * 兼職特休時數 = 標準天數 × 8h × (PT每週工時 / 40)
+ * 勞基法 §38 比例原則：PT 特休以「小時」計，正職基準固定 40h/週
+ */
+export function getPTAnnualLeaveHours(joinDate, weeklyHours) {
+  const { days, yearsWorked } = getAnnualLeaveEntitlement(joinDate)
+  const ratio = Math.min(1, (Number(weeklyHours) || 0) / 40)
+  const hours = days * 8 * ratio
+  return { hours, days, yearsWorked, ratio }
+}
+
 // ══════════════════════════════════════
 //  取得假別完整資訊
 // ══════════════════════════════════════
@@ -325,7 +336,7 @@ export function getLeaveTypeInfo(code) {
 //  驗證請假規則
 // ══════════════════════════════════════
 
-export function validateLeaveRequest({ type, days, hours, usedDays, gender, customPolicy, joinDate }) {
+export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, gender, customPolicy, joinDate, isPartTime, weeklyHours }) {
   const policy = getLeaveTypeInfo(type)
   if (!policy) return { valid: false, error: '無效的假別' }
 
@@ -339,20 +350,39 @@ export function validateLeaveRequest({ type, days, hours, usedDays, gender, cust
     if (!joinDate) {
       return { valid: false, error: '員工資料缺到職日，無法計算特休年資' }
     }
-    const { days: entitlement, yearsWorked } = getAnnualLeaveEntitlement(joinDate)
-    if (entitlement === 0) {
-      return { valid: false, error: `未滿 6 個月年資（目前 ${yearsWorked} 年），尚無特休資格` }
-    }
-    const extraDays = Math.max(0, customPolicy?.extra_days || 0)
-    const totalEntitlement = entitlement + extraDays
-    const requestDays = days || (hours ? hours / 8 : 0)
-    const used = usedDays || 0
-    if (used + requestDays > totalEntitlement) {
-      const suffix = extraDays > 0 ? `（含加給 ${extraDays} 天）` : ''
-      const remaining = totalEntitlement - used
-      return {
-        valid: false,
-        error: `特休餘額不足：年度 ${totalEntitlement} 天${suffix}，已用 ${used} 天，剩餘 ${remaining} 天，不足申請 ${requestDays} 天`,
+
+    if (isPartTime) {
+      // ── 兼職：以「小時」計算特休額度 ──
+      const { hours: entitlementHours, days: entDays, yearsWorked } = getPTAnnualLeaveHours(joinDate, weeklyHours)
+      if (entitlementHours === 0) {
+        return { valid: false, error: `未滿 6 個月年資（目前 ${yearsWorked} 年），尚無特休資格` }
+      }
+      const requestHours = hours || ((days || 0) * (weeklyHours ? (weeklyHours / 5) : 8))
+      const usedH = usedHours || 0
+      const remaining = entitlementHours - usedH
+      if (usedH + requestHours > entitlementHours) {
+        return {
+          valid: false,
+          error: `特休餘額不足：年度 ${entitlementHours}h（${entDays}天×比例），已用 ${usedH}h，剩餘 ${remaining}h，不足申請 ${requestHours}h`,
+        }
+      }
+    } else {
+      // ── 正職/行政：以「天」計算特休額度 ──
+      const { days: entitlement, yearsWorked } = getAnnualLeaveEntitlement(joinDate)
+      if (entitlement === 0) {
+        return { valid: false, error: `未滿 6 個月年資（目前 ${yearsWorked} 年），尚無特休資格` }
+      }
+      const extraDays = Math.max(0, customPolicy?.extra_days || 0)
+      const totalEntitlement = entitlement + extraDays
+      const requestDays = days || (hours ? hours / 8 : 0)
+      const used = usedDays || 0
+      if (used + requestDays > totalEntitlement) {
+        const suffix = extraDays > 0 ? `（含加給 ${extraDays} 天）` : ''
+        const remaining = totalEntitlement - used
+        return {
+          valid: false,
+          error: `特休餘額不足：年度 ${totalEntitlement} 天${suffix}，已用 ${used} 天，剩餘 ${remaining} 天，不足申請 ${requestDays} 天`,
+        }
       }
     }
   }

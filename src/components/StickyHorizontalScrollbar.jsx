@@ -199,7 +199,10 @@ export default function StickyHorizontalScrollbar() {
            drawer mode (≤1024px) sidebar 不佔位，由 CSS @media 改 left: 0 */
         position: 'fixed',
         bottom: 0,
-        left: 'var(--sidebar-width)',
+        /* ★ 關鍵：fixed 元素不在 #root zoom 內，但 sidebar 在 zoom 內
+           所以 sticky bar 的 left 必須 = sidebar 邏輯寬 × fontScale，
+           才能對齊 sidebar 視覺右邊。否則 zoom != 1 時左右會跑掉。*/
+        left: 'calc(var(--sidebar-width) * var(--app-font-scale, 1))',
         right: 0,
         height: trackWidth > 0 ? 21 : 0,
         overflowX: 'auto',

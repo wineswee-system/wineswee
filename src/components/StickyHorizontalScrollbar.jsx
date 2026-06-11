@@ -192,6 +192,7 @@ export default function StickyHorizontalScrollbar() {
     <div
       ref={stickyRef}
       aria-hidden="true"
+      className="sticky-x-scrollbar"
       style={{
         position: 'sticky',
         bottom: 0,

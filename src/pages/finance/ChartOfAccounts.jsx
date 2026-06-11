@@ -170,8 +170,8 @@ export default function ChartOfAccounts() {
       </div>
 
       {/* Table */}
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th>代號</th>

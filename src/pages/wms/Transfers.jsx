@@ -79,8 +79,8 @@ export default function Transfers() {
 
       {error && <div style={{ background: 'var(--accent-red-dim)', color: 'var(--accent-red)', padding: '8px 16px', borderRadius: 8, marginBottom: 16 }}>{error} <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}><X size={14} /></button></div>}
 
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th>調撥單號</th>

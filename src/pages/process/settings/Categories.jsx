@@ -151,8 +151,8 @@ export default function Categories() {
 
       {/* List */}
       {loading ? <LoadingSpinner /> : (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th style={{ width: 80 }}>順序</th>

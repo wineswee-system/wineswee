@@ -129,8 +129,8 @@ export default function CostCenters() {
       </div>
 
       {tab === 'list' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>代碼</th>
@@ -179,8 +179,8 @@ export default function CostCenters() {
                   <span style={{ color: 'var(--accent-blue)', fontFamily: 'monospace' }}>{cc}</span>
                   {' '}{centers.find(c => c.code === cc)?.name || ''}
                 </h3>
-                <div className="data-table">
-                  <table>
+                <div className="data-table-wrapper">
+                  <table className="data-table">
                     <thead>
                       <tr>
                         <th>科目代碼</th>

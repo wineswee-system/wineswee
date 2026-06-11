@@ -209,8 +209,8 @@ export default function ApprovalRules() {
       </div>
 
       {tab === 'rules' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>模組</th>
@@ -249,8 +249,8 @@ export default function ApprovalRules() {
       )}
 
       {tab === 'requests' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>模組</th>

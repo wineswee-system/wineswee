@@ -140,8 +140,8 @@ export default function PickPackShip() {
       </div>
 
       {tab === 'pick' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>揀貨單號</th>
@@ -191,8 +191,8 @@ export default function PickPackShip() {
       )}
 
       {tab === 'pack' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>包裝單號</th>

@@ -132,8 +132,8 @@ export default function CarrierIntegration() {
       )}
 
       {tab === 'tracking' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead><tr><th>出貨單號</th><th>物流商</th><th>追蹤號碼</th><th>收件人</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
               {shipments.length === 0 ? (

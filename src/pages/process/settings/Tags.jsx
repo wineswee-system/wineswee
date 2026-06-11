@@ -111,8 +111,8 @@ export default function Tags() {
       </div>
 
       {loading ? <LoadingSpinner /> : (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th style={{ width: 80 }}>順序</th>

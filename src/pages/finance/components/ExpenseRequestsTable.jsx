@@ -31,8 +31,8 @@ export default function ExpenseRequestsTable({
   onEditResubmit,
 }) {
   return (
-    <div className="data-table">
-      <table>
+    <div className="data-table-wrapper">
+      <table className="data-table">
         <thead>
           <tr>
             <th>申請人</th>

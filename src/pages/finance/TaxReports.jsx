@@ -137,8 +137,8 @@ export default function TaxReports() {
             {/* Sales Invoices */}
             <div>
               <h4 style={{ margin: '0 0 12px' }}>銷項發票明細（{salesInvoices.length} 筆）</h4>
-              <div className="data-table">
-                <table>
+              <div className="data-table-wrapper">
+                <table className="data-table">
                   <thead>
                     <tr>
                       <th>發票號碼</th>
@@ -166,8 +166,8 @@ export default function TaxReports() {
             {/* Purchase Invoices */}
             <div>
               <h4 style={{ margin: '0 0 12px' }}>進項發票明細（{purchaseInvoices.length} 筆）</h4>
-              <div className="data-table">
-                <table>
+              <div className="data-table-wrapper">
+                <table className="data-table">
                   <thead>
                     <tr>
                       <th>發票號碼</th>
@@ -208,8 +208,8 @@ export default function TaxReports() {
             </div>
           </div>
 
-          <div className="data-table">
-            <table>
+          <div className="data-table-wrapper">
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>所得人</th>

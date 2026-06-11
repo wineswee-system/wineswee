@@ -153,8 +153,8 @@ export default function PeriodClose() {
         </div>
       </div>
 
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th>期間</th>

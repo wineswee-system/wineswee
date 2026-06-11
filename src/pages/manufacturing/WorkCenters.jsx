@@ -163,8 +163,8 @@ export default function WorkCenters() {
       </div>
 
       {tab === 'list' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>代碼</th>

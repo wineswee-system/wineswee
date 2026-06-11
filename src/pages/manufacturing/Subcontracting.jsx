@@ -123,8 +123,8 @@ export default function Subcontracting() {
         ))}
       </div>
 
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th>託外單號</th>

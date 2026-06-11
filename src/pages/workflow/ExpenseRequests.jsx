@@ -741,8 +741,8 @@ export default function ExpenseRequests() {
       </div>
 
       {/* Table */}
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th style={{ width: 55 }}>單號</th>

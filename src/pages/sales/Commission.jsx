@@ -131,8 +131,8 @@ export default function Commission() {
       </div>
 
       {tab === 'rules' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead><tr><th>名稱</th><th style={{ textAlign: 'right' }}>佣金率 %</th><th style={{ textAlign: 'right' }}>最低訂單金額</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
               {rules.map(r => (
@@ -155,8 +155,8 @@ export default function Commission() {
       )}
 
       {tab === 'records' && (
-        <div className="data-table">
-          <table>
+        <div className="data-table-wrapper">
+          <table className="data-table">
             <thead><tr><th>業務</th><th>訂單</th><th style={{ textAlign: 'right' }}>訂單金額</th><th style={{ textAlign: 'right' }}>佣金率</th><th style={{ textAlign: 'right' }}>佣金</th><th>期間</th><th>狀態</th></tr></thead>
             <tbody>
               {records.length === 0 ? (

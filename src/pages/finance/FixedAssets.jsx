@@ -252,8 +252,8 @@ export default function FixedAssets() {
         </select>
       </div>
 
-      <div className="data-table">
-        <table>
+      <div className="data-table-wrapper">
+        <table className="data-table">
           <thead>
             <tr>
               <th>資產編號</th>
@@ -307,7 +307,7 @@ export default function FixedAssets() {
       {/* Modal */}
       {showModal && (
         <ModalOverlay onClose={() => setShowModal(false)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 520, maxHeight: '90vh', overflow: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 'min(520px, calc(100vw - 32px))', maxHeight: 'min(90vh, calc(100vh - 32px))', overflow: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>{editingId ? '編輯資產' : '新增固定資產'}</h3>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowModal(false)}><X size={20} /></button>

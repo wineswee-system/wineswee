@@ -166,6 +166,16 @@ export default function StickyHorizontalScrollbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── trackWidth 變動 → 重新算 sticky bar 位置（每次 React re-render 後立刻同步）
+  useEffect(() => {
+    if (trackWidth === 0 || !stickyRef.current) return
+    const main = document.querySelector('.main-content')
+    if (!main) return
+    const rect = main.getBoundingClientRect()
+    stickyRef.current.style.left = rect.left + 'px'
+    stickyRef.current.style.right = (window.innerWidth - rect.right) + 'px'
+  }, [trackWidth])
+
   // ── 雙向同步 scrollLeft ──────────────────────────────────────
   useEffect(() => {
     if (trackWidth === 0) return
@@ -209,10 +219,9 @@ export default function StickyHorizontalScrollbar() {
            drawer mode (≤1024px) sidebar 不佔位，由 CSS @media 改 left: 0 */
         position: 'fixed',
         bottom: 0,
-        /* left / right 由 JS updateStickyPosition() 動態抓 main-content
-           視覺 rect 設定。inline 預設值給個 fallback 避免初次 render 跑掉。*/
-        left: 0,
-        right: 0,
+        /* ★ 故意不寫 left/right！React render 會 reconcile 把它們設回 0
+           沖掉 JS updateStickyPosition() 動態設的值（race condition）。
+           純由 JS 在 mount + pickTarget + trackWidth 變動時設 DOM style。*/
         height: trackWidth > 0 ? 21 : 0,
         overflowX: 'auto',
         overflowY: 'hidden',

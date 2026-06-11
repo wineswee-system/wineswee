@@ -176,7 +176,7 @@ export default function EmbeddableCharts() {
       {/* Create Modal */}
       {showCreateModal && (
         <ModalOverlay onClose={() => setShowCreateModal(false)}>
-          <div className="card" style={{ width: 480, maxHeight: '85vh', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
+          <div className="card" style={{ width: 'min(480px, calc(100vw - 32px))', maxHeight: 'min(88vh, calc(100vh - 32px))', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px' }}>建立分享圖表</h3>
 
             <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>圖表標題</label>

@@ -526,7 +526,7 @@ function TrainingImportModal({ orgId, existingTitles, onClose, onImported }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="card" style={{ width: 580, maxHeight: '78vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ width: 'min(580px, calc(100vw - 32px))', maxHeight: 'min(85vh, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border-primary)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>

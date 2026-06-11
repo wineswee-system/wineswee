@@ -446,7 +446,7 @@ function QuizImportModal({ onClose, onImport }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="card" style={{ width: 660, maxHeight: '82vh', overflowY: 'auto', padding: 24 }}>
+      <div className="card" style={{ width: 'min(660px, calc(100vw - 32px))', maxHeight: 'min(85vh, calc(100vh - 32px))', overflowY: 'auto', padding: 24 }}>
         <h3 style={{ margin: '0 0 6px', color: 'var(--text-primary)' }}>匯入測驗題目</h3>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, flex: 1 }}>

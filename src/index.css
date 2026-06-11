@@ -1119,11 +1119,13 @@ input, select, textarea {
 
 /* ---- Data Table ---- */
 .data-table-wrapper {
-  width: 100%;
-  /* ★ overflow-x: scroll — 永遠保留滾輪空間
-     配下面 wrapper 專屬 scrollbar 樣式（track 不透明），使用者一定看得到 */
-  overflow-x: scroll;
+  width: 100% !important;
+  /* ★ !important 砸下去：之前 specificity 鬥到沒結果，直接強制
+     不管哪個檔哪個 component override 都贏 */
+  overflow-x: scroll !important;
   -webkit-overflow-scrolling: touch;
+  /* 強制 display: block 確保 wrapper 是 block-level，scrollbar 才會出 */
+  display: block !important;
 }
 /* ★ data-table-wrapper 專屬 scrollbar — track 改成淺底色（不透明）
    讓使用者一眼看到「這裡可以橫向滑」，不會跟全站 transparent track 搞混 */
@@ -1166,13 +1168,12 @@ input, select, textarea {
    避免誤傷 <div className="data-table"> 這種把 class 套在 div 上的舊用法 */
 .data-table-wrapper > table,
 .data-table-wrapper .data-table {
-  /* ★ width: auto — table 按 cell 內容自然撐寬（cells 都 nowrap 加總起來的寬度）
-     min-width: 100% — 確保內容少時 table 仍撐滿 wrapper，不會留白
-     table-layout: auto（預設）配 nowrap cells = table 寬度 = Σ cell 寬度
-     比 max-content 對 <table> 元素更穩定（spec 上 max-content 對 table 行為未定義） */
-  width: auto;
-  min-width: 100%;
-  table-layout: auto;
+  /* ★ !important + max-content 直接強制 table 撐到內容自然寬度
+     瀏覽器 table-layout 不能再幫我們「壓縮 cells fit width」
+     min-width: max(720px, 100%) 確保少資料時也撐滿 + 多欄時超過 wrapper */
+  width: max-content !important;
+  min-width: max(720px, 100%) !important;
+  table-layout: auto !important;
 }
 
 /* 把 class 套在 div 上的舊用法 (<div className="data-table"><table>) —

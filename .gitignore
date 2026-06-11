@@ -22,3 +22,9 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+# RWD 截圖驗收（含登入 token，不能入庫）
+.playwright-state.json
+screenshots/
+test-results/
+playwright-report/

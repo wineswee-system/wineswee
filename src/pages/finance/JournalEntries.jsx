@@ -394,49 +394,51 @@ export default function JournalEntries() {
                             {entryLines.length === 0 ? (
                               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>尚無分錄</div>
                             ) : (
-                              <table className="data-table" style={{ fontSize: 13 }}>
-                                <thead>
-                                  <tr>
-                                    <th>科目代碼</th>
-                                    <th>科目名稱</th>
-                                    <th>摘要</th>
-                                    <th style={{ textAlign: 'right', color: 'var(--accent-green)' }}>借方</th>
-                                    <th style={{ textAlign: 'right', color: 'var(--accent-red)' }}>貸方</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {entryLines.map(l => (
-                                    <tr key={l.id}>
-                                      <td>{l.account_code || '-'}</td>
-                                      <td>{l.account_name || '-'}</td>
-                                      <td>{l.description || '-'}</td>
-                                      <td style={{ textAlign: 'right', color: 'var(--accent-green)', fontWeight: 600 }}>
-                                        {(Number(l.debit) || 0) > 0 ? fmt(Number(l.debit)) : ''}
-                                      </td>
-                                      <td style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 600 }}>
-                                        {(Number(l.credit) || 0) > 0 ? fmt(Number(l.credit)) : ''}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                  <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
-                                    <td colSpan={3} style={{ textAlign: 'right' }}>合計</td>
-                                    <td style={{ textAlign: 'right', color: 'var(--accent-green)' }}>
-                                      {fmt(entryTotalDebit)}
-                                    </td>
-                                    <td style={{ textAlign: 'right', color: 'var(--accent-red)' }}>
-                                      {fmt(entryTotalCredit)}
-                                    </td>
-                                  </tr>
-                                  {Math.round((entryTotalDebit - entryTotalCredit) * 100) / 100 !== 0 && (
+                              <div className="data-table-wrapper">
+                                <table className="data-table" style={{ fontSize: 13 }}>
+                                  <thead>
                                     <tr>
-                                      <td colSpan={3} style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 600 }}>差額</td>
-                                      <td colSpan={2} style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 700 }}>
-                                        {fmt(Math.abs(entryTotalDebit - entryTotalCredit))}
+                                      <th>科目代碼</th>
+                                      <th>科目名稱</th>
+                                      <th>摘要</th>
+                                      <th style={{ textAlign: 'right', color: 'var(--accent-green)' }}>借方</th>
+                                      <th style={{ textAlign: 'right', color: 'var(--accent-red)' }}>貸方</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {entryLines.map(l => (
+                                      <tr key={l.id}>
+                                        <td>{l.account_code || '-'}</td>
+                                        <td>{l.account_name || '-'}</td>
+                                        <td>{l.description || '-'}</td>
+                                        <td style={{ textAlign: 'right', color: 'var(--accent-green)', fontWeight: 600 }}>
+                                          {(Number(l.debit) || 0) > 0 ? fmt(Number(l.debit)) : ''}
+                                        </td>
+                                        <td style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 600 }}>
+                                          {(Number(l.credit) || 0) > 0 ? fmt(Number(l.credit)) : ''}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
+                                      <td colSpan={3} style={{ textAlign: 'right' }}>合計</td>
+                                      <td style={{ textAlign: 'right', color: 'var(--accent-green)' }}>
+                                        {fmt(entryTotalDebit)}
+                                      </td>
+                                      <td style={{ textAlign: 'right', color: 'var(--accent-red)' }}>
+                                        {fmt(entryTotalCredit)}
                                       </td>
                                     </tr>
-                                  )}
-                                </tbody>
-                              </table>
+                                    {Math.round((entryTotalDebit - entryTotalCredit) * 100) / 100 !== 0 && (
+                                      <tr>
+                                        <td colSpan={3} style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 600 }}>差額</td>
+                                        <td colSpan={2} style={{ textAlign: 'right', color: 'var(--accent-red)', fontWeight: 700 }}>
+                                          {fmt(Math.abs(entryTotalDebit - entryTotalCredit))}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
                             )}
                           </div>
                         </td>
@@ -509,78 +511,80 @@ export default function JournalEntries() {
                   </button>
                 </div>
 
-                <table className="data-table" style={{ fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 180 }}>會計科目</th>
-                      <th>摘要</th>
-                      <th style={{ width: 120, textAlign: 'right' }}>借方</th>
-                      <th style={{ width: 120, textAlign: 'right' }}>貸方</th>
-                      <th style={{ width: 40 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {formLines.map((line, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <select
-                            className="form-input"
-                            style={{ width: '100%', fontSize: 12 }}
-                            value={line.account_code}
-                            onChange={e => updateLine(idx, 'account_code', e.target.value)}
-                          >
-                            <option value="">選擇科目</option>
-                            {CHART_OF_ACCOUNTS.map(a => (
-                              <option key={a.code} value={a.code}>{a.code} {a.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            className="form-input"
-                            style={{ width: '100%', fontSize: 12 }}
-                            value={line.description}
-                            onChange={e => updateLine(idx, 'description', e.target.value)}
-                            placeholder="摘要"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="form-input"
-                            type="number"
-                            min="0"
-                            style={{ width: '100%', fontSize: 12, textAlign: 'right' }}
-                            value={line.debit}
-                            onChange={e => updateLine(idx, 'debit', e.target.value)}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="form-input"
-                            type="number"
-                            min="0"
-                            style={{ width: '100%', fontSize: 12, textAlign: 'right' }}
-                            value={line.credit}
-                            onChange={e => updateLine(idx, 'credit', e.target.value)}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td>
-                          <button
-                            className="btn"
-                            style={{ padding: 4, color: 'var(--accent-red)', opacity: formLines.length <= 2 ? 0.3 : 1 }}
-                            disabled={formLines.length <= 2}
-                            onClick={() => removeLine(idx)}
-                            title="刪除此行"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
+                <div className="data-table-wrapper">
+                  <table className="data-table" style={{ fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 180 }}>會計科目</th>
+                        <th>摘要</th>
+                        <th style={{ width: 120, textAlign: 'right' }}>借方</th>
+                        <th style={{ width: 120, textAlign: 'right' }}>貸方</th>
+                        <th style={{ width: 40 }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {formLines.map((line, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <select
+                              className="form-input"
+                              style={{ width: '100%', fontSize: 12 }}
+                              value={line.account_code}
+                              onChange={e => updateLine(idx, 'account_code', e.target.value)}
+                            >
+                              <option value="">選擇科目</option>
+                              {CHART_OF_ACCOUNTS.map(a => (
+                                <option key={a.code} value={a.code}>{a.code} {a.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              className="form-input"
+                              style={{ width: '100%', fontSize: 12 }}
+                              value={line.description}
+                              onChange={e => updateLine(idx, 'description', e.target.value)}
+                              placeholder="摘要"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="form-input"
+                              type="number"
+                              min="0"
+                              style={{ width: '100%', fontSize: 12, textAlign: 'right' }}
+                              value={line.debit}
+                              onChange={e => updateLine(idx, 'debit', e.target.value)}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="form-input"
+                              type="number"
+                              min="0"
+                              style={{ width: '100%', fontSize: 12, textAlign: 'right' }}
+                              value={line.credit}
+                              onChange={e => updateLine(idx, 'credit', e.target.value)}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td>
+                            <button
+                              className="btn"
+                              style={{ padding: 4, color: 'var(--accent-red)', opacity: formLines.length <= 2 ? 0.3 : 1 }}
+                              disabled={formLines.length <= 2}
+                              onClick={() => removeLine(idx)}
+                              title="刪除此行"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
                 {/* Running totals / balance indicator */}
                 <div style={{

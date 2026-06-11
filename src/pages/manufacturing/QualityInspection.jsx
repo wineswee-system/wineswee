@@ -150,22 +150,24 @@ export default function QualityInspection() {
                     {isExpanded && items.length > 0 && (
                       <tr key={`${q.id}-detail`}>
                         <td colSpan={8} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
-                          <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
-                            <thead>
-                              <tr><th>檢驗項目</th><th>數量</th><th>合格</th><th>不合格</th><th>不合格原因</th></tr>
-                            </thead>
-                            <tbody>
-                              {items.map((it, i) => (
-                                <tr key={i}>
-                                  <td>{it.name}</td>
-                                  <td>{it.qty}</td>
-                                  <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{it.passed}</td>
-                                  <td style={{ color: it.failed > 0 ? 'var(--accent-red)' : 'inherit', fontWeight: it.failed > 0 ? 600 : 400 }}>{it.failed}</td>
-                                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{it.reason || '-'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="data-table-wrapper">
+                            <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
+                              <thead>
+                                <tr><th>檢驗項目</th><th>數量</th><th>合格</th><th>不合格</th><th>不合格原因</th></tr>
+                              </thead>
+                              <tbody>
+                                {items.map((it, i) => (
+                                  <tr key={i}>
+                                    <td>{it.name}</td>
+                                    <td>{it.qty}</td>
+                                    <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>{it.passed}</td>
+                                    <td style={{ color: it.failed > 0 ? 'var(--accent-red)' : 'inherit', fontWeight: it.failed > 0 ? 600 : 400 }}>{it.failed}</td>
+                                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{it.reason || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </td>
                       </tr>
                     )}

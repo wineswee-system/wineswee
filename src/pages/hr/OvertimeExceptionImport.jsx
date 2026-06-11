@@ -354,56 +354,58 @@ export default function OvertimeExceptionImport() {
             </button>
           </div>
           <div style={{ overflowX: 'auto', maxHeight: 400 }}>
-            <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>狀態</th>
-                  <th>列</th>
-                  <th>員工</th>
-                  <th>日期</th>
-                  <th style={{ textAlign: 'right' }}>本筆時數</th>
-                  <th>類型</th>
-                  <th style={{ textAlign: 'right' }}>該月已有<br/>(加班)</th>
-                  <th style={{ textAlign: 'right' }}>該月已有<br/>(額外)</th>
-                  <th style={{ textAlign: 'right', fontWeight: 700 }}>加後合計</th>
-                  <th>警示</th>
-                  <th>原因</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parsed.map((r, i) => {
-                  const valid = !r.issue
-                  const w = valid && r.sameMonth ? warnLevel(r.newTotal) : null
-                  return (
-                    <tr key={i} style={!valid ? { background: 'rgba(239,68,68,0.06)' } : (w?.bg && w.bg !== 'transparent' ? { background: w.bg } : undefined)}>
-                      <td>
-                        {valid
-                          ? <CheckCircle size={14} style={{ color: 'var(--accent-green)' }} />
-                          : <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>{r.issue}</span>}
-                      </td>
-                      <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.rowNum}</td>
-                      <td>{r.name} {r.employee?.employee_number && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({r.employee.employee_number})</span>}</td>
-                      <td>{r.date} {r.rowMonth !== month && <span style={{ fontSize: 10, color: 'var(--accent-orange)' }}>不同月</span>}</td>
-                      <td style={{ textAlign: 'right' }}>{r.hours}</td>
-                      <td>{r.type}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingRegular.toFixed(1) : '—'}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingException.toFixed(1) : '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: w?.color || 'var(--text-muted)' }}>
-                        {valid && r.sameMonth ? r.newTotal.toFixed(1) : '—'}
-                      </td>
-                      <td>
-                        {w && (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: w.color }}>
-                            <AlertTriangle size={11} /> {w.label}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>狀態</th>
+                    <th>列</th>
+                    <th>員工</th>
+                    <th>日期</th>
+                    <th style={{ textAlign: 'right' }}>本筆時數</th>
+                    <th>類型</th>
+                    <th style={{ textAlign: 'right' }}>該月已有<br/>(加班)</th>
+                    <th style={{ textAlign: 'right' }}>該月已有<br/>(額外)</th>
+                    <th style={{ textAlign: 'right', fontWeight: 700 }}>加後合計</th>
+                    <th>警示</th>
+                    <th>原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.map((r, i) => {
+                    const valid = !r.issue
+                    const w = valid && r.sameMonth ? warnLevel(r.newTotal) : null
+                    return (
+                      <tr key={i} style={!valid ? { background: 'rgba(239,68,68,0.06)' } : (w?.bg && w.bg !== 'transparent' ? { background: w.bg } : undefined)}>
+                        <td>
+                          {valid
+                            ? <CheckCircle size={14} style={{ color: 'var(--accent-green)' }} />
+                            : <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>{r.issue}</span>}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.rowNum}</td>
+                        <td>{r.name} {r.employee?.employee_number && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({r.employee.employee_number})</span>}</td>
+                        <td>{r.date} {r.rowMonth !== month && <span style={{ fontSize: 10, color: 'var(--accent-orange)' }}>不同月</span>}</td>
+                        <td style={{ textAlign: 'right' }}>{r.hours}</td>
+                        <td>{r.type}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingRegular.toFixed(1) : '—'}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingException.toFixed(1) : '—'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: w?.color || 'var(--text-muted)' }}>
+                          {valid && r.sameMonth ? r.newTotal.toFixed(1) : '—'}
+                        </td>
+                        <td>
+                          {w && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: w.color }}>
+                              <AlertTriangle size={11} /> {w.label}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -420,36 +422,38 @@ export default function OvertimeExceptionImport() {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{recentImports.length} 筆</span>
         </div>
         <div style={{ overflowX: 'auto', maxHeight: 320 }}>
-          <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
-            <thead>
-              <tr>
-                <th>員工</th>
-                <th>日期</th>
-                <th style={{ textAlign: 'right' }}>時數</th>
-                <th>類型</th>
-                <th>原因</th>
-                <th>備註</th>
-                <th>匯入時間</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentImports.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>尚無匯入紀錄</td></tr>
-              ) : recentImports.map(r => (
-                <tr key={r.id}>
-                  <td>{r.employee}</td>
-                  <td>{r.request_date}</td>
-                  <td style={{ textAlign: 'right' }}>{r.ot_hours}</td>
-                  <td>{r.ot_type}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.exception_note || '—'}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {r.exception_imported_at?.slice(0, 16).replace('T', ' ')}
-                  </td>
+          <div className="data-table-wrapper">
+            <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>員工</th>
+                  <th>日期</th>
+                  <th style={{ textAlign: 'right' }}>時數</th>
+                  <th>類型</th>
+                  <th>原因</th>
+                  <th>備註</th>
+                  <th>匯入時間</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentImports.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>尚無匯入紀錄</td></tr>
+                ) : recentImports.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.employee}</td>
+                    <td>{r.request_date}</td>
+                    <td style={{ textAlign: 'right' }}>{r.ot_hours}</td>
+                    <td>{r.ot_type}</td>
+                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</td>
+                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.exception_note || '—'}</td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {r.exception_imported_at?.slice(0, 16).replace('T', ' ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -473,43 +477,45 @@ export default function OvertimeExceptionImport() {
           <div style={{ padding: 24, textAlign: 'center' }}><LoadingSpinner /></div>
         ) : (
           <div style={{ overflowX: 'auto', maxHeight: 460 }}>
-            <table className="data-table" style={{ fontSize: 12, width: '100%', whiteSpace: 'nowrap' }}>
-              <thead>
-                <tr>
-                  <th>員工</th>
-                  <th>員編</th>
-                  <th>部門</th>
-                  <th style={{ textAlign: 'right' }}>加班</th>
-                  <th style={{ textAlign: 'right' }}>額外</th>
-                  <th style={{ textAlign: 'right', fontWeight: 700 }}>合計時數</th>
-                  <th>警示</th>
-                </tr>
-              </thead>
-              <tbody>
-                {empStats.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>無資料</td></tr>
-                ) : empStats.map(e => {
-                  const w = warnLevel(e.total)
-                  return (
-                    <tr key={e.id}>
-                      <td>{e.name}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{e.employee_number || '—'}</td>
-                      <td style={{ color: 'var(--text-muted)' }}>{e.dept || '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{e.regular.toFixed(1)}</td>
-                      <td style={{ textAlign: 'right', color: e.exception > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                        {e.exception > 0 ? e.exception.toFixed(1) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: w.color }}>{e.total.toFixed(1)}</td>
-                      <td>
-                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: w.color, background: w.bg }}>
-                          {w.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 12, width: '100%', whiteSpace: 'nowrap' }}>
+                <thead>
+                  <tr>
+                    <th>員工</th>
+                    <th>員編</th>
+                    <th>部門</th>
+                    <th style={{ textAlign: 'right' }}>加班</th>
+                    <th style={{ textAlign: 'right' }}>額外</th>
+                    <th style={{ textAlign: 'right', fontWeight: 700 }}>合計時數</th>
+                    <th>警示</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {empStats.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>無資料</td></tr>
+                  ) : empStats.map(e => {
+                    const w = warnLevel(e.total)
+                    return (
+                      <tr key={e.id}>
+                        <td>{e.name}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{e.employee_number || '—'}</td>
+                        <td style={{ color: 'var(--text-muted)' }}>{e.dept || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{e.regular.toFixed(1)}</td>
+                        <td style={{ textAlign: 'right', color: e.exception > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                          {e.exception > 0 ? e.exception.toFixed(1) : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: w.color }}>{e.total.toFixed(1)}</td>
+                        <td>
+                          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: w.color, background: w.bg }}>
+                            {w.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

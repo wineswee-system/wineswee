@@ -243,21 +243,23 @@ export default function Outbound() {
                   {(items[o.id] || []).length === 0 ? (
                     <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>尚無明細</div>
                   ) : (
-                    <table className="data-table">
-                      <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>實揀數量</th><th>儲位</th><th>狀態</th></tr></thead>
-                      <tbody>
-                        {items[o.id].map(item => (
-                          <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
-                            <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
-                            <td>{item.sku_name}</td>
-                            <td>{item.quantity}</td>
-                            <td style={{ fontWeight: 600, color: item.picked_qty >= item.quantity ? 'var(--accent-green)' : 'var(--text-primary)' }}>{item.picked_qty}</td>
-                            <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
-                            <td><span className={`badge ${item.status === '已揀貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div className="data-table-wrapper">
+                      <table className="data-table">
+                        <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>實揀數量</th><th>儲位</th><th>狀態</th></tr></thead>
+                        <tbody>
+                          {items[o.id].map(item => (
+                            <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
+                              <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
+                              <td>{item.sku_name}</td>
+                              <td>{item.quantity}</td>
+                              <td style={{ fontWeight: 600, color: item.picked_qty >= item.quantity ? 'var(--accent-green)' : 'var(--text-primary)' }}>{item.picked_qty}</td>
+                              <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
+                              <td><span className={`badge ${item.status === '已揀貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               )}

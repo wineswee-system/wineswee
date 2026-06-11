@@ -256,24 +256,26 @@ export default function LaborInspection() {
             <div style={{ padding: '8px 0', marginBottom: 12, borderBottom: '1px solid var(--border-light)', fontSize: 13, color: 'var(--text-secondary)' }}>
               {reports[detailModal].summary}
             </div>
-            <table className="data-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th>項目</th>
-                  <th>內容</th>
-                  <th style={{ width: 80, textAlign: 'center' }}>狀態</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reports[detailModal].items.map((item, idx) => (
-                  <tr key={idx}>
-                    <td style={{ fontWeight: 500 }}>{item.label}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{item.value}</td>
-                    <td style={{ textAlign: 'center' }}>{statusBadge(item.status)}</td>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th>項目</th>
+                    <th>內容</th>
+                    <th style={{ width: 80, textAlign: 'center' }}>狀態</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {reports[detailModal].items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 500 }}>{item.label}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{item.value}</td>
+                      <td style={{ textAlign: 'center' }}>{statusBadge(item.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
                 onClick={() => {

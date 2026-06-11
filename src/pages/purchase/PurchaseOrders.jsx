@@ -327,21 +327,23 @@ export default function PurchaseOrders() {
                         <td colSpan={10} style={{ padding: 0 }}>
                           <div style={{ padding: '8px 16px 12px 40px', background: 'var(--bg-secondary)' }}>
                             <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: 'var(--text-secondary)' }}>採購明細</div>
-                            <table className="data-table" style={{ fontSize: 12 }}>
-                              <thead>
-                                <tr><th>品項</th><th>數量</th><th>單價</th><th>小計</th></tr>
-                              </thead>
-                              <tbody>
-                                {o.line_items.map((li, i) => (
-                                  <tr key={i}>
-                                    <td style={{ fontWeight: 600 }}>{li.product || li.itemCode || '-'}</td>
-                                    <td>{li.qty}</td>
-                                    <td>{fmt(li.unit_price || li.unitPrice)}</td>
-                                    <td>{fmt((li.qty || 0) * (li.unit_price || li.unitPrice || 0))}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <div className="data-table-wrapper">
+                              <table className="data-table" style={{ fontSize: 12 }}>
+                                <thead>
+                                  <tr><th>品項</th><th>數量</th><th>單價</th><th>小計</th></tr>
+                                </thead>
+                                <tbody>
+                                  {o.line_items.map((li, i) => (
+                                    <tr key={i}>
+                                      <td style={{ fontWeight: 600 }}>{li.product || li.itemCode || '-'}</td>
+                                      <td>{li.qty}</td>
+                                      <td>{fmt(li.unit_price || li.unitPrice)}</td>
+                                      <td>{fmt((li.qty || 0) * (li.unit_price || li.unitPrice || 0))}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                             {/* Match result detail if available */}
                             {matchResults[o.id]?.result && (
                               <div style={{ marginTop: 8, padding: 8, borderRadius: 6, fontSize: 11, background: matchResults[o.id].result.matched ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)' }}>
@@ -404,32 +406,34 @@ export default function PurchaseOrders() {
               </button>
             </div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-              <table className="data-table" style={{ fontSize: 12, marginBottom: 0 }}>
-                <thead>
-                  <tr><th>品項名稱</th><th style={{ width: 80 }}>數量</th><th style={{ width: 100 }}>單價</th><th style={{ width: 100 }}>小計</th><th style={{ width: 40 }}></th></tr>
-                </thead>
-                <tbody>
-                  {lineItems.map((li, i) => (
-                    <tr key={i}>
-                      <td>
-                        <input className="form-input" type="text" style={{ width: '100%', fontSize: 12 }} placeholder="品項名稱" value={li.product} onChange={e => updateLineItem(i, 'product', e.target.value)} />
-                      </td>
-                      <td>
-                        <input className="form-input" type="number" style={{ width: '100%', fontSize: 12 }} placeholder="0" value={li.qty} onChange={e => updateLineItem(i, 'qty', e.target.value)} />
-                      </td>
-                      <td>
-                        <input className="form-input" type="number" style={{ width: '100%', fontSize: 12 }} placeholder="0" value={li.unit_price} onChange={e => updateLineItem(i, 'unit_price', e.target.value)} />
-                      </td>
-                      <td style={{ fontWeight: 600, textAlign: 'right' }}>{fmt(li.total)}</td>
-                      <td>
-                        {lineItems.length > 1 && (
-                          <button type="button" onClick={() => removeLineItem(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14 }}>x</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="data-table-wrapper">
+                <table className="data-table" style={{ fontSize: 12, marginBottom: 0 }}>
+                  <thead>
+                    <tr><th>品項名稱</th><th style={{ width: 80 }}>數量</th><th style={{ width: 100 }}>單價</th><th style={{ width: 100 }}>小計</th><th style={{ width: 40 }}></th></tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((li, i) => (
+                      <tr key={i}>
+                        <td>
+                          <input className="form-input" type="text" style={{ width: '100%', fontSize: 12 }} placeholder="品項名稱" value={li.product} onChange={e => updateLineItem(i, 'product', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className="form-input" type="number" style={{ width: '100%', fontSize: 12 }} placeholder="0" value={li.qty} onChange={e => updateLineItem(i, 'qty', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className="form-input" type="number" style={{ width: '100%', fontSize: 12 }} placeholder="0" value={li.unit_price} onChange={e => updateLineItem(i, 'unit_price', e.target.value)} />
+                        </td>
+                        <td style={{ fontWeight: 600, textAlign: 'right' }}>{fmt(li.total)}</td>
+                        <td>
+                          {lineItems.length > 1 && (
+                            <button type="button" onClick={() => removeLineItem(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14 }}>x</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <div style={{ textAlign: 'right', fontWeight: 600, marginTop: 6, fontSize: 13 }}>
               品項小計: {fmt(lineItemsTotal)}

@@ -503,21 +503,23 @@ export default function DripCampaignBuilder({
 
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>執行時間軸</div>
                   <div style={{ maxHeight: 200, overflow: 'auto' }}>
-                    <table className="data-table" style={{ width: '100%', fontSize: 11 }}>
-                      <thead>
-                        <tr><th>聯絡人</th><th>步驟</th><th>動作</th><th>排程時間</th></tr>
-                      </thead>
-                      <tbody>
-                        {simulationResult.timeline.slice(0, 20).map((t, i) => (
-                          <tr key={i}>
-                            <td>{t.contact_name}</td>
-                            <td>#{t.step_index + 1}</td>
-                            <td>{t.action}</td>
-                            <td>{new Date(t.scheduled_at).toLocaleString('zh-TW')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div className="data-table-wrapper">
+                      <table className="data-table" style={{ width: '100%', fontSize: 11 }}>
+                        <thead>
+                          <tr><th>聯絡人</th><th>步驟</th><th>動作</th><th>排程時間</th></tr>
+                        </thead>
+                        <tbody>
+                          {simulationResult.timeline.slice(0, 20).map((t, i) => (
+                            <tr key={i}>
+                              <td>{t.contact_name}</td>
+                              <td>#{t.step_index + 1}</td>
+                              <td>{t.action}</td>
+                              <td>{new Date(t.scheduled_at).toLocaleString('zh-TW')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                   {simulationResult.timeline.length > 20 && (
                     <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>

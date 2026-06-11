@@ -300,27 +300,29 @@ export default function POSShifts() {
                           ) : shiftTransactions.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>此班別尚無交易紀錄</div>
                           ) : (
-                            <table className="data-table" style={{ fontSize: 12 }}>
-                              <thead>
-                                <tr><th>交易編號</th><th>時間</th><th>品項</th><th>付款方式</th><th>金額</th><th>狀態</th></tr>
-                              </thead>
-                              <tbody>
-                                {shiftTransactions.map(t => (
-                                  <tr key={t.id}>
-                                    <td style={{ fontWeight: 600, fontSize: 11 }}>{t.transaction_number}</td>
-                                    <td style={{ fontSize: 11 }}>{t.created_at?.slice(0, 16) || '-'}</td>
-                                    <td style={{ fontSize: 11 }}>{Array.isArray(t.items) ? t.items.map(i => i.name).join(', ') : '-'}</td>
-                                    <td>{t.payment_method || '-'}</td>
-                                    <td style={{ fontWeight: 600 }}>NT$ {(t.total || 0).toLocaleString()}</td>
-                                    <td>
-                                      <span className={`badge ${t.status === '完成' ? 'badge-success' : 'badge-warning'}`}>
-                                        <span className="badge-dot"></span>{t.status || '-'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <div className="data-table-wrapper">
+                              <table className="data-table" style={{ fontSize: 12 }}>
+                                <thead>
+                                  <tr><th>交易編號</th><th>時間</th><th>品項</th><th>付款方式</th><th>金額</th><th>狀態</th></tr>
+                                </thead>
+                                <tbody>
+                                  {shiftTransactions.map(t => (
+                                    <tr key={t.id}>
+                                      <td style={{ fontWeight: 600, fontSize: 11 }}>{t.transaction_number}</td>
+                                      <td style={{ fontSize: 11 }}>{t.created_at?.slice(0, 16) || '-'}</td>
+                                      <td style={{ fontSize: 11 }}>{Array.isArray(t.items) ? t.items.map(i => i.name).join(', ') : '-'}</td>
+                                      <td>{t.payment_method || '-'}</td>
+                                      <td style={{ fontWeight: 600 }}>NT$ {(t.total || 0).toLocaleString()}</td>
+                                      <td>
+                                        <span className={`badge ${t.status === '完成' ? 'badge-success' : 'badge-warning'}`}>
+                                          <span className="badge-dot"></span>{t.status || '-'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           )}
                         </div>
                       </td>

@@ -408,26 +408,28 @@ export default function MRP() {
                       {isExpanded && comps.length > 0 && (
                         <tr key={`${r.id}-detail`}>
                           <td colSpan={6} style={{ padding: 0, background: 'var(--bg-secondary)' }}>
-                            <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
-                              <thead>
-                                <tr><th>零件名稱</th><th>需求量</th><th>庫存量</th><th>缺料量</th></tr>
-                              </thead>
-                              <tbody>
-                                {comps.map((c, i) => {
-                                  const shortageQty = Math.max(0, (c.need || 0) - (c.stock || 0))
-                                  return (
-                                    <tr key={i} style={shortageQty > 0 ? { background: 'rgba(239, 68, 68, 0.05)' } : {}}>
-                                      <td>{c.name}</td>
-                                      <td>{c.need}</td>
-                                      <td>{c.stock}</td>
-                                      <td style={{ color: shortageQty > 0 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 600 }}>
-                                        {shortageQty > 0 ? shortageQty : '充足'}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
+                            <div className="data-table-wrapper">
+                              <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
+                                <thead>
+                                  <tr><th>零件名稱</th><th>需求量</th><th>庫存量</th><th>缺料量</th></tr>
+                                </thead>
+                                <tbody>
+                                  {comps.map((c, i) => {
+                                    const shortageQty = Math.max(0, (c.need || 0) - (c.stock || 0))
+                                    return (
+                                      <tr key={i} style={shortageQty > 0 ? { background: 'rgba(239, 68, 68, 0.05)' } : {}}>
+                                        <td>{c.name}</td>
+                                        <td>{c.need}</td>
+                                        <td>{c.stock}</td>
+                                        <td style={{ color: shortageQty > 0 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 600 }}>
+                                          {shortageQty > 0 ? shortageQty : '充足'}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </td>
                         </tr>
                       )}

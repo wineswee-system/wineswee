@@ -64,34 +64,36 @@ export default function DripCampaignAnalytics({ campaign, metrics, onClose }) {
         {metrics.step_metrics.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>各步驟績效</h4>
-            <table className="data-table" style={{ width: '100%', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>步驟</th>
-                  <th>類型</th>
-                  <th>主旨</th>
-                  <th>發送</th>
-                  <th>開啟</th>
-                  <th>點擊</th>
-                  <th>開信率</th>
-                  <th>點擊率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.step_metrics.map((sm, i) => (
-                  <tr key={i}>
-                    <td>#{sm.step_index + 1}</td>
-                    <td>{sm.step_type || '-'}</td>
-                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sm.subject || '-'}</td>
-                    <td>{sm.sent}</td>
-                    <td>{sm.opened}</td>
-                    <td>{sm.clicked}</td>
-                    <td><span className={`badge ${sm.open_rate > 40 ? 'badge-success' : sm.open_rate > 20 ? 'badge-warning' : 'badge-danger'}`}>{sm.open_rate}%</span></td>
-                    <td><span className={`badge ${sm.click_rate > 20 ? 'badge-success' : sm.click_rate > 10 ? 'badge-warning' : 'badge-danger'}`}>{sm.click_rate}%</span></td>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>步驟</th>
+                    <th>類型</th>
+                    <th>主旨</th>
+                    <th>發送</th>
+                    <th>開啟</th>
+                    <th>點擊</th>
+                    <th>開信率</th>
+                    <th>點擊率</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {metrics.step_metrics.map((sm, i) => (
+                    <tr key={i}>
+                      <td>#{sm.step_index + 1}</td>
+                      <td>{sm.step_type || '-'}</td>
+                      <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sm.subject || '-'}</td>
+                      <td>{sm.sent}</td>
+                      <td>{sm.opened}</td>
+                      <td>{sm.clicked}</td>
+                      <td><span className={`badge ${sm.open_rate > 40 ? 'badge-success' : sm.open_rate > 20 ? 'badge-warning' : 'badge-danger'}`}>{sm.open_rate}%</span></td>
+                      <td><span className={`badge ${sm.click_rate > 20 ? 'badge-success' : sm.click_rate > 10 ? 'badge-warning' : 'badge-danger'}`}>{sm.click_rate}%</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

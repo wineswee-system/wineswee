@@ -270,46 +270,48 @@ export default function POSOverview() {
           <div className="card-title"><span className="card-title-icon"><Store size={16} /></span> 各分店業績總覽</div>
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>分店</th>
-                <th style={{ textAlign: 'right' }}>營業額</th>
-                <th>佔比</th>
-                <th style={{ textAlign: 'right' }}>交易筆數</th>
-                <th style={{ textAlign: 'right' }}>平均客單價</th>
-                <th style={{ textAlign: 'right' }}>退款筆數</th>
-                <th>尖峰時段</th>
-              </tr>
-            </thead>
-            <tbody>
-              {storeSummary.map(s => (
-                <tr key={s.name}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, display: 'inline-block', flexShrink: 0 }} />
-                      <span style={{ fontWeight: 600 }}>{s.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>$ {Math.round(s.revenue).toLocaleString()}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
-                      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
-                        <div style={{ width: `${(s.revenue / maxRevenue * 100).toFixed(1)}%`, height: '100%', borderRadius: 3, background: s.color, transition: 'width 0.5s ease' }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 36, textAlign: 'right' }}>
-                        {totalRevenue > 0 ? ((s.revenue / totalRevenue) * 100).toFixed(1) : 0}%
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{s.count.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right' }}>$ {Math.round(s.avg).toLocaleString()}</td>
-                  <td style={{ textAlign: 'right' }}>{s.refunds}</td>
-                  <td><span className="badge badge-info">{s.peakHour}</span></td>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>分店</th>
+                  <th style={{ textAlign: 'right' }}>營業額</th>
+                  <th>佔比</th>
+                  <th style={{ textAlign: 'right' }}>交易筆數</th>
+                  <th style={{ textAlign: 'right' }}>平均客單價</th>
+                  <th style={{ textAlign: 'right' }}>退款筆數</th>
+                  <th>尖峰時段</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {storeSummary.map(s => (
+                  <tr key={s.name}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, display: 'inline-block', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600 }}>{s.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>$ {Math.round(s.revenue).toLocaleString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
+                        <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                          <div style={{ width: `${(s.revenue / maxRevenue * 100).toFixed(1)}%`, height: '100%', borderRadius: 3, background: s.color, transition: 'width 0.5s ease' }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 36, textAlign: 'right' }}>
+                          {totalRevenue > 0 ? ((s.revenue / totalRevenue) * 100).toFixed(1) : 0}%
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{s.count.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>$ {Math.round(s.avg).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{s.refunds}</td>
+                    <td><span className="badge badge-info">{s.peakHour}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

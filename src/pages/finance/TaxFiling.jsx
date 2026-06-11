@@ -257,16 +257,18 @@ export default function TaxFiling() {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header"><h3 className="card-title">稅額計算</h3></div>
             <div style={{ padding: 16 }}>
-              <table className="data-table">
-                <tbody>
-                  <tr><td>銷項稅額</td><td style={{ textAlign: 'right' }}>{fmt(salesTax)}</td></tr>
-                  <tr><td>進項稅額</td><td style={{ textAlign: 'right' }}>{fmt(purchaseTax)}</td></tr>
-                  <tr style={{ fontWeight: 700, fontSize: '1.1em' }}>
-                    <td>{netTax >= 0 ? '應納稅額' : '溢付稅額'}</td>
-                    <td style={{ textAlign: 'right', color: netTax >= 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{fmt(Math.abs(netTax))}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <tbody>
+                    <tr><td>銷項稅額</td><td style={{ textAlign: 'right' }}>{fmt(salesTax)}</td></tr>
+                    <tr><td>進項稅額</td><td style={{ textAlign: 'right' }}>{fmt(purchaseTax)}</td></tr>
+                    <tr style={{ fontWeight: 700, fontSize: '1.1em' }}>
+                      <td>{netTax >= 0 ? '應納稅額' : '溢付稅額'}</td>
+                      <td style={{ textAlign: 'right', color: netTax >= 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{fmt(Math.abs(netTax))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

@@ -548,41 +548,43 @@ export default function HRImport() {
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ fontSize: 13, minWidth: 600 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>行</th>
-                  <th>狀態</th>
-                  {m.templateHeaders.map(h => <th key={h}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((row) => {
-                  const ok = row.errors.length === 0
-                  const p = row.payload
-                  return (
-                    <tr key={row.rowNo} style={{ background: ok ? undefined : 'rgba(239,68,68,0.05)' }}>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{row.rowNo}</td>
-                      <td>
-                        {ok
-                          ? <CheckCircle2 size={15} color="var(--accent-green)" />
-                          : <span style={{ color: 'var(--accent-red)', fontSize: 11 }}>
-                              <XCircle size={13} style={{ verticalAlign: 'middle', marginRight: 3 }} />
-                              {row.errors.join('；')}
-                            </span>
-                        }
-                      </td>
-                      {/* 原始欄位值 */}
-                      {m.templateHeaders.map(h => {
-                        const fieldKey = m.fieldMap[h] || h
-                        const val = row.raw[h] ?? ''
-                        return <td key={h} style={{ color: val ? undefined : 'var(--text-muted)' }}>{val || '—'}</td>
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 13, minWidth: 600 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}>行</th>
+                    <th>狀態</th>
+                    {m.templateHeaders.map(h => <th key={h}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((row) => {
+                    const ok = row.errors.length === 0
+                    const p = row.payload
+                    return (
+                      <tr key={row.rowNo} style={{ background: ok ? undefined : 'rgba(239,68,68,0.05)' }}>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{row.rowNo}</td>
+                        <td>
+                          {ok
+                            ? <CheckCircle2 size={15} color="var(--accent-green)" />
+                            : <span style={{ color: 'var(--accent-red)', fontSize: 11 }}>
+                                <XCircle size={13} style={{ verticalAlign: 'middle', marginRight: 3 }} />
+                                {row.errors.join('；')}
+                              </span>
+                          }
+                        </td>
+                        {/* 原始欄位值 */}
+                        {m.templateHeaders.map(h => {
+                          const fieldKey = m.fieldMap[h] || h
+                          const val = row.raw[h] ?? ''
+                          return <td key={h} style={{ color: val ? undefined : 'var(--text-muted)' }}>{val || '—'}</td>
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

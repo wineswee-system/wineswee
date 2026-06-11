@@ -352,65 +352,67 @@ export default function WorkflowBuilder() {
 
           {/* Table */}
           <div className="card">
-            <table className="data-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>流程名稱</th>
-                  <th>觸發條件</th>
-                  <th>步驟數</th>
-                  <th>狀態</th>
-                  <th>執行次數</th>
-                  <th style={{ width: 140 }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workflows.map(wf => (
-                  <tr key={wf.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{wf.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wf.description}</div>
-                    </td>
-                    <td><span style={{ fontSize: 12 }}>{getTriggerLabel(wf.trigger_event)}</span></td>
-                    <td>{(wf.steps || []).length}</td>
-                    <td>{statusBadge(wf.status)}</td>
-                    <td style={{ fontWeight: 600 }}>{wf.executions || 0}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {wf.status !== 'draft' && (
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>流程名稱</th>
+                    <th>觸發條件</th>
+                    <th>步驟數</th>
+                    <th>狀態</th>
+                    <th>執行次數</th>
+                    <th style={{ width: 140 }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workflows.map(wf => (
+                    <tr key={wf.id}>
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{wf.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wf.description}</div>
+                      </td>
+                      <td><span style={{ fontSize: 12 }}>{getTriggerLabel(wf.trigger_event)}</span></td>
+                      <td>{(wf.steps || []).length}</td>
+                      <td>{statusBadge(wf.status)}</td>
+                      <td style={{ fontWeight: 600 }}>{wf.executions || 0}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {wf.status !== 'draft' && (
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: 11 }}
+                              onClick={() => toggleStatus(wf.id)}
+                              title={wf.status === 'active' ? '暫停' : '啟用'}
+                            >
+                              {wf.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
+                            </button>
+                          )}
                           <button
                             className="btn btn-secondary"
                             style={{ padding: '4px 8px', fontSize: 11 }}
-                            onClick={() => toggleStatus(wf.id)}
-                            title={wf.status === 'active' ? '暫停' : '啟用'}
+                            onClick={() => editWorkflow(wf)}
+                            title="編輯"
                           >
-                            {wf.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
+                            <Settings size={13} />
                           </button>
-                        )}
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: 11 }}
-                          onClick={() => editWorkflow(wf)}
-                          title="編輯"
-                        >
-                          <Settings size={13} />
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }}
-                          onClick={() => deleteWorkflow(wf.id)}
-                          title="刪除"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {workflows.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無工作流程</td></tr>
-                )}
-              </tbody>
-            </table>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }}
+                            onClick={() => deleteWorkflow(wf.id)}
+                            title="刪除"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {workflows.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無工作流程</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

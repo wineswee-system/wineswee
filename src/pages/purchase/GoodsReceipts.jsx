@@ -402,44 +402,46 @@ export default function GoodsReceipts() {
               {currentMatchResult.purchaseOrder?.items?.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>比對明細</div>
-                  <table className="data-table" style={{ fontSize: 12 }}>
-                    <thead>
-                      <tr>
-                        <th>品項</th>
-                        <th>PO 數量</th>
-                        <th>GR 數量</th>
-                        <th>發票數量</th>
-                        <th>PO 單價</th>
-                        <th>發票單價</th>
-                        <th>狀態</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentMatchResult.purchaseOrder.items.map((item, i) => {
-                        const grItem = currentMatchResult.goodsReceipt?.items?.find(g => g.itemCode === item.itemCode)
-                        const invItem = currentMatchResult.invoice?.items?.find(inv => inv.itemCode === item.itemCode)
-                        const hasDiscrepancy = currentMatchResult.discrepancies?.some(d =>
-                          d.field?.includes(item.itemCode)
-                        )
-                        return (
-                          <tr key={i}>
-                            <td style={{ fontWeight: 600 }}>{item.itemCode}</td>
-                            <td>{item.qty}</td>
-                            <td>{grItem?.receivedQty ?? '-'}</td>
-                            <td>{invItem?.qty ?? '-'}</td>
-                            <td>{fmt(item.unitPrice)}</td>
-                            <td>{fmt(invItem?.unitPrice)}</td>
-                            <td>
-                              {hasDiscrepancy
-                                ? <span style={{ color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={14} /> 差異</span>
-                                : <span style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> 一致</span>
-                              }
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="data-table-wrapper">
+                    <table className="data-table" style={{ fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th>品項</th>
+                          <th>PO 數量</th>
+                          <th>GR 數量</th>
+                          <th>發票數量</th>
+                          <th>PO 單價</th>
+                          <th>發票單價</th>
+                          <th>狀態</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentMatchResult.purchaseOrder.items.map((item, i) => {
+                          const grItem = currentMatchResult.goodsReceipt?.items?.find(g => g.itemCode === item.itemCode)
+                          const invItem = currentMatchResult.invoice?.items?.find(inv => inv.itemCode === item.itemCode)
+                          const hasDiscrepancy = currentMatchResult.discrepancies?.some(d =>
+                            d.field?.includes(item.itemCode)
+                          )
+                          return (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 600 }}>{item.itemCode}</td>
+                              <td>{item.qty}</td>
+                              <td>{grItem?.receivedQty ?? '-'}</td>
+                              <td>{invItem?.qty ?? '-'}</td>
+                              <td>{fmt(item.unitPrice)}</td>
+                              <td>{fmt(invItem?.unitPrice)}</td>
+                              <td>
+                                {hasDiscrepancy
+                                  ? <span style={{ color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={14} /> 差異</span>
+                                  : <span style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> 一致</span>
+                                }
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

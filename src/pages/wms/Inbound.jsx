@@ -196,29 +196,31 @@ export default function Inbound() {
                 {(items[o.id] || []).length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>尚無明細</div>
                 ) : (
-                  <table className="data-table">
-                    <thead><tr><th>品號</th><th>品名</th><th>預計數量</th><th>實收數量</th><th>指定儲位</th><th>狀態</th></tr></thead>
-                    <tbody>
-                      {items[o.id].map(item => (
-                        <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
-                          <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
-                          <td>{item.sku_name}</td>
-                          <td>{item.expected_qty}</td>
-                          <td>
-                            <input
-                              className="form-input"
-                              type="number"
-                              style={{ width: 80, padding: '2px 6px', fontSize: 12 }}
-                              defaultValue={item.received_qty}
-                              onBlur={e => updateItemQty(o.id, item.id, Number(e.target.value))}
-                            />
-                          </td>
-                          <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
-                          <td><span className={`badge ${item.status === '已收貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="data-table-wrapper">
+                    <table className="data-table">
+                      <thead><tr><th>品號</th><th>品名</th><th>預計數量</th><th>實收數量</th><th>指定儲位</th><th>狀態</th></tr></thead>
+                      <tbody>
+                        {items[o.id].map(item => (
+                          <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
+                            <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
+                            <td>{item.sku_name}</td>
+                            <td>{item.expected_qty}</td>
+                            <td>
+                              <input
+                                className="form-input"
+                                type="number"
+                                style={{ width: 80, padding: '2px 6px', fontSize: 12 }}
+                                defaultValue={item.received_qty}
+                                onBlur={e => updateItemQty(o.id, item.id, Number(e.target.value))}
+                              />
+                            </td>
+                            <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
+                            <td><span className={`badge ${item.status === '已收貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}

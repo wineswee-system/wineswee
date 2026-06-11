@@ -272,62 +272,64 @@ export default function FormBuilder() {
               <Plus size={16} /> 新增表單
             </button>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>表單名稱</th>
-                <th>說明</th>
-                <th>狀態</th>
-                <th>欄位數</th>
-                <th>提交數</th>
-                <th>建立日期</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {forms.map(f => (
-                <tr key={f.id}>
-                  <td style={{ fontWeight: 600 }}>{f.name}</td>
-                  <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.description || '-'}</td>
-                  <td><span className={`badge ${STATUS_BADGE[f.status]}`}>{STATUS_LABEL[f.status]}</span></td>
-                  <td>{(f.fields || []).length}</td>
-                  <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{f.submissions_count || 0}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{new Date(f.created_at).toLocaleDateString('zh-TW')}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      <button className="btn btn-sm" onClick={() => editForm(f)} title="編輯">
-                        <Settings size={14} />
-                      </button>
-                      {f.status === 'draft' && (
-                        <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'active')} title="啟用" style={{ color: 'var(--accent-green)' }}>
-                          <Check size={14} />
-                        </button>
-                      )}
-                      {f.status === 'active' && (
-                        <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'archived')} title="封存" style={{ color: 'var(--accent-orange)' }}>
-                          <FileText size={14} />
-                        </button>
-                      )}
-                      {f.status === 'archived' && (
-                        <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'active')} title="重新啟用" style={{ color: 'var(--accent-green)' }}>
-                          <Check size={14} />
-                        </button>
-                      )}
-                      <button className="btn btn-sm" onClick={() => { setEmbedFormId(f.id); setShowEmbedModal(true) }} title="取得嵌入碼" style={{ color: 'var(--accent-purple)' }}>
-                        <Code size={14} />
-                      </button>
-                      <button className="btn btn-sm" onClick={() => deleteForm(f.id)} title="刪除" style={{ color: 'var(--accent-red)' }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>表單名稱</th>
+                  <th>說明</th>
+                  <th>狀態</th>
+                  <th>欄位數</th>
+                  <th>提交數</th>
+                  <th>建立日期</th>
+                  <th>操作</th>
                 </tr>
-              ))}
-              {forms.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>尚無表單，點擊「新增表單」開始建立</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {forms.map(f => (
+                  <tr key={f.id}>
+                    <td style={{ fontWeight: 600 }}>{f.name}</td>
+                    <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.description || '-'}</td>
+                    <td><span className={`badge ${STATUS_BADGE[f.status]}`}>{STATUS_LABEL[f.status]}</span></td>
+                    <td>{(f.fields || []).length}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{f.submissions_count || 0}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{new Date(f.created_at).toLocaleDateString('zh-TW')}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <button className="btn btn-sm" onClick={() => editForm(f)} title="編輯">
+                          <Settings size={14} />
+                        </button>
+                        {f.status === 'draft' && (
+                          <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'active')} title="啟用" style={{ color: 'var(--accent-green)' }}>
+                            <Check size={14} />
+                          </button>
+                        )}
+                        {f.status === 'active' && (
+                          <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'archived')} title="封存" style={{ color: 'var(--accent-orange)' }}>
+                            <FileText size={14} />
+                          </button>
+                        )}
+                        {f.status === 'archived' && (
+                          <button className="btn btn-sm" onClick={() => toggleStatus(f.id, 'active')} title="重新啟用" style={{ color: 'var(--accent-green)' }}>
+                            <Check size={14} />
+                          </button>
+                        )}
+                        <button className="btn btn-sm" onClick={() => { setEmbedFormId(f.id); setShowEmbedModal(true) }} title="取得嵌入碼" style={{ color: 'var(--accent-purple)' }}>
+                          <Code size={14} />
+                        </button>
+                        <button className="btn btn-sm" onClick={() => deleteForm(f.id)} title="刪除" style={{ color: 'var(--accent-red)' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {forms.length === 0 && (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>尚無表單，點擊「新增表單」開始建立</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -595,39 +597,41 @@ export default function FormBuilder() {
           </div>
           {filteredSubs.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>表單</th>
-                    {/* Gather all unique field keys */}
-                    {[...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))].map(key => (
-                      <th key={key}>{key}</th>
-                    ))}
-                    <th>提交時間</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSubs.map((sub, idx) => {
-                    const allKeys = [...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))]
-                    const formName = forms.find(f => f.id === sub.form_id)?.name || sub.form_id
-                    return (
-                      <tr key={sub.id}>
-                        <td style={{ color: 'var(--text-secondary)' }}>{idx + 1}</td>
-                        <td><span className="badge badge-info">{formName}</span></td>
-                        {allKeys.map(key => (
-                          <td key={key} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {(sub.data || {})[key] || '-'}
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>表單</th>
+                      {/* Gather all unique field keys */}
+                      {[...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))].map(key => (
+                        <th key={key}>{key}</th>
+                      ))}
+                      <th>提交時間</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSubs.map((sub, idx) => {
+                      const allKeys = [...new Set(filteredSubs.flatMap(s => Object.keys(s.data || {})))]
+                      const formName = forms.find(f => f.id === sub.form_id)?.name || sub.form_id
+                      return (
+                        <tr key={sub.id}>
+                          <td style={{ color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td><span className="badge badge-info">{formName}</span></td>
+                          {allKeys.map(key => (
+                            <td key={key} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {(sub.data || {})[key] || '-'}
+                            </td>
+                          ))}
+                          <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                            {new Date(sub.submitted_at).toLocaleString('zh-TW')}
                           </td>
-                        ))}
-                        <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                          {new Date(sub.submitted_at).toLocaleString('zh-TW')}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-secondary)' }}>

@@ -254,39 +254,41 @@ function MatchDetail({ result, matchIcon }) {
       {Array.isArray(poItems) && poItems.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>品項明細比對</div>
-          <table className="data-table" style={{ fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th>品項</th>
-                <th>PO 數量</th>
-                <th>GR 收貨數量</th>
-                <th>PO 單價</th>
-                <th>PO 金額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poItems.map((item, i) => {
-                const code = item.product || item.itemCode || 'ITEM'
-                const poQty = parseFloat(item.qty) || 0
-                const unitPrice = parseFloat(item.unit_price || item.unitPrice) || 0
-                const grMatch = (grItems || []).filter(g => g.code === code)
-                const grQty = grMatch.reduce((s, g) => s + g.qty, 0)
-                const qtyMatch = Math.abs(grQty - poQty) < 1 || (poQty > 0 && Math.abs(grQty - poQty) / poQty <= 0.01)
-                return (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 600 }}>{code}</td>
-                    <td>{poQty}</td>
-                    <td style={{ color: qtyMatch ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 600 }}>
-                      {grItems?.length > 0 ? grQty : '-'}
-                      {!qtyMatch && grItems?.length > 0 && <span style={{ marginLeft: 4, fontSize: 11 }}>({grQty - poQty > 0 ? '+' : ''}{grQty - poQty})</span>}
-                    </td>
-                    <td>{fmt(unitPrice)}</td>
-                    <td>{fmt(poQty * unitPrice)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="data-table-wrapper">
+            <table className="data-table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>品項</th>
+                  <th>PO 數量</th>
+                  <th>GR 收貨數量</th>
+                  <th>PO 單價</th>
+                  <th>PO 金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {poItems.map((item, i) => {
+                  const code = item.product || item.itemCode || 'ITEM'
+                  const poQty = parseFloat(item.qty) || 0
+                  const unitPrice = parseFloat(item.unit_price || item.unitPrice) || 0
+                  const grMatch = (grItems || []).filter(g => g.code === code)
+                  const grQty = grMatch.reduce((s, g) => s + g.qty, 0)
+                  const qtyMatch = Math.abs(grQty - poQty) < 1 || (poQty > 0 && Math.abs(grQty - poQty) / poQty <= 0.01)
+                  return (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 600 }}>{code}</td>
+                      <td>{poQty}</td>
+                      <td style={{ color: qtyMatch ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 600 }}>
+                        {grItems?.length > 0 ? grQty : '-'}
+                        {!qtyMatch && grItems?.length > 0 && <span style={{ marginLeft: 4, fontSize: 11 }}>({grQty - poQty > 0 ? '+' : ''}{grQty - poQty})</span>}
+                      </td>
+                      <td>{fmt(unitPrice)}</td>
+                      <td>{fmt(poQty * unitPrice)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -294,32 +296,34 @@ function MatchDetail({ result, matchIcon }) {
       {Array.isArray(_apRecords) && _apRecords.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>應付帳款記錄</div>
-          <table className="data-table" style={{ fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th>AP 編號</th>
-                <th>供應商</th>
-                <th>金額</th>
-                <th>狀態</th>
-                <th>參考編號</th>
-              </tr>
-            </thead>
-            <tbody>
-              {_apRecords.map((ap, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }}>AP-{String(ap.id).padStart(3, '0')}</td>
-                  <td>{ap.supplier || '-'}</td>
-                  <td>{fmt(ap.amount)}</td>
-                  <td>
-                    <span className={`badge ${ap.status === '已付' ? 'badge-success' : 'badge-warning'}`}>
-                      <span className="badge-dot"></span>{ap.status || '待付'}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ap.reference || '-'}</td>
+          <div className="data-table-wrapper">
+            <table className="data-table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>AP 編號</th>
+                  <th>供應商</th>
+                  <th>金額</th>
+                  <th>狀態</th>
+                  <th>參考編號</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {_apRecords.map((ap, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>AP-{String(ap.id).padStart(3, '0')}</td>
+                    <td>{ap.supplier || '-'}</td>
+                    <td>{fmt(ap.amount)}</td>
+                    <td>
+                      <span className={`badge ${ap.status === '已付' ? 'badge-success' : 'badge-warning'}`}>
+                        <span className="badge-dot"></span>{ap.status || '待付'}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ap.reference || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

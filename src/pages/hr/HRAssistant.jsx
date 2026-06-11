@@ -182,14 +182,16 @@ export default function HRAssistant() {
                   {/* Simple table chart */}
                   {msg.chart && msg.chart.type === 'table' && msg.chart.labels?.length > 0 && (
                     <div style={{ marginTop: 12 }}>
-                      <table className="data-table" style={{ fontSize: 12 }}>
-                        <thead><tr>{msg.chart.labels.map((l, j) => <th key={j}>{l}</th>)}</tr></thead>
-                        <tbody>
-                          {(msg.chart.rows || []).map((row, j) => (
-                            <tr key={j}>{row.map((cell, k) => <td key={k}>{cell}</td>)}</tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="data-table-wrapper">
+                        <table className="data-table" style={{ fontSize: 12 }}>
+                          <thead><tr>{msg.chart.labels.map((l, j) => <th key={j}>{l}</th>)}</tr></thead>
+                          <tbody>
+                            {(msg.chart.rows || []).map((row, j) => (
+                              <tr key={j}>{row.map((cell, k) => <td key={k}>{cell}</td>)}</tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
 

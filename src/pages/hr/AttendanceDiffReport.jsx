@@ -232,59 +232,61 @@ export default function AttendanceDiffReport() {
 
       {/* 報表 */}
       <div className="card" style={{ padding: 0 }}>
-        <table className="data-table" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th>員工</th>
-              <th>門市</th>
-              <th style={{ textAlign: 'center' }}>差異筆數</th>
-              <th style={{ textAlign: 'center' }}>通知狀態</th>
-              <th style={{ textAlign: 'center' }}>詳情</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</td></tr>
-            ) : report.length === 0 ? (
-              <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無資料</td></tr>
-            ) : report.map(r => (
-              <tr key={r.employee_id} style={{ opacity: r.diff_count > 0 ? 1 : 0.5 }}>
-                <td>{r.employee_name}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{r.store_name || '—'}</td>
-                <td style={{ textAlign: 'center' }}>
-                  {r.diff_count > 0 ? (
-                    <span style={{
-                      padding: '2px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700,
-                      background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
-                    }}>{r.diff_count}</span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)' }}>0</span>
-                  )}
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  {r.diff_count === 0 ? (
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                  ) : r.notified ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-green)', fontSize: 12, fontWeight: 600 }}>
-                      <CheckCircle size={12} /> 已通知
-                    </span>
-                  ) : (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-orange)', fontSize: 12, fontWeight: 600 }}>
-                      <AlertCircle size={12} /> 未通知
-                    </span>
-                  )}
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  {r.diff_count > 0 && (
-                    <button onClick={() => openDetail(r)} className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }}>
-                      <FileText size={12} /> 看
-                    </button>
-                  )}
-                </td>
+        <div className="data-table-wrapper">
+          <table className="data-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>員工</th>
+                <th>門市</th>
+                <th style={{ textAlign: 'center' }}>差異筆數</th>
+                <th style={{ textAlign: 'center' }}>通知狀態</th>
+                <th style={{ textAlign: 'center' }}>詳情</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</td></tr>
+              ) : report.length === 0 ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無資料</td></tr>
+              ) : report.map(r => (
+                <tr key={r.employee_id} style={{ opacity: r.diff_count > 0 ? 1 : 0.5 }}>
+                  <td>{r.employee_name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{r.store_name || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count > 0 ? (
+                      <span style={{
+                        padding: '2px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                        background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+                      }}>{r.diff_count}</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>0</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count === 0 ? (
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                    ) : r.notified ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-green)', fontSize: 12, fontWeight: 600 }}>
+                        <CheckCircle size={12} /> 已通知
+                      </span>
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-orange)', fontSize: 12, fontWeight: 600 }}>
+                        <AlertCircle size={12} /> 未通知
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count > 0 && (
+                      <button onClick={() => openDetail(r)} className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }}>
+                        <FileText size={12} /> 看
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* 詳情 modal — 用 createPortal 渲染到 body，避免 layout wrapper transform 影響 fixed */}

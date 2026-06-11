@@ -454,28 +454,30 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
     }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 20, width: 720, maxWidth: '95vw', maxHeight: '85vh', overflow: 'auto' }}>
         <h3 style={{ marginTop: 0 }}>⚙️ 獎金規則設定</h3>
-        <table className="data-table" style={{ marginTop: 8 }}>
-          <thead>
-            <tr>
-              <th>角色</th><th>權重</th><th>記功獎金/筆</th><th>達標獎金</th>
-              <th>缺失扣/筆</th><th>小過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id}>
-                <td><b>{r.role}</b></td>
-                <td><Input value={r.weight} step="0.1" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, weight: v } : x))} /></td>
-                <td><Input value={r.merit_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, merit_amount: v } : x))} /></td>
-                <td><Input value={r.target_bonus_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, target_bonus_amount: v } : x))} /></td>
-                <td><Input value={r.absence_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, absence_deduct: v } : x))} /></td>
-                <td><Input value={r.minor_offense_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, minor_offense_deduct: v } : x))} /></td>
-                <td><Input value={r.punch_deduct_start} onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_start: v } : x))} /></td>
-                <td><Input value={r.punch_deduct_amount} step="50" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_amount: v } : x))} /></td>
+        <div className="data-table-wrapper">
+          <table className="data-table" style={{ marginTop: 8 }}>
+            <thead>
+              <tr>
+                <th>角色</th><th>權重</th><th>記功獎金/筆</th><th>達標獎金</th>
+                <th>缺失扣/筆</th><th>小過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.id}>
+                  <td><b>{r.role}</b></td>
+                  <td><Input value={r.weight} step="0.1" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, weight: v } : x))} /></td>
+                  <td><Input value={r.merit_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, merit_amount: v } : x))} /></td>
+                  <td><Input value={r.target_bonus_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, target_bonus_amount: v } : x))} /></td>
+                  <td><Input value={r.absence_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, absence_deduct: v } : x))} /></td>
+                  <td><Input value={r.minor_offense_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, minor_offense_deduct: v } : x))} /></td>
+                  <td><Input value={r.punch_deduct_start} onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_start: v } : x))} /></td>
+                  <td><Input value={r.punch_deduct_amount} step="50" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_amount: v } : x))} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={handleSave}>儲存</button>

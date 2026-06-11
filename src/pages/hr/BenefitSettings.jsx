@@ -203,80 +203,82 @@ export default function BenefitSettings() {
       {/* Content */}
       {loading ? <LoadingSpinner /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                {tab === 'leave' ? (
-                  <>
-                    <th>假別</th>
-                    <th>法定天數</th>
-                    <th>加給天數</th>
-                    <th>合計</th>
-                    <th>適用範圍</th>
-                    <th>備註</th>
-                    <th>操作</th>
-                  </>
-                ) : (
-                  <>
-                    <th>獎金名稱</th>
-                    <th>類型</th>
-                    <th>金額/比例</th>
-                    <th>週期</th>
-                    <th>適用範圍</th>
-                    <th>備註</th>
-                    <th>操作</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {policies.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
-                  尚未設定{tab === 'leave' ? '假別' : '獎金'}政策，點擊「新增」開始設定
-                </td></tr>
-              ) : policies.map(p => (
-                <tr key={p.id}>
+          <div className="data-table-wrapper">
+            <table className="data-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
                   {tab === 'leave' ? (
                     <>
-                      <td><strong>{getLeaveLabel(p.code)}</strong></td>
-                      <td>{LEAVE_TYPES.find(t => t.code === p.code)?.maxDays ?? '依年資'}</td>
-                      <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>+{p.config?.extra_days || 0} 天</td>
-                      <td style={{ fontWeight: 700 }}>
-                        {(LEAVE_TYPES.find(t => t.code === p.code)?.maxDays || 0) + (p.config?.extra_days || 0)} 天
-                      </td>
-                      <td>{scopeLabel(p)}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
-                        </div>
-                      </td>
+                      <th>假別</th>
+                      <th>法定天數</th>
+                      <th>加給天數</th>
+                      <th>合計</th>
+                      <th>適用範圍</th>
+                      <th>備註</th>
+                      <th>操作</th>
                     </>
                   ) : (
                     <>
-                      <td><strong>{p.code}</strong></td>
-                      <td>{BONUS_TYPE_LABELS[p.config?.type] || p.config?.type}</td>
-                      <td style={{ fontWeight: 600 }}>
-                        {p.config?.type === 'fixed' && `$${(p.config.amount || 0).toLocaleString()}`}
-                        {p.config?.type === 'percent' && `${((p.config.rate || 0) * 100).toFixed(1)}%`}
-                        {p.config?.type === 'milestone' && `${(p.config.tiers?.length || 0)} 階`}
-                      </td>
-                      <td>{p.config?.period === 'monthly' ? '每月' : p.config?.period === 'quarterly' ? '每季' : '每年'}</td>
-                      <td>{scopeLabel(p)}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
-                        </div>
-                      </td>
+                      <th>獎金名稱</th>
+                      <th>類型</th>
+                      <th>金額/比例</th>
+                      <th>週期</th>
+                      <th>適用範圍</th>
+                      <th>備註</th>
+                      <th>操作</th>
                     </>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {policies.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
+                    尚未設定{tab === 'leave' ? '假別' : '獎金'}政策，點擊「新增」開始設定
+                  </td></tr>
+                ) : policies.map(p => (
+                  <tr key={p.id}>
+                    {tab === 'leave' ? (
+                      <>
+                        <td><strong>{getLeaveLabel(p.code)}</strong></td>
+                        <td>{LEAVE_TYPES.find(t => t.code === p.code)?.maxDays ?? '依年資'}</td>
+                        <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>+{p.config?.extra_days || 0} 天</td>
+                        <td style={{ fontWeight: 700 }}>
+                          {(LEAVE_TYPES.find(t => t.code === p.code)?.maxDays || 0) + (p.config?.extra_days || 0)} 天
+                        </td>
+                        <td>{scopeLabel(p)}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td><strong>{p.code}</strong></td>
+                        <td>{BONUS_TYPE_LABELS[p.config?.type] || p.config?.type}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          {p.config?.type === 'fixed' && `$${(p.config.amount || 0).toLocaleString()}`}
+                          {p.config?.type === 'percent' && `${((p.config.rate || 0) * 100).toFixed(1)}%`}
+                          {p.config?.type === 'milestone' && `${(p.config.tiers?.length || 0)} 階`}
+                        </td>
+                        <td>{p.config?.period === 'monthly' ? '每月' : p.config?.period === 'quarterly' ? '每季' : '每年'}</td>
+                        <td>{scopeLabel(p)}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

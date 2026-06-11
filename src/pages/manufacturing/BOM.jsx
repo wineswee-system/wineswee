@@ -335,36 +335,38 @@ export default function BOM() {
                               <div style={{ padding: '8px 16px', fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)' }}>
                                 JSONB 零件清單 ({comps.length})
                               </div>
-                              <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
-                                <thead>
-                                  <tr><th>零件名稱</th><th>零件代碼</th><th>數量</th><th>單位</th><th>單價</th><th>小計</th><th>類型</th></tr>
-                                </thead>
-                                <tbody>
-                                  {comps.map((c, i) => {
-                                    const isSubAssembly = !!c.parent_bom_id
-                                    const subBom = isSubAssembly ? boms.find(sb => String(sb.id) === String(c.parent_bom_id)) : null
-                                    return (
-                                      <tr key={i}>
-                                        <td>
-                                          {isSubAssembly && <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle', color: 'var(--accent-purple)' }} />}
-                                          {c.name}
-                                        </td>
-                                        <td><code>{c.code}</code></td>
-                                        <td>{c.qty}</td>
-                                        <td>{c.unit}</td>
-                                        <td>{fmt(c.cost_per_unit)}</td>
-                                        <td style={{ fontWeight: 600 }}>{fmt(c.qty * c.cost_per_unit)}</td>
-                                        <td>
-                                          {isSubAssembly
-                                            ? <span className="badge badge-info"><span className="badge-dot"></span>子組件 ({subBom?.product_name || '?'})</span>
-                                            : <span className="badge badge-success"><span className="badge-dot"></span>原物料</span>
-                                          }
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
+                              <div className="data-table-wrapper">
+                                <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
+                                  <thead>
+                                    <tr><th>零件名稱</th><th>零件代碼</th><th>數量</th><th>單位</th><th>單價</th><th>小計</th><th>類型</th></tr>
+                                  </thead>
+                                  <tbody>
+                                    {comps.map((c, i) => {
+                                      const isSubAssembly = !!c.parent_bom_id
+                                      const subBom = isSubAssembly ? boms.find(sb => String(sb.id) === String(c.parent_bom_id)) : null
+                                      return (
+                                        <tr key={i}>
+                                          <td>
+                                            {isSubAssembly && <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle', color: 'var(--accent-purple)' }} />}
+                                            {c.name}
+                                          </td>
+                                          <td><code>{c.code}</code></td>
+                                          <td>{c.qty}</td>
+                                          <td>{c.unit}</td>
+                                          <td>{fmt(c.cost_per_unit)}</td>
+                                          <td style={{ fontWeight: 600 }}>{fmt(c.qty * c.cost_per_unit)}</td>
+                                          <td>
+                                            {isSubAssembly
+                                              ? <span className="badge badge-info"><span className="badge-dot"></span>子組件 ({subBom?.product_name || '?'})</span>
+                                              : <span className="badge badge-success"><span className="badge-dot"></span>原物料</span>
+                                            }
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
                           )}
 
@@ -464,45 +466,47 @@ export default function BOM() {
                                 尚無結構化 BOM 明細。點擊「新增組件」來建立。
                               </div>
                             ) : (
-                              <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
-                                <thead>
-                                  <tr><th>SKU 代碼</th><th>品名</th><th>數量</th><th>單位</th><th>損耗率 %</th><th>單價</th><th>類型</th><th style={{ width: 60 }}>操作</th></tr>
-                                </thead>
-                                <tbody>
-                                  {structuredLines.map(line => {
-                                    const sku = line.skus || {}
-                                    const subBom = line.is_sub_assembly ? boms.find(bb => bb.id === line.sub_bom_id) : null
-                                    return (
-                                      <tr key={line.id}>
-                                        <td><code>{sku.code || '—'}</code></td>
-                                        <td>
-                                          {line.is_sub_assembly && <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle', color: 'var(--accent-purple)' }} />}
-                                          {sku.name || '—'}
-                                        </td>
-                                        <td>{line.quantity}</td>
-                                        <td>{line.unit}</td>
-                                        <td>{line.scrap_rate > 0 ? `${line.scrap_rate}%` : '—'}</td>
-                                        <td>{fmt(sku.cost || 0)}</td>
-                                        <td>
-                                          {line.is_sub_assembly
-                                            ? <span className="badge badge-info"><span className="badge-dot"></span>子組件 {subBom ? `(${subBom.product_name})` : ''}</span>
-                                            : <span className="badge badge-success"><span className="badge-dot"></span>原物料</span>
-                                          }
-                                        </td>
-                                        <td>
-                                          <button
-                                            style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4 }}
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteBOMLine(line.id, b.id) }}
-                                            title="刪除此組件"
-                                          >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
+                              <div className="data-table-wrapper">
+                                <table className="data-table" style={{ margin: 0, borderRadius: 0 }}>
+                                  <thead>
+                                    <tr><th>SKU 代碼</th><th>品名</th><th>數量</th><th>單位</th><th>損耗率 %</th><th>單價</th><th>類型</th><th style={{ width: 60 }}>操作</th></tr>
+                                  </thead>
+                                  <tbody>
+                                    {structuredLines.map(line => {
+                                      const sku = line.skus || {}
+                                      const subBom = line.is_sub_assembly ? boms.find(bb => bb.id === line.sub_bom_id) : null
+                                      return (
+                                        <tr key={line.id}>
+                                          <td><code>{sku.code || '—'}</code></td>
+                                          <td>
+                                            {line.is_sub_assembly && <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle', color: 'var(--accent-purple)' }} />}
+                                            {sku.name || '—'}
+                                          </td>
+                                          <td>{line.quantity}</td>
+                                          <td>{line.unit}</td>
+                                          <td>{line.scrap_rate > 0 ? `${line.scrap_rate}%` : '—'}</td>
+                                          <td>{fmt(sku.cost || 0)}</td>
+                                          <td>
+                                            {line.is_sub_assembly
+                                              ? <span className="badge badge-info"><span className="badge-dot"></span>子組件 {subBom ? `(${subBom.product_name})` : ''}</span>
+                                              : <span className="badge badge-success"><span className="badge-dot"></span>原物料</span>
+                                            }
+                                          </td>
+                                          <td>
+                                            <button
+                                              style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 4 }}
+                                              onClick={(e) => { e.stopPropagation(); handleDeleteBOMLine(line.id, b.id) }}
+                                              title="刪除此組件"
+                                            >
+                                              <Trash2 size={14} />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
                             )}
                           </div>
                         </td>

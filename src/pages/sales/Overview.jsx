@@ -344,33 +344,35 @@ export default function SalesOverview() {
           <div className="card-title"><span className="card-title-icon"><ShoppingCart size={16} /></span> 最近訂單</div>
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>訂單編號</th>
-                <th>客戶</th>
-                <th style={{ textAlign: 'right' }}>金額</th>
-                <th>付款狀態</th>
-                <th>出貨狀態</th>
-                <th>建立日期</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map(o => (
-                <tr key={o.id}>
-                  <td style={{ fontWeight: 600 }}>{o.order_number}</td>
-                  <td>{o.customer}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>$ {Math.round(o.grand_total || 0).toLocaleString()}</td>
-                  <td><span className={`badge ${payBadge[o.payment_status] || 'badge-info'}`}>{o.payment_status}</span></td>
-                  <td><span className={`badge ${shipBadge[o.shipping_status] || 'badge-info'}`}>{o.shipping_status}</span></td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{(o.created_at || '').slice(0, 10)}</td>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>訂單編號</th>
+                  <th>客戶</th>
+                  <th style={{ textAlign: 'right' }}>金額</th>
+                  <th>付款狀態</th>
+                  <th>出貨狀態</th>
+                  <th>建立日期</th>
                 </tr>
-              ))}
-              {recentOrders.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>尚無訂單資料</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentOrders.map(o => (
+                  <tr key={o.id}>
+                    <td style={{ fontWeight: 600 }}>{o.order_number}</td>
+                    <td>{o.customer}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>$ {Math.round(o.grand_total || 0).toLocaleString()}</td>
+                    <td><span className={`badge ${payBadge[o.payment_status] || 'badge-info'}`}>{o.payment_status}</span></td>
+                    <td><span className={`badge ${shipBadge[o.shipping_status] || 'badge-info'}`}>{o.shipping_status}</span></td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{(o.created_at || '').slice(0, 10)}</td>
+                  </tr>
+                ))}
+                {recentOrders.length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>尚無訂單資料</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

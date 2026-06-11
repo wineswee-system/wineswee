@@ -237,77 +237,79 @@ export default function PayrollAuditLog() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ fontSize: 12, whiteSpace: 'nowrap', width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 140 }}>時間</th>
-                  <th style={{ width: 100 }}>調整人</th>
-                  <th style={{ width: 100 }}>員工</th>
-                  <th style={{ width: 80 }}>來源</th>
-                  <th style={{ width: 110 }}>項目</th>
-                  <th style={{ width: 180 }}>原 → 新</th>
-                  <th style={{ width: 100, textAlign: 'right' }}>影響</th>
-                  <th>理由 / 標記</th>
-                </tr>
-              </thead>
-              <tbody>
-                {enrichedLogs.map(log => {
-                  const isSuper = !!log.superseded_at
-                  const impact  = log._impact
-                  return (
-                    <tr key={log.adjustment_id} style={{
-                      opacity:    isSuper ? 0.5 : 1,
-                      background: log._flags.includes('high_impact') ? 'rgba(245,158,11,0.08)' : undefined,
-                    }}>
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
-                        {new Date(log.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{log.created_by_name || '—'}</td>
-                      <td>{log.employee_name || '—'}</td>
-                      <td>
-                        <span style={{
-                          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                          background: 'var(--bg-card)', color: 'var(--text-secondary)',
-                        }}>
-                          {SOURCE_LABEL[log.source_type] || log.source_type}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{FIELD_LABEL[log.field] || log.field}</td>
-                      <td style={{ fontSize: 11 }}>
-                        <span style={{ color: 'var(--text-muted)' }}>{formatJsonValue(log.original_value)}</span>
-                        {' → '}
-                        <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{formatJsonValue(log.new_value)}</span>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700,
-                        color: impact > 0 ? 'var(--accent-green)' : impact < 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                        {impact === 0 ? '—' : (impact > 0 ? '+' : '') + fmt(impact)}
-                      </td>
-                      <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {log.reason || <span style={{ fontStyle: 'italic' }}>(無理由)</span>}
-                        {log._flags.includes('high_impact') && (
-                          <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                            color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>
-                            <AlertTriangle size={9} /> 大金額
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 12, whiteSpace: 'nowrap', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 140 }}>時間</th>
+                    <th style={{ width: 100 }}>調整人</th>
+                    <th style={{ width: 100 }}>員工</th>
+                    <th style={{ width: 80 }}>來源</th>
+                    <th style={{ width: 110 }}>項目</th>
+                    <th style={{ width: 180 }}>原 → 新</th>
+                    <th style={{ width: 100, textAlign: 'right' }}>影響</th>
+                    <th>理由 / 標記</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrichedLogs.map(log => {
+                    const isSuper = !!log.superseded_at
+                    const impact  = log._impact
+                    return (
+                      <tr key={log.adjustment_id} style={{
+                        opacity:    isSuper ? 0.5 : 1,
+                        background: log._flags.includes('high_impact') ? 'rgba(245,158,11,0.08)' : undefined,
+                      }}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
+                          {new Date(log.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{log.created_by_name || '—'}</td>
+                        <td>{log.employee_name || '—'}</td>
+                        <td>
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            background: 'var(--bg-card)', color: 'var(--text-secondary)',
+                          }}>
+                            {SOURCE_LABEL[log.source_type] || log.source_type}
                           </span>
-                        )}
-                        {log._flags.includes('no_reason') && !log.reason && (
-                          <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                            color: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
-                            無理由
-                          </span>
-                        )}
-                        {isSuper && (
-                          <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                            color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}>
-                            <RotateCcw size={9} /> 已被取代
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{FIELD_LABEL[log.field] || log.field}</td>
+                        <td style={{ fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{formatJsonValue(log.original_value)}</span>
+                          {' → '}
+                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{formatJsonValue(log.new_value)}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700,
+                          color: impact > 0 ? 'var(--accent-green)' : impact < 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                          {impact === 0 ? '—' : (impact > 0 ? '+' : '') + fmt(impact)}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {log.reason || <span style={{ fontStyle: 'italic' }}>(無理由)</span>}
+                          {log._flags.includes('high_impact') && (
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                              color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>
+                              <AlertTriangle size={9} /> 大金額
+                            </span>
+                          )}
+                          {log._flags.includes('no_reason') && !log.reason && (
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                              color: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
+                              無理由
+                            </span>
+                          )}
+                          {isSuper && (
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                              color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}>
+                              <RotateCcw size={9} /> 已被取代
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

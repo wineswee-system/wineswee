@@ -78,24 +78,26 @@ export default function ImportModal({
             資料預覽（前 5 筆，共 {importData.rows.length} 筆）
           </div>
           <div style={{ overflowX: 'auto', maxHeight: 200, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
-            <table className="data-table" style={{ fontSize: 11 }}>
-              <thead>
-                <tr>
-                  {importData.headers.map(h => (
-                    <th key={h} style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {importData.rows.slice(0, 5).map((row, i) => (
-                  <tr key={i}>
+            <div className="data-table-wrapper">
+              <table className="data-table" style={{ fontSize: 11 }}>
+                <thead>
+                  <tr>
                     {importData.headers.map(h => (
-                      <td key={h} style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{row[h]}</td>
+                      <th key={h} style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {importData.rows.slice(0, 5).map((row, i) => (
+                    <tr key={i}>
+                      {importData.headers.map(h => (
+                        <td key={h} style={{ padding: '4px 8px', whiteSpace: 'nowrap' }}>{row[h]}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

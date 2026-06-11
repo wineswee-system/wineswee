@@ -286,9 +286,12 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (ssErr) {
         console.warn('salary_structures sync 失敗:', ssErr)
         toast.error('薪資結構同步失敗 — 員工資料已存，但薪資真理源未更新')
+        setSaving(false)
+        return
       }
     }
 
+    if (!storeChanged) toast.success('已更新')
     setSaving(false)
   }
 

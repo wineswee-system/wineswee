@@ -1154,28 +1154,39 @@ input, select, textarea {
 }
 
 /* ★ Sticky 浮動橫向滾軸（StickyHorizontalScrollbar.jsx 元素）— 給高 table 用
-   套跟 wrapper 一樣的 cyan 樣式，使用者一眼看到 */
+   sticky bar 整體背景 cyan-dim，所以 thumb 必須用深色才能看出來、user 才知道拖哪 */
 .sticky-x-scrollbar {
   scrollbar-width: auto;
-  scrollbar-color: var(--accent-cyan) var(--glass-medium);
+  scrollbar-color: #0e7490 transparent;  /* Firefox: 深 cyan thumb + 透明 track */
 }
 .sticky-x-scrollbar::-webkit-scrollbar {
-  height: 14px;
+  height: 18px;
 }
 .sticky-x-scrollbar::-webkit-scrollbar-track {
-  background: var(--glass-medium);
-  border-radius: 4px;
+  background: transparent;  /* 透明讓底下 cyan-dim background 透出來 */
 }
 .sticky-x-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--accent-cyan);
-  border-radius: 4px;
-  border: 2px solid var(--glass-medium);
+  background: #0e7490;  /* 深 teal cyan，跟 cyan-dim 底色強對比 */
+  border-radius: 8px;
+  border: 3px solid transparent;
   background-clip: padding-box;
+  min-width: 60px;
+  cursor: grab;
 }
 .sticky-x-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-cyan);
-  border: 1px solid var(--glass-medium);
+  background: #155e75;  /* hover 更深 */
   background-clip: padding-box;
+}
+.sticky-x-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #0c4a6e;
+  cursor: grabbing;
+  background-clip: padding-box;
+}
+[data-theme="light"] .sticky-x-scrollbar {
+  scrollbar-color: #0891b2 transparent;
+}
+[data-theme="light"] .sticky-x-scrollbar::-webkit-scrollbar-thumb {
+  background: #0891b2;
 }
 
 .data-table {

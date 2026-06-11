@@ -4575,6 +4575,9 @@ div.data-table > table {
 .main-content {
   /* fontScale 1.0 時 = 100vw - sidebar（跟原行為一致）；> 1 時自動縮邏輯寬 */
   max-width: calc(100vw / var(--app-font-scale, 1) - var(--sidebar-width));
+  /* 留 30px 底部空間給 fixed 定位的 StickyHorizontalScrollbar，
+     避免 scroll 到底時最後一行被滾軸蓋住 */
+  padding-bottom: 30px;
 }
 
 /* drawer mode (≤1024): sidebar 是 overlay 不佔位 → main-content 滿版 */

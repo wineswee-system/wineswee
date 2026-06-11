@@ -1191,15 +1191,19 @@ export default function Schedule() {
                   fontWeight: 600,
                 }}
                 onClick={() => {
-                  // 一律用 cycle 範圍（跟 wizard onComplete 出來的一樣），不用主頁的 month 範圍
-                  // 變形工時店：getCycleFor 算當前 probe 對應 cycle
-                  // 標準工時 / 沒 anchor → 退月制
+                  // 找實際有 shift 資料的最後一筆日期，用那筆算 cycle
+                  // 不要用 activeStart（月視圖時是月初，可能算到「上一個 cycle」沒資料）
                   const ws = storeSettings?.work_hour_system
                   const anchor = storeSettings?.variable_period_start
+                  let probeDate = activeStart  // fallback
+                  const withShift = schedules.filter(s => s.shift)
+                  if (withShift.length > 0) {
+                    probeDate = withShift.reduce((max, s) => s.date > max ? s.date : max, withShift[0].date)
+                  }
                   let builderStart = activeStart
                   let builderEnd = activeEnd
                   if (ws && ws !== '標準工時' && anchor) {
-                    const cycle = getCycleFor(activeStart, ws, anchor)
+                    const cycle = getCycleFor(probeDate, ws, anchor)
                     builderStart = cycle.start
                     builderEnd = cycle.end
                   }

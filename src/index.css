@@ -1152,7 +1152,12 @@ input, select, textarea {
 }
 
 .data-table {
-  width: 100%;
+  /* ★ width: auto 不是 100% — table 按 cell 內容自然撐寬
+     min-width: 100% 確保少欄/少資料時 table 仍撐滿容器
+     原本 width: 100% 配合 table-layout: auto，瀏覽器會「壓縮 cells fit width」
+     即使 cells nowrap 也會被擠，導致內容看得到但實際 table 沒 overflow，wrapper 沒滾輪 */
+  width: auto;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }

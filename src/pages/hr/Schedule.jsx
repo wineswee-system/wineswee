@@ -1191,19 +1191,31 @@ export default function Schedule() {
                   fontWeight: 600,
                 }}
                 onClick={() => {
+                  // 一律用 cycle 範圍（跟 wizard onComplete 出來的一樣），不用主頁的 month 範圍
+                  // 變形工時店：getCycleFor 算當前 probe 對應 cycle
+                  // 標準工時 / 沒 anchor → 退月制
+                  const ws = storeSettings?.work_hour_system
+                  const anchor = storeSettings?.variable_period_start
+                  let builderStart = activeStart
+                  let builderEnd = activeEnd
+                  if (ws && ws !== '標準工時' && anchor) {
+                    const cycle = getCycleFor(activeStart, ws, anchor)
+                    builderStart = cycle.start
+                    builderEnd = cycle.end
+                  }
                   navigate('/hr/schedule-builder', {
                     state: {
                       store: storeFilter,
                       storeId: currentStore.id,
-                      month: activeStart?.slice(0, 7),
-                      range: { start: activeStart, end: activeEnd },
-                      workHourSystem: storeSettings?.work_hour_system || '標準工時',
+                      month: builderStart?.slice(0, 7),
+                      range: { start: builderStart, end: builderEnd },
+                      workHourSystem: ws || '標準工時',
                       restDayMap: {},
                       empRestMap: {},
                     },
                   })
                 }}
-                title="直接進手填頁編輯（跳過排班精靈）"
+                title="直接進手填頁編輯此 cycle（跳過排班精靈）"
               >
                 ✏ 繼續編輯
               </button>

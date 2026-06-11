@@ -259,19 +259,26 @@ export default function EmployeeFormModal({
       <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--glass-light)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>💰 薪資資訊</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="計薪方式">
-            <select className="form-input" style={{ width: '100%' }} value={form.salary_type} onChange={e => set('salary_type', e.target.value)}>
-              <option value="monthly">月薪制</option>
-              <option value="hourly">時薪制</option>
+          <Field label="員工分類">
+            <select className="form-input" style={{ width: '100%' }}
+              value={form.employment_category || 'regular'}
+              onChange={e => {
+                const cat = e.target.value
+                set('employment_category', cat)
+              }}>
+              <option value="regular">正職（門市）</option>
+              <option value="admin">行政</option>
+              <option value="parttime">兼職（時薪）</option>
+              <option value="piece">計件</option>
             </select>
           </Field>
-          {form.salary_type === 'monthly' ? (
-            <Field label="月底薪 (NT$)">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="28000" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
-            </Field>
-          ) : (
+          {(form.employment_category || 'regular') === 'parttime' ? (
             <Field label="時薪 (NT$)">
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="183" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
+            </Field>
+          ) : (
+            <Field label="月底薪 (NT$)">
+              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="28000" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
             </Field>
           )}
         </div>

@@ -88,7 +88,7 @@ export default function Employees() {
   const [form, setForm] = useState({
     name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '',
     store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
-    salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+    employment_category: 'regular', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
     emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
     bank_code: '', bank_account: '',
     role: '', supervisor_id: null,
@@ -138,12 +138,14 @@ export default function Employees() {
       // 角色：UI 手動指定優先；沒指定則 fallback 用 position 推
       const role = form.role || posInfo?.level || 'store_staff'
       const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
+      // employment_category 屬於 salary_structures，不寫進 employees 表
+      const { employment_category: _cat, ...formForEmployee } = form
       const payload = {
-        ...form,
+        ...formForEmployee,
+        salary_type: _cat === 'parttime' ? 'hourly' : 'monthly',
         department_id: form.department_id ? Number(form.department_id) : null,
         store_id: form.store_id ? Number(form.store_id) : null,
         supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,
-        // 空字串日期改 null（DB 用 date 欄位，'' 會 cast 失敗）
         birth_date: form.birth_date || null,
         probation_end_date: form.probation_end_date || null,
         avatar,
@@ -168,7 +170,7 @@ export default function Employees() {
         setForm({
           name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '',
           store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
-          salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+          employment_category: 'regular', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
           emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
           bank_code: '', bank_account: '',
           role: '', supervisor_id: null,

@@ -17,6 +17,19 @@ const PRESET_ALLOWANCES = [
   '通訊費補助', '託兒津貼', '房屋津貼', '績效獎金',
 ]
 
+const EMPLOYMENT_CATEGORY_LABELS = {
+  regular:  '正職門市',
+  admin:    '行政',
+  parttime: '兼職',
+  piece:    '計件',
+}
+const EMPLOYMENT_CATEGORY_COLORS = {
+  regular:  { bg: 'var(--accent-cyan-dim)',   fg: 'var(--accent-cyan)' },
+  admin:    { bg: 'var(--accent-purple-dim)', fg: 'var(--accent-purple)' },
+  parttime: { bg: 'var(--accent-blue-dim)',   fg: 'var(--accent-blue)' },
+  piece:    { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' },
+}
+
 const emptyForm = {
   employee_id: '',
   base_salary: '',           // 本薪（合約名義）
@@ -28,8 +41,11 @@ const emptyForm = {
   night_shift_allowance: '', // 夜班津貼
   cross_store_allowance: '', // 跨區津貼
   attendance_bonus: '',
+  employment_category: 'regular',
   salary_type: 'monthly',
   hourly_rate: '',
+  piece_rate: '',
+  current_piece_count: '',
   health_ins_dependents: '0',
   insurance_grade_id: '',    // 投保級距 (預留 fk)
   effective_from: new Date().toISOString().slice(0, 10),
@@ -113,8 +129,11 @@ export default function SalaryStructures() {
       night_shift_allowance: String(s.night_shift_allowance || ''),
       cross_store_allowance: String(s.cross_store_allowance || ''),
       attendance_bonus: String(s.attendance_bonus || ''),
+      employment_category: s.employment_category || 'regular',
       salary_type: s.salary_type || 'monthly',
       hourly_rate: String(s.hourly_rate || ''),
+      piece_rate: String(s.piece_rate || ''),
+      current_piece_count: String(s.current_piece_count || ''),
       health_ins_dependents: String(s.health_ins_dependents || 0),
       insurance_grade_id: String(s.insurance_grade_id || ''),
       effective_from: s.effective_from || new Date().toISOString().slice(0, 10),
@@ -162,9 +181,11 @@ export default function SalaryStructures() {
       night_shift_allowance: Number(form.night_shift_allowance) || 0,
       cross_store_allowance: Number(form.cross_store_allowance) || 0,
       attendance_bonus: Number(form.attendance_bonus) || 0,
-      salary_type: form.salary_type,
-      // hourly_rate DB 為 NOT NULL DEFAULT 0；月薪人員直接送 0，PT 才送實際值
-      hourly_rate: form.salary_type === 'hourly' ? (Number(form.hourly_rate) || 0) : 0,
+      employment_category: form.employment_category || 'regular',
+      salary_type: form.employment_category === 'parttime' ? 'hourly' : 'monthly',
+      hourly_rate: form.employment_category === 'parttime' ? (Number(form.hourly_rate) || 0) : 0,
+      piece_rate: Number(form.piece_rate) || 0,
+      current_piece_count: Number(form.current_piece_count) || 0,
       health_ins_dependents: Number(form.health_ins_dependents) || 0,
       insurance_grade_id: form.insurance_grade_id ? Number(form.insurance_grade_id) : null,
       effective_from: form.effective_from,
@@ -262,13 +283,15 @@ export default function SalaryStructures() {
                     <td style={{ padding: '10px 14px' }}>{emp?.dept || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>{emp?.store || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                        background: s.salary_type === 'monthly' ? 'rgba(0,200,150,0.15)' : 'rgba(0,150,255,0.15)',
-                        color: s.salary_type === 'monthly' ? 'var(--accent-green)' : 'var(--accent-cyan)',
-                      }}>
-                        {s.salary_type === 'monthly' ? '月薪' : '時薪'}
-                      </span>
+                      {(() => {
+                        const cat = s.employment_category || (s.salary_type === 'hourly' ? 'parttime' : 'regular')
+                        const c = EMPLOYMENT_CATEGORY_COLORS[cat] || EMPLOYMENT_CATEGORY_COLORS.regular
+                        return (
+                          <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.fg }}>
+                            {EMPLOYMENT_CATEGORY_LABELS[cat] || cat}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
                       <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
@@ -319,22 +342,47 @@ export default function SalaryStructures() {
               disabled={!!editingId}
             />
           </Field>
-          <Field label="薪資類型">
-            <select className="form-input" value={form.salary_type} onChange={e => set('salary_type', e.target.value)}>
-              <option value="monthly">月薪</option>
-              <option value="hourly">時薪</option>
+          <Field label="員工分類">
+            <select className="form-input" value={form.employment_category || 'regular'}
+              onChange={e => {
+                const cat = e.target.value
+                set('employment_category', cat)
+                if (cat === 'piece' && !form.piece_rate) set('piece_rate', '2000')
+              }}>
+              <option value="regular">正職（門市，加班 1.34/1.67 階梯）</option>
+              <option value="admin">行政（月薪含 OT）</option>
+              <option value="parttime">兼職（時薪制，投保 PT 級距）</option>
+              <option value="piece">計件（月薪 = 件數 × 單價，不算加班）</option>
             </select>
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="本薪 (合約名義)">
-              <input className="form-input" type="number" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} placeholder="0" />
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
-            </Field>
-            <Field label="申報底薪 (投保用)">
-              <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="留空＝自動 min(本薪+津貼, 45,800)" />
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
-            </Field>
-            {form.salary_type === 'hourly' && (
+            {form.employment_category === 'piece' ? (
+              <>
+                <Field label="每件單價 (NT$)">
+                  <input className="form-input" type="number" value={form.piece_rate} onChange={e => set('piece_rate', e.target.value)} placeholder="2000" />
+                </Field>
+                <Field label="本月件數">
+                  <input className="form-input" type="number" value={form.current_piece_count} onChange={e => set('current_piece_count', e.target.value)} placeholder="0" />
+                  {Number(form.current_piece_count) > 0 && Number(form.piece_rate) > 0 && (
+                    <div style={{ fontSize: 10, color: 'var(--accent-cyan)', marginTop: 2 }}>
+                      預估月薪：NT$ {(Number(form.current_piece_count) * Number(form.piece_rate)).toLocaleString()}
+                    </div>
+                  )}
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="本薪 (合約名義)">
+                  <input className="form-input" type="number" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} placeholder="0" />
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
+                </Field>
+                <Field label="申報底薪 (投保用)">
+                  <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="留空＝自動 min(本薪+津貼, 45,800)" />
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
+                </Field>
+              </>
+            )}
+            {form.employment_category === 'parttime' && (
               <Field label="時薪">
                 <input className="form-input" type="number" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} placeholder="0" />
               </Field>

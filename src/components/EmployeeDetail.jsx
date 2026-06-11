@@ -154,6 +154,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           hourly_rate:           ss.data.hourly_rate           ?? 0,
           weekly_hours:          ss.data.weekly_hours          ?? f.weekly_hours,
           custom_allowances:     Array.isArray(ss.data.custom_allowances) ? ss.data.custom_allowances : [],
+          // ★ 計件薪資相關欄位
+          employment_category:   ss.data.employment_category   ?? null,
+          piece_rate:            ss.data.piece_rate            ?? 0,
+          current_piece_count:   ss.data.current_piece_count   ?? 0,
         }))
       }
     }).catch(() => {})
@@ -250,7 +254,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     //   只在 form 內有薪資相關欄位時才動，避免不必要的 upsert
     const hasSalaryEdit = ['salary_type', 'base_salary', 'hourly_rate', 'meal_allowance',
       'transport_allowance', 'housing_allowance', 'supervisor_allowance', 'attendance_bonus',
-      'night_shift_allowance', 'cross_store_allowance', 'custom_allowances', 'weekly_hours']
+      'night_shift_allowance', 'cross_store_allowance', 'custom_allowances', 'weekly_hours',
+      'employment_category', 'piece_rate', 'current_piece_count']
       .some(k => k in form)
     if (hasSalaryEdit) {
       // 查現有 record 決定 update 還是 insert
@@ -270,6 +275,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
         night_shift_allowance: Number(form.night_shift_allowance) || 0,
         cross_store_allowance: Number(form.cross_store_allowance) || 0,
         custom_allowances: Array.isArray(form.custom_allowances) ? form.custom_allowances : [],
+        // ★ 計件薪資 — 三個欄位都同步寫，piece 員工以外的 employment_category 也要存
+        employment_category: form.employment_category || null,
+        piece_rate: Number(form.piece_rate) || 0,
+        current_piece_count: Number(form.current_piece_count) || 0,
       }
       const ssOp = existing
         ? supabase.from('salary_structures').update(ssPayload).eq('id', existing.id)

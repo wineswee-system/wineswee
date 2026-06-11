@@ -132,26 +132,72 @@ export default function HrTabContent({
       {subTab === 'salary' && (
         <>
           <SectionTitle icon="💰" text="薪資" />
+          {/* ★ 員工分類 — 4 個選項決定加班費演算法 + 投保邏輯
+             regular(正職門市 1.34/1.67) / admin(行政 OT×1 月薪含) / parttime(兼職 PT 投保) / piece(計件無 OT) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>計薪方式</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.salary_type || 'monthly'} onChange={e => set('salary_type', e.target.value)}>
-                <option value="monthly">月薪制</option><option value="hourly">時薪制</option>
+            <div><div style={L}>員工分類</div>
+              <select className="form-input" style={{ width: '100%' }}
+                value={form.employment_category || 'regular'}
+                onChange={e => {
+                  const cat = e.target.value
+                  set('employment_category', cat)
+                  // 自動同步 salary_type（payrollCalc 仍會用到）：piece 用 monthly、parttime 用 hourly、其他 monthly
+                  if (cat === 'parttime') set('salary_type', 'hourly')
+                  else set('salary_type', 'monthly')
+                  // 計件預設單價 2000（廠商實務上多數 2000/件）
+                  if (cat === 'piece' && !form.piece_rate) set('piece_rate', 2000)
+                }}>
+                <option value="regular">正職（門市，加班 1.34/1.67 階梯）</option>
+                <option value="admin">行政（月薪含 OT，加班 ×1）</option>
+                <option value="parttime">兼職（時薪制，投保 PT 級距）</option>
+                <option value="piece">計件（月薪 = 件數 × 單價，不算加班）</option>
               </select>
             </div>
-            {(form.salary_type || 'monthly') === 'monthly'
-              ? <div><div style={L}>月底薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：28000" value={form.base_salary || ''} onChange={e => set('base_salary', e.target.value)} /></div>
-              : <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：183" value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
-            }
+            {(() => {
+              const cat = form.employment_category || 'regular'
+              if (cat === 'piece') {
+                return <div><div style={L}>每件單價 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="2000" value={form.piece_rate || ''} onChange={e => set('piece_rate', e.target.value)} /></div>
+              }
+              if (cat === 'parttime') {
+                return <div><div style={L}>時薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：183" value={form.hourly_rate || ''} onChange={e => set('hourly_rate', e.target.value)} /></div>
+              }
+              // regular / admin → 月底薪
+              return <div><div style={L}>月底薪 (NT$)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：28000" value={form.base_salary || ''} onChange={e => set('base_salary', e.target.value)} /></div>
+            })()}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>每週工時上限</div><input className="form-input" type="number" style={{ width: '100%' }} value={form.weekly_hours || 40} onChange={e => set('weekly_hours', e.target.value)} /></div>
-            {(form.salary_type || 'monthly') === 'monthly' && (
-              <div><div style={L}>換算時薪</div>
-                <div className="form-input" style={{ width: '100%', background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
-                  NT$ {form.base_salary ? Math.round(Number(form.base_salary) / 30 / 8) : '—'} /hr
+            {(() => {
+              const cat = form.employment_category || 'regular'
+              if (cat === 'piece') {
+                // 計件員工專屬：本月件數（HR 計薪前手動更新）
+                const cnt = Number(form.current_piece_count) || 0
+                const rate = Number(form.piece_rate) || 0
+                return (
+                  <div><div style={L}>本月件數（計薪前更新）</div>
+                    <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0"
+                      value={form.current_piece_count || ''}
+                      onChange={e => set('current_piece_count', e.target.value)} />
+                    {cnt > 0 && rate > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 4 }}>
+                        ✨ 預估月薪：{cnt} × {rate.toLocaleString()} = NT$ {(cnt * rate).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              if (cat === 'parttime') {
+                return null  // 時薪制不顯示換算時薪
+              }
+              // 月薪制（regular / admin）顯示換算時薪
+              return (
+                <div><div style={L}>換算時薪</div>
+                  <div className="form-input" style={{ width: '100%', background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
+                    NT$ {form.base_salary ? Math.round(Number(form.base_salary) / 30 / 8) : '—'} /hr
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
 
           <SectionTitle icon="🎁" text="津貼" />

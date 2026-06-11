@@ -185,6 +185,11 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
   return scopedEmployees.map(emp => {
     const ss              = ssMap[emp.id] || {}
     const isHourly        = ss.salary_type === 'hourly'
+    // ★ 員工分類擴充：employment_category 4 個值（NULL → 舊邏輯不動）
+    //   regular(正職門市) / admin(行政) / parttime(兼職) / piece(計件)
+    const empCategory     = ss.employment_category || null
+    const isPiece         = empCategory === 'piece'
+    const isPTLike        = isHourly || isPiece  // 投保走 PT 級距（11100/29500）
     const att             = attMap[emp.id] || { hours: 0, holidayHours: 0, lateMins: 0, days: 0, lateRows: [] }
     const ot              = otMap[emp.id]  || { weekday: 0, restday: 0, holiday: 0, rows: [] }
     const otException     = otExceptionMap[emp.id] || { weekday: 0, restday: 0, holiday: 0, rows: [] }
@@ -195,9 +200,14 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     const policyBonus     = bonusMap[emp.id] || 0
     const legalDeductionTotal = legalMap[emp.id] || 0
 
-    const baseSalary = isHourly
-      ? Math.ceil((ss.hourly_rate || 0) * att.hours)
-      : (ss.base_salary || emp.base_salary || 0)
+    // ★ 計件員工：月薪 = 本月件數 × 單價（HR 在員工編輯頁手動填件數）
+    const pieceCount = Number(ss.current_piece_count) || 0
+    const pieceRate  = Number(ss.piece_rate) || 0
+    const baseSalary = isPiece
+      ? Math.ceil(pieceCount * pieceRate)
+      : isHourly
+        ? Math.ceil((ss.hourly_rate || 0) * att.hours)
+        : (ss.base_salary || emp.base_salary || 0)
     const roleAllowance   = Number(ss.supervisor_allowance || 0) + Number(ss.role_allowance || 0)
     const mealAllowance   = ss.meal_allowance    || 0
     const transportAllow  = ss.transport_allowance || 0
@@ -341,8 +351,9 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     // 過期補休兌現（generate_payroll 月結時也會同樣加進去）
     const compTimeSettledPay   = ctMap[emp.id]?.amount || 0
     const compTimeSettledCount = ctMap[emp.id]?.count  || 0
-    const regularOvertimePay = otLegalPay.total + holidayBonus + compTimeSettledPay
-    const extraOvertimePay   = otExceptionPay.total
+    // ★ 計件員工強制 OT = 0（不算加班費，月薪 = 件數×單價）
+    const regularOvertimePay = isPiece ? 0 : (otLegalPay.total + holidayBonus + compTimeSettledPay)
+    const extraOvertimePay   = isPiece ? 0 : otExceptionPay.total
     const overtimePay        = regularOvertimePay + extraOvertimePay
 
     const otPayWeekday   = otLegalPay.weekday
@@ -402,13 +413,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     // 3. FT 沒設 → 用 baseForInsure (base + 津貼)
     const insuredSalary = ss.base_insured != null && Number(ss.base_insured) > 0
       ? Number(ss.base_insured)
-      : (isHourly
+      : (isPTLike
         ? findPTInsuredSalary(batchBrackets?.labor || [], baseSalary + roleAllowance)
         : baseForInsure)
 
     const fullMonthResult = calculateNetSalary(effBase, {
       insuredSalary,
-      isPartTime: isHourly,
+      isPartTime: isPTLike,  // ★ piece 也走 PT 投保邏輯
       dependents,
       voluntaryPensionRate: voluntaryRate,
       brackets: batchBrackets,

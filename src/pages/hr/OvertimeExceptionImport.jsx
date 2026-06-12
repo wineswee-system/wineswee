@@ -22,6 +22,9 @@ import Salary from './Salary'
 
 const CSV_HEADERS = ['員工名稱', '日期', '開始時間', '結束時間', '時數', '類型', '原因', '備註']
 
+// ot_category 代碼 → 中文（真正算薪的分類，由 classify_ot_category_safe 讀班表+月曆判）
+const CAT_LABEL = { weekday: '平日', restday: '休息日', weekly_off: '例假', holiday: '國定假日' }
+
 const CSV_TEMPLATE = '﻿' + CSV_HEADERS.join(',') + '\n' +
   '範例：張庭瑋,2026-06-05,18:00,22:00,4,假日,客戶緊急驗收,勞資會議第3次決議\n'
 
@@ -266,6 +269,14 @@ export default function OvertimeExceptionImport() {
           r.alreadyImported = dupSet.has(`${r.employee_id}|${r.date}|${Number(r.hours)}`)
         }
       })
+
+      // ── 預覽時就算出真正的類型（讀班表+國定假日，跟匯入時 trigger 同一支）──
+      await Promise.all(validForCheck.map(async (r) => {
+        const { data: cat } = await supabase.rpc('classify_ot_category_safe', {
+          p_date: r.date, p_employee_id: r.employee_id,
+        })
+        r.realCategory = cat || null
+      }))
     }
     setParsed(enriched)
   }
@@ -448,9 +459,10 @@ export default function OvertimeExceptionImport() {
                     <th>狀態</th>
                     <th>列</th>
                     <th>員工</th>
+                    <th>門市/部門</th>
                     <th>日期</th>
                     <th style={{ textAlign: 'right' }}>本筆時數</th>
-                    <th>類型</th>
+                    <th>類型（系統判）</th>
                     <th style={{ textAlign: 'right' }}>該月已有<br/>(加班)</th>
                     <th style={{ textAlign: 'right' }}>該月已有<br/>(額外)</th>
                     <th style={{ textAlign: 'right', fontWeight: 700 }}>加後合計</th>
@@ -471,9 +483,14 @@ export default function OvertimeExceptionImport() {
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.rowNum}</td>
                         <td>{r.name} {r.employee?.employee_number && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({r.employee.employee_number})</span>}</td>
+                        <td style={{ fontSize: 11 }}>{r.employee?.store || r.employee?.stores?.name || r.employee?.dept || r.employee?.departments?.name || '—'}</td>
                         <td>{r.date} {r.rowMonth !== month && <span style={{ fontSize: 10, color: 'var(--accent-orange)' }}>不同月</span>}</td>
                         <td style={{ textAlign: 'right' }}>{r.hours}</td>
-                        <td>{r.type}</td>
+                        <td>
+                          {r.realCategory
+                            ? <span style={{ fontWeight: 600, color: r.realCategory === 'weekday' ? 'var(--text-secondary)' : 'var(--accent-cyan)' }}>{CAT_LABEL[r.realCategory] || r.realCategory}</span>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
                         <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingRegular.toFixed(1) : '—'}</td>
                         <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{valid && r.sameMonth ? r.existingException.toFixed(1) : '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 700, color: w?.color || 'var(--text-muted)' }}>

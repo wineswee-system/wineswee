@@ -1,5 +1,8 @@
 node_modules
 dist
+.claude/
+tmp_payroll_import/
+tmp_*/
 .env
 .env.local
 .env.*.local

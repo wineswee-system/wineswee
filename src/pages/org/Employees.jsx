@@ -13,6 +13,8 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import EmployeeFormModal from './components/EmployeeFormModal'
 import ResignRehireModal from './components/ResignRehireModal'
+import OffboardingModal from '../../components/OffboardingModal'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -66,6 +68,8 @@ const PosSelect = ({ value, onChange }) => (
 )
 
 export default function Employees() {
+  const { profile } = useAuth()
+  const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
@@ -234,27 +238,30 @@ export default function Employees() {
     setResignReason('')
     setShowResignModal(true)
   }
-  const handleResign = async () => {
+  // 填完離職日期+原因 → 開交接 Modal（OffboardingModal 走 resign_employee 做交接+離職）
+  const handleResign = () => {
     if (!selectedEmp) return
-    try {
-      // 統一走 apply_employee_resignation RPC：一次做完 employees + assignment + schedules + 待審單 cleanup
-      const { data: result, error } = await supabase.rpc('apply_employee_resignation', {
-        p_emp_id: selectedEmp.id,
-        p_resign_date: resignDate,
-        p_resign_reason: resignReason,
-        p_resign_type: 'voluntary',
-      })
-      if (error) throw error
-      if (!result?.ok) throw new Error(result?.error || 'RESIGN_FAILED')
+    setOffboardingFor({ employee: selectedEmp, date: resignDate, reason: resignReason })
+    setShowResignModal(false)
+  }
 
-      setEmployees(prev => prev.map(e => e.id === selectedEmp.id
-        ? { ...e, status: '離職', resign_date: resignDate, resign_reason: resignReason, resign_type: 'voluntary' }
-        : e))
-      setShowResignModal(false)
-    } catch (err) {
-      console.error('Operation failed:', err)
-      toast.error('操作失敗：' + (err.message || '未知錯誤'))
-    }
+  // 交接完成 → 補寫離職原因 + 更新本地狀態
+  const handleOffboardingDone = async (result) => {
+    const off = offboardingFor
+    if (!off) return
+    try {
+      if (off.reason) {
+        await supabase.from('employees').update({ resign_reason: off.reason, resign_type: 'voluntary' }).eq('id', off.employee.id)
+      }
+    } catch { /* 原因補寫失敗不擋流程 */ }
+    setEmployees(prev => prev.map(e => e.id === off.employee.id
+      ? { ...e, status: '離職', resign_date: off.date, resign_reason: off.reason, resign_type: 'voluntary' }
+      : e))
+    const c = result || {}
+    const moved = (c.chain_steps_count || 0) + (c.snapshots_count || 0) + (c.stores_count || 0)
+      + (c.depts_count || 0) + (c.sections_count || 0) + (c.extras_count || 0) + (c.tasks_count || 0) + (c.subordinates_count || 0)
+    toast.success(moved > 0 ? `已離職，交接 ${moved} 項（${c.mode === 'proxy' ? '代理' : '交接'}）` : '已設為離職')
+    setOffboardingFor(null)
   }
 
 
@@ -621,6 +628,19 @@ export default function Employees() {
         setResignReason={setResignReason}
         onSubmit={handleResign}
       />
+
+      {/* 離職交接 Modal（填完日期原因後出現）*/}
+      {offboardingFor && (
+        <OffboardingModal
+          employee={offboardingFor.employee}
+          pendingStatus="離職"
+          pendingResignDate={offboardingFor.date}
+          allEmployees={employees}
+          currentUserEmpId={profile?.id || null}
+          onSuccess={handleOffboardingDone}
+          onCancel={() => setOffboardingFor(null)}
+        />
+      )}
 
       {/* 復職 Modal */}
       <ResignRehireModal

@@ -51,7 +51,9 @@ export default function OffboardingModal({
   const [error, setError]     = useState(null)
 
   // Per-category delegates
-  const [delegates, setDelegates] = useState({ chain: '', store: '', dept: '' })
+  const [delegates, setDelegates] = useState({ chain: '', store: '', dept: '', section: '' })
+  // 交接(永久) | 代理(可再轉手)
+  const [mode, setMode] = useState('transfer')
   // "同一個人" bulk selector
   const [bulkId, setBulkId] = useState('')
 
@@ -63,9 +65,10 @@ export default function OffboardingModal({
   const applyBulk = () => {
     if (!bulkId) return
     setDelegates(prev => ({
-      chain: items?.chain_steps?.length > 0 || items?.snapshots?.length > 0 ? bulkId : prev.chain,
-      store: items?.managed_stores?.length > 0 ? bulkId : prev.store,
-      dept:  items?.managed_depts?.length > 0  ? bulkId : prev.dept,
+      chain:   items?.chain_steps?.length > 0 || items?.snapshots?.length > 0 || items?.extra_signs > 0 || items?.tasks > 0 ? bulkId : prev.chain,
+      store:   items?.managed_stores?.length > 0 ? bulkId : prev.store,
+      dept:    items?.managed_depts?.length > 0 || items?.subordinates?.length > 0 ? bulkId : prev.dept,
+      section: items?.managed_sections?.length > 0 ? bulkId : prev.section,
     }))
     setError(null)
   }
@@ -80,19 +83,21 @@ export default function OffboardingModal({
       })
   }, [employee.id])
 
-  const needsChain = !!(items?.chain_steps?.length > 0 || items?.snapshots?.length > 0)
-  const needsStore = !!(items?.managed_stores?.length > 0)
-  const needsDept  = !!(items?.managed_depts?.length > 0)
-  const hasWork    = needsChain || needsStore || needsDept || items?.upcoming_shifts > 0
+  const needsChain   = !!(items?.chain_steps?.length > 0 || items?.snapshots?.length > 0 || items?.extra_signs > 0 || items?.tasks > 0)
+  const needsStore   = !!(items?.managed_stores?.length > 0)
+  const needsDept    = !!(items?.managed_depts?.length > 0 || items?.subordinates?.length > 0)
+  const needsSection = !!(items?.managed_sections?.length > 0)
+  const hasWork      = needsChain || needsStore || needsDept || needsSection || items?.upcoming_shifts > 0
 
   const candidateEmployees = (allEmployees || []).filter(
     e => e.id !== employee.id && e.status === '在職'
   )
 
   const handleConfirm = async () => {
-    if (needsChain && !delegates.chain) { setError('請選擇簽核鏈承接人'); return }
-    if (needsStore && !delegates.store) { setError('請選擇門市主管承接人'); return }
-    if (needsDept  && !delegates.dept)  { setError('請選擇部門主管承接人'); return }
+    if (needsChain   && !delegates.chain)   { setError('請選擇簽核鏈承接人'); return }
+    if (needsStore   && !delegates.store)   { setError('請選擇門市主管承接人'); return }
+    if (needsDept    && !delegates.dept)    { setError('請選擇部門主管承接人'); return }
+    if (needsSection && !delegates.section) { setError('請選擇課別督導承接人'); return }
 
     setSaving(true)
     setError(null)
@@ -101,9 +106,11 @@ export default function OffboardingModal({
         p_emp_id:               employee.id,
         p_new_status:           pendingStatus,
         p_resign_date:          pendingResignDate || null,
-        p_chain_delegate_id:    delegates.chain ? Number(delegates.chain) : null,
-        p_store_delegate_id:    delegates.store ? Number(delegates.store) : null,
-        p_dept_delegate_id:     delegates.dept  ? Number(delegates.dept)  : null,
+        p_chain_delegate_id:    delegates.chain   ? Number(delegates.chain)   : null,
+        p_store_delegate_id:    delegates.store   ? Number(delegates.store)   : null,
+        p_dept_delegate_id:     delegates.dept    ? Number(delegates.dept)    : null,
+        p_section_delegate_id:  delegates.section ? Number(delegates.section) : null,
+        p_mode:                 mode,
         p_authorized_by_emp_id: currentUserEmpId || null,
       })
       if (rpcErr) throw new Error(rpcErr.message)
@@ -172,6 +179,27 @@ export default function OffboardingModal({
           {!loading && hasWork && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
+              {/* ── 交接 / 代理 模式 ── */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { key: 'transfer', label: '🔄 交接（永久）', desc: '以後都是接手人的' },
+                  { key: 'proxy',    label: '🟡 代理（暫代）', desc: '之後可再轉給別人' },
+                ].map(m => {
+                  const active = mode === m.key
+                  return (
+                    <button key={m.key} onClick={() => setMode(m.key)}
+                      style={{
+                        flex: 1, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', textAlign: 'left',
+                        border: `1.5px solid ${active ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                        background: active ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
+                      }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>{m.label}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{m.desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+
               {/* ── 同一個人快速套用 ── */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -229,6 +257,23 @@ export default function OffboardingModal({
                       ).map(([rt, cnt]) => `${RT_LABEL[rt] || rt} ${cnt} 筆`).join('、')}
                     </Row>
                   )}
+                  {items.extra_signs > 0 && <Row>待處理加簽 {items.extra_signs} 筆</Row>}
+                  {items.tasks > 0 && <Row>名下未完成任務 {items.tasks} 項</Row>}
+                </SectionWithPicker>
+              )}
+
+              {/* ── 課別督導 ── */}
+              {needsSection && (
+                <SectionWithPicker
+                  icon={<Users size={13} />}
+                  label={`課別督導（${items.managed_sections.length} 個課別）`}
+                  accent="cyan"
+                  pickerValue={delegates.section}
+                  onPickerChange={v => setDelegate('section', v)}
+                  candidates={candidateEmployees}
+                  pickerLabel="* 課別督導承接人："
+                >
+                  {items.managed_sections.map(s => <Row key={s.id}>{s.name}</Row>)}
                 </SectionWithPicker>
               )}
 
@@ -247,18 +292,21 @@ export default function OffboardingModal({
                 </SectionWithPicker>
               )}
 
-              {/* ── 部門主管 ── */}
+              {/* ── 部門主管 + 直屬下屬 ── */}
               {needsDept && (
                 <SectionWithPicker
                   icon={<Users size={13} />}
-                  label={`部門主管（${items.managed_depts.length} 個部門）`}
+                  label={`部門主管／下屬（${items.managed_depts?.length || 0} 部門 · ${items.subordinates?.length || 0} 下屬）`}
                   accent="blue"
                   pickerValue={delegates.dept}
                   onPickerChange={v => setDelegate('dept', v)}
                   candidates={candidateEmployees}
-                  pickerLabel="* 部門主管承接人："
+                  pickerLabel="* 部門主管／下屬報告對象承接人："
                 >
-                  {items.managed_depts.map(d => <Row key={d.id}>{d.name}</Row>)}
+                  {items.managed_depts?.map(d => <Row key={d.id}>{d.name}</Row>)}
+                  {items.subordinates?.length > 0 && (
+                    <Row>下屬：{items.subordinates.map(s => s.name).slice(0, 5).join('、')}{items.subordinates.length > 5 ? `…等 ${items.subordinates.length} 人` : ''}</Row>
+                  )}
                 </SectionWithPicker>
               )}
 

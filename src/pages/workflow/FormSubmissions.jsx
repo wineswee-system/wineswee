@@ -229,7 +229,9 @@ export default function FormSubmissions() {
 
   const handleCancel = async (sub) => {
     if (!(await confirm({ message: '確定取消此申請？' }))) return
-    await supabase.from('form_submissions').update({ status: '已取消' }).eq('id', sub.id)
+    const { error } = await supabase.from('form_submissions').update({ status: '已取消' }).eq('id', sub.id)
+    if (error) { toast.error('取消失敗：' + error.message); return }
+    toast.success('已取消')
     load()
   }
 

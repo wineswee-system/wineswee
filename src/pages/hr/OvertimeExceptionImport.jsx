@@ -172,7 +172,7 @@ export default function OvertimeExceptionImport() {
     }
   }
 
-  const parseCsv = (text) => {
+  const parseCsv = async (text) => {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l)
     if (lines.length < 2) {
       toast.error('CSV 至少要有 header 跟 1 列資料')
@@ -245,8 +245,28 @@ export default function OvertimeExceptionImport() {
         existingException: empTally.exception,
         existingTotal,
         newTotal,
+        alreadyImported: false,
       }
     })
+
+    // ── 防重複：比對 DB 已匯入的 exception OT（員工+日期+時數）標記，不重複進 ──
+    const validForCheck = enriched.filter(r => r.employee_id && !r.issue)
+    if (validForCheck.length > 0) {
+      const empIds = [...new Set(validForCheck.map(r => r.employee_id))]
+      const dates  = [...new Set(validForCheck.map(r => r.date))]
+      const { data: existing } = await supabase
+        .from('overtime_requests')
+        .select('employee_id, request_date, ot_hours')
+        .eq('is_exception', true)
+        .in('employee_id', empIds)
+        .in('request_date', dates)
+      const dupSet = new Set((existing || []).map(o => `${o.employee_id}|${o.request_date}|${Number(o.ot_hours)}`))
+      enriched.forEach(r => {
+        if (r.employee_id && !r.issue) {
+          r.alreadyImported = dupSet.has(`${r.employee_id}|${r.date}|${Number(r.hours)}`)
+        }
+      })
+    }
     setParsed(enriched)
   }
 
@@ -266,9 +286,10 @@ export default function OvertimeExceptionImport() {
 
   // ── 匯入 ──
   const handleImport = async () => {
-    const validRows = parsed.filter(r => !r.issue && r.employee_id)
-    if (validRows.length === 0) { toast.error('沒有可匯入的有效資料'); return }
-    if (!window.confirm(`確認匯入 ${validRows.length} 筆加班補登紀錄？\n(${parsed.length - validRows.length} 筆無效列被略過)`)) return
+    const validRows = parsed.filter(r => !r.issue && r.employee_id && !r.alreadyImported)
+    const dupCount  = parsed.filter(r => r.alreadyImported).length
+    if (validRows.length === 0) { toast.error('沒有新的可匯入資料（其餘為無效或已匯入）'); return }
+    if (!window.confirm(`確認匯入 ${validRows.length} 筆新加班紀錄？\n(略過 ${dupCount} 筆已匯入、${parsed.length - validRows.length - dupCount} 筆無效)`)) return
 
     setImporting(true)
     let success = 0, fail = 0
@@ -397,7 +418,7 @@ export default function OvertimeExceptionImport() {
       {/* ─── CSV 解析狀態（按鈕在 header）─── */}
       {parsed.length > 0 && (
         <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-          已解析 {parsed.length} 列，其中 {parsed.filter(r => !r.issue).length} 列可匯入
+          已解析 {parsed.length} 列 · 🟢 新筆 {parsed.filter(r => !r.issue && r.employee_id && !r.alreadyImported).length} · 🔵 已匯入 {parsed.filter(r => r.alreadyImported).length} · ⚠️ 無效 {parsed.filter(r => r.issue).length}
         </div>
       )}
 
@@ -408,7 +429,7 @@ export default function OvertimeExceptionImport() {
             <div className="card-title">CSV 預覽（含計算）</div>
             <button className="btn btn-primary" disabled={importing}
               onClick={handleImport}>
-              {importing ? '匯入中...' : `匯入 ${parsed.filter(r => !r.issue && r.employee_id).length} 筆`}
+              {importing ? '匯入中...' : `匯入 ${parsed.filter(r => !r.issue && r.employee_id && !r.alreadyImported).length} 筆新資料`}
             </button>
           </div>
           <div style={{ overflowX: 'auto', maxHeight: 400 }}>

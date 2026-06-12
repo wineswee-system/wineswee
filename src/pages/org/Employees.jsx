@@ -76,6 +76,8 @@ export default function Employees() {
   const [deptFilter, setDeptFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('在職')
   const [typeFilter, setTypeFilter] = useState('')
+  const [sortKey, setSortKey] = useState('')   // 欄位排序 key
+  const [sortDir, setSortDir] = useState('asc') // asc | desc
   const [showModal, setShowModal] = useState(false)
   const [showResignModal, setShowResignModal] = useState(false)
   const [showRehireModal, setShowRehireModal] = useState(false)
@@ -299,7 +301,46 @@ export default function Employees() {
     (search === '' || e.name?.includes(search) || e.name_en?.toLowerCase().includes(search.toLowerCase()) || e.email?.includes(search) || e.employee_number?.includes(search))
   )
 
+  // ── 欄位排序 ──
+  // 點欄位標題：第一次升冪、再點降冪、第三次取消
+  const toggleSort = (key) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir('asc') }
+    else if (sortDir === 'asc') { setSortDir('desc') }
+    else { setSortKey(''); setSortDir('asc') }
+  }
+  const colValue = (e, key) => {
+    switch (key) {
+      case 'number':   return e.employee_number || `EMP-${String(e.id).padStart(3, '0')}`
+      case 'name':     return e.name || ''
+      case 'type':     return e.employment_type || '正職'
+      case 'dept':     return deptName(e.department_id) || ''
+      case 'position': return e.position || ''
+      case 'store':    return storeName(e.store_id) || ''
+      case 'join':     return e.join_date || ''
+      case 'status':   return e.status || ''
+      default:         return ''
+    }
+  }
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => {
+        const va = colValue(a, sortKey), vb = colValue(b, sortKey)
+        const cmp = String(va).localeCompare(String(vb), 'zh-Hant', { numeric: true })
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    : filtered
 
+  // 可排序欄位標題（點擊切換 + 箭頭指示）
+  const Th = ({ label, sk }) => {
+    const active = sortKey === sk
+    return (
+      <th onClick={() => toggleSort(sk)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+        {label}
+        <span style={{ marginLeft: 4, fontSize: 10, color: active ? 'var(--accent-cyan)' : 'var(--text-muted)', opacity: active ? 1 : 0.5 }}>
+          {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+        </span>
+      </th>
+    )
+  }
 
   return (
     <div className="fade-in">
@@ -469,11 +510,23 @@ export default function Employees() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>編號</th><th>姓名</th><th>類型</th><th>部門</th><th>職稱</th><th>門市</th><th>Email</th><th>手機</th><th>到職日</th><th>狀態</th><th>操作</th></tr>
+              <tr>
+                <Th label="編號" sk="number" />
+                <Th label="姓名" sk="name" />
+                <Th label="類型" sk="type" />
+                <Th label="部門" sk="dept" />
+                <Th label="職稱" sk="position" />
+                <Th label="門市" sk="store" />
+                <th>Email</th>
+                <th>手機</th>
+                <Th label="到職日" sk="join" />
+                <Th label="狀態" sk="status" />
+                <th>操作</th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
-              {filtered.map(e => {
+              {sorted.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
+              {sorted.map(e => {
                 const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '正職'))
                 return (
                 <tr key={e.id} style={{ opacity: e.status === '離職' ? 0.55 : 1, cursor: 'pointer' }} onClick={() => openDetail(e)}>

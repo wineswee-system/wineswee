@@ -130,16 +130,14 @@ export default function Sidebar() {
     setActiveGroup(routeToGroup(location.pathname))
   }, [location.pathname])
 
-  // Auto-expand section containing active route
+  // Auto-expand only the section containing active route (accordion: close others)
   useEffect(() => {
     const sections = groupNav[activeGroup] || []
-    for (const section of sections) {
-      if (section.children) {
-        const match = section.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'))
-        if (match) {
-          setOpenMenus(prev => ({ ...prev, [section.label]: true }))
-        }
-      }
+    const matchSection = sections
+      .filter(s => s.children)
+      .find(s => s.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/')))
+    if (matchSection) {
+      setOpenMenus({ [matchSection.label]: true })
     }
   }, [location.pathname, activeGroup])
 
@@ -165,7 +163,11 @@ export default function Sidebar() {
   }, [])
 
   const toggleMenu = (key) => {
-    setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }))
+    setOpenMenus(prev => {
+      const alreadyOpen = prev[key] === true
+      if (alreadyOpen) return { ...prev, [key]: false }
+      return { [key]: true }  // accordion: close all others implicitly
+    })
   }
 
   const handleNavClick = () => {
@@ -507,7 +509,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {activeGroup !== 'dashboard' && !isSystemGroup && !isSuperAdminGroup && currentSections.map((section, si) => {
           const SectionIcon = section.icon
-          const isOpen = openMenus[section.label] !== false // default open
+          const isOpen = openMenus[section.label] === true
           const visible = matchSection(section)
 
           return (

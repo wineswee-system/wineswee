@@ -394,6 +394,14 @@ export default function OvertimeExceptionImport() {
             value={sheetUrl}
             onChange={e => setSheetUrl(e.target.value)}
           />
+          <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>月份</span>
+          <input
+            type="month"
+            className="form-input"
+            style={{ fontSize: 13, width: 150 }}
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+          />
           <button className="btn btn-primary" disabled={readingSheet} onClick={readFromSheet} style={{ whiteSpace: 'nowrap' }}>
             <FileSpreadsheet size={14} /> {readingSheet ? '讀取中…' : '讀取 Sheet'}
           </button>

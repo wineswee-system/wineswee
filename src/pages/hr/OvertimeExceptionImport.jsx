@@ -140,31 +140,31 @@ export default function OvertimeExceptionImport() {
     parseCsv(text)
   }
 
-  // ── 從 Google Sheet 直讀（gviz CSV 端點；Sheet 須設「知道連結的人可檢視」）──
-  // 從貼上的 URL 取出 spreadsheetId + gid（分頁），組 gviz CSV 端點 fetch
-  const buildGvizUrl = (url) => {
-    const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-    if (!idMatch) return null
-    const id = idMatch[1]
-    const gidMatch = url.match(/[?&#]gid=([0-9]+)/)
-    const gid = gidMatch ? gidMatch[1] : '0'
-    return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`
+  // ── 從 Google Sheet 直讀（gviz CSV；Sheet 須設「知道連結的人可檢視」）──
+  // 月份分頁制：選的月份 2026-07 → 自動讀分頁「2026/7」，一條連結六個月通用
+  const monthToTabName = (m) => {
+    const [y, mm] = m.split('-')
+    return `${y}/${Number(mm)}`  // 2026-07 → 2026/7
   }
 
   const readFromSheet = async () => {
     const url = sheetUrl.trim()
     if (!url) { toast.error('請先貼上 Google Sheet 連結'); return }
-    const gviz = buildGvizUrl(url)
-    if (!gviz) { toast.error('連結格式不對，請貼完整的 Google Sheet 網址'); return }
+    const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    if (!idMatch) { toast.error('連結格式不對，請貼完整的 Google Sheet 網址'); return }
+    const id = idMatch[1]
+    const tab = monthToTabName(month)
+    // 用分頁名讀（對應 OTX 選的月份），不靠 URL 裡的 gid
+    const gviz = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`
     setReadingSheet(true)
     try {
       const resp = await fetch(gviz)
       if (!resp.ok) throw new Error('HTTP ' + resp.status)
       const text = (await resp.text()).replace(/^﻿/, '')
-      // gviz 回傳的 CSV 每欄都用雙引號包住，parseCsvLine 會處理；存連結方便下次
+      if (!text.trim()) { toast.error(`分頁「${tab}」是空的，或沒有這個分頁（確認月份選對 + Sheet 已公開）`); return }
       localStorage.setItem('otx_sheet_url', url)
       parseCsv(text)
-      toast.success('已讀取 Google Sheet')
+      toast.success(`已讀取分頁「${tab}」`)
     } catch (err) {
       toast.error('讀取失敗：' + (err.message || '') + '（確認 Sheet 已設「知道連結的人可檢視」）')
     } finally {
@@ -378,7 +378,8 @@ export default function OvertimeExceptionImport() {
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-          欄位需與 CSV 模板相同（員工名稱 / 日期 / 時數，選填 開始時間 / 結束時間 / 類型 / 原因 / 備註）。連結會記住下次免再貼。
+          會自動讀取「<b>{(() => { const [y, mm] = month.split('-'); return `${y}/${Number(mm)}` })()}</b>」分頁（對應上方選的月份）。
+          欄位需含 員工名稱 / 日期 / 時數（選填 開始時間 / 結束時間 / 類型 / 原因 / 備註）。連結會記住免再貼。
         </div>
       </div>
 

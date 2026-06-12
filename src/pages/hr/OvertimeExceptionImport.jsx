@@ -75,6 +75,9 @@ export default function OvertimeExceptionImport() {
   const [recentImports, setRecentImports] = useState([])
   const [statsSearch, setStatsSearch] = useState('')
   const [showOnlyOver, setShowOnlyOver] = useState(false)
+  // Google Sheet 直讀（記住上次貼的連結）
+  const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem('otx_sheet_url') || '')
+  const [readingSheet, setReadingSheet] = useState(false)
 
   // ── 載入該月所有員工的 OT 累計（一般 vs 特例）+ 在職員工 + 最近匯入 ──
   const loadMonthStats = useCallback(async () => {
@@ -137,13 +140,45 @@ export default function OvertimeExceptionImport() {
     parseCsv(text)
   }
 
+  // ── 從 Google Sheet 直讀（gviz CSV 端點；Sheet 須設「知道連結的人可檢視」）──
+  // 從貼上的 URL 取出 spreadsheetId + gid（分頁），組 gviz CSV 端點 fetch
+  const buildGvizUrl = (url) => {
+    const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    if (!idMatch) return null
+    const id = idMatch[1]
+    const gidMatch = url.match(/[?&#]gid=([0-9]+)/)
+    const gid = gidMatch ? gidMatch[1] : '0'
+    return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`
+  }
+
+  const readFromSheet = async () => {
+    const url = sheetUrl.trim()
+    if (!url) { toast.error('請先貼上 Google Sheet 連結'); return }
+    const gviz = buildGvizUrl(url)
+    if (!gviz) { toast.error('連結格式不對，請貼完整的 Google Sheet 網址'); return }
+    setReadingSheet(true)
+    try {
+      const resp = await fetch(gviz)
+      if (!resp.ok) throw new Error('HTTP ' + resp.status)
+      const text = (await resp.text()).replace(/^﻿/, '')
+      // gviz 回傳的 CSV 每欄都用雙引號包住，parseCsvLine 會處理；存連結方便下次
+      localStorage.setItem('otx_sheet_url', url)
+      parseCsv(text)
+      toast.success('已讀取 Google Sheet')
+    } catch (err) {
+      toast.error('讀取失敗：' + (err.message || '') + '（確認 Sheet 已設「知道連結的人可檢視」）')
+    } finally {
+      setReadingSheet(false)
+    }
+  }
+
   const parseCsv = (text) => {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l)
     if (lines.length < 2) {
       toast.error('CSV 至少要有 header 跟 1 列資料')
       return
     }
-    const header = lines[0].split(',').map(c => c.trim())
+    const header = parseCsvLine(lines[0]).map(c => c.trim())  // 用 parseCsvLine：相容 gviz 引號包住的欄名
     const headerMap = {}
     CSV_HEADERS.forEach(h => {
       const idx = header.indexOf(h)
@@ -317,11 +352,33 @@ export default function OvertimeExceptionImport() {
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               <Download size={14} /> 下載 CSV 模板
             </button>
-            <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <input type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: 'none' }} />
               <Upload size={14} /> 選 CSV 檔案
             </label>
           </div>
+        </div>
+      </div>
+
+      {/* ─── 從 Google Sheet 直讀 ─── */}
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <FileSpreadsheet size={18} style={{ color: 'var(--accent-green)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>Google Sheet 連結</span>
+          <input
+            type="text"
+            className="form-input"
+            style={{ flex: 1, minWidth: 240, fontSize: 13 }}
+            placeholder="貼上加班 Google Sheet 網址（須設「知道連結的人可檢視」）"
+            value={sheetUrl}
+            onChange={e => setSheetUrl(e.target.value)}
+          />
+          <button className="btn btn-primary" disabled={readingSheet} onClick={readFromSheet} style={{ whiteSpace: 'nowrap' }}>
+            <FileSpreadsheet size={14} /> {readingSheet ? '讀取中…' : '讀取 Sheet'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+          欄位需與 CSV 模板相同（員工名稱 / 日期 / 時數，選填 開始時間 / 結束時間 / 類型 / 原因 / 備註）。連結會記住下次免再貼。
         </div>
       </div>
 

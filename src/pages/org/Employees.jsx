@@ -14,6 +14,8 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import EmployeeFormModal from './components/EmployeeFormModal'
 import ResignRehireModal from './components/ResignRehireModal'
 import OffboardingModal from '../../components/OffboardingModal'
+import ProxyManagementModal from '../../components/ProxyManagementModal'
+import { ArrowRightLeft } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
@@ -70,6 +72,7 @@ const PosSelect = ({ value, onChange }) => (
 export default function Employees() {
   const { profile } = useAuth()
   const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
+  const [showProxyMgmt, setShowProxyMgmt] = useState(false)
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
@@ -358,6 +361,7 @@ export default function Employees() {
             <p>員工基本資料管理（到職 / 離職）</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setShowProxyMgmt(true)}><ArrowRightLeft size={14} /> 代理管理</button>
             <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>
             <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>
           </div>
@@ -628,6 +632,15 @@ export default function Employees() {
         setResignReason={setResignReason}
         onSubmit={handleResign}
       />
+
+      {/* 代理管理 Modal */}
+      {showProxyMgmt && (
+        <ProxyManagementModal
+          allEmployees={employees}
+          currentUserEmpId={profile?.id || null}
+          onClose={() => setShowProxyMgmt(false)}
+        />
+      )}
 
       {/* 離職交接 Modal（填完日期原因後出現）*/}
       {offboardingFor && (

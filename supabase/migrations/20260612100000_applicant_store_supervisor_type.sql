@@ -602,26 +602,27 @@ BEGIN
 END $$;
 
 
--- ─── 6. 更新 approval_chain_steps（未來新申請單用）────────────────────────
-UPDATE public.approval_chain_steps acs
-SET target_type = 'applicant_store_supervisor'
-FROM public.approval_chains ac
-JOIN public.form_templates ft ON ft.approval_chain_id = ac.id
-WHERE (ft.name LIKE '%門市報修%' OR ft.name LIKE '%報修申請%')
-  AND acs.chain_id = ac.id
-  AND acs.label LIKE '%督導%';
+-- ─── 6. 不修改 approval_chain_steps ──────────────────────────────────────
+-- 報修單督導步驟已正確設為 applicant_section_supervisor；
+-- stores.section_id / department_sections.supervisor_id 資料也已設好，
+-- 不需要改 target_type。
+-- （此區塊保留為空，避免 idempotent rerun 出錯）
 
 
--- ─── 7. 修補現有在飛快照（目前那張報修單）───────────────────────────────
-UPDATE public.request_chain_snapshots rcs
-SET target_type = 'applicant_store_supervisor'
-FROM public.form_submissions fs
-JOIN public.form_templates ft ON ft.id = fs.template_id
-WHERE (ft.name LIKE '%門市報修%' OR ft.name LIKE '%報修申請%')
-  AND rcs.request_type = 'form_submission'
-  AND rcs.request_id   = fs.id
-  AND rcs.label LIKE '%督導%'
-  AND fs.status = '申請中';
+-- ─── 7. 不修補快照 ────────────────────────────────────────────────────────
+-- 快照快照的 target_type 應維持 applicant_section_supervisor；
+-- 若先前已被誤改為 applicant_store_supervisor，請在 Studio 手動補回：
+--   UPDATE request_chain_snapshots
+--   SET target_type = 'applicant_section_supervisor'
+--   WHERE request_type = 'form_submission'
+--     AND step_order = 3
+--     AND target_type = 'applicant_store_supervisor'
+--     AND request_id = (
+--       SELECT id FROM form_submissions
+--       WHERE template_id = (SELECT id FROM form_templates WHERE name = '門市報修申請單')
+--         AND status = '申請中'
+--       LIMIT 1
+--     );
 
 
 COMMIT;

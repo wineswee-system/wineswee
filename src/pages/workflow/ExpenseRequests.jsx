@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { Plus, X, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getAccounts, getEmployees } from '../../lib/db'
+import { getAccounts } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
@@ -80,10 +80,15 @@ export default function ExpenseRequests() {
     const orgId = profile?.organization_id
     let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
+    // 費用頁只用員工的 id/name/dept/編號/門市（下拉+payload），不需 getEmployees 的 56 欄
+    let empQuery = supabase.from('employees')
+      .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status')
+      .eq('status', '在職').order('name')
+    if (orgId) empQuery = empQuery.eq('organization_id', orgId)
     const [reqRes, accRes, empRes, orgRes, extraRes, storeRes] = await Promise.all([
       reqQuery,
       getAccounts(orgId),
-      getEmployees(orgId),
+      empQuery,
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
       // 加簽（P3a）：撈 pending extras 給 UI 顯示 / 撤銷判斷
       supabase.from('approval_extra_steps')

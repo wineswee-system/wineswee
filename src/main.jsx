@@ -7,7 +7,6 @@ import { getEventBus, registerAllHandlers } from './lib/events/index.js'
 import { logger } from './lib/logger.js'
 import { applyFontScale, getFontScale } from './lib/fontScale.js'
 import { installGlobalErrorHandler } from './lib/systemLogger.js'
-import { dlqMonitor } from './lib/dlqMonitor.js'
 
 const log = logger.forModule('app')
 
@@ -30,15 +29,10 @@ log.info('Event bus initialized with all domain handlers')
 installGlobalErrorHandler()
 log.info('Global error handler installed')
 
-// Start DLQ monitor: polls every 60s, tracks error budget, fires alert callbacks
-dlqMonitor.start()
-dlqMonitor.onAlert((alert) => {
-  log.warn(`DLQ alert [${alert.severity}]: ${alert.message}`, {
-    alert_type: alert.type,
-    severity: alert.severity,
-  })
-})
-log.info('DLQ monitor started')
+// ⚠️ DLQ monitor 已移除 client 端啟動（2026-06-14 效能修補）
+//    原本每個瀏覽器每 60s 跑 COUNT(*) on business_events + dead_letter_queue，
+//    吃連線、隨資料變慢、人越多越慘，且沒有任何頁面消費它的資料（alert 只進 log）。
+//    DLQ 監控應改為伺服器端 cron；lib/dlqMonitor.js 保留供未來 server 用。
 
 // Register Service Worker (production only)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

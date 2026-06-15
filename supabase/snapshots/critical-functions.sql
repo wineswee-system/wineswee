@@ -2,6 +2,96 @@
 -- 此檔是「關鍵 DB 函式」在 live DB 的定義快照。
 -- git diff 此檔有變 = 有人在 DB 改了函式（可能是 Studio hotfix 沒回填 migration）。
 
+-- ═══════════ _calc_monthly_withholding(p_gross numeric) ═══════════
+CREATE OR REPLACE FUNCTION public._calc_monthly_withholding(p_gross numeric)
+ RETURNS numeric
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  -- 公司政策：所得稅不代扣（員工自行申報）→ 代扣稅額一律 0
+  SELECT 0::numeric
+$function$
+;
+
+-- ═══════════ _compute_ot_pay(p_hours numeric, p_hourly_rate numeric, p_category text) ═══════════
+CREATE OR REPLACE FUNCTION public._compute_ot_pay(p_hours numeric, p_hourly_rate numeric, p_category text)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+BEGIN
+  IF p_hours IS NULL OR p_hours <= 0 OR p_hourly_rate IS NULL OR p_hourly_rate <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  IF p_category = 'weekday' THEN
+    RETURN CEIL(
+      LEAST(p_hours, 2) * p_hourly_rate * 1.34
+      + GREATEST(p_hours - 2, 0) * p_hourly_rate * 1.67
+    );
+  END IF;
+
+  -- restday / weekly_off / holiday → 用 restday tiered
+  RETURN CEIL(
+    LEAST(p_hours, 2) * p_hourly_rate * 1.34
+    + LEAST(GREATEST(p_hours - 2, 0), 6) * p_hourly_rate * 1.67
+    + GREATEST(p_hours - 8, 0) * p_hourly_rate * 2.67
+  );
+END $function$
+;
+
+-- ═══════════ _compute_ot_pay(p_hours numeric, p_hourly_rate numeric, p_category text, p_salary_type text) ═══════════
+CREATE OR REPLACE FUNCTION public._compute_ot_pay(p_hours numeric, p_hourly_rate numeric, p_category text, p_salary_type text DEFAULT 'monthly'::text)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+DECLARE
+  v_is_ft BOOLEAN := (COALESCE(p_salary_type, 'monthly') = 'monthly');
+BEGIN
+  IF p_hours IS NULL OR p_hours <= 0 OR p_hourly_rate IS NULL OR p_hourly_rate <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  -- 平日：FT/PT 一樣
+  IF p_category = 'weekday' THEN
+    RETURN CEIL(
+      LEAST(p_hours, 2) * p_hourly_rate * 1.34
+      + GREATEST(p_hours - 2, 0) * p_hourly_rate * 1.67
+    );
+  END IF;
+
+  -- 國定假日：FT ≤8h ×1（月薪已含當日）、>8h §24 延長（前2h ×1.34、再 ×1.67）/ PT ×2 全程
+  IF p_category = 'holiday' THEN
+    IF v_is_ft THEN
+      RETURN CEIL(
+        LEAST(p_hours, 8) * p_hourly_rate * 1.0
+        + LEAST(GREATEST(p_hours - 8, 0), 2) * p_hourly_rate * 1.34
+        + GREATEST(p_hours - 10, 0) * p_hourly_rate * 1.67
+      );
+    ELSE
+      RETURN CEIL(p_hours * p_hourly_rate * 2.0);
+    END IF;
+  END IF;
+
+  -- 例假：FT ×1（另有補休 ledger，§40 加發 1 倍）/ PT ×2（無補休）
+  IF p_category = 'weekly_off' THEN
+    IF v_is_ft THEN
+      RETURN CEIL(p_hours * p_hourly_rate * 1.0);
+    ELSE
+      RETURN CEIL(p_hours * p_hourly_rate * 2.0);
+    END IF;
+  END IF;
+
+  -- 休息日（restday）：FT/PT 都用階梯 1.34/1.67/2.67
+  RETURN CEIL(
+    LEAST(p_hours, 2) * p_hourly_rate * 1.34
+    + LEAST(GREATEST(p_hours - 2, 0), 6) * p_hourly_rate * 1.67
+    + GREATEST(p_hours - 8, 0) * p_hourly_rate * 2.67
+  );
+END $function$
+;
+
 -- ═══════════ _employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer) ═══════════
 CREATE OR REPLACE FUNCTION public._employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer DEFAULT NULL::integer)
  RETURNS boolean

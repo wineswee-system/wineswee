@@ -34,6 +34,8 @@ const ROOT = join(__dirname, '..')
 // ── 高風險函式：高頻重寫 / 攸關錢與簽核（drift 最危險的一批）──
 const CRITICAL = [
   'generate_payroll',
+  '_compute_ot_pay',
+  '_calc_monthly_withholding',
   'resolve_snapshot_step_approvers',
   '_employee_matches_chain_step',
   '_employee_matches_snapshot_step',

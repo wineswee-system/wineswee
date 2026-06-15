@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "db:drift": "node scripts/db-drift.mjs",
     "resolve-errors": "node scripts/resolve-errors.mjs",
     "resolve-errors:dry": "node scripts/resolve-errors.mjs --dry-run",
     "resolve-errors:since": "node scripts/resolve-errors.mjs --since",

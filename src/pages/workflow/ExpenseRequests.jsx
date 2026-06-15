@@ -82,9 +82,9 @@ export default function ExpenseRequests() {
     const orgId = profile?.organization_id
     let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
-    // 費用頁只用員工的 id/name/dept/編號/門市（下拉+payload），不需 getEmployees 的 56 欄
+    // 費用頁用員工的 id/name/dept/編號/門市（下拉+payload）+ signature_url（簽呈 PDF 蓋章），不需 getEmployees 的 56 欄
     let empQuery = supabase.from('employees')
-      .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status')
+      .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
       .eq('status', '在職').order('name')
     if (orgId) empQuery = empQuery.eq('organization_id', orgId)
     const [reqRes, accRes, empRes, orgRes, extraRes, storeRes] = await Promise.all([

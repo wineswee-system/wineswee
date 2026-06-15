@@ -13,6 +13,7 @@ export default [
     ignores: [
       'dist/**', 'coverage/**', 'playwright-report/**', 'test-results/**',
       'node_modules/**', 'public/**', 'scripts/**', '*.config.js', 'sw.js',
+      '.claude/**',  // git worktree 副本（非 shipping，避免重複計算）
     ],
   },
   js.configs.recommended,

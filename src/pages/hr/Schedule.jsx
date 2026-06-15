@@ -307,9 +307,11 @@ export default function Schedule() {
     setPublishStatusRows(data || [])
   }
 
-  // Run compliance check when schedules update
+  // Run compliance check when schedules update（debounce 250ms：連續填格時只在停下後驗一次，
+  // 避免每填一格就跑 5 個全量勞基法驗證造成卡頓）
   useEffect(() => {
-    if (schedules.length > 0) {
+    if (schedules.length === 0) return
+    const timer = setTimeout(() => {
       const baseResult = validateSchedule(schedules, weekDates, shiftDefs)
       // 加 cycle-aware 例休 quota 檢查（依當前店設定的工時制）
       const quotaResult = validateLeisureQuota({
@@ -328,7 +330,8 @@ export default function Schedule() {
         warnings: [...baseResult.warnings, ...quotaResult.warnings, ...otResult.warnings, ...nightResult.warnings, ...holidayResult.warnings],
         isValid: baseResult.errors.length + quotaResult.errors.length + otResult.errors.length + nightResult.errors.length + holidayResult.errors.length === 0,
       })
-    }
+    }, 250)
+    return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, weekStart, storeSettings, activeStart, activeEnd, employees, holidays, shiftDefs])
 

@@ -377,12 +377,36 @@ export default function ExpenseRequests() {
   }
 
   // Open detail modal: load attachments + build 2-stage chain steps
+  //
+  // 治本：簽核流程改走後端聚合 RPC get_expense_request_chain_full（一次回完整步驟），
+  // 取代下方一長串序列 await。RPC 輸出與舊組裝逐單比對 174/174 一致
+  // （scripts/_diff_chain_full.mjs）。出問題把 USE_AGGREGATE_CHAIN_RPC 改 false 即回退舊路徑；
+  // 舊邏輯也是 RPC 失敗時的自動 fallback，雙保險。
+  const USE_AGGREGATE_CHAIN_RPC = true
   const openDetail = async (req) => {
     detailRowIdRef.current = req.id
     setShowDetail(req)
     loadAttachments(req.id)
     setLoadingChain(true)
     setDetailChainSteps([])
+
+    // ── 快路徑：一支聚合 RPC 拿完整 finalSteps ──
+    if (USE_AGGREGATE_CHAIN_RPC) {
+      try {
+        const { data, error } = await supabase.rpc('get_expense_request_chain_full', {
+          p_id: req.id,
+          p_applicant_emp_id: req.employee_id ?? null,
+        })
+        if (error) throw error
+        if (detailRowIdRef.current !== req.id) return
+        setDetailChainSteps(Array.isArray(data) ? data : [])
+        setLoadingChain(false)
+        return
+      } catch (e) {
+        // RPC 失敗 → 不中斷使用者，落回下方舊組裝邏輯
+        console.warn('[openDetail] get_expense_request_chain_full 失敗，fallback 舊組裝:', e)
+      }
+    }
 
     const isPending  = req.status === '待核銷'
     const isSettled  = req.status === '已核銷'

@@ -92,6 +92,456 @@ BEGIN
 END $function$
 ;
 
+-- ═══════════ _compute_payroll_for_employee(p_emp_id integer, p_period text) ═══════════
+CREATE OR REPLACE FUNCTION public._compute_payroll_for_employee(p_emp_id integer, p_period text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_emp            employees;
+  v_ss             salary_structures;
+  v_year           INT  := split_part(p_period, '-', 1)::int;
+  v_month          INT  := split_part(p_period, '-', 2)::int;
+  v_mstart         date := make_date(v_year, v_month, 1);
+  v_mend           date := (make_date(v_year, v_month, 1) + interval '1 month - 1 day')::date;
+  v_total_days     INT  := extract(day from v_mend)::int;
+  -- 分類
+  v_is_hourly      boolean;
+  v_emp_category   text;
+  v_is_piece       boolean;
+  v_is_ptlike      boolean;
+  -- 出勤
+  v_hours          numeric := 0;
+  v_holiday_hours  numeric := 0;
+  v_late_mins      numeric := 0;
+  v_work_days      int := 0;
+  v_store_id       int;
+  v_tolerance      int;
+  -- 津貼
+  v_role_allow     numeric;
+  v_meal           numeric;
+  v_transport      numeric;
+  v_att_bonus_base numeric;
+  v_custom         jsonb;
+  v_custom_total   numeric := 0;
+  v_other_custom   numeric := 0;
+  v_night          numeric;
+  v_cross          numeric;
+  v_night_struct   numeric;
+  v_cross_struct   numeric;
+  v_night_custom   numeric;
+  v_cross_custom   numeric;
+  v_dependents     int;
+  v_vol_rate       numeric;
+  -- 本薪
+  v_base_salary    numeric;
+  v_base_for_ins   numeric;
+  v_hourly_rate    numeric;
+  v_piece_count    numeric;
+  v_piece_rate     numeric;
+  -- OT
+  v_ot_wd numeric:=0; v_ot_rd numeric:=0; v_ot_wo numeric:=0; v_ot_hd numeric:=0;
+  v_otx_wd numeric:=0; v_otx_rd numeric:=0; v_otx_wo numeric:=0; v_otx_hd numeric:=0;
+  v_ot_pay_wd numeric:=0; v_ot_pay_rd numeric:=0; v_ot_pay_wo numeric:=0; v_ot_pay_hd numeric:=0;
+  v_otx_pay_wd numeric:=0; v_otx_pay_rd numeric:=0; v_otx_pay_wo numeric:=0; v_otx_pay_hd numeric:=0;
+  v_ot_legal_total numeric:=0;
+  v_ot_exc_total   numeric:=0;
+  v_holiday_bonus  numeric:=0;
+  v_comp_amt       numeric:=0;
+  v_comp_cnt       int:=0;
+  v_reg_ot         numeric:=0;
+  v_extra_ot       numeric:=0;
+  v_overtime_pay   numeric:=0;
+  -- 請假/扣款
+  v_unpaid_hours   numeric:=0;
+  v_unpaid_days    numeric:=0;
+  v_half_hours     numeric:=0;
+  v_late_deduction numeric:=0;
+  v_unpaid_deduct  numeric:=0;
+  v_half_deduct    numeric:=0;
+  v_absence_deduct numeric:=0;
+  v_absence_days   numeric:=0;
+  v_attendance_bonus numeric:=0;
+  v_legal_total    numeric:=0;
+  v_policy_bonus   numeric:=0;
+  -- prorate
+  v_join           date;
+  v_resign         date;
+  v_eff_start      date;
+  v_eff_end        date;
+  v_sal_ratio      numeric := 1;
+  v_sal_actual     int;
+  v_eff_base       numeric; v_eff_role numeric; v_eff_meal numeric; v_eff_transp numeric;
+  v_eff_attb numeric; v_eff_night numeric; v_eff_cross numeric; v_eff_otherc numeric;
+  v_eff_custom_total numeric;
+  -- 投保
+  v_insured        numeric;
+  -- net 計算
+  v_gross          numeric;
+  v_labor_emp numeric:=0; v_labor_er numeric:=0; v_labor_insured numeric:=0;
+  v_health_emp numeric:=0; v_health_er numeric:=0; v_health_insured numeric:=0;
+  v_pension_self numeric:=0; v_pension_er numeric:=0; v_wage_grade numeric;
+  v_total_deduct   numeric;
+  v_net            numeric;
+  -- partial month（保險 prorate，對齊 calculateInServiceDays）
+  v_in_service     int;
+  v_month_days     int := v_total_days;
+  v_proration      numeric := 1;
+  v_is_partial     boolean := false;
+  v_prorated_labor numeric; v_prorated_pension numeric;
+  v_prorated_laborE numeric; v_prorated_pensionE numeric;
+  v_ins_delta      numeric;
+  v_ot_ovt_for_net numeric;
+BEGIN
+  SELECT * INTO v_emp FROM employees WHERE id = p_emp_id;
+  IF v_emp.id IS NULL THEN RETURN NULL; END IF;
+  SELECT * INTO v_ss FROM salary_structures WHERE employee_id = p_emp_id;
+
+  v_is_hourly    := COALESCE(v_ss.salary_type,'') = 'hourly';
+  v_emp_category := v_ss.employment_category;
+  v_is_piece     := COALESCE(v_emp_category = 'piece', false);   -- NULL→false（否則 NOT NULL 連鎖出錯）
+  v_is_ptlike    := v_is_hourly OR v_is_piece;
+
+  -- ── 員工所屬門市 id（給政策獎金 specificity 用）──
+  SELECT id INTO v_store_id FROM stores WHERE name = v_emp.store LIMIT 1;
+
+  -- ── 出勤聚合（遲到容忍依「打卡當下門市」late_tolerance_minutes，0/缺 → 5;對齊前端）──
+  SELECT
+    COALESCE(SUM(ar.total_hours),0),
+    COALESCE(SUM(ar.total_hours) FILTER (WHERE h.is_workday IS FALSE),0),
+    COALESCE(SUM(ar.late_minutes) FILTER (
+      WHERE ar.is_late AND ar.late_minutes > COALESCE(NULLIF(st.late_tolerance_minutes,0),5)),0),
+    COUNT(*)
+  INTO v_hours, v_holiday_hours, v_late_mins, v_work_days
+  FROM attendance_records ar
+  LEFT JOIN holidays h ON h.date = ar.date
+  LEFT JOIN stores st ON st.id = ar.store_id
+  WHERE ar.employee_id = p_emp_id
+    AND ar.date >= v_mstart AND ar.date <= v_mend;
+
+  -- ── 津貼 ──
+  v_role_allow     := COALESCE(v_ss.supervisor_allowance,0) + COALESCE(v_ss.role_allowance,0);
+  v_meal           := COALESCE(v_ss.meal_allowance,0);
+  v_transport      := COALESCE(v_ss.transport_allowance,0);
+  v_att_bonus_base := COALESCE(v_ss.attendance_bonus,0);
+  v_custom         := CASE WHEN jsonb_typeof(v_ss.custom_allowances)='array' THEN v_ss.custom_allowances ELSE '[]'::jsonb END;
+  v_dependents     := COALESCE(v_ss.health_ins_dependents,0);
+  v_vol_rate       := COALESCE(v_emp.labor_pension_self_rate,0) / 100.0;
+
+  SELECT COALESCE(SUM((c->>'amount')::numeric),0) INTO v_custom_total
+    FROM jsonb_array_elements(v_custom) c;
+  SELECT COALESCE(SUM((c->>'amount')::numeric),0) INTO v_other_custom
+    FROM jsonb_array_elements(v_custom) c
+   WHERE (c->>'name') !~ '夜班|夜間|跨店|跨區';
+  v_night_struct := COALESCE(v_ss.night_shift_allowance,0);
+  v_cross_struct := COALESCE(v_ss.cross_store_allowance,0);
+  SELECT COALESCE(MAX((c->>'amount')::numeric),0) INTO v_night_custom
+    FROM jsonb_array_elements(v_custom) c WHERE (c->>'name') ~ '夜班|夜間';
+  SELECT COALESCE(MAX((c->>'amount')::numeric),0) INTO v_cross_custom
+    FROM jsonb_array_elements(v_custom) c WHERE (c->>'name') ~ '跨店|跨區';
+  v_night := CASE WHEN v_night_struct > 0 THEN v_night_struct ELSE v_night_custom END;
+  v_cross := CASE WHEN v_cross_struct > 0 THEN v_cross_struct ELSE v_cross_custom END;
+
+  -- ── 本薪 ──
+  v_piece_count := COALESCE(v_ss.current_piece_count,0);
+  v_piece_rate  := COALESCE(v_ss.piece_rate,0);
+  IF v_is_piece THEN
+    v_base_salary := ceil(v_piece_count * v_piece_rate);
+  ELSIF v_is_hourly THEN
+    v_base_salary := ceil(COALESCE(v_ss.hourly_rate,0) * v_hours);
+  ELSE
+    v_base_salary := COALESCE(v_ss.base_salary, v_emp.base_salary, 0);
+  END IF;
+
+  v_base_for_ins := COALESCE(v_ss.base_salary, v_emp.base_salary, 0)
+                  + v_role_allow + v_night + v_cross + v_meal + v_transport
+                  + v_att_bonus_base + v_other_custom;
+
+  v_hourly_rate := CASE WHEN v_is_hourly THEN COALESCE(v_ss.hourly_rate,0)
+                        ELSE round(v_base_for_ins / 30.0 / 8.0, 2) END;
+
+  -- ── 加班費（OT 四桶；分 legal / exception；weekday/restday/holiday 分日階梯，weekly_off 用總時數）──
+  -- 桶總時數（給顯示）
+  SELECT
+    COALESCE(SUM(ot_hours) FILTER (WHERE NOT COALESCE(is_exception,false) AND cat='weekday'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE NOT COALESCE(is_exception,false) AND cat='restday'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE NOT COALESCE(is_exception,false) AND cat='weekly_off'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE NOT COALESCE(is_exception,false) AND cat='holiday'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE COALESCE(is_exception,false) AND cat='weekday'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE COALESCE(is_exception,false) AND cat='restday'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE COALESCE(is_exception,false) AND cat='weekly_off'),0),
+    COALESCE(SUM(ot_hours) FILTER (WHERE COALESCE(is_exception,false) AND cat='holiday'),0)
+  INTO v_ot_wd, v_ot_rd, v_ot_wo, v_ot_hd, v_otx_wd, v_otx_rd, v_otx_wo, v_otx_hd
+  FROM (
+    SELECT ot_hours, is_exception,
+      COALESCE(NULLIF(ot_category,''),
+        CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END
+      ) AS cat
+    FROM overtime_requests
+    WHERE employee_id = p_emp_id AND status='已核准'
+      AND request_date >= v_mstart AND request_date <= v_mend
+  ) o;
+
+  -- 分日階梯 pay：weekday/restday/holiday（per date+cat 加總後套 per-day 公式再加總）
+  -- legal（is_exception=false）
+  SELECT
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='weekday'),0),
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='restday'),0),
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='holiday'),0)
+  INTO v_ot_pay_wd, v_ot_pay_rd, v_ot_pay_hd
+  FROM (
+    SELECT request_date, cat, SUM(ot_hours) dh FROM (
+      SELECT request_date, ot_hours,
+        COALESCE(NULLIF(ot_category,''),
+          CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END) cat
+      FROM overtime_requests
+      WHERE employee_id=p_emp_id AND status='已核准' AND NOT COALESCE(is_exception,false)
+        AND request_date >= v_mstart AND request_date <= v_mend
+    ) x WHERE cat IN ('weekday','restday','holiday') GROUP BY request_date, cat
+  ) d;
+  v_ot_pay_wo := public._ot_pay_zh(v_ot_wo, v_hourly_rate, 'weekly_off', v_is_hourly);
+  v_ot_legal_total := v_ot_pay_wd + v_ot_pay_rd + v_ot_pay_wo + v_ot_pay_hd;
+
+  -- exception（is_exception=true）
+  SELECT
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='weekday'),0),
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='restday'),0),
+    COALESCE(SUM(public._ot_pay_zh(dh, v_hourly_rate, cat, v_is_hourly)) FILTER (WHERE cat='holiday'),0)
+  INTO v_otx_pay_wd, v_otx_pay_rd, v_otx_pay_hd
+  FROM (
+    SELECT request_date, cat, SUM(ot_hours) dh FROM (
+      SELECT request_date, ot_hours,
+        COALESCE(NULLIF(ot_category,''),
+          CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END) cat
+      FROM overtime_requests
+      WHERE employee_id=p_emp_id AND status='已核准' AND COALESCE(is_exception,false)
+        AND request_date >= v_mstart AND request_date <= v_mend
+    ) x WHERE cat IN ('weekday','restday','holiday') GROUP BY request_date, cat
+  ) d;
+  v_otx_pay_wo := public._ot_pay_zh(v_otx_wo, v_hourly_rate, 'weekly_off', v_is_hourly);
+  v_ot_exc_total := v_otx_pay_wd + v_otx_pay_rd + v_otx_pay_wo + v_otx_pay_hd;
+
+  -- 國定出勤加給（非計件 +×1）
+  v_holiday_bonus := CASE WHEN NOT v_is_piece THEN ceil(v_holiday_hours * v_hourly_rate * 1) ELSE 0 END;
+
+  -- 過期補休兌現（read-only：sum ceil(frozen × remaining/max(hours,1)))
+  SELECT
+    COALESCE(SUM(ceil(COALESCE(frozen_ot_amount,0) * (hours - hours_used) / GREATEST(hours,1))) FILTER (WHERE (hours-hours_used) > 0),0),
+    COUNT(*) FILTER (WHERE (hours-hours_used) > 0)
+  INTO v_comp_amt, v_comp_cnt
+  FROM comp_time_ledger
+  WHERE employee_id=p_emp_id AND status='active' AND expires_at < v_mend;
+
+  v_reg_ot   := CASE WHEN v_is_piece THEN 0 ELSE v_ot_legal_total + v_holiday_bonus + v_comp_amt END;
+  v_extra_ot := CASE WHEN v_is_piece THEN 0 ELSE v_ot_exc_total END;
+  v_overtime_pay := v_reg_ot + v_extra_ot;
+
+  -- ── 請假 ──
+  SELECT
+    COALESCE(SUM(CASE WHEN type IN ('事假','personal','無薪假','unpaid') THEN COALESCE(hours, COALESCE(days,0)*8) ELSE 0 END),0),
+    COALESCE(SUM(CASE WHEN type IN ('事假','personal','無薪假','unpaid') THEN COALESCE(days,0) ELSE 0 END),0),
+    COALESCE(SUM(CASE WHEN type IN ('病假','sick','生理假','menstrual') THEN COALESCE(hours, COALESCE(days,0)*8) ELSE 0 END),0)
+  INTO v_unpaid_hours, v_unpaid_days, v_half_hours
+  FROM leave_requests
+  WHERE employee_id=p_emp_id AND status='已核准'
+    AND start_date >= v_mstart AND start_date <= v_mend;
+  v_absence_days := v_unpaid_days;
+
+  -- ── 法定扣款（fixed only，對齊前端 batch）──
+  SELECT COALESCE(SUM(CASE WHEN deduction_type='fixed' OR deduction_type IS NULL THEN COALESCE(monthly_amount,0) ELSE 0 END),0)
+  INTO v_legal_total
+  FROM legal_deductions
+  WHERE employee_id=p_emp_id AND status='進行中' AND started_month <= p_period;
+
+  -- ── 政策獎金（batch: sales=0 → 只有 fixed 型有值；最具體優先 by code）──
+  SELECT COALESCE(SUM(CASE WHEN (config->>'type')='fixed' THEN COALESCE((config->>'amount')::numeric,0) ELSE 0 END),0)
+  INTO v_policy_bonus
+  FROM (
+    SELECT DISTINCT ON (code) code, config
+    FROM benefit_policies
+    WHERE category='bonus' AND is_active
+      AND effective_from <= current_date AND (effective_to IS NULL OR effective_to >= current_date)
+      AND ( (store_id IS NULL AND employee_id IS NULL)
+         OR (store_id = v_store_id AND employee_id IS NULL)
+         OR (employee_id = p_emp_id) )
+    ORDER BY code, (CASE WHEN employee_id IS NOT NULL THEN 2 ELSE 0 END)+(CASE WHEN store_id IS NOT NULL THEN 1 ELSE 0 END) DESC
+  ) b;
+
+  -- ── 扣款金額 ──
+  v_late_deduction := floor(v_late_mins/30) * floor(v_hourly_rate * 0.5);
+  v_unpaid_deduct  := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_unpaid_hours * v_hourly_rate) END;
+  v_half_deduct    := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_half_hours * v_hourly_rate * 0.5) END;
+  v_absence_deduct := v_unpaid_deduct + v_half_deduct;
+  v_attendance_bonus := CASE WHEN v_late_mins > 0 OR v_absence_days > 0 THEN 0 ELSE v_att_bonus_base END;
+
+  -- ── 月薪 prorate（曆日制）──
+  v_join   := CASE WHEN v_emp.join_date   IS NOT NULL THEN v_emp.join_date::date   END;
+  v_resign := CASE WHEN v_emp.resign_date IS NOT NULL THEN v_emp.resign_date::date END;
+  v_sal_actual := v_total_days;
+  IF NOT v_is_hourly THEN
+    v_eff_start := CASE WHEN v_join   IS NOT NULL AND v_join   > v_mstart THEN v_join   ELSE v_mstart END;
+    v_eff_end   := CASE WHEN v_resign IS NOT NULL AND v_resign < v_mend   THEN v_resign ELSE v_mend   END;
+    IF v_eff_start > v_mstart OR v_eff_end < v_mend THEN
+      v_sal_actual := GREATEST((v_eff_end - v_eff_start) + 1, 1);
+      v_sal_ratio  := v_sal_actual::numeric / v_total_days;
+    END IF;
+  END IF;
+
+  IF NOT v_is_hourly THEN
+    v_eff_base   := ceil(v_base_salary   * v_sal_ratio);
+    v_eff_role   := ceil(v_role_allow    * v_sal_ratio);
+    v_eff_meal   := ceil(v_meal          * v_sal_ratio);
+    v_eff_transp := ceil(v_transport     * v_sal_ratio);
+    v_eff_attb   := ceil(v_attendance_bonus * v_sal_ratio);
+    v_eff_night  := ceil(v_night         * v_sal_ratio);
+    v_eff_cross  := ceil(v_cross         * v_sal_ratio);
+    v_eff_otherc := ceil(v_other_custom  * v_sal_ratio);
+    v_eff_custom_total := ceil(v_custom_total * v_sal_ratio);
+  ELSE
+    v_eff_base:=v_base_salary; v_eff_role:=v_role_allow; v_eff_meal:=v_meal; v_eff_transp:=v_transport;
+    v_eff_attb:=v_attendance_bonus; v_eff_night:=v_night; v_eff_cross:=v_cross; v_eff_otherc:=v_other_custom;
+    v_eff_custom_total := v_custom_total;
+  END IF;
+
+  -- ── 投保金額 ──
+  IF v_ss.base_insured IS NOT NULL AND v_ss.base_insured > 0 THEN
+    v_insured := v_ss.base_insured;
+  ELSIF v_is_ptlike THEN
+    v_insured := public._find_pt_insured(v_year, v_base_salary + v_role_allow);
+  ELSE
+    v_insured := v_base_for_ins;
+  END IF;
+
+  -- ── calculateNetSalary ──
+  v_ot_ovt_for_net := v_overtime_pay + v_eff_role + v_eff_night + v_eff_cross + v_eff_meal + v_eff_transp + v_eff_attb + v_eff_otherc;
+  v_gross := v_eff_base + v_ot_ovt_for_net + v_policy_bonus;
+
+  -- 勞保
+  IF v_emp.labor_insurance IS NOT FALSE THEN
+    SELECT insured_salary, employee_premium, employer_premium
+      INTO v_labor_insured, v_labor_emp, v_labor_er
+    FROM public._labor_bracket_row(v_year, v_insured, v_is_ptlike);
+  END IF;
+  v_labor_emp := COALESCE(v_labor_emp,0); v_labor_er := COALESCE(v_labor_er,0);
+
+  -- 健保
+  IF v_emp.health_insurance IS NOT FALSE THEN
+    SELECT insured_salary, employee_premium, employer_premium
+      INTO v_health_insured, v_health_emp, v_health_er
+    FROM public._health_bracket_row(v_year, v_insured);
+    v_health_emp := COALESCE(v_health_emp,0) * (1 + LEAST(v_dependents,3));
+    v_health_er  := COALESCE(v_health_er,0);
+  END IF;
+  v_health_emp := COALESCE(v_health_emp,0); v_health_er := COALESCE(v_health_er,0);
+
+  -- 勞退（以 effBase 計）
+  v_wage_grade  := LEAST(v_eff_base, 150000);
+  v_pension_er  := round(v_wage_grade * 0.06);
+  v_pension_self := round(v_wage_grade * LEAST(GREATEST(v_vol_rate,0),0.06));
+
+  v_total_deduct := v_labor_emp + v_health_emp + v_pension_self + 0
+                  + (v_absence_deduct + v_late_deduction + v_legal_total);
+  v_net := ceil(v_gross - v_total_deduct);
+
+  -- ── partial month 保險 prorate（calculateInServiceDays）──
+  DECLARE
+    v_hire date := COALESCE(v_join, v_mstart);
+    v_res  date := COALESCE(v_resign, v_mend);
+    v_pstart date; v_pend date;
+  BEGIN
+    v_pstart := GREATEST(v_hire, v_mstart);
+    v_pend   := LEAST(v_res, v_mend);
+    IF v_pend < v_pstart THEN v_in_service := 0;
+    ELSE v_in_service := (v_pend - v_pstart) + 1; END IF;
+  END;
+  v_proration := CASE WHEN v_month_days > 0 THEN v_in_service::numeric / v_month_days ELSE 1 END;
+  v_is_partial := v_proration < 1 AND v_proration > 0;
+
+  IF v_is_partial THEN
+    v_prorated_labor   := floor(v_labor_emp   * v_proration);
+    v_prorated_pension := floor(v_pension_self* v_proration);
+    v_prorated_laborE  := ceil(v_labor_er     * v_proration);
+    v_prorated_pensionE:= ceil(v_pension_er   * v_proration);
+    v_ins_delta := (v_labor_emp + v_pension_self) - (v_prorated_labor + v_prorated_pension);
+    v_total_deduct := v_total_deduct - v_ins_delta;
+    v_labor_emp := v_prorated_labor;
+    v_pension_self := v_prorated_pension;
+    v_labor_er := v_prorated_laborE;
+    v_pension_er := v_prorated_pensionE;
+    v_net := ceil(v_gross - v_total_deduct);
+  END IF;
+
+  RETURN jsonb_build_object(
+    'employee', v_emp.name,
+    'employee_id', v_emp.id,
+    'dept', COALESCE(v_emp.dept,''),
+    'department_id', v_emp.department_id,
+    'position', COALESCE(v_emp.position,''),
+    'store', COALESCE(v_emp.store,''),
+    'base_salary', v_eff_base,
+    'role_allowance', v_eff_role,
+    'meal_allowance', v_eff_meal,
+    'transport_allowance', v_eff_transp,
+    'night_allowance', v_eff_night,
+    'cross_store_allowance', v_eff_cross,
+    'other_custom_total', GREATEST(v_eff_otherc,0),
+    'attendance_bonus', v_eff_attb,
+    'custom_allowances', v_custom,
+    'custom_allowances_total', v_eff_custom_total,
+    'regular_overtime_pay', v_reg_ot,
+    'extra_overtime_pay', v_extra_ot,
+    'overtimePay', v_overtime_pay,
+    'comp_time_settled_pay', v_comp_amt,
+    'comp_time_settled_count', v_comp_cnt,
+    'policyBonus', v_policy_bonus,
+    'workDays', v_work_days,
+    'workHours', v_hours,
+    'holidayHours', v_holiday_hours,
+    'holidayBonus', v_holiday_bonus,
+    'otWeekday', v_ot_wd, 'otRestday', v_ot_rd, 'otWeeklyOff', v_ot_wo, 'otHoliday', v_ot_hd,
+    'otPayWeekday', v_ot_pay_wd, 'otPayRestday', v_ot_pay_rd, 'otPayWeeklyOff', v_ot_pay_wo, 'otPayHoliday', v_ot_pay_hd,
+    'absenceDays', v_absence_days, 'unpaidHours', v_unpaid_hours, 'halfPayHours', v_half_hours,
+    'lateMins', v_late_mins
+  ) || jsonb_build_object(
+    'absenceDeduction', v_absence_deduct,
+    'unpaidDeduction', v_unpaid_deduct,
+    'halfPayDeduction', v_half_deduct,
+    'lateDeduction', v_late_deduction,
+    'legal_deduction', v_legal_total,
+    'health_ins_dependents', v_dependents,
+    'pension_self_pct', COALESCE(v_emp.labor_pension_self_rate,0),
+    'in_service_days', v_in_service,
+    'month_days', v_month_days,
+    'proration_ratio', v_proration,
+    'is_partial_month', v_is_partial,
+    'salary_prorate_ratio', v_sal_ratio,
+    'salary_actual_wd', v_sal_actual,
+    'salary_total_wd', v_total_days,
+    'join_date', v_emp.join_date,
+    'resign_date', v_emp.resign_date,
+    '_is_hourly', v_is_hourly,
+    '_hourly_rate', v_hourly_rate,
+    '_base_for_insure', v_base_for_ins,
+    '_insured_salary', v_insured,
+    -- calculateNetSalary 結果（攤平）
+    'gross', v_gross,
+    'insuredLabor', COALESCE(v_labor_insured,0),
+    'insuredHealth', COALESCE(v_health_insured,0),
+    'laborInsurance', v_labor_emp,
+    'healthInsurance', v_health_emp,
+    'pension', v_pension_self,
+    'incomeTax', 0,
+    'totalDeductions', v_total_deduct,
+    'netSalary', v_net,
+    'laborEmployer', v_labor_er,
+    'healthEmployer', v_health_er,
+    'pensionEmployer', v_pension_er
+  );
+END $function$
+;
+
 -- ═══════════ _employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer) ═══════════
 CREATE OR REPLACE FUNCTION public._employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer DEFAULT NULL::integer)
  RETURNS boolean
@@ -511,7 +961,8 @@ BEGIN
     RETURN json_build_object('ok', false, 'error', 'STEP_NOT_FOUND', 'current_step', v_req.settle_current_step);
   END IF;
 
-  SELECT _employee_matches_chain_step(v_emp.id, v_step.id) INTO v_matches;
+  -- ★ 修正：補上申請人 id（第 3 參數），動態 target（部門主管/店督導）才解得出簽核人
+  SELECT _employee_matches_chain_step(v_emp.id, v_step.id, v_req.employee_id) INTO v_matches;
   IF NOT v_matches THEN
     RETURN json_build_object('ok', false, 'error', 'NOT_AUTHORIZED_FOR_STEP',
                              'current_step', v_req.settle_current_step);
@@ -1274,6 +1725,353 @@ BEGIN
   RETURN NEXT;
 END;
 $function$
+;
+
+-- ═══════════ get_expense_request_chain_full(p_id integer, p_applicant_emp_id integer) ═══════════
+CREATE OR REPLACE FUNCTION public.get_expense_request_chain_full(p_id integer, p_applicant_emp_id integer DEFAULT NULL::integer)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_req            expense_requests;
+  v_app_id         INT;
+  v_status_eff     TEXT;              -- 主鏈用：待核銷→已核准（其餘照舊）
+  v_chain          json;             -- 主鏈步驟（building block 解析過 names）
+  v_timeline       json;             -- 主鏈 timeline
+  v_total          INT;
+  v_cur            INT;
+  v_main           json := '[]'::json;
+  v_sup            jsonb;
+  -- 核銷
+  v_in_settle      boolean;
+  v_is_settled     boolean;
+  v_settle_cur     INT;
+  v_settle_tl      json;
+  v_settle_chain   json;
+  v_has_settle_snap boolean;
+  v_settle_steps   json := '[]'::json;
+  v_settle_start   TIMESTAMPTZ;
+  v_interval       TEXT;
+  v_diff           BIGINT;
+  v_final          jsonb;
+BEGIN
+  SELECT * INTO v_req FROM expense_requests WHERE id = p_id;
+  IF v_req.id IS NULL THEN RETURN '[]'::json; END IF;
+
+  v_app_id     := COALESCE(p_applicant_emp_id, v_req.employee_id);
+  v_status_eff := CASE WHEN v_req.status = '待核銷' THEN '已核准' ELSE v_req.status END;
+
+  -- ════════════════════════════════════════════════════════════════════════
+  -- 1) 主鏈 baseSteps
+  -- ════════════════════════════════════════════════════════════════════════
+  IF v_req.approval_chain_id IS NULL THEN
+    -- ── 無 chain fallback（buildChainBasedSteps 133-141）──
+    IF v_status_eff IN ('已核准','已核銷') THEN
+      v_sup := jsonb_build_object('label','主管核示','name',COALESCE(v_req.approved_by,''),
+                                  'status','completed','completedAt', v_req.approved_at);
+    ELSIF v_status_eff IN ('已駁回','已拒絕','已退回') THEN
+      v_sup := jsonb_build_object('label','主管核示','name',COALESCE(v_req.approved_by,''),
+                                  'status','rejected','rejectReason', v_req.reject_reason);
+    ELSE
+      v_sup := jsonb_build_object('label','主管核示','name','','status','current');
+    END IF;
+
+    v_main := (jsonb_build_array(
+      jsonb_build_object('label','申請人','name',COALESCE(v_req.employee,'—'),
+                         'status','completed','completedAt', v_req.created_at, 'isApplicant', true),
+      v_sup
+    ))::json;
+
+  ELSE
+    -- ── 有 chain：snapshot 優先，fallback live（buildChainBasedSteps 161-203）──
+    v_chain := public.get_request_chain_display_names('expense_request', p_id, v_app_id);
+    IF v_chain IS NULL OR json_array_length(v_chain) = 0 THEN
+      v_chain := public.get_chain_step_display_names(v_req.approval_chain_id, v_app_id);
+    END IF;
+    IF v_chain IS NULL THEN v_chain := '[]'::json; END IF;
+
+    v_total := json_array_length(v_chain);
+    v_cur   := COALESCE(v_req.current_step, 0);
+    IF v_cur < 0 THEN v_cur := 0;
+    ELSIF v_cur > v_total + 1 THEN v_cur := v_total + 1; END IF;     -- clamp（buildChainBasedSteps 208-215）
+
+    v_timeline := public.get_approval_timeline('expense_request', p_id);
+
+    -- 申請人 cell + chain steps + 加簽 step，用 sort_key 排序（mergeExtraSteps 324-339）
+    SELECT COALESCE(json_agg(obj ORDER BY sort_key, seq), '[]'::json)
+      INTO v_main
+    FROM (
+      -- 申請人（order -1）
+      SELECT (-1)::numeric AS sort_key, 0 AS seq,
+        jsonb_build_object('label','申請人','name',COALESCE(v_req.employee,'—'),
+                           'status','completed','completedAt', v_req.created_at, 'isApplicant', true) AS obj
+
+      UNION ALL
+
+      -- chain steps（order = step_order）
+      SELECT cs.step_order::numeric, 0,
+        jsonb_build_object(
+          'label',         cs.label,
+          'name',          cs.target_name,
+          'target_emp_id', cs.target_emp_id,
+          'role_name',     cs.role_name,
+          'status',        cs.status,
+          'completedAt',   cs.completed_at,
+          'completedBy',   CASE WHEN cs.status = 'completed' THEN cs.target_name ELSE NULL END,
+          'rejectReason',  CASE WHEN cs.status = 'rejected' THEN v_req.reject_reason ELSE '' END,
+          'durationText',  cs.duration_text
+        )
+      FROM (
+        SELECT
+          c.step_order, c.label, c.role_name, c.target_emp_id, c.target_name, c.status,
+          -- timeline 覆蓋（openDetail 443-452）：exited_at 有 + status completed/rejected
+          CASE WHEN tl.exited_at IS NOT NULL AND c.status IN ('completed','rejected')
+               THEN tl.duration_text ELSE NULL END AS duration_text,
+          CASE WHEN tl.exited_at IS NOT NULL AND c.status IN ('completed','rejected')
+               THEN tl.exited_at
+               WHEN c.status = 'completed' AND c.step_order = v_total - 1
+               THEN v_req.approved_at
+               ELSE NULL END AS completed_at
+        FROM (
+          SELECT
+            (e->>'step_order')::int AS step_order,
+            e->>'label'             AS label,
+            e->>'role_name'         AS role_name,
+            NULLIF(e->>'target_emp_id','')::int AS target_emp_id,
+            -- targetName = names || (target_emp_id ? approverMap : role_name)（buildChainBasedSteps 226）
+            COALESCE(
+              NULLIF(e->>'names',''),
+              CASE WHEN NULLIF(e->>'target_emp_id','') IS NOT NULL
+                   THEN COALESCE(emp.name,'') ELSE COALESCE(e->>'role_name','') END
+            ) AS target_name,
+            -- 狀態（buildChainBasedSteps 219-225）
+            CASE
+              WHEN v_status_eff IN ('已駁回','已拒絕','已退回') THEN
+                CASE WHEN (e->>'step_order')::int = v_cur THEN 'rejected'
+                     WHEN (e->>'step_order')::int < v_cur THEN 'completed'
+                     ELSE 'pending' END
+              WHEN v_status_eff IN ('已核准','已核銷') THEN 'completed'
+              ELSE
+                CASE WHEN (e->>'step_order')::int < v_cur THEN 'completed'
+                     WHEN (e->>'step_order')::int = v_cur THEN 'current'
+                     ELSE 'pending' END
+            END AS status
+          FROM json_array_elements(v_chain) e
+          -- approverMap fallback：舊前端的 approverMap 是用「現行 chain」的 target_emp_id 建的，
+          -- 故名字只能在現行 chain 的 target_emp_id 範圍內 resolve（快照若指向已不在現行 chain
+          -- 的人，舊前端顯示空白——這裡忠實複製，見 openDetail 392-403）
+          LEFT JOIN employees emp
+            ON emp.id = NULLIF(e->>'target_emp_id','')::int
+           AND emp.id IN (SELECT acs.target_emp_id FROM approval_chain_steps acs
+                           WHERE acs.chain_id = v_req.approval_chain_id
+                             AND acs.target_emp_id IS NOT NULL)
+        ) c
+        LEFT JOIN LATERAL (
+          -- 同 step_order 可能多筆（駁回後重簽，甚至 entered_at 並列只差 exited_at）；
+          -- 舊前端用 tlByStep[so]=t 依陣列順序覆蓋 → 取陣列「最後一筆」（用 ordinality 復刻，
+          -- 比 entered_at 排序穩，因為並列時 entered_at 分不出先後）
+          SELECT (te.elem->>'exited_at')::timestamptz AS exited_at,
+                 te.elem->>'duration_text' AS duration_text
+          FROM json_array_elements(v_timeline) WITH ORDINALITY AS te(elem, ord)
+          WHERE (te.elem->>'step_order')::int = c.step_order
+          ORDER BY te.ord DESC
+          LIMIT 1
+        ) tl ON true
+      ) cs
+
+      UNION ALL
+
+      -- 加簽 step（order = insert_before_step - 0.5）（mergeExtraSteps 294-319）
+      SELECT (x.insert_before_step - 0.5)::numeric, x.seq,
+        jsonb_build_object(
+          'kind',               'extra',
+          'label',              '加簽',
+          'name',               COALESCE(asg.name,''),
+          'status',             CASE x.status WHEN 'pending'  THEN 'current'
+                                              WHEN 'approved' THEN 'completed'
+                                              WHEN 'rejected' THEN 'rejected'
+                                              ELSE 'pending' END,
+          'completedAt',        x.approved_at,
+          'completedBy',        COALESCE(asg.name,''),
+          'durationText',       public._fmt_duration_zh(x.created_at, x.approved_at),
+          'rejectReason',       COALESCE(x.reject_reason,''),
+          'extraReason',        COALESCE(x.reason,''),
+          'extraRequesterName', COALESCE(rb.name,'')
+        )
+      FROM (
+        SELECT *, row_number() OVER (ORDER BY created_at) AS seq
+        FROM approval_extra_steps
+        WHERE source_table = 'expense_requests' AND source_id = p_id
+          AND status <> 'cancelled'
+      ) x
+      LEFT JOIN employees asg ON asg.id = x.assignee_id
+      LEFT JOIN employees rb  ON rb.id  = x.requested_by_id
+    ) q;
+  END IF;
+
+  -- ════════════════════════════════════════════════════════════════════════
+  -- 2) 核銷階段（openDetail 457-581）
+  -- ════════════════════════════════════════════════════════════════════════
+  v_in_settle  := v_req.status IN ('待核銷','已核銷');
+  v_is_settled := v_req.status = '已核銷';
+
+  IF NOT v_in_settle THEN
+    v_final := v_main::jsonb;
+
+  ELSIF v_req.settle_chain_id IS NULL THEN
+    -- 無核銷鏈 → 單關「財務核章」佔位（openDetail 570-580）
+    v_final := v_main::jsonb || jsonb_build_array(
+      jsonb_build_object(
+        'label',       '財務核章',
+        'name',        CASE WHEN v_is_settled THEN COALESCE(NULLIF(v_req.settled_by,''),'') ELSE '' END,
+        'status',      CASE WHEN v_is_settled THEN 'completed' ELSE 'current' END,
+        'completedAt', CASE WHEN v_is_settled THEN v_req.settled_at ELSE NULL END,
+        'archival',    false,
+        'isSettle',    true
+      )
+    );
+
+  ELSE
+    -- 有核銷鏈：snapshot（request_type='expense_settle'）優先，fallback live
+    v_settle_cur := COALESCE(v_req.settle_current_step, 0);
+    v_settle_tl  := public.get_approval_timeline('expense_settle', p_id);
+
+    -- settleStartAt：snapshot 的 created_at 欄不存在（live 表是 snapshotted_at），
+    -- 故舊前端該查必失敗 → 一律 fallback timeline step 0 entered_at（openDetail 547）
+    SELECT t.entered_at INTO v_settle_start
+    FROM json_to_recordset(v_settle_tl) AS t(step_order int, entered_at timestamptz)
+    WHERE t.step_order = 0 LIMIT 1;
+
+    -- 「核准後 N 天/小時/分鐘送核銷(驗收)」（openDetail 548-554）
+    IF v_settle_start IS NOT NULL AND v_req.approved_at IS NOT NULL THEN
+      v_diff := floor(EXTRACT(EPOCH FROM (v_settle_start - v_req.approved_at)))::BIGINT;
+      v_interval := CASE
+        WHEN v_diff < 3600  THEN '核准後 ' || (v_diff / 60)    || ' 分鐘送核銷(驗收)'
+        WHEN v_diff < 86400 THEN '核准後 ' || (v_diff / 3600)  || ' 小時送核銷(驗收)'
+        ELSE                     '核准後 ' || (v_diff / 86400) || ' 天送核銷(驗收)'
+      END;
+    ELSE
+      v_interval := NULL;
+    END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM request_chain_snapshots
+      WHERE request_type = 'expense_settle' AND request_id = p_id
+    ) INTO v_has_settle_snap;
+
+    IF v_has_settle_snap THEN
+      -- 快照路徑：直接讀 request_chain_snapshots，names 只用 target_emp_id→name
+      -- （openDetail 463-481，刻意不解動態 target，與舊前端一致）
+      SELECT COALESCE(json_agg(
+        jsonb_build_object(
+          'label',  src.display_label,
+          'name',   CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                         THEN COALESCE(NULLIF(v_req.settled_by,''), src.emp_name)
+                         ELSE src.emp_name END,
+          'status', src.status,
+          'completedAt', CASE
+            WHEN stl.exited_at IS NOT NULL AND src.status = 'completed'
+            THEN COALESCE(CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                               THEN v_req.settled_at END, stl.exited_at)
+            ELSE CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                      THEN v_req.settled_at END END,
+          'durationText', CASE WHEN stl.exited_at IS NOT NULL AND src.status = 'completed'
+                               THEN stl.duration_text ELSE NULL END,
+          'archival', false,
+          'isSettle', true
+        ) ORDER BY src.step_order
+      ), '[]'::json)
+      INTO v_settle_steps
+      FROM (
+        SELECT
+          s.step_order,
+          COALESCE(NULLIF(s.label,''), NULLIF(s.role_name,''),
+                   '核銷第 ' || (s.step_order + 1) || ' 關') AS display_label,
+          CASE WHEN s.target_emp_id IS NOT NULL THEN COALESCE(emp.name,'')
+               ELSE COALESCE(NULLIF(s.role_name,''), NULLIF(s.label,''), '') END AS emp_name,
+          CASE WHEN v_is_settled THEN 'completed'
+               WHEN s.step_order < v_settle_cur THEN 'completed'
+               WHEN s.step_order = v_settle_cur THEN 'current'
+               ELSE 'pending' END AS status,
+          count(*) OVER () AS total
+        FROM request_chain_snapshots s
+        LEFT JOIN employees emp ON emp.id = s.target_emp_id
+        WHERE s.request_type = 'expense_settle' AND s.request_id = p_id
+      ) src
+      LEFT JOIN LATERAL (
+        SELECT (te.elem->>'exited_at')::timestamptz AS exited_at,
+               te.elem->>'duration_text' AS duration_text
+        FROM json_array_elements(v_settle_tl) WITH ORDINALITY AS te(elem, ord)
+        WHERE (te.elem->>'step_order')::int = src.step_order ORDER BY te.ord DESC LIMIT 1
+      ) stl ON true;
+
+    ELSE
+      -- live 路徑：get_chain_step_display_names（已解動態 names）（openDetail 482-489）
+      v_settle_chain := public.get_chain_step_display_names(v_req.settle_chain_id, v_app_id);
+      IF v_settle_chain IS NULL THEN v_settle_chain := '[]'::json; END IF;
+
+      SELECT COALESCE(json_agg(
+        jsonb_build_object(
+          'label',  src.display_label,
+          'name',   CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                         THEN COALESCE(NULLIF(v_req.settled_by,''), src.emp_name)
+                         ELSE src.emp_name END,
+          'status', src.status,
+          'completedAt', CASE
+            WHEN stl.exited_at IS NOT NULL AND src.status = 'completed'
+            THEN COALESCE(CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                               THEN v_req.settled_at END, stl.exited_at)
+            ELSE CASE WHEN v_is_settled AND src.step_order = src.total - 1
+                      THEN v_req.settled_at END END,
+          'durationText', CASE WHEN stl.exited_at IS NOT NULL AND src.status = 'completed'
+                               THEN stl.duration_text ELSE NULL END,
+          'archival', false,
+          'isSettle', true
+        ) ORDER BY src.step_order
+      ), '[]'::json)
+      INTO v_settle_steps
+      FROM (
+        SELECT
+          (e->>'step_order')::int AS step_order,
+          COALESCE(NULLIF(e->>'label',''), NULLIF(e->>'role_name',''),
+                   '核銷第 ' || ((e->>'step_order')::int + 1) || ' 關') AS display_label,
+          COALESCE(e->>'names','') AS emp_name,
+          CASE WHEN v_is_settled THEN 'completed'
+               WHEN (e->>'step_order')::int < v_settle_cur THEN 'completed'
+               WHEN (e->>'step_order')::int = v_settle_cur THEN 'current'
+               ELSE 'pending' END AS status,
+          json_array_length(v_settle_chain) AS total
+        FROM json_array_elements(v_settle_chain) e
+      ) src
+      LEFT JOIN LATERAL (
+        SELECT (te.elem->>'exited_at')::timestamptz AS exited_at,
+               te.elem->>'duration_text' AS duration_text
+        FROM json_array_elements(v_settle_tl) WITH ORDINALITY AS te(elem, ord)
+        WHERE (te.elem->>'step_order')::int = src.step_order ORDER BY te.ord DESC LIMIT 1
+      ) stl ON true;
+    END IF;
+
+    -- baseSteps + 核銷分隔 + 核銷申請人 + 核銷各關（openDetail 564-569）
+    v_final := v_main::jsonb
+      || jsonb_build_array(
+           jsonb_build_object('kind','settle_divider'),
+           jsonb_build_object(
+             'label','申請人（送核銷/驗收）',
+             'name', v_req.employee,
+             'status','completed',
+             'completedAt', v_settle_start,
+             'noteText', v_interval,
+             'isSettle', true,
+             'isApplicant', true
+           )
+         )
+      || v_settle_steps::jsonb;
+  END IF;
+
+  RETURN COALESCE(v_final, '[]'::jsonb)::json;
+END $function$
 ;
 
 -- ═══════════ hr_chain_approve(p_table text, p_id integer, p_approver_id integer, p_action text, p_reason text) ═══════════
@@ -2082,6 +2880,36 @@ BEGIN
   RETURN result;
 END
 $function$
+;
+
+-- ═══════════ preview_payroll(p_period text, p_org integer, p_store_filter text) ═══════════
+CREATE OR REPLACE FUNCTION public.preview_payroll(p_period text, p_org integer, p_store_filter text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_year   INT  := split_part(p_period,'-',1)::int;
+  v_month  INT  := split_part(p_period,'-',2)::int;
+  v_mend   date := (make_date(v_year, v_month, 1) + interval '1 month - 1 day')::date;
+  v_result json;
+BEGIN
+  SELECT COALESCE(json_agg(public._compute_payroll_for_employee(e.id, p_period) ORDER BY e.name), '[]'::json)
+    INTO v_result
+  FROM employees e
+  WHERE e.organization_id = p_org
+    -- 員工範圍對齊前端 Salary.jsx：在職 + 近一個月內離職（相對今日，非計薪月）
+    AND ( e.status = '在職'
+       OR (e.status = '離職' AND e.resign_date >= (date_trunc('month', current_date) - interval '1 month')::date) )
+    AND (e.join_date IS NULL OR e.join_date <= v_mend)
+    AND (
+      p_store_filter IS NULL
+      OR e.store = p_store_filter
+      OR (e.additional_stores IS NOT NULL AND p_store_filter = ANY(e.additional_stores))
+    );
+  RETURN v_result;
+END $function$
 ;
 
 -- ═══════════ resolve_snapshot_step_approvers(p_request_type text, p_request_id integer, p_step_order integer, p_applicant_emp_id integer) ═══════════

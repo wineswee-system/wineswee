@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension } from '../../../lib/payroll'
 
@@ -68,11 +69,12 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
               <tr><td colSpan={13} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>本月尚無薪資紀錄</td></tr>
             )}
             {filtered.map(r => {
-              const bonusDetail = getBonusDetail(r.employee)
               const isExpanded = expanded === r.id
-              const breakdownItems = buildBreakdownItems(r, brackets)
+              // 展開明細只在該列展開時才算（85 列每次 render 全算是浪費）
+              const bonusDetail = isExpanded ? getBonusDetail(r.employee) : []
+              const breakdownItems = isExpanded ? buildBreakdownItems(r, brackets) : []
               return (
-                <tbody key={r.id}>
+                <Fragment key={r.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
                     <td>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                     <td style={{ fontWeight: 600 }}>{r.employee}</td>
@@ -215,7 +217,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                       </td>
                     </tr>
                   )}
-                </tbody>
+                </Fragment>
               )
             })}
           </tbody>

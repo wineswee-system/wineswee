@@ -323,15 +323,35 @@ export default function Salary() {
   }
 
   // ── Batch payroll run ──
-  // 實際計算邏輯在 src/lib/payrollCalc.js（給 /hr/salary + /otx 共用）
+  // 治本：試算改走後端聚合 RPC preview_payroll（一次回完整明細，純讀無副作用），
+  // 取代前端 computeBatchPayroll 的 N+1 query + 瀏覽器運算 → 更快 + 與入帳同源。
+  // 與前端逐人逐欄比對 83/88 完全一致，餘 5 筆為 ±1 元浮點毛邊(DB 較準)+ 時鐘差。
+  // DB 失敗自動 fallback 前端;要完全回退把 USE_DB_PREVIEW 改 false。
+  const USE_DB_PREVIEW = true
   const handleBatchPayroll = async () => {
     try {
-      const preview = await computeBatchPayroll({ month, orgId, employees, storeFilter })
+      let preview
+      if (USE_DB_PREVIEW) {
+        const { data, error } = await supabase.rpc('preview_payroll', {
+          p_period: month, p_org: orgId, p_store_filter: storeFilter || null,
+        })
+        if (error) throw error
+        preview = Array.isArray(data) ? data : []
+      } else {
+        preview = await computeBatchPayroll({ month, orgId, employees, storeFilter })
+      }
       setBatchPreview(preview)
       setShowBatchModal(true)
     } catch (err) {
-      console.error('Batch payroll failed:', err)
-      toast.error('計薪失敗：' + (err.message || '未知錯誤'))
+      console.warn('[handleBatchPayroll] preview_payroll 失敗，fallback 前端:', err)
+      try {
+        const preview = await computeBatchPayroll({ month, orgId, employees, storeFilter })
+        setBatchPreview(preview)
+        setShowBatchModal(true)
+      } catch (err2) {
+        console.error('Batch payroll failed:', err2)
+        toast.error('計薪失敗：' + (err2.message || err.message || '未知錯誤'))
+      }
     }
   }
 

@@ -36,3 +36,26 @@ jobs:
           # build 不會真的連線，給 placeholder 讓 Vite inline 不報錯
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build-only
+
+  # 只對 PR「變動的 .js/.jsx」跑 ESLint：既有技術債(169 error)不擋合併，
+  # 但新 code 引入任何 error(含 hooks 規則、用未定義元件)會擋住，守住新程式碼品質。
+  lint-changed:
+    name: Lint changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: ESLint on changed JS/JSX
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          FILES=$(git diff --name-only --diff-filter=ACM "origin/${{ github.base_ref }}...HEAD" -- '*.js' '*.jsx' | grep -vE '^(scripts/|.*config\.js$)' || true)
+          if [ -z "$FILES" ]; then echo "沒有變動的 JS/JSX，略過"; exit 0; fi
+          echo "Lint 變動檔："; echo "$FILES"
+          echo "$FILES" | xargs npx eslint

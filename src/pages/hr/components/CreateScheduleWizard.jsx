@@ -78,34 +78,6 @@ function GapChip({ gap, loading }) {
   return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: c.bg, color: c.color }}>{c.label}</span>
 }
 
-function DateChip({ date, type, onRemove, isWish }) {
-  const isRest = type === '休假'
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 4 }}>
-      <span style={{
-        padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-        background: isRest ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.10)',
-        color: isRest ? '#f59e0b' : '#ef4444',
-        border: `1px solid ${isRest ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.25)'}`,
-      }}>
-        {date.slice(5)}
-      </span>
-      {isWish && (
-        <span style={{
-          fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
-          background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)',
-          border: '1px solid rgba(34,211,238,0.25)',
-        }} title="已核准希望休">希</span>
-      )}
-      <button onClick={onRemove} style={{
-        width: 16, height: 16, borderRadius: '50%', border: 'none', cursor: 'pointer',
-        background: 'var(--bg-secondary)', color: 'var(--text-muted)',
-        fontSize: 10, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>✕</button>
-    </div>
-  )
-}
-
 export default function CreateScheduleWizard({ open, onClose, locations, mode, onComplete }) {
   const { profile: authProfile } = useAuth()
   const [step, setStep] = useState(1)
@@ -123,8 +95,6 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   const [empRestMap, setEmpRestMap] = useState({})
   // `${empName}|${date}` — dates auto-filled from approved off_requests (희望休)
   const wishDates = useRef(new Set())
-  // `${storeId}|${empName}|${type}` → boolean
-  const [showPicker, setShowPicker] = useState({})
   const [isSaving, setIsSaving]     = useState(false)
   const [activeStoreTab, setActiveStoreTab] = useState(null)
 
@@ -337,26 +307,21 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
     setSelectedStoreIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   }
 
-  const addDate = (storeId, empName, type, date) => {
+  // 點格子循環：空 → 休假 → 例假 → 空（給 step2 假別網格用）
+  const cycleRestDate = (storeId, empName, date) => {
     const key = `${storeId}|${empName}`
     setEmpRestMap(prev => {
       const cur = prev[key] || { 休假: [], 例假: [] }
-      const list = cur[type] || []
-      if (list.includes(date)) return prev
-      return { ...prev, [key]: { ...cur, [type]: [...list, date].sort() } }
+      const inRest  = (cur['休假'] || []).includes(date)
+      const inLeave = (cur['例假'] || []).includes(date)
+      let rest  = (cur['休假'] || []).filter(d => d !== date)
+      let leave = (cur['例假'] || []).filter(d => d !== date)
+      if (!inRest && !inLeave) rest = [...rest, date].sort()
+      else if (inRest)         leave = [...leave, date].sort()
+      // 例假 → 空（兩者都已濾掉）
+      return { ...prev, [key]: { 休假: rest, 例假: leave } }
     })
   }
-
-  const removeDate = (storeId, empName, type, date) => {
-    const key = `${storeId}|${empName}`
-    setEmpRestMap(prev => {
-      const cur = prev[key] || { 休假: [], 例假: [] }
-      return { ...prev, [key]: { ...cur, [type]: (cur[type] || []).filter(d => d !== date) } }
-    })
-  }
-
-  const openPicker  = (storeId, empName, type) => setShowPicker(p => ({ ...p, [`${storeId}|${empName}|${type}`]: true }))
-  const closePicker = (storeId, empName, type) => setShowPicker(p => ({ ...p, [`${storeId}|${empName}|${type}`]: false }))
 
   const handleComplete = async (actionMode) => {
     if (!selectedPeriod || isSaving) return
@@ -725,88 +690,76 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                     <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, background: 'var(--bg-card)' }}>
                       此門市無在職員工
                     </div>
-                  ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, background: 'var(--bg-card)' }}>
-                      <thead>
-                        <tr style={{ background: 'var(--bg-secondary)' }}>
-                          <th style={thStyle}>員工姓名</th>
-                          <th style={{ ...thStyle, textAlign: 'left', width: '38%', color: '#f59e0b' }}>🌙 休假日期</th>
-                          <th style={{ ...thStyle, textAlign: 'left', width: '38%', color: '#ef4444' }}>🛑 例假日期</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {emps.map((emp, ri) => {
-                          const key  = `${store.id}|${emp.name}`
-                          const vals = empRestMap[key] || { 休假: [], 例假: [] }
-                          return (
-                            <tr key={emp.id} style={{ background: ri % 2 !== 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', verticalAlign: 'top' }}>
-                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{emp.name}</div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{emp.employment_type}</div>
-                              </td>
-
-                              {['休假', '例假'].map(type => {
-                                const pickerKey = `${store.id}|${emp.name}|${type}`
-                                const isPicking = !!showPicker[pickerKey]
-                                const dates     = vals[type] || []
-                                const typeColor = type === '休假' ? '#f59e0b' : '#ef4444'
-
-                                return (
-                                  <td key={type} style={{ padding: '10px 10px', borderBottom: '1px solid var(--border-light)', verticalAlign: 'top' }}>
-                                    {dates.map(date => (
-                                      <DateChip
-                                        key={date}
-                                        date={date}
-                                        type={type}
-                                        isWish={wishDates.current.has(`${emp.name}|${date}`)}
-                                        onRemove={() => removeDate(store.id, emp.name, type, date)}
-                                      />
-                                    ))}
-
-                                    {isPicking ? (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <input
-                                          type="date"
-                                          autoFocus
-                                          min={rangeStart}
-                                          max={rangeEnd}
-                                          defaultValue={rangeStart}
-                                          style={{
-                                            padding: '4px 6px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                                            border: `1px solid ${typeColor}`,
-                                            background: 'var(--bg-card)', color: 'var(--text-primary)', width: 130,
-                                          }}
-                                          onChange={e => {
-                                            const v = e.target.value
-                                            if (v && v >= rangeStart && v <= rangeEnd) {
-                                              addDate(store.id, emp.name, type, v)
-                                              closePicker(store.id, emp.name, type)
-                                            }
-                                          }}
-                                        />
-                                        <button onClick={() => closePicker(store.id, emp.name, type)} style={{
-                                          width: 20, height: 20, borderRadius: 5, border: '1px solid var(--border-medium)',
-                                          background: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-                                          fontSize: 11, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}>✕</button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => openPicker(store.id, emp.name, type)} style={{
-                                        width: 26, height: 26, borderRadius: 7, cursor: 'pointer',
-                                        border: `1px dashed ${typeColor}`, background: 'transparent', color: typeColor,
-                                        fontSize: 18, fontWeight: 700, lineHeight: 1,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-                                      }} title={`新增${type}日期`}>+</button>
-                                    )}
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  )}
+                  ) : (() => {
+                    // 該期所有日期（rangeStart ~ rangeEnd）
+                    const periodDates = []
+                    if (rangeStart && rangeEnd) {
+                      let dd = new Date(rangeStart + 'T00:00:00Z')
+                      const de = new Date(rangeEnd + 'T00:00:00Z')
+                      while (dd <= de) { periodDates.push(dd.toISOString().slice(0, 10)); dd.setUTCDate(dd.getUTCDate() + 1) }
+                    }
+                    const WK = ['日', '一', '二', '三', '四', '五', '六']
+                    const dcell = {
+                      width: 30, minWidth: 30, height: 32, textAlign: 'center', cursor: 'pointer',
+                      borderRight: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-light)',
+                      fontSize: 14, padding: 0, userSelect: 'none',
+                    }
+                    return (
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-light)', borderRadius: 8 }}>
+                      <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-secondary)' }}>
+                        點格子標假：空 →🌙休假 →🛑例假 →空（再點循環）；🔵「希」= 員工已核准的希望休
+                      </div>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, background: 'var(--bg-card)' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)' }}>
+                            <th style={{ ...thStyle, position: 'sticky', left: 0, zIndex: 2, background: 'var(--bg-secondary)', minWidth: 96, textAlign: 'left' }}>員工</th>
+                            {periodDates.map(d => {
+                              const dt = new Date(d + 'T00:00:00Z'); const dow = dt.getUTCDay()
+                              const we = dow === 0 || dow === 6
+                              return (
+                                <th key={d} style={{ ...thStyle, width: 30, minWidth: 30, padding: '3px 0', color: we ? '#ef4444' : 'var(--text-muted)' }}>
+                                  <div style={{ fontWeight: 700, fontSize: 11 }}>{dt.getUTCDate()}</div>
+                                  <div style={{ fontSize: 9 }}>{WK[dow]}</div>
+                                </th>
+                              )
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {emps.map((emp, ri) => {
+                            const key  = `${store.id}|${emp.name}`
+                            const vals = empRestMap[key] || { 休假: [], 例假: [] }
+                            const restSet  = new Set(vals['休假'] || [])
+                            const leaveSet = new Set(vals['例假'] || [])
+                            const rowBg = ri % 2 !== 0 ? 'rgba(0,0,0,0.02)' : 'var(--bg-card)'
+                            return (
+                              <tr key={emp.id} style={{ background: ri % 2 !== 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
+                                <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border-light)', position: 'sticky', left: 0, zIndex: 1, background: rowBg, whiteSpace: 'nowrap' }}>
+                                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{emp.name}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{emp.employment_type}</div>
+                                </td>
+                                {periodDates.map(d => {
+                                  const isRest = restSet.has(d); const isLeave = leaveSet.has(d)
+                                  const isWish = wishDates.current.has(`${emp.name}|${d}`)
+                                  const dow = new Date(d + 'T00:00:00Z').getUTCDay(); const we = dow === 0 || dow === 6
+                                  return (
+                                    <td key={d}
+                                      onClick={() => cycleRestDate(store.id, emp.name, d)}
+                                      title={`${d}${isWish ? '（希望休）' : ''} · 點一下循環：休假→例假→清除`}
+                                      style={{ ...dcell, background: isRest ? 'rgba(245,158,11,0.20)' : isLeave ? 'rgba(239,68,68,0.20)' : we ? 'rgba(99,102,241,0.04)' : undefined }}>
+                                      {isRest ? '🌙' : isLeave ? '🛑' : (isWish ? <span style={{ fontSize: 9, color: 'var(--accent-cyan)', fontWeight: 700 }}>希</span> : '')}
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    )
+                  })()
+                  }
                 </div>
               )
             })()}

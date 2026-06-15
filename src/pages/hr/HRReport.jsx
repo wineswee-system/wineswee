@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Users, Clock, CalendarOff, DollarSign } from 'lucide-react'
-import { getEmployees, getAttendance, getLeaveRequests, getSalaryRecords } from '../../lib/db'
+import { getActiveEmployees, getAttendance, getLeaveRequests, getSalaryRecords } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -16,9 +16,11 @@ export default function HRReport() {
   useEffect(() => {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
+    // 出勤只取今日 + 只要 status 欄位（原本撈全表全欄只為算「今日遲到」，既慢又名實不符）
+    const today = new Date().toLocaleDateString('en-CA')  // 本地 YYYY-MM-DD
     Promise.all([
-      getEmployees(orgId),
-      getAttendance(null, { orgId }),
+      getActiveEmployees('id, dept, status', orgId),
+      getAttendance(today, { orgId, columns: 'status' }),
       getLeaveRequests({ orgId }),
       getSalaryRecords(null, orgId),
     ]).then(([e, a, l, s]) => {

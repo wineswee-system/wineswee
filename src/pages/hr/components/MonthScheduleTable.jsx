@@ -380,13 +380,19 @@ function EmployeeRow({
           }}
           onClick={(e) => {
             if (!canEditSchedule || cellLocked) return
-            // 拖曳到別格了 → 不開 modal（多格選取）
+            // 拖曳到別格了（多格框選）→ 不動作
             if (selection && (selection.anchor.empName !== selection.end.empName
               || selection.anchor.date !== selection.end.date)) return
-            // 單格點擊 → 清 selection，開 modal
             if (e.shiftKey) return
-            setSelection?.(null)
+            // 單擊 = 選取那格（mousedown 已設 selection 單格 + focusedCell）；不再直接開編輯
+            // 選好後可按 R/S/B/M/E 填班、Del 清除、Esc 退選；要細編改用雙擊
             setFocusedCell?.({ empName: emp.name, date })
+          }}
+          onDoubleClick={(e) => {
+            if (!canEditSchedule || cellLocked) return
+            // 雙擊 = 進入細部編輯 modal（清掉框選，聚焦這格）
+            e.preventDefault()
+            setSelection?.(null)
             if (!isEditing) setEditCell({ empName: emp.name, date })
           }}>
             {/* Cell Content */}

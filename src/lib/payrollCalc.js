@@ -232,11 +232,8 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
     // 判斷員工分類（決定國定加班倍率）：
     // 不用 role 判斷（部分行政員工 role 設成 manager/store_staff，但實際掛在「總部」）
-    // 改看所屬店的 work_hour_system：
-    // - store 變形工時（12 家實體門市都設 4週變形）→ 門市正職
-    //   → 1.34/1.67 階梯（§30-1 國定可調移，當日視為平日）
-    // - store 標準工時 / 未設（行政員工掛在威士威總部）→ 行政正職
-    //   → ×1 全程（月薪已含 30 天工資）
+    // 國定假日 OT 倍率（全 FT 一致，不分門市/行政）：
+    // - FT（月薪）：≤8h ×1（月薪已含當日工資）；>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
     // - PT (isHourly)：×2 全程
 
     // ── 單筆 (per-row) 倍率計算 — 給 detail UI 顯示用 ──
@@ -258,8 +255,11 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       }
       if (cat === 'holiday') {
         if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
-        // regular/admin 國定假日 OT 均 ×1（月薪已含當日工資）
-        return { _pay: Math.ceil(h * hourlyRate), _rate_label: '×1.0' }
+        // FT 國定假日：≤8h ×1（月薪已含當日）；>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
+        const base = Math.min(h, 8) * hourlyRate
+        const ot1 = Math.min(Math.max(h - 8, 0), 2) * hourlyRate * 1.34
+        const ot2 = Math.max(h - 10, 0) * hourlyRate * 1.67
+        return { _pay: Math.ceil(base + ot1 + ot2), _rate_label: h <= 8 ? '×1.0' : '×1.0 / ×1.34 / ×1.67' }
       }
       // weekday
       const pay = h <= 2
@@ -313,10 +313,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       const weeklyOff = isHourly
         ? Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
         : Math.ceil((bucket.weekly_off || 0) * hourlyRate * 1)
-      // 國定假日 OT：PT ×2；regular/admin 均 ×1
+      // 國定假日 OT：PT ×2 全程；FT ≤8h ×1、>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
       const holiday = sumByDay('holiday', h => {
         if (isHourly) return Math.ceil(h * hourlyRate * 2)
-        return Math.ceil(h * hourlyRate)
+        const base = Math.min(h, 8) * hourlyRate
+        const ot1 = Math.min(Math.max(h - 8, 0), 2) * hourlyRate * 1.34
+        const ot2 = Math.max(h - 10, 0) * hourlyRate * 1.67
+        return Math.ceil(base + ot1 + ot2)
       })
       return {
         weekday, restday, weekly_off: weeklyOff, holiday,

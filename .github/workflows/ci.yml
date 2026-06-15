@@ -1,0 +1,38 @@
+name: CI
+
+# PR 與推上 main 時自動跑：單元測試 + 正式 build。
+# 這是品質 gate——壞掉的測試或 build 失敗會擋住合併，避免回歸進 main。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支連續 push 時，取消上一輪還在跑的，省 runner
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          # build 不會真的連線，給 placeholder 讓 Vite inline 不報錯
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build-only

@@ -22,20 +22,37 @@ function WhsTag({ whs }) {
   )
 }
 
-function getNextTwoPeriods(ws, anchor) {
+// 算「第 idx 期」：idx 0 = 今天所在週期的「下一期」(原第1期)，正值往後翻、負值往前翻(補排過去)
+function getPeriodByIdx(ws, anchor, idx) {
+  const wsv = ws || '標準工時'
   const today = new Date().toISOString().slice(0, 10)
   try {
-    const cur = getCycleFor(today, ws || '標準工時', anchor || null)
-    const d1 = new Date(cur.end + 'T00:00:00Z')
-    d1.setUTCDate(d1.getUTCDate() + 1)
-    const p1 = getCycleFor(d1.toISOString().slice(0, 10), ws || '標準工時', anchor || null)
-    const d2 = new Date(p1.end + 'T00:00:00Z')
-    d2.setUTCDate(d2.getUTCDate() + 1)
-    const p2 = getCycleFor(d2.toISOString().slice(0, 10), ws || '標準工時', anchor || null)
-    return [{ start: p1.start, end: p1.end }, { start: p2.start, end: p2.end }]
+    const cur = getCycleFor(today, wsv, anchor || null)
+    // base = 今天週期的下一期
+    const d0 = new Date(cur.end + 'T00:00:00Z'); d0.setUTCDate(d0.getUTCDate() + 1)
+    let p = getCycleFor(d0.toISOString().slice(0, 10), wsv, anchor || null)
+    if (idx > 0) {
+      for (let i = 0; i < idx; i++) {
+        const nd = new Date(p.end + 'T00:00:00Z'); nd.setUTCDate(nd.getUTCDate() + 1)
+        p = getCycleFor(nd.toISOString().slice(0, 10), wsv, anchor || null)
+      }
+    } else if (idx < 0) {
+      for (let i = 0; i < -idx; i++) {
+        const pd = new Date(p.start + 'T00:00:00Z'); pd.setUTCDate(pd.getUTCDate() - 1)
+        p = getCycleFor(pd.toISOString().slice(0, 10), wsv, anchor || null)
+      }
+    }
+    return { start: p.start, end: p.end }
   } catch {
-    return []
+    return null
   }
+}
+
+// 期數標籤：idx 0=下一期、正=往後、負=往前補排
+function periodIdxLabel(idx) {
+  if (idx === 0) return '下一期'
+  if (idx > 0) return `下 ${idx + 1} 期`
+  return `往前 ${-idx} 期（補排）`
 }
 
 function analyzeGap(lastDate, newStart) {
@@ -309,10 +326,9 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   const selectedStores   = locations.filter(l => selectedStoreIds.has(l.id))
   const primaryStore     = selectedStores[0]
   const primarySettings  = primaryStore ? (storeSettingsMap[primaryStore.id] || {}) : {}
-  const periods          = primaryStore
-    ? getNextTwoPeriods(primarySettings.work_hour_system, primarySettings.variable_period_start)
-    : []
-  const selectedPeriod   = periods[selectedPeriodIdx] || null
+  const selectedPeriod   = primaryStore
+    ? getPeriodByIdx(primarySettings.work_hour_system, primarySettings.variable_period_start, selectedPeriodIdx)
+    : null
 
   // Helper: get real work_hour_system for a store (from store_settings, not stores table)
   const getWhs = (storeId) => storeSettingsMap[storeId]?.work_hour_system || null
@@ -526,41 +542,39 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               <div>
                 <label style={labelStyle}>
                   選擇排班期間
-                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {getWhs(primaryStore?.id) || '標準工時'} 自動計算下兩期</span>
+                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 11 }}>依 {getWhs(primaryStore?.id) || '標準工時'} · ◀ ▶ 左右翻選任意期（可往前補排）</span>
                 </label>
-                {periods.length === 0 ? (
+                {!selectedPeriod ? (
                   <div style={warnBox}>⚠ 此門市尚未設定工時制度或週期基準日，請先到門市設定完善資料</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {periods.map((p, i) => {
-                      const days = Math.round((new Date(p.end) - new Date(p.start)) / 86400000) + 1
-                      const active = selectedPeriodIdx === i
-                      return (
-                        <div key={i} onClick={() => setSelectedPeriodIdx(i)} style={{
-                          display: 'flex', alignItems: 'center', gap: 14, padding: '11px 16px',
-                          borderRadius: 10, cursor: 'pointer',
-                          border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
-                          background: active ? 'rgba(34,211,238,0.07)' : 'var(--bg-secondary)',
-                          transition: 'all 0.15s',
-                        }}>
-                          <div style={{
-                            width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                            border: `2px solid ${active ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            {active && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-cyan)' }} />}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>第 {i + 1} 期</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                              {p.start} ~ {p.end}<span style={{ marginLeft: 8, fontSize: 11 }}>（{days} 天）</span>
-                            </div>
-                          </div>
+                ) : (() => {
+                  const days = Math.round((new Date(selectedPeriod.end) - new Date(selectedPeriod.start)) / 86400000) + 1
+                  const navBtn = {
+                    width: 40, height: 40, borderRadius: 9, flexShrink: 0,
+                    border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                    color: 'var(--accent-cyan)', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                  }
+                  return (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                      borderRadius: 10, border: '1px solid var(--accent-cyan)',
+                      background: 'rgba(34,211,238,0.07)',
+                    }}>
+                      <button type="button" title="往前一期（補排過去）"
+                        onClick={() => setSelectedPeriodIdx(i => i - 1)} style={navBtn}>◀</button>
+                      <div style={{ flex: 1, textAlign: 'center' }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
+                          {selectedPeriod.start} ~ {selectedPeriod.end}
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {days} 天 · {periodIdxLabel(selectedPeriodIdx)}
+                        </div>
+                      </div>
+                      <button type="button" title="往後一期"
+                        onClick={() => setSelectedPeriodIdx(i => i + 1)} style={navBtn}>▶</button>
+                    </div>
+                  )
+                })()}
                 {selectedStores.length > 1 && new Set(selectedStores.map(s => getWhs(s.id))).size > 1 && (
                   <div style={{ ...warnBox, marginTop: 8 }}>⚠ 已選門市的工時制度不同，期間依「{primaryStore?.name}」計算</div>
                 )}

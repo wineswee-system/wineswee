@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
 import { useAuth } from '../../contexts/AuthContext'
 import { Plus, X, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -48,6 +49,7 @@ export default function ExpenseRequests() {
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
+  const returnNav = useReturnNav()  // 從「我的待簽」帶 ?returnTo 跳來時，簽完用它回待簽；否則 no-op
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
   const [employees, setEmployees] = useState([])
@@ -358,6 +360,8 @@ export default function ExpenseRequests() {
       toast.success(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
     }
     load()
+    setShowDetail(null)
+    returnNav()  // 從「我的待簽」點來的，簽完自動回待簽繼續簽下一個（非待簽進來則 no-op）
   }
 
   // Open settle modal
@@ -637,6 +641,8 @@ export default function ExpenseRequests() {
     }
     toast.success(data.fully_settled ? '核銷(驗收)完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
     load()
+    setShowDetail(null)
+    returnNav()  // 從「我的待簽」點來的，簽完自動回待簽
   }
 
   const handleDelete = async (row) => {

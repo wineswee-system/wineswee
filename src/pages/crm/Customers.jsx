@@ -68,7 +68,8 @@ export default function Customers() {
     Promise.all([
       supabase.from('customers').select('*').order('created_at', { ascending: false }),
       supabase.from('stores').select('*'),
-      supabase.from('outbound_orders').select('*').order('created_at', { ascending: false }),
+      // 客戶卡只顯示「最新出貨狀態」7 欄，不需整張出貨單全欄
+      supabase.from('outbound_orders').select('id, order_number, carrier, tracking_number, status, customer, created_at').order('created_at', { ascending: false }),
     ]).then(([c, l, o]) => {
       setCustomers(c.data || [])
       setLocations(l.data || [])
